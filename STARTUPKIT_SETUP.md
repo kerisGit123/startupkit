@@ -517,3 +517,105 @@ cd startupkit
 npm install
 npx convex dev
 # Follow STARTUPKIT_SETUP.md
+
+----------------------------------------------------
+
+I'll help you create a step-by-step guide for cloning your startupkit from GitHub, renaming it, and running the automated setup.
+
+Let me first check the current setup documentation to understand the automated setup process better.
+
+# Step-by-Step Guide: Clone StartupKit and Set Up Your New Project
+
+Based on your screenshots, here's the complete workflow:
+
+## **Step 1: Clone Repository with GitHub Desktop**
+
+1. **Open GitHub Desktop** (as shown in your pic2)
+2. **Click "Clone a repository"**
+3. **Select your repository:**
+   - Find `kerisGit123/startupkit` in the list
+4. **Set Local Path:**
+   - Change the local path to your desired location
+   - Example: `D:\gemini\your-new-project-name` (replace `your-new-project-name` with your actual project name)
+   - Click "Choose..." button to browse and select the folder
+5. **Click "Clone"** button
+
+## **Step 2: Rename the Project**
+
+After cloning, you'll need to rename references in your project:
+
+1. **Navigate to the cloned folder** in File Explorer
+2. **Open the project in Windsurf:**
+   - Right-click the folder → "Open with Windsurf"
+   - OR open Windsurf → File → Open Folder → select your cloned folder
+
+3. **Update `package.json`:**
+   - Change the `"name"` field to your project name
+   - Example: `"name": "my-awesome-saas"`
+
+4. **Update `README.md`** (optional but recommended):
+   - Replace "StartupKit" with your project name
+   - Update description
+
+## **Step 3: Run Automated Setup**
+
+1. **Open Terminal in Windsurf:**
+   - Press `` Ctrl + ` `` (backtick) or View → Terminal
+
+2. **Run the setup command:**
+   ```bash
+   npm run setup
+   ```
+
+3. **The automated setup will:**
+   - ✅ Install all dependencies (npm packages)
+   - ✅ Initialize Convex database
+   - ✅ Deploy database schema
+   - ✅ Create `.env.local` template file
+   - ✅ Guide you through API key setup
+
+4. **Follow the prompts** to enter your API keys for:
+   - Clerk (authentication)
+   - Convex (database)
+   - Stripe (payments)
+
+## **Step 4: Start Development**
+
+After setup completes:
+
+```bash
+npm run dev
+```
+
+Your app will be available at `http://localhost:3000`
+
+---
+
+## **Quick Reference Commands**
+
+```bash
+# Clone (via GitHub Desktop UI - no command needed)
+
+# Navigate to project
+cd D:\gemini\your-project-name
+
+# Automated setup
+npm run setup
+
+# Start development server
+npm run dev
+
+# Deploy Convex (when ready)
+npx convex deploy
+```
+
+---
+
+## **Important Notes**
+
+- **Local Path**: Choose a meaningful folder name when cloning (this becomes your project folder)
+- **GitHub Connection**: The cloned repo stays connected to `kerisGit123/startupkit` - you may want to change the remote URL later if creating a new project
+- **API Keys**: Have your Clerk, Convex, and Stripe accounts ready before running `npm run setup`
+- **Environment File**: Never commit `.env.local` to GitHub (it's already in `.gitignore`)
+
+Would you like me to create a quick reference document with these steps saved in your project folder?
