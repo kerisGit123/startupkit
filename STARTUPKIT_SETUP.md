@@ -490,7 +490,7 @@ After setup is complete:
 
 ## Support
 
-- **Documentation**: Check `zdoc/` folder for detailed guides
+- **Documentation**: Check documentation files in root folder for detailed guides
 - **Issues**: Create GitHub issue
 - **Community**: Join our Discord
 

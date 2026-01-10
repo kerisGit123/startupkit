@@ -24,11 +24,14 @@ export async function POST(req: Request) {
     const subscription = await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: true,
     });
+    
+    // Type assertion for Stripe subscription response
+    const typedSubscription = subscription as any;
 
     // IMMEDIATELY update Convex database so UI shows warning instantly
-    const companyId = subscription.metadata?.companyId;
+    const companyId = typedSubscription.metadata?.companyId;
     if (companyId) {
-      const priceId = subscription.items?.data?.[0]?.price?.id;
+      const priceId = typedSubscription.items?.data?.[0]?.price?.id;
       let plan = "starter";
       if (priceId === env.PRO_MONTHLY_PRICE_ID) plan = "pro";
       if (priceId === env.STARTER_MONTHLY_PRICE_ID) plan = "starter";
@@ -36,11 +39,11 @@ export async function POST(req: Request) {
       await convex.mutation(api.subscriptions.upsertSubscription, {
         companyId,
         plan,
-        stripeCustomerId: subscription.customer as string,
-        stripeSubscriptionId: subscription.id,
-        currentPeriodEnd: subscription.current_period_end,
+        stripeCustomerId: typedSubscription.customer as string,
+        stripeSubscriptionId: typedSubscription.id,
+        currentPeriodEnd: typedSubscription.current_period_end as number,
         cancelAtPeriodEnd: true,  // Set this immediately!
-        status: subscription.status,
+        status: typedSubscription.status,
       });
       
       // Record cancellation in transaction history
@@ -48,12 +51,12 @@ export async function POST(req: Request) {
         companyId,
         action: "canceled",
         plan,
-        status: subscription.status,
-        stripeCustomerId: subscription.customer as string,
-        stripeSubscriptionId: subscription.id,
+        status: typedSubscription.status,
+        stripeCustomerId: typedSubscription.customer as string,
+        stripeSubscriptionId: typedSubscription.id,
         source: "user_action",
         eventType: "subscription.canceled",
-        currentPeriodEnd: subscription.current_period_end,
+        currentPeriodEnd: typedSubscription.current_period_end as number,
       });
     }
 
@@ -62,10 +65,11 @@ export async function POST(req: Request) {
       subscription,
       message: "Subscription will be canceled at the end of the billing period"
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Cancel subscription error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to cancel subscription";
     return NextResponse.json(
-      { error: error.message || "Failed to cancel subscription" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

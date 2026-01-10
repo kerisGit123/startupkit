@@ -31,11 +31,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const { targetUserId, role } = await req.json();
+    const { targetUserId, email, role } = await req.json();
 
-    if (!targetUserId || !role) {
+    if ((!targetUserId && !email) || !role) {
       return NextResponse.json(
-        { error: "Missing targetUserId or role" },
+        { error: "Missing targetUserId/email or role" },
         { status: 400 }
       );
     }
@@ -46,8 +46,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
+    // Find user by email if email provided instead of userId
+    let userId = targetUserId;
+    if (!userId && email) {
+      const users = await client.users.getUserList({ emailAddress: [email] });
+      if (users.data.length === 0) {
+        return NextResponse.json(
+          { error: `No user found with email: ${email}` },
+          { status: 404 }
+        );
+      }
+      userId = users.data[0].id;
+    }
+
     // Update user metadata
-    await client.users.updateUserMetadata(targetUserId, {
+    await client.users.updateUserMetadata(userId, {
       publicMetadata: {
         role: role,
       },
@@ -55,7 +68,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      message: `Role ${role} assigned to user ${targetUserId}`,
+      message: `Role ${role} assigned to user ${email || userId}`,
     });
   } catch (error) {
     console.error("Error assigning role:", error);

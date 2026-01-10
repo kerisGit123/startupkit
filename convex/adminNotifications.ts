@@ -1,0 +1,195 @@
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+export const getNotifications = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get recent activity (last 7 days)
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    
+    const subscriptions = await ctx.db
+      .query("subscription_transactions")
+      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
+      .order("desc")
+      .take(10);
+
+    const purchases = await ctx.db
+      .query("credits_ledger")
+      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
+      .order("desc")
+      .take(10);
+
+    const tickets = await ctx.db
+      .query("support_tickets")
+      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
+      .order("desc")
+      .take(10);
+
+    const notifications = [];
+
+    // Get all read notifications for this user
+    const readNotifications = await ctx.db
+      .query("notifications_read")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+    
+    const readIds = new Set(readNotifications.map(n => n.notificationId));
+
+    // Add subscription notifications
+    for (const sub of subscriptions) {
+      const subId = sub._id.toString();
+      notifications.push({
+        id: subId,
+        type: sub.action === "canceled" ? "subscription_canceled" : "new_subscription",
+        title: sub.action === "canceled" 
+          ? `Subscription Canceled - ${sub.plan || 'plan'}`
+          : `New Subscription - ${sub.plan || 'plan'}`,
+        description: sub.companyId,
+        time: sub.createdAt,
+        read: readIds.has(subId),
+      });
+    }
+
+    // Add purchase notifications
+    for (const purchase of purchases) {
+      const purchaseId = purchase._id.toString();
+      notifications.push({
+        id: purchaseId,
+        type: "new_purchase",
+        title: `New Purchase - ${purchase.tokens} credits`,
+        description: `MYR ${purchase.amountPaid || 0}`,
+        time: purchase.createdAt,
+        read: readIds.has(purchaseId),
+      });
+    }
+
+    // Add ticket notifications
+    for (const ticket of tickets) {
+      const ticketId = ticket._id.toString();
+      notifications.push({
+        id: ticketId,
+        type: "new_ticket",
+        title: `New Support Ticket - ${ticket.subject}`,
+        description: ticket.userEmail,
+        time: ticket.createdAt,
+        read: readIds.has(ticketId),
+      });
+    }
+
+    // Sort by time (most recent first)
+    notifications.sort((a, b) => b.time - a.time);
+
+    return notifications.slice(0, 20);
+  },
+});
+
+export const markAsRead = mutation({
+  args: { notificationId: v.string(), type: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    
+    // Check if already marked as read by this user
+    const existing = await ctx.db
+      .query("notifications_read")
+      .withIndex("by_user_notification", (q) => 
+        q.eq("userId", identity.subject).eq("notificationId", args.notificationId)
+      )
+      .first();
+    
+    if (!existing) {
+      // Mark as read by inserting into notifications_read table
+      await ctx.db.insert("notifications_read", {
+        notificationId: args.notificationId,
+        type: args.type,
+        userId: identity.subject,
+        readAt: Date.now(),
+      });
+    }
+    
+    return { success: true };
+  },
+});
+
+export const getUnreadCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return 0;
+    }
+
+    // Count recent items (last 7 days)
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    
+    const recentSubscriptions = await ctx.db
+      .query("subscription_transactions")
+      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
+      .collect();
+
+    const recentPurchases = await ctx.db
+      .query("credits_ledger")
+      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
+      .collect();
+
+    const recentTickets = await ctx.db
+      .query("support_tickets")
+      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
+      .collect();
+
+    // Get read notifications
+    const readNotifications = await ctx.db
+      .query("notifications_read")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+    
+    const readIds = new Set(readNotifications.map(n => n.notificationId));
+    
+    // Debug: Log what we're comparing
+    console.log("=== NOTIFICATION DEBUG ===");
+    console.log("User ID:", identity.subject);
+    console.log("Read notification IDs:", Array.from(readIds));
+    console.log("Recent subscriptions:", recentSubscriptions.map(s => ({ id: s._id.toString(), plan: s.plan, createdAt: s.createdAt })));
+    console.log("Recent purchases:", recentPurchases.map(p => ({ id: p._id.toString(), tokens: p.tokens, createdAt: p.createdAt })));
+    console.log("Recent tickets:", recentTickets.map(t => ({ id: t._id.toString(), subject: t.subject, createdAt: t.createdAt })));
+    
+    // Count unread - convert IDs to strings for comparison
+    let unreadCount = 0;
+    const unreadItems: any[] = [];
+    
+    for (const sub of recentSubscriptions) {
+      const subId = sub._id.toString();
+      if (!readIds.has(subId)) {
+        unreadCount++;
+        unreadItems.push({ type: 'subscription', id: subId, plan: sub.plan });
+      }
+    }
+    for (const purchase of recentPurchases) {
+      const purchaseId = purchase._id.toString();
+      if (!readIds.has(purchaseId)) {
+        unreadCount++;
+        unreadItems.push({ type: 'purchase', id: purchaseId, tokens: purchase.tokens });
+      }
+    }
+    for (const ticket of recentTickets) {
+      const ticketId = ticket._id.toString();
+      if (!readIds.has(ticketId)) {
+        unreadCount++;
+        unreadItems.push({ type: 'ticket', id: ticketId, subject: ticket.subject });
+      }
+    }
+    
+    console.log("Unread items:", unreadItems);
+    console.log("Total unread count:", unreadCount);
+    console.log("=== END DEBUG ===");
+    
+    return unreadCount;
+  },
+});

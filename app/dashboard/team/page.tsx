@@ -95,13 +95,13 @@ export default function TeamPage() {
                 <div key={membership.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-gray-600 font-bold">
-                      {membership.publicUserData.firstName?.[0] || "M"}
+                      {membership.publicUserData?.firstName?.[0] || "M"}
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">
-                        {membership.publicUserData.firstName} {membership.publicUserData.lastName}
+                        {membership.publicUserData?.firstName} {membership.publicUserData?.lastName}
                       </p>
-                      <p className="text-sm text-gray-500">{membership.publicUserData.identifier}</p>
+                      <p className="text-sm text-gray-500">{membership.publicUserData?.identifier}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">

@@ -91,6 +91,19 @@ export default defineSchema({
   }).index("by_companyId", ["companyId"]),
 
   // ============================================
+  // ADMIN: Notifications Read Tracking
+  // ============================================
+  notifications_read: defineTable({
+    notificationId: v.string(),
+    type: v.string(),
+    userId: v.string(),
+    readAt: v.number(),
+  })
+    .index("by_notification", ["notificationId"])
+    .index("by_user", ["userId"])
+    .index("by_user_notification", ["userId", "notificationId"]),
+
+  // ============================================
   // ADMIN: Admin Users
   // ============================================
   admin_users: defineTable({
@@ -140,9 +153,14 @@ export default defineSchema({
     description: v.string(),
     category: v.union(
       v.literal("billing"),
+      v.literal("plans"),
+      v.literal("usage"),
+      v.literal("general"),
+      v.literal("credit"),
       v.literal("technical"),
-      v.literal("dispute"),
-      v.literal("general")
+      v.literal("invoice"),
+      v.literal("service"),
+      v.literal("other")
     ),
     priority: v.union(
       v.literal("low"),

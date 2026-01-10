@@ -15,14 +15,25 @@ import {
   UserCog,
   LogOut,
   Menu,
-  X
+  X,
+  Ticket,
+  Bell
 } from "lucide-react";
 import { useClerk } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { signOut } = useClerk();
+  const { signOut, user } = useClerk();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  
+  const tickets = useQuery(
+    api.tickets.getUserTickets,
+    user?.id ? {} : "skip"
+  );
+  
+  const openTicketsCount = tickets?.filter(t => t.status === "open").length || 0;
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -31,6 +42,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     { name: "Pricing Plans", href: "/pricing", icon: CreditCard },
     { name: "Team", href: "/dashboard/team", icon: Users },
     { name: "User Management", href: "/dashboard/users", icon: UserCog },
+    { name: "Support Tickets", href: "/support", icon: Ticket },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
@@ -123,7 +135,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex-1 lg:flex-none"></div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
+            <Link href="/support" className="relative p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <Bell className="w-5 h-5 text-gray-600" />
+              {openTicketsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {openTicketsCount}
+                </span>
+              )}
+            </Link>
             <UserButton afterSignOutUrl="/" />
           </div>
         </div>

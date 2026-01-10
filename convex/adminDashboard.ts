@@ -15,11 +15,8 @@ export const getDashboardStats = query({
     // Calculate MRR
     let mrr = 0;
     subscriptions.filter(s => s.status === "active").forEach(sub => {
-      if (sub.plan === "starter") {
-        mrr += 19.90;
-      } else if (sub.plan === "pro") {
-        mrr += 29.00;
-      }
+      const prices: Record<string, number> = { starter: 19.90, pro: 29.00, business: 99 };
+      mrr += prices[sub.plan] || 0;
     });
 
     // Open tickets

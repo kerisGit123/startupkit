@@ -34,3 +34,36 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+
+
+10/01/2026, 11:19:51 pm [CONVEX Q(adminNotifications:getUnreadCount)] [LOG] 'Unread items:' [
+  {
+    type: 'subscription',
+    id: 'jn7c0jc519s8arr1vsa5q8by2x7yvnfr',
+    plan: 'starter'
+  },
+  {
+    type: 'subscription',
+    id: 'jn7dm0dh0redxa2dn8fy2y46397ytrha',
+    plan: 'starter'
+  },
+  {
+    type: 'subscription',
+    id: 'jn78dtmspwy0xg044j080rwks17yvksk',
+    plan: 'starter'
+  },
+  {
+    type: 'subscription',
+    id: 'jn7c2prfqekgeevnsarm0w5e3s7ytpjy',
+    plan: 'starter'
+  },
+  {
+    type: 'subscription',
+    id: 'jn79s2tf7235htf053ex3k5ev97yv7nz',
+    plan: 'starter'
+  }
+]
+10/01/2026, 11:19:51 pm [CONVEX Q(adminNotifications:getUnreadCount)] [LOG] 'Total unread count:' 5
+10/01/2026, 11:19:51 pm [CONVEX Q(adminNotifications:getUnreadCount)] [LOG] '=== END DEBUG ==='

@@ -11,27 +11,27 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ onMenuClick, isSuperAdmin }: AdminHeaderProps) {
   return (
-    <header className="bg-gradient-to-r from-purple-900 to-purple-800 border-b border-purple-700 sticky top-0 z-[60]">
-      <div className="flex items-center justify-between px-4 lg:px-8 py-4">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-[60]">
+      <div className="flex items-center justify-between px-4 lg:px-8 py-3">
         <div className="flex items-center gap-2 lg:gap-4">
           <button
             onClick={onMenuClick}
-            className="p-2.5 text-white hover:text-purple-200 hover:bg-purple-700 rounded-lg transition-colors border border-purple-600"
+            className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
             aria-label="Open menu"
           >
-            <Menu className="w-6 h-6" />
+            <Menu className="w-5 h-5" />
           </button>
           
-          <Link href="/admin" className="text-lg lg:text-xl font-bold text-white">
+          <Link href="/admin" className="text-base lg:text-lg font-semibold text-gray-900">
             Admin Panel
           </Link>
         </div>
 
-        <div className="flex items-center gap-2 lg:gap-4">
+        <div className="flex items-center gap-2 lg:gap-3">
           {isSuperAdmin && (
             <Link
               href="/dashboard"
-              className="flex items-center gap-2 px-3 py-2 text-sm text-white bg-purple-700 hover:bg-purple-600 rounded-lg transition border border-purple-600"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
               title="Go to User Dashboard"
             >
               <LayoutDashboard className="w-4 h-4" />
@@ -39,7 +39,7 @@ export default function AdminHeader({ onMenuClick, isSuperAdmin }: AdminHeaderPr
             </Link>
           )}
           
-          <button className="relative p-2 text-white hover:text-purple-200 hover:bg-purple-700 rounded-lg transition">
+          <button className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
             <Bell className="w-5 h-5" />
             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
           </button>

@@ -17,13 +17,25 @@ export const getUserStats = query({
     const users = await ctx.db.query("users").collect();
     const subscriptions = await ctx.db.query("org_subscriptions").collect();
     
-    const totalUsers = users.length;
+    const totalUsers = users.filter(u => !u.deletionTime).length;
     const activeSubscriptions = subscriptions.filter(s => s.status === "active").length;
+    
+    // Get unique company IDs with active subscriptions
+    const companiesWithSubs = new Set(
+      subscriptions
+        .filter(s => s.status === "active")
+        .map(s => s.companyId)
+    );
+    
+    // Count users without active subscriptions
+    const freeUsers = users.filter(u => 
+      !u.deletionTime && !companiesWithSubs.has(u.clerkUserId || "")
+    ).length;
     
     return {
       totalUsers,
       activeSubscriptions,
-      freeUsers: totalUsers - activeSubscriptions,
+      freeUsers,
     };
   },
 });

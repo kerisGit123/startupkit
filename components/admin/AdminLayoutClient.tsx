@@ -1,39 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import AdminSidebar from "./AdminSidebar";
-import AdminHeader from "./AdminHeader";
-import { AdminRole } from "@/lib/adminAuth";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/app-sidebar";
+import { ThemeSwitcher } from "@/components/theme-switcher";
+import { NotificationBell } from "@/components/notification-bell";
+import { PanelSwitcher } from "@/components/panel-switcher";
+import { HeaderUser } from "@/components/header-user";
+import { Separator } from "@/components/ui/separator";
+import { useUser } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 interface AdminLayoutClientProps {
-  role: AdminRole;
-  isSuperAdmin: boolean;
   children: React.ReactNode;
 }
 
 export default function AdminLayoutClient({
-  role,
-  isSuperAdmin,
   children,
 }: AdminLayoutClientProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, isLoaded } = useUser();
+  const router = useRouter();
 
+  useEffect(() => {
+    if (isLoaded && !user) {
+      router.push("/sign-in");
+    }
+  }, [isLoaded, user, router]);
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      <AdminHeader
-        onMenuClick={() => setSidebarOpen(true)}
-        isSuperAdmin={isSuperAdmin}
-      />
-      <div className="flex flex-1 overflow-hidden">
-        <AdminSidebar
-          role={role}
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-        <main className="flex-1 overflow-y-auto p-4 lg:p-8">
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex flex-1 items-center justify-between">
+            <h1 className="text-lg font-semibold">Admin Panel</h1>
+            <div className="flex items-center gap-2">
+              <PanelSwitcher />
+              <NotificationBell />
+              <ThemeSwitcher />
+              <HeaderUser />
+            </div>
+          </div>
+        </header>
+        <main className="flex flex-1 flex-col p-4 pt-4">
           {children}
         </main>
-      </div>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
