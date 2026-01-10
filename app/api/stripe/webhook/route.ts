@@ -13,11 +13,7 @@ export async function POST(req: Request) {
   let event: any;
   try {
     const text = await req.text();
-    const signingSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    if (!signingSecret) {
-      return NextResponse.json({ error: "Missing signing secret" }, { status: 500 });
-    }
-    event = stripe.webhooks.constructEvent(text, sig, signingSecret);
+    event = stripe.webhooks.constructEvent(text, sig, env.STRIPE_WEBHOOK_SECRET);
   } catch (err: any) {
     console.error("Stripe webhook signature verification failed", err?.message);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });

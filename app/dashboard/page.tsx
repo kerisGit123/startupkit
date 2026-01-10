@@ -5,7 +5,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCompany } from "@/hooks/useCompany";
 import { useSubscription } from "@/hooks/useSubscription";
-import { ArrowUpRight, TrendingUp, Users, Zap, BarChart3, Wallet, Settings } from "lucide-react";
+import { useAdminRole } from "@/hooks/useAdminRole";
+import { ArrowUpRight, TrendingUp, Users, Zap, BarChart3, Wallet, Settings, Shield } from "lucide-react";
 import Link from "next/link";
 
 export default function DashboardPage() {
@@ -13,6 +14,7 @@ export default function DashboardPage() {
   const { organization } = useOrganization();
   const { companyId } = useCompany();
   const { plan, entitlements, isLoading } = useSubscription();
+  const { isAdmin } = useAdminRole();
 
   const creditsBalance = useQuery(
     api.credits.getBalance,
@@ -52,16 +54,35 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Welcome back, {user.firstName || user.fullName || "User"}! 👋
-          </h1>
-          <p className="text-gray-600">
-            Here&apos;s what&apos;s happening with your account today.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+                Welcome back, {user.firstName || user.fullName || "User"}! 👋
+                {isAdmin && (
+                  <span className="ml-3 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 border border-purple-300">
+                    <Shield className="w-4 h-4 mr-1" />
+                    Super Admin
+                  </span>
+                )}
+              </h1>
+              <p className="text-gray-600">
+                Here&apos;s what&apos;s happening with your account today.
+              </p>
+            </div>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center gap-2 px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold transition shadow-md whitespace-nowrap"
+              >
+                <Shield className="w-5 h-5" />
+                <span>Admin Panel</span>
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Stats Grid */}

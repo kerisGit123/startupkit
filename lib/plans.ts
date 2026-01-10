@@ -30,11 +30,11 @@ export const PLANS: Record<PlanId, PlanInfo> = {
   starter: {
     id: "starter",
     title: "Starter",
-    monthlyPrice: 9.90,
-    yearlyPrice: 99.00,
+    monthlyPrice: 19.90,
+    yearlyPrice: 190.00,
     prices: {
-      monthly: { label: "MYR 9.90/month" },
-      yearly: { label: "MYR 99.00/year" },
+      monthly: { label: "MYR 19.90/month" },
+      yearly: { label: "MYR 190.00/year" },
     },
     features: ["50 Scans per month", "Organization"],
     entitlements: { scansPerMonth: 50, storageMB: 100 },

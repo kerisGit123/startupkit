@@ -16,6 +16,37 @@ export default function BillingPage() {
   const [isCanceling, setIsCanceling] = useState(false);
   const [showFullHistory, setShowFullHistory] = useState(false);
 
+  const handleBuyCredits = async (tokens: number, amount: number) => {
+    if (!user || !companyId) {
+      alert("Please sign in to buy credits");
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/stripe/create-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "credits",
+          tokens,
+          amount,
+          companyId,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert("Failed to create checkout session");
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      alert("An error occurred. Please try again.");
+    }
+  };
+
   const creditsBalance = useQuery(
     api.credits.getBalance,
     companyId ? { companyId } : "skip"
@@ -175,7 +206,7 @@ export default function BillingPage() {
                 <h4 className="text-lg font-semibold mb-1 text-gray-900">100 Credits</h4>
                 <p className="text-2xl font-bold mb-3 text-gray-900">MYR 10.00</p>
                 <button
-                  onClick={() => {/* Add Stripe checkout */}}
+                  onClick={() => handleBuyCredits(100, 1000)}
                   className="w-full py-2 px-4 bg-yellow-400 text-black rounded-lg hover:bg-yellow-500 font-semibold transition"
                 >
                   Buy Now
@@ -188,7 +219,7 @@ export default function BillingPage() {
                 <h4 className="text-lg font-semibold mb-1 text-gray-900">500 Credits</h4>
                 <p className="text-2xl font-bold mb-3 text-gray-900">MYR 40.00</p>
                 <button
-                  onClick={() => {/* Add Stripe checkout */}}
+                  onClick={() => handleBuyCredits(500, 4000)}
                   className="w-full py-2 px-4 bg-yellow-400 text-black rounded-lg hover:bg-yellow-500 font-semibold transition"
                 >
                   Buy Now
@@ -198,7 +229,7 @@ export default function BillingPage() {
                 <h4 className="text-lg font-semibold mb-1 text-gray-900">1000 Credits</h4>
                 <p className="text-2xl font-bold mb-3 text-gray-900">MYR 70.00</p>
                 <button
-                  onClick={() => {/* Add Stripe checkout */}}
+                  onClick={() => handleBuyCredits(1000, 7000)}
                   className="w-full py-2 px-4 bg-yellow-400 text-black rounded-lg hover:bg-yellow-500 font-semibold transition"
                 >
                   Buy Now
@@ -287,7 +318,11 @@ export default function BillingPage() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-gray-900 capitalize">
+                          <p className={`text-sm font-medium capitalize ${
+                            event.action === "canceled" || event.action === "deleted" 
+                              ? "text-red-600" 
+                              : "text-gray-900"
+                          }`}>
                             {event.action === "checkout_completed" && "Subscription Created"}
                             {event.action === "created" && "Subscription Activated"}
                             {event.action === "updated" && "Subscription Updated"}
