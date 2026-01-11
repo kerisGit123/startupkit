@@ -1,17 +1,17 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Ticket, Clock, CheckCircle, AlertCircle, Search, ChevronLeft, ChevronRight, Inbox, Archive } from "lucide-react";
+import { Ticket, Clock, CheckCircle, AlertCircle, Search, ChevronLeft, ChevronRight, Inbox, Archive, Send } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useUser } from "@clerk/nextjs";
 
 export default function TicketsPage() {
+  const { user } = useUser();
   const tickets = useQuery(api.adminTickets.getAllTickets);
   const stats = useQuery(api.adminTickets.getTicketStats);
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,7 +20,12 @@ export default function TicketsPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [sending, setSending] = useState(false);
   const itemsPerPage = 10;
+  
+  const addMessage = useMutation(api.adminTickets.addTicketMessage);
+  const updateStatus = useMutation(api.adminTickets.updateTicketStatus);
 
   const filteredTickets = useMemo(() => {
     if (!tickets) return [];
@@ -87,6 +92,48 @@ export default function TicketsPage() {
 
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedTicket, setSelectedTicket] = useState<any>(null);
+
+  const messages = useQuery(
+    api.adminTickets.getTicketMessages,
+    selectedTicket ? { ticketId: selectedTicket._id } : "skip"
+  );
+
+  const handleSendReply = async () => {
+    if (!replyMessage.trim() || !selectedTicket || !user) return;
+
+    setSending(true);
+    try {
+      await addMessage({
+        ticketId: selectedTicket._id,
+        message: replyMessage,
+        senderName: user.fullName || "Admin",
+        senderId: user.id,
+      });
+      setReplyMessage("");
+      alert("Reply sent successfully!");
+    } catch (error) {
+      console.error("Error sending reply:", error);
+      alert("Failed to send reply");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!selectedTicket) return;
+
+    try {
+      await updateStatus({
+        ticketId: selectedTicket._id,
+        status: newStatus as any,
+      });
+      setSelectedTicket({ ...selectedTicket, status: newStatus });
+      alert("Status updated successfully!");
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("Failed to update status");
+    }
+  };
 
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background">
@@ -330,9 +377,7 @@ export default function TicketsPage() {
                 <select 
                   className="w-full px-3 py-2 border rounded-md"
                   value={selectedTicket.status}
-                  onChange={(e) => {
-                    setSelectedTicket({...selectedTicket, status: e.target.value});
-                  }}
+                  onChange={(e) => handleStatusChange(e.target.value)}
                 >
                   <option value="open">Open</option>
                   <option value="in_progress">In Progress</option>
@@ -346,20 +391,62 @@ export default function TicketsPage() {
             {/* Conversation Section */}
             <div className="bg-white rounded-lg border p-6">
               <h2 className="text-lg font-semibold mb-4">Conversation</h2>
-              <div className="text-center py-8 text-gray-500 text-sm">
-                No messages yet. Be the first to reply!
+              
+              <div className="space-y-4 mb-6 max-h-96 overflow-y-auto">
+                {messages && messages.length > 0 ? (
+                  messages.map((message) => (
+                    <div
+                      key={message._id}
+                      className={`p-4 rounded-lg ${
+                        message.senderType === "admin"
+                          ? "bg-blue-50 border border-blue-200 ml-8"
+                          : "bg-gray-50 border border-gray-200 mr-8"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold text-gray-900">
+                          {message.senderType === "admin" ? message.senderName : "Customer"}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(message.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-gray-700">{message.message}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    No messages yet. Be the first to reply!
+                  </div>
+                )}
               </div>
 
               {/* Reply Form */}
-              <div className="mt-6">
+              <div className="mt-6 border-t pt-4">
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Reply to Customer</h3>
                 <textarea
+                  value={replyMessage}
+                  onChange={(e) => setReplyMessage(e.target.value)}
                   placeholder="Type your response here..."
                   className="w-full px-3 py-2 border rounded-md min-h-32 text-sm"
                 />
                 <div className="flex justify-end mt-3">
-                  <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    Send Reply
+                  <Button 
+                    onClick={handleSendReply}
+                    disabled={sending || !replyMessage.trim()}
+                    className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2"
+                  >
+                    {sending ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        Send Reply
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>

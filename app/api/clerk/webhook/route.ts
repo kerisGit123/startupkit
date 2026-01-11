@@ -63,6 +63,54 @@ export async function POST(req: Request) {
         updatedBy: u?.id || "system",
       });
 
+      // Track referral if user signed up with referral code
+      if (type === "user.created") {
+        const referralCode = u?.unsafe_metadata?.referralCode || u?.public_metadata?.referralCode;
+        console.log("🔍 User created - checking for referral code:", {
+          userId: u?.id,
+          hasUnsafeMetadata: !!u?.unsafe_metadata?.referralCode,
+          hasPublicMetadata: !!u?.public_metadata?.referralCode,
+          referralCode: referralCode,
+        });
+        
+        if (referralCode) {
+          try {
+            console.log("📝 Tracking referral:", referralCode);
+            await convex.mutation(api.referrals.trackReferral, {
+              referralCode: referralCode as string,
+              newUserId: u?.id,
+            });
+            console.log("✅ Referral tracked successfully");
+          } catch (error) {
+            console.error("❌ Failed to track referral:", error);
+          }
+        } else {
+          console.log("ℹ️ No referral code found in user metadata");
+        }
+      }
+
+      // Complete referral and award credits when email is verified
+      if (type === "user.updated") {
+        const emailVerified = u?.email_addresses?.[0]?.verification?.status === "verified";
+        console.log("🔍 User updated - checking email verification:", {
+          userId: u?.id,
+          emailVerified: emailVerified,
+        });
+        
+        if (emailVerified) {
+          try {
+            console.log("📧 Email verified - completing referral for user:", u?.id);
+            const result = await convex.mutation(api.referrals.completeReferral, {
+              referredUserId: u?.id,
+            });
+            console.log("✅ Referral completed:", result);
+          } catch (error) {
+            // Silently fail if no pending referral (user might not have used referral code)
+            console.log("ℹ️ No pending referral to complete for user:", u?.id);
+          }
+        }
+      }
+
       return NextResponse.json({ ok: true });
     }
 

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as activityDashboard from "../activityDashboard.js";
 import type * as admin from "../admin.js";
 import type * as adminAnalytics from "../adminAnalytics.js";
 import type * as adminDashboard from "../adminDashboard.js";
@@ -17,15 +18,21 @@ import type * as adminNotificationsForceFix from "../adminNotificationsForceFix.
 import type * as adminPurchases from "../adminPurchases.js";
 import type * as adminSubscriptions from "../adminSubscriptions.js";
 import type * as adminTickets from "../adminTickets.js";
+import type * as adminUserManagement from "../adminUserManagement.js";
 import type * as adminUsers from "../adminUsers.js";
+import type * as alerts from "../alerts.js";
 import type * as credits from "../credits.js";
 import type * as debugNotifications from "../debugNotifications.js";
 import type * as fixNotifications from "../fixNotifications.js";
 import type * as forceFixAll from "../forceFixAll.js";
 import type * as forceFixNotifications from "../forceFixNotifications.js";
+import type * as ipBlocking from "../ipBlocking.js";
+import type * as referrals from "../referrals.js";
 import type * as settings from "../settings.js";
 import type * as subscriptions from "../subscriptions.js";
+import type * as syncUserData from "../syncUserData.js";
 import type * as tickets from "../tickets.js";
+import type * as userActivity from "../userActivity.js";
 import type * as users from "../users.js";
 
 import type {
@@ -35,6 +42,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  activityDashboard: typeof activityDashboard;
   admin: typeof admin;
   adminAnalytics: typeof adminAnalytics;
   adminDashboard: typeof adminDashboard;
@@ -44,15 +52,21 @@ declare const fullApi: ApiFromModules<{
   adminPurchases: typeof adminPurchases;
   adminSubscriptions: typeof adminSubscriptions;
   adminTickets: typeof adminTickets;
+  adminUserManagement: typeof adminUserManagement;
   adminUsers: typeof adminUsers;
+  alerts: typeof alerts;
   credits: typeof credits;
   debugNotifications: typeof debugNotifications;
   fixNotifications: typeof fixNotifications;
   forceFixAll: typeof forceFixAll;
   forceFixNotifications: typeof forceFixNotifications;
+  ipBlocking: typeof ipBlocking;
+  referrals: typeof referrals;
   settings: typeof settings;
   subscriptions: typeof subscriptions;
+  syncUserData: typeof syncUserData;
   tickets: typeof tickets;
+  userActivity: typeof userActivity;
   users: typeof users;
 }>;
 

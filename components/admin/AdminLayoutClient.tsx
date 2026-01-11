@@ -7,6 +7,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { PanelSwitcher } from "@/components/panel-switcher";
 import { HeaderUser } from "@/components/header-user";
 import { Separator } from "@/components/ui/separator";
+import { LoginTracker } from "@/components/LoginTracker";
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -27,7 +28,9 @@ export default function AdminLayoutClient({
     }
   }, [isLoaded, user, router]);
   return (
-    <SidebarProvider>
+    <>
+      <LoginTracker />
+      <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
@@ -48,5 +51,6 @@ export default function AdminLayoutClient({
         </main>
       </SidebarInset>
     </SidebarProvider>
+    </>
   );
 }

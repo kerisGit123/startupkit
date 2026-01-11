@@ -1,13 +1,16 @@
 "use client";
 
 import { useUser, useOrganization } from "@clerk/nextjs";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCompany } from "@/hooks/useCompany";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAdminRole } from "@/hooks/useAdminRole";
-import { ArrowUpRight, TrendingUp, Users, Zap, BarChart3, Wallet, Settings, Shield } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Users, Zap, BarChart3, Wallet, Settings, Shield, Copy, Check, Gift } from "lucide-react";
 import Link from "next/link";
+import { AlertBanner } from "@/components/AlertBanner";
+import { ReferralTracker } from "@/components/ReferralTracker";
+import { useState, useMemo, useEffect } from "react";
 
 export default function DashboardPage() {
   const { user } = useUser();
@@ -15,11 +18,43 @@ export default function DashboardPage() {
   const { companyId } = useCompany();
   const { plan, entitlements, isLoading } = useSubscription();
   const { isAdmin } = useAdminRole();
+  const [copied, setCopied] = useState(false);
 
   const creditsBalance = useQuery(
     api.credits.getBalance,
     companyId ? { companyId } : "skip"
   );
+
+  const referralCode = useQuery(
+    api.referrals.getReferralCode,
+    user?.id ? { userId: user.id } : "skip"
+  );
+
+  const referralSettings = useQuery(api.referrals.getReferralSettings);
+
+  const generateReferralCode = useMutation(api.referrals.generateReferralCode);
+
+  useEffect(() => {
+    if (user?.id && referralCode === null) {
+      generateReferralCode({ userId: user.id });
+    }
+  }, [user?.id, referralCode, generateReferralCode]);
+
+  const referralLink = useMemo(() => {
+    if (referralCode) {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "");
+      return `${baseUrl}/sign-up?ref=${referralCode.code}`;
+    }
+    return "";
+  }, [referralCode]);
+
+  const handleCopyReferralLink = () => {
+    if (referralLink) {
+      navigator.clipboard.writeText(referralLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   if (!user) {
     return (
@@ -55,7 +90,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+      <ReferralTracker />
       <div className="max-w-7xl mx-auto">
+        {/* Alert Banner */}
+        <div className="mb-6">
+          <AlertBanner />
+        </div>
+
         {/* Welcome Section */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -174,6 +215,76 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Referral Link Card */}
+        {referralSettings?.enabled && referralLink && (
+          <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl shadow-sm border border-purple-200 p-6 mb-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Gift className="w-6 h-6 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Refer Friends & Earn Credits</h2>
+                <p className="text-sm text-gray-600">
+                  Share your referral link and earn {referralSettings.rewardCredits || 50} credits for each friend who signs up
+                  {referralSettings.bonusCredits && referralSettings.bonusCredits > 0 
+                    ? `, and they get ${referralSettings.bonusCredits} credits too!` 
+                    : '!'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg p-4 border border-gray-200">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Your Referral Link</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={referralLink}
+                  readOnly
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 font-mono text-sm"
+                />
+                <button
+                  onClick={handleCopyReferralLink}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold transition flex items-center gap-2 whitespace-nowrap"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      Copy Link
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {referralCode && referralCode.totalReferrals > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-2xl font-bold text-purple-600">{referralCode.totalReferrals}</p>
+                      <p className="text-xs text-gray-600">Total Referrals</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-purple-600">{referralCode.totalCreditsEarned}</p>
+                      <p className="text-xs text-gray-600">Credits Earned</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Link
+              href="/dashboard/referrals"
+              className="mt-4 block text-center text-sm text-purple-600 hover:text-purple-700 font-medium"
+            >
+              View detailed referral stats →
+            </Link>
+          </div>
+        )}
 
         {/* Recent Activity / Quick Links */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

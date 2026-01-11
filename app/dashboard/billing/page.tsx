@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCompany } from "@/hooks/useCompany";
 import { useSubscription } from "@/hooks/useSubscription";
-import { CreditCard, Calendar, ShoppingCart, ExternalLink } from "lucide-react";
+import { CreditCard, Calendar, ShoppingCart, ExternalLink, Gift } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -359,45 +359,69 @@ export default function BillingPage() {
 
           <div className="space-y-3">
             {purchaseHistory && purchaseHistory.length > 0 ? (
-              purchaseHistory.map((purchase) => (
-                <div key={purchase._id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-yellow-100 rounded-lg">
-                      <ShoppingCart className="w-5 h-5 text-yellow-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{purchase.tokens} Credits Purchased</p>
-                      {purchase.amountPaid && purchase.currency && (
-                        <p className="text-sm font-semibold text-yellow-600">
-                          {purchase.currency.toUpperCase()} {(purchase.amountPaid / 100).toFixed(2)}
+              purchaseHistory.map((purchase) => {
+                const isReferralBonus = purchase.reason?.includes("referral") || purchase.reason?.includes("Welcome bonus");
+                const isReferralReward = purchase.reason?.includes("Referral reward");
+                
+                return (
+                  <div key={purchase._id} className={`flex items-center justify-between p-4 border rounded-lg ${
+                    isReferralBonus || isReferralReward ? 'border-purple-200 bg-purple-50' : 'border-gray-200'
+                  }`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg ${
+                        isReferralBonus || isReferralReward ? 'bg-purple-100' : 'bg-yellow-100'
+                      }`}>
+                        {isReferralBonus || isReferralReward ? (
+                          <Gift className="w-5 h-5 text-purple-600" />
+                        ) : (
+                          <ShoppingCart className="w-5 h-5 text-yellow-600" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {isReferralBonus ? `${purchase.tokens} Referral Bonus Credits` :
+                           isReferralReward ? `${purchase.tokens} Referral Reward Credits` :
+                           `${purchase.tokens} Credits Purchased`}
                         </p>
-                      )}
-                      <p className="text-sm text-gray-500">
-                        {new Date(purchase.createdAt).toLocaleDateString('en-GB')} at {new Date(purchase.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                        {purchase.reason && (
+                          <p className="text-sm text-purple-600 font-medium">
+                            {purchase.reason}
+                          </p>
+                        )}
+                        {purchase.amountPaid && purchase.currency && (
+                          <p className="text-sm font-semibold text-yellow-600">
+                            {purchase.currency.toUpperCase()} {(purchase.amountPaid / 100).toFixed(2)}
+                          </p>
+                        )}
+                        <p className="text-sm text-gray-500">
+                          {new Date(purchase.createdAt).toLocaleDateString('en-GB')} at {new Date(purchase.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {purchase.stripeCheckoutSessionId && (
+                          <p className="text-xs text-gray-400 mt-1">Transaction ID: {purchase.stripeCheckoutSessionId}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right flex flex-col items-end gap-2">
+                      <div>
+                        <p className={`font-semibold ${isReferralBonus || isReferralReward ? 'text-purple-600' : 'text-gray-900'}`}>
+                          +{purchase.tokens}
+                        </p>
+                        <p className="text-xs text-gray-500">Credits</p>
+                      </div>
                       {purchase.stripeCheckoutSessionId && (
-                        <p className="text-xs text-gray-400 mt-1">Transaction ID: {purchase.stripeCheckoutSessionId}</p>
+                        <a
+                          href={`https://dashboard.stripe.com/test/payments/${purchase.stripePaymentIntentId || purchase.stripeCheckoutSessionId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-yellow-600 hover:text-yellow-700 flex items-center gap-1"
+                        >
+                          View Invoice <ExternalLink className="w-3 h-3" />
+                        </a>
                       )}
                     </div>
                   </div>
-                  <div className="text-right flex flex-col items-end gap-2">
-                    <div>
-                      <p className="font-semibold text-gray-900">+{purchase.tokens}</p>
-                      <p className="text-xs text-gray-500">Credits</p>
-                    </div>
-                    {purchase.stripeCheckoutSessionId && (
-                      <a
-                        href={`https://dashboard.stripe.com/test/payments/${purchase.stripePaymentIntentId || purchase.stripeCheckoutSessionId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-yellow-600 hover:text-yellow-700 flex items-center gap-1"
-                      >
-                        View Invoice <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                 <div className="flex items-center gap-4">

@@ -1,9 +1,9 @@
 "use client";
 
 import { UserButton } from "@clerk/nextjs";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, 
   CreditCard, 
@@ -17,14 +17,17 @@ import {
   Menu,
   X,
   Ticket,
-  Bell
+  Bell,
+  ShieldAlert
 } from "lucide-react";
 import { useClerk } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { LoginTracker } from "@/components/LoginTracker";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { signOut, user } = useClerk();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
@@ -32,6 +35,22 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     api.tickets.getUserTickets,
     user?.id ? {} : "skip"
   );
+  
+  // Check if user is blocked
+  const currentUser = useQuery(
+    api.adminUsers.getAllUsers,
+    user?.id ? {} : "skip"
+  );
+  
+  const userRecord = currentUser?.find(u => u.clerkUserId === user?.id);
+  const isBlocked = userRecord?.isBlocked || false;
+  
+  useEffect(() => {
+    if (isBlocked) {
+      signOut();
+      router.push("/blocked");
+    }
+  }, [isBlocked, signOut, router]);
   
   const openTicketsCount = tickets?.filter(t => t.status === "open").length || 0;
 
@@ -48,10 +67,37 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) => pathname === href;
 
+  // Show blocked message if user is blocked
+  if (isBlocked) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="flex justify-center mb-4">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+              <ShieldAlert className="w-8 h-8 text-red-600" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-6">
+            Your account has been blocked by an administrator. Please contact support for assistance.
+          </p>
+          <button
+            onClick={() => signOut()}
+            className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
-      {/* Backdrop overlay for mobile - only show when sidebar is open */}
-      {sidebarOpen && (
+    <>
+      <LoginTracker />
+      <div className="flex h-screen bg-gray-100 overflow-hidden">
+        {/* Backdrop overlay for mobile - only show when sidebar is open */}
+        {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
@@ -150,5 +196,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
     </div>
+    </>
   );
 }

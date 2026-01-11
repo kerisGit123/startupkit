@@ -10,6 +10,7 @@ import {
   IconCreditCard,
   IconBell,
   IconShield,
+  IconActivity,
 } from "@tabler/icons-react"
 
 import {
@@ -37,6 +38,11 @@ const navItems = [
     icon: IconUsers,
   },
   {
+    title: "Activity",
+    url: "/admin/activity",
+    icon: IconActivity,
+  },
+  {
     title: "Subscriptions",
     url: "/admin/subscriptions",
     icon: IconCreditCard,
@@ -54,6 +60,16 @@ const navItems = [
   {
     title: "Notifications",
     url: "/admin/notifications",
+    icon: IconBell,
+  },
+  {
+    title: "Referrals",
+    url: "/admin/referrals",
+    icon: IconShield,
+  },
+  {
+    title: "Alerts",
+    url: "/admin/alerts",
     icon: IconBell,
   },
   {
