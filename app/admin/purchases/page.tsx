@@ -156,15 +156,16 @@ export default function PurchasesPage() {
               </th>
               <th className="px-6 py-3 text-sm font-medium text-gray-600">Purchase</th>
               <th className="px-6 py-3 text-sm font-medium text-gray-600">Customer</th>
+              <th className="px-6 py-3 text-sm font-medium text-gray-600">Date</th>
               <th className="px-6 py-3 text-sm font-medium text-gray-600">Credits</th>
               <th className="px-6 py-3 text-sm font-medium text-gray-600">Amount</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {!filteredPurchases ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">Loading...</td></tr>
+              <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">Loading...</td></tr>
             ) : filteredPurchases.length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">No purchases found</td></tr>
+              <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">No purchases found</td></tr>
             ) : (
               filteredPurchases.map((purchase) => (
                 <tr key={purchase._id} className="hover:bg-gray-50 transition-colors">
@@ -205,12 +206,27 @@ export default function PurchasesPage() {
                     <div className="text-xs text-gray-500">{purchase.userEmail || "No email"}</div>
                   </td>
                   <td className="px-6 py-4">
+                    <div className="text-sm">
+                      {new Date(purchase.createdAt).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {new Date(purchase.createdAt).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
                     {getCreditBadge(purchase.tokens)}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="text-orange-500">{getPriorityIcon(purchase.tokens)}</span>
-                      <span className="text-sm font-medium">MYR {(purchase.tokens * 0.39).toFixed(2)}</span>
+                      <span className="text-sm font-medium">MYR {((purchase.amountPaid || 0) / 100).toFixed(2)}</span>
                     </div>
                   </td>
                 </tr>

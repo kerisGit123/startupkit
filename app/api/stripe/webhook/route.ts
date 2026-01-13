@@ -24,21 +24,34 @@ export async function POST(req: Request) {
       case "payment_intent.succeeded": {
         const pi = event.data.object as any;
         const md = pi.metadata || {};
+        console.log("[WEBHOOK] payment_intent.succeeded", { metadata: md, piId: pi.id });
+        
         if (md.type === "credits") {
           const companyId = md.companyId;
+          const userId = md.userId || undefined;
           const tokens = Number(md.tokens || 0);
           const amountPaid = pi.amount_received || pi.amount;
           const currency = pi.currency || md.currency;
           
+          console.log("[WEBHOOK] Processing credit purchase", { companyId, userId, tokens, amountPaid, currency });
+          
           if (companyId && tokens > 0) {
-            await convex.mutation(api.credits.addCredits, {
-              companyId,
-              tokens,
-              stripePaymentIntentId: pi.id,
-              stripeCheckoutSessionId: undefined,
-              amountPaid,
-              currency,
-            });
+            try {
+              const result = await convex.mutation(api.transactions.createTransaction.createPaymentTransaction, {
+                companyId,
+                userId: userId as any,
+                amount: amountPaid,
+                currency,
+                tokens,
+                stripePaymentIntentId: pi.id,
+              });
+              console.log("[WEBHOOK] Credit purchase transaction created", result);
+            } catch (error) {
+              console.error("[WEBHOOK] Failed to create payment transaction", error);
+              throw error;
+            }
+          } else {
+            console.log("[WEBHOOK] Skipping - invalid companyId or tokens", { companyId, tokens });
           }
         }
         break;
@@ -46,22 +59,39 @@ export async function POST(req: Request) {
 
       case "checkout.session.completed": {
         const session = event.data.object as any;
+        console.log("[WEBHOOK] checkout.session.completed", { 
+          sessionId: session.id, 
+          mode: session.mode, 
+          metadata: session.metadata 
+        });
         
         if (session.mode === "payment" && session.metadata?.type === "credits") {
           const companyId = session.metadata?.companyId;
+          const userId = session.metadata?.userId || undefined;
           const tokens = Number(session.metadata?.tokens || 0);
           const amountPaid = session.amount_total;
           const currency = session.currency;
           
+          console.log("[WEBHOOK] Processing checkout credit purchase", { companyId, userId, tokens, amountPaid, currency });
+          
           if (companyId && tokens > 0) {
-            await convex.mutation(api.credits.addCredits, {
-              companyId,
-              tokens,
-              stripePaymentIntentId: session.payment_intent,
-              stripeCheckoutSessionId: session.id,
-              amountPaid,
-              currency,
-            });
+            try {
+              const result = await convex.mutation(api.transactions.createTransaction.createPaymentTransaction, {
+                companyId,
+                userId: userId as any,
+                amount: amountPaid,
+                currency,
+                tokens,
+                stripePaymentIntentId: session.payment_intent as string,
+                stripeCheckoutSessionId: session.id,
+              });
+              console.log("[WEBHOOK] Checkout credit purchase transaction created", result);
+            } catch (error) {
+              console.error("[WEBHOOK] Failed to create checkout payment transaction", error);
+              throw error;
+            }
+          } else {
+            console.log("[WEBHOOK] Skipping checkout - invalid companyId or tokens", { companyId, tokens });
           }
           break;
         }
@@ -71,26 +101,39 @@ export async function POST(req: Request) {
         const customerId = session.customer;
         const planFromMetadata = session.metadata?.plan || "starter";
         
+        console.log("[WEBHOOK] Processing subscription checkout", { companyId, subscriptionId, plan: planFromMetadata });
+        
         if (companyId) {
-          await convex.mutation(api.subscriptions.upsertSubscription, {
-            companyId,
-            plan: planFromMetadata,
-            stripeCustomerId: customerId,
-            stripeSubscriptionId: subscriptionId,
-            currentPeriodEnd: undefined,
-            status: "active",
-          });
-          
-          await convex.mutation(api.subscriptions.recordTransaction, {
-            companyId,
-            action: "checkout_completed",
-            plan: planFromMetadata,
-            status: "active",
-            stripeCustomerId: customerId,
-            stripeSubscriptionId: subscriptionId,
-            source: "stripe",
-            eventType: "checkout.session.completed",
-          });
+          try {
+            await convex.mutation(api.subscriptions.upsertSubscription, {
+              companyId,
+              plan: planFromMetadata,
+              stripeCustomerId: customerId as string,
+              stripeSubscriptionId: subscriptionId as string,
+              currentPeriodEnd: undefined,
+              status: "active",
+            });
+            console.log("[WEBHOOK] Subscription upserted");
+            
+            // NEW: Create transaction with invoice for subscription
+            const result = await convex.mutation(api.transactions.createTransaction.createSubscriptionTransaction, {
+              companyId,
+              userId: session.metadata?.userId as any,
+              amount: session.amount_total || 0,
+              currency: session.currency || "usd",
+              plan: planFromMetadata,
+              status: "active",
+              action: "created",
+              stripeSubscriptionId: subscriptionId as string,
+              stripeCustomerId: customerId as string,
+              eventType: "checkout.session.completed",
+              source: "stripe",
+            });
+            console.log("[WEBHOOK] Subscription transaction created", result);
+          } catch (error) {
+            console.error("[WEBHOOK] Failed to process subscription", error);
+            throw error;
+          }
         }
         break;
       }
@@ -116,16 +159,21 @@ export async function POST(req: Request) {
             status: sub.status,
           });
           
-          await convex.mutation(api.subscriptions.recordTransaction, {
+          // NEW: Create transaction with invoice for subscription update
+          const amount = sub.items?.data?.[0]?.price?.unit_amount || 0;
+          await convex.mutation(api.transactions.createTransaction.createSubscriptionTransaction, {
             companyId,
-            action: event.type.endsWith("created") ? "created" : "updated",
+            userId: sub.metadata?.userId,
+            amount,
+            currency: sub.currency || "usd",
             plan,
             status: sub.status,
-            stripeCustomerId: sub.customer,
+            action: event.type.endsWith("created") ? "created" : "updated",
             stripeSubscriptionId: sub.id,
-            source: "stripe",
+            stripeCustomerId: sub.customer,
             eventType: event.type,
             currentPeriodEnd: sub.current_period_end,
+            source: "stripe",
           });
         }
         break;
@@ -144,16 +192,20 @@ export async function POST(req: Request) {
           status: sub.status,
         });
         
-        await convex.mutation(api.subscriptions.recordTransaction, {
+        // Record cancellation (no invoice needed for cancellations)
+        await convex.mutation(api.transactions.createTransaction.createSubscriptionTransaction, {
           companyId: companyId || "",
-          action: "deleted",
+          userId: sub.metadata?.userId,
+          amount: 0,
+          currency: "usd",
           plan: "free",
           status: sub.status,
-          stripeCustomerId: sub.customer,
+          action: "cancelled",
           stripeSubscriptionId: sub.id,
-          source: "stripe",
+          stripeCustomerId: sub.customer,
           eventType: event.type,
           currentPeriodEnd: sub.current_period_end,
+          source: "stripe",
         });
         break;
       }

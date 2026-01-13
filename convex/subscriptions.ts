@@ -112,12 +112,29 @@ export const getEntitlements = query({
 export const getSubscriptionHistory = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    const transactions = await ctx.db
+    const subscriptionEvents = await ctx.db
       .query("subscription_transactions")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
       .order("desc")
       .take(50);
-    return transactions;
+    
+    // Join with users to get email
+    const eventsWithUser = await Promise.all(
+      subscriptionEvents.map(async (event) => {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", event.companyId))
+          .first();
+        
+        return {
+          ...event,
+          userEmail: user?.email || null,
+          userName: user?.fullName || user?.firstName || null,
+        };
+      })
+    );
+    
+    return eventsWithUser;
   },
 });
 
@@ -132,12 +149,16 @@ export const recordTransaction = mutation({
     source: v.optional(v.string()),
     eventType: v.optional(v.string()),
     currentPeriodEnd: v.optional(v.number()),
+    amount: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
     
+    // Check for duplicates in the last 60 seconds
     const windowMs = 60_000;
-    const recent: any[] = [];
+    const recent = [];
     const cursor = ctx.db
       .query("subscription_transactions")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
@@ -171,6 +192,10 @@ export const recordTransaction = mutation({
       source: args.source,
       eventType: args.eventType,
       currentPeriodEnd: args.currentPeriodEnd,
+      amount: args.amount,
+      currency: args.currency,
+      reason: args.reason,
+      cancelledAt: args.action === "cancelled" ? now : undefined,
       createdAt: now,
     });
     return true;

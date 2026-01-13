@@ -36,6 +36,140 @@ export default defineSchema({
     .index("by_isBlocked", ["isBlocked"]),
 
   // ============================================
+  // CORE: Platform Configuration (SaaS Settings)
+  // ============================================
+  platform_config: defineTable({
+    key: v.string(),
+    value: v.any(),
+    category: v.string(),
+    description: v.string(),
+    isEncrypted: v.boolean(),
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  })
+    .index("by_key", ["key"])
+    .index("by_category", ["category"]),
+
+  // ============================================
+  // EMAIL: Templates
+  // ============================================
+  email_templates: defineTable({
+    name: v.string(),
+    subject: v.string(),
+    html: v.optional(v.string()),
+    htmlBody: v.optional(v.string()),
+    plainTextBody: v.optional(v.string()),
+    variables: v.array(v.string()),
+    category: v.optional(v.union(v.literal("system"), v.literal("custom"), v.literal("campaign"))),
+    type: v.optional(v.union(
+      v.literal("welcome"),
+      v.literal("password_reset"),
+      v.literal("subscription"),
+      v.literal("payment"),
+      v.literal("usage_alert"),
+      v.literal("admin_notification"),
+      v.literal("custom")
+    )),
+    createdBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    isActive: v.optional(v.boolean()),
+    isDefault: v.optional(v.boolean()),
+  })
+    .index("by_category", ["category"])
+    .index("by_type", ["type"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_active", ["isActive"]),
+
+  // ============================================
+  // EMAIL: Campaigns
+  // ============================================
+  email_campaigns: defineTable({
+    name: v.string(),
+    subject: v.string(),
+    templateId: v.optional(v.id("email_templates")),
+    systemTemplateKey: v.optional(v.string()),
+    recipientType: v.union(
+      v.literal("all_users"),
+      v.literal("specific_users"),
+      v.literal("user_segment"),
+      v.literal("active_7_days"),
+      v.literal("inactive_1_month"),
+      v.literal("user_label")
+    ),
+    recipientUserIds: v.optional(v.array(v.string())),
+    userLabel: v.optional(v.string()),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("scheduled"),
+      v.literal("sending"),
+      v.literal("sent"),
+      v.literal("failed")
+    ),
+    scheduledAt: v.optional(v.number()),
+    sentAt: v.optional(v.number()),
+    totalRecipients: v.number(),
+    sentCount: v.number(),
+    deliveredCount: v.number(),
+    openedCount: v.number(),
+    clickedCount: v.number(),
+    failedCount: v.number(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_scheduledAt", ["scheduledAt"]),
+
+  // ============================================
+  // EMAIL: Events & Analytics
+  // ============================================
+  email_events: defineTable({
+    campaignId: v.optional(v.id("email_campaigns")),
+    userId: v.string(),
+    userEmail: v.string(),
+    eventType: v.union(
+      v.literal("sent"),
+      v.literal("delivered"),
+      v.literal("opened"),
+      v.literal("clicked"),
+      v.literal("bounced"),
+      v.literal("complained")
+    ),
+    timestamp: v.number(),
+  })
+    .index("by_campaignId", ["campaignId"])
+    .index("by_userId", ["userId"])
+    .index("by_eventType", ["eventType"]),
+
+  // ============================================
+  // EMAIL: Logs (for testing/debugging)
+  // ============================================
+  email_logs: defineTable({
+    sentTo: v.string(), // recipient email
+    subject: v.string(),
+    htmlContent: v.string(),
+    textContent: v.optional(v.string()),
+    templateType: v.optional(v.string()), // e.g., "welcome", "sales_announcement"
+    templateName: v.optional(v.string()),
+    campaignId: v.optional(v.id("email_campaigns")),
+    variables: v.optional(v.any()), // Store the variables used
+    status: v.union(
+      v.literal("logged"), // Logged but not sent (test mode)
+      v.literal("sent"), // Actually sent via Resend
+      v.literal("failed") // Failed to send
+    ),
+    errorMessage: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_sentTo", ["sentTo"])
+    .index("by_templateType", ["templateType"])
+    .index("by_campaignId", ["campaignId"])
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"]),
+
+  // ============================================
   // CORE: Organization Settings (Tenant Config)
   // ============================================
   org_settings: defineTable({
@@ -69,6 +203,25 @@ export default defineSchema({
     referralEnabled: v.optional(v.boolean()),
     referralRewardCredits: v.optional(v.number()), // Credits for referrer
     referralBonusCredits: v.optional(v.number()), // Bonus for new user
+    
+    // Email Settings
+    emailEnabled: v.optional(v.boolean()), // Master toggle for all emails
+    sendWelcomeEmail: v.optional(v.boolean()),
+    sendPasswordResetEmail: v.optional(v.boolean()),
+    sendSubscriptionEmails: v.optional(v.boolean()),
+    sendUsageAlerts: v.optional(v.boolean()),
+    sendAdminNotifications: v.optional(v.boolean()),
+    sendPaymentNotifications: v.optional(v.boolean()),
+    resendApiKey: v.optional(v.string()), // Resend API key
+    emailFromName: v.optional(v.string()), // e.g., "Your SaaS"
+    emailFromAddress: v.optional(v.string()), // e.g., "noreply@yourdomain.com"
+    passwordResetLink: v.optional(v.string()), // Clerk password reset URL
+    
+    // Credit Settings
+    initialSignupCredits: v.optional(v.number()), // Credits given on signup
+    
+    // Super Admin Settings
+    superAdminEmail: v.optional(v.string()), // Super admin email (cannot be deleted)
     
     // Legacy fields (for backward compatibility)
     email: v.optional(v.string()),
@@ -112,7 +265,25 @@ export default defineSchema({
     .index("by_subscription", ["stripeSubscriptionId"]),
 
   // ============================================
-  // CORE: Subscription Audit Log
+  // EMAIL: Unsubscribes
+  // ============================================
+  email_unsubscribes: defineTable({
+    userId: v.optional(v.id("users")),
+    email: v.string(),
+    unsubscribedFrom: v.union(
+      v.literal("all"),
+      v.literal("marketing"),
+      v.literal("transactional"),
+      v.literal("notifications")
+    ),
+    reason: v.optional(v.string()),
+    unsubscribedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_user", ["userId"]),
+
+  // ============================================
+  // CORE: Subscription Event Log (Audit trail for all subscription changes)
   // ============================================
   subscription_transactions: defineTable({
     companyId: v.string(),
@@ -124,11 +295,73 @@ export default defineSchema({
     source: v.optional(v.string()),
     eventType: v.optional(v.string()),
     currentPeriodEnd: v.optional(v.number()),
+    amount: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    reason: v.optional(v.string()),
+    cancelledAt: v.optional(v.number()),
     createdAt: v.number(),
-  }).index("by_companyId", ["companyId"]),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_stripeSubscriptionId", ["stripeSubscriptionId"])
+    .index("by_action", ["action"]),
 
   // ============================================
-  // CORE: Credits System (One-time Purchases)
+  // CORE: Unified Transactions (Financial records that affect credits/money)
+  // ============================================
+  transactions: defineTable({
+    companyId: v.string(),
+    userId: v.optional(v.id("users")),
+    
+    // Transaction Type
+    type: v.union(
+      v.literal("subscription"),
+      v.literal("payment"),
+      v.literal("credit"),
+      v.literal("referral"),
+      v.literal("bonus"),
+      v.literal("refund")
+    ),
+    transactionType: v.union(
+      v.literal("recurring"),
+      v.literal("one_time")
+    ),
+    
+    // Financial Details
+    amount: v.number(),
+    currency: v.string(),
+    tokens: v.optional(v.number()),
+    
+    // Stripe Integration
+    stripePaymentIntentId: v.optional(v.string()),
+    stripeCheckoutSessionId: v.optional(v.string()),
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+    
+    // Subscription Details (when type = "subscription")
+    plan: v.optional(v.string()),
+    status: v.optional(v.string()),
+    action: v.optional(v.string()),
+    source: v.optional(v.string()),
+    eventType: v.optional(v.string()),
+    currentPeriodEnd: v.optional(v.number()),
+    
+    // Invoice Link
+    invoiceId: v.optional(v.id("invoices")),
+    invoiceNo: v.optional(v.string()),
+    
+    // Metadata
+    reason: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_userId", ["userId"])
+    .index("by_type", ["type"])
+    .index("by_invoiceId", ["invoiceId"])
+    .index("by_stripePaymentIntentId", ["stripePaymentIntentId"])
+    .index("by_stripeSubscriptionId", ["stripeSubscriptionId"]),
+
+  // ============================================
+  // CORE: Credits System (One-time Purchases) - LEGACY (Keep for backward compatibility)
   // ============================================
   credits_ledger: defineTable({
     companyId: v.string(),
@@ -138,8 +371,12 @@ export default defineSchema({
     amountPaid: v.optional(v.number()),
     currency: v.optional(v.string()),
     reason: v.optional(v.string()),
+    invoiceId: v.optional(v.id("invoices")),
+    invoiceNo: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_companyId", ["companyId"]),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_invoiceId", ["invoiceId"]),
 
   credits_balance: defineTable({
     companyId: v.string(),
@@ -443,4 +680,86 @@ export default defineSchema({
     .index("by_alertId", ["alertId"])
     .index("by_userId", ["userId"])
     .index("by_alert_user", ["alertId", "userId"]),
+
+  // ============================================
+  // INVOICE SYSTEM
+  // ============================================
+  invoice_config: defineTable({
+    invoicePrefix: v.string(),
+    invoiceNoType: v.union(
+      v.literal("year_running"),
+      v.literal("year_month_running"),
+      v.literal("year_month_en_running"),
+      v.literal("full_year_running"),
+      v.literal("custom"),
+      v.literal("year_dash_running"),
+      v.literal("year_month_en_dash_running")
+    ),
+    invoiceLeadingZeros: v.number(),
+    invoiceRunningNo: v.number(),
+    invoiceCurrentNo: v.string(),
+    lastResetDate: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+
+  invoices: defineTable({
+    invoiceNo: v.string(),
+    userId: v.optional(v.id("users")),
+    companyId: v.optional(v.string()),
+    amount: v.number(),
+    currency: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("issued"),
+      v.literal("paid"),
+      v.literal("cancelled"),
+      v.literal("overdue")
+    ),
+    invoiceType: v.union(
+      v.literal("subscription"),
+      v.literal("payment")
+    ),
+    transactionType: v.union(
+      v.literal("recurring"),
+      v.literal("one_time")
+    ),
+    transactionId: v.optional(v.id("transactions")),
+    items: v.array(v.object({
+      description: v.string(),
+      quantity: v.number(),
+      unitPrice: v.number(),
+      total: v.number(),
+    })),
+    billingDetails: v.object({
+      name: v.string(),
+      email: v.string(),
+      address: v.optional(v.string()),
+      city: v.optional(v.string()),
+      state: v.optional(v.string()),
+      country: v.optional(v.string()),
+      postalCode: v.optional(v.string()),
+    }),
+    subtotal: v.number(),
+    tax: v.optional(v.number()),
+    taxRate: v.optional(v.number()),
+    discount: v.optional(v.number()),
+    total: v.number(),
+    notes: v.optional(v.string()),
+    stripePaymentIntentId: v.optional(v.string()),
+    stripeInvoiceId: v.optional(v.string()),
+    issuedAt: v.optional(v.number()),
+    dueDate: v.optional(v.number()),
+    paidAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_invoiceNo", ["invoiceNo"])
+    .index("by_userId", ["userId"])
+    .index("by_companyId", ["companyId"])
+    .index("by_status", ["status"])
+    .index("by_invoiceType", ["invoiceType"])
+    .index("by_transactionType", ["transactionType"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_issuedAt", ["issuedAt"]),
 });

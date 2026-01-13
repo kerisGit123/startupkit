@@ -55,6 +55,15 @@ async function main() {
       log('Running: npx convex dev --once', colors.blue);
       execSync('npx convex dev --once', { stdio: 'inherit' });
       log('✅ Convex initialized\n', colors.green);
+      
+      // Seed database with default data
+      log('🌱 Seeding database with default data...', colors.yellow);
+      try {
+        execSync('npx convex run setup/seedDatabase:seedDatabase', { stdio: 'inherit' });
+        log('✅ Database seeded successfully\n', colors.green);
+      } catch (error) {
+        log('⚠️  Database seeding skipped. Run manually: npx convex run setup/seedDatabase:seedDatabase', colors.yellow);
+      }
     } catch (error) {
       log('⚠️  Convex setup incomplete. Run manually: npx convex dev', colors.yellow);
     }

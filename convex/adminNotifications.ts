@@ -55,14 +55,22 @@ export const getNotifications = query({
       });
     }
 
-    // Add purchase notifications
+    // Add credit reward notifications (purchases, referrals, bonuses)
     for (const purchase of purchases) {
       const purchaseId = purchase._id.toString();
+      const isPaid = purchase.amountPaid && purchase.amountPaid > 0;
+      const title = isPaid 
+        ? `Credit Purchase - ${purchase.tokens} credits`
+        : `Credit Reward - ${purchase.tokens} credits`;
+      const description = isPaid 
+        ? `MYR ${purchase.amountPaid}`
+        : "Referral/Signup Bonus";
+      
       notifications.push({
         id: purchaseId,
-        type: "new_purchase",
-        title: `New Purchase - ${purchase.tokens} credits`,
-        description: `MYR ${purchase.amountPaid || 0}`,
+        type: isPaid ? "credit_purchase" : "credit_reward",
+        title,
+        description,
         time: purchase.createdAt,
         read: readIds.has(purchaseId),
       });

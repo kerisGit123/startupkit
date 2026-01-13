@@ -3,14 +3,17 @@
 import * as React from "react"
 import {
   IconLayoutDashboard,
-  IconChartBar,
   IconUsers,
   IconSettings,
-  IconFileText,
   IconCreditCard,
   IconBell,
   IconShield,
   IconActivity,
+  IconMail,
+  IconShoppingCart,
+  IconTicket,
+  IconFileInvoice,
+  IconReceipt,
 } from "@tabler/icons-react"
 
 import {
@@ -50,17 +53,22 @@ const navItems = [
   {
     title: "Purchases",
     url: "/admin/purchases",
-    icon: IconCreditCard,
+    icon: IconShoppingCart,
+  },
+  {
+    title: "Invoices",
+    url: "/admin/invoices",
+    icon: IconFileInvoice,
+  },
+  {
+    title: "Transactions",
+    url: "/admin/transactions",
+    icon: IconReceipt,
   },
   {
     title: "Tickets",
     url: "/admin/tickets",
-    icon: IconFileText,
-  },
-  {
-    title: "Notifications",
-    url: "/admin/notifications",
-    icon: IconBell,
+    icon: IconTicket,
   },
   {
     title: "Referrals",
@@ -68,9 +76,19 @@ const navItems = [
     icon: IconShield,
   },
   {
+    title: "Notifications",
+    url: "/admin/notifications",
+    icon: IconBell,
+  },
+  {
     title: "Alerts",
     url: "/admin/alerts",
     icon: IconBell,
+  },
+  {
+    title: "Email Management",
+    url: "/admin/email-management",
+    icon: IconMail,
   },
   {
     title: "Settings",

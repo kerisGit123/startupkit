@@ -1,6 +1,26 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+/**
+ * LEGACY CREDIT SYSTEM
+ * 
+ * NOTE: This file is now LEGACY for backward compatibility.
+ * 
+ * NEW CREDIT PURCHASES should use:
+ * - api.transactions.createTransaction.createPaymentTransaction
+ * 
+ * This automatically:
+ * - Creates a transaction record
+ * - Generates an invoice with invoice number
+ * - Updates the credits balance
+ * - Links transaction to invoice
+ * 
+ * The addCredits mutation below is kept for:
+ * - Manual admin credit adjustments
+ * - Backward compatibility with existing code
+ * - Migration purposes
+ */
+
 export const addCredits = mutation({
   args: {
     companyId: v.string(),
