@@ -203,6 +203,7 @@ export default defineSchema({
     referralEnabled: v.optional(v.boolean()),
     referralRewardCredits: v.optional(v.number()), // Credits for referrer
     referralBonusCredits: v.optional(v.number()), // Bonus for new user
+    referralRequireEmailVerification: v.optional(v.boolean()), // Require email verification for credits
     
     // Email Settings
     emailEnabled: v.optional(v.boolean()), // Master toggle for all emails
@@ -762,4 +763,222 @@ export default defineSchema({
     .index("by_transactionType", ["transactionType"])
     .index("by_createdAt", ["createdAt"])
     .index("by_issuedAt", ["issuedAt"]),
+
+  // ============================================
+  // CHATBOT SYSTEM: AI Chatbot with n8n Integration
+  // ============================================
+  
+  // Knowledge base for chatbot responses
+  knowledge_base: defineTable({
+    title: v.string(),
+    content: v.string(),
+    category: v.string(),
+    type: v.union(v.literal("frontend"), v.literal("user_panel")),
+    tags: v.array(v.string()),
+    keywords: v.array(v.string()),
+    status: v.union(v.literal("draft"), v.literal("published")),
+    version: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.string(),
+  })
+    .index("by_type", ["type", "status"])
+    .index("by_category", ["category"])
+    .index("by_status", ["status"]),
+
+  // Chatbot configuration with visual designer settings
+  chatbot_config: defineTable({
+    type: v.union(v.literal("frontend"), v.literal("user_panel")),
+    isActive: v.boolean(),
+    n8nWebhookUrl: v.string(),
+    
+    // Widget Designer Settings
+    theme: v.union(v.literal("light"), v.literal("dark"), v.literal("auto")),
+    position: v.union(v.literal("left"), v.literal("right")),
+    roundness: v.number(),
+    
+    // Branding
+    companyName: v.string(),
+    companyLogoUrl: v.optional(v.string()),
+    logoStorageId: v.optional(v.string()),
+    
+    // Colors
+    primaryColor: v.string(),
+    secondaryColor: v.string(),
+    backgroundColor: v.string(),
+    textColor: v.string(),
+    userMessageBgColor: v.string(),
+    aiMessageBgColor: v.string(),
+    userMessageTextColor: v.string(),
+    aiMessageTextColor: v.string(),
+    aiBorderColor: v.string(),
+    aiTextColor: v.string(),
+    
+    // Dark Theme Colors
+    darkPrimaryColor: v.optional(v.string()),
+    darkSecondaryColor: v.optional(v.string()),
+    darkBackgroundColor: v.optional(v.string()),
+    darkTextColor: v.optional(v.string()),
+    darkUserMessageTextColor: v.optional(v.string()),
+    darkAiMessageBgColor: v.optional(v.string()),
+    darkAiBorderColor: v.optional(v.string()),
+    darkAiTextColor: v.optional(v.string()),
+    
+    // Messages
+    welcomeMessage: v.string(),
+    responseTimeText: v.string(),
+    firstBotMessage: v.string(),
+    placeholderText: v.string(),
+    
+    // Features
+    showThemeToggle: v.boolean(),
+    showCompanyLogo: v.boolean(),
+    showResponseTime: v.boolean(),
+    enableSoundNotifications: v.boolean(),
+    enableTypingIndicator: v.boolean(),
+    
+    // Mobile Settings
+    mobileFullScreen: v.boolean(),
+    mobilePosition: v.union(v.literal("bottom"), v.literal("top")),
+    
+    updatedAt: v.number(),
+    updatedBy: v.string(),
+  }).index("by_type", ["type"]),
+
+  // Chatbot conversations with admin takeover support
+  chatbot_conversations: defineTable({
+    sessionId: v.string(),
+    userId: v.optional(v.id("users")),
+    type: v.union(v.literal("frontend"), v.literal("user_panel")),
+    messages: v.array(v.object({
+      role: v.union(v.literal("user"), v.literal("assistant"), v.literal("admin")),
+      content: v.string(),
+      timestamp: v.number(),
+      senderId: v.optional(v.string()),
+      imageUrl: v.optional(v.string()),
+      imageStorageId: v.optional(v.string()),
+      messageType: v.optional(v.union(
+        v.literal("text"),
+        v.literal("image"),
+        v.literal("system"),
+        v.literal("intervention_request")
+      )),
+    })),
+    status: v.union(
+      v.literal("active"),
+      v.literal("waiting_for_agent"),
+      v.literal("admin_takeover"),
+      v.literal("resolved"),
+      v.literal("escalated")
+    ),
+    takenOverBy: v.optional(v.id("users")),
+    takenOverAt: v.optional(v.number()),
+    resolved: v.boolean(),
+    escalatedToSupport: v.boolean(),
+    interventionRequested: v.boolean(),
+    interventionRequestedAt: v.optional(v.number()),
+    // Lead capture fields
+    userEmail: v.optional(v.string()),
+    userName: v.optional(v.string()),
+    userPhone: v.optional(v.string()),
+    userCompany: v.optional(v.string()),
+    leadCaptured: v.boolean(),
+    leadCapturedAt: v.optional(v.number()),
+    customAttributes: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_type", ["type"])
+    .index("by_type_status", ["type", "status"])
+    .index("by_admin", ["takenOverBy"])
+    .index("by_lead_captured", ["leadCaptured"]),
+
+  // Lead capture form configuration
+  lead_capture_config: defineTable({
+    type: v.union(v.literal("frontend"), v.literal("user_panel")),
+    isEnabled: v.boolean(),
+    triggerAfterMessages: v.number(),
+    requiredFields: v.array(v.string()),
+    customFields: v.array(v.object({
+      fieldName: v.string(),
+      fieldLabel: v.string(),
+      fieldType: v.union(v.literal("text"), v.literal("email"), v.literal("phone"), v.literal("select"), v.literal("textarea")),
+      isRequired: v.boolean(),
+      options: v.optional(v.array(v.string())),
+      placeholder: v.optional(v.string()),
+    })),
+    formTitle: v.string(),
+    formDescription: v.string(),
+    updatedAt: v.number(),
+  }).index("by_type", ["type"]),
+
+  // Appointment bookings from chat
+  chat_appointments: defineTable({
+    conversationId: v.id("chatbot_conversations"),
+    sessionId: v.string(),
+    type: v.union(v.literal("frontend"), v.literal("user_panel")),
+    appointmentDate: v.number(),
+    appointmentTime: v.string(),
+    duration: v.number(),
+    timezone: v.string(),
+    customerName: v.string(),
+    customerEmail: v.string(),
+    customerPhone: v.optional(v.string()),
+    purpose: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("confirmed"),
+      v.literal("cancelled"),
+      v.literal("completed")
+    ),
+    assignedTo: v.optional(v.id("users")),
+    meetingLink: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_conversation", ["conversationId"])
+    .index("by_status", ["status"])
+    .index("by_date", ["appointmentDate"]),
+
+  // User attributes for lead enrichment
+  user_attributes: defineTable({
+    sessionId: v.string(),
+    conversationId: v.id("chatbot_conversations"),
+    attributes: v.any(),
+    source: v.union(v.literal("form"), v.literal("chat"), v.literal("admin")),
+    collectedAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_conversation", ["conversationId"]),
+
+  // Chatbot analytics
+  chatbot_analytics: defineTable({
+    sessionId: v.string(),
+    type: v.union(v.literal("frontend"), v.literal("user_panel")),
+    totalMessages: v.number(),
+    resolvedByBot: v.boolean(),
+    resolvedByAdmin: v.boolean(),
+    adminTakeoverTime: v.optional(v.number()),
+    resolutionTime: v.optional(v.number()),
+    satisfactionRating: v.optional(v.number()),
+    commonQuestions: v.array(v.string()),
+    createdAt: v.number(),
+  }).index("by_type", ["type"]),
+
+  // Admin live chat queue
+  admin_chat_queue: defineTable({
+    conversationId: v.id("chatbot_conversations"),
+    type: v.union(v.literal("frontend"), v.literal("user_panel")),
+    priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+    status: v.union(v.literal("waiting"), v.literal("assigned"), v.literal("resolved")),
+    assignedTo: v.optional(v.id("users")),
+    assignedAt: v.optional(v.number()),
+    waitTime: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_assigned", ["assignedTo"]),
 });

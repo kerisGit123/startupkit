@@ -4,6 +4,7 @@ import { SignInButton, SignUpButton, SignedIn, SignedOut } from "@clerk/nextjs";
 import { Zap, Database, ArrowRight, Check, Sparkles, Lock } from "lucide-react";
 import Link from "next/link";
 import { PLANS } from "@/lib/plans";
+import { ChatWidget } from "@/components/ChatWidget";
 
 export default function Home() {
   return (
@@ -342,6 +343,9 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* Chat Widget */}
+      <ChatWidget type="frontend" />
     </div>
   );
 }

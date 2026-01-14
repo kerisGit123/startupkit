@@ -1,7 +1,7 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
@@ -11,10 +11,12 @@ export function ReferralTracker() {
   const searchParams = useSearchParams();
   const trackReferral = useMutation(api.referrals.trackReferral);
   const completeReferral = useMutation(api.referrals.completeReferral);
+  const settings = useQuery(api.referrals.getReferralSettings);
   const hasTracked = useRef(false);
 
+  // Effect 1: Handle new referral signup
   useEffect(() => {
-    if (!isLoaded || !user || hasTracked.current) {
+    if (!isLoaded || !user || !settings || hasTracked.current) {
       return;
     }
 
@@ -36,25 +38,42 @@ export function ReferralTracker() {
           if (trackResult.success) {
             console.log("✅ Referral tracked successfully!");
             
-            // Step 2: Immediately complete referral and award credits
-            try {
-              console.log("💰 Awarding credits to both users...");
-              const completeResult = await completeReferral({
-                referredUserId: user.id,
-              });
-              
-              if (completeResult.success) {
-                console.log("✅ Credits awarded!", {
-                  referrerGot: completeResult.rewardAmount,
-                  youGot: completeResult.bonusAmount,
-                });
-              }
-            } catch (completeError) {
-              console.error("❌ Failed to award credits:", completeError);
-            }
+            // Step 2: Check if email verification is required (admin setting)
+            const requireEmailVerification = settings.requireEmailVerification ?? true;
+            const emailVerified = user.emailAddresses?.[0]?.verification?.status === "verified";
             
-            localStorage.removeItem("pendingReferralCode");
-            hasTracked.current = true;
+            // Award credits if: email verification not required OR email is verified
+            if (!requireEmailVerification || emailVerified) {
+              // Award credits (either verification not required or email is verified)
+              try {
+                const reason = !requireEmailVerification 
+                  ? "Email verification not required by admin" 
+                  : "Email verified";
+                console.log(`💰 ${reason}! Awarding credits to both users...`);
+                const completeResult = await completeReferral({
+                  referredUserId: user.id,
+                });
+                
+                if (completeResult.success) {
+                  console.log("✅ Credits awarded!", {
+                    referrerGot: completeResult.rewardAmount,
+                    youGot: completeResult.bonusAmount,
+                  });
+                }
+              } catch (completeError) {
+                console.error("❌ Failed to award credits:", completeError);
+              }
+              
+              localStorage.removeItem("pendingReferralCode");
+              hasTracked.current = true;
+            } else {
+              // Email verification required but not verified yet - keep referral pending
+              console.log("⏳ Referral tracked but email not verified yet. Credits will be awarded after email verification.");
+              console.log("📧 Please check your email and verify your account to receive credits.");
+              console.log("ℹ️ Admin setting: Email verification is REQUIRED for referral credits.");
+              // Keep pendingReferralCode in localStorage for next check
+              hasTracked.current = true;
+            }
           } else {
             // Handle "already referred" case gracefully
             if (trackResult.error === "User already referred") {
@@ -76,7 +95,51 @@ export function ReferralTracker() {
     };
 
     handleReferral();
-  }, [isLoaded, user, searchParams, trackReferral, completeReferral]);
+  }, [isLoaded, user, settings, searchParams, trackReferral, completeReferral]);
+
+  // Effect 2: Check if user verified email after initial signup
+  useEffect(() => {
+    if (!isLoaded || !user || !settings) {
+      return;
+    }
+
+    const checkEmailVerification = async () => {
+      const storedReferralCode = localStorage.getItem("pendingReferralCode");
+      
+      // If there's still a pending referral code, check if email is now verified
+      if (storedReferralCode) {
+        const requireEmailVerification = settings.requireEmailVerification ?? true;
+        const emailVerified = user.emailAddresses?.[0]?.verification?.status === "verified";
+        
+        // Complete referral if: email verification not required OR email is verified
+        if (!requireEmailVerification || emailVerified) {
+          try {
+            const reason = !requireEmailVerification 
+              ? "Email verification not required by admin" 
+              : "Email verified";
+            console.log(`📧 ${reason}! Completing pending referral...`);
+            const completeResult = await completeReferral({
+              referredUserId: user.id,
+            });
+            
+            if (completeResult.success) {
+              console.log("✅ Credits awarded after email verification!", {
+                referrerGot: completeResult.rewardAmount,
+                youGot: completeResult.bonusAmount,
+              });
+              localStorage.removeItem("pendingReferralCode");
+            }
+          } catch {
+            // Referral might not exist or already completed
+            console.log("ℹ️ No pending referral to complete");
+            localStorage.removeItem("pendingReferralCode");
+          }
+        }
+      }
+    };
+
+    checkEmailVerification();
+  }, [isLoaded, user, settings, completeReferral]);
 
   return null;
 }

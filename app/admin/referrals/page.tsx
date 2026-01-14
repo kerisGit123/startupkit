@@ -13,6 +13,7 @@ export default function AdminReferralsPage() {
   const [rewardCredits, setRewardCredits] = useState("");
   const [bonusCredits, setBonusCredits] = useState("");
   const [enabled, setEnabled] = useState(true);
+  const [requireEmailVerification, setRequireEmailVerification] = useState(true);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
   const [sendingAlert, setSendingAlert] = useState<string | null>(null);
   const [alertDialog, setAlertDialog] = useState<{ userId: string; userName: string; userEmail: string } | null>(null);
@@ -29,6 +30,7 @@ export default function AdminReferralsPage() {
         enabled,
         rewardCredits: rewardCredits !== "" ? parseInt(rewardCredits) : undefined,
         bonusCredits: bonusCredits !== "" ? parseInt(bonusCredits) : undefined,
+        requireEmailVerification,
       });
       alert("Referral settings updated successfully!");
       setRewardCredits("");
@@ -185,6 +187,7 @@ export default function AdminReferralsPage() {
               <li>• Referrer Reward: <strong>{settings?.rewardCredits ?? 50} credits</strong></li>
               <li>• New User Bonus: <strong>{settings?.bonusCredits ?? 10} credits</strong></li>
               <li>• Program Status: <strong>{settings?.enabled ? "Enabled" : "Disabled"}</strong></li>
+              <li>• Email Verification: <strong>{settings?.requireEmailVerification ? "Required" : "Not Required"}</strong></li>
             </ul>
           </div>
 
@@ -201,6 +204,22 @@ export default function AdminReferralsPage() {
                 Enable Program
               </label>
             </div>
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="requireEmailVerification"
+                checked={requireEmailVerification}
+                onChange={(e) => setRequireEmailVerification(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <label htmlFor="requireEmailVerification" className="text-sm font-medium">
+                Require Email Verification for Credits
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-2 ml-6">
+              When enabled, users must verify their email before receiving referral credits. Recommended for security.
+            </p>
 
             <div>
               <label className="text-sm font-medium">Referrer Reward (Credits)</label>

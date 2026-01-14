@@ -433,6 +433,7 @@ export const getReferralSettings = query({
       enabled: settings?.referralEnabled ?? true,
       rewardCredits: settings?.referralRewardCredits ?? DEFAULT_REFERRAL_REWARD,
       bonusCredits: settings?.referralBonusCredits ?? DEFAULT_REFERRAL_BONUS,
+      requireEmailVerification: settings?.referralRequireEmailVerification ?? true,
     };
   },
 });
@@ -445,6 +446,7 @@ export const updateReferralSettings = mutation({
     enabled: v.optional(v.boolean()),
     rewardCredits: v.optional(v.number()),
     bonusCredits: v.optional(v.number()),
+    requireEmailVerification: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const settings = await ctx.db.query("org_settings").first();
@@ -457,6 +459,7 @@ export const updateReferralSettings = mutation({
       referralEnabled: args.enabled !== undefined ? args.enabled : settings.referralEnabled,
       referralRewardCredits: args.rewardCredits !== undefined ? args.rewardCredits : settings.referralRewardCredits,
       referralBonusCredits: args.bonusCredits !== undefined ? args.bonusCredits : settings.referralBonusCredits,
+      referralRequireEmailVerification: args.requireEmailVerification !== undefined ? args.requireEmailVerification : settings.referralRequireEmailVerification,
     });
 
     return { success: true, message: "Referral settings updated" };

@@ -14,6 +14,11 @@ import {
   IconTicket,
   IconFileInvoice,
   IconReceipt,
+  IconMessageChatbot,
+  IconMessages,
+  IconChartBar,
+  IconBook,
+  IconPalette,
 } from "@tabler/icons-react"
 
 import {
@@ -89,6 +94,31 @@ const navItems = [
     title: "Email Management",
     url: "/admin/email-management",
     icon: IconMail,
+  },
+  {
+    title: "Chatbot Settings",
+    url: "/admin/chatbot-settings",
+    icon: IconMessageChatbot,
+  },
+  {
+    title: "Widget Designer",
+    url: "/admin/chatbot-designer",
+    icon: IconPalette,
+  },
+  {
+    title: "Live Chat",
+    url: "/admin/live-chat",
+    icon: IconMessages,
+  },
+  {
+    title: "Knowledge Base",
+    url: "/admin/knowledge-base",
+    icon: IconBook,
+  },
+  {
+    title: "Chatbot Analytics",
+    url: "/admin/chatbot-analytics",
+    icon: IconChartBar,
   },
   {
     title: "Settings",

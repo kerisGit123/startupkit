@@ -21,7 +21,9 @@ import type * as adminTickets from "../adminTickets.js";
 import type * as adminUserManagement from "../adminUserManagement.js";
 import type * as adminUsers from "../adminUsers.js";
 import type * as alerts from "../alerts.js";
+import type * as analytics from "../analytics.js";
 import type * as campaignTemplates from "../campaignTemplates.js";
+import type * as chatbot from "../chatbot.js";
 import type * as companySettings from "../companySettings.js";
 import type * as credits from "../credits.js";
 import type * as debugNotifications from "../debugNotifications.js";
@@ -49,6 +51,7 @@ import type * as invoices_createInvoiceForTransaction from "../invoices/createIn
 import type * as invoices_invoiceSystem from "../invoices/invoiceSystem.js";
 import type * as invoices_queries from "../invoices/queries.js";
 import type * as ipBlocking from "../ipBlocking.js";
+import type * as knowledgeBase from "../knowledgeBase.js";
 import type * as migrations_addIsActiveToCampaigns from "../migrations/addIsActiveToCampaigns.js";
 import type * as migrations_deleteDraftCampaign from "../migrations/deleteDraftCampaign.js";
 import type * as platformConfig from "../platformConfig.js";
@@ -84,7 +87,9 @@ declare const fullApi: ApiFromModules<{
   adminUserManagement: typeof adminUserManagement;
   adminUsers: typeof adminUsers;
   alerts: typeof alerts;
+  analytics: typeof analytics;
   campaignTemplates: typeof campaignTemplates;
+  chatbot: typeof chatbot;
   companySettings: typeof companySettings;
   credits: typeof credits;
   debugNotifications: typeof debugNotifications;
@@ -112,6 +117,7 @@ declare const fullApi: ApiFromModules<{
   "invoices/invoiceSystem": typeof invoices_invoiceSystem;
   "invoices/queries": typeof invoices_queries;
   ipBlocking: typeof ipBlocking;
+  knowledgeBase: typeof knowledgeBase;
   "migrations/addIsActiveToCampaigns": typeof migrations_addIsActiveToCampaigns;
   "migrations/deleteDraftCampaign": typeof migrations_deleteDraftCampaign;
   platformConfig: typeof platformConfig;

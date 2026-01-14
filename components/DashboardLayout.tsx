@@ -24,6 +24,7 @@ import { useClerk } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { LoginTracker } from "@/components/LoginTracker";
+import { ChatWidget } from "@/components/ChatWidget";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -196,6 +197,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
     </div>
+
+    {/* Chat Widget for User Panel */}
+    <ChatWidget type="user_panel" userId={user?.id} />
     </>
   );
 }
