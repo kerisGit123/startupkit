@@ -152,8 +152,9 @@ export default function EmailManagementPage() {
       return;
     }
     
-    if (!settings.resendApiKey || !settings.emailFromName || !settings.emailFromAddress) {
-      toast.error("Please configure Resend settings first");
+    // Allow test mode even without API key configured
+    if (!settings.useSystemNotification && (!settings.resendApiKey || !settings.emailFromName || !settings.emailFromAddress)) {
+      toast.error("Please configure Resend settings first or enable System Notification (test mode)");
       return;
     }
     
@@ -161,14 +162,19 @@ export default function EmailManagementPage() {
     try {
       const result = await sendTestEmail({
         to: testEmail,
-        resendApiKey: settings.resendApiKey,
-        fromName: settings.emailFromName,
-        fromEmail: settings.emailFromAddress,
+        resendApiKey: settings.resendApiKey || "",
+        fromName: settings.emailFromName || "Test",
+        fromEmail: settings.emailFromAddress || "test@example.com",
+        useTestMode: settings.useSystemNotification,
       });
       
       if (result.success) {
         setTestEmailStatus("success");
-        toast.success("Test email sent successfully!");
+        if (settings.useSystemNotification) {
+          toast.success("Test email logged to database (test mode)!");
+        } else {
+          toast.success("Test email sent successfully!");
+        }
         setTimeout(() => setTestEmailStatus("idle"), 3000);
       } else {
         setTestEmailStatus("error");
@@ -1502,6 +1508,7 @@ export default function EmailManagementPage() {
                   <nav className="space-y-1">
                     {[
                       { id: "global", label: "Global Variables", icon: "🌐" },
+                      { id: "company", label: "Company Data", icon: "🏢" },
                       { id: "welcome", label: "Welcome Email", icon: "👋" },
                       { id: "subscription", label: "Subscription", icon: "💳" },
                       { id: "payment", label: "Payment", icon: "💰" },
@@ -1638,6 +1645,34 @@ export default function EmailManagementPage() {
                       </div>
                     </>
                   )}
+                  
+                  {selectedVariableGroup === "company" && (
+                    <div className="mt-8 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <h4 className="font-semibold text-green-900 mb-2">🏢 Company Data Variables</h4>
+                      <p className="text-sm text-green-800 mb-3">These variables are automatically populated from your company settings configured in <strong>Settings → Company</strong>:</p>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <code className="px-2 py-1 bg-green-100 rounded block mb-1">{`{company_name}`}</code>
+                          <p className="text-xs text-green-700">Your company name</p>
+                        </div>
+                        <div>
+                          <code className="px-2 py-1 bg-green-100 rounded block mb-1">{`{company_email}`}</code>
+                          <p className="text-xs text-green-700">Main contact email</p>
+                        </div>
+                        <div>
+                          <code className="px-2 py-1 bg-green-100 rounded block mb-1">{`{company_phone}`}</code>
+                          <p className="text-xs text-green-700">Contact phone number</p>
+                        </div>
+                        <div>
+                          <code className="px-2 py-1 bg-green-100 rounded block mb-1">{`{company_address}`}</code>
+                          <p className="text-xs text-green-700">Full company address</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-green-700 mt-3">
+                        💡 To update these values, go to <strong>Settings → Company</strong> and save your company information.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -1663,20 +1698,11 @@ export default function EmailManagementPage() {
 
             <div>
               <Label className="text-sm font-medium">Template Type</Label>
-              <p className="text-sm mt-1">
+              <div className="text-sm mt-1">
                 <Badge variant="outline">{previewingLog?.templateType || "custom"}</Badge>
                 {previewingLog?.templateName && <span className="ml-2 text-muted-foreground">({previewingLog.templateName})</span>}
-              </p>
-            </div>
-
-            {previewingLog?.variables && (
-              <div>
-                <Label className="text-sm font-medium">Variables Used</Label>
-                <div className="mt-2 p-3 bg-muted rounded text-xs font-mono">
-                  <pre>{JSON.stringify(previewingLog.variables, null, 2)}</pre>
-                </div>
               </div>
-            )}
+            </div>
 
             <div>
               <Label className="text-sm font-medium">Email Content</Label>
@@ -1709,7 +1735,7 @@ export default function EmailManagementPage() {
       <Dialog open={showLogCodePreview} onOpenChange={setShowLogCodePreview}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Email Preview - Variables Used</DialogTitle>
+            <DialogTitle>Email HTML Code</DialogTitle>
             <DialogDescription>
               Sent to: {previewingLog?.sentTo} | {previewingLog?.createdAt && formatDate(previewingLog.createdAt)}
             </DialogDescription>
@@ -1718,20 +1744,20 @@ export default function EmailManagementPage() {
           <div className="space-y-4">
             <div>
               <Label className="text-sm font-medium">Subject</Label>
-              <p className="text-sm mt-1 p-2 bg-muted rounded">{previewingLog?.subject}</p>
+              <div className="text-sm mt-1 p-2 bg-muted rounded">{previewingLog?.subject}</div>
             </div>
 
             <div>
               <Label className="text-sm font-medium">Template Type</Label>
-              <p className="text-sm mt-1">
+              <div className="text-sm mt-1">
                 <Badge variant="outline">{previewingLog?.templateType || "custom"}</Badge>
-              </p>
+              </div>
             </div>
 
             <div>
-              <Label className="text-sm font-medium">Variables Used</Label>
-              <div className="mt-2 p-4 bg-slate-950 text-green-400 rounded-lg text-sm font-mono overflow-x-auto">
-                <pre>{previewingLog?.variables ? JSON.stringify(previewingLog.variables, null, 2) : "{}"}</pre>
+              <Label className="text-sm font-medium">HTML Code</Label>
+              <div className="mt-2 p-4 bg-slate-950 text-green-400 rounded-lg text-sm font-mono overflow-x-auto max-h-[500px] overflow-y-auto">
+                <pre>{previewingLog?.htmlContent || "No HTML content available"}</pre>
               </div>
             </div>
           </div>

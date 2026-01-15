@@ -664,6 +664,19 @@ export const deleteInvoice = mutation({
       };
     }
 
+    // If this invoice was converted from a PO, reverse the conversion
+    if (invoice.purchaseOrderId) {
+      const po = await ctx.db.get(invoice.purchaseOrderId);
+      if (po) {
+        await ctx.db.patch(invoice.purchaseOrderId, {
+          status: "draft",
+          convertedToInvoiceId: undefined,
+          convertedByClerkUserId: undefined,
+          convertedAt: undefined,
+        });
+      }
+    }
+
     await ctx.db.delete(id);
 
     return {

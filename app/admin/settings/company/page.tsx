@@ -9,80 +9,130 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, Upload, X } from "lucide-react";
 
 export default function CompanySettingsPage() {
-  const companySettings = useQuery(api.platformConfig.getByCategory, { category: "company" });
-  const batchSet = useMutation(api.platformConfig.batchSet);
+  const companySettings = useQuery(api.companySettings.getCompanySettings);
+  const invoicePOConfig = useQuery(api.invoicePOConfig.getInvoicePOConfig);
+  const updateSettings = useMutation(api.companySettings.updateCompanySettings);
+  const updateInvoicePOConfig = useMutation(api.invoicePOConfig.updateInvoicePOConfig);
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>("");
   const [localSettings, setLocalSettings] = useState({
     companyName: "",
     companyEmail: "",
     companyPhone: "",
     companyAddress: "",
     companyCountry: "",
+    companyTin: "",
+    companyLicense: "",
     passwordResetLink: "",
+    SSTRegNo: "",
+    regNo: "",
+    defaultTerm: "",
+    websiteURL: "",
+    bankAccount: "",
+    bankName: "",
+    paymentNote: "",
+    serviceTaxCode: "",
+    serviceTax: 0,
+    serviceTaxEnable: false,
+    roundingEnable: false,
+    reportCompanyName: "",
+    reportCompanyAddress: "",
+    reportCompanyPhone: "",
+    reportCompanyEmail: "",
+    reportLogoUrl: "",
+    currency: "RM",
+    reportFooter: "",
+    showReportLogo: true,
+    generateFooterDate: true,
+    serviceTaxInvoiceEnable: true,
+    discountInvoice: false,
   });
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    if (companySettings && !isInitialized) {
+    if (companySettings && invoicePOConfig && !isInitialized) {
       setLocalSettings({
-        companyName: (companySettings.companyName as string) ?? "",
-        companyEmail: (companySettings.companyEmail as string) ?? "",
-        companyPhone: (companySettings.companyPhone as string) ?? "",
-        companyAddress: (companySettings.companyAddress as string) ?? "",
-        companyCountry: (companySettings.companyCountry as string) ?? "",
-        passwordResetLink: (companySettings.passwordResetLink as string) ?? "",
+        companyName: companySettings.companyName ?? "",
+        companyEmail: companySettings.companyEmail ?? "",
+        companyPhone: companySettings.companyPhone ?? "",
+        companyAddress: companySettings.companyAddress ?? "",
+        companyCountry: companySettings.companyCountry ?? "",
+        companyTin: companySettings.companyTin ?? "",
+        companyLicense: companySettings.companyLicense ?? "",
+        passwordResetLink: companySettings.passwordResetLink ?? "",
+        SSTRegNo: invoicePOConfig.SSTRegNo ?? "",
+        regNo: invoicePOConfig.regNo ?? "",
+        defaultTerm: invoicePOConfig.defaultTerm ?? "",
+        websiteURL: invoicePOConfig.websiteURL ?? "",
+        bankAccount: invoicePOConfig.bankAccount ?? "",
+        bankName: invoicePOConfig.bankName ?? "",
+        paymentNote: invoicePOConfig.paymentNote ?? "",
+        serviceTaxCode: invoicePOConfig.serviceTaxCode ?? "",
+        serviceTax: invoicePOConfig.serviceTax ?? 0,
+        serviceTaxEnable: invoicePOConfig.serviceTaxEnable ?? false,
+        roundingEnable: invoicePOConfig.roundingEnable ?? false,
+        reportCompanyName: invoicePOConfig.reportCompanyName ?? "",
+        reportCompanyAddress: invoicePOConfig.reportCompanyAddress ?? "",
+        reportCompanyPhone: invoicePOConfig.reportCompanyPhone ?? "",
+        reportCompanyEmail: invoicePOConfig.reportCompanyEmail ?? "",
+        reportLogoUrl: invoicePOConfig.reportLogoUrl ?? "",
+        showReportLogo: invoicePOConfig.showReportLogo ?? true,
+        currency: invoicePOConfig.currency ?? "RM",
+        reportFooter: invoicePOConfig.documentFooter ?? "",
+        generateFooterDate: invoicePOConfig.generateFooterDate ?? true,
+        serviceTaxInvoiceEnable: invoicePOConfig.serviceTaxInvoiceEnable ?? true,
+        discountInvoice: invoicePOConfig.discountInvoice ?? false,
       });
       setIsInitialized(true);
     }
-  }, [companySettings, isInitialized]);
+  }, [companySettings, invoicePOConfig, isInitialized]);
 
   const handleSave = async () => {
     setSaveStatus("saving");
     try {
-      await batchSet({
-        settings: [
-          {
-            key: "companyName",
-            value: localSettings.companyName,
-            category: "company",
-            description: "Platform company name",
-          },
-          {
-            key: "companyEmail",
-            value: localSettings.companyEmail,
-            category: "company",
-            description: "Main contact email for your company",
-          },
-          {
-            key: "companyPhone",
-            value: localSettings.companyPhone,
-            category: "company",
-            description: "Contact phone number",
-          },
-          {
-            key: "companyAddress",
-            value: localSettings.companyAddress,
-            category: "company",
-            description: "Full company address",
-          },
-          {
-            key: "companyCountry",
-            value: localSettings.companyCountry,
-            category: "company",
-            description: "Country where company is registered",
-          },
-          {
-            key: "passwordResetLink",
-            value: localSettings.passwordResetLink,
-            category: "company",
-            description: "Clerk password reset URL",
-          },
-        ],
+      // Save basic company settings to org_settings
+      await updateSettings({
+        companyName: localSettings.companyName,
+        companyEmail: localSettings.companyEmail,
+        companyPhone: localSettings.companyPhone,
+        companyAddress: localSettings.companyAddress,
+        companyCountry: localSettings.companyCountry,
+        companyTin: localSettings.companyTin,
+        companyLicense: localSettings.companyLicense,
+        passwordResetLink: localSettings.passwordResetLink,
       });
+      
+      // Save Invoice & PO Configuration to platform_config with category "invoicePO"
+      await updateInvoicePOConfig({
+        SSTRegNo: localSettings.SSTRegNo,
+        regNo: localSettings.regNo,
+        defaultTerm: localSettings.defaultTerm,
+        websiteURL: localSettings.websiteURL,
+        bankAccount: localSettings.bankAccount,
+        bankName: localSettings.bankName,
+        paymentNote: localSettings.paymentNote,
+        serviceTaxCode: localSettings.serviceTaxCode,
+        serviceTax: localSettings.serviceTax,
+        serviceTaxEnable: localSettings.serviceTaxEnable,
+        roundingEnable: localSettings.roundingEnable,
+        reportCompanyName: localSettings.reportCompanyName,
+        reportCompanyAddress: localSettings.reportCompanyAddress,
+        reportCompanyPhone: localSettings.reportCompanyPhone,
+        reportCompanyEmail: localSettings.reportCompanyEmail,
+        reportLogoUrl: localSettings.reportLogoUrl,
+        showReportLogo: localSettings.showReportLogo,
+        currency: localSettings.currency,
+        documentFooter: localSettings.reportFooter,
+        generateFooterDate: localSettings.generateFooterDate,
+        serviceTaxInvoiceEnable: localSettings.serviceTaxInvoiceEnable,
+        discountInvoice: localSettings.discountInvoice,
+      });
+      
       setSaveStatus("success");
       setTimeout(() => setSaveStatus("idle"), 3000);
     } catch (error) {
@@ -200,6 +250,32 @@ export default function CompanySettingsPage() {
             />
             <p className="text-sm text-muted-foreground">
               Country where company is registered
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="companyTin">Company TIN Number</Label>
+            <Input
+              id="companyTin"
+              placeholder="Tax Identification Number"
+              value={localSettings.companyTin}
+              onChange={(e) => setLocalSettings({ ...localSettings, companyTin: e.target.value })}
+            />
+            <p className="text-sm text-muted-foreground">
+              Tax Identification Number for your company
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="companyLicense">Company License Number</Label>
+            <Input
+              id="companyLicense"
+              placeholder="Business License Number"
+              value={localSettings.companyLicense}
+              onChange={(e) => setLocalSettings({ ...localSettings, companyLicense: e.target.value })}
+            />
+            <p className="text-sm text-muted-foreground">
+              Business license or registration number
             </p>
           </div>
 

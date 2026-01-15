@@ -33,7 +33,7 @@ export const searchByEmail = query({
 
 /**
  * Delete a user from Convex (admin only)
- * This marks the user as deleted but doesn't remove from Clerk
+ * This marks the user as deleted AND removes all related data
  */
 export const deleteUserFromConvex = mutation({
   args: {
@@ -52,13 +52,40 @@ export const deleteUserFromConvex = mutation({
       throw new Error("Cannot delete super admin user");
     }
 
-    const now = Date.now();
+    const clerkUserId = user.clerkUserId;
 
-    // Mark user as deleted
-    await ctx.db.patch(userId, {
-      deletionTime: now,
-      updatedAt: now,
-    });
+    // Delete all related data for this user
+    const deletedRecords = {
+      emailLogs: 0,
+      notifications: 0,
+    };
+
+    // 1. Delete email logs sent to this user
+    if (user.email) {
+      const emailLogs = await ctx.db
+        .query("email_logs")
+        .filter((q) => q.eq(q.field("sentTo"), user.email))
+        .collect();
+      for (const log of emailLogs) {
+        await ctx.db.delete(log._id);
+        deletedRecords.emailLogs++;
+      }
+    }
+
+    // 2. Delete admin notifications for this user
+    if (clerkUserId) {
+      const notifications = await ctx.db
+        .query("admin_notifications")
+        .filter((q) => q.eq(q.field("userId"), clerkUserId))
+        .collect();
+      for (const notification of notifications) {
+        await ctx.db.delete(notification._id);
+        deletedRecords.notifications++;
+      }
+    }
+
+    // 3. Finally, delete the user record itself
+    await ctx.db.delete(userId);
 
     return {
       success: true,
@@ -66,6 +93,7 @@ export const deleteUserFromConvex = mutation({
         email: user.email,
         fullName: user.fullName,
       },
+      deletedRecords,
     };
   },
 });

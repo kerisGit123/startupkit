@@ -199,6 +199,20 @@ export default defineSchema({
     companySize: v.optional(v.string()),
     industry: v.optional(v.string()),
     
+    // Invoice & PO Configuration Fields (DEPRECATED - moved to platform_config with category "invoicePO")
+    SSTRegNo: v.optional(v.string()), // SST Registration Number
+    regNo: v.optional(v.string()), // Registration Number
+    defaultTerm: v.optional(v.string()), // Default payment terms
+    websiteURL: v.optional(v.string()), // Company website
+    bankAccount: v.optional(v.string()), // Bank account number
+    bankName: v.optional(v.string()), // Bank name
+    paymentNote: v.optional(v.string()), // Payment instructions/notes
+    serviceTaxCode: v.optional(v.string()), // Service tax code
+    serviceTax: v.optional(v.number()), // Service tax percentage
+    serviceTaxEnable: v.optional(v.boolean()), // Enable service tax
+    roundingEnable: v.optional(v.boolean()), // Enable rounding
+    documentFooter: v.optional(v.string()), // Footer text for invoices and POs
+    
     // Referral Program Settings
     referralEnabled: v.optional(v.boolean()),
     referralRewardCredits: v.optional(v.number()), // Credits for referrer
@@ -685,24 +699,9 @@ export default defineSchema({
   // ============================================
   // INVOICE SYSTEM
   // ============================================
-  invoice_config: defineTable({
-    invoicePrefix: v.string(),
-    invoiceNoType: v.union(
-      v.literal("year_running"),
-      v.literal("year_month_running"),
-      v.literal("year_month_en_running"),
-      v.literal("full_year_running"),
-      v.literal("custom"),
-      v.literal("year_dash_running"),
-      v.literal("year_month_en_dash_running")
-    ),
-    invoiceLeadingZeros: v.number(),
-    invoiceRunningNo: v.number(),
-    invoiceCurrentNo: v.string(),
-    lastResetDate: v.number(),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  }),
+  // Note: Invoice configuration moved to platform_config table with category "invoice_config"
+  // PO configuration moved to platform_config table with category "PO_config"
+  // Invoice & PO shared config moved to platform_config table with category "invoicePO"
 
   invoices: defineTable({
     invoiceNo: v.string(),
@@ -719,13 +718,22 @@ export default defineSchema({
     ),
     invoiceType: v.union(
       v.literal("subscription"),
-      v.literal("payment")
+      v.literal("payment"),
+      v.literal("invoice")
     ),
     transactionType: v.union(
       v.literal("recurring"),
       v.literal("one_time")
     ),
     transactionId: v.optional(v.id("transactions")),
+    purchaseOrderId: v.optional(v.id("purchase_orders")),
+    purchaseOrderNo: v.optional(v.string()),
+    sourceType: v.optional(v.union(
+      v.literal("stripe_subscription"),
+      v.literal("stripe_payment"),
+      v.literal("purchase_order"),
+      v.literal("manual")
+    )),
     items: v.array(v.object({
       description: v.string(),
       quantity: v.number(),
@@ -746,11 +754,11 @@ export default defineSchema({
     taxRate: v.optional(v.number()),
     discount: v.optional(v.number()),
     total: v.number(),
+    dueDate: v.optional(v.number()),
     notes: v.optional(v.string()),
     stripePaymentIntentId: v.optional(v.string()),
     stripeInvoiceId: v.optional(v.string()),
     issuedAt: v.optional(v.number()),
-    dueDate: v.optional(v.number()),
     paidAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -763,6 +771,106 @@ export default defineSchema({
     .index("by_transactionType", ["transactionType"])
     .index("by_createdAt", ["createdAt"])
     .index("by_issuedAt", ["issuedAt"]),
+
+  // ============================================
+  // PURCHASE ORDERS
+  // ============================================
+  purchase_orders: defineTable({
+    poNo: v.string(),
+    userId: v.optional(v.id("users")),
+    companyId: v.optional(v.string()),
+    vendorName: v.string(),
+    vendorEmail: v.optional(v.string()),
+    vendorAddress: v.optional(v.string()),
+    amount: v.number(),
+    currency: v.string(),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("issued"),
+      v.literal("approved"),
+      v.literal("received"),
+      v.literal("cancelled")
+    ),
+    items: v.array(v.object({
+      description: v.string(),
+      quantity: v.number(),
+      unitPrice: v.number(),
+      total: v.number(),
+    })),
+    subtotal: v.number(),
+    tax: v.optional(v.number()),
+    taxRate: v.optional(v.number()),
+    discount: v.optional(v.number()),
+    total: v.number(),
+    dueDate: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    paymentTerms: v.optional(v.string()),
+    deliveryDate: v.optional(v.number()),
+    issuedAt: v.optional(v.number()),
+    approvedAt: v.optional(v.number()),
+    approvedBy: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.string(),
+    createdByClerkUserId: v.optional(v.string()),
+    lastEditedByClerkUserId: v.optional(v.string()),
+    lastEditedAt: v.optional(v.number()),
+    convertedToInvoiceId: v.optional(v.id("invoices")),
+    convertedAt: v.optional(v.number()),
+    convertedByClerkUserId: v.optional(v.string()),
+  })
+    .index("by_poNo", ["poNo"])
+    .index("by_userId", ["userId"])
+    .index("by_companyId", ["companyId"])
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"])
+    .index("by_issuedAt", ["issuedAt"]),
+
+  // PO Share Links - Public shareable links with expiration
+  po_share_links: defineTable({
+    poId: v.id("purchase_orders"),
+    shareToken: v.string(), // UUID for public access
+    expiresAt: v.number(), // Timestamp when link expires
+    createdAt: v.number(),
+    accessCount: v.number(), // Track how many times accessed
+    lastAccessedAt: v.optional(v.number()),
+    isActive: v.boolean(), // Can be manually deactivated
+  })
+    .index("by_po", ["poId"])
+    .index("by_token", ["shareToken"])
+    .index("by_expiry", ["expiresAt"]),
+
+  // SaaS Customers - Reusable customer data for POs and Invoices
+  saas_customers: defineTable({
+    companyId: v.optional(v.string()),
+    customerName: v.string(),
+    customerEmail: v.optional(v.string()),
+    customerPhone: v.optional(v.string()),
+    customerAddress: v.optional(v.string()),
+    customerType: v.union(v.literal("saas"), v.literal("local")), // Distinguish between SaaS and local customers
+    // Additional business info
+    companyRegistrationNo: v.optional(v.string()),
+    taxId: v.optional(v.string()),
+    // Contact person
+    contactPersonName: v.optional(v.string()),
+    contactPersonEmail: v.optional(v.string()),
+    contactPersonPhone: v.optional(v.string()),
+    // Business details
+    industry: v.optional(v.string()),
+    website: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    // Metadata
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    lastEditedBy: v.optional(v.string()),
+  })
+    .index("by_company", ["companyId"])
+    .index("by_name", ["customerName"])
+    .index("by_email", ["customerEmail"])
+    .index("by_type", ["customerType"])
+    .index("by_active", ["isActive"]),
 
   // ============================================
   // CHATBOT SYSTEM: AI Chatbot with n8n Integration
@@ -981,4 +1089,14 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_assigned", ["assignedTo"]),
+
+  // ============================================
+  // REPORT LOGOS: Uploaded logos for reports
+  // ============================================
+  report_logos: defineTable({
+    companyId: v.string(),
+    storageId: v.string(), // Reference to Convex storage
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_companyId", ["companyId"]),
 });

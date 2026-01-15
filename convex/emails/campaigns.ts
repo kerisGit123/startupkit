@@ -200,10 +200,14 @@ export const sendCampaign = mutation({
       }
     }
 
-    // Update campaign status
+    // Update campaign status (reset counts for resend)
     await ctx.db.patch(campaignId, {
       status: "sending",
       sentAt: Date.now(),
+      sentCount: 0,
+      deliveredCount: 0,
+      openedCount: 0,
+      clickedCount: 0,
     });
 
     let sentCount = 0;
@@ -219,7 +223,7 @@ export const sendCampaign = mutation({
       variablesFromConfig[variable.key] = variable.value;
     }
 
-    // Get company settings for company variables
+    // Get company settings from org_settings table
     const companySettings = await ctx.db.query("org_settings").first();
 
     for (const user of recipients) {
@@ -233,12 +237,15 @@ export const sendCampaign = mutation({
           event_date: `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`,
           event_time: `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`,
           
-          // Dynamic variables from database
+          // Dynamic variables from database (company data from org_settings)
           user_name: user.fullName || user.firstName || user.email?.split('@')[0] || "User",
           company_name: companySettings?.companyName || settings.emailFromName || "StartupKit",
           company_email: companySettings?.companyEmail || settings.emailFromAddress || "support@startupkit.com",
           company_phone: companySettings?.companyPhone || "",
           company_address: companySettings?.companyAddress || "",
+          company_country: companySettings?.companyCountry || "",
+          company_tin: companySettings?.companyTin || "",
+          company_license: companySettings?.companyLicense || "",
           
           // Static variables from platform_config (lowest priority, will be overridden if already set)
           ...variablesFromConfig,

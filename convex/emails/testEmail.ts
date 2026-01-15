@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { action } from "../_generated/server";
+import { action, internalMutation } from "../_generated/server";
+import { internal } from "../_generated/api";
 
 export const sendTestEmail = action({
   args: {
@@ -7,17 +8,10 @@ export const sendTestEmail = action({
     resendApiKey: v.string(),
     fromName: v.string(),
     fromEmail: v.string(),
+    useTestMode: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    try {
-      const { Resend } = await import("resend");
-      const resend = new Resend(args.resendApiKey);
-
-      const { data, error } = await resend.emails.send({
-        from: `${args.fromName} <${args.fromEmail}>`,
-        to: [args.to],
-        subject: "Test Email from Your SaaS Platform",
-        html: `
+    const htmlContent = `
           <!DOCTYPE html>
           <html>
           <head>
@@ -64,7 +58,34 @@ export const sendTestEmail = action({
             </div>
           </body>
           </html>
-        `,
+        `;
+
+    try {
+      // If test mode is enabled, just log to database
+      if (args.useTestMode) {
+        await ctx.runMutation(internal.emails.testEmail.logTestEmail, {
+          to: args.to,
+          subject: "Test Email from Your SaaS Platform",
+          htmlContent,
+          fromName: args.fromName,
+          fromEmail: args.fromEmail,
+        });
+        
+        return { 
+          success: true, 
+          message: "Test email logged to database (test mode)"
+        };
+      }
+
+      // Otherwise, actually send via Resend
+      const { Resend } = await import("resend");
+      const resend = new Resend(args.resendApiKey);
+
+      const { data, error } = await resend.emails.send({
+        from: `${args.fromName} <${args.fromEmail}>`,
+        to: [args.to],
+        subject: "Test Email from Your SaaS Platform",
+        html: htmlContent,
       });
 
       if (error) {
@@ -88,5 +109,28 @@ export const sendTestEmail = action({
         error: error instanceof Error ? error.message : "Unknown error occurred" 
       };
     }
+  },
+});
+
+// Internal mutation to log test email to database
+export const logTestEmail = internalMutation({
+  args: {
+    to: v.string(),
+    subject: v.string(),
+    htmlContent: v.string(),
+    fromName: v.string(),
+    fromEmail: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("email_logs", {
+      sentTo: args.to,
+      subject: args.subject,
+      htmlContent: args.htmlContent,
+      textContent: "",
+      templateType: "test",
+      templateName: "Test Email",
+      status: "logged",
+      createdAt: Date.now(),
+    });
   },
 });

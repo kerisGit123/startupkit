@@ -110,19 +110,28 @@ function ChatbotConfigCard({ config, type, onUpdate }: ChatbotConfigCardProps) {
     }
 
     try {
-      const response = await fetch(webhookUrl, {
+      // Use the API route instead of calling n8n directly to avoid CORS
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          n8nWebhookUrl: webhookUrl,
           chatId: "test_" + Date.now(),
-          message: "Test connection",
-          route: "test"
+          message: "Test connection from chatbot settings",
+          route: type,
+          userId: null
         })
       });
       
       if (response.ok) {
         const data = await response.json();
-        toast.success("Connection successful! Response: " + JSON.stringify(data).substring(0, 100));
+        if (data.output) {
+          toast.success("Connection successful! Response: " + data.output.substring(0, 100));
+        } else if (data.error) {
+          toast.error("Connection failed: " + data.error);
+        } else {
+          toast.success("Connection successful!");
+        }
       } else {
         toast.error("Connection failed: " + response.statusText);
       }

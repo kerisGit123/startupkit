@@ -8,58 +8,40 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Save, AlertTriangle } from "lucide-react";
+import { RefreshCw, Save, AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function InvoiceSettingsPage() {
-  const config = useQuery(api.invoices.invoiceSystem.getInvoiceConfig);
-  const initializeConfig = useMutation(api.invoices.invoiceSystem.initializeInvoiceConfig);
-  const updateConfig = useMutation(api.invoices.invoiceSystem.updateInvoiceConfig);
-  const setCounter = useMutation(api.invoices.invoiceSystem.setInvoiceCounter);
-  const resetCounter = useMutation(api.invoices.invoiceSystem.resetInvoiceCounter);
+  const config = useQuery(api.invoiceConfig.getInvoiceConfig);
+  const updateConfig = useMutation(api.invoiceConfig.updateInvoiceConfig);
+  const resetCounter = useMutation(api.invoiceConfig.resetInvoiceCounter);
   
   const [invoicePrefix, setInvoicePrefix] = useState("INV-");
-  const [invoiceNoType, setInvoiceNoType] = useState<"year_running" | "year_month_running" | "year_month_en_running" | "full_year_running" | "custom" | "year_dash_running" | "year_month_en_dash_running">("year_running");
+  const [invoiceNumberFormat, setInvoiceNumberFormat] = useState("Year + Running");
   const [invoiceLeadingZeros, setInvoiceLeadingZeros] = useState(4);
+  const [invoiceCurrentCounter, setInvoiceCurrentCounter] = useState(1);
   const [previewInvoiceNo, setPreviewInvoiceNo] = useState("");
-  const [isInitializing, setIsInitializing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [newCounterValue, setNewCounterValue] = useState("");
   const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     if (config) {
-      setInvoicePrefix(config.invoicePrefix);
-      setInvoiceNoType(config.invoiceNoType as any);
-      setInvoiceLeadingZeros(config.invoiceLeadingZeros);
-      setPreviewInvoiceNo(config.invoiceCurrentNo);
+      setInvoicePrefix(config.invoicePrefix || "INV-");
+      setInvoiceNumberFormat(config.invoiceNumberFormat || "Year + Running");
+      setInvoiceLeadingZeros(config.invoiceLeadingZeros || 4);
+      setInvoiceCurrentCounter(config.invoiceCurrentCounter || 1);
     }
   }, [config]);
-
-  const handleInitialize = async () => {
-    setIsInitializing(true);
-    try {
-      await initializeConfig({
-        invoicePrefix,
-        invoiceNoType,
-        invoiceLeadingZeros,
-      });
-      toast.success("Invoice configuration initialized successfully");
-    } catch (error) {
-      toast.error("Failed to initialize invoice configuration");
-      console.error(error);
-    } finally {
-      setIsInitializing(false);
-    }
-  };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
       await updateConfig({
         invoicePrefix,
-        invoiceNoType,
+        invoiceNumberFormat,
         invoiceLeadingZeros,
+        invoiceCurrentCounter,
       });
       toast.success("Invoice configuration updated successfully");
     } catch (error) {
@@ -71,134 +53,36 @@ export default function InvoiceSettingsPage() {
   };
 
   const refreshPreview = () => {
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const fullYear = now.getFullYear().toString();
-    const month = (now.getMonth() + 1).toString().padStart(2, "0");
-    const monthCode = ["JA", "FE", "MR", "AP", "MY", "JN", "JL", "AU", "SE", "OC", "NO", "DE"][now.getMonth()];
-    const runningNo = "1".padStart(invoiceLeadingZeros, "0");
+    const year = new Date().getFullYear();
+    const yearShort = year.toString().slice(-2);
+    const month = (new Date().getMonth() + 1).toString().padStart(2, "0");
+    const paddedCounter = invoiceCurrentCounter.toString().padStart(invoiceLeadingZeros, "0");
 
-    let preview = invoicePrefix;
-    switch (invoiceNoType) {
-      case "year_running":
-        preview += `${year}${runningNo}`;
+    let preview = "";
+    switch (invoiceNumberFormat) {
+      case "Year + Running":
+        preview = `${invoicePrefix}${yearShort}${paddedCounter}`;
         break;
-      case "year_month_running":
-        preview += `${year}${month}${runningNo}`;
+      case "Running Only":
+        preview = `${invoicePrefix}${paddedCounter}`;
         break;
-      case "year_month_en_running":
-        preview += `${year}${monthCode}${runningNo}`;
+      case "Month + Running":
+        preview = `${invoicePrefix}${yearShort}${month}${paddedCounter}`;
         break;
-      case "full_year_running":
-        preview += `${fullYear}${runningNo}`;
-        break;
-      case "year_dash_running":
-        preview += `${year}-${runningNo}`;
-        break;
-      case "year_month_en_dash_running":
-        preview += `${year}${monthCode}-${runningNo}`;
-        break;
-      case "custom":
-        preview += runningNo;
-        break;
+      default:
+        preview = `${invoicePrefix}${yearShort}${paddedCounter}`;
     }
     setPreviewInvoiceNo(preview);
   };
 
   useEffect(() => {
     refreshPreview();
-  }, [invoicePrefix, invoiceNoType, invoiceLeadingZeros]);
+  }, [invoicePrefix, invoiceNumberFormat, invoiceLeadingZeros, invoiceCurrentCounter]);
 
   if (!config) {
     return (
-      <div className="container max-w-4xl py-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Invoice Configuration</CardTitle>
-            <CardDescription>
-              Initialize invoice numbering system for your transactions
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-yellow-900">Invoice System Not Initialized</h4>
-                  <p className="text-sm text-yellow-700 mt-1">
-                    You need to initialize the invoice configuration before you can generate invoices for transactions.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="invoicePrefix">Invoice Prefix</Label>
-                <Input
-                  id="invoicePrefix"
-                  value={invoicePrefix}
-                  onChange={(e) => setInvoicePrefix(e.target.value)}
-                  placeholder="INV-"
-                  maxLength={10}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invoiceNoType">Invoice Number Format</Label>
-                <Select value={invoiceNoType} onValueChange={(val: any) => setInvoiceNoType(val)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="year_running">Year + Running (e.g., 250001)</SelectItem>
-                    <SelectItem value="year_month_running">Year + Month + Running (e.g., 25010001)</SelectItem>
-                    <SelectItem value="year_month_en_running">Year + Month Code + Running (e.g., 25JA0001)</SelectItem>
-                    <SelectItem value="full_year_running">Full Year + Running (e.g., 20250001)</SelectItem>
-                    <SelectItem value="custom">Custom/Sequential (e.g., 0001)</SelectItem>
-                    <SelectItem value="year_dash_running">Year-Running (e.g., 25-0001)</SelectItem>
-                    <SelectItem value="year_month_en_dash_running">Year+Month-Running (e.g., 25JA-0001)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invoiceLeadingZeros">Leading Zeros</Label>
-                <Input
-                  id="invoiceLeadingZeros"
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={invoiceLeadingZeros}
-                  onChange={(e) => setInvoiceLeadingZeros(parseInt(e.target.value) || 4)}
-                />
-              </div>
-
-              <div className="rounded-lg border bg-muted/50 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Preview</p>
-                    <p className="text-2xl font-bold text-primary mt-1">
-                      {previewInvoiceNo}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={refreshPreview}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Refresh
-                  </Button>
-                </div>
-              </div>
-
-              <Button 
-                onClick={handleInitialize} 
-                className="w-full"
-                disabled={isInitializing}
-              >
-                {isInitializing ? "Initializing..." : "Initialize Invoice System"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -237,32 +121,20 @@ export default function InvoiceSettingsPage() {
 
           {/* Invoice Number Format */}
           <div className="space-y-2">
-            <Label htmlFor="invoiceNoType">Invoice Number Format</Label>
-            <Select value={invoiceNoType} onValueChange={(val: any) => setInvoiceNoType(val)}>
+            <Label htmlFor="invoiceNumberFormat">Invoice Number Format</Label>
+            <Select value={invoiceNumberFormat} onValueChange={setInvoiceNumberFormat}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="year_running">
+                <SelectItem value="Year + Running">
                   Year + Running (e.g., INV-250001) ⭐ Recommended
                 </SelectItem>
-                <SelectItem value="year_month_running">
-                  Year + Month + Running (e.g., INV-25010001)
+                <SelectItem value="Running Only">
+                  Running Only (e.g., INV-0001)
                 </SelectItem>
-                <SelectItem value="year_month_en_running">
-                  Year + Month Code + Running (e.g., INV-25JA0001)
-                </SelectItem>
-                <SelectItem value="full_year_running">
-                  Full Year + Running (e.g., INV-20250001)
-                </SelectItem>
-                <SelectItem value="custom">
-                  Custom/Sequential (e.g., INV-0001)
-                </SelectItem>
-                <SelectItem value="year_dash_running">
-                  Year-Running (e.g., INV-25-0001)
-                </SelectItem>
-                <SelectItem value="year_month_en_dash_running">
-                  Year+Month-Running (e.g., INV-25JA-0001)
+                <SelectItem value="Month + Running">
+                  Month + Running (e.g., INV-25010001)
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -308,7 +180,7 @@ export default function InvoiceSettingsPage() {
             <Label>Current Counter</Label>
             <div className="flex items-center gap-2">
               <Input
-                value={config.invoiceRunningNo}
+                value={invoiceCurrentCounter}
                 disabled
                 className="bg-muted flex-1"
               />
@@ -341,7 +213,13 @@ export default function InvoiceSettingsPage() {
                   }
                   setIsResetting(true);
                   try {
-                    await setCounter({ counterValue: value });
+                    await updateConfig({
+                      invoicePrefix,
+                      invoiceNumberFormat,
+                      invoiceLeadingZeros,
+                      invoiceCurrentCounter: value,
+                    });
+                    setInvoiceCurrentCounter(value);
                     toast.success(`Counter set to ${value}`);
                     setNewCounterValue("");
                   } catch (error) {
@@ -362,7 +240,8 @@ export default function InvoiceSettingsPage() {
                   }
                   setIsResetting(true);
                   try {
-                    await resetCounter({});
+                    await resetCounter({ newCounter: 1 });
+                    setInvoiceCurrentCounter(1);
                     toast.success("Counter reset to 1");
                     setNewCounterValue("");
                   } catch (error) {
@@ -406,9 +285,9 @@ export default function InvoiceSettingsPage() {
             </p>
           </div>
           <div>
-            <p className="font-semibold">Auto-Reset</p>
+            <p className="font-semibold">Number Format</p>
             <p className="text-muted-foreground">
-              Depending on your format, numbers reset yearly (year_running), monthly (year_month_running), or never (custom).
+              Choose between Year + Running (recommended), Running Only, or Month + Running formats.
             </p>
           </div>
           <div>

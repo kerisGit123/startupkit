@@ -61,9 +61,19 @@ const navItems = [
     icon: IconShoppingCart,
   },
   {
-    title: "Invoices",
-    url: "/admin/invoices",
+    title: "Purchase Orders",
+    url: "/admin/purchase-orders",
+    icon: IconReceipt,
+  },
+  {
+    title: "Invoices & POs",
+    url: "/admin/invoices-and-pos",
     icon: IconFileInvoice,
+  },
+  {
+    title: "Customers",
+    url: "/admin/customers",
+    icon: IconUsers,
   },
   {
     title: "Transactions",

@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { useCompany } from "@/hooks/useCompany";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAdminRole } from "@/hooks/useAdminRole";
-import { ArrowUpRight, TrendingUp, Users, Zap, BarChart3, Wallet, Settings, Shield, Copy, Check, Gift } from "lucide-react";
+import { ArrowUpRight, TrendingUp, Users, Zap, BarChart3, Wallet, Settings, Shield, Copy, Check, Gift, FileText } from "lucide-react";
 import Link from "next/link";
 import { AlertBanner } from "@/components/AlertBanner";
 import { ReferralTracker } from "@/components/ReferralTracker";
@@ -298,11 +298,15 @@ export default function DashboardPage() {
               <Wallet className="w-6 h-6 mx-auto mb-2 text-gray-600" />
               <p className="text-sm font-medium text-gray-900">Billing</p>
             </Link>
+            <Link href="/dashboard/invoices" className="p-4 border border-gray-200 rounded-lg hover:border-yellow-400 hover:bg-yellow-50 transition text-center">
+              <FileText className="w-6 h-6 mx-auto mb-2 text-gray-600" />
+              <p className="text-sm font-medium text-gray-900">Invoices</p>
+            </Link>
             <Link href="/dashboard/team" className="p-4 border border-gray-200 rounded-lg hover:border-yellow-400 hover:bg-yellow-50 transition text-center">
               <Users className="w-6 h-6 mx-auto mb-2 text-gray-600" />
               <p className="text-sm font-medium text-gray-900">Team</p>
             </Link>
-            <Link href="/settings" className="p-4 border border-gray-200 rounded-lg hover:border-yellow-400 hover:bg-yellow-50 transition text-center">
+            <Link href="/dashboard/settings" className="p-4 border border-gray-200 rounded-lg hover:border-yellow-400 hover:bg-yellow-50 transition text-center">
               <Settings className="w-6 h-6 mx-auto mb-2 text-gray-600" />
               <p className="text-sm font-medium text-gray-900">Settings</p>
             </Link>

@@ -111,10 +111,11 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(config.n8nWebhookUrl, {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          n8nWebhookUrl: config.n8nWebhookUrl,
           chatId: sessionId,
           message: input,
           route: type,

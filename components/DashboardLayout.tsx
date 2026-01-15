@@ -18,7 +18,8 @@ import {
   X,
   Ticket,
   Bell,
-  ShieldAlert
+  ShieldAlert,
+  FileText
 } from "lucide-react";
 import { useClerk } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
@@ -59,11 +60,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Usage", href: "/dashboard/usage", icon: BarChart3 },
     { name: "Billing", href: "/dashboard/billing", icon: Wallet },
+    { name: "Invoices", href: "/dashboard/invoices", icon: FileText },
     { name: "Pricing Plans", href: "/pricing", icon: CreditCard },
     { name: "Team", href: "/dashboard/team", icon: Users },
     { name: "User Management", href: "/dashboard/users", icon: UserCog },
     { name: "Support Tickets", href: "/support", icon: Ticket },
-    { name: "Settings", href: "/settings", icon: Settings },
+    { name: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
 
   const isActive = (href: string) => pathname === href;

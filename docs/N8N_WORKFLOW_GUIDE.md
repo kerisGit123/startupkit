@@ -6,22 +6,43 @@
 
 ## 📋 Overview
 
-This guide provides ready-to-use n8n workflow examples for:
-- Basic chatbot with AI responses
-- Admin takeover detection
-- Auto-escalation based on keywords
-- Lead capture triggers
-- Appointment booking notifications
+This guide provides ready-to-use n8n workflow examples for your chatbot system. Click on any workflow type below to jump to its configuration:
+
+### 🎯 Select Your Workflow Type
+
+Choose the workflow you want to set up:
+
+<div style="display: flex; flex-wrap: wrap; gap: 12px; margin: 20px 0;">
+
+**[🤖 Basic Chatbot](#basic-chatbot-workflow)** - AI-powered responses for general queries
+
+**[👤 Admin Takeover](#admin-takeover-workflow)** - Detect and escalate to human agents
+
+**[⚡ Auto-Escalation](#auto-escalation-workflow)** - Keyword-based automatic escalation
+
+**[📋 Lead Capture](#lead-capture-workflow)** - Capture and store customer information
+
+**[📅 Appointment Booking](#appointment-booking-workflow)** - Schedule and notify appointments
+
+</div>
 
 ---
 
-## 🚀 Basic Chatbot Workflow
+## 🤖 Basic Chatbot Workflow
+
+**Purpose:** Handle general customer queries with AI-powered responses
 
 ### Workflow Structure
 
 ```
 Webhook Trigger → Extract Data → AI Processing → Format Response → Return
 ```
+
+### When to Use
+- General customer support
+- FAQ responses
+- Product information queries
+- 24/7 automated assistance
 
 ### n8n Workflow JSON
 
@@ -108,15 +129,168 @@ Webhook Trigger → Extract Data → AI Processing → Format Response → Retur
 }
 ```
 
+### Setup Steps
+
+1. **Import Workflow**: Copy the JSON above and import into n8n
+2. **Configure OpenAI**: Add your OpenAI API key in credentials
+3. **Set Webhook URL**: Copy the webhook URL and add to your frontend
+4. **Test**: Send a test message to verify the workflow
+
+### Frontend Integration
+
+```javascript
+const response = await fetch('YOUR_N8N_WEBHOOK_URL', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    chatId: 'chat-123',
+    message: 'What are your business hours?',
+    route: 'general'
+  })
+});
+```
+
+[← Back to Workflow Selection](#select-your-workflow-type)
+
 ---
 
-## 🆘 Auto-Escalation Workflow
+## 👤 Admin Takeover Workflow
+
+**Purpose:** Detect when customers need human assistance and escalate to admin
 
 ### Workflow Structure
 
+```text
+Webhook → Extract → Detect Takeover Request → Notify Admin → Update Chat Status → Response
 ```
+
+### When to Use
+- Customer explicitly requests human agent
+- Complex issues requiring human judgment
+- Escalation from automated responses
+- VIP customer handling
+
+### Key Features
+- Real-time admin notifications
+- Chat status updates in Convex
+- Seamless handoff from bot to human
+- Admin dashboard alerts
+
+### n8n Workflow JSON
+
+```json
+{
+  "name": "Admin Takeover Detection",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "admin-takeover",
+        "responseMode": "responseNode"
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $input.item.json.body.message.toLowerCase();\nconst chatId = $input.item.json.body.chatId;\n\nconst takeoverPhrases = [\n  'speak to human',\n  'talk to agent',\n  'human support',\n  'real person',\n  'customer service'\n];\n\nconst needsTakeover = takeoverPhrases.some(phrase => message.includes(phrase));\n\nreturn {\n  chatId,\n  message: $input.item.json.body.message,\n  needsTakeover,\n  timestamp: Date.now()\n};"
+      },
+      "name": "Detect Takeover",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.needsTakeover }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "IF Takeover Needed",
+      "type": "n8n-nodes-base.if",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_CONVEX_HTTP_ACTION_URL",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ { \"chatId\": $json.chatId, \"status\": \"admin_takeover\", \"timestamp\": $json.timestamp } }}"
+      },
+      "name": "Update Chat Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"message\": \"Connecting you with a human agent. Please wait...\", \"status\": \"admin_takeover\" } }}"
+      },
+      "name": "Respond - Takeover",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"message\": \"How can I help you today?\", \"status\": \"bot\" } }}"
+      },
+      "name": "Respond - Normal",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1050, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Detect Takeover" }]]
+    },
+    "Detect Takeover": {
+      "main": [[{ "node": "IF Takeover Needed" }]]
+    },
+    "IF Takeover Needed": {
+      "main": [
+        [{ "node": "Update Chat Status" }],
+        [{ "node": "Respond - Normal" }]
+      ]
+    },
+    "Update Chat Status": {
+      "main": [[{ "node": "Respond - Takeover" }]]
+    }
+  }
+}
+```
+
+### Setup Steps
+
+1. **Import Workflow**: Import JSON into n8n
+2. **Configure Convex URL**: Replace `YOUR_CONVEX_HTTP_ACTION_URL` with your Convex HTTP action endpoint
+3. **Customize Phrases**: Edit takeover detection phrases in "Detect Takeover" node
+4. **Test**: Try phrases like "I want to speak to a human"
+
+[← Back to Workflow Selection](#select-your-workflow-type)
+
+---
+
+## ⚡ Auto-Escalation Workflow
+
+**Purpose:** Automatically escalate conversations based on specific keywords or conditions
+
+### Workflow Structure
+
+```text
 Webhook → Extract → Check Keywords → Branch (Escalate/Normal) → AI/Alert → Response
 ```
+
+### When to Use
+- Urgent issues (billing, refunds, complaints)
+- Technical problems requiring immediate attention
+- Security or privacy concerns
+- High-priority customer segments
 
 ### Escalation Keywords Detection
 
@@ -134,7 +308,12 @@ const escalationKeywords = [
   'manager',
   'complaint',
   'urgent',
-  'emergency'
+  'emergency',
+  'refund',
+  'cancel subscription',
+  'billing issue',
+  'not working',
+  'broken'
 ];
 
 const needsEscalation = escalationKeywords.some(keyword => 
@@ -142,9 +321,11 @@ const needsEscalation = escalationKeywords.some(keyword =>
 );
 
 return {
-  ...($input.item.json),
+  chatId: $input.item.json.body.chatId,
+  message: $input.item.json.body.message,
   needsEscalation,
-  detectedKeywords: escalationKeywords.filter(k => message.includes(k))
+  detectedKeywords: escalationKeywords.filter(k => message.includes(k)),
+  timestamp: Date.now()
 };
 ```
 
@@ -268,134 +449,318 @@ return {
 }
 ```
 
----
+### Setup Steps
 
-## 📚 Knowledge Base Integration
+1. **Import Workflow**: Import JSON into n8n
+2. **Configure Webhook**: Copy webhook URL
+3. **Customize Keywords**: Adjust escalation keywords for your use case
+4. **Test**: Send messages with keywords like "urgent" or "refund"
 
-### Query Knowledge Base Before AI
-
-```javascript
-// n8n Code Node - Search Knowledge Base
-const userMessage = $input.item.json.message.toLowerCase();
-
-// Call your Convex searchArticles function
-const knowledgeBase = [
-  // This would come from your Convex database
-  {
-    title: "How to reset password",
-    content: "To reset your password, go to Settings > Security > Reset Password",
-    keywords: ["password", "reset", "forgot", "login"]
-  }
-];
-
-const relevantArticles = knowledgeBase.filter(article =>
-  article.keywords.some(keyword => userMessage.includes(keyword))
-);
-
-return {
-  message: $input.item.json.message,
-  hasKnowledgeBase: relevantArticles.length > 0,
-  articles: relevantArticles,
-  context: relevantArticles.map(a => a.content).join('\n\n')
-};
-```
-
-### AI with Knowledge Base Context
-
-```javascript
-// OpenAI Node with Context
-{
-  "model": "gpt-4",
-  "messages": [
-    {
-      "role": "system",
-      "content": "You are a support assistant. Use the following knowledge base articles to answer questions:\n\n{{ $json.context }}\n\nIf the knowledge base doesn't contain the answer, say so politely."
-    },
-    {
-      "role": "user",
-      "content": "{{ $json.message }}"
-    }
-  ]
-}
-```
+[← Back to Workflow Selection](#select-your-workflow-type)
 
 ---
 
-## 📧 Lead Capture Notification
+## 📋 Lead Capture Workflow
 
-### Send Email When Lead Captured
+**Purpose:** Capture customer information and notify sales team
+
+### Workflow Structure
+
+```text
+Webhook → Extract Lead Data → Save to Convex → Send Notification → Response
+```
+
+### When to Use
+- Contact form submissions
+- Demo requests
+- Quote requests
+- Newsletter signups
+- Sales inquiries
+
+### Key Features
+- Automatic lead storage in Convex
+- Email notifications to sales team
+- Slack/Teams integration options
+- Lead scoring and routing
+
+### Complete Workflow JSON
 
 ```json
 {
-  "name": "Lead Capture Notification",
+  "name": "Lead Capture & Notification",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "lead-captured"
+        "path": "lead-captured",
+        "responseMode": "responseNode"
       },
-      "name": "Webhook - Lead Captured",
+      "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
       "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  name: $input.item.json.body.name,\n  email: $input.item.json.body.email,\n  phone: $input.item.json.body.phone || '',\n  company: $input.item.json.body.company || '',\n  message: $input.item.json.body.message || '',\n  source: 'chatbot',\n  capturedAt: Date.now()\n};"
+      },
+      "name": "Extract Lead Data",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_CONVEX_HTTP_ACTION_URL",
+        "method": "POST",
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ $json }}"
+      },
+      "name": "Save to Convex",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [650, 300]
     },
     {
       "parameters": {
         "fromEmail": "notifications@yourcompany.com",
         "toEmail": "sales@yourcompany.com",
-        "subject": "🎯 New Lead Captured: {{ $json.body.name }}",
-        "text": "New lead from chatbot:\n\nName: {{ $json.body.name }}\nEmail: {{ $json.body.email }}\nPhone: {{ $json.body.phone }}\nCompany: {{ $json.body.company }}\n\nConversation ID: {{ $json.body.conversationId }}"
+        "subject": "🎯 New Lead: {{ $('Extract Lead Data').item.json.name }}",
+        "html": "<h2>New Lead Captured</h2><p><strong>Name:</strong> {{ $('Extract Lead Data').item.json.name }}</p><p><strong>Email:</strong> {{ $('Extract Lead Data').item.json.email }}</p><p><strong>Phone:</strong> {{ $('Extract Lead Data').item.json.phone }}</p><p><strong>Company:</strong> {{ $('Extract Lead Data').item.json.company }}</p><p><strong>Message:</strong> {{ $('Extract Lead Data').item.json.message }}</p><p><strong>Source:</strong> Chatbot</p>"
       },
-      "name": "Send Email",
+      "name": "Send Email Notification",
       "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 1,
-      "position": [450, 300]
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Thank you! We'll contact you soon.\" } }}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1050, 300]
     }
-  ]
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Extract Lead Data" }]]
+    },
+    "Extract Lead Data": {
+      "main": [[{ "node": "Save to Convex" }]]
+    },
+    "Save to Convex": {
+      "main": [[{ "node": "Send Email Notification" }]]
+    },
+    "Send Email Notification": {
+      "main": [[{ "node": "Respond to Webhook" }]]
+    }
+  }
 }
 ```
+
+### Setup Steps
+
+1. **Import Workflow**: Import JSON into n8n
+2. **Configure Email**: Set up email credentials (Gmail, SendGrid, etc.)
+3. **Set Convex URL**: Replace `YOUR_CONVEX_HTTP_ACTION_URL` with your endpoint
+4. **Customize Notification**: Edit email template and recipients
+5. **Test**: Submit a test lead through your chatbot
+
+### Frontend Integration
+
+```javascript
+// Trigger lead capture from chatbot
+const captureLeadResponse = await fetch('YOUR_N8N_WEBHOOK_URL', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'John Doe',
+    email: 'john@example.com',
+    phone: '+1234567890',
+    company: 'Acme Corp',
+    message: 'Interested in your product'
+  })
+});
+```
+
+[← Back to Workflow Selection](#select-your-workflow-type)
 
 ---
 
 ## 📅 Appointment Booking Workflow
 
-### Create Calendar Event
+**Purpose:** Schedule appointments and send confirmations
+
+### Workflow Structure
+
+```text
+Webhook → Validate Data → Create Calendar Event → Send Confirmation → Update Convex → Response
+```
+
+### When to Use
+- Demo bookings
+- Consultation scheduling
+- Support calls
+- Sales meetings
+- Onboarding sessions
+
+### Key Features
+- Google Calendar integration
+- Automatic confirmation emails
+- Timezone handling
+- Reminder notifications
+- Booking conflict detection
+
+### Complete Workflow JSON
 
 ```json
 {
-  "name": "Appointment Booking",
+  "name": "Appointment Booking & Notification",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "appointment-booked"
+        "path": "appointment-booked",
+        "responseMode": "responseNode"
       },
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
       "position": [250, 300]
     },
     {
       "parameters": {
-        "calendar": "primary",
-        "start": "={{ $json.body.date }}T{{ $json.body.time }}",
-        "end": "={{ $json.body.date }}T{{ $json.body.time + 1 hour }}",
-        "summary": "Meeting with {{ $json.body.name }}",
-        "description": "Purpose: {{ $json.body.purpose }}\n\nNotes: {{ $json.body.notes }}\n\nContact: {{ $json.body.email }}"
+        "jsCode": "const { name, email, date, time, purpose, notes } = $input.item.json.body;\n\n// Format datetime for Google Calendar\nconst startDateTime = `${date}T${time}:00`;\nconst endTime = new Date(`${date}T${time}:00`);\nendTime.setHours(endTime.getHours() + 1);\nconst endDateTime = endTime.toISOString().slice(0, 16);\n\nreturn {\n  name,\n  email,\n  date,\n  time,\n  purpose: purpose || 'General consultation',\n  notes: notes || '',\n  startDateTime,\n  endDateTime,\n  timestamp: Date.now()\n};"
       },
-      "name": "Google Calendar",
-      "type": "n8n-nodes-base.googleCalendar",
-      "typeVersion": 1,
+      "name": "Format Appointment Data",
+      "type": "n8n-nodes-base.code",
       "position": [450, 300]
     },
     {
       "parameters": {
-        "fromEmail": "appointments@yourcompany.com",
-        "toEmail": "={{ $json.body.email }}",
-        "subject": "✅ Appointment Confirmed",
-        "html": "<h2>Your appointment is confirmed!</h2><p>Date: {{ $json.body.date }}</p><p>Time: {{ $json.body.time }}</p><p>We look forward to meeting with you!</p>"
+        "calendar": "primary",
+        "start": "={{ $json.startDateTime }}",
+        "end": "={{ $json.endDateTime }}",
+        "summary": "Meeting with {{ $json.name }}",
+        "description": "Purpose: {{ $json.purpose }}\n\nNotes: {{ $json.notes }}\n\nContact: {{ $json.email }}",
+        "attendees": "={{ $json.email }}"
       },
-      "name": "Send Confirmation",
+      "name": "Create Google Calendar Event",
+      "type": "n8n-nodes-base.googleCalendar",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "appointments@yourcompany.com",
+        "toEmail": "={{ $('Format Appointment Data').item.json.email }}",
+        "subject": "✅ Appointment Confirmed - {{ $('Format Appointment Data').item.json.date }}",
+        "html": "<div style='font-family: Arial, sans-serif; max-width: 600px;'><h2 style='color: #4CAF50;'>Your Appointment is Confirmed!</h2><div style='background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;'><p><strong>Date:</strong> {{ $('Format Appointment Data').item.json.date }}</p><p><strong>Time:</strong> {{ $('Format Appointment Data').item.json.time }}</p><p><strong>Purpose:</strong> {{ $('Format Appointment Data').item.json.purpose }}</p></div><p>We look forward to meeting with you!</p><p style='color: #666; font-size: 12px;'>If you need to reschedule, please contact us at support@yourcompany.com</p></div>"
+      },
+      "name": "Send Confirmation Email",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Appointment booked successfully!\", \"eventId\": $('Create Google Calendar Event').item.json.id } }}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Format Appointment Data" }]]
+    },
+    "Format Appointment Data": {
+      "main": [[{ "node": "Create Google Calendar Event" }]]
+    },
+    "Create Google Calendar Event": {
+      "main": [[{ "node": "Send Confirmation Email" }]]
+    },
+    "Send Confirmation Email": {
+      "main": [[{ "node": "Respond to Webhook" }]]
+    }
+  }
+}
+```
+
+### Setup Steps
+
+1. **Import Workflow**: Import JSON into n8n
+2. **Configure Google Calendar**: 
+   - Add Google Calendar credentials in n8n
+   - Authorize calendar access
+   - Select target calendar
+3. **Configure Email**: Set up email sending credentials
+4. **Customize Templates**: Edit confirmation email HTML
+5. **Test**: Book a test appointment
+
+### Frontend Integration
+
+```javascript
+// Book appointment from chatbot
+const bookingResponse = await fetch('YOUR_N8N_WEBHOOK_URL', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    date: '2026-01-20',
+    time: '14:00',
+    purpose: 'Product demo',
+    notes: 'Interested in enterprise plan'
+  })
+});
+```
+
+[← Back to Workflow Selection](#select-your-workflow-type)
+
+---
+
+## 🎯 Quick Start Guide
+
+### Step-by-Step Setup
+
+1. **Choose Your Workflow**: Click on the workflow type you need from the [selection menu](#select-your-workflow-type)
+2. **Copy JSON**: Copy the workflow JSON from the chosen section
+3. **Import to n8n**: 
+   - Open n8n
+   - Click "Import from File" or "Import from Clipboard"
+   - Paste the JSON
+4. **Configure Credentials**: Set up required credentials (OpenAI, Email, Google Calendar, etc.)
+5. **Update URLs**: Replace placeholder URLs with your actual endpoints
+6. **Test**: Activate the workflow and send a test request
+7. **Deploy**: Use the webhook URL in your frontend chatbot
+
+### Common Configuration
+
+**Convex HTTP Actions**: Create HTTP actions in Convex for:
+- Updating chat status
+- Saving leads
+- Storing appointments
+
+**Email Setup**: Supported providers:
+- Gmail (OAuth2)
+- SendGrid (API Key)
+- SMTP (Custom server)
+
+**Calendar Integration**: Requires:
+- Google Calendar API enabled
+- OAuth2 credentials
+- Calendar ID
+
+---
+
+## 📞 Support
+
+Need help setting up your workflows? Check the n8n documentation or contact support.
+
+**Resources:**
+- [n8n Documentation](https://docs.n8n.io)
+- [Convex Documentation](https://docs.convex.dev)
+- [OpenAI API Docs](https://platform.openai.com/docs)
+
+[🔝 Back to Top](#-n8n-workflow-integration-guide)
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 1,
       "position": [650, 300]

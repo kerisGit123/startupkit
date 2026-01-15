@@ -30,12 +30,13 @@ export const createInvoiceForTransaction = internalMutation({
         : null;
       console.log("[createInvoiceForTransaction] User", { userId: transaction.userId, hasUser: !!user });
       
-      // 3. Generate invoice number
+      // 3. Generate invoice number from platform_config
       console.log("[createInvoiceForTransaction] Generating invoice number");
-      const { invoiceNo } = await ctx.runMutation(
-        internal.invoices.invoiceSystem.generateInvoiceNumber,
+      const { invoiceNumber } = await ctx.runMutation(
+        internal.invoiceConfig.getNextInvoiceNumber,
         {}
       );
+      const invoiceNo = invoiceNumber;
       console.log("[createInvoiceForTransaction] Invoice number generated", { invoiceNo });
     
     // 4. Determine invoice type
