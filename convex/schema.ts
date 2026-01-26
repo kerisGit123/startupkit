@@ -1099,4 +1099,290 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_companyId", ["companyId"]),
+
+  // ============================================
+  // BOOKING SYSTEM: Calendly-like Appointment Scheduling
+  // ============================================
+  
+  // Appointments - Main booking records
+  appointments: defineTable({
+    // Client Information
+    clientId: v.id("clients"),
+    clientName: v.string(),
+    clientEmail: v.string(),
+    clientPhone: v.optional(v.string()),
+    
+    // Event Type Link
+    eventTypeId: v.optional(v.id("event_types")), // Link to event type
+    
+    // Appointment Details
+    date: v.string(), // "2026-01-26"
+    startTime: v.string(), // "14:00"
+    endTime: v.string(), // "15:00"
+    duration: v.number(), // minutes (60)
+    
+    // Status & Metadata
+    status: v.union(
+      v.literal("pending"),
+      v.literal("confirmed"),
+      v.literal("cancelled"),
+      v.literal("completed"),
+      v.literal("no_show")
+    ),
+    
+    // Purpose & Notes
+    appointmentType: v.string(), // "consultation", "demo", "support" (legacy, use eventTypeId)
+    notes: v.optional(v.string()),
+    internalNotes: v.optional(v.string()), // Admin-only notes
+    
+    // Location (from event type or custom)
+    location: v.optional(v.string()), // Meeting link or location details
+    
+    // Custom answers to event type questions
+    customAnswers: v.optional(v.array(v.object({
+      question: v.string(),
+      answer: v.string(),
+    }))),
+    
+    // Google Calendar Integration
+    googleEventId: v.optional(v.string()),
+    googleCalendarSynced: v.boolean(),
+    lastSyncedAt: v.optional(v.number()),
+    
+    // Tracking
+    bookedBy: v.union(
+      v.literal("chatbot"),
+      v.literal("admin"),
+      v.literal("api")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.id("users")), // Admin user ID
+  })
+    .index("by_date", ["date"])
+    .index("by_client", ["clientId"])
+    .index("by_status", ["status"])
+    .index("by_email", ["clientEmail"])
+    .index("by_googleEventId", ["googleEventId"])
+    .index("by_date_status", ["date", "status"]),
+
+  // Clients - Customer records for bookings
+  clients: defineTable({
+    // Basic Information
+    name: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    company: v.optional(v.string()),
+    
+    // Additional Details
+    timezone: v.optional(v.string()), // "America/New_York"
+    preferredContactMethod: v.optional(v.string()), // "email", "phone", "sms"
+    
+    // Metadata
+    tags: v.array(v.string()), // ["vip", "enterprise", "trial"]
+    notes: v.optional(v.string()),
+    
+    // Statistics
+    totalAppointments: v.number(),
+    completedAppointments: v.number(),
+    cancelledAppointments: v.number(),
+    noShowCount: v.number(),
+    
+    // Tracking
+    firstBookedAt: v.number(),
+    lastBookedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_phone", ["phone"])
+    .index("by_company", ["company"]),
+
+  // Availability - Weekly schedule configuration
+  availability: defineTable({
+    // Day Configuration
+    dayOfWeek: v.number(), // 0-6 (Sunday-Saturday)
+    
+    // Time Slots
+    startTime: v.string(), // "09:00"
+    endTime: v.string(), // "17:00"
+    slotDuration: v.number(), // 30 or 60 minutes
+    
+    // Buffer Times (Calendly-style)
+    bufferBefore: v.optional(v.number()), // Minutes before event (e.g., 30)
+    bufferAfter: v.optional(v.number()), // Minutes after event (e.g., 10)
+    bufferBetweenSlots: v.number(), // 15 minutes (deprecated, use bufferAfter)
+    
+    // Max Meetings Limits
+    maxMeetingsPerDay: v.optional(v.number()), // e.g., 2 meetings per day
+    maxMeetingsPerWeek: v.optional(v.number()), // e.g., 6 meetings per week
+    
+    // Break Times
+    breakTimes: v.optional(v.array(v.object({
+      start: v.string(),
+      end: v.string(),
+    }))),
+    
+    // Status
+    isActive: v.boolean(),
+    
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_day", ["dayOfWeek"])
+    .index("by_active", ["isActive"]),
+
+  // Event Types - Different appointment types (Calendly-style)
+  event_types: defineTable({
+    // Basic Info
+    name: v.string(), // "30 Minute Meeting", "Consultation"
+    slug: v.string(), // "30-min-meeting" for URL
+    description: v.optional(v.string()),
+    
+    // Duration & Scheduling
+    duration: v.number(), // Minutes (15, 30, 45, 60, 120)
+    
+    // Location
+    locationType: v.union(
+      v.literal("google_meet"),
+      v.literal("zoom"),
+      v.literal("phone"),
+      v.literal("in_person"),
+      v.literal("custom")
+    ),
+    locationDetails: v.optional(v.string()), // Custom location or instructions
+    
+    // Color for calendar display
+    color: v.string(), // Hex color "#4F46E5"
+    
+    // Availability specific to this event type
+    customAvailability: v.optional(v.boolean()), // Use custom hours for this event
+    
+    // Buffer times specific to this event type
+    bufferBefore: v.optional(v.number()),
+    bufferAfter: v.optional(v.number()),
+    
+    // Limits
+    maxBookingsPerDay: v.optional(v.number()),
+    maxBookingsPerWeek: v.optional(v.number()),
+    
+    // Booking window
+    minNoticeHours: v.optional(v.number()), // Minimum hours before booking (e.g., 24)
+    maxDaysInFuture: v.optional(v.number()), // How far in advance can book (e.g., 60 days)
+    
+    // Questions to ask during booking
+    customQuestions: v.optional(v.array(v.object({
+      question: v.string(),
+      required: v.boolean(),
+      type: v.union(v.literal("text"), v.literal("textarea"), v.literal("select")),
+      options: v.optional(v.array(v.string())),
+    }))),
+    
+    // Status
+    isActive: v.boolean(),
+    isPublic: v.boolean(), // Show on public booking page
+    
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.id("users")),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_active", ["isActive"])
+    .index("by_public", ["isPublic"]),
+
+  // Availability Overrides - Date-specific exceptions
+  availability_overrides: defineTable({
+    // Date-specific overrides
+    date: v.string(), // "2026-01-26"
+    
+    // Override Type
+    type: v.union(
+      v.literal("blocked"), // Day off, holiday
+      v.literal("custom")   // Custom hours for this day
+    ),
+    
+    // Custom Hours (if type = "custom")
+    customStartTime: v.optional(v.string()),
+    customEndTime: v.optional(v.string()),
+    
+    // Metadata
+    reason: v.optional(v.string()), // "Holiday", "Conference"
+    isHoliday: v.optional(v.boolean()), // Mark as holiday for special handling
+    holidayName: v.optional(v.string()), // "Christmas", "New Year"
+    createdAt: v.number(),
+  })
+    .index("by_date", ["date"])
+    .index("by_type", ["type"])
+    .index("by_holiday", ["isHoliday"]),
+
+  // Google Calendar Sync - OAuth and sync configuration
+  google_calendar_sync: defineTable({
+    // Sync Configuration
+    calendarId: v.string(), // Google Calendar ID
+    isEnabled: v.boolean(),
+    syncDirection: v.union(
+      v.literal("one_way_to_google"),
+      v.literal("two_way")
+    ),
+    
+    // OAuth Credentials (encrypted)
+    accessToken: v.optional(v.string()),
+    refreshToken: v.optional(v.string()),
+    tokenExpiresAt: v.optional(v.number()),
+    
+    // Sync Status
+    lastSyncAt: v.optional(v.number()),
+    lastSyncStatus: v.optional(v.string()),
+    syncErrors: v.optional(v.array(v.object({
+      timestamp: v.number(),
+      error: v.string(),
+    }))),
+    
+    // Metadata
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_calendarId", ["calendarId"]),
+
+  // Leads - CRM for potential customers (before they become clients)
+  leads: defineTable({
+    name: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    source: v.string(), // "chatbot", "website", "referral", "manual"
+    message: v.optional(v.string()),
+    status: v.string(), // "new", "contacted", "converted", "lost"
+    convertedToClientId: v.optional(v.id("clients")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_status", ["status"])
+    .index("by_createdAt", ["createdAt"]),
+
+  // Booking Conversations - Track chatbot booking sessions
+  booking_conversations: defineTable({
+    sessionId: v.string(),
+    clientId: v.optional(v.id("clients")),
+    
+    // Status
+    status: v.union(
+      v.literal("active"),
+      v.literal("booking_in_progress"),
+      v.literal("completed"),
+      v.literal("abandoned")
+    ),
+    
+    // Context
+    currentIntent: v.optional(v.string()), // "booking", "rescheduling", "cancellation"
+    collectedData: v.optional(v.any()), // Temporary data during booking flow
+    
+    // Tracking
+    lastMessageAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_sessionId", ["sessionId"])
+    .index("by_status", ["status"]),
 });

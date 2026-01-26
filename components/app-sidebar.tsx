@@ -19,6 +19,7 @@ import {
   IconChartBar,
   IconBook,
   IconPalette,
+  IconCalendar,
 } from "@tabler/icons-react"
 
 import {
@@ -36,104 +37,144 @@ import { NavUser } from "@/components/nav-user"
 
 const navItems = [
   {
-    title: "Dashboard",
-    url: "/admin",
-    icon: IconLayoutDashboard,
+    title: "Core",
+    items: [
+      {
+        title: "Dashboard",
+        url: "/admin",
+        icon: IconLayoutDashboard,
+      },
+      {
+        title: "Users",
+        url: "/admin/users",
+        icon: IconUsers,
+      },
+      {
+        title: "Activity",
+        url: "/admin/activity",
+        icon: IconActivity,
+      },
+    ],
   },
   {
-    title: "Users",
-    url: "/admin/users",
-    icon: IconUsers,
+    title: "Business Operations",
+    items: [
+      {
+        title: "Subscriptions",
+        url: "/admin/subscriptions",
+        icon: IconCreditCard,
+      },
+      {
+        title: "Purchases",
+        url: "/admin/purchases",
+        icon: IconShoppingCart,
+      },
+      {
+        title: "Purchase Orders",
+        url: "/admin/purchase-orders",
+        icon: IconReceipt,
+      },
+      {
+        title: "Invoices & POs",
+        url: "/admin/invoices-and-pos",
+        icon: IconFileInvoice,
+      },
+      {
+        title: "Customers",
+        url: "/admin/customers",
+        icon: IconUsers,
+      },
+      {
+        title: "Transactions",
+        url: "/admin/transactions",
+        icon: IconReceipt,
+      },
+      {
+        title: "Referrals",
+        url: "/admin/referrals",
+        icon: IconShield,
+      },
+    ],
   },
   {
-    title: "Activity",
-    url: "/admin/activity",
-    icon: IconActivity,
+    title: "Booking & CRM",
+    items: [
+      {
+        title: "Booking Management",
+        url: "/admin/booking",
+        icon: IconCalendar,
+      },
+      {
+        title: "Leads",
+        url: "/admin/leads",
+        icon: IconUsers,
+      },
+    ],
   },
   {
-    title: "Subscriptions",
-    url: "/admin/subscriptions",
-    icon: IconCreditCard,
+    title: "Communication & Support",
+    items: [
+      {
+        title: "Tickets",
+        url: "/admin/tickets",
+        icon: IconTicket,
+      },
+      {
+        title: "Live Chat",
+        url: "/admin/live-chat",
+        icon: IconMessages,
+      },
+      {
+        title: "Email Management",
+        url: "/admin/email-management",
+        icon: IconMail,
+      },
+      {
+        title: "Notifications",
+        url: "/admin/notifications",
+        icon: IconBell,
+      },
+      {
+        title: "Alerts",
+        url: "/admin/alerts",
+        icon: IconBell,
+      },
+    ],
   },
   {
-    title: "Purchases",
-    url: "/admin/purchases",
-    icon: IconShoppingCart,
+    title: "Chatbot",
+    items: [
+      {
+        title: "Chatbot Settings",
+        url: "/admin/chatbot-settings",
+        icon: IconMessageChatbot,
+      },
+      {
+        title: "Widget Designer",
+        url: "/admin/chatbot-designer",
+        icon: IconPalette,
+      },
+      {
+        title: "Knowledge Base",
+        url: "/admin/knowledge-base",
+        icon: IconBook,
+      },
+      {
+        title: "Chatbot Analytics",
+        url: "/admin/chatbot-analytics",
+        icon: IconChartBar,
+      },
+    ],
   },
   {
-    title: "Purchase Orders",
-    url: "/admin/purchase-orders",
-    icon: IconReceipt,
-  },
-  {
-    title: "Invoices & POs",
-    url: "/admin/invoices-and-pos",
-    icon: IconFileInvoice,
-  },
-  {
-    title: "Customers",
-    url: "/admin/customers",
-    icon: IconUsers,
-  },
-  {
-    title: "Transactions",
-    url: "/admin/transactions",
-    icon: IconReceipt,
-  },
-  {
-    title: "Tickets",
-    url: "/admin/tickets",
-    icon: IconTicket,
-  },
-  {
-    title: "Referrals",
-    url: "/admin/referrals",
-    icon: IconShield,
-  },
-  {
-    title: "Notifications",
-    url: "/admin/notifications",
-    icon: IconBell,
-  },
-  {
-    title: "Alerts",
-    url: "/admin/alerts",
-    icon: IconBell,
-  },
-  {
-    title: "Email Management",
-    url: "/admin/email-management",
-    icon: IconMail,
-  },
-  {
-    title: "Chatbot Settings",
-    url: "/admin/chatbot-settings",
-    icon: IconMessageChatbot,
-  },
-  {
-    title: "Widget Designer",
-    url: "/admin/chatbot-designer",
-    icon: IconPalette,
-  },
-  {
-    title: "Live Chat",
-    url: "/admin/live-chat",
-    icon: IconMessages,
-  },
-  {
-    title: "Knowledge Base",
-    url: "/admin/knowledge-base",
-    icon: IconBook,
-  },
-  {
-    title: "Chatbot Analytics",
-    url: "/admin/chatbot-analytics",
-    icon: IconChartBar,
-  },
-  {
-    title: "Settings",
-    url: "/admin/settings",
-    icon: IconSettings,
+    title: "System",
+    items: [
+      {
+        title: "Settings",
+        url: "/admin/settings",
+        icon: IconSettings,
+      },
+    ],
   },
 ]
 

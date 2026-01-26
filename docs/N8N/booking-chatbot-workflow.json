@@ -1,0 +1,295 @@
+{
+  "name": "Booking Chatbot with AI Tools",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "id": "chat-trigger",
+      "name": "When chat message received"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "You are a helpful booking assistant for scheduling appointments.\n\nYou have access to these tools:\n- checkAvailability(date, duration) - Check available time slots for a specific date\n- bookAppointment(clientEmail, clientName, clientPhone, date, startTime, duration, appointmentType, notes) - Book an appointment\n- lookupClient(email, phone) - Find existing client information and appointment history\n- createClient(name, email, phone, company, notes) - Create a new client record\n- getAppointments(date, startDate, endDate, clientEmail, status) - View appointments\n- updateAppointment(appointmentId, date, startTime, duration, status, notes) - Modify an existing appointment\n- deleteAppointment(appointmentId, reason) - Cancel an appointment\n\nBOOKING WORKFLOW:\n1. When user wants to book, ask for their preferred date\n2. Use checkAvailability() to show available time slots\n3. Collect required information: name, email (phone is optional)\n4. Use bookAppointment() to confirm the booking\n5. Provide clear confirmation with all details\n\nRESCHEDULING WORKFLOW:\n1. Ask for client email to lookup their appointments\n2. Use lookupClient() to find their booking\n3. Show current appointment details\n4. Ask for new preferred date/time\n5. Use checkAvailability() to verify new slot\n6. Use updateAppointment() to reschedule\n\nCANCELLATION WORKFLOW:\n1. Ask for client email\n2. Use lookupClient() to find appointment\n3. Confirm cancellation intent\n4. Use deleteAppointment() with reason\n\nBEST PRACTICES:\n- Always be conversational and friendly\n- Confirm details before making changes\n- Provide clear confirmations with date, time, and contact info\n- If client exists, acknowledge them as a returning customer\n- For rescheduling, always check availability before confirming\n- Use natural date formats (e.g., 'tomorrow', 'next Monday') and convert to YYYY-MM-DD\n- Default appointment duration is 60 minutes unless specified\n- Always include appointment type (consultation, demo, support, etc.)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.6,
+      "position": [450, 300],
+      "id": "ai-agent",
+      "name": "Booking AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 1000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "id": "openai-model",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId || $json.chatId || 'default' }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [450, 500],
+      "id": "conversation-memory",
+      "name": "Conversation Memory"
+    },
+    {
+      "parameters": {
+        "name": "checkAvailability",
+        "description": "Check available time slots for a specific date. Returns a list of available time slots with start and end times. Required parameter: date (format: YYYY-MM-DD). Optional: duration in minutes (default 60).",
+        "method": "POST",
+        "url": "https://YOUR_CONVEX_DEPLOYMENT.convex.site/checkAvailability",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"date\": $json.date, \"duration\": $json.duration || 60 } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [650, 200],
+      "id": "tool-check-availability",
+      "name": "Check Availability Tool"
+    },
+    {
+      "parameters": {
+        "name": "bookAppointment",
+        "description": "Book a new appointment. Required: clientEmail, clientName, date (YYYY-MM-DD), startTime (HH:MM format like 14:00). Optional: clientPhone, duration (default 60 minutes), appointmentType (default 'consultation'), notes. Returns appointment confirmation with appointmentId.",
+        "method": "POST",
+        "url": "https://YOUR_CONVEX_DEPLOYMENT.convex.site/bookAppointment",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"clientEmail\": $json.clientEmail, \"clientName\": $json.clientName, \"clientPhone\": $json.clientPhone, \"date\": $json.date, \"startTime\": $json.startTime, \"duration\": $json.duration || 60, \"appointmentType\": $json.appointmentType || 'consultation', \"notes\": $json.notes, \"bookedBy\": 'chatbot' } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [650, 300],
+      "id": "tool-book-appointment",
+      "name": "Book Appointment Tool"
+    },
+    {
+      "parameters": {
+        "name": "lookupClient",
+        "description": "Find an existing client by email or phone number. Returns client information and their recent appointment history (last 5 appointments). Use this to check if a client exists before booking or to find their appointments for rescheduling/cancellation.",
+        "method": "POST",
+        "url": "https://YOUR_CONVEX_DEPLOYMENT.convex.site/lookupClient",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"email\": $json.email, \"phone\": $json.phone } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [650, 400],
+      "id": "tool-lookup-client",
+      "name": "Lookup Client Tool"
+    },
+    {
+      "parameters": {
+        "name": "createClient",
+        "description": "Create a new client record. Required: name, email. Optional: phone, company, notes. Use this only if you need to create a client separately from booking (bookAppointment creates clients automatically).",
+        "method": "POST",
+        "url": "https://YOUR_CONVEX_DEPLOYMENT.convex.site/createClient",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"name\": $json.name, \"email\": $json.email, \"phone\": $json.phone, \"company\": $json.company, \"notes\": $json.notes } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [650, 500],
+      "id": "tool-create-client",
+      "name": "Create Client Tool"
+    },
+    {
+      "parameters": {
+        "name": "getAppointments",
+        "description": "Get appointments by various filters. Optional parameters: date (YYYY-MM-DD for specific day), startDate and endDate (for date range), clientEmail (for specific client), status (pending/confirmed/cancelled/completed), limit (default 50). Returns list of appointments.",
+        "method": "POST",
+        "url": "https://YOUR_CONVEX_DEPLOYMENT.convex.site/getAppointments",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"date\": $json.date, \"startDate\": $json.startDate, \"endDate\": $json.endDate, \"clientEmail\": $json.clientEmail, \"status\": $json.status, \"limit\": $json.limit || 50 } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [650, 600],
+      "id": "tool-get-appointments",
+      "name": "Get Appointments Tool"
+    },
+    {
+      "parameters": {
+        "name": "updateAppointment",
+        "description": "Update an existing appointment. Required: appointmentId. Optional: date (YYYY-MM-DD), startTime (HH:MM), duration (minutes), status (pending/confirmed/cancelled/completed/no_show), notes, internalNotes. Use this for rescheduling or changing appointment details.",
+        "method": "POST",
+        "url": "https://YOUR_CONVEX_DEPLOYMENT.convex.site/updateAppointment",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"appointmentId\": $json.appointmentId, \"date\": $json.date, \"startTime\": $json.startTime, \"duration\": $json.duration, \"status\": $json.status, \"notes\": $json.notes, \"internalNotes\": $json.internalNotes } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [650, 700],
+      "id": "tool-update-appointment",
+      "name": "Update Appointment Tool"
+    },
+    {
+      "parameters": {
+        "name": "deleteAppointment",
+        "description": "Cancel an appointment. Required: appointmentId. Optional: reason (cancellation reason). This performs a soft delete by setting status to 'cancelled'. Use this when a client wants to cancel their appointment.",
+        "method": "POST",
+        "url": "https://YOUR_CONVEX_DEPLOYMENT.convex.site/deleteAppointment",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"appointmentId\": $json.appointmentId, \"reason\": $json.reason } }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [650, 800],
+      "id": "tool-delete-appointment",
+      "name": "Delete Appointment Tool"
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Availability Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Book Appointment Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Client Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Client Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Appointments Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Appointment Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Appointment Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Booking AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-26T02:32:00.000Z",
+  "versionId": "1"
+}

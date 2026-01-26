@@ -84,6 +84,7 @@ export const createArticle = mutation({
 export const updateArticle = mutation({
   args: {
     articleId: v.id("knowledge_base"),
+    type: v.optional(v.union(v.literal("frontend"), v.literal("backend"))),
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     category: v.optional(v.string()),
