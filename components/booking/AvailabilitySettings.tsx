@@ -104,6 +104,7 @@ export function AvailabilitySettings() {
         updatedAt: now,
       });
     }
+    setHasChanges(true);
   };
 
   const handleUpdateTimes = async (dayOfWeek: number) => {
@@ -209,13 +210,24 @@ export function AvailabilitySettings() {
       {/* Weekly Hours */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className="text-2xl">🔄</span>
-            Weekly hours
-          </CardTitle>
-          <CardDescription>
-            Set when you are typically available for meetings
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-2xl">🔄</span>
+                Weekly hours
+              </CardTitle>
+              <CardDescription>
+                Set when you are typically available for meetings
+              </CardDescription>
+            </div>
+            <Button 
+              onClick={handleSaveAllSettings}
+              variant={hasChanges ? "default" : "outline"}
+              disabled={!hasChanges}
+            >
+              {hasChanges ? "Save Changes" : "Saved"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {DAYS.map((day) => {

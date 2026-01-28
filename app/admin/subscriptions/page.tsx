@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { DollarSign, TrendingUp, Users, CheckCircle, XCircle, Search, MoreHorizontal } from "lucide-react";
+import { DollarSign, TrendingUp, Users, CheckCircle, XCircle, Search, Download } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,33 @@ export default function SubscriptionsPage() {
     }
   };
 
+  const exportToCSV = () => {
+    const headers = ['Subscription ID', 'Customer Name', 'Email', 'Plan', 'Status', 'Created Date'];
+    const csvData = filteredSubscriptions.map(sub => [
+      sub.stripeSubscriptionId || 'N/A',
+      sub.userName || 'Unknown',
+      sub.userEmail || 'No email',
+      sub.plan || 'Free',
+      sub.status || 'inactive',
+      new Date(sub._creationTime).toISOString()
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `subscriptions_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getPriorityIcon = (plan: string) => {
     switch (plan?.toLowerCase()) {
       case "business":
@@ -62,55 +89,69 @@ export default function SubscriptionsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold">Subscriptions</h1>
-        <p className="text-muted-foreground mt-2">
-          View and manage all subscriptions
-        </p>
+    <div className="flex-1 space-y-4 p-4 md:p-6 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Subscriptions</h1>
+          <p className="text-muted-foreground">
+            View and manage all subscriptions
+          </p>
+        </div>
+        <Button onClick={exportToCSV}>
+          <Download className="w-4 h-4 mr-2" />
+          Export CSV
+        </Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Subscriptions</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.totalSubscriptions || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              All-time subscriptions
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.activeSubscriptions || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats?.totalSubscriptions ? Math.round((stats.activeSubscriptions / stats.totalSubscriptions) * 100) : 0}% of total
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Canceled</CardTitle>
-            <XCircle className="h-4 w-4 text-destructive" />
+            <XCircle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.canceledSubscriptions || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Churn tracking
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">MRR</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">MYR {stats?.mrr || "0.00"}</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center">
-              <TrendingUp className="w-3 h-3 mr-1" />
+            <p className="text-xs text-muted-foreground mt-1">
               Monthly Recurring Revenue
             </p>
           </CardContent>
@@ -155,8 +196,9 @@ export default function SubscriptionsPage() {
         </select>
       </div>
 
-      {/* Clean Table - Image 4 Style */}
-      <div className="bg-white rounded-lg border">
+      {/* Subscriptions Table */}
+      <Card>
+        <CardContent className="p-0">
         <table className="w-full">
           <thead className="border-b">
             <tr className="text-left">
@@ -229,20 +271,16 @@ export default function SubscriptionsPage() {
         </table>
         
         {/* Pagination Footer */}
-        <div className="border-t px-6 py-3 flex items-center justify-between text-sm text-gray-600">
-          <div>0 of {filteredSubscriptions?.length || 0} row(s) selected.</div>
-          <div className="flex items-center gap-4">
-            <span>Rows per page: 10</span>
-            <span>Page 1 of {Math.ceil((filteredSubscriptions?.length || 0) / 10)}</span>
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled>«</Button>
-              <Button variant="outline" size="sm" disabled>‹</Button>
-              <Button variant="outline" size="sm">›</Button>
-              <Button variant="outline" size="sm">»</Button>
+        {filteredSubscriptions && filteredSubscriptions.length > 0 && (
+          <div className="border-t px-6 py-3 flex items-center justify-between text-sm text-muted-foreground">
+            <div>Showing {filteredSubscriptions.length} subscription{filteredSubscriptions.length !== 1 ? 's' : ''}</div>
+            <div className="flex items-center gap-2">
+              <span>Page 1 of {Math.ceil(filteredSubscriptions.length / 10)}</span>
             </div>
           </div>
-        </div>
-      </div>
+        )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

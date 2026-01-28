@@ -8,6 +8,8 @@ import {
   lookupClient,
   createLead,
   searchKnowledgeBase,
+  searchKnowledgeBaseFrontend,
+  searchKnowledgeBaseCombined,
   lookupAppointments,
   getAppointments 
 } from "./bookingTools";
@@ -62,11 +64,23 @@ http.route({
   handler: createLead,
 });
 
-// Knowledge base
+// Knowledge base endpoints
 http.route({
   path: "/api/booking/search-knowledge",
   method: "POST",
-  handler: searchKnowledgeBase,
+  handler: searchKnowledgeBase, // Legacy endpoint
+});
+
+http.route({
+  path: "/api/booking/search-knowledge-frontend",
+  method: "POST",
+  handler: searchKnowledgeBaseFrontend,
+});
+
+http.route({
+  path: "/api/booking/search-knowledge-combined",
+  method: "POST",
+  handler: searchKnowledgeBaseCombined,
 });
 
 // Appointment lookup

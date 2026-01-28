@@ -11,7 +11,6 @@ export const getAvailabilityByDay = query({
     return await ctx.db
       .query("availability")
       .withIndex("by_day", (q) => q.eq("dayOfWeek", dayOfWeek))
-      .filter((q) => q.eq(q.field("isActive"), true))
       .first();
   },
 });

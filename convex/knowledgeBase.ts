@@ -35,14 +35,21 @@ export const searchArticles = query({
       .collect();
 
     const searchLower = args.query.toLowerCase();
+    const searchWords = searchLower.split(/\s+/).filter(word => word.length > 0);
     
     return articles.filter((article) => {
-      const titleMatch = article.title.toLowerCase().includes(searchLower);
-      const contentMatch = article.content.toLowerCase().includes(searchLower);
-      const keywordMatch = article.keywords.some((k) => k.toLowerCase().includes(searchLower));
-      const tagMatch = article.tags.some((t) => t.toLowerCase().includes(searchLower));
+      const titleLower = article.title.toLowerCase();
+      const contentLower = article.content.toLowerCase();
+      const keywordsLower = article.keywords.map(k => k.toLowerCase());
+      const tagsLower = article.tags.map(t => t.toLowerCase());
       
-      return titleMatch || contentMatch || keywordMatch || tagMatch;
+      // Match if ANY search word is found in title, content, keywords, or tags
+      return searchWords.some(word => {
+        return titleLower.includes(word) ||
+               contentLower.includes(word) ||
+               keywordsLower.some(k => k.includes(word)) ||
+               tagsLower.some(t => t.includes(word));
+      });
     });
   },
 });

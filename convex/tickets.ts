@@ -30,6 +30,9 @@ export const createTicket = mutation({
     const ticketCount = await ctx.db.query("support_tickets").collect();
     const ticketNumber = `TKT-${String(ticketCount.length + 1).padStart(6, "0")}`;
 
+    const now = Date.now();
+
+    // Create ticket in support_tickets table
     const ticketId = await ctx.db.insert("support_tickets", {
       ticketNumber,
       companyId: identity.subject,
@@ -41,8 +44,42 @@ export const createTicket = mutation({
       priority: args.priority,
       status: "open",
       slaBreached: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Map priority to inbox priority
+    let inboxPriority: "low" | "normal" | "high";
+    if (args.priority === "urgent" || args.priority === "high") {
+      inboxPriority = "high";
+    } else if (args.priority === "low") {
+      inboxPriority = "low";
+    } else {
+      inboxPriority = "normal";
+    }
+
+    // Automatically create inbox entry so it appears in admin inbox
+    await ctx.db.insert("inbox_messages", {
+      threadId: ticketNumber,
+      channel: "ticket",
+      direction: "inbound",
+      subject: `[${ticketNumber}] ${args.subject}`,
+      body: args.description,
+      status: "unread",
+      priority: inboxPriority,
+      tags: [args.category, args.priority],
+      sentAt: now,
+      createdAt: now,
+      updatedAt: now,
+      metadata: {
+        ticketId: ticketId,
+        ticketNumber: ticketNumber,
+        category: args.category,
+        originalPriority: args.priority,
+        userEmail: args.userEmail,
+        userName: args.userName,
+        slaBreached: false,
+      },
     });
 
     return ticketId;
@@ -86,6 +123,9 @@ export const addCustomerMessage = mutation({
     const ticket = await ctx.db.get(args.ticketId);
     if (!ticket) throw new Error("Ticket not found");
 
+    const now = Date.now();
+
+    // Add to ticket_messages table
     const messageId = await ctx.db.insert("ticket_messages", {
       ticketId: args.ticketId,
       senderId: args.senderId,
@@ -93,11 +133,26 @@ export const addCustomerMessage = mutation({
       senderName: args.senderName,
       message: args.message,
       isInternal: false,
-      createdAt: Date.now(),
+      createdAt: now,
     });
 
+    // Update the original inbox message to mark as unreplied (customer replied)
+    const inboxMessage = await ctx.db
+      .query("inbox_messages")
+      .withIndex("by_thread", (q) => q.eq("threadId", ticket.ticketNumber))
+      .first();
+    
+    if (inboxMessage) {
+      await ctx.db.patch(inboxMessage._id, {
+        status: "unread", // Mark as unread since customer replied
+        updatedAt: now,
+      });
+    }
+
+    // Update ticket status
     await ctx.db.patch(args.ticketId, {
-      updatedAt: Date.now(),
+      status: "waiting_customer",
+      updatedAt: now,
     });
 
     return messageId;

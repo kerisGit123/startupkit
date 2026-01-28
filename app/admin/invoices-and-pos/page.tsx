@@ -7,11 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Download, Eye, TrendingUp, Search, Copy, Check, Settings2, Plus, Trash2, ShoppingCart, Edit, RefreshCw, CheckCircle, Calendar } from "lucide-react";
+import { FileText, Download, Eye, TrendingUp, Search, Copy, Check, Settings2, Plus, Trash2, ShoppingCart, Edit, RefreshCw, CheckCircle, Calendar, MoreHorizontal } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useUser } from "@clerk/nextjs";
@@ -331,8 +332,8 @@ export default function InvoicesAndPOsPage() {
   const [editingInvoiceId, setEditingInvoiceId] = useState<Id<"invoices"> | null>(null);
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      <div className="mb-6 flex items-start justify-between">
+    <div className="flex-1 space-y-4 p-4 md:p-6 pt-6">
+      <div className="flex items-center justify-between space-y-2">
         <div>
           <h1 className="text-3xl font-bold">Invoices & Purchase Orders</h1>
           <p className="text-muted-foreground mt-2">
@@ -579,7 +580,7 @@ export default function InvoicesAndPOsPage() {
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-4 mb-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
@@ -587,6 +588,9 @@ export default function InvoicesAndPOsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {stats.byStatus?.paid || 0} paid
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -596,15 +600,21 @@ export default function InvoicesAndPOsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{purchaseOrders?.length || 0}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {purchaseOrders?.filter(po => po.status === 'approved').length || 0} approved
+              </p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Subscriptions</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
+              <RefreshCw className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.byType.subscription}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Recurring revenue
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -614,8 +624,11 @@ export default function InvoicesAndPOsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${(stats.totalAmount / 100).toLocaleString()}
+                MYR {(stats.totalAmount / 100).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                From {stats.total} invoices
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -678,13 +691,13 @@ export default function InvoicesAndPOsPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Invoice #</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>User</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                          <TableHead className="w-[120px]">Invoice #</TableHead>
+                          <TableHead className="w-[110px]">Date</TableHead>
+                          <TableHead>Customer</TableHead>
+                          <TableHead className="w-[120px]">Type</TableHead>
+                          <TableHead className="w-[100px]">Status</TableHead>
+                          <TableHead className="text-right w-[120px]">Amount</TableHead>
+                          <TableHead className="w-[70px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -698,35 +711,40 @@ export default function InvoicesAndPOsPage() {
                             <TableCell className="text-right font-medium">
                               {invoice.currency} {(invoice.total / 100).toFixed(2)}
                             </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <Link href={`/admin/invoice/${invoice._id}`}>
-                                  <Button variant="ghost" size="sm" title="View Invoice">
-                                    <Eye className="h-4 w-4" />
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
                                   </Button>
-                                </Link>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  title="Edit Invoice"
-                                  onClick={() => setEditingInvoiceId(invoice._id)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Link href={`/admin/invoice/${invoice._id}`}>
-                                  <Button variant="ghost" size="sm" title="Download PDF">
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </Link>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  title="Delete Invoice"
-                                  onClick={() => handleDeleteInvoice(invoice._id, invoice.invoiceNo)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/admin/invoice/${invoice._id}`} className="cursor-pointer">
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      View Details
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setEditingInvoiceId(invoice._id)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit Invoice
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/admin/invoice/${invoice._id}`} className="cursor-pointer">
+                                      <Download className="mr-2 h-4 w-4" />
+                                      Download PDF
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeleteInvoice(invoice._id, invoice.invoiceNo)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -780,12 +798,12 @@ export default function InvoicesAndPOsPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>PO #</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead>Customer</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Amount</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                          <TableHead className="w-[120px]">PO #</TableHead>
+                          <TableHead className="w-[110px]">Date</TableHead>
+                          <TableHead>Vendor</TableHead>
+                          <TableHead className="w-[180px]">Status</TableHead>
+                          <TableHead className="text-right w-[120px]">Amount</TableHead>
+                          <TableHead className="w-[70px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -808,41 +826,40 @@ export default function InvoicesAndPOsPage() {
                             <TableCell className="text-right font-medium">
                               {po.currency} {(po.total / 100).toFixed(2)}
                             </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Link href={`/admin/po/${po._id}`}>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    className="gap-1"
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/admin/po/${po._id}`} className="cursor-pointer">
+                                      <Eye className="mr-2 h-4 w-4" />
+                                      View Details
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setEditingPOId(po._id)}>
+                                    <Edit className="mr-2 h-4 w-4" />
+                                    Edit PO
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <Link href={`/admin/po/${po._id}`} className="cursor-pointer">
+                                      <Download className="mr-2 h-4 w-4" />
+                                      Download PDF
+                                    </Link>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDeletePO(po._id, po.poNo)}
+                                    className="text-destructive focus:text-destructive"
                                   >
-                                    <Eye className="h-3 w-3" />
-                                    Preview
-                                  </Button>
-                                </Link>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className="gap-1"
-                                  onClick={() => setEditingPOId(po._id)}
-                                >
-                                  <Edit className="h-3 w-3" />
-                                  Edit
-                                </Button>
-                                <Link href={`/admin/po/${po._id}`}>
-                                  <Button size="sm" variant="ghost" title="Download PDF">
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                </Link>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost"
-                                  title="Delete Purchase Order"
-                                  onClick={() => handleDeletePO(po._id, po.poNo)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </TableCell>
                           </TableRow>
                         ))}

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Users, CreditCard, Ticket, DollarSign, TrendingUp, ShoppingCart, Calendar, Download, Bell } from "lucide-react";
+import { Users, CreditCard, Ticket, DollarSign, ShoppingCart, Calendar, Download, Bell, Mail, UserPlus, CalendarPlus } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -80,7 +80,7 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground mt-2">
-            Overview of your SaaS platform
+            Welcome back! Here's what's happening today.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -99,11 +99,43 @@ export default function AdminDashboard() {
             className="w-40"
             placeholder="End date"
           />
-          <Button onClick={handleDownloadReport} className="gap-2">
+          <Button onClick={handleDownloadReport} variant="outline" className="gap-2">
             <Download className="w-4 h-4" />
-            Download
+            Export
           </Button>
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-3 md:grid-cols-4">
+        <Button 
+          onClick={() => window.location.href = '/admin/booking'}
+          className="h-auto py-4 flex-col gap-2 bg-orange-600 hover:bg-orange-700"
+        >
+          <CalendarPlus className="w-5 h-5" />
+          <span className="text-sm font-medium">New Booking</span>
+        </Button>
+        <Button 
+          onClick={() => window.location.href = '/admin/tickets'}
+          className="h-auto py-4 flex-col gap-2 bg-red-600 hover:bg-red-700"
+        >
+          <Mail className="w-5 h-5" />
+          <span className="text-sm font-medium">Create Ticket</span>
+        </Button>
+        <Button 
+          onClick={() => window.location.href = '/admin/customers'}
+          className="h-auto py-4 flex-col gap-2 bg-purple-600 hover:bg-purple-700"
+        >
+          <UserPlus className="w-5 h-5" />
+          <span className="text-sm font-medium">Add Customer</span>
+        </Button>
+        <Button 
+          onClick={() => window.location.href = '/admin/email-management'}
+          className="h-auto py-4 flex-col gap-2 bg-blue-600 hover:bg-blue-700"
+        >
+          <Mail className="w-5 h-5" />
+          <span className="text-sm font-medium">Send Email</span>
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -119,61 +151,53 @@ export default function AdminDashboard() {
         <TabsContent value="overview" className="space-y-6">
 
           {/* Key Metrics */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card className="hover:shadow-md transition-shadow">
+          <div>
+            <h2 className="text-lg font-semibold mb-4">Key Metrics</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="hover:shadow-lg transition-all border-l-4 border-l-purple-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+            <Users className="h-5 w-5 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">+{stats?.newUsersThisMonth || 0} this month</p>
+            <div className="text-3xl font-bold">{stats?.totalUsers || 0}</div>
+            <p className="text-xs text-green-600 mt-1 font-medium">↑ +{stats?.newUsersThisMonth || 0} this month</p>
           </CardContent>
         </Card>
         
-        <Card className="hover:shadow-md transition-shadow">
+        <Card className="hover:shadow-lg transition-all border-l-4 border-l-green-500">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Active Subscriptions</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Revenue (MRR)</CardTitle>
+            <DollarSign className="h-5 w-5 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.activeSubscriptions || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">+{stats?.newSubscriptionsThisMonth || 0} this month</p>
+            <div className="text-3xl font-bold">MYR {stats?.mrr || "0"}</div>
+            <p className="text-xs text-green-600 mt-1 font-medium">↑ +{stats?.newSubscriptionsThisMonth || 0} new subs</p>
           </CardContent>
         </Card>
         
-        <Card className="hover:shadow-md transition-shadow">
+        <Card className="hover:shadow-lg transition-all border-l-4 border-l-orange-500 cursor-pointer" onClick={() => window.location.href = '/admin/booking'}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">MRR</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Today's Bookings</CardTitle>
+            <Calendar className="h-5 w-5 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">MYR {stats?.mrr || "0.00"}</div>
-            <p className="text-xs text-muted-foreground mt-1">Monthly recurring</p>
+            <div className="text-3xl font-bold">{stats?.activeSubscriptions || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1">Click to view calendar</p>
           </CardContent>
         </Card>
         
-        <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => window.location.href = '/admin/tickets'}>
+        <Card className="hover:shadow-lg transition-all border-l-4 border-l-red-500 cursor-pointer" onClick={() => window.location.href = '/admin/tickets'}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Open Tickets</CardTitle>
-            <Ticket className="h-4 w-4 text-muted-foreground" />
+            <Ticket className="h-5 w-5 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.openTickets || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Needs attention</p>
+            <div className="text-3xl font-bold">{stats?.openTickets || 0}</div>
+            <p className="text-xs text-red-600 mt-1 font-medium">⚠ Needs attention</p>
           </CardContent>
         </Card>
-        
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">Active Now</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">+{stats?.newUsersThisMonth || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">+20% from last hour</p>
-              </CardContent>
-            </Card>
+          </div>
           </div>
 
           {/* Overview Chart */}

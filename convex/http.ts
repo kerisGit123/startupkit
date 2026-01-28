@@ -1,0 +1,95 @@
+import { httpRouter } from "convex/server";
+import { 
+  checkAvailability, 
+  bookAppointment, 
+  updateAppointment, 
+  deleteAppointment,
+  createClient,
+  lookupClient,
+  createLead,
+  searchKnowledgeBase,
+  searchKnowledgeBaseFrontend,
+  searchKnowledgeBaseCombined,
+  lookupAppointments,
+  getAppointments 
+} from "./bookingTools";
+
+const http = httpRouter();
+
+// Core booking operations
+http.route({
+  path: "/api/booking/check-availability",
+  method: "POST",
+  handler: checkAvailability,
+});
+
+http.route({
+  path: "/api/booking/create-appointment",
+  method: "POST",
+  handler: bookAppointment,
+});
+
+http.route({
+  path: "/api/booking/update-appointment",
+  method: "POST",
+  handler: updateAppointment,
+});
+
+http.route({
+  path: "/api/booking/delete-appointment",
+  method: "POST",
+  handler: deleteAppointment,
+});
+
+// Client and lead management
+http.route({
+  path: "/api/booking/create-client",
+  method: "POST",
+  handler: createClient,
+});
+
+http.route({
+  path: "/api/booking/lookup-client",
+  method: "POST",
+  handler: lookupClient,
+});
+
+http.route({
+  path: "/api/booking/create-lead",
+  method: "POST",
+  handler: createLead,
+});
+
+// Knowledge base endpoints
+http.route({
+  path: "/api/booking/search-knowledge",
+  method: "POST",
+  handler: searchKnowledgeBase,
+});
+
+http.route({
+  path: "/api/booking/search-knowledge-frontend",
+  method: "POST",
+  handler: searchKnowledgeBaseFrontend,
+});
+
+http.route({
+  path: "/api/booking/search-knowledge-combined",
+  method: "POST",
+  handler: searchKnowledgeBaseCombined,
+});
+
+// Appointment lookup
+http.route({
+  path: "/api/booking/lookup-appointments",
+  method: "POST",
+  handler: lookupAppointments,
+});
+
+http.route({
+  path: "/api/booking/appointments",
+  method: "POST",
+  handler: getAppointments,
+});
+
+export default http;

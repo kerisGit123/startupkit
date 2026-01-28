@@ -251,3 +251,115 @@ export const getRealtimeMetrics = query({
     };
   },
 });
+
+// ============================================
+// BUSINESS ANALYTICS
+// ============================================
+
+// Get comprehensive business dashboard metrics
+export const getBusinessMetrics = query({
+  args: {
+    timeRange: v.optional(v.union(v.literal("7d"), v.literal("30d"), v.literal("90d"), v.literal("1y"))),
+  },
+  handler: async (ctx, args) => {
+    const timeRange = args.timeRange || "30d";
+    const now = Date.now();
+    const timeRanges = {
+      "7d": 7 * 24 * 60 * 60 * 1000,
+      "30d": 30 * 24 * 60 * 60 * 1000,
+      "90d": 90 * 24 * 60 * 60 * 1000,
+      "1y": 365 * 24 * 60 * 60 * 1000,
+    };
+    const startTime = now - timeRanges[timeRange];
+    const previousStartTime = startTime - timeRanges[timeRange];
+
+    // Revenue metrics
+    const allTransactions = await ctx.db.query("financial_ledger").collect();
+    const currentPeriodTransactions = allTransactions.filter(t => t.transactionDate >= startTime);
+    const previousPeriodTransactions = allTransactions.filter(
+      t => t.transactionDate >= previousStartTime && t.transactionDate < startTime
+    );
+
+    const currentRevenue = currentPeriodTransactions
+      .filter(t => t.amount > 0)
+      .reduce((sum, t) => sum + t.amount, 0);
+    const previousRevenue = previousPeriodTransactions
+      .filter(t => t.amount > 0)
+      .reduce((sum, t) => sum + t.amount, 0);
+    const revenueGrowth = previousRevenue > 0 
+      ? ((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1)
+      : 0;
+
+    // Customer metrics
+    const allContacts = await ctx.db.query("contacts").collect();
+    const currentPeriodContacts = allContacts.filter(c => c.createdAt >= startTime);
+    const previousPeriodContacts = allContacts.filter(
+      c => c.createdAt >= previousStartTime && c.createdAt < startTime
+    );
+
+    const totalCustomers = allContacts.filter(c => c.type === "customer").length;
+    const newCustomers = currentPeriodContacts.filter(c => c.type === "customer").length;
+    const customerGrowth = previousPeriodContacts.length > 0
+      ? ((currentPeriodContacts.length - previousPeriodContacts.length) / previousPeriodContacts.length * 100).toFixed(1)
+      : 0;
+
+    // Booking metrics
+    const allAppointments = await ctx.db.query("appointments").collect();
+    const currentPeriodAppointments = allAppointments.filter(a => {
+      const appointmentTime = new Date(a.date).getTime();
+      return appointmentTime >= startTime;
+    });
+    const completedAppointments = currentPeriodAppointments.filter(a => a.status === "completed").length;
+    const cancelledAppointments = currentPeriodAppointments.filter(a => a.status === "cancelled").length;
+
+    // Lead metrics
+    const totalLeads = allContacts.filter(c => c.type === "lead").length;
+    const qualifiedLeads = allContacts.filter(c => c.lifecycleStage === "qualified").length;
+    const conversionRate = totalLeads > 0 
+      ? ((totalCustomers / (totalCustomers + totalLeads)) * 100).toFixed(1)
+      : 0;
+
+    return {
+      revenue: {
+        current: currentRevenue,
+        previous: previousRevenue,
+        growth: parseFloat(revenueGrowth as string),
+        transactions: currentPeriodTransactions.length,
+      },
+      customers: {
+        total: totalCustomers,
+        new: newCustomers,
+        growth: parseFloat(customerGrowth as string),
+        active: allContacts.filter(c => c.status === "active").length,
+      },
+      bookings: {
+        total: currentPeriodAppointments.length,
+        completed: completedAppointments,
+        cancelled: cancelledAppointments,
+        completionRate: currentPeriodAppointments.length > 0
+          ? ((completedAppointments / currentPeriodAppointments.length) * 100).toFixed(1)
+          : 0,
+      },
+      leads: {
+        total: totalLeads,
+        qualified: qualifiedLeads,
+        conversionRate: parseFloat(conversionRate as string),
+      },
+    };
+  },
+});
+
+// Get customer lifecycle funnel
+export const getCustomerFunnel = query({
+  handler: async (ctx) => {
+    const contacts = await ctx.db.query("contacts").collect();
+
+    return {
+      prospect: contacts.filter(c => c.lifecycleStage === "prospect").length,
+      qualified: contacts.filter(c => c.lifecycleStage === "qualified").length,
+      customer: contacts.filter(c => c.lifecycleStage === "customer").length,
+      at_risk: contacts.filter(c => c.lifecycleStage === "at_risk").length,
+      churned: contacts.filter(c => c.lifecycleStage === "churned").length,
+    };
+  },
+});

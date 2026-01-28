@@ -6,20 +6,17 @@ import {
   IconUsers,
   IconSettings,
   IconCreditCard,
-  IconBell,
   IconShield,
-  IconActivity,
-  IconMail,
-  IconShoppingCart,
-  IconTicket,
   IconFileInvoice,
   IconReceipt,
   IconMessageChatbot,
-  IconMessages,
   IconChartBar,
   IconBook,
   IconPalette,
   IconCalendar,
+  IconCurrencyDollar,
+  IconInbox,
+  IconRobot,
 } from "@tabler/icons-react"
 
 import {
@@ -37,42 +34,30 @@ import { NavUser } from "@/components/nav-user"
 
 const navItems = [
   {
-    title: "Core",
-    items: [
-      {
-        title: "Dashboard",
-        url: "/admin",
-        icon: IconLayoutDashboard,
-      },
-      {
-        title: "Users",
-        url: "/admin/users",
-        icon: IconUsers,
-      },
-      {
-        title: "Activity",
-        url: "/admin/activity",
-        icon: IconActivity,
-      },
-    ],
+    title: "Dashboard",
+    url: "/admin",
+    icon: IconLayoutDashboard,
+    color: "text-blue-600",
   },
   {
-    title: "Business Operations",
+    title: "Finance",
+    icon: IconCurrencyDollar,
+    color: "text-green-600",
     items: [
+      {
+        title: "Revenue Dashboard",
+        url: "/admin/revenue",
+        icon: IconChartBar,
+      },
+      {
+        title: "Transactions",
+        url: "/admin/revenue/transactions",
+        icon: IconReceipt,
+      },
       {
         title: "Subscriptions",
         url: "/admin/subscriptions",
         icon: IconCreditCard,
-      },
-      {
-        title: "Purchases",
-        url: "/admin/purchases",
-        icon: IconShoppingCart,
-      },
-      {
-        title: "Purchase Orders",
-        url: "/admin/purchase-orders",
-        icon: IconReceipt,
       },
       {
         title: "Invoices & POs",
@@ -80,29 +65,21 @@ const navItems = [
         icon: IconFileInvoice,
       },
       {
-        title: "Customers",
-        url: "/admin/customers",
-        icon: IconUsers,
-      },
-      {
-        title: "Transactions",
-        url: "/admin/transactions",
-        icon: IconReceipt,
-      },
-      {
-        title: "Referrals",
+        title: "Referral Program",
         url: "/admin/referrals",
         icon: IconShield,
       },
     ],
   },
   {
-    title: "Booking & CRM",
+    title: "Customers",
+    icon: IconUsers,
+    color: "text-purple-600",
     items: [
       {
-        title: "Booking Management",
-        url: "/admin/booking",
-        icon: IconCalendar,
+        title: "All Customers",
+        url: "/admin/customers",
+        icon: IconUsers,
       },
       {
         title: "Leads",
@@ -112,40 +89,35 @@ const navItems = [
     ],
   },
   {
-    title: "Communication & Support",
+    title: "Bookings",
+    url: "/admin/booking",
+    icon: IconCalendar,
+    color: "text-orange-600",
+  },
+  {
+    title: "Inbox",
+    icon: IconInbox,
+    color: "text-blue-600",
     items: [
       {
-        title: "Tickets",
-        url: "/admin/tickets",
-        icon: IconTicket,
+        title: "All Messages",
+        url: "/admin/inbox",
+        icon: IconInbox,
       },
       {
         title: "Live Chat",
         url: "/admin/live-chat",
-        icon: IconMessages,
-      },
-      {
-        title: "Email Management",
-        url: "/admin/email-management",
-        icon: IconMail,
-      },
-      {
-        title: "Notifications",
-        url: "/admin/notifications",
-        icon: IconBell,
-      },
-      {
-        title: "Alerts",
-        url: "/admin/alerts",
-        icon: IconBell,
+        icon: IconMessageChatbot,
       },
     ],
   },
   {
-    title: "Chatbot",
+    title: "Automation",
+    icon: IconRobot,
+    color: "text-indigo-600",
     items: [
       {
-        title: "Chatbot Settings",
+        title: "Chatbot",
         url: "/admin/chatbot-settings",
         icon: IconMessageChatbot,
       },
@@ -160,21 +132,17 @@ const navItems = [
         icon: IconBook,
       },
       {
-        title: "Chatbot Analytics",
+        title: "Analytics",
         url: "/admin/chatbot-analytics",
         icon: IconChartBar,
       },
     ],
   },
   {
-    title: "System",
-    items: [
-      {
-        title: "Settings",
-        url: "/admin/settings",
-        icon: IconSettings,
-      },
-    ],
+    title: "Settings",
+    url: "/admin/settings",
+    icon: IconSettings,
+    color: "text-gray-600",
   },
 ]
 

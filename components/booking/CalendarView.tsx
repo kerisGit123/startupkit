@@ -274,14 +274,26 @@ export function CalendarView({ onDateSelect, onAppointmentClick, onDateClick }: 
                           <DraggableAppointment
                             key={apt._id}
                             id={apt._id}
-                            className="text-xs p-1 rounded truncate cursor-pointer text-white relative"
+                            className="text-xs p-1.5 rounded cursor-pointer text-white relative overflow-hidden"
                             style={{ backgroundColor: bgColor }}
                             onClick={(e) => {
                               e.stopPropagation();
                               onAppointmentClick?.(apt._id);
                             }}
                           >
-                            {apt.startTime} {apt.clientName}
+                            <div className="flex flex-col gap-0.5">
+                              <div className="font-semibold truncate">
+                                {apt.startTime} - {apt.endTime}
+                              </div>
+                              <div className="truncate opacity-90">
+                                {apt.clientName}
+                              </div>
+                              {apt.notes && (
+                                <div className="text-[10px] truncate opacity-75 italic">
+                                  {apt.notes}
+                                </div>
+                              )}
+                            </div>
                           </DraggableAppointment>
                         );
                       })}

@@ -93,12 +93,35 @@ export async function POST(req: NextRequest) {
     
     // Chat Trigger returns response in different formats
     // Try to extract the actual message from various possible response structures
+    console.log("Data type:", typeof data);
+    console.log("Data keys:", Object.keys(data));
+    console.log("Data.output:", data.output);
+    
     let output = data.output || data.response || data.text || data.message;
     
     // If data is a string, use it directly
     if (typeof data === 'string') {
       output = data;
     }
+    
+    // If output is a JSON string, parse it to get the actual reply
+    if (typeof output === 'string' && (output.startsWith('{') || output.startsWith('['))) {
+      try {
+        const parsedOutput = JSON.parse(output);
+        // Extract reply from various AI response formats
+        output = parsedOutput.reply || 
+                 parsedOutput.response || 
+                 parsedOutput.text || 
+                 parsedOutput.message || 
+                 parsedOutput.output ||
+                 output; // fallback to original if no known field found
+      } catch (e) {
+        // If parsing fails, use the string as-is
+        console.log("Could not parse output as JSON, using as-is");
+      }
+    }
+    
+    console.log("Final output being sent:", output);
     
     // Return in the format expected by ChatWidget
     return NextResponse.json({ output: output || "I received your message." });

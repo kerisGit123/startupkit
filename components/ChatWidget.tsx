@@ -25,6 +25,7 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
   const [interventionRequested, setInterventionRequested] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const config = useQuery(api.chatbot.getConfig, { type });
 
@@ -43,7 +44,11 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    // Auto-focus input after messages are received
+    if (!isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [messages, isLoading]);
 
   // Don't render if chatbot is not active
   if (!config?.isActive) return null;
@@ -136,12 +141,14 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
       console.error("Chat error:", error);
       const errorMessage = {
         role: "assistant",
-        content: "Sorry, I'm having trouble connecting. Please try again later.",
+        content: "Sorry, I'm having trouble connecting. Please check your n8n webhook URL and ensure the workflow is active.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      // Focus input after response
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
@@ -317,7 +324,7 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
 
           {/* Input */}
           <div className="p-3 border-t" style={{ borderColor: config?.aiBorderColor || "#e0e0e0" }}>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <input
                 type="file"
                 ref={fileInputRef}
@@ -327,7 +334,7 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-3 py-2 border rounded-lg hover:bg-gray-50"
+                className="flex-shrink-0 px-3 py-2 border rounded-lg hover:bg-gray-50"
                 style={{
                   borderRadius: `${(config?.roundness || 12) * 0.6}px`,
                   borderColor: config?.aiBorderColor || "#e0e0e0",
@@ -337,22 +344,25 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
                 📷
               </button>
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder={config?.placeholderText || "Type your message..."}
-                className="flex-1 px-3 py-2 border rounded-lg outline-none"
+                className="flex-1 min-w-0 px-3 py-2 border rounded-lg outline-none"
                 style={{
                   borderRadius: `${(config?.roundness || 12) * 0.6}px`,
                   borderColor: config?.aiBorderColor || "#e0e0e0",
+                  color: config?.textColor || "#000000",
+                  backgroundColor: "#ffffff",
                 }}
                 disabled={isLoading}
               />
               <button
                 onClick={sendMessage}
                 disabled={isLoading}
-                className="px-4 py-2 text-white rounded-lg disabled:opacity-50"
+                className="flex-shrink-0 px-4 py-2 text-white rounded-lg disabled:opacity-50 whitespace-nowrap"
                 style={{
                   backgroundColor: config?.primaryColor || "#854fff",
                   borderRadius: `${(config?.roundness || 12) * 0.6}px`,

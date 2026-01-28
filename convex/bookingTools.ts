@@ -542,52 +542,117 @@ export const createLead = httpAction(async (ctx, request) => {
 });
 
 // ============================================
-// TOOL 7: Knowledge Base Search
+// TOOL 7A: Knowledge Base Search - Frontend Only
 // ============================================
-export const searchKnowledgeBase = httpAction(async (ctx, request) => {
-  const { query, type = "frontend", isAuthenticated = false } = await request.json();
+export const searchKnowledgeBaseFrontend = httpAction(async (ctx, request) => {
+  const { query } = await request.json();
   
-  // Determine which knowledge base to search
-  // Frontend users: only frontend knowledge
-  // Backend users: both frontend and backend knowledge
-  let searchType: "frontend" | "backend" = type;
-  
-  if (isAuthenticated && type === "backend") {
-    searchType = "backend";
-  } else {
-    searchType = "frontend";
+  if (!query || query.trim() === "") {
+    return new Response(JSON.stringify({
+      success: false,
+      message: "Query parameter is required",
+      results: [],
+      count: 0,
+    }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
   
+  // Search only frontend knowledge base
   const articles = await ctx.runQuery(api.knowledgeBase.searchArticles, {
-    type: searchType,
+    type: "frontend",
     query,
   });
   
-  // If authenticated, also search frontend knowledge
-  let allArticles = articles;
-  if (isAuthenticated && searchType === "backend") {
-    const frontendArticles = await ctx.runQuery(api.knowledgeBase.searchArticles, {
-      type: "frontend",
-      query,
-    });
-    allArticles = [...articles, ...frontendArticles];
-  }
+  // Return top 3 most relevant articles as single concatenated text
+  const topArticles = articles.slice(0, 3);
   
-  // Return top 3 most relevant articles
-  const topArticles = allArticles.slice(0, 3).map(article => ({
-    title: article.title,
-    content: article.content,
-    category: article.category,
-    tags: article.tags,
-  }));
+  // Concatenate all articles into one big chunk
+  const concatenatedContent = topArticles
+    .map((article, index) => 
+      `Article ${index + 1}: ${article.title}\n${article.content}\nCategory: ${article.category}\nTags: ${article.tags.join(', ')}`
+    )
+    .join('\n\n---\n\n');
   
   return new Response(JSON.stringify({
     success: true,
-    results: topArticles,
+    content: concatenatedContent,
     count: topArticles.length,
+    source: "frontend",
   }), {
     headers: { "Content-Type": "application/json" },
   });
+});
+
+// ============================================
+// TOOL 7B: Knowledge Base Search - Combined (Frontend + User Panel)
+// ============================================
+export const searchKnowledgeBaseCombined = httpAction(async (ctx, request) => {
+  const { query } = await request.json();
+  
+  if (!query || query.trim() === "") {
+    return new Response(JSON.stringify({
+      success: false,
+      message: "Query parameter is required",
+      results: [],
+      count: 0,
+    }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  
+  // Search both frontend and user_panel knowledge bases
+  const frontendArticles = await ctx.runQuery(api.knowledgeBase.searchArticles, {
+    type: "frontend",
+    query,
+  });
+  
+  const userPanelArticles = await ctx.runQuery(api.knowledgeBase.searchArticles, {
+    type: "user_panel",
+    query,
+  });
+  
+  // Combine results - return more articles so AI can analyze and pick the right ones
+  const allArticles = [...frontendArticles, ...userPanelArticles];
+  
+  // Return top 15 articles to give AI more context for analysis
+  const topArticles = allArticles.slice(0, 15);
+  
+  // Concatenate all articles into one big chunk with better formatting for AI analysis
+  const concatenatedContent = topArticles
+    .map((article, index) => 
+      `Article ${index + 1}: ${article.title}\nSource: ${article.type}\nCategory: ${article.category}\nTags: ${article.tags.join(', ')}\nKeywords: ${article.keywords?.join(', ') || 'N/A'}\n\nContent:\n${article.content}`
+    )
+    .join('\n\n---\n\n');
+  
+  return new Response(JSON.stringify({
+    success: true,
+    content: concatenatedContent,
+    count: topArticles.length,
+    source: "combined",
+    breakdown: {
+      frontend: frontendArticles.length,
+      user_panel: userPanelArticles.length,
+    },
+  }), {
+    headers: { "Content-Type": "application/json" },
+  });
+});
+
+// ============================================
+// TOOL 7C: Legacy Knowledge Base Search (Deprecated)
+// ============================================
+export const searchKnowledgeBase = httpAction(async (ctx, request) => {
+  const { query, type = "frontend" } = await request.json();
+  
+  // Redirect to appropriate endpoint based on type
+  if (type === "combined" || type === "user_panel") {
+    return searchKnowledgeBaseCombined(ctx, request);
+  }
+  
+  return searchKnowledgeBaseFrontend(ctx, request);
 });
 
 // ============================================

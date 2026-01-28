@@ -47,7 +47,7 @@ export function DraggableAppointment({
       </div>
       
       {/* Content - clickable for editing */}
-      <div className="pl-1">
+      <div className="pl-7">
         {children}
       </div>
     </div>

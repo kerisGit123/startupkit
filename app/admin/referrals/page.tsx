@@ -101,16 +101,18 @@ export default function AdminReferralsPage() {
   const activeReferrers = leaderboard?.filter(user => user.totalReferrals > 0).length || 0;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold">Referral Program Management</h1>
-        <p className="text-muted-foreground mt-2">
-          Configure rewards and monitor referral activity
-        </p>
+    <div className="flex-1 space-y-4 p-4 md:p-6 pt-6">
+      <div className="flex items-center justify-between space-y-2">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Referral Program Management</h1>
+          <p className="text-muted-foreground">
+            Configure rewards and monitor referral activity
+          </p>
+        </div>
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Referrals</CardTitle>
@@ -175,86 +177,101 @@ export default function AdminReferralsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Gift className="w-5 h-5" />
-            Referral Rewards Configuration
+            Program Configuration
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              <strong>Current Settings:</strong>
-            </p>
-            <ul className="text-sm text-blue-700 mt-2 space-y-1">
-              <li>• Referrer Reward: <strong>{settings?.rewardCredits ?? 50} credits</strong></li>
-              <li>• New User Bonus: <strong>{settings?.bonusCredits ?? 10} credits</strong></li>
-              <li>• Program Status: <strong>{settings?.enabled ? "Enabled" : "Disabled"}</strong></li>
-              <li>• Email Verification: <strong>{settings?.requireEmailVerification ? "Required" : "Not Required"}</strong></li>
-            </ul>
-          </div>
-
-          <div className="grid gap-4">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="enabled"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <label htmlFor="enabled" className="text-sm font-medium">
-                Enable Program
-              </label>
+        <CardContent className="space-y-6">
+          {/* Current Settings Display */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Referrer Reward</p>
+              <p className="text-2xl font-bold">{settings?.rewardCredits ?? 50} credits</p>
             </div>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="requireEmailVerification"
-                checked={requireEmailVerification}
-                onChange={(e) => setRequireEmailVerification(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <label htmlFor="requireEmailVerification" className="text-sm font-medium">
-                Require Email Verification for Credits
-              </label>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">New User Bonus</p>
+              <p className="text-2xl font-bold">{settings?.bonusCredits ?? 10} credits</p>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2 ml-6">
-              When enabled, users must verify their email before receiving referral credits. Recommended for security.
-            </p>
-
-            <div>
-              <label className="text-sm font-medium">Referrer Reward (Credits)</label>
-              <Input
-                type="number"
-                placeholder={`Current: ${settings?.rewardCredits || 50}`}
-                value={rewardCredits}
-                onChange={(e) => setRewardCredits(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Credits awarded to referrer
-              </p>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Program Status</p>
+              <p className="text-lg font-semibold">{settings?.enabled ? "✓ Enabled" : "✗ Disabled"}</p>
             </div>
-
-            <div>
-              <label className="text-sm font-medium">New User Bonus (Credits)</label>
-              <Input
-                type="number"
-                placeholder={`Current: ${settings?.bonusCredits ?? 10}`}
-                value={bonusCredits}
-                onChange={(e) => setBonusCredits(e.target.value)}
-                min="0"
-                step="1"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Bonus for referred user (set to 0 to disable)
-              </p>
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Email Verification</p>
+              <p className="text-lg font-semibold">{settings?.requireEmailVerification ? "✓ Required" : "✗ Not Required"}</p>
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={setDefaultPreset} variant="outline" className="flex-1">
+          <div className="border-t pt-6">
+
+            <div className="grid gap-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Referrer Reward (Credits)</label>
+                  <Input
+                    type="number"
+                    placeholder={`Current: ${settings?.rewardCredits || 50}`}
+                    value={rewardCredits}
+                    onChange={(e) => setRewardCredits(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Credits awarded to referrer
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">New User Bonus (Credits)</label>
+                  <Input
+                    type="number"
+                    placeholder={`Current: ${settings?.bonusCredits ?? 10}`}
+                    value={bonusCredits}
+                    onChange={(e) => setBonusCredits(e.target.value)}
+                    min="0"
+                    step="1"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Bonus for referred user (set to 0 to disable)
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="enabled"
+                    checked={enabled}
+                    onChange={(e) => setEnabled(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="enabled" className="text-sm font-medium">
+                    Enable Program
+                  </label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="requireEmailVerification"
+                    checked={requireEmailVerification}
+                    onChange={(e) => setRequireEmailVerification(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor="requireEmailVerification" className="text-sm font-medium">
+                    Require Email Verification for Credits
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground ml-6">
+                  When enabled, users must verify their email before receiving referral credits. Recommended for security.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-4 border-t">
+            <Button onClick={setDefaultPreset} variant="outline">
               Set Default (50/100)
             </Button>
-            <Button onClick={handleUpdateSettings} className="flex-1">
+            <Button onClick={handleUpdateSettings}>
               Update Settings
             </Button>
           </div>

@@ -54,10 +54,11 @@ export function AppointmentDetailsModal({
   // Update form when appointment loads
   useEffect(() => {
     if (appointment) {
+      const apt = appointment as any;
       setFormData({
-        clientName: appointment.clientName,
-        clientEmail: appointment.clientEmail,
-        clientPhone: appointment.clientPhone || "",
+        clientName: apt.contactName || apt.clientName || "",
+        clientEmail: apt.contactEmail || apt.clientEmail || "",
+        clientPhone: apt.contactPhone || apt.clientPhone || "",
         date: appointment.date,
         startTime: appointment.startTime,
         duration: appointment.duration,
@@ -202,7 +203,7 @@ export function AppointmentDetailsModal({
                   onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
                 />
               ) : (
-                <p className="text-sm font-medium">{appointment.clientName}</p>
+                <p className="text-sm font-medium">{(appointment as any).contactName || (appointment as any).clientName || "N/A"}</p>
               )}
             </div>
             <div>
@@ -214,7 +215,7 @@ export function AppointmentDetailsModal({
                   onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
                 />
               ) : (
-                <p className="text-sm font-medium">{appointment.clientEmail}</p>
+                <p className="text-sm font-medium">{(appointment as any).contactEmail || (appointment as any).clientEmail || "N/A"}</p>
               )}
             </div>
           </div>
@@ -227,7 +228,7 @@ export function AppointmentDetailsModal({
                 onChange={(e) => setFormData({ ...formData, clientPhone: e.target.value })}
               />
             ) : (
-              <p className="text-sm font-medium">{appointment.clientPhone || "N/A"}</p>
+              <p className="text-sm font-medium">{(appointment as any).contactPhone || (appointment as any).clientPhone || "N/A"}</p>
             )}
           </div>
 

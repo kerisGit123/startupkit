@@ -321,7 +321,95 @@ export default defineSchema({
     .index("by_action", ["action"]),
 
   // ============================================
-  // CORE: Unified Transactions (Financial records that affect credits/money)
+  // CORE: Financial Ledger (Single Source of Truth for ALL Revenue)
+  // ============================================
+  financial_ledger: defineTable({
+    // Unique Identifier
+    ledgerId: v.string(), // "TXN-2026-001234"
+    
+    // Core Financial Data
+    amount: v.number(),
+    currency: v.string(),
+    
+    // Transaction Classification
+    type: v.union(
+      v.literal("subscription_charge"),
+      v.literal("subscription_refund"),
+      v.literal("one_time_payment"),
+      v.literal("credit_purchase"),
+      v.literal("refund"),
+      v.literal("chargeback"),
+      v.literal("adjustment")
+    ),
+    
+    // Revenue Attribution
+    revenueSource: v.union(
+      v.literal("stripe_subscription"),
+      v.literal("stripe_payment"),
+      v.literal("manual"),
+      v.literal("referral_bonus"),
+      v.literal("credit_adjustment")
+    ),
+    
+    // Relationships
+    userId: v.optional(v.id("users")),
+    contactId: v.optional(v.id("contacts")),
+    companyId: v.optional(v.string()),
+    subscriptionId: v.optional(v.id("org_subscriptions")),
+    invoiceId: v.optional(v.id("invoices")),
+    
+    // Stripe Integration
+    stripePaymentIntentId: v.optional(v.string()),
+    stripeInvoiceId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+    stripeCustomerId: v.optional(v.string()),
+    stripeChargeId: v.optional(v.string()),
+    
+    // Subscription Details (for subscription charges)
+    subscriptionPlan: v.optional(v.string()),
+    subscriptionPeriodStart: v.optional(v.number()),
+    subscriptionPeriodEnd: v.optional(v.number()),
+    
+    // Credit/Token Details (for credit purchases)
+    tokensAmount: v.optional(v.number()),
+    
+    // Description & Metadata
+    description: v.string(),
+    notes: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    
+    // Timestamps
+    transactionDate: v.number(), // When transaction actually occurred
+    recordedAt: v.number(), // When recorded in system
+    
+    // Reconciliation & Audit
+    isReconciled: v.boolean(),
+    reconciledAt: v.optional(v.number()),
+    reconciledBy: v.optional(v.string()),
+    
+    // Legacy References (for migration tracking)
+    legacyTransactionId: v.optional(v.id("transactions")),
+    legacySubscriptionTransactionId: v.optional(v.id("subscription_transactions")),
+    legacyCreditLedgerId: v.optional(v.id("credits_ledger")),
+    
+    // System Fields
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_ledgerId", ["ledgerId"])
+    .index("by_userId", ["userId"])
+    .index("by_contactId", ["contactId"])
+    .index("by_companyId", ["companyId"])
+    .index("by_type", ["type"])
+    .index("by_source", ["revenueSource"])
+    .index("by_date", ["transactionDate"])
+    .index("by_subscription", ["stripeSubscriptionId"])
+    .index("by_payment_intent", ["stripePaymentIntentId"])
+    .index("by_invoice", ["invoiceId"])
+    .index("by_reconciled", ["isReconciled"]),
+
+  // ============================================
+  // CORE: Unified Transactions (LEGACY - Being replaced by financial_ledger)
   // ============================================
   transactions: defineTable({
     companyId: v.string(),
@@ -840,7 +928,88 @@ export default defineSchema({
     .index("by_token", ["shareToken"])
     .index("by_expiry", ["expiresAt"]),
 
-  // SaaS Customers - Reusable customer data for POs and Invoices
+  // ============================================
+  // CRM: Unified Contacts (Consolidates Customers & Leads)
+  // ============================================
+  contacts: defineTable({
+    // Basic Information
+    name: v.string(),
+    email: v.string(),
+    phone: v.optional(v.string()),
+    company: v.optional(v.string()),
+    
+    // Contact Type & Lifecycle
+    type: v.union(
+      v.literal("lead"),
+      v.literal("customer"),
+      v.literal("partner")
+    ),
+    lifecycleStage: v.union(
+      v.literal("prospect"),      // Initial contact
+      v.literal("qualified"),     // Qualified lead
+      v.literal("customer"),      // Active customer
+      v.literal("at_risk"),       // Customer at risk of churning
+      v.literal("churned")        // Lost customer
+    ),
+    status: v.union(
+      v.literal("active"),
+      v.literal("inactive"),
+      v.literal("blocked")
+    ),
+    
+    // Lead-specific fields
+    leadSource: v.optional(v.string()), // "chatbot", "website", "referral", "manual"
+    leadScore: v.optional(v.number()), // 0-100
+    
+    // Customer-specific fields
+    customerSince: v.optional(v.number()),
+    totalRevenue: v.optional(v.number()),
+    subscriptionId: v.optional(v.id("org_subscriptions")),
+    
+    // Business Information
+    companyRegistrationNo: v.optional(v.string()),
+    taxId: v.optional(v.string()),
+    industry: v.optional(v.string()),
+    website: v.optional(v.string()),
+    address: v.optional(v.string()),
+    
+    // Contact Person (for companies)
+    contactPersonName: v.optional(v.string()),
+    contactPersonEmail: v.optional(v.string()),
+    contactPersonPhone: v.optional(v.string()),
+    
+    // Assignment & Ownership
+    assignedTo: v.optional(v.id("users")),
+    
+    // Tags & Categorization
+    tags: v.array(v.string()),
+    labels: v.array(v.string()),
+    
+    // Notes & Communication
+    notes: v.optional(v.string()),
+    lastContactedAt: v.optional(v.number()),
+    nextFollowUpAt: v.optional(v.number()),
+    
+    // Metadata
+    companyId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    createdBy: v.optional(v.string()),
+    lastEditedBy: v.optional(v.string()),
+    
+    // Legacy references (for migration)
+    legacyCustomerId: v.optional(v.id("saas_customers")),
+    legacyLeadId: v.optional(v.id("leads")),
+  })
+    .index("by_email", ["email"])
+    .index("by_type", ["type"])
+    .index("by_lifecycle", ["lifecycleStage"])
+    .index("by_status", ["status"])
+    .index("by_company", ["companyId"])
+    .index("by_assigned", ["assignedTo"])
+    .index("by_createdAt", ["createdAt"]),
+
+  // SaaS Customers - Reusable customer data for POs and Invoices (LEGACY - use contacts table)
   saas_customers: defineTable({
     companyId: v.optional(v.string()),
     customerName: v.string(),
@@ -1107,10 +1276,10 @@ export default defineSchema({
   // Appointments - Main booking records
   appointments: defineTable({
     // Client Information
-    clientId: v.id("clients"),
-    clientName: v.string(),
-    clientEmail: v.string(),
-    clientPhone: v.optional(v.string()),
+    contactId: v.id("contacts"),
+    contactName: v.string(),
+    contactEmail: v.string(),
+    contactPhone: v.optional(v.string()),
     
     // Event Type Link
     eventTypeId: v.optional(v.id("event_types")), // Link to event type
@@ -1160,9 +1329,9 @@ export default defineSchema({
     createdBy: v.optional(v.id("users")), // Admin user ID
   })
     .index("by_date", ["date"])
-    .index("by_client", ["clientId"])
+    .index("by_contact", ["contactId"])
     .index("by_status", ["status"])
-    .index("by_email", ["clientEmail"])
+    .index("by_email", ["contactEmail"])
     .index("by_googleEventId", ["googleEventId"])
     .index("by_date_status", ["date", "status"]),
 
@@ -1385,4 +1554,69 @@ export default defineSchema({
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_status", ["status"]),
+
+  // Unified Inbox - All communication channels in one place
+  inbox_messages: defineTable({
+    // Contact & Thread
+    contactId: v.optional(v.id("contacts")),
+    threadId: v.string(),
+    
+    // Channel & Direction
+    channel: v.union(
+      v.literal("email"),
+      v.literal("chatbot"),
+      v.literal("ticket"),
+      v.literal("sms")
+    ),
+    direction: v.union(
+      v.literal("inbound"),
+      v.literal("outbound")
+    ),
+    
+    // Content
+    subject: v.optional(v.string()),
+    body: v.string(),
+    
+    // Status & Priority
+    status: v.union(
+      v.literal("unread"),
+      v.literal("read"),
+      v.literal("replied"),
+      v.literal("archived")
+    ),
+    priority: v.optional(v.union(
+      v.literal("low"),
+      v.literal("normal"),
+      v.literal("high")
+    )),
+    
+    // Assignment & Organization
+    assignedTo: v.optional(v.id("users")),
+    tags: v.optional(v.array(v.string())),
+    starred: v.optional(v.boolean()),
+    workflowStatus: v.optional(v.union(
+      v.literal("urgent"),
+      v.literal("follow-up"),
+      v.literal("resolved"),
+      v.literal("pending")
+    )),
+    
+    // Timestamps
+    sentAt: v.number(),
+    readAt: v.optional(v.number()),
+    repliedAt: v.optional(v.number()),
+    
+    // Metadata
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_channel", ["channel"])
+    .index("by_status", ["status"])
+    .index("by_assigned", ["assignedTo"])
+    .index("by_contact", ["contactId"])
+    .index("by_thread", ["threadId"])
+    .index("by_sentAt", ["sentAt"])
+    .index("by_starred", ["starred"])
+    .index("by_workflow_status", ["workflowStatus"]),
 });
