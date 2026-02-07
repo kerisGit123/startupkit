@@ -625,6 +625,14 @@ export default defineSchema({
     senderName: v.string(),
     message: v.string(),
     isInternal: v.boolean(),
+    // Attachment support
+    attachments: v.optional(v.array(v.object({
+      storageId: v.string(),
+      fileName: v.string(),
+      fileType: v.string(),
+      fileSize: v.number(),
+      fileUrl: v.optional(v.string()),
+    }))),
     createdAt: v.number(),
   })
     .index("by_ticketId", ["ticketId"])
@@ -1134,12 +1142,23 @@ export default defineSchema({
       senderId: v.optional(v.string()),
       imageUrl: v.optional(v.string()),
       imageStorageId: v.optional(v.string()),
+      fileUrl: v.optional(v.string()),
+      fileStorageId: v.optional(v.string()),
+      fileName: v.optional(v.string()),
+      fileType: v.optional(v.string()),
+      fileSize: v.optional(v.number()),
       messageType: v.optional(v.union(
         v.literal("text"),
         v.literal("image"),
+        v.literal("file"),
         v.literal("system"),
-        v.literal("intervention_request")
+        v.literal("intervention_request"),
+        v.literal("quick_reply")
       )),
+      quickReplies: v.optional(v.array(v.object({
+        label: v.string(),
+        value: v.string(),
+      }))),
     })),
     status: v.union(
       v.literal("active"),
@@ -1162,6 +1181,14 @@ export default defineSchema({
     leadCaptured: v.boolean(),
     leadCapturedAt: v.optional(v.number()),
     customAttributes: v.optional(v.any()),
+    rating: v.optional(v.number()),
+    ratingComment: v.optional(v.string()),
+    ratedAt: v.optional(v.number()),
+    label: v.optional(v.union(
+      v.literal("urgent"),
+      v.literal("follow-up"),
+      v.literal("resolved")
+    )),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

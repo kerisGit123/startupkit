@@ -228,7 +228,7 @@ export default function ActivityDashboardPage() {
               <p className="text-sm text-muted-foreground">No active users today</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {usersActiveToday.users.map((user) => (
+                {usersActiveToday.users.map((user: { id: string; fullName?: string; email?: string; lastActiveAt?: number; userLabel?: string }) => (
                   <div key={user.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                       <Users className="w-5 h-5 text-primary" />
@@ -282,7 +282,7 @@ export default function ActivityDashboardPage() {
             {!topActiveUsers || topActiveUsers.length === 0 ? (
               <p className="text-sm text-muted-foreground">No activity data available</p>
             ) : (
-              topActiveUsers.slice(0, showAllActiveUsers ? 20 : 5).map((item, index) => (
+              topActiveUsers.slice(0, showAllActiveUsers ? 20 : 5).map((item: { userId: string; activityCount: number; user?: { fullName?: string; email?: string } }, index: number) => (
                 <div key={item.userId} className="flex items-center gap-4 p-3 border rounded-lg hover:bg-gray-50">
                   <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm">
                     #{index + 1}
@@ -375,7 +375,7 @@ export default function ActivityDashboardPage() {
                     </td>
                   </tr>
                 ) : (
-                  loginHistory.slice((loginHistoryPage - 1) * loginHistoryPageSize, loginHistoryPage * loginHistoryPageSize).map((login) => (
+                  loginHistory.slice((loginHistoryPage - 1) * loginHistoryPageSize, loginHistoryPage * loginHistoryPageSize).map((login: { _id: string; userId: string; timestamp: number; ipAddress?: string; userAgent?: string; user?: { fullName?: string; email?: string; userLabel?: string } }) => (
                     <tr key={login._id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="font-medium text-sm">

@@ -1,9 +1,42 @@
-import { mutation } from "../_generated/server";
+import { mutation, internalMutation } from "..//_generated/server";
+import { action } from "..//_generated/server";
+import { internalQuery } from "..//_generated/server";
 import { v } from "convex/values";
+import { internal } from "..//_generated/api";
+
+/**
+ * Internal mutation to log emails to database
+ */
+export const logSystemEmail = internalMutation({
+  args: {
+    sentTo: v.string(),
+    subject: v.string(),
+    htmlContent: v.string(),
+    templateType: v.string(),
+    variables: v.optional(v.any()),
+    status: v.union(v.literal("logged"), v.literal("sent"), v.literal("failed")),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("email_logs", {
+      sentTo: args.sentTo,
+      subject: args.subject,
+      htmlContent: args.htmlContent,
+      textContent: "",
+      templateType: args.templateType,
+      templateName: `${args.templateType} email`,
+      variables: args.variables || {},
+      status: args.status,
+      errorMessage: args.errorMessage,
+      createdAt: Date.now(),
+    });
+  },
+});
 
 /**
  * Helper function to send system emails (welcome, password reset, etc.)
  * Respects the System Notification toggle - logs to database if ON, sends via Resend if OFF
+ * This is a mutation-based version for test/log mode only
  */
 export const sendSystemEmail = mutation({
   args: {
@@ -35,48 +68,158 @@ export const sendSystemEmail = mutation({
 
     const useSystemNotification = settings.useSystemNotification === true;
 
+    // In mutation context, always log to DB. For actual sending, use the action version.
+    await ctx.db.insert("email_logs", {
+      sentTo: args.recipientEmail,
+      subject: args.subject,
+      htmlContent: args.htmlContent,
+      textContent: "",
+      templateType: args.templateType,
+      templateName: `${args.templateType} email`,
+      variables: args.variables || {},
+      status: useSystemNotification ? "logged" : "logged",
+      createdAt: Date.now(),
+    });
+
+    return {
+      success: true,
+      mode: useSystemNotification ? "test" : "pending",
+      message: useSystemNotification
+        ? "Email logged to database (test mode)"
+        : "Email logged. Use sendSystemEmailAction for actual sending.",
+    };
+  },
+});
+
+/**
+ * Action-based email sender that can make HTTP calls to Resend.
+ * Use this when you need to actually send emails.
+ */
+export const sendSystemEmailAction = action({
+  args: {
+    recipientEmail: v.string(),
+    recipientName: v.optional(v.string()),
+    templateType: v.string(),
+    subject: v.string(),
+    htmlContent: v.string(),
+    variables: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    // Read email settings from platform_config via a query
+    const settings = await ctx.runQuery(internal.emails.systemEmailLogger.getEmailConfig);
+
+    const useSystemNotification = settings.useSystemNotification === true;
+
     if (useSystemNotification) {
       // TEST MODE: Log to database instead of sending
-      await ctx.db.insert("email_logs", {
+      await ctx.runMutation(internal.emails.systemEmailLogger.logSystemEmail, {
         sentTo: args.recipientEmail,
         subject: args.subject,
         htmlContent: args.htmlContent,
-        textContent: "",
         templateType: args.templateType,
-        templateName: `${args.templateType} email`,
-        variables: args.variables || {},
+        variables: args.variables,
         status: "logged",
-        createdAt: Date.now(),
       });
 
       return {
         success: true,
         mode: "test",
-        message: "Email logged to database (test mode)",
+        message: "Email logged to database (System Notification mode is ON)",
       };
-    } else {
-      // PRODUCTION MODE: Send via Resend
-      // TODO: Integrate with Resend API here
-      
-      // For now, also log to database for record keeping
-      await ctx.db.insert("email_logs", {
+    }
+
+    // PRODUCTION MODE: Send via Resend
+    try {
+      const resendApiKey = settings.resendApiKey;
+      if (!resendApiKey) {
+        await ctx.runMutation(internal.emails.systemEmailLogger.logSystemEmail, {
+          sentTo: args.recipientEmail,
+          subject: args.subject,
+          htmlContent: args.htmlContent,
+          templateType: args.templateType,
+          variables: args.variables,
+          status: "failed",
+          errorMessage: "Resend API key not configured",
+        });
+        return { success: false, error: "Resend API key not configured" };
+      }
+
+      const { Resend } = await import("resend");
+      const resend = new Resend(resendApiKey);
+
+      const fromName = settings.emailFromName || "Support";
+      const fromAddress = settings.emailFromAddress || "noreply@yourdomain.com";
+
+      const { data, error } = await resend.emails.send({
+        from: `${fromName} <${fromAddress}>`,
+        to: [args.recipientEmail],
+        subject: args.subject,
+        html: args.htmlContent,
+      });
+
+      if (error) {
+        await ctx.runMutation(internal.emails.systemEmailLogger.logSystemEmail, {
+          sentTo: args.recipientEmail,
+          subject: args.subject,
+          htmlContent: args.htmlContent,
+          templateType: args.templateType,
+          variables: args.variables,
+          status: "failed",
+          errorMessage: error.message || "Resend API error",
+        });
+        return { success: false, error: error.message };
+      }
+
+      // Log successful send
+      await ctx.runMutation(internal.emails.systemEmailLogger.logSystemEmail, {
         sentTo: args.recipientEmail,
         subject: args.subject,
         htmlContent: args.htmlContent,
-        textContent: "",
         templateType: args.templateType,
-        templateName: `${args.templateType} email`,
-        variables: args.variables || {},
+        variables: args.variables,
         status: "sent",
-        createdAt: Date.now(),
       });
 
       return {
         success: true,
         mode: "production",
+        messageId: data?.id,
         message: "Email sent via Resend",
       };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      await ctx.runMutation(internal.emails.systemEmailLogger.logSystemEmail, {
+        sentTo: args.recipientEmail,
+        subject: args.subject,
+        htmlContent: args.htmlContent,
+        templateType: args.templateType,
+        variables: args.variables,
+        status: "failed",
+        errorMessage: errorMsg,
+      });
+      return { success: false, error: errorMsg };
     }
+  },
+});
+
+/**
+ * Internal query to read email config from platform_config table.
+ * Used by sendSystemEmailAction to check settings before sending.
+ */
+export const getEmailConfig = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const emailSettings = await ctx.db
+      .query("platform_config")
+      .filter((q) => q.eq(q.field("category"), "email"))
+      .collect();
+
+    const settings: Record<string, string | boolean> = {};
+    for (const setting of emailSettings) {
+      settings[setting.key] = setting.value as string | boolean;
+    }
+
+    return settings;
   },
 });
 

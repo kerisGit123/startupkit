@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 export default function ChatbotAnalyticsPage() {
-  const [selectedType, setSelectedType] = useState<"frontend" | "user_panel">("frontend");
+  const [selectedType, setSelectedType] = useState<"frontend" | "user_panel">("user_panel");
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("7d");
 
   const analytics = useQuery(api.analytics.getChatbotAnalytics, {

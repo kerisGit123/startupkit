@@ -39,7 +39,7 @@ export default function ChatbotDesignerPage() {
     setIsSaving(true);
     try {
       // Exclude system fields that shouldn't be sent to the mutation
-      const { _id, _creationTime, updatedAt, updatedBy, logoStorageId, darkPrimaryColor, darkSecondaryColor, darkBackgroundColor, darkTextColor, ...configToSave } = localConfig;
+      const { _id, _creationTime, updatedAt, updatedBy, logoStorageId, ...configToSave } = localConfig;
       
       await updateConfig({
         ...configToSave,

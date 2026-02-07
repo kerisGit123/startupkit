@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 
+// Stripe amounts are stored in cents (e.g. 1000 = RM10.00)
+// This helper converts cents to actual currency value
+const toCurrency = (cents: number) => Math.round((cents / 100) * 100) / 100;
+
 // ============================================
 // QUERIES
 // ============================================
@@ -56,7 +60,10 @@ export const getAllLedgerEntries = query({
       entries = entries.filter(e => e.transactionDate <= args.endDate!);
     }
 
-    return entries.sort((a, b) => b.transactionDate - a.transactionDate);
+    // Convert amounts from Stripe cents to actual currency
+    return entries
+      .sort((a, b) => b.transactionDate - a.transactionDate)
+      .map(e => ({ ...e, amount: toCurrency(e.amount) }));
   },
 });
 
@@ -106,7 +113,12 @@ export const getRevenueBySource = query({
       bySource[source] = (bySource[source] || 0) + entry.amount;
     }
 
-    return bySource;
+    // Convert from cents to currency
+    const result: Record<string, number> = {};
+    for (const [source, amount] of Object.entries(bySource)) {
+      result[source] = toCurrency(amount);
+    }
+    return result;
   },
 });
 
@@ -127,14 +139,14 @@ export const calculateMRR = query({
       e.transactionDate >= thirtyDaysAgo && e.amount > 0
     );
 
-    // Sum up subscription charges
+    // Sum up subscription charges (in cents)
     const totalRevenue = recentEntries.reduce((sum, e) => sum + e.amount, 0);
     
     // Calculate average daily revenue and multiply by 30
     const mrr = (totalRevenue / 30) * 30;
 
     return {
-      mrr: Math.round(mrr * 100) / 100,
+      mrr: toCurrency(mrr),
       period: "last_30_days",
       totalTransactions: recentEntries.length,
     };
@@ -162,8 +174,8 @@ export const calculateARR = query({
     const arr = mrr * 12;
 
     return {
-      arr: Math.round(arr * 100) / 100,
-      mrr: Math.round(mrr * 100) / 100,
+      arr: toCurrency(arr),
+      mrr: toCurrency(mrr),
     };
   },
 });
@@ -197,9 +209,9 @@ export const getTotalRevenue = query({
     const netRevenue = revenue - refunds;
 
     return {
-      revenue: Math.round(revenue * 100) / 100,
-      refunds: Math.round(refunds * 100) / 100,
-      netRevenue: Math.round(netRevenue * 100) / 100,
+      revenue: toCurrency(revenue),
+      refunds: toCurrency(refunds),
+      netRevenue: toCurrency(netRevenue),
       transactionCount: entries.length,
     };
   },
@@ -245,30 +257,157 @@ export const getRevenueAnalytics = query({
     // Calculate ARR
     const arr = mrr * 12;
 
-    // Revenue by source
+    // Revenue by source (convert from cents)
     const bySource: Record<string, number> = {};
     for (const entry of currentEntries.filter(e => e.amount > 0)) {
       const source = entry.revenueSource;
       bySource[source] = (bySource[source] || 0) + entry.amount;
     }
+    const convertedBySource: Record<string, number> = {};
+    for (const [source, amount] of Object.entries(bySource)) {
+      convertedBySource[source] = toCurrency(amount);
+    }
 
     return {
       currentPeriod: {
-        revenue: Math.round(currentRevenue * 100) / 100,
-        refunds: Math.round(currentRefunds * 100) / 100,
-        netRevenue: Math.round(currentNet * 100) / 100,
+        revenue: toCurrency(currentRevenue),
+        refunds: toCurrency(currentRefunds),
+        netRevenue: toCurrency(currentNet),
         transactionCount: currentEntries.length,
       },
       previousPeriod: {
-        revenue: Math.round(previousRevenue * 100) / 100,
-        refunds: Math.round(previousRefunds * 100) / 100,
-        netRevenue: Math.round(previousNet * 100) / 100,
+        revenue: toCurrency(previousRevenue),
+        refunds: toCurrency(previousRefunds),
+        netRevenue: toCurrency(previousNet),
         transactionCount: previousEntries.length,
       },
       growth: Math.round(growth * 100) / 100,
-      mrr: Math.round(mrr * 100) / 100,
-      arr: Math.round(arr * 100) / 100,
-      revenueBySource: bySource,
+      mrr: toCurrency(mrr),
+      arr: toCurrency(arr),
+      revenueBySource: convertedBySource,
+    };
+  },
+});
+
+// Get monthly revenue trend (real data for charts)
+export const getMonthlyRevenueTrend = query({
+  args: {
+    months: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const monthCount = args.months || 6;
+    const now = new Date();
+    const allEntries = await ctx.db.query("financial_ledger").collect();
+
+    const trends = [];
+    for (let i = monthCount - 1; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+
+      const monthEntries = allEntries.filter(
+        (e) => e.transactionDate >= monthStart.getTime() && e.transactionDate <= monthEnd.getTime()
+      );
+
+      const revenue = monthEntries
+        .filter((e) => e.amount > 0)
+        .reduce((sum, e) => sum + e.amount, 0);
+      const refunds = monthEntries
+        .filter((e) => e.amount < 0)
+        .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+      const subscriptions = monthEntries
+        .filter((e) => e.type === "subscription_charge" && e.amount > 0)
+        .reduce((sum, e) => sum + e.amount, 0);
+      const oneTime = monthEntries
+        .filter((e) => e.type === "one_time_payment" && e.amount > 0)
+        .reduce((sum, e) => sum + e.amount, 0);
+
+      trends.push({
+        month: monthStart.toLocaleDateString("en-US", { month: "short" }),
+        year: monthStart.getFullYear(),
+        revenue: toCurrency(revenue),
+        refunds: toCurrency(refunds),
+        net: toCurrency(revenue - refunds),
+        subscriptions: toCurrency(subscriptions),
+        oneTime: toCurrency(oneTime),
+        transactions: monthEntries.length,
+      });
+    }
+
+    return trends;
+  },
+});
+
+// Get comprehensive financial summary for admin dashboard
+export const getFinancialSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    const allEntries = await ctx.db.query("financial_ledger").collect();
+    const now = Date.now();
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+    // All-time totals
+    const allTimeRevenue = allEntries
+      .filter((e) => e.amount > 0)
+      .reduce((sum, e) => sum + e.amount, 0);
+    const allTimeRefunds = allEntries
+      .filter((e) => e.amount < 0)
+      .reduce((sum, e) => sum + Math.abs(e.amount), 0);
+
+    // Last 30 days
+    const last30 = allEntries.filter((e) => e.transactionDate >= thirtyDaysAgo);
+    const last30Revenue = last30.filter((e) => e.amount > 0).reduce((sum, e) => sum + e.amount, 0);
+
+    // Last 7 days
+    const last7 = allEntries.filter((e) => e.transactionDate >= sevenDaysAgo);
+    const last7Revenue = last7.filter((e) => e.amount > 0).reduce((sum, e) => sum + e.amount, 0);
+
+    // Average transaction value
+    const positiveEntries = allEntries.filter((e) => e.amount > 0);
+    const avgTransactionValue =
+      positiveEntries.length > 0
+        ? positiveEntries.reduce((sum, e) => sum + e.amount, 0) / positiveEntries.length
+        : 0;
+
+    // Top customers by revenue
+    const customerRevenue: Record<string, { total: number; count: number; stripeId?: string }> = {};
+    for (const entry of allEntries.filter((e) => e.amount > 0)) {
+      const key = entry.stripeCustomerId || entry.companyId || "unknown";
+      if (!customerRevenue[key]) {
+        customerRevenue[key] = { total: 0, count: 0, stripeId: entry.stripeCustomerId };
+      }
+      customerRevenue[key].total += entry.amount;
+      customerRevenue[key].count++;
+    }
+
+    const topCustomers = Object.entries(customerRevenue)
+      .map(([key, data]) => ({ customer: key, ...data }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+
+    // Convert topCustomers totals from cents
+    const convertedTopCustomers = topCustomers.map(c => ({
+      ...c,
+      total: toCurrency(c.total),
+    }));
+
+    return {
+      allTime: {
+        revenue: toCurrency(allTimeRevenue),
+        refunds: toCurrency(allTimeRefunds),
+        net: toCurrency(allTimeRevenue - allTimeRefunds),
+        transactions: allEntries.length,
+      },
+      last30Days: {
+        revenue: toCurrency(last30Revenue),
+        transactions: last30.length,
+      },
+      last7Days: {
+        revenue: toCurrency(last7Revenue),
+        transactions: last7.length,
+      },
+      avgTransactionValue: toCurrency(avgTransactionValue),
+      topCustomers: convertedTopCustomers,
     };
   },
 });

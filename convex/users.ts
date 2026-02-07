@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const upsertFromClerk = mutation({
@@ -41,6 +41,18 @@ export const upsertFromClerk = mutation({
       createdAt: now,
     });
     return id;
+  },
+});
+
+export const getUserByClerkId = query({
+  args: { clerkUserId: v.string() },
+  handler: async (ctx, { clerkUserId }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", clerkUserId))
+      .first();
+
+    return user;
   },
 });
 

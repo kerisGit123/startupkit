@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,6 +60,15 @@ function ChatbotConfigCard({ config, type, onUpdate }: ChatbotConfigCardProps) {
   const [webhookUrl, setWebhookUrl] = useState(config?.n8nWebhookUrl || "");
   const [widgetColor, setWidgetColor] = useState(config?.primaryColor || "#854fff");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Sync state when config loads from Convex (async query)
+  useEffect(() => {
+    if (config) {
+      setIsActive(config.isActive || false);
+      setWebhookUrl(config.n8nWebhookUrl || "");
+      setWidgetColor(config.primaryColor || "#854fff");
+    }
+  }, [config]);
 
   const handleSave = async () => {
     setIsSaving(true);

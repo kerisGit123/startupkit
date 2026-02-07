@@ -193,11 +193,11 @@ export function POEditDialog({ poId, isOpen, onClose, onSuccess }: POEditDialogP
         clerkUserId: user.id,
       });
 
-      toast.success("Purchase order updated successfully");
+      toast.success("Sales order updated successfully");
       onSuccess?.();
       onClose();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to update purchase order";
+      const errorMessage = error instanceof Error ? error.message : "Failed to update sales order";
       toast.error(errorMessage);
     } finally {
       setIsSaving(false);
@@ -211,9 +211,9 @@ export function POEditDialog({ poId, isOpen, onClose, onSuccess }: POEditDialogP
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cannot Edit Purchase Order</DialogTitle>
+            <DialogTitle>Cannot Edit Sales Order</DialogTitle>
             <DialogDescription>
-              This purchase order has been converted to an invoice and cannot be edited.
+              This sales order has been converted to an invoice and cannot be edited.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -228,9 +228,9 @@ export function POEditDialog({ poId, isOpen, onClose, onSuccess }: POEditDialogP
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Purchase Order: {po.poNo}</DialogTitle>
+          <DialogTitle>Edit Sales Order: {po.poNo}</DialogTitle>
           <DialogDescription>
-            Update purchase order details. All monetary values in MYR.
+            Update sales order details. All monetary values in MYR.
           </DialogDescription>
         </DialogHeader>
 

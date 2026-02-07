@@ -103,6 +103,120 @@ export const getThread = query({
   },
 });
 
+// Get ticket conversation thread using ticket_messages table (has both customer + admin messages)
+export const getTicketThread = query({
+  args: { ticketNumber: v.string() },
+  handler: async (ctx, { ticketNumber }) => {
+    // Find the support ticket by ticketNumber
+    const ticket = await ctx.db
+      .query("support_tickets")
+      .withIndex("by_ticketNumber", (q) => q.eq("ticketNumber", ticketNumber))
+      .first();
+
+    if (!ticket) return { ticket: null, messages: [] };
+
+    // Get all messages from ticket_messages table (customer + admin)
+    const messages = await ctx.db
+      .query("ticket_messages")
+      .withIndex("by_ticketId", (q) => q.eq("ticketId", ticket._id))
+      .order("asc")
+      .collect();
+
+    return { ticket, messages };
+  },
+});
+
+// Get grouped inbox messages - one entry per thread with metadata
+export const getGroupedMessages = query({
+  args: {
+    channel: v.optional(v.union(
+      v.literal("email"),
+      v.literal("chatbot"),
+      v.literal("ticket"),
+      v.literal("sms")
+    )),
+  },
+  handler: async (ctx, args) => {
+    let allMessages = await ctx.db.query("inbox_messages").collect();
+
+    if (args.channel) {
+      allMessages = allMessages.filter(m => m.channel === args.channel);
+    }
+
+    // Group by threadId - keep the original (first inbound) message as representative
+    const threadMap = new Map<string, {
+      original: typeof allMessages[0];
+      replyCount: number;
+      lastReplyAt: number;
+      hasUnread: boolean;
+      hasNewCustomerReply: boolean;
+    }>();
+
+    for (const msg of allMessages) {
+      const existing = threadMap.get(msg.threadId);
+      if (!existing) {
+        threadMap.set(msg.threadId, {
+          original: msg,
+          replyCount: 0,
+          lastReplyAt: msg.sentAt,
+          hasUnread: msg.status === "unread",
+          hasNewCustomerReply: false,
+        });
+      } else {
+        existing.replyCount++;
+        if (msg.sentAt > existing.lastReplyAt) {
+          existing.lastReplyAt = msg.sentAt;
+        }
+        if (msg.status === "unread") {
+          existing.hasUnread = true;
+          if (msg.direction === "inbound") {
+            existing.hasNewCustomerReply = true;
+          }
+        }
+        // Keep the original inbound message as the representative
+        if (msg.direction === "inbound" && msg.sentAt < existing.original.sentAt) {
+          existing.original = msg;
+        }
+      }
+    }
+
+    // Also count ticket_messages replies for ticket threads
+    const results = [];
+    for (const [threadId, data] of threadMap) {
+      let ticketMessageCount = 0;
+      let hasNewCustomerReply = data.hasNewCustomerReply;
+
+      if (data.original.channel === "ticket" && data.original.metadata?.ticketId) {
+        const ticketMessages = await ctx.db
+          .query("ticket_messages")
+          .withIndex("by_ticketId", (q) => q.eq("ticketId", data.original.metadata!.ticketId as any))
+          .collect();
+        ticketMessageCount = ticketMessages.length;
+
+        // Check if latest message is from customer
+        if (ticketMessages.length > 0) {
+          const lastMsg = ticketMessages[ticketMessages.length - 1];
+          if (lastMsg.senderType === "customer") {
+            hasNewCustomerReply = true;
+          }
+        }
+      }
+
+      results.push({
+        ...data.original,
+        threadId,
+        replyCount: Math.max(data.replyCount, ticketMessageCount > 0 ? ticketMessageCount - 1 : 0),
+        lastReplyAt: data.lastReplyAt,
+        hasUnread: data.hasUnread,
+        hasNewCustomerReply,
+        updatedAt: data.lastReplyAt,
+      });
+    }
+
+    return results.sort((a, b) => b.lastReplyAt - a.lastReplyAt);
+  },
+});
+
 // Get contact's message history
 export const getContactMessages = query({
   args: { contactId: v.id("contacts") },

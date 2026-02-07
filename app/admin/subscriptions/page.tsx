@@ -4,9 +4,9 @@ export const dynamic = 'force-dynamic';
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { DollarSign, TrendingUp, Users, CheckCircle, XCircle, Search, Download } from "lucide-react";
+import { Users, CheckCircle, XCircle, Search, Download, Calendar, RefreshCw } from "lucide-react";
 import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,12 +39,24 @@ export default function SubscriptionsPage() {
     });
   }, [subscriptions, searchTerm, planFilter, startDate, endDate]);
 
-  const getStatusBadge = (status: string) => {
+  const PLAN_PRICES: Record<string, number> = {
+    starter: 19.90,
+    pro: 29.00,
+    business: 99.00,
+  };
+
+  const getStatusBadge = (status: string, cancelAtPeriodEnd?: boolean) => {
+    if (cancelAtPeriodEnd && status === "active") {
+      return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100">Canceling</Badge>;
+    }
     switch (status) {
       case "active":
         return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>;
       case "canceled":
-        return <Badge variant="outline" className="text-gray-600">Canceled</Badge>;
+      case "cancelled":
+        return <Badge variant="outline" className="text-red-600 border-red-200">Canceled</Badge>;
+      case "past_due":
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Past Due</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -90,71 +102,69 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-6 pt-6">
-      <div className="flex items-center justify-between space-y-2">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Subscriptions</h1>
-          <p className="text-muted-foreground">
-            View and manage all subscriptions
+          <h1 className="text-2xl font-bold tracking-tight">Subscriptions</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            Manage all customer subscriptions
           </p>
         </div>
-        <Button onClick={exportToCSV}>
-          <Download className="w-4 h-4 mr-2" />
-          Export CSV
+        <Button size="sm" onClick={exportToCSV}>
+          <Download className="w-4 h-4 mr-1.5" />
+          Export
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Baremetrics-style Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Subscriptions</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalSubscriptions || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              All-time subscriptions
-            </p>
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Total</p>
+              <Users className="h-4 w-4 text-blue-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">{stats?.totalSubscriptions || 0}</p>
+            <p className="text-blue-200 text-xs mt-1.5">All-time subscriptions</p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><Users className="h-20 w-20" /></div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.activeSubscriptions || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats?.totalSubscriptions ? Math.round((stats.activeSubscriptions / stats.totalSubscriptions) * 100) : 0}% of total
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Active</p>
+              <CheckCircle className="h-4 w-4 text-emerald-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">{stats?.activeSubscriptions || 0}</p>
+            <p className="text-emerald-200 text-xs mt-1.5">
+              {stats?.totalSubscriptions ? Math.round(((stats.activeSubscriptions || 0) / stats.totalSubscriptions) * 100) : 0}% of total
             </p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><CheckCircle className="h-20 w-20" /></div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Canceled</CardTitle>
-            <XCircle className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.canceledSubscriptions || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Churn tracking
-            </p>
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-red-100 text-xs font-semibold uppercase tracking-wider">Churn</p>
+              <XCircle className="h-4 w-4 text-red-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">{(stats?.canceledSubscriptions || 0) + (stats?.cancelingSubscriptions || 0)}</p>
+            <p className="text-red-200 text-xs mt-1.5">{stats?.churnRate || "0.0"}% churn rate</p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><XCircle className="h-20 w-20" /></div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">MRR</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">MYR {stats?.mrr || "0.00"}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Monthly Recurring Revenue
-            </p>
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">MRR</p>
+              <RefreshCw className="h-4 w-4 text-violet-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">MYR {stats?.mrr || "0.00"}</p>
+            <p className="text-violet-200 text-xs mt-1.5">Monthly Recurring Revenue</p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><RefreshCw className="h-20 w-20" /></div>
         </Card>
       </div>
 
@@ -209,13 +219,15 @@ export default function SubscriptionsPage() {
               <th className="px-6 py-3 text-sm font-medium text-gray-600">Customer</th>
               <th className="px-6 py-3 text-sm font-medium text-gray-600">Status</th>
               <th className="px-6 py-3 text-sm font-medium text-gray-600">Plan</th>
+              <th className="px-6 py-3 text-sm font-medium text-gray-600 text-right">Price/mo</th>
+              <th className="px-6 py-3 text-sm font-medium text-gray-600">Renewal</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {!filteredSubscriptions ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">Loading...</td></tr>
+              <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">Loading...</td></tr>
             ) : filteredSubscriptions.length === 0 ? (
-              <tr><td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">No subscriptions found</td></tr>
+              <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">No subscriptions found</td></tr>
             ) : (
               filteredSubscriptions.map((sub) => (
                 <tr key={sub._id} className="hover:bg-gray-50 transition-colors">
@@ -256,13 +268,28 @@ export default function SubscriptionsPage() {
                     <div className="text-xs text-gray-500">{sub.userEmail || "No email"}</div>
                   </td>
                   <td className="px-6 py-4">
-                    {getStatusBadge(sub.status || "inactive")}
+                    {getStatusBadge(sub.status || "inactive", sub.cancelAtPeriodEnd)}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="text-orange-500">{getPriorityIcon(sub.plan || "")}</span>
-                      <span className="text-sm capitalize">{sub.plan || "Free"}</span>
+                      <span className="text-sm capitalize font-medium">{sub.plan || "Free"}</span>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <span className="font-semibold text-sm">
+                      MYR {(PLAN_PRICES[sub.plan || ""] || 0).toFixed(2)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {sub.currentPeriodEnd ? (
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{new Date(sub.currentPeriodEnd * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    )}
                   </td>
                 </tr>
               ))

@@ -112,12 +112,85 @@ export const getTicketById = query({
   },
 });
 
+// Sync all tickets to inbox - creates inbox entries for tickets that don't have them
+export const syncTicketsToInbox = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const allTickets = await ctx.db.query("support_tickets").collect();
+    let synced = 0;
+
+    for (const ticket of allTickets) {
+      // Check if inbox entry already exists for this ticket
+      const existing = await ctx.db
+        .query("inbox_messages")
+        .withIndex("by_thread", (q) => q.eq("threadId", ticket.ticketNumber))
+        .first();
+
+      if (!existing) {
+        let inboxPriority: "low" | "normal" | "high" = "normal";
+        if (ticket.priority === "urgent" || ticket.priority === "high") {
+          inboxPriority = "high";
+        } else if (ticket.priority === "low") {
+          inboxPriority = "low";
+        }
+
+        await ctx.db.insert("inbox_messages", {
+          threadId: ticket.ticketNumber,
+          channel: "ticket",
+          direction: "inbound",
+          subject: `[${ticket.ticketNumber}] ${ticket.subject}`,
+          body: ticket.description || "",
+          status: "unread",
+          priority: inboxPriority,
+          tags: [ticket.category || "general", ticket.priority || "medium"],
+          sentAt: ticket.createdAt,
+          createdAt: ticket.createdAt,
+          updatedAt: ticket.updatedAt || ticket.createdAt,
+          metadata: {
+            ticketId: ticket._id,
+            ticketNumber: ticket.ticketNumber,
+            category: ticket.category || "general",
+            originalPriority: ticket.priority,
+            userEmail: ticket.userEmail || "",
+            userName: ticket.userId || "Unknown",
+            slaBreached: ticket.slaBreached || false,
+          },
+        });
+        synced++;
+      }
+    }
+
+    return { synced, total: allTickets.length };
+  },
+});
+
+export const generateTicketUploadUrl = mutation({
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const getTicketFileUrl = mutation({
+  args: { storageId: v.string() },
+  handler: async (ctx, args) => {
+    const url = await ctx.storage.getUrl(args.storageId as import("./_generated/dataModel").Id<"_storage">);
+    return url;
+  },
+});
+
 export const addCustomerMessage = mutation({
   args: {
     ticketId: v.id("support_tickets"),
     message: v.string(),
     senderName: v.string(),
     senderId: v.string(),
+    attachments: v.optional(v.array(v.object({
+      storageId: v.string(),
+      fileName: v.string(),
+      fileType: v.string(),
+      fileSize: v.number(),
+      fileUrl: v.optional(v.string()),
+    }))),
   },
   handler: async (ctx, args) => {
     const ticket = await ctx.db.get(args.ticketId);
@@ -133,6 +206,7 @@ export const addCustomerMessage = mutation({
       senderName: args.senderName,
       message: args.message,
       isInternal: false,
+      attachments: args.attachments,
       createdAt: now,
     });
 

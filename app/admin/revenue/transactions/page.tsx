@@ -2,14 +2,16 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { 
   Search,
   Filter,
   Download,
   ArrowLeft,
   Calendar,
-  DollarSign
+  TrendingUp,
+  TrendingDown,
+  BarChart3
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,13 +40,16 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<string>("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
 
   const allTransactions = useQuery(api.financialLedger.getAllLedgerEntries, {});
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+  const formatCurrency = (amount: number, currency: string = 'MYR') => {
+    return new Intl.NumberFormat('en-MY', {
       style: 'currency',
-      currency: 'USD',
+      currency: currency.toUpperCase(),
     }).format(amount);
   };
 
@@ -81,17 +86,39 @@ export default function TransactionsPage() {
     }
   };
 
-  // Filter transactions
-  const filteredTransactions = allTransactions?.filter((transaction) => {
-    const matchesSearch = searchQuery === "" || 
-      transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      transaction.ledgerId.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesType = typeFilter === "all" || transaction.type === typeFilter;
-    const matchesSource = sourceFilter === "all" || transaction.revenueSource === sourceFilter;
+  // Filter transactions with date range support
+  const filteredTransactions = useMemo(() => {
+    if (!allTransactions) return [];
+    const now = new Date().getTime();
 
-    return matchesSearch && matchesType && matchesSource;
-  }) || [];
+    return allTransactions.filter((transaction) => {
+      const matchesSearch = searchQuery === "" || 
+        transaction.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        transaction.ledgerId.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesType = typeFilter === "all" || transaction.type === typeFilter;
+      const matchesSource = sourceFilter === "all" || transaction.revenueSource === sourceFilter;
+
+      // Date range filter
+      let matchesDate = true;
+      if (dateRange === "custom") {
+        const txDate = new Date(transaction.transactionDate);
+        if (customStartDate && txDate < new Date(customStartDate)) matchesDate = false;
+        if (customEndDate && txDate > new Date(customEndDate + "T23:59:59")) matchesDate = false;
+      } else if (dateRange !== "all") {
+        const ranges: Record<string, number> = {
+          "1w": 7 * 86400000,
+          "2w": 14 * 86400000,
+          "1m": 30 * 86400000,
+          "2m": 60 * 86400000,
+        };
+        const range = ranges[dateRange];
+        if (range) matchesDate = (now - transaction.transactionDate) <= range;
+      }
+
+      return matchesSearch && matchesType && matchesSource && matchesDate;
+    });
+  }, [allTransactions, searchQuery, typeFilter, sourceFilter, dateRange, customStartDate, customEndDate]);
 
   // Calculate totals
   const totalRevenue = filteredTransactions
@@ -170,83 +197,125 @@ export default function TransactionsPage() {
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Button 
             variant="ghost" 
             size="icon"
+            className="h-8 w-8"
             onClick={() => window.location.href = '/admin/revenue'}
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">All Transactions</h1>
-            <p className="text-muted-foreground mt-1">
-              Complete financial ledger with {allTransactions.length} transactions
+            <h1 className="text-2xl font-bold tracking-tight">Transactions</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">
+              {allTransactions.length} total entries in the financial ledger
             </p>
           </div>
         </div>
-        <Button onClick={exportToCSV}>
-          <Download className="w-4 h-4 mr-2" />
+        <Button size="sm" onClick={exportToCSV}>
+          <Download className="w-4 h-4 mr-1.5" />
           Export CSV
         </Button>
       </div>
 
-      {/* Summary Cards */}
+      {/* Baremetrics-style Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(totalRevenue)}
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Revenue</p>
+              <TrendingUp className="h-4 w-4 text-emerald-200" />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              From {filteredTransactions.filter(t => t.amount > 0).length} transactions
+            <p className="text-2xl font-extrabold tracking-tight">{formatCurrency(totalRevenue, 'MYR')}</p>
+            <p className="text-emerald-200 text-xs mt-1.5">
+              {filteredTransactions.filter(t => t.amount > 0).length} transactions
             </p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10">
+            <TrendingUp className="h-20 w-20" />
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Refunds</CardTitle>
-            <DollarSign className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(totalRefunds)}
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-red-100 text-xs font-semibold uppercase tracking-wider">Refunds</p>
+              <TrendingDown className="h-4 w-4 text-red-200" />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              From {filteredTransactions.filter(t => t.amount < 0).length} refunds
+            <p className="text-2xl font-extrabold tracking-tight">{formatCurrency(totalRefunds, 'MYR')}</p>
+            <p className="text-red-200 text-xs mt-1.5">
+              {filteredTransactions.filter(t => t.amount < 0).length} refunds
             </p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10">
+            <TrendingDown className="h-20 w-20" />
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {formatCurrency(netRevenue)}
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Net Revenue</p>
+              <BarChart3 className="h-4 w-4 text-violet-200" />
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Total: {filteredTransactions.length} transactions
+            <p className="text-2xl font-extrabold tracking-tight">{formatCurrency(netRevenue, 'MYR')}</p>
+            <p className="text-violet-200 text-xs mt-1.5">
+              {filteredTransactions.length} total entries
             </p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10">
+            <BarChart3 className="h-20 w-20" />
+          </div>
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Search and filter transactions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+      {/* Inline Filter Bar */}
+      <Card className="shadow-sm">
+        <CardContent className="pt-5 pb-4 space-y-3">
+          {/* Date Range Quick Filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground mr-1">Period:</span>
+            {[
+              { value: "all", label: "All Time" },
+              { value: "1w", label: "1 Week" },
+              { value: "2w", label: "2 Weeks" },
+              { value: "1m", label: "1 Month" },
+              { value: "2m", label: "2 Months" },
+              { value: "custom", label: "Custom" },
+            ].map((opt) => (
+              <Button
+                key={opt.value}
+                variant={dateRange === opt.value ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs px-3"
+                onClick={() => setDateRange(opt.value)}
+              >
+                {opt.label}
+              </Button>
+            ))}
+            {dateRange === "custom" && (
+              <div className="flex items-center gap-2 ml-2">
+                <Input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="h-7 text-xs w-36"
+                />
+                <span className="text-xs text-muted-foreground">to</span>
+                <Input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="h-7 text-xs w-36"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Search + Type/Source Filters */}
+          <div className="grid gap-3 md:grid-cols-3">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -287,21 +356,25 @@ export default function TransactionsPage() {
             </Select>
           </div>
 
-          {(searchQuery || typeFilter !== "all" || sourceFilter !== "all") && (
-            <div className="mt-4 flex items-center gap-2">
-              <Badge variant="secondary">
+          {(searchQuery || typeFilter !== "all" || sourceFilter !== "all" || dateRange !== "all") && (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
                 {filteredTransactions.length} results
               </Badge>
               <Button
                 variant="ghost"
                 size="sm"
+                className="text-xs h-7"
                 onClick={() => {
                   setSearchQuery("");
                   setTypeFilter("all");
                   setSourceFilter("all");
+                  setDateRange("all");
+                  setCustomStartDate("");
+                  setCustomEndDate("");
                 }}
               >
-                Clear filters
+                Clear all filters
               </Button>
             </div>
           )}
@@ -309,25 +382,27 @@ export default function TransactionsPage() {
       </Card>
 
       {/* Transactions Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
-          <CardDescription>
-            Showing {filteredTransactions.length} of {allTransactions.length} transactions
-          </CardDescription>
+      <Card className="shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Transaction History</CardTitle>
+            <span className="text-xs text-muted-foreground">
+              {filteredTransactions.length} of {allTransactions.length}
+            </span>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          <div className="rounded-lg border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Ledger ID</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                <TableRow className="bg-muted/40 hover:bg-muted/40">
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider">Ledger ID</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider">Date</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider">Description</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider">Type</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider">Source</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider">Status</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-right">Amount</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -353,7 +428,7 @@ export default function TransactionsPage() {
                   filteredTransactions.map((transaction) => {
                     const sourceBadge = getSourceBadge(transaction.revenueSource);
                     return (
-                      <TableRow key={transaction._id} className="hover:bg-muted/50">
+                      <TableRow key={transaction._id} className="hover:bg-muted/30">
                         <TableCell className="font-mono text-xs">
                           {transaction.ledgerId}
                         </TableCell>
@@ -389,17 +464,17 @@ export default function TransactionsPage() {
                               Reconciled
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                              Pending
+                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                              Recorded
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
                           <span className={cn(
-                            "font-bold text-lg",
-                            transaction.amount >= 0 ? "text-green-600" : "text-red-600"
+                            "font-bold text-sm",
+                            transaction.amount >= 0 ? "text-emerald-600" : "text-red-600"
                           )}>
-                            {transaction.amount >= 0 ? "+" : ""}{formatCurrency(transaction.amount)}
+                            {transaction.amount >= 0 ? "+" : ""}{formatCurrency(transaction.amount, transaction.currency)}
                           </span>
                         </TableCell>
                       </TableRow>

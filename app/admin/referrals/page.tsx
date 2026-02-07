@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Gift, Users, TrendingUp, Settings, DollarSign, Copy, Bell, X } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export default function AdminReferralsPage() {
   const [rewardCredits, setRewardCredits] = useState("");
@@ -32,12 +33,12 @@ export default function AdminReferralsPage() {
         bonusCredits: bonusCredits !== "" ? parseInt(bonusCredits) : undefined,
         requireEmailVerification,
       });
-      alert("Referral settings updated successfully!");
+      toast.success("Referral settings updated successfully!");
       setRewardCredits("");
       setBonusCredits("");
     } catch (error) {
       console.error("Failed to update settings:", error);
-      alert("Failed to update settings");
+      toast.error("Failed to update settings");
     }
   };
 
@@ -59,7 +60,7 @@ export default function AdminReferralsPage() {
 
   const sendAlertToReferrer = async () => {
     if (!alertDialog || !alertMessage.trim()) {
-      alert("Please enter a message");
+      toast.error("Please enter a message");
       return;
     }
     
@@ -84,12 +85,12 @@ export default function AdminReferralsPage() {
       });
       
       console.log("Alert created successfully:", result);
-      alert(`Alert sent to ${alertDialog.userName}!\n\nThe message will appear in their alerts page.\n\nUser ID: ${alertDialog.userId}`);
+      toast.success(`Alert sent to ${alertDialog.userName}! The message will appear in their alerts page.`);
       setAlertDialog(null);
       setAlertMessage("");
     } catch (error) {
       console.error("Failed to send alert:", error);
-      alert("Failed to send alert");
+      toast.error("Failed to send alert");
     } finally {
       setSendingAlert(null);
     }
@@ -111,64 +112,58 @@ export default function AdminReferralsPage() {
         </div>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Baremetrics-style Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Referrals</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalReferrals}</div>
-            <p className="text-xs text-muted-foreground">
-              All-time referrals
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Referrers</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{activeReferrers}</div>
-            <p className="text-xs text-muted-foreground">
-              Users with referrals
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Credits Distributed</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCreditsDistributed}</div>
-            <p className="text-xs text-muted-foreground">
-              Total credits awarded
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Program Status</CardTitle>
-            <Settings className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {settings?.enabled ? (
-                <Badge className="bg-green-500">Active</Badge>
-              ) : (
-                <Badge variant="secondary">Disabled</Badge>
-              )}
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Total Referrals</p>
+              <Users className="h-4 w-4 text-blue-200" />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Current status
+            <p className="text-3xl font-extrabold tracking-tight">{totalReferrals}</p>
+            <p className="text-blue-200 text-xs mt-1.5">All-time referrals</p>
+          </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><Users className="h-20 w-20" /></div>
+        </Card>
+
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Active Referrers</p>
+              <TrendingUp className="h-4 w-4 text-emerald-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">{activeReferrers}</p>
+            <p className="text-emerald-200 text-xs mt-1.5">Users with referrals</p>
+          </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><TrendingUp className="h-20 w-20" /></div>
+        </Card>
+
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Credits Distributed</p>
+              <DollarSign className="h-4 w-4 text-violet-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">{totalCreditsDistributed}</p>
+            <p className="text-violet-200 text-xs mt-1.5">Total credits awarded</p>
+          </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><DollarSign className="h-20 w-20" /></div>
+        </Card>
+
+        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Program Status</p>
+              <Settings className="h-4 w-4 text-amber-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">
+              {settings?.enabled ? "Active" : "Off"}
+            </p>
+            <p className="text-amber-200 text-xs mt-1.5">
+              {settings?.enabled ? "Program is running" : "Program is disabled"}
             </p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><Settings className="h-20 w-20" /></div>
         </Card>
       </div>
 

@@ -17,6 +17,9 @@ import {
   IconCurrencyDollar,
   IconInbox,
   IconRobot,
+  IconMail,
+  IconTemplate,
+  IconSend,
 } from "@tabler/icons-react"
 
 import {
@@ -60,7 +63,7 @@ const navItems = [
         icon: IconCreditCard,
       },
       {
-        title: "Invoices & POs",
+        title: "Invoices & Sales Orders",
         url: "/admin/invoices-and-pos",
         icon: IconFileInvoice,
       },
@@ -108,6 +111,28 @@ const navItems = [
         title: "Live Chat",
         url: "/admin/live-chat",
         icon: IconMessageChatbot,
+      },
+    ],
+  },
+  {
+    title: "Email",
+    icon: IconMail,
+    color: "text-pink-600",
+    items: [
+      {
+        title: "Email Management",
+        url: "/admin/email-management",
+        icon: IconMail,
+      },
+      {
+        title: "Email Templates",
+        url: "/admin/email-templates",
+        icon: IconTemplate,
+      },
+      {
+        title: "Send Campaign",
+        url: "/admin/email-management?tab=campaigns",
+        icon: IconSend,
       },
     ],
   },

@@ -28,28 +28,52 @@ export const getAllSubscriptions = query({
   },
 });
 
+const PLAN_PRICES: Record<string, number> = {
+  starter: 19.90,
+  pro: 29.00,
+  business: 99.00,
+};
+
 export const getSubscriptionStats = query({
   handler: async (ctx) => {
     const subscriptions = await ctx.db.query("org_subscriptions").collect();
     
-    const activeSubscriptions = subscriptions.filter(s => s.status === "active");
-    const canceledSubscriptions = subscriptions.filter(s => s.cancelAtPeriodEnd);
+    const activeSubscriptions = subscriptions.filter(s => s.status === "active" && !s.cancelAtPeriodEnd);
+    const cancelingSubscriptions = subscriptions.filter(s => s.cancelAtPeriodEnd);
+    const canceledSubscriptions = subscriptions.filter(s => s.status === "canceled" || s.status === "cancelled");
     
-    // Calculate MRR (Monthly Recurring Revenue)
+    // Calculate MRR (Monthly Recurring Revenue) from active subs only
     let mrr = 0;
     activeSubscriptions.forEach(sub => {
-      if (sub.plan === "starter") {
-        mrr += 19.90;
-      } else if (sub.plan === "pro") {
-        mrr += 29.00;
+      mrr += PLAN_PRICES[sub.plan] || 0;
+    });
+    // Include canceling subs (still active until period end)
+    cancelingSubscriptions.forEach(sub => {
+      if (sub.status === "active") {
+        mrr += PLAN_PRICES[sub.plan] || 0;
       }
     });
 
+    // Plan breakdown
+    const planBreakdown: Record<string, number> = {};
+    subscriptions.forEach(sub => {
+      const plan = sub.plan || "unknown";
+      planBreakdown[plan] = (planBreakdown[plan] || 0) + 1;
+    });
+
+    // Churn rate (canceled / total)
+    const churnRate = subscriptions.length > 0 
+      ? ((canceledSubscriptions.length + cancelingSubscriptions.length) / subscriptions.length * 100).toFixed(1)
+      : "0.0";
+
     return {
       totalSubscriptions: subscriptions.length,
-      activeSubscriptions: activeSubscriptions.length,
+      activeSubscriptions: activeSubscriptions.length + cancelingSubscriptions.filter(s => s.status === "active").length,
+      cancelingSubscriptions: cancelingSubscriptions.length,
       canceledSubscriptions: canceledSubscriptions.length,
       mrr: mrr.toFixed(2),
+      churnRate,
+      planBreakdown,
     };
   },
 });

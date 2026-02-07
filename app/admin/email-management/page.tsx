@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,8 +21,16 @@ import { Badge } from "@/components/ui/badge";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function EmailManagementPage() {
-  const [activeTab, setActiveTab] = useState("settings");
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") || "settings";
+  const [activeTab, setActiveTab] = useState(initialTab);
   const emailSettings = useQuery(api.platformConfig.getByCategory, { category: "email" });
+
+  // Sync tab with URL param changes
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
   const batchSet = useMutation(api.platformConfig.batchSet);
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");

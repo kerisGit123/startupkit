@@ -14,15 +14,22 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 export default function EmailTemplatesPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "custom" | "system">("all");
   const templates = useQuery(api.emailTemplates.listTemplates);
   const deleteTemplate = useMutation(api.emailTemplates.deleteTemplate);
   const updateTemplate = useMutation(api.emailTemplates.updateTemplate);
 
-  const filteredTemplates = templates?.filter(
-    (t) =>
+  const filteredTemplates = templates?.filter((t) => {
+    const matchesSearch =
       t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      t.type.toLowerCase().includes(searchTerm.toLowerCase());
+    const isCustom = t.type === "custom";
+    const matchesType =
+      typeFilter === "all" ||
+      (typeFilter === "custom" && isCustom) ||
+      (typeFilter === "system" && !isCustom);
+    return matchesSearch && matchesType;
+  });
 
   const handleToggleActive = async (id: Id<"email_templates">, currentStatus: boolean) => {
     await updateTemplate({ id, isActive: !currentStatus });
@@ -85,6 +92,29 @@ export default function EmailTemplatesPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Filter Tabs */}
+      <div className="flex gap-2 mb-6">
+        {(["all", "custom", "system"] as const).map((filter) => (
+          <Button
+            key={filter}
+            variant={typeFilter === filter ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTypeFilter(filter)}
+          >
+            {filter === "all" ? "All Templates" : filter === "custom" ? "Custom" : "System"}
+            {templates && (
+              <Badge variant="secondary" className="ml-2">
+                {filter === "all"
+                  ? templates.length
+                  : filter === "custom"
+                    ? templates.filter((t) => t.type === "custom").length
+                    : templates.filter((t) => t.type !== "custom").length}
+              </Badge>
+            )}
+          </Button>
+        ))}
+      </div>
 
       {/* Templates Grid */}
       {!templates ? (

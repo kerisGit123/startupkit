@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { api } from "@/convex/_generated/api";
+import { fetchMutation, fetchQuery } from "convex/nextjs";
 
 export async function POST(req: NextRequest) {
+  console.log("🚀 API ROUTE CALLED - /api/chat");
+  
   try {
     const body = await req.json();
-    const { n8nWebhookUrl, chatId, message, route, userId } = body;
+    const { n8nWebhookUrl, chatId, message, route, userId, type = "frontend" } = body;
+
+    console.log("📥 Request body:", { chatId, message, type, hasUserId: !!userId, hasWebhookUrl: !!n8nWebhookUrl });
 
     if (!n8nWebhookUrl) {
       return NextResponse.json(
@@ -15,15 +21,17 @@ export async function POST(req: NextRequest) {
     console.log("Calling n8n webhook:", n8nWebhookUrl);
 
     // Forward the request to n8n webhook
-    // Match the exact format that works in the HTML version
+    // Chat Trigger expects chatInput and sessionId
     const response = await fetch(n8nWebhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        chatInput: message,
+        sessionId: chatId,
+        message: message, // Keep for backward compatibility
         chatId: chatId,
-        message: message,
         route: route || "general",
       }),
     });
@@ -31,6 +39,25 @@ export async function POST(req: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text().catch(() => "No response body");
       console.error(`n8n webhook error (${response.status}):`, errorText);
+      
+      // Still store the user message even if n8n fails
+      try {
+        let convexUserId = undefined;
+        if (userId && type === "user_panel") {
+          const user = await fetchQuery(api.users.getUserByClerkId, { clerkUserId: userId });
+          if (user) convexUserId = user._id;
+        }
+        await fetchMutation(api.chatbot.storeConversation, {
+          sessionId: chatId,
+          type: type,
+          userMessage: message,
+          aiResponse: "[n8n webhook unavailable]",
+          userId: convexUserId,
+        });
+        console.log("✅ User message stored despite n8n failure");
+      } catch (storeErr) {
+        console.error("❌ Failed to store message on n8n failure:", storeErr);
+      }
       
       return NextResponse.json(
         { 
@@ -123,8 +150,58 @@ export async function POST(req: NextRequest) {
     
     console.log("Final output being sent:", output);
     
+    // Extract quick replies if present in n8n response
+    let quickReplies = undefined;
+    if (data.quickReplies && Array.isArray(data.quickReplies)) {
+      quickReplies = data.quickReplies;
+      console.log("Quick replies found:", JSON.stringify(quickReplies));
+    } else {
+      console.log("No quick replies in response. Data structure:", JSON.stringify(data));
+    }
+
+    // Store conversation in Convex after successful n8n response
+    try {
+      console.log("Attempting to store conversation:", {
+        sessionId: chatId,
+        type,
+        hasUserId: !!userId,
+        hasQuickReplies: !!quickReplies,
+      });
+      
+      // If userId is provided (Clerk ID), look up the Convex user ID
+      let convexUserId = undefined;
+      if (userId && type === "user_panel") {
+        console.log("Looking up Convex user ID for Clerk ID:", userId);
+        const user = await fetchQuery(api.users.getUserByClerkId, { clerkUserId: userId });
+        if (user) {
+          convexUserId = user._id;
+          console.log("Found Convex user ID:", convexUserId);
+        } else {
+          console.warn("⚠️ No Convex user found for Clerk ID:", userId);
+        }
+      }
+      
+      await fetchMutation(api.chatbot.storeConversation, {
+        sessionId: chatId,
+        type: type,
+        userMessage: message,
+        aiResponse: output || "I received your message.",
+        userId: convexUserId,
+        quickReplies: quickReplies || undefined,
+      });
+      
+      console.log("✅ Conversation stored successfully in Convex");
+    } catch (convexError) {
+      console.error("❌ Failed to store conversation in Convex:", convexError);
+      console.error("Error details:", JSON.stringify(convexError, null, 2));
+      // Don't fail the request if storage fails - user still gets response
+    }
+    
     // Return in the format expected by ChatWidget
-    return NextResponse.json({ output: output || "I received your message." });
+    return NextResponse.json({ 
+      output: output || "I received your message.",
+      quickReplies: quickReplies,
+    });
   } catch (error) {
     console.error("Chat API error:", error);
     return NextResponse.json(

@@ -62,16 +62,16 @@ export default function InvoicesAndPOsPage() {
   const deletePO = useMutation(api.purchaseOrders.mutations.deletePurchaseOrder);
   
   const handleDeletePO = async (poId: Id<"purchase_orders">, poNo: string) => {
-    if (!confirm(`Are you sure you want to delete purchase order ${poNo}? This action cannot be undone.`)) {
+    if (!confirm(`Are you sure you want to delete sales order ${poNo}? This action cannot be undone.`)) {
       return;
     }
     
     try {
       await deletePO({ poId });
-      toast.success(`Purchase order ${poNo} deleted successfully`);
+      toast.success(`Sales order ${poNo} deleted successfully`);
     } catch (error) {
-      console.error('Failed to delete purchase order:', error);
-      toast.error('Failed to delete purchase order');
+      console.error('Failed to delete sales order:', error);
+      toast.error('Failed to delete sales order');
     }
   };
   
@@ -252,7 +252,7 @@ export default function InvoicesAndPOsPage() {
         companyId,
       });
       
-      toast.success(`Purchase Order ${poNumber} created successfully!`);
+      toast.success(`Sales Order ${poNumber} created successfully!`);
       setShowPOModal(false);
       setPOForm({
         vendorName: "",
@@ -266,7 +266,7 @@ export default function InvoicesAndPOsPage() {
       });
     } catch (error) {
       console.error("Failed to create PO:", error);
-      toast.error("Failed to create purchase order");
+      toast.error("Failed to create sales order");
     }
   };
 
@@ -335,23 +335,23 @@ export default function InvoicesAndPOsPage() {
     <div className="flex-1 space-y-4 p-4 md:p-6 pt-6">
       <div className="flex items-center justify-between space-y-2">
         <div>
-          <h1 className="text-3xl font-bold">Invoices & Purchase Orders</h1>
+          <h1 className="text-3xl font-bold">Invoices & Sales Orders</h1>
           <p className="text-muted-foreground mt-2">
-            View and manage all invoices and purchase orders
+            View and manage all invoices and sales orders
           </p>
         </div>
         <Dialog open={showPOModal} onOpenChange={setShowPOModal}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
-              Create Purchase Order
+              Create Sales Order
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Create Purchase Order</DialogTitle>
+              <DialogTitle>Create Sales Order</DialogTitle>
               <DialogDescription>
-                Create a new purchase order for customer transactions
+                Create a new sales order for customer transactions
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -571,65 +571,61 @@ export default function InvoicesAndPOsPage() {
                 onClick={handleCreatePO}
                 disabled={!poForm.vendorName || poForm.items.some(item => !item.description || item.unitPrice <= 0)}
               >
-                Create Purchase Order
+                Create Sales Order
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Baremetrics-style Statistics Cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {stats.byStatus?.paid || 0} paid
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Purchase Orders</CardTitle>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{purchaseOrders?.length || 0}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                {purchaseOrders?.filter(po => po.status === 'approved').length || 0} approved
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Subscriptions</CardTitle>
-              <RefreshCw className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.byType.subscription}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Recurring revenue
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                MYR {(stats.totalAmount / 100).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Invoices</p>
+                <FileText className="h-4 w-4 text-blue-200" />
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                From {stats.total} invoices
-              </p>
+              <p className="text-3xl font-extrabold tracking-tight">{stats.total}</p>
+              <p className="text-blue-200 text-xs mt-1.5">{stats.byStatus?.paid || 0} paid</p>
             </CardContent>
+            <div className="absolute -right-3 -bottom-3 opacity-10"><FileText className="h-20 w-20" /></div>
+          </Card>
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Sales Orders</p>
+                <ShoppingCart className="h-4 w-4 text-amber-200" />
+              </div>
+              <p className="text-3xl font-extrabold tracking-tight">{purchaseOrders?.length || 0}</p>
+              <p className="text-amber-200 text-xs mt-1.5">{purchaseOrders?.filter(po => po.status === 'approved').length || 0} approved</p>
+            </CardContent>
+            <div className="absolute -right-3 -bottom-3 opacity-10"><ShoppingCart className="h-20 w-20" /></div>
+          </Card>
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Subscriptions</p>
+                <RefreshCw className="h-4 w-4 text-violet-200" />
+              </div>
+              <p className="text-3xl font-extrabold tracking-tight">{stats.byType.subscription}</p>
+              <p className="text-violet-200 text-xs mt-1.5">Recurring revenue</p>
+            </CardContent>
+            <div className="absolute -right-3 -bottom-3 opacity-10"><RefreshCw className="h-20 w-20" /></div>
+          </Card>
+          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+            <CardContent className="pt-5 pb-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Total Amount</p>
+                <TrendingUp className="h-4 w-4 text-emerald-200" />
+              </div>
+              <p className="text-3xl font-extrabold tracking-tight">
+                MYR {(stats.totalAmount / 100).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              <p className="text-emerald-200 text-xs mt-1.5">From {stats.total} invoices</p>
+            </CardContent>
+            <div className="absolute -right-3 -bottom-3 opacity-10"><TrendingUp className="h-20 w-20" /></div>
           </Card>
         </div>
       )}
@@ -673,7 +669,7 @@ export default function InvoicesAndPOsPage() {
               </TabsTrigger>
               <TabsTrigger value="pos">
                 <ShoppingCart className="h-4 w-4 mr-2" />
-                Purchase Orders
+                Sales Orders
               </TabsTrigger>
             </TabsList>
 
@@ -705,7 +701,12 @@ export default function InvoicesAndPOsPage() {
                           <TableRow key={invoice._id}>
                             <TableCell className="font-mono font-medium">{invoice.invoiceNo}</TableCell>
                             <TableCell>{formatDate(invoice.createdAt)}</TableCell>
-                            <TableCell>{invoice.billingDetails?.email || "N/A"}</TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium text-sm">{(invoice as any).userName || invoice.billingDetails?.name || "—"}</p>
+                                <p className="text-xs text-muted-foreground">{(invoice as any).userEmail || invoice.billingDetails?.email || ""}</p>
+                              </div>
+                            </TableCell>
                             <TableCell>{getTypeBadge(invoice.invoiceType)}</TableCell>
                             <TableCell>{getStatusBadge(invoice.status)}</TableCell>
                             <TableCell className="text-right font-medium">
@@ -784,13 +785,13 @@ export default function InvoicesAndPOsPage() {
               )}
             </TabsContent>
 
-            {/* Purchase Orders Tab */}
+            {/* Sales Orders Tab */}
             <TabsContent value="pos" className="mt-4">
               {!paginatedPOs || paginatedPOs.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No purchase orders found</p>
-                  <p className="text-sm mt-2">{searchTerm || startDate || endDate ? "Try adjusting your filters" : "Click 'Create Purchase Order' to get started"}</p>
+                  <p>No sales orders found</p>
+                  <p className="text-sm mt-2">{searchTerm || startDate || endDate ? "Try adjusting your filters" : "Click 'Create Sales Order' to get started"}</p>
                 </div>
               ) : (
                 <>
@@ -798,9 +799,9 @@ export default function InvoicesAndPOsPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[120px]">PO #</TableHead>
+                          <TableHead className="w-[120px]">SO #</TableHead>
                           <TableHead className="w-[110px]">Date</TableHead>
-                          <TableHead>Vendor</TableHead>
+                          <TableHead>Customer</TableHead>
                           <TableHead className="w-[180px]">Status</TableHead>
                           <TableHead className="text-right w-[120px]">Amount</TableHead>
                           <TableHead className="w-[70px]"></TableHead>
@@ -842,7 +843,7 @@ export default function InvoicesAndPOsPage() {
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setEditingPOId(po._id)}>
                                     <Edit className="mr-2 h-4 w-4" />
-                                    Edit PO
+                                    Edit Sales Order
                                   </DropdownMenuItem>
                                   <DropdownMenuItem asChild>
                                     <Link href={`/admin/po/${po._id}`} className="cursor-pointer">
@@ -870,7 +871,7 @@ export default function InvoicesAndPOsPage() {
                   {filteredPOs.length > rowsPerPage && (
                     <div className="flex items-center justify-between px-2 py-4">
                       <div className="text-sm text-muted-foreground">
-                        Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, filteredPOs.length)} of {filteredPOs.length} purchase orders
+                        Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, filteredPOs.length)} of {filteredPOs.length} sales orders
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
