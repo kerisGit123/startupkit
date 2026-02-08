@@ -96,9 +96,9 @@ export default function InvoicePOConfigPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Invoice & PO Configuration</h2>
+        <h2 className="text-2xl font-bold tracking-tight">Invoice & SO Configuration</h2>
         <p className="text-muted-foreground">
-          Configure invoice and purchase order settings, tax rates, and payment information.
+          Configure invoice and sales order settings, tax rates, and payment information.
         </p>
       </div>
 

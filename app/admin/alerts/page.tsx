@@ -119,7 +119,7 @@ export default function AdminAlertsPage() {
   const filteredAlerts = useMemo(() => {
     if (!alerts) return [];
 
-    return alerts.filter((alert) => {
+    return alerts.filter((alert: any) => {
       // Search by title or message
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -437,7 +437,7 @@ export default function AdminAlertsPage() {
           ) : (
             <>
               <div className="space-y-3">
-                {paginatedAlerts.map((alert) => (
+                {paginatedAlerts.map((alert: any) => (
                 <div
                   key={alert._id}
                   className="flex items-start gap-3 p-4 border rounded-lg hover:bg-gray-50"

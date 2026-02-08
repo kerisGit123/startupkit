@@ -1184,6 +1184,8 @@ export default defineSchema({
     rating: v.optional(v.number()),
     ratingComment: v.optional(v.string()),
     ratedAt: v.optional(v.number()),
+    ratingRequested: v.optional(v.boolean()),
+    ratingRequestedAt: v.optional(v.number()),
     label: v.optional(v.union(
       v.literal("urgent"),
       v.literal("follow-up"),

@@ -42,7 +42,7 @@ export function AppointmentBookingModal({ onSubmit, onClose }: AppointmentBookin
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Generate time slots (9 AM - 5 PM, 30-minute intervals)
-  const timeSlots = [];
+  const timeSlots: { value: string; label: string }[] = [];
   for (let hour = 9; hour <= 17; hour++) {
     for (let minute = 0; minute < 60; minute += 30) {
       if (hour === 17 && minute > 0) break; // Stop at 5:00 PM

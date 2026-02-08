@@ -16,7 +16,6 @@ import {
   IconCalendar,
   IconCurrencyDollar,
   IconInbox,
-  IconRobot,
   IconMail,
   IconTemplate,
   IconSend,
@@ -108,9 +107,9 @@ const navItems = [
         icon: IconInbox,
       },
       {
-        title: "Live Chat",
-        url: "/admin/live-chat",
-        icon: IconMessageChatbot,
+        title: "Chatbot Analytics",
+        url: "/admin/chatbot-analytics",
+        icon: IconChartBar,
       },
     ],
   },
@@ -130,17 +129,27 @@ const navItems = [
         icon: IconTemplate,
       },
       {
-        title: "Send Campaign",
-        url: "/admin/email-management?tab=campaigns",
+        title: "Campaigns",
+        url: "/admin/email-management/campaigns",
         icon: IconSend,
+      },
+      {
+        title: "Analytics",
+        url: "/admin/email-management/analytics",
+        icon: IconChartBar,
       },
     ],
   },
   {
-    title: "Automation",
-    icon: IconRobot,
-    color: "text-indigo-600",
+    title: "Settings",
+    icon: IconSettings,
+    color: "text-gray-600",
     items: [
+      {
+        title: "General",
+        url: "/admin/settings",
+        icon: IconSettings,
+      },
       {
         title: "Chatbot",
         url: "/admin/chatbot-settings",
@@ -156,18 +165,7 @@ const navItems = [
         url: "/admin/knowledge-base",
         icon: IconBook,
       },
-      {
-        title: "Analytics",
-        url: "/admin/chatbot-analytics",
-        icon: IconChartBar,
-      },
     ],
-  },
-  {
-    title: "Settings",
-    url: "/admin/settings",
-    icon: IconSettings,
-    color: "text-gray-600",
   },
 ]
 

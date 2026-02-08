@@ -115,7 +115,7 @@ export const sendCampaign = mutation({
       throw new Error(`Template not found for ID: ${campaign.templateId}`);
     }
 
-    // Get platform config
+    // Get platform config for email settings
     const emailSettings = await ctx.db
       .query("platform_config")
       .filter((q) => q.eq(q.field("category"), "email"))
@@ -126,11 +126,23 @@ export const sendCampaign = mutation({
       settings[setting.key] = setting.value;
     }
 
-    // Check if system notification (test mode) is enabled
-    const useTestMode = testMode || settings.useSystemNotification === true;
+    // Get Resend config to check if active
+    const resendConfigs = await ctx.db
+      .query("platform_config")
+      .withIndex("by_category", (q) => q.eq("category", "resend"))
+      .collect();
+    const resendSettings: Record<string, string> = {};
+    for (const item of resendConfigs) {
+      resendSettings[item.key] = String(item.value ?? "");
+    }
+    const resendActive = resendSettings.resendActive === "true";
+    const resendApiKey = resendSettings.resendApiKey || settings.resendApiKey || "";
 
-    if (!useTestMode && !settings.resendApiKey) {
-      throw new Error("Resend API key not configured. Enable System Notification (test mode) to log emails without sending.");
+    // Check if system notification (test mode) is enabled
+    const useTestMode = testMode || settings.useSystemNotification === true || !resendActive;
+
+    if (!useTestMode && !resendApiKey) {
+      throw new Error("Resend API key not configured. Enable Resend in Settings or use test mode to log emails.");
     }
 
     // Get recipients
@@ -200,6 +212,13 @@ export const sendCampaign = mutation({
       }
     }
 
+    // Filter out unsubscribed users
+    const unsubscribes = await ctx.db.query("email_unsubscribes").collect();
+    const unsubEmails = new Set(unsubscribes.map(u => u.email.toLowerCase()));
+    const filteredRecipients = recipients.filter(r => r.email && !unsubEmails.has(r.email.toLowerCase()));
+    recipients.length = 0;
+    recipients.push(...filteredRecipients);
+
     // Update campaign status (reset counts for resend)
     await ctx.db.patch(campaignId, {
       status: "sending",
@@ -259,6 +278,46 @@ export const sendCampaign = mutation({
           const regex = new RegExp(`\\{${key}\\}`, 'g');
           htmlContent = htmlContent.replace(regex, value);
           subject = subject.replace(regex, value);
+        }
+
+        // Inject open tracking pixel and click tracking links
+        // Read base URL from platform_config or org_settings (process.env may not be available in Convex)
+        const appUrlConfig = await ctx.db
+          .query("platform_config")
+          .filter((q) => q.and(
+            q.eq(q.field("category"), "general"),
+            q.eq(q.field("key"), "appUrl")
+          ))
+          .first();
+        const baseUrl = appUrlConfig?.value || companySettings?.websiteURL || process.env.NEXT_PUBLIC_APP_URL || "";
+        if (baseUrl) {
+          const encodedEmail = encodeURIComponent(user.email!);
+          
+          // Add tracking pixel before </body> (or at end)
+          const trackingPixel = `<img src="${baseUrl}/api/email-track/open?cid=${campaignId}&e=${encodedEmail}" width="1" height="1" style="display:none" alt="" />`;
+          if (htmlContent.includes("</body>")) {
+            htmlContent = htmlContent.replace("</body>", `${trackingPixel}</body>`);
+          } else {
+            htmlContent += trackingPixel;
+          }
+
+          // Rewrite <a href="..."> links for click tracking
+          htmlContent = htmlContent.replace(
+            /href="(https?:\/\/[^"]+)"/gi,
+            (match: string, url: string) => {
+              const trackUrl = `${baseUrl}/api/email-track/click?cid=${campaignId}&e=${encodedEmail}&url=${encodeURIComponent(url)}`;
+              return `href="${trackUrl}"`;
+            }
+          );
+
+          // Add unsubscribe link footer
+          const unsubUrl = `${baseUrl}/api/email-track/unsubscribe?e=${encodedEmail}`;
+          const unsubFooter = `<div style="text-align:center;padding:16px 0;margin-top:24px;border-top:1px solid #eee;font-size:12px;color:#999"><a href="${unsubUrl}" style="color:#999;text-decoration:underline">Unsubscribe</a> from future emails</div>`;
+          if (htmlContent.includes("</body>")) {
+            htmlContent = htmlContent.replace("</body>", `${unsubFooter}</body>`);
+          } else {
+            htmlContent += unsubFooter;
+          }
         }
 
         if (useTestMode) {

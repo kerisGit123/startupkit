@@ -234,6 +234,72 @@ export default function RevenueDashboard() {
         </Card>
       </div>
 
+      {/* SaaS Health Metrics - Inspired by Baremetrics/ChartMogul dashboards */}
+      {analytics.saas && (
+        <div className="grid gap-4 md:grid-cols-6">
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Active Subs</p>
+                <Users className="h-3.5 w-3.5 text-emerald-500" />
+              </div>
+              <p className="text-2xl font-extrabold">{analytics.saas.activeSubscriptions}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{analytics.saas.canceledSubscriptions} canceled</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Churn Rate</p>
+                <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+              </div>
+              <p className="text-2xl font-extrabold">{analytics.saas.churnRate}%</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Last 30 days</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Customer CLV</p>
+                <Zap className="h-3.5 w-3.5 text-violet-500" />
+              </div>
+              <p className="text-2xl font-extrabold">{formatCurrency(analytics.saas.clv)}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Avg {analytics.saas.avgSubMonths} mo</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Signups</p>
+                <ArrowUpRight className="h-3.5 w-3.5 text-blue-500" />
+              </div>
+              <p className="text-2xl font-extrabold">{analytics.saas.newSignups}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">Last mo: {analytics.saas.lastMonthSignups}</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Payments</p>
+                <Receipt className="h-3.5 w-3.5 text-emerald-500" />
+              </div>
+              <p className="text-2xl font-extrabold">{analytics.saas.paymentsCount}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{analytics.saas.refundsCount} refunds</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Today</p>
+                <BarChart3 className="h-3.5 w-3.5 text-amber-500" />
+              </div>
+              <p className="text-2xl font-extrabold">{formatCurrency(analytics.saas.todayRevenue)}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{analytics.saas.totalCustomers} customers</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Revenue Trend Area Chart - Full Width Baremetrics Style */}
       <Card className="shadow-sm">
         <CardHeader className="pb-2">

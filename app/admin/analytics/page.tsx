@@ -141,7 +141,7 @@ export default function AnalyticsPage() {
           <ChartContainer config={revenueChartConfig} className="h-[300px] w-full">
             <BarChart
               accessibilityLayer
-              data={analytics?.monthlyData.map(d => ({ 
+              data={analytics?.monthlyData.map((d: any) => ({ 
                 month: d.month, 
                 revenue: d.revenue
               })) || []}
@@ -212,7 +212,7 @@ export default function AnalyticsPage() {
             <ChartContainer config={purchaseChartConfig} className="h-[250px] w-full">
               <BarChart
                 accessibilityLayer
-                data={analytics?.purchaseMonthlyData.map(d => ({ 
+                data={analytics?.purchaseMonthlyData.map((d: any) => ({ 
                   month: d.month, 
                   value: chartView === "count" ? d.count : d.amount 
                 })) || []}
@@ -285,7 +285,7 @@ export default function AnalyticsPage() {
             <ChartContainer config={subscriptionChartConfig} className="h-[250px] w-full">
               <BarChart
                 accessibilityLayer
-                data={analytics?.subscriptionMonthlyData.map(d => ({ 
+                data={analytics?.subscriptionMonthlyData.map((d: any) => ({ 
                   month: d.month, 
                   value: chartView === "count" ? d.count : d.amount 
                 })) || []}

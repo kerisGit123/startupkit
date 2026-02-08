@@ -207,7 +207,7 @@ export default function PODocumentPage() {
                   onClick={() => setShowEditDialog(true)}
                 >
                   <Edit className="h-4 w-4" />
-                  Edit PO
+                  Edit SO
                 </Button>
                 <Button 
                   onClick={() => setShowConversionModal(true)}
@@ -267,7 +267,7 @@ export default function PODocumentPage() {
             <div className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-600" />
               <div>
-                <p className="font-medium text-green-900">This PO has been converted to an invoice</p>
+                <p className="font-medium text-green-900">This SO has been converted to an invoice</p>
                 <p className="text-sm text-green-700">
                   Converted on {new Date(po.convertedAt || 0).toLocaleDateString()}
                 </p>
@@ -364,7 +364,7 @@ export default function PODocumentPage() {
             
             <div className="border border-black p-3">
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="font-semibold">PURCHASE ORDER</div>
+                <div className="font-semibold">SALES ORDER</div>
                 <div></div>
                 <div>NO.</div>
                 <div className="font-mono">{po.poNo}</div>
@@ -447,7 +447,7 @@ export default function PODocumentPage() {
                       <td className="py-2 px-2 text-right font-semibold w-24 border-l border-black">{(po.subtotal / 100).toFixed(2)}</td>
                     </tr>
                     
-                    {po.discount && po.discount > 0 && (
+                    {(po.discount ?? 0) > 0 && (
                       <tr className="border-b border-black text-green-600">
                         <td className="py-2 px-2">Discount</td>
                         <td className="py-2 px-2 text-right w-16 border-l border-black">{invoicePOConfig.currency}</td>

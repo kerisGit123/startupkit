@@ -157,12 +157,12 @@ export default function ChatbotAnalyticsPage() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }: { name?: string; percent?: number }) => `${name ?? ""}: ${((percent ?? 0) * 100).toFixed(0)}%`}
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
                 >
-                  {resolutionData.map((entry, index) => (
+                  {resolutionData.map((entry: { name: string; value: number }, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -182,7 +182,7 @@ export default function ChatbotAnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {topQuestions.map((question, idx) => (
+              {topQuestions.map((question: { question: string; count: number }, idx: number) => (
                 <div key={idx} className="flex items-center justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-medium line-clamp-1">{question.question}</p>
@@ -237,8 +237,8 @@ export default function ChatbotAnalyticsPage() {
           <div className="grid md:grid-cols-5 gap-4">
             {[5, 4, 3, 2, 1].map((rating) => {
               const count = stats?.satisfactionScores?.[rating] || 0;
-              const total = Object.values(stats?.satisfactionScores || {}).reduce(
-                (a: number, b: number) => a + b,
+              const total = (Object.values(stats?.satisfactionScores || {}) as number[]).reduce(
+                (a, b) => a + b,
                 0
               );
               const percentage = total > 0 ? (count / total) * 100 : 0;
@@ -270,7 +270,7 @@ export default function ChatbotAnalyticsPage() {
   );
 }
 
-function StatCard({ title, value, icon, color, trend }: any) {
+function StatCard({ title, value, icon, color, trend }: { title: string; value: number | string; icon: React.ReactNode; color: string; trend?: number }) {
   const isPositive = trend && trend > 0;
   const isNegative = trend && trend < 0;
 

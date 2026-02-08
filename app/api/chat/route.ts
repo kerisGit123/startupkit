@@ -7,9 +7,9 @@ export async function POST(req: NextRequest) {
   
   try {
     const body = await req.json();
-    const { n8nWebhookUrl, chatId, message, route, userId, type = "frontend" } = body;
+    const { n8nWebhookUrl, chatId, message, route, userId, type = "frontend", userEmail, userName } = body;
 
-    console.log("📥 Request body:", { chatId, message, type, hasUserId: !!userId, hasWebhookUrl: !!n8nWebhookUrl });
+    console.log("📥 Request body:", { chatId, message, type, hasUserId: !!userId, hasWebhookUrl: !!n8nWebhookUrl, userEmail, userName });
 
     if (!n8nWebhookUrl) {
       return NextResponse.json(
@@ -33,6 +33,10 @@ export async function POST(req: NextRequest) {
         message: message, // Keep for backward compatibility
         chatId: chatId,
         route: route || "general",
+        // Pass logged-in user info so AI won't ask for email/name
+        ...(userEmail && { userEmail }),
+        ...(userName && { userName }),
+        isLoggedInUser: type === "user_panel" && !!userEmail,
       }),
     });
 

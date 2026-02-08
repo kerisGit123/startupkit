@@ -52,7 +52,7 @@ type LifecycleStage = "prospect" | "qualified" | "customer" | "at_risk" | "churn
 
 export default function ContactsPage() {
   const [activeType, setActiveType] = useState<ContactType>("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleStage | "all">("all");
   const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
 
@@ -65,7 +65,7 @@ export default function ContactsPage() {
   const stats = useQuery(api.contacts.getContactStats);
 
   // Filter by search query
-  const filteredContacts = allContacts?.filter((contact) => {
+  const filteredContacts = allContacts?.filter((contact: any) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -250,7 +250,7 @@ export default function ContactsPage() {
                   checked={selectedContacts.size === filteredContacts?.length && filteredContacts.length > 0}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedContacts(new Set(filteredContacts?.map(c => c._id) || []));
+                      setSelectedContacts(new Set(filteredContacts?.map((contact: any) => contact._id) || []));
                     } else {
                       setSelectedContacts(new Set());
                     }
@@ -281,7 +281,7 @@ export default function ContactsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredContacts.map((contact) => (
+              filteredContacts.map((contact: any) => (
                 <TableRow 
                   key={contact._id}
                   className="hover:bg-muted/50 cursor-pointer"
@@ -342,7 +342,7 @@ export default function ContactsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 flex-wrap">
-                      {contact.tags.slice(0, 2).map((tag) => (
+                      {contact.tags.slice(0, 2).map((tag: string) => (
                         <Badge key={tag} variant="secondary" className="text-xs">
                           {tag}
                         </Badge>

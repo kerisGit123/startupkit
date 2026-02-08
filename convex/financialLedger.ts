@@ -268,6 +268,52 @@ export const getRevenueAnalytics = query({
       convertedBySource[source] = toCurrency(amount);
     }
 
+    // SaaS Metrics
+    const PLAN_PRICES: Record<string, number> = { starter: 19.90, pro: 29.00, business: 99.00 };
+    const subscriptions = await ctx.db.query("org_subscriptions").collect();
+    const users = await ctx.db.query("users").collect();
+
+    const activeSubs = subscriptions.filter(s => s.status === "active");
+    const canceledSubs = subscriptions.filter(s => s.status === "canceled" || s.status === "cancelled");
+
+    // Real MRR from active subscriptions
+    let realMrr = 0;
+    activeSubs.forEach(s => { realMrr += PLAN_PRICES[s.plan] || 0; });
+
+    // Churn rate
+    const recentCanceled = canceledSubs.filter(s => s.updatedAt && s.updatedAt >= thirtyDaysAgo).length;
+    const activeAtStart = subscriptions.filter(s =>
+      s.createdAt < thirtyDaysAgo && (s.status === "active" || (s.updatedAt && s.updatedAt >= thirtyDaysAgo))
+    ).length;
+    const churnRate = activeAtStart > 0 ? (recentCanceled / activeAtStart) * 100 : 0;
+
+    // Avg sub length
+    const subsWithDuration = subscriptions.filter(s => s.createdAt);
+    const avgSubMs = subsWithDuration.length > 0
+      ? subsWithDuration.reduce((sum, s) => {
+          const end = s.status === "active" ? now : (s.updatedAt || now);
+          return sum + (end - s.createdAt);
+        }, 0) / subsWithDuration.length
+      : 0;
+    const avgSubMonths = avgSubMs / (30 * 24 * 60 * 60 * 1000);
+
+    // CLV
+    const arpu = activeSubs.length > 0 ? realMrr / activeSubs.length : 0;
+    const clv = arpu * avgSubMonths;
+
+    // Signups this month
+    const newSignups = users.filter(u => u.createdAt && u.createdAt >= thirtyDaysAgo).length;
+    const lastMonthSignups = users.filter(u => u.createdAt && u.createdAt >= sixtyDaysAgo && u.createdAt < thirtyDaysAgo).length;
+
+    // Payments & refunds counts
+    const paymentsCount = currentEntries.filter(e => e.amount > 0).length;
+    const refundsCount = currentEntries.filter(e => e.amount < 0).length;
+
+    // Today's revenue
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEntries = allEntries.filter(e => e.transactionDate >= todayStart.getTime());
+    const todayRevenue = todayEntries.filter(e => e.amount > 0).reduce((sum, e) => sum + e.amount, 0);
+
     return {
       currentPeriod: {
         revenue: toCurrency(currentRevenue),
@@ -282,9 +328,23 @@ export const getRevenueAnalytics = query({
         transactionCount: previousEntries.length,
       },
       growth: Math.round(growth * 100) / 100,
-      mrr: toCurrency(mrr),
-      arr: toCurrency(arr),
+      mrr: toCurrency(realMrr > 0 ? realMrr * 100 : mrr),
+      arr: toCurrency(realMrr > 0 ? realMrr * 12 * 100 : arr),
       revenueBySource: convertedBySource,
+      // SaaS Metrics
+      saas: {
+        activeSubscriptions: activeSubs.length,
+        canceledSubscriptions: canceledSubs.length,
+        churnRate: Math.round(churnRate * 10) / 10,
+        clv: toCurrency(clv * 100),
+        avgSubMonths: Math.round(avgSubMonths * 10) / 10,
+        newSignups,
+        lastMonthSignups,
+        paymentsCount,
+        refundsCount,
+        todayRevenue: toCurrency(todayRevenue),
+        totalCustomers: users.length,
+      },
     };
   },
 });
@@ -299,7 +359,7 @@ export const getMonthlyRevenueTrend = query({
     const now = new Date();
     const allEntries = await ctx.db.query("financial_ledger").collect();
 
-    const trends = [];
+    const trends: { month: string; year: number; revenue: number; refunds: number; net: number; subscriptions: number; oneTime: number; transactions: number }[] = [];
     for (let i = monthCount - 1; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);

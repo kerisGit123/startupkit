@@ -39,13 +39,19 @@ export const calculateAvailableSlots = query({
     }
 
     // Get booking settings from platform_config (lunch break and holidays)
-    const bookingSettings = await ctx.db
+    // Settings are stored as individual rows, so collect all and build key-value map
+    const bookingConfigRows = await ctx.db
       .query("platform_config")
       .withIndex("by_category", (q) => q.eq("category", "booking"))
-      .first();
+      .collect();
+    
+    const bookingSettings: Record<string, unknown> = {};
+    for (const row of bookingConfigRows) {
+      bookingSettings[row.key] = row.value;
+    }
     
     // Check if this date is a holiday
-    const holidays = (bookingSettings?.holidays as Array<{date: string; name: string; reason?: string}>) || [];
+    const holidays = (bookingSettings.holidays as Array<{date: string; name: string; reason?: string}>) || [];
     const isHoliday = holidays.some(h => h.date === date);
     
     // If it's a holiday, return no available slots
@@ -53,9 +59,9 @@ export const calculateAvailableSlots = query({
       return [];
     }
     
-    const lunchBreakEnabled = bookingSettings?.lunchBreakEnabled as boolean || false;
-    const lunchBreakStart = bookingSettings?.lunchBreakStart as string || "12:00";
-    const lunchBreakEnd = bookingSettings?.lunchBreakEnd as string || "13:00";
+    const lunchBreakEnabled = bookingSettings.lunchBreakEnabled as boolean || false;
+    const lunchBreakStart = bookingSettings.lunchBreakStart as string || "12:00";
+    const lunchBreakEnd = bookingSettings.lunchBreakEnd as string || "13:00";
 
     // Determine working hours
     const startTime = availability?.startTime || "09:00";
@@ -174,16 +180,16 @@ export const getAppointmentsByDate = query({
     statuses: v.optional(v.array(v.string())),
   },
   handler: async (ctx, { date, statuses }) => {
-    let query = ctx.db
+    const dbQuery = ctx.db
       .query("appointments")
       .withIndex("by_date", (q) => q.eq("date", date));
 
     if (statuses && statuses.length > 0) {
-      const appointments = await query.collect();
+      const appointments = await dbQuery.collect();
       return appointments.filter((apt) => statuses.includes(apt.status));
     }
 
-    return await query.collect();
+    return await dbQuery.collect();
   },
 });
 
@@ -219,11 +225,14 @@ export const getAppointmentsByClient = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, { clientId, limit = 10 }) => {
-    const appointments = await ctx.db
+    const allAppointments = await ctx.db
       .query("appointments")
-      .withIndex("by_client", (q) => q.eq("clientId", clientId))
       .order("desc")
-      .take(limit);
+      .collect();
+    
+    const appointments = allAppointments
+      .filter((apt) => apt.contactId === clientId || (apt as any).clientId === clientId)
+      .slice(0, limit);
 
     return appointments;
   },

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { 
@@ -36,10 +37,12 @@ type MessageType = "all" | "ticket" | "chatbot" | "email" | "notification";
 type MessageStatus = "unread" | "read" | "archived" | "replied";
 
 export default function InboxPage() {
+  const searchParams = useSearchParams();
   // State declarations first
   const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "unread" | "important">("all");
   const [activeType, setActiveType] = useState<MessageType>("all");
+  const [userTypeFilter, setUserTypeFilter] = useState<"all" | "logged-in" | "visitor">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
@@ -55,6 +58,23 @@ export default function InboxPage() {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailSending, setEmailSending] = useState(false);
+  const [cleanupDialogOpen, setCleanupDialogOpen] = useState(false);
+  const [cleanupDays, setCleanupDays] = useState(90);
+  const [cleanupRunning, setCleanupRunning] = useState(false);
+  const [starredFilter, setStarredFilter] = useState(false);
+  const [chatbotPage, setChatbotPage] = useState(0);
+  const [allInboxPage, setAllInboxPage] = useState(0);
+  const [ticketPage, setTicketPage] = useState(0);
+  const PAGE_SIZE = 20;
+  const CHATBOT_PAGE_SIZE = 20;
+
+  // Handle URL params (e.g. ?tab=chatbot from Live Chat redirect)
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "chatbot") setActiveType("chatbot");
+    else if (tab === "ticket") setActiveType("ticket");
+    else if (tab === "email") setActiveType("email" as MessageType);
+  }, [searchParams]);
 
   // Fetch real data from Convex (after state is declared)
   const groupedMessages = useQuery(api.inbox.getGroupedMessages, {});
@@ -79,6 +99,19 @@ export default function InboxPage() {
       : "skip"
   );
 
+  const emailLogs = useQuery(
+    api.emails.emailLogs.listEmailLogs,
+    activeType === "email" ? {} : "skip"
+  );
+  const notifications = useQuery(
+    api.adminNotifications.getNotifications,
+    activeType === "notification" ? undefined : "skip"
+  );
+  const cleanupPreview = useQuery(
+    api.inboxCleanup.getCleanupPreview,
+    cleanupDialogOpen ? { olderThanDays: cleanupDays } : "skip"
+  );
+
   const replyToMessage = useMutation(api.inbox.replyToMessage);
   const forwardMessage = useMutation(api.inbox.forwardMessage);
   const toggleStar = useMutation(api.inbox.toggleStar);
@@ -86,6 +119,10 @@ export default function InboxPage() {
   const deleteMessage = useMutation(api.inbox.deleteMessage);
   const adminReplyToConversation = useMutation(api.chatbot.adminReplyToConversation);
   const updateConversationLabel = useMutation(api.chatbot.updateConversationLabel);
+  const requestRatingMutation = useMutation(api.chatbot.requestRating);
+  const cleanOldChatbot = useMutation(api.inboxCleanup.cleanOldChatbot);
+  const cleanOldInboxMessages = useMutation(api.inboxCleanup.cleanOldInboxMessages);
+  const cleanOldEmailLogs = useMutation(api.inboxCleanup.cleanOldEmailLogs);
 
   // Live chatbot conversation data (reactive - updates when admin sends reply)
   const liveChatbotConversation = selectedMessage?._isChatbot
@@ -109,7 +146,7 @@ export default function InboxPage() {
 
   // Filter messages - use grouped messages (one entry per thread)
   const isChatbotTab = activeType === "chatbot";
-  const filteredMessages = isChatbotTab ? [] : (groupedMessages || []).filter((msg) => {
+  const filteredMessages = isChatbotTab ? [] : (groupedMessages || []).filter((msg: any) => {
     if (activeType !== "all" && msg.channel !== activeType) return false;
     if (activeFilter === "unread" && !msg.hasUnread) return false;
     if (activeFilter === "important" && msg.workflowStatus !== "urgent" && msg.workflowStatus !== "follow-up") return false;
@@ -124,6 +161,9 @@ export default function InboxPage() {
     if (activeFilter === "important" && !conv.escalatedToSupport && conv.label !== "urgent" && conv.label !== "follow-up") return false;
     if (!isWithinDateRange(conv.updatedAt || conv.createdAt)) return false;
     if (labelFilter !== "all" && conv.label !== labelFilter) return false;
+    // User type filter: logged-in vs visitor
+    if (userTypeFilter === "logged-in" && conv.userType !== "registered") return false;
+    if (userTypeFilter === "visitor" && conv.userType !== "visitor") return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const matchName = conv.userName?.toLowerCase().includes(q);
@@ -302,12 +342,24 @@ export default function InboxPage() {
     }
   };
 
+  // Admin requests rating from chatbot user
+  const handleRequestRating = async () => {
+    if (!selectedMessage?._isChatbot) return;
+    try {
+      await requestRatingMutation({ conversationId: selectedMessage._id });
+      toast.success("Rating request sent to user's chat widget");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to request rating");
+    }
+  };
+
   // Use grouped data directly - already has reply counts, apply date + label filter
-  const ticketsWithReplyCounts = filteredMessages.filter(msg => {
+  const ticketsWithReplyCounts = filteredMessages.filter((msg: any) => {
     if (!isWithinDateRange(msg.lastReplyAt || msg.sentAt)) return false;
     if (labelFilter !== "all" && msg.workflowStatus !== labelFilter) return false;
+    if (starredFilter && !msg.starred) return false;
     return true;
-  }).map(msg => ({
+  }).map((msg: any) => ({
     ...msg,
     hasNewReplies: msg.hasUnread || msg.hasNewCustomerReply,
   }));
@@ -393,7 +445,7 @@ export default function InboxPage() {
               <Ticket className="w-4 h-4" />
               <span>Tickets</span>
               <Badge variant="secondary" className="ml-auto">
-                {groupedMessages?.filter(m => m.channel === "ticket").length || 0}
+                {groupedMessages?.filter((m: any) => m.channel === "ticket").length || 0}
               </Badge>
             </Button>
             <Button
@@ -408,20 +460,35 @@ export default function InboxPage() {
               </Badge>
             </Button>
             <Button
-              variant="ghost"
+              variant={activeType === "email" ? "default" : "ghost"}
               className="w-full justify-start gap-2"
-              onClick={() => window.location.href = '/admin/email-management'}
+              onClick={() => { setActiveType("email" as MessageType); setSelectedMessage(null); }}
             >
               <Mail className="w-4 h-4" />
               <span>Email Logs</span>
               <Badge variant="secondary" className="ml-auto">
-                <ExternalLink className="w-3 h-3" />
+                {emailLogs?.length || 0}
+              </Badge>
+            </Button>
+            <Button
+              variant={activeType === "notification" ? "default" : "ghost"}
+              className="w-full justify-start gap-2"
+              onClick={() => { setActiveType("notification" as MessageType); setSelectedMessage(null); }}
+            >
+              <Bell className="w-4 h-4" />
+              <span>Notifications</span>
+              <Badge variant="secondary" className="ml-auto">
+                {notifications?.length || 0}
               </Badge>
             </Button>
 
             <div className="pt-4 border-t">
-              <Button variant="ghost" className="w-full justify-start gap-2">
-                <Star className="w-4 h-4" />
+              <Button
+                variant={starredFilter ? "default" : "ghost"}
+                className="w-full justify-start gap-2"
+                onClick={() => { setStarredFilter(!starredFilter); setActiveType("ticket"); }}
+              >
+                <Star className={cn("w-4 h-4", starredFilter && "fill-yellow-400 text-yellow-400")} />
                 <span>Starred</span>
               </Button>
             </div>
@@ -453,6 +520,18 @@ export default function InboxPage() {
                 <span>Resolved</span>
               </Button>
             </div>
+
+            {/* Cleanup Section */}
+            <div className="pt-4 border-t">
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={() => setCleanupDialogOpen(true)}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Cleanup Old Data</span>
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -476,12 +555,12 @@ export default function InboxPage() {
                 <TabsTrigger value="important">Important</TabsTrigger>
               </TabsList>
             </Tabs>
-            {/* Date Range + Label Filters */}
-            <div className="flex gap-2">
+            {/* Date Range + Label + User Type Filters */}
+            <div className="flex gap-2 flex-wrap">
               <select
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
-                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background"
+                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background min-w-[100px]"
               >
                 <option value="all">All Time</option>
                 <option value="1w">Last 1 Week</option>
@@ -493,13 +572,24 @@ export default function InboxPage() {
               <select
                 value={labelFilter}
                 onChange={(e) => setLabelFilter(e.target.value)}
-                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background"
+                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background min-w-[100px]"
               >
                 <option value="all">All Labels</option>
                 <option value="urgent">🔴 Urgent</option>
                 <option value="follow-up">🟡 Follow-up</option>
                 <option value="resolved">🟢 Resolved</option>
               </select>
+              {isChatbotTab && (
+                <select
+                  value={userTypeFilter}
+                  onChange={(e) => setUserTypeFilter(e.target.value as "all" | "logged-in" | "visitor")}
+                  className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background min-w-[100px]"
+                >
+                  <option value="all">All Users</option>
+                  <option value="logged-in">🔵 Logged-in</option>
+                  <option value="visitor">⚪ Visitors</option>
+                </select>
+              )}
             </div>
           </div>
 
@@ -530,7 +620,8 @@ export default function InboxPage() {
                   </div>
                 </div>
               ) : (
-                allInboxItems.map((item: any) =>
+                <>
+              {allInboxItems.slice(allInboxPage * PAGE_SIZE, (allInboxPage + 1) * PAGE_SIZE).map((item: any) =>
                   item._source === "chatbot" ? (
                     /* Chatbot item in All Inbox */
                     <div
@@ -664,7 +755,19 @@ export default function InboxPage() {
                       </div>
                     </div>
                   )
-                )
+                )}
+                {allInboxItems.length > PAGE_SIZE && (
+                  <div className="p-3 border-t flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      {allInboxPage * PAGE_SIZE + 1}-{Math.min((allInboxPage + 1) * PAGE_SIZE, allInboxItems.length)} of {allInboxItems.length}
+                    </span>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" disabled={allInboxPage === 0} onClick={() => setAllInboxPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
+                      <Button variant="outline" size="sm" disabled={(allInboxPage + 1) * PAGE_SIZE >= allInboxItems.length} onClick={() => setAllInboxPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
+                    </div>
+                  </div>
+                )}
+                </>
               )
             ) : isChatbotTab ? (
               /* Chatbot-only tab */
@@ -678,7 +781,8 @@ export default function InboxPage() {
                     </div>
                   </div>
                 ) : (
-                  filteredChatbotConversations.map((conv: any) => (
+                  <>
+                  {filteredChatbotConversations.slice(chatbotPage * CHATBOT_PAGE_SIZE, (chatbotPage + 1) * CHATBOT_PAGE_SIZE).map((conv: any) => (
                     <div
                       key={conv._id}
                       onClick={() => setSelectedMessage({ ...conv, _isChatbot: true })}
@@ -746,7 +850,19 @@ export default function InboxPage() {
                             <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
                               {conv.messageCount} messages
                             </span>
-                            {conv.hasAppointment && (
+                            {conv.hasAppointment && conv.appointmentDetails && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium" title={`${conv.appointmentDetails.purpose || "Appointment"} - ${conv.appointmentDetails.status}`}>
+                                📅 {new Date(conv.appointmentDetails.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {conv.appointmentDetails.time}
+                                {(() => {
+                                  const diffDays = Math.ceil((conv.appointmentDetails.date - Date.now()) / 86400000);
+                                  if (diffDays < 0) return ` (${Math.abs(diffDays)}d ago)`;
+                                  if (diffDays === 0) return " (Today)";
+                                  if (diffDays === 1) return " (Tomorrow)";
+                                  return ` (in ${diffDays}d)`;
+                                })()}
+                              </span>
+                            )}
+                            {conv.hasAppointment && !conv.appointmentDetails && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium">
                                 📅 Booking
                               </span>
@@ -765,12 +881,140 @@ export default function InboxPage() {
                         </div>
                       </div>
                     </div>
-                  ))
+                  ))}
+                  {/* Pagination controls */}
+                  {filteredChatbotConversations.length > CHATBOT_PAGE_SIZE && (
+                    <div className="p-3 border-t flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        {chatbotPage * CHATBOT_PAGE_SIZE + 1}-{Math.min((chatbotPage + 1) * CHATBOT_PAGE_SIZE, filteredChatbotConversations.length)} of {filteredChatbotConversations.length}
+                      </span>
+                      <div className="flex gap-1">
+                        <Button variant="outline" size="sm" disabled={chatbotPage === 0} onClick={() => setChatbotPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
+                        <Button variant="outline" size="sm" disabled={(chatbotPage + 1) * CHATBOT_PAGE_SIZE >= filteredChatbotConversations.length} onClick={() => setChatbotPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
+                      </div>
+                    </div>
+                  )}
+                  </>
                 )}
               </>
+            ) : activeType === "email" ? (
+              /* Email Logs tab */
+              !emailLogs || emailLogs.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <div className="text-center p-8">
+                    <Mail className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p className="font-medium">No email logs</p>
+                    <p className="text-xs mt-1">System emails will appear here</p>
+                  </div>
+                </div>
+              ) : (
+                emailLogs.filter((log: any) => {
+                  if (!isWithinDateRange(log.createdAt)) return false;
+                  if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    return log.sentTo.toLowerCase().includes(q) || log.subject.toLowerCase().includes(q);
+                  }
+                  return true;
+                }).map((log: any) => (
+                  <div
+                    key={log._id}
+                    onClick={() => setSelectedMessage({ ...log, _isEmailLog: true })}
+                    className={cn(
+                      "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors",
+                      selectedMessage?._id === log._id && "bg-muted",
+                      log.status === "failed" && "border-l-4 border-l-red-500"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
+                        log.status === "sent" ? "bg-green-100 text-green-700" :
+                        log.status === "failed" ? "bg-red-100 text-red-700" :
+                        "bg-gray-100 text-gray-600"
+                      )}>
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium truncate text-sm">{log.sentTo}</span>
+                          <Badge variant="outline" className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            log.status === "sent" && "border-green-300 text-green-700 bg-green-50",
+                            log.status === "failed" && "border-red-300 text-red-700 bg-red-50",
+                            log.status === "logged" && "border-gray-300 text-gray-600 bg-gray-50"
+                          )}>
+                            {log.status}
+                          </Badge>
+                          {log.templateType && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                              {log.templateType}
+                            </Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {formatDate(log.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium truncate">{log.subject}</p>
+                        {log.errorMessage && (
+                          <p className="text-xs text-red-600 mt-1 truncate">❌ {log.errorMessage}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : activeType === "notification" ? (
+              /* Notifications tab */
+              !notifications || notifications.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <div className="text-center p-8">
+                    <Bell className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p className="font-medium">No notifications</p>
+                    <p className="text-xs mt-1">System notifications will appear here</p>
+                  </div>
+                </div>
+              ) : (
+                notifications.map((notif: any) => (
+                  <div
+                    key={notif.id}
+                    className={cn(
+                      "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors",
+                      !notif.isRead && "bg-blue-50/30 border-l-4 border-l-blue-500"
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
+                        notif.type === "subscription" ? "bg-green-100 text-green-700" :
+                        notif.type === "purchase" ? "bg-blue-100 text-blue-700" :
+                        notif.type === "ticket" ? "bg-orange-100 text-orange-700" :
+                        "bg-gray-100 text-gray-600"
+                      )}>
+                        <Bell className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm">{notif.title}</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
+                            {notif.type}
+                          </Badge>
+                          {!notif.isRead && (
+                            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                          )}
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {formatDate(notif.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{notif.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )
             ) : (
-              /* Ticket/Email specific tab */
-              ticketsWithReplyCounts.map((ticket) => (
+              /* Ticket specific tab */
+              <>
+              {ticketsWithReplyCounts.slice(ticketPage * PAGE_SIZE, (ticketPage + 1) * PAGE_SIZE).map((ticket: any) => (
                 <div
                   key={ticket._id}
                   onClick={() => setSelectedMessage(ticket)}
@@ -837,7 +1081,7 @@ export default function InboxPage() {
                             {ticket.replyCount} replies
                           </span>
                         )}
-                        {ticket.tags?.slice(0, 3).map((tag) => (
+                        {ticket.tags?.slice(0, 3).map((tag: string) => (
                           <span
                             key={tag}
                             className="text-xs px-2 py-0.5 rounded-full bg-muted"
@@ -849,7 +1093,19 @@ export default function InboxPage() {
                     </div>
                   </div>
                 </div>
-              ))
+              ))}
+              {ticketsWithReplyCounts.length > PAGE_SIZE && (
+                <div className="p-3 border-t flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    {ticketPage * PAGE_SIZE + 1}-{Math.min((ticketPage + 1) * PAGE_SIZE, ticketsWithReplyCounts.length)} of {ticketsWithReplyCounts.length}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" disabled={ticketPage === 0} onClick={() => setTicketPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
+                    <Button variant="outline" size="sm" disabled={(ticketPage + 1) * PAGE_SIZE >= ticketsWithReplyCounts.length} onClick={() => setTicketPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
+                  </div>
+                </div>
+              )}
+              </>
             )}
           </div>
         </Card>
@@ -857,7 +1113,46 @@ export default function InboxPage() {
         {/* Right - Message Detail */}
         <Card className="col-span-6 flex flex-col overflow-hidden">
           {selectedMessage ? (
-            selectedMessage._isChatbot ? (
+            selectedMessage._isEmailLog ? (
+              /* Email Log Detail View */
+              <div className="flex flex-col h-full">
+                <div className="p-4 border-b">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline" className={cn(
+                      "text-xs",
+                      selectedMessage.status === "sent" && "border-green-300 text-green-700 bg-green-50",
+                      selectedMessage.status === "failed" && "border-red-300 text-red-700 bg-red-50",
+                      selectedMessage.status === "logged" && "border-gray-300 text-gray-600 bg-gray-50"
+                    )}>
+                      {selectedMessage.status === "sent" ? "✅ Sent" : selectedMessage.status === "failed" ? "❌ Failed" : "📝 Logged"}
+                    </Badge>
+                    {selectedMessage.templateType && (
+                      <Badge variant="secondary" className="text-xs">{selectedMessage.templateType}</Badge>
+                    )}
+                    {selectedMessage.templateName && (
+                      <Badge variant="secondary" className="text-xs">{selectedMessage.templateName}</Badge>
+                    )}
+                    <span className="text-xs text-muted-foreground ml-auto">
+                      {new Date(selectedMessage.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <h2 className="text-lg font-semibold">{selectedMessage.subject}</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    <span className="font-medium">To:</span> {selectedMessage.sentTo}
+                  </p>
+                  {selectedMessage.errorMessage && (
+                    <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                      <span className="font-medium">Error:</span> {selectedMessage.errorMessage}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  <div className="prose max-w-none text-sm">
+                    <div dangerouslySetInnerHTML={{ __html: selectedMessage.htmlContent || "<p>No content</p>" }} />
+                  </div>
+                </div>
+              </div>
+            ) : selectedMessage._isChatbot ? (
               /* Chatbot Conversation Detail View */
               <>
                 <div className="p-4 border-b">
@@ -959,7 +1254,7 @@ export default function InboxPage() {
                 {/* Appointment Info */}
                 {chatbotAppointments && chatbotAppointments.length > 0 && (
                   <div className="px-4 py-2 border-b bg-blue-50">
-                    {chatbotAppointments.map((apt, idx) => (
+                    {chatbotAppointments.map((apt: any, idx: number) => (
                       <div key={idx} className="flex items-center gap-3 text-sm">
                         <Calendar className="w-4 h-4 text-blue-600" />
                         <span className="font-medium text-blue-800">Booking:</span>
@@ -1047,6 +1342,24 @@ export default function InboxPage() {
                       <Send className="w-4 h-4" />
                       Send
                     </Button>
+                    {(() => {
+                      const liveConv = liveChatbotConversation || selectedMessage;
+                      const hasRating = !!liveConv?.rating;
+                      const isRequested = !!liveConv?.ratingRequested;
+                      return (
+                        <Button
+                          onClick={handleRequestRating}
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          disabled={hasRating || isRequested}
+                          title={hasRating ? "Already rated" : isRequested ? "Rating already requested" : "Ask user to rate this conversation"}
+                        >
+                          <Star className={cn("w-4 h-4", hasRating && "fill-yellow-400 text-yellow-400")} />
+                          {hasRating ? `Rated ${liveConv.rating}⭐` : isRequested ? "Requested" : "Rate"}
+                        </Button>
+                      );
+                    })()}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">Messages will appear in the user&apos;s chat widget in real-time</p>
                 </div>
@@ -1148,7 +1461,7 @@ export default function InboxPage() {
                         </div>
                       )}
                       {/* Thread messages (customer + admin) */}
-                      {ticketThread.messages.map((msg) => (
+                      {ticketThread.messages.map((msg: any) => (
                         <div
                           key={msg._id}
                           className={cn(
@@ -1205,7 +1518,7 @@ export default function InboxPage() {
                   ) : threadMessages && threadMessages.length > 0 ? (
                     /* Non-ticket channels: use inbox thread messages */
                     <div className="space-y-4">
-                      {threadMessages.map((msg, index) => (
+                      {threadMessages.map((msg: any, index: number) => (
                         <div
                           key={msg._id}
                           className={cn(
@@ -1391,6 +1704,95 @@ export default function InboxPage() {
               >
                 <Mail className="w-4 h-4 mr-2" />
                 {emailSending ? "Sending..." : "Send Email"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cleanup Dialog */}
+      <Dialog open={cleanupDialogOpen} onOpenChange={setCleanupDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Cleanup Old Data</DialogTitle>
+            <DialogDescription>
+              Remove old chatbot conversations, tickets, and email logs to reduce database size.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label>Delete data older than</Label>
+              <select
+                value={cleanupDays}
+                onChange={(e) => setCleanupDays(Number(e.target.value))}
+                className="w-full border rounded-md px-3 py-2 bg-background"
+              >
+                <option value={30}>30 days</option>
+                <option value={60}>60 days</option>
+                <option value={90}>90 days</option>
+                <option value={180}>6 months</option>
+                <option value={365}>1 year</option>
+              </select>
+            </div>
+
+            {cleanupPreview && (
+              <div className="space-y-2 text-sm">
+                <p className="font-medium">Preview of records to delete:</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                    <p className="font-semibold text-blue-700">{cleanupPreview.chatbot.old}</p>
+                    <p className="text-xs text-blue-600">Chatbot conversations</p>
+                    <p className="text-[10px] text-muted-foreground">of {cleanupPreview.chatbot.total} total</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
+                    <p className="font-semibold text-orange-700">{cleanupPreview.tickets.old}</p>
+                    <p className="text-xs text-orange-600">Inbox messages</p>
+                    <p className="text-[10px] text-muted-foreground">of {cleanupPreview.tickets.total} total</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-purple-50 border border-purple-200">
+                    <p className="font-semibold text-purple-700">{cleanupPreview.emailLogs.old}</p>
+                    <p className="text-xs text-purple-600">Email logs</p>
+                    <p className="text-[10px] text-muted-foreground">of {cleanupPreview.emailLogs.total} total</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800 font-medium">⚠️ This action cannot be undone</p>
+              <p className="text-xs text-yellow-700 mt-1">
+                Deleted data includes conversations, ticket messages, and email logs older than {cleanupDays} days.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCleanupDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={cleanupRunning}
+                onClick={async () => {
+                  setCleanupRunning(true);
+                  try {
+                    const [chatResult, inboxResult, emailResult] = await Promise.all([
+                      cleanOldChatbot({ olderThanDays: cleanupDays }),
+                      cleanOldInboxMessages({ olderThanDays: cleanupDays }),
+                      cleanOldEmailLogs({ olderThanDays: cleanupDays }),
+                    ]);
+                    toast.success(
+                      `Cleaned up: ${chatResult.deleted} conversations, ${inboxResult.deleted} inbox messages, ${emailResult.deleted} email logs`
+                    );
+                    setCleanupDialogOpen(false);
+                  } catch (error) {
+                    toast.error("Cleanup failed. Please try again.");
+                  } finally {
+                    setCleanupRunning(false);
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                {cleanupRunning ? "Cleaning..." : "Delete Old Data"}
               </Button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Settings, User, Building2, TestTube, FileText, ShoppingCart, Receipt, Image, Mail, RefreshCw } from "lucide-react";
+import { Settings, User, Building2, TestTube, FileText, ShoppingCart, Receipt, Image, Mail, RefreshCw, Send } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -24,7 +24,7 @@ const sidebarNavItems = [
     icon: Mail,
   },
   {
-    title: "Invoice & PO Config",
+    title: "Invoice & SO Config",
     href: "/admin/settings/invoice-po-config",
     icon: Receipt,
   },
@@ -39,9 +39,14 @@ const sidebarNavItems = [
     icon: FileText,
   },
   {
-    title: "Purchase Orders",
+    title: "Sales Orders",
     href: "/admin/settings/po",
     icon: ShoppingCart,
+  },
+  {
+    title: "Resend Email",
+    href: "/admin/settings/resend",
+    icon: Send,
   },
   {
     title: "Sync Data",

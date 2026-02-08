@@ -57,25 +57,15 @@ export const getChatbotAnalytics = query({
     const avgResponseTime =
       responseCount > 0 ? Math.round(totalResponseTime / responseCount) : 0;
 
-    // Get analytics records for satisfaction scores
-    const analyticsRecords = await ctx.db
-      .query("chatbot_analytics")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("type"), args.type),
-          q.gte(q.field("createdAt"), startTime)
-        )
-      )
-      .collect();
-
+    // Get satisfaction scores directly from conversations (rating field)
     const satisfactionScores: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let totalSatisfaction = 0;
     let satisfactionCount = 0;
 
-    analyticsRecords.forEach((record) => {
-      if (record.satisfactionRating) {
-        satisfactionScores[record.satisfactionRating]++;
-        totalSatisfaction += record.satisfactionRating;
+    conversations.forEach((conv) => {
+      if (conv.rating && conv.rating >= 1 && conv.rating <= 5) {
+        satisfactionScores[conv.rating]++;
+        totalSatisfaction += conv.rating;
         satisfactionCount++;
       }
     });
@@ -188,9 +178,9 @@ function calculateAdminPerformance(conversations: any[]) {
   >();
 
   conversations
-    .filter((c) => c.adminId)
+    .filter((c) => c.takenOverBy)
     .forEach((conv) => {
-      const adminId = conv.adminId;
+      const adminId = String(conv.takenOverBy);
       const existing = adminMap.get(adminId) || {
         conversations: 0,
         totalResponseTime: 0,
@@ -199,14 +189,16 @@ function calculateAdminPerformance(conversations: any[]) {
 
       existing.conversations++;
 
-      // Calculate admin response time
-      const adminMessages = conv.messages.filter((m: any) => m.role === "admin");
-      if (adminMessages.length > 0 && conv.adminTakeoverAt) {
+      // Calculate admin response time from takeover to first admin message
+      const adminMessages = conv.messages.filter((m: any) => m.role === "admin" && m.content !== "An admin has joined the conversation");
+      if (adminMessages.length > 0 && conv.takenOverAt) {
         const firstAdminMsg = adminMessages[0];
         const responseTime =
-          (firstAdminMsg.timestamp - conv.adminTakeoverAt) / 1000 / 60; // minutes
-        existing.totalResponseTime += responseTime;
-        existing.count++;
+          (firstAdminMsg.timestamp - conv.takenOverAt) / 1000 / 60; // minutes
+        if (responseTime >= 0 && responseTime < 1440) { // Sanity check: < 24 hours
+          existing.totalResponseTime += responseTime;
+          existing.count++;
+        }
       }
 
       adminMap.set(adminId, existing);
@@ -214,7 +206,7 @@ function calculateAdminPerformance(conversations: any[]) {
 
   return Array.from(adminMap.entries())
     .map(([adminId, data]) => ({
-      admin: adminId.substring(0, 8), // Shorten ID for display
+      admin: `Admin ${adminId.substring(0, 6)}`,
       conversations: data.conversations,
       avgResponseTime:
         data.count > 0 ? Math.round(data.totalResponseTime / data.count) : 0,

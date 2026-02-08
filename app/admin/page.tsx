@@ -80,7 +80,7 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground mt-2">
-            Welcome back! Here's what's happening today.
+            Welcome back! Here&apos;s what&apos;s happening today.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -178,11 +178,11 @@ export default function AdminDashboard() {
         
         <Card className="hover:shadow-lg transition-all border-l-4 border-l-orange-500 cursor-pointer" onClick={() => window.location.href = '/admin/booking'}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Today's Bookings</CardTitle>
+            <CardTitle className="text-sm font-medium">Today&apos;s Bookings</CardTitle>
             <Calendar className="h-5 w-5 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats?.activeSubscriptions || 0}</div>
+            <div className="text-3xl font-bold">{stats?.todaysBookings || 0}</div>
             <p className="text-xs text-muted-foreground mt-1">Click to view calendar</p>
           </CardContent>
         </Card>
@@ -198,6 +198,48 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
           </div>
+          </div>
+
+          {/* SaaS Metrics */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4">SaaS Health</h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+              <Card className="hover:shadow-md transition-all">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-xs text-muted-foreground uppercase font-medium">Active Subs</p>
+                  <p className="text-2xl font-bold mt-1">{stats?.activeSubscriptions || 0}</p>
+                  <p className="text-xs text-green-600 mt-1">MRR: MYR {stats?.mrr || "0"}</p>
+                </CardContent>
+              </Card>
+              <Card className="hover:shadow-md transition-all">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-xs text-muted-foreground uppercase font-medium">Churn Rate</p>
+                  <p className="text-2xl font-bold mt-1">{stats?.churnRate || "0"}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">{stats?.canceledSubscriptions || 0} canceled</p>
+                </CardContent>
+              </Card>
+              <Card className="hover:shadow-md transition-all">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-xs text-muted-foreground uppercase font-medium">Customer CLV</p>
+                  <p className="text-2xl font-bold mt-1">MYR {stats?.clv || "0"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Lifetime value</p>
+                </CardContent>
+              </Card>
+              <Card className="hover:shadow-md transition-all">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-xs text-muted-foreground uppercase font-medium">Avg Sub Length</p>
+                  <p className="text-2xl font-bold mt-1">{stats?.avgSubLengthMonths || "0"} mo</p>
+                  <p className="text-xs text-muted-foreground mt-1">Average duration</p>
+                </CardContent>
+              </Card>
+              <Card className="hover:shadow-md transition-all">
+                <CardContent className="pt-4 pb-3">
+                  <p className="text-xs text-muted-foreground uppercase font-medium">Net Revenue Ret.</p>
+                  <p className="text-2xl font-bold mt-1">{stats?.nrr || "100"}%</p>
+                  <p className="text-xs text-muted-foreground mt-1">ARR: MYR {stats?.arr || "0"}</p>
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* Overview Chart */}
@@ -249,7 +291,7 @@ export default function AdminDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>Recent Sales</CardTitle>
-                <CardDescription>You made 265 sales this month</CardDescription>
+                <CardDescription>You made {recentActivity?.length || 0} sales this month</CardDescription>
               </CardHeader>
               <CardContent>
                 {!recentActivity ? (
@@ -275,7 +317,9 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                         </div>
-                        <p className="text-sm font-semibold">+MYR {activity.type === "subscription" ? "99.00" : "39.00"}</p>
+                        <p className="text-sm font-semibold text-emerald-600">+MYR {activity.type === "subscription" 
+                              ? (activity.plan === "pro" ? "29.00" : activity.plan === "business" ? "99.00" : "19.90")
+                              : ((activity.amount || 0) / 100).toFixed(2)}</p>
                       </div>
                     ))}
                   </div>

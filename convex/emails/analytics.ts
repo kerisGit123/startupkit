@@ -5,14 +5,29 @@ export const getOverallStats = query({
     const campaigns = await ctx.db.query("email_campaigns").collect();
     
     const totalSent = campaigns.reduce((sum, c) => sum + c.sentCount, 0);
+    const totalDelivered = campaigns.reduce((sum, c) => sum + (c.deliveredCount || c.sentCount), 0);
     const totalOpened = campaigns.reduce((sum, c) => sum + c.openedCount, 0);
     const totalClicked = campaigns.reduce((sum, c) => sum + c.clickedCount, 0);
+    const totalFailed = campaigns.reduce((sum, c) => sum + c.failedCount, 0);
+    const totalRecipients = campaigns.reduce((sum, c) => sum + c.totalRecipients, 0);
+
+    // Get unsubscribe count
+    const unsubscribes = await ctx.db.query("email_unsubscribes").collect();
 
     return {
       totalSent,
+      totalDelivered,
+      totalRecipients,
       totalCampaigns: campaigns.length,
       openRate: totalSent > 0 ? (totalOpened / totalSent) * 100 : 0,
       clickRate: totalSent > 0 ? (totalClicked / totalSent) * 100 : 0,
+      bounceRate: totalSent > 0 ? (totalFailed / totalSent) * 100 : 0,
+      deliveryRate: totalSent > 0 ? (totalDelivered / totalSent) * 100 : 0,
+      unsubscribeCount: unsubscribes.length,
+      unsubscribeRate: totalSent > 0 ? (unsubscribes.length / totalSent) * 100 : 0,
+      totalOpened,
+      totalClicked,
+      totalFailed,
     };
   },
 });
@@ -29,9 +44,36 @@ export const getTopCampaigns = query({
         ...c,
         openRate: c.sentCount > 0 ? (c.openedCount / c.sentCount) * 100 : 0,
         clickRate: c.sentCount > 0 ? (c.clickedCount / c.sentCount) * 100 : 0,
+        bounceRate: c.sentCount > 0 ? (c.failedCount / c.sentCount) * 100 : 0,
+        deliveryRate: c.sentCount > 0 ? ((c.deliveredCount || c.sentCount) / c.sentCount) * 100 : 0,
       }))
       .sort((a, b) => b.openRate - a.openRate)
-      .slice(0, 5);
+      .slice(0, 10);
+  },
+});
+
+export const getCampaignBreakdown = query({
+  handler: async (ctx) => {
+    const campaigns = await ctx.db
+      .query("email_campaigns")
+      .order("desc")
+      .collect();
+
+    return campaigns.map(c => ({
+      _id: c._id,
+      name: c.name,
+      recipients: c.totalRecipients,
+      sentCount: c.sentCount,
+      deliveredCount: c.deliveredCount || c.sentCount,
+      openedCount: c.openedCount,
+      clickedCount: c.clickedCount,
+      failedCount: c.failedCount,
+      openRate: c.sentCount > 0 ? (c.openedCount / c.sentCount) * 100 : 0,
+      clickRate: c.sentCount > 0 ? (c.clickedCount / c.sentCount) * 100 : 0,
+      bounceRate: c.sentCount > 0 ? (c.failedCount / c.sentCount) * 100 : 0,
+      sentAt: c.sentAt,
+      status: c.status,
+    }));
   },
 });
 

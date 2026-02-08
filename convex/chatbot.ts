@@ -601,6 +601,11 @@ export const getChatbotConversations = query({
           .filter(q => q.eq(q.field("conversationId"), conv._id))
           .collect();
 
+        // Get next/most recent appointment details
+        const nextAppointment = appointments.length > 0
+          ? appointments.sort((a, b) => b.appointmentDate - a.appointmentDate)[0]
+          : null;
+
         return {
           ...conv,
           userName,
@@ -611,6 +616,12 @@ export const getChatbotConversations = query({
           messageCount,
           hasAppointment: appointments.length > 0,
           appointmentCount: appointments.length,
+          appointmentDetails: nextAppointment ? {
+            date: nextAppointment.appointmentDate,
+            time: nextAppointment.appointmentTime,
+            status: nextAppointment.status,
+            purpose: nextAppointment.purpose || "",
+          } : null,
           lastMessageContent: lastMessage?.content?.substring(0, 100) || "",
           lastMessageRole: lastMessage?.role || "",
           lastMessageTime: lastMessage?.timestamp || conv.updatedAt,
@@ -726,6 +737,29 @@ export const updateConversationLabel = mutation({
       label: args.label,
       updatedAt: Date.now(),
     });
+    return { success: true };
+  },
+});
+
+// Admin requests rating from user - sets flag that ChatWidget detects
+export const requestRating = mutation({
+  args: {
+    conversationId: v.id("chatbot_conversations"),
+  },
+  handler: async (ctx, args) => {
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) throw new Error("Conversation not found");
+
+    if (conversation.rating) {
+      throw new Error("User has already submitted a rating");
+    }
+
+    await ctx.db.patch(args.conversationId, {
+      ratingRequested: true,
+      ratingRequestedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
     return { success: true };
   },
 });

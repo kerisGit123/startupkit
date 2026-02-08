@@ -46,6 +46,12 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
 
   const config = useQuery(api.chatbot.getConfig, { type });
 
+  // Fetch logged-in user info (for user_panel type) so chatbot won't ask for email
+  const loggedInUser = useQuery(
+    api.users.getUserByClerkId,
+    type === "user_panel" && userId ? { clerkUserId: userId } : "skip"
+  );
+
   // Subscribe to conversation for real-time admin messages
   const conversation = useQuery(
     api.chatbot.getConversationBySession,
@@ -100,6 +106,13 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
       }
     }
   }, [conversation?.messages]);
+
+  // Detect admin-triggered rating request
+  useEffect(() => {
+    if (conversation?.ratingRequested && !showRating && !ratingSubmitted && !conversation?.rating) {
+      setShowRating(true);
+    }
+  }, [conversation?.ratingRequested, conversation?.rating, showRating, ratingSubmitted]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -270,6 +283,8 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
           route: type,
           type: type,
           userId: userId || undefined,
+          userEmail: loggedInUser?.email || undefined,
+          userName: loggedInUser?.name || undefined,
         }),
       });
 

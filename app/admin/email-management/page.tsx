@@ -11,14 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, AlertCircle, Loader2, Mail, FileText, Send, BarChart3, Sparkles, Eye, EyeOff, Copy, Edit, X, Plus, Trash2, MousePointer, TrendingUp } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, Mail, FileText, Send, Sparkles, Eye, EyeOff, Copy, Edit, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { TemplateEditorDialog } from "@/components/email/TemplateEditorDialog";
-import { CampaignCreatorDialog } from "@/components/email/CampaignCreatorDialog";
 import { Badge } from "@/components/ui/badge";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function EmailManagementPage() {
   const searchParams = useSearchParams();
@@ -54,14 +52,6 @@ export default function EmailManagementPage() {
   const templates = useQuery(api.emails.templates.listTemplates);
   const deleteTemplate = useMutation(api.emails.templates.deleteTemplate);
   const duplicateTemplate = useMutation(api.emails.templates.duplicateTemplate);
-  const campaigns = useQuery(api.emails.campaigns.listCampaigns);
-  const sendCampaign = useMutation(api.emails.campaigns.sendCampaign);
-  const pauseCampaign = useMutation(api.emails.campaigns.pauseCampaign);
-  const resumeCampaign = useMutation(api.emails.campaigns.resumeCampaign);
-  const deleteCampaign = useMutation(api.emails.campaigns.deleteCampaign);
-  const analyticsStats = useQuery(api.emails.analytics.getOverallStats);
-  const topCampaigns = useQuery(api.emails.analytics.getTopCampaigns);
-  const performanceData = useQuery(api.emails.analytics.getPerformanceOverTime);
 
   // Email logs queries and mutations
   const emailLogs = useQuery(api.emails.emailLogs.listEmailLogs);
@@ -80,10 +70,6 @@ export default function EmailManagementPage() {
   const [showTemplateEditor, setShowTemplateEditor] = useState(false);
   const [showTemplatePreview, setShowTemplatePreview] = useState(false);
 
-  // Campaign management state
-  const [showCampaignCreator, setShowCampaignCreator] = useState(false);
-  const [campaignSearchQuery, setCampaignSearchQuery] = useState("");
-  const [campaignFilter, setCampaignFilter] = useState<"all" | "system" | "custom">("all");
 
   // Email logs state
   const [previewingLog, setPreviewingLog] = useState<any>(null);
@@ -370,42 +356,6 @@ export default function EmailManagementPage() {
     }
   };
 
-  const handlePauseCampaign = async (campaignId: string) => {
-    try {
-      await pauseCampaign({ campaignId: campaignId as any });
-      toast.success("Campaign paused");
-    } catch {
-      toast.error("Failed to pause campaign");
-    }
-  };
-
-  const handleSendCampaign = async (campaignId: string) => {
-    try {
-      // Use testMode based on System Notification setting
-      await sendCampaign({ 
-        campaignId: campaignId as any,
-        testMode: settings.useSystemNotification 
-      });
-      
-      if (settings.useSystemNotification) {
-        toast.success("Campaign logged to database (test mode)");
-      } else {
-        toast.success("Campaign sent successfully");
-      }
-    } catch {
-      toast.error("Failed to send campaign");
-    }
-  };
-
-  const handleResumeCampaign = async (campaignId: string) => {
-    try {
-      await resumeCampaign({ campaignId: campaignId as any });
-      toast.success("Campaign resumed");
-    } catch {
-      toast.error("Failed to resume campaign");
-    }
-  };
-
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString("en-US", {
       year: "numeric",
@@ -414,17 +364,6 @@ export default function EmailManagementPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
-
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      draft: "secondary",
-      scheduled: "default",
-      sending: "default",
-      sent: "outline",
-      failed: "destructive",
-    };
-    return <Badge variant={variants[status] || "outline"}>{status}</Badge>;
   };
 
   if (emailSettings === undefined) {
@@ -484,7 +423,7 @@ export default function EmailManagementPage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="settings" className="gap-2">
             <Mail className="h-4 w-4" />
             Settings
@@ -492,14 +431,6 @@ export default function EmailManagementPage() {
           <TabsTrigger value="templates" className="gap-2">
             <FileText className="h-4 w-4" />
             Templates
-          </TabsTrigger>
-          <TabsTrigger value="campaigns" className="gap-2">
-            <Send className="h-4 w-4" />
-            Campaigns
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Analytics
           </TabsTrigger>
           <TabsTrigger value="logs" className="gap-2">
             <FileText className="h-4 w-4" />
@@ -1044,308 +975,6 @@ export default function EmailManagementPage() {
               )}
             </TabsContent>
           </Tabs>
-        </TabsContent>
-
-        <TabsContent value="campaigns" className="space-y-6">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <h2 className="text-2xl font-bold">Email Campaigns</h2>
-              <p className="text-muted-foreground">Create and manage email campaigns</p>
-            </div>
-            <Button onClick={() => setShowCampaignCreator(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Campaign
-            </Button>
-          </div>
-
-          <div className="flex gap-4 mb-4">
-            <div className="flex-1">
-              <Input
-                placeholder="Search campaigns by name..."
-                value={campaignSearchQuery}
-                onChange={(e) => setCampaignSearchQuery(e.target.value)}
-                className="max-w-md"
-              />
-            </div>
-            <select
-              value={campaignFilter}
-              onChange={(e) => setCampaignFilter(e.target.value as "all" | "system" | "custom")}
-              className="px-3 py-2 border rounded-md bg-background"
-            >
-              <option value="all">All Templates</option>
-              <option value="system">System Templates</option>
-              <option value="custom">Custom Templates</option>
-            </select>
-          </div>
-
-          <div className="space-y-4">
-            {campaigns?.filter((campaign) => {
-              // Filter by search query
-              const matchesSearch = campaign.name.toLowerCase().includes(campaignSearchQuery.toLowerCase());
-              
-              // Filter by template type
-              const template = templates?.find(t => t._id === campaign.templateId);
-              const matchesFilter = 
-                campaignFilter === "all" ||
-                (campaignFilter === "system" && template?.category === "system") ||
-                (campaignFilter === "custom" && (template?.category === "custom" || template?.category === "campaign"));
-              
-              return matchesSearch && matchesFilter;
-            }).map((campaign) => (
-              <Card key={campaign._id}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle>{campaign.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {campaign.scheduledAt 
-                          ? `Scheduled for ${formatDate(campaign.scheduledAt)}`
-                          : campaign.sentAt
-                          ? `Sent on ${formatDate(campaign.sentAt)}`
-                          : "Draft"}
-                      </p>
-                      <div className="flex gap-2 mt-2">
-                        {(() => {
-                          const template = templates?.find(t => t._id === campaign.templateId);
-                          return template ? (
-                            <>
-                              <Badge variant="outline">{template.name}</Badge>
-                              {template.category && <Badge variant="secondary">{template.category}</Badge>}
-                            </>
-                          ) : null;
-                        })()}
-                      </div>
-                    </div>
-                    {getStatusBadge(campaign.status)}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-5 gap-4 mb-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Recipients</p>
-                      <p className="text-2xl font-bold">{campaign.totalRecipients}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Sent</p>
-                      <p className="text-2xl font-bold">{campaign.sentCount}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Opened</p>
-                      <p className="text-2xl font-bold">
-                        {campaign.openedCount}
-                        <span className="text-sm text-muted-foreground ml-1">
-                          ({campaign.sentCount > 0 
-                            ? Math.round((campaign.openedCount / campaign.sentCount) * 100)
-                            : 0}%)
-                        </span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Clicked</p>
-                      <p className="text-2xl font-bold">
-                        {campaign.clickedCount}
-                        <span className="text-sm text-muted-foreground ml-1">
-                          ({campaign.sentCount > 0 
-                            ? Math.round((campaign.clickedCount / campaign.sentCount) * 100)
-                            : 0}%)
-                        </span>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Failed</p>
-                      <p className="text-2xl font-bold">{campaign.failedCount}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-2 flex-wrap">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const template = templates?.find(t => t._id === campaign.templateId);
-                        if (template) {
-                          setPreviewingTemplate(template);
-                        } else {
-                          toast.error("Template not found");
-                        }
-                      }}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View Template
-                    </Button>
-                    {(campaign.status === "draft" || campaign.status === "scheduled") && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const template = templates?.find(t => t._id === campaign.templateId);
-                            if (template) {
-                              handleEditTemplate(template);
-                            } else {
-                              toast.error("Template not found");
-                            }
-                          }}
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Edit
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSendCampaign(campaign._id)}
-                        >
-                          <Send className="h-4 w-4 mr-1" />
-                          {settings.useSystemNotification ? "Test Send (Log Only)" : "Send Now"}
-                        </Button>
-                      </>
-                    )}
-                    {campaign.status === "sending" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePauseCampaign(campaign._id)}
-                      >
-                        Pause
-                      </Button>
-                    )}
-                    {campaign.status === "sent" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleSendCampaign(campaign._id)}
-                      >
-                        <Send className="h-4 w-4 mr-1" />
-                        Resend
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        if (confirm("Are you sure you want to delete this campaign?")) {
-                          try {
-                            await deleteCampaign({ campaignId: campaign._id as any });
-                            toast.success("Campaign deleted successfully");
-                          } catch {
-                            toast.error("Failed to delete campaign");
-                          }
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      <span className="text-red-600">Delete</span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-4 mb-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Sent</CardTitle>
-                <Mail className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsStats?.totalSent || 0}</div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Open Rate</CardTitle>
-                <Eye className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {analyticsStats?.openRate ? `${analyticsStats.openRate.toFixed(1)}%` : "0%"}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Click Rate</CardTitle>
-                <MousePointer className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {analyticsStats?.clickRate ? `${analyticsStats.clickRate.toFixed(1)}%` : "0%"}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Campaigns</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{analyticsStats?.totalCampaigns || 0}</div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Performance Over Time</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {performanceData && performanceData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="sent" stroke="#8884d8" name="Sent" />
-                    <Line type="monotone" dataKey="opened" stroke="#82ca9d" name="Opened" />
-                    <Line type="monotone" dataKey="clicked" stroke="#ffc658" name="Clicked" />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  No performance data available yet
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Performing Campaigns</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {topCampaigns && topCampaigns.length > 0 ? (
-                <div className="space-y-4">
-                  {topCampaigns.map((campaign) => (
-                    <div key={campaign._id} className="flex justify-between items-center">
-                      <div>
-                        <p className="font-medium">{campaign.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {campaign.sentCount} sent
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">{campaign.openRate.toFixed(1)}% open</p>
-                        <p className="text-sm text-muted-foreground">
-                          {campaign.clickRate.toFixed(1)}% click
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-8 text-center text-muted-foreground">
-                  No campaigns sent yet
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-6">
@@ -1912,10 +1541,6 @@ export default function EmailManagementPage() {
         </div>
       )}
 
-      {/* Campaign Creator Dialog */}
-      {showCampaignCreator && (
-        <CampaignCreatorDialog onClose={() => setShowCampaignCreator(false)} />
-      )}
     </div>
   );
 }
