@@ -77,7 +77,7 @@ export const sendCampaignWithVariables = mutation({
           variables
         );
 
-        // Here you would actually send via Resend API
+        // Email will be sent via SMTP API route when campaign action is used
         // For now, we'll just log the event
         console.log(`Sending to ${user.email}:`);
         console.log(`Subject: ${subject}`);
@@ -161,7 +161,7 @@ export const sendSystemEmail = mutation({
       variables
     );
 
-    // 6. Send email (integrate with Resend here)
+    // 6. Send email (sent via SMTP when using sendSystemEmailAction)
     console.log(`Sending ${templateType} email to ${user.email}`);
     console.log(`Subject: ${subject}`);
     console.log(`All variables populated from database:`, variables);

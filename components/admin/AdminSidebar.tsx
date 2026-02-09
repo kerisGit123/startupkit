@@ -54,7 +54,7 @@ const navItems: NavItem[] = [
   },
   {
     name: "Tickets",
-    href: "/admin/tickets",
+    href: "/admin/inbox?tab=ticket",
     icon: Ticket,
     roles: ["super_admin", "support_admin"],
   },

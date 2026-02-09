@@ -21,7 +21,6 @@ export const getSettings = query({
       paymentNotificationEnabled: settings.sendPaymentNotifications ?? true,
       usageAlertEnabled: settings.sendUsageAlerts ?? true,
       adminNotificationEnabled: settings.sendAdminNotifications ?? true,
-      resendApiKey: settings.resendApiKey ?? "",
       senderName: settings.emailFromName ?? "",
       senderEmail: settings.emailFromAddress ?? "",
     };
@@ -38,7 +37,6 @@ export const updateSettings = mutation({
     paymentNotificationEnabled: v.optional(v.boolean()),
     usageAlertEnabled: v.optional(v.boolean()),
     adminNotificationEnabled: v.optional(v.boolean()),
-    resendApiKey: v.optional(v.string()),
     senderName: v.optional(v.string()),
     senderEmail: v.optional(v.string()),
   },
@@ -59,7 +57,6 @@ export const updateSettings = mutation({
         sendPaymentNotifications: args.paymentNotificationEnabled ?? true,
         sendUsageAlerts: args.usageAlertEnabled ?? true,
         sendAdminNotifications: args.adminNotificationEnabled ?? true,
-        resendApiKey: args.resendApiKey ?? "",
         emailFromName: args.senderName ?? "",
         emailFromAddress: args.senderEmail ?? "",
         createdAt: Date.now(),
@@ -81,7 +78,6 @@ export const updateSettings = mutation({
       if (args.paymentNotificationEnabled !== undefined) updateData.sendPaymentNotifications = args.paymentNotificationEnabled;
       if (args.usageAlertEnabled !== undefined) updateData.sendUsageAlerts = args.usageAlertEnabled;
       if (args.adminNotificationEnabled !== undefined) updateData.sendAdminNotifications = args.adminNotificationEnabled;
-      if (args.resendApiKey !== undefined) updateData.resendApiKey = args.resendApiKey;
       if (args.senderName !== undefined) updateData.emailFromName = args.senderName;
       if (args.senderEmail !== undefined) updateData.emailFromAddress = args.senderEmail;
       

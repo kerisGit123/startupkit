@@ -126,23 +126,22 @@ export const sendCampaign = mutation({
       settings[setting.key] = setting.value;
     }
 
-    // Get Resend config to check if active
-    const resendConfigs = await ctx.db
+    // Get SMTP config to check if configured
+    const smtpConfigs = await ctx.db
       .query("platform_config")
-      .withIndex("by_category", (q) => q.eq("category", "resend"))
+      .withIndex("by_category", (q) => q.eq("category", "smtp"))
       .collect();
-    const resendSettings: Record<string, string> = {};
-    for (const item of resendConfigs) {
-      resendSettings[item.key] = String(item.value ?? "");
+    const smtpSettings: Record<string, string> = {};
+    for (const item of smtpConfigs) {
+      smtpSettings[item.key] = String(item.value ?? "");
     }
-    const resendActive = resendSettings.resendActive === "true";
-    const resendApiKey = resendSettings.resendApiKey || settings.resendApiKey || "";
+    const smtpConfigured = !!(smtpSettings.smtpHost || smtpSettings.smtpApiKey);
 
     // Check if system notification (test mode) is enabled
-    const useTestMode = testMode || settings.useSystemNotification === true || !resendActive;
+    const useTestMode = testMode || settings.useSystemNotification === true || !smtpConfigured;
 
-    if (!useTestMode && !resendApiKey) {
-      throw new Error("Resend API key not configured. Enable Resend in Settings or use test mode to log emails.");
+    if (!useTestMode && !smtpConfigured) {
+      throw new Error("SMTP not configured. Configure SMTP in Email Settings or use test mode to log emails.");
     }
 
     // Get recipients
@@ -335,9 +334,20 @@ export const sendCampaign = mutation({
             createdAt: Date.now(),
           });
         } else {
-          // PRODUCTION MODE: Actually send via Resend
-          // TODO: Integrate with Resend API here
-          
+          // PRODUCTION MODE: Send via SMTP API route
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3000";
+          const smtpRes = await fetch(`${appUrl}/api/send-system-email`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: user.email!,
+              subject,
+              html: htmlContent,
+            }),
+          });
+          const smtpData = await smtpRes.json();
+          const emailStatus = smtpRes.ok && smtpData.success ? "sent" : "failed";
+
           // Log to email_logs for record keeping
           await ctx.db.insert("email_logs", {
             sentTo: user.email!,
@@ -348,7 +358,8 @@ export const sendCampaign = mutation({
             templateName: template.name,
             campaignId,
             variables,
-            status: "sent",
+            status: emailStatus,
+            errorMessage: emailStatus === "failed" ? (smtpData.error || "SMTP send failed") : undefined,
             createdAt: Date.now(),
           });
         }

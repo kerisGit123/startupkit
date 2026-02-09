@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,13 +25,16 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Search, Edit, Trash2, Building2, Users } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Building2, Users, ChevronLeft, ChevronRight, UserCheck, UserX } from "lucide-react";
+
+const PAGE_SIZE = 10;
 
 export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showDialog, setShowDialog] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Id<"saas_customers"> | null>(null);
   const [customerTypeFilter, setCustomerTypeFilter] = useState<"all" | "saas" | "local">("all");
+  const [currentPage, setCurrentPage] = useState(0);
 
   const customers = useQuery(api.saasCustomers.queries.getAllCustomers, {
     customerType: customerTypeFilter === "all" ? undefined : customerTypeFilter,
@@ -149,36 +152,56 @@ export default function CustomersPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.total || 0}</div>
+        <Card className="hover:shadow-md transition-all">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Total Customers</p>
+                <p className="text-2xl font-bold mt-1">{stats?.total || 0}</p>
+              </div>
+              <div className="p-2.5 bg-purple-100 rounded-xl">
+                <Users className="w-5 h-5 text-purple-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">SaaS Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.saas || 0}</div>
+        <Card className="hover:shadow-md transition-all">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">SaaS Customers</p>
+                <p className="text-2xl font-bold mt-1">{stats?.saas || 0}</p>
+              </div>
+              <div className="p-2.5 bg-blue-100 rounded-xl">
+                <Building2 className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Local Customers</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.local || 0}</div>
+        <Card className="hover:shadow-md transition-all">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Local Customers</p>
+                <p className="text-2xl font-bold mt-1">{stats?.local || 0}</p>
+              </div>
+              <div className="p-2.5 bg-emerald-100 rounded-xl">
+                <UserCheck className="w-5 h-5 text-emerald-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Inactive</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.inactive || 0}</div>
+        <Card className="hover:shadow-md transition-all">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Inactive</p>
+                <p className="text-2xl font-bold mt-1">{stats?.inactive || 0}</p>
+              </div>
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <UserX className="w-5 h-5 text-red-600" />
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -215,55 +238,72 @@ export default function CustomersPage() {
         <CardContent className="pt-6">
           <div className="space-y-4">
             {filteredCustomers && filteredCustomers.length > 0 ? (
-              filteredCustomers.map((customer) => (
-                <div
-                  key={customer._id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                      {customer.customerType === "saas" ? (
-                        <Building2 className="h-5 w-5 text-primary" />
-                      ) : (
-                        <Users className="h-5 w-5 text-primary" />
-                      )}
+              <>
+                {filteredCustomers.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((customer) => (
+                  <div
+                    key={customer._id}
+                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className={`p-2 rounded-lg ${customer.customerType === "saas" ? "bg-blue-100" : "bg-emerald-100"}`}>
+                        {customer.customerType === "saas" ? (
+                          <Building2 className="h-5 w-5 text-blue-600" />
+                        ) : (
+                          <Users className="h-5 w-5 text-emerald-600" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold">{customer.customerName}</h3>
+                          <Badge variant={customer.customerType === "saas" ? "default" : "secondary"}>
+                            {customer.customerType.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground space-y-0.5">
+                          {customer.customerEmail && <p>📧 {customer.customerEmail}</p>}
+                          {customer.customerPhone && <p>📞 {customer.customerPhone}</p>}
+                          {customer.industry && <p>🏢 {customer.industry}</p>}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold">{customer.customerName}</h3>
-                        <Badge variant={customer.customerType === "saas" ? "default" : "secondary"}>
-                          {customer.customerType.toUpperCase()}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-muted-foreground space-y-1">
-                        {customer.customerEmail && <p>📧 {customer.customerEmail}</p>}
-                        {customer.customerPhone && <p>📞 {customer.customerPhone}</p>}
-                        {customer.customerAddress && <p>📍 {customer.customerAddress}</p>}
-                      </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleOpenDialog(customer._id)}
+                        className="gap-2"
+                      >
+                        <Edit className="h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(customer._id)}
+                        className="gap-2 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleOpenDialog(customer._id)}
-                      className="gap-2"
-                    >
-                      <Edit className="h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDelete(customer._id)}
-                      className="gap-2 text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete
-                    </Button>
+                ))}
+                {/* Pagination */}
+                {filteredCustomers.length > PAGE_SIZE && (
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, filteredCustomers.length)} of {filteredCustomers.length}
+                    </p>
+                    <div className="flex gap-1">
+                      <Button variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setCurrentPage(currentPage - 1)}>
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" disabled={(currentPage + 1) * PAGE_SIZE >= filteredCustomers.length} onClick={() => setCurrentPage(currentPage + 1)}>
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))
+                )}
+              </>
             ) : (
               <div className="text-center py-12 text-muted-foreground">
                 <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />

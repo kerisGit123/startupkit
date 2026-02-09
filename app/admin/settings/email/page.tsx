@@ -11,21 +11,48 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Mail, Send, Settings, Shield, Zap } from "lucide-react";
+import { Mail, Send, Settings, Shield, Zap, Loader2, AlertCircle, Eye, EyeOff, Copy } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function EmailSettingsPage() {
   const emailSettings = useQuery(api.emailSettings.getSettings);
   const updateEmailSettings = useMutation(api.emailSettings.updateSettings);
+  const smtpConfig = useQuery(api.smtpConfig.getSmtpConfig);
+  const updateSmtpConfig = useMutation(api.smtpConfig.updateSmtpConfig);
 
+  const [smtpLoaded, setSmtpLoaded] = useState(false);
   const [smtpSettings, setSmtpSettings] = useState({
     host: "",
     port: "587",
     username: "",
     password: "",
-    fromEmail: emailSettings?.senderEmail || "",
-    fromName: emailSettings?.senderName || "",
+    fromEmail: "",
+    fromName: "",
     useTLS: true,
+    apiKey: "",
+    active: false,
   });
+  const [testEmailTo, setTestEmailTo] = useState("");
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [isSavingSMTP, setIsSavingSMTP] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  // Populate SMTP fields once when config loads
+  if (smtpConfig && !smtpLoaded) {
+    setSmtpLoaded(true);
+    setSmtpSettings({
+      host: smtpConfig.smtpHost || "",
+      port: smtpConfig.smtpPort || "587",
+      username: smtpConfig.smtpUsername || "",
+      password: smtpConfig.smtpPassword || "",
+      fromEmail: smtpConfig.smtpFromEmail || "",
+      fromName: smtpConfig.smtpFromName || "",
+      useTLS: smtpConfig.smtpUseTLS ?? true,
+      apiKey: smtpConfig.smtpApiKey || "",
+      active: smtpConfig.smtpActive ?? false,
+    });
+  }
 
   const [automationSettings, setAutomationSettings] = useState({
     welcomeEmail: emailSettings?.welcomeEmailEnabled ?? true,
@@ -43,15 +70,29 @@ export default function EmailSettingsPage() {
   });
 
   const handleSaveSMTP = async () => {
+    setIsSavingSMTP(true);
     try {
+      await updateSmtpConfig({
+        smtpHost: smtpSettings.host,
+        smtpPort: smtpSettings.port,
+        smtpUsername: smtpSettings.username,
+        smtpPassword: smtpSettings.password,
+        smtpFromEmail: smtpSettings.fromEmail,
+        smtpFromName: smtpSettings.fromName,
+        smtpUseTLS: smtpSettings.useTLS,
+        smtpApiKey: smtpSettings.apiKey,
+        smtpActive: smtpSettings.active,
+      });
       await updateEmailSettings({
         senderEmail: smtpSettings.fromEmail,
         senderName: smtpSettings.fromName,
         emailEnabled: true,
       });
-      toast.success("Email settings saved successfully");
-    } catch (error) {
-      toast.error("Failed to save email settings");
+      toast.success("SMTP settings saved successfully");
+    } catch {
+      toast.error("Failed to save SMTP settings");
+    } finally {
+      setIsSavingSMTP(false);
     }
   };
 
@@ -63,17 +104,46 @@ export default function EmailSettingsPage() {
         paymentNotificationEnabled: automationSettings.paymentConfirmation,
       });
       toast.success("Automation settings saved successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to save automation settings");
     }
   };
 
   const handleTestEmail = async () => {
-    toast.info("Sending test email...");
-    // TODO: Implement test email functionality
-    setTimeout(() => {
+    if (!testEmailTo) {
+      toast.error("Please enter a recipient email address");
+      return;
+    }
+    if (!smtpSettings.host || !smtpSettings.username) {
+      toast.error("Please save your SMTP settings first");
+      return;
+    }
+    setIsSendingTest(true);
+    try {
+      const res = await fetch("/api/smtp/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: testEmailTo,
+          smtpHost: smtpSettings.host,
+          smtpPort: smtpSettings.port,
+          smtpUsername: smtpSettings.username,
+          smtpPassword: smtpSettings.password,
+          smtpFromEmail: smtpSettings.fromEmail,
+          smtpFromName: smtpSettings.fromName,
+          smtpUseTLS: smtpSettings.useTLS,
+          apiKey: smtpSettings.apiKey,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send test email");
       toast.success("Test email sent successfully!");
-    }, 2000);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to send test email";
+      toast.error(message);
+    } finally {
+      setIsSendingTest(false);
+    }
   };
 
   return (
@@ -105,10 +175,31 @@ export default function EmailSettingsPage() {
         <TabsContent value="smtp" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>SMTP Server Settings</CardTitle>
-              <CardDescription>
-                Configure your SMTP server for sending emails
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>SMTP Server Settings</CardTitle>
+                  <CardDescription>
+                    Configure your SMTP server for sending emails
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm font-medium ${smtpSettings.active ? "text-green-600" : "text-muted-foreground"}`}>
+                    {smtpSettings.active ? "Active" : "Inactive"}
+                  </span>
+                  <Switch
+                    checked={smtpSettings.active}
+                    onCheckedChange={(checked) => setSmtpSettings({ ...smtpSettings, active: checked })}
+                  />
+                </div>
+              </div>
+              {!smtpSettings.active && (
+                <Alert className="mt-3 bg-amber-50 border-amber-200">
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-800">
+                    SMTP is inactive. Emails will be logged to the database only (not actually sent).
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
@@ -144,13 +235,24 @@ export default function EmailSettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="smtp-password">Password</Label>
-                  <Input
-                    id="smtp-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={smtpSettings.password}
-                    onChange={(e) => setSmtpSettings({ ...smtpSettings, password: e.target.value })}
-                  />
+                  <div className="relative">
+                    <Input
+                      id="smtp-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={smtpSettings.password}
+                      onChange={(e) => setSmtpSettings({ ...smtpSettings, password: e.target.value })}
+                      className="pr-20"
+                    />
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5">
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { navigator.clipboard.writeText(smtpSettings.password); toast.success("Password copied"); }} disabled={!smtpSettings.password}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -175,6 +277,29 @@ export default function EmailSettingsPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="smtp-apikey">API Key <span className="text-xs text-muted-foreground">(optional, for Brevo/Sendinblue HTTP API)</span></Label>
+                <div className="relative">
+                  <Input
+                    id="smtp-apikey"
+                    type={showApiKey ? "text" : "password"}
+                    placeholder="xkeysib-..."
+                    value={smtpSettings.apiKey}
+                    onChange={(e) => setSmtpSettings({ ...smtpSettings, apiKey: e.target.value })}
+                    className="pr-20"
+                  />
+                  <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5">
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowApiKey(!showApiKey)}>
+                      {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { navigator.clipboard.writeText(smtpSettings.apiKey); toast.success("API key copied"); }} disabled={!smtpSettings.apiKey}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">If provided and using Brevo, emails will be sent via HTTP API instead of SMTP. Get your API key from Brevo → Settings → SMTP & API → API Keys.</p>
+              </div>
+
               <div className="flex items-center space-x-2">
                 <Switch
                   id="use-tls"
@@ -184,14 +309,30 @@ export default function EmailSettingsPage() {
                 <Label htmlFor="use-tls">Use TLS/SSL encryption</Label>
               </div>
 
-              <div className="flex gap-2 pt-4">
-                <Button onClick={handleSaveSMTP}>
-                  Save SMTP Settings
-                </Button>
-                <Button variant="outline" onClick={handleTestEmail} className="gap-2">
-                  <Send className="w-4 h-4" />
-                  Send Test Email
-                </Button>
+              <div className="flex flex-col gap-4 pt-4">
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveSMTP} disabled={isSavingSMTP}>
+                    {isSavingSMTP ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Save SMTP Settings"}
+                  </Button>
+                </div>
+                <div className="border-t pt-4">
+                  <Label htmlFor="test-email-to" className="text-sm font-medium">Send Test Email</Label>
+                  <p className="text-xs text-muted-foreground mb-2">Verify your SMTP configuration by sending a test email</p>
+                  <div className="flex gap-2">
+                    <Input
+                      id="test-email-to"
+                      type="email"
+                      placeholder="recipient@example.com"
+                      value={testEmailTo}
+                      onChange={(e) => setTestEmailTo(e.target.value)}
+                      className="max-w-sm"
+                    />
+                    <Button variant="outline" onClick={handleTestEmail} disabled={isSendingTest} className="gap-2">
+                      {isSendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {isSendingTest ? "Sending..." : "Send Test Email"}
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

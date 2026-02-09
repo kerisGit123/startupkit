@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, AlertCircle, Loader2, Mail, FileText, Send, Sparkles, Eye, EyeOff, Copy, Edit, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Loader2, Mail, FileText, Send, Sparkles, Eye, Copy, Edit, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -34,7 +34,6 @@ export default function EmailManagementPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [testEmail, setTestEmail] = useState("");
   const [testEmailStatus, setTestEmailStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
-  const [showApiKey, setShowApiKey] = useState(false);
   const [generatingAllTemplates, setGeneratingAllTemplates] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
   const [previewingTemplate, setPreviewingTemplate] = useState<any>(null);
@@ -90,7 +89,6 @@ export default function EmailManagementPage() {
     sendPaymentNotifications: true,
     sendUsageAlerts: true,
     sendAdminNotifications: true,
-    resendApiKey: "",
     emailFromName: "",
     emailFromAddress: "",
   });
@@ -107,7 +105,6 @@ export default function EmailManagementPage() {
       sendPaymentNotifications: (emailSettings.sendPaymentNotifications as boolean) ?? true,
       sendUsageAlerts: (emailSettings.sendUsageAlerts as boolean) ?? true,
       sendAdminNotifications: (emailSettings.sendAdminNotifications as boolean) ?? true,
-      resendApiKey: (emailSettings.resendApiKey as string) ?? "",
       emailFromName: (emailSettings.emailFromName as string) ?? "",
       emailFromAddress: (emailSettings.emailFromAddress as string) ?? "",
     });
@@ -127,7 +124,6 @@ export default function EmailManagementPage() {
           { key: "sendPaymentNotifications", value: settings.sendPaymentNotifications, category: "email", description: "Send payment notifications", isEncrypted: false },
           { key: "sendUsageAlerts", value: settings.sendUsageAlerts, category: "email", description: "Send usage alerts", isEncrypted: false },
           { key: "sendAdminNotifications", value: settings.sendAdminNotifications, category: "email", description: "Send admin notifications", isEncrypted: false },
-          { key: "resendApiKey", value: settings.resendApiKey, category: "email", description: "Resend API key", isEncrypted: true },
           { key: "emailFromName", value: settings.emailFromName, category: "email", description: "Sender name", isEncrypted: false },
           { key: "emailFromAddress", value: settings.emailFromAddress, category: "email", description: "Sender email", isEncrypted: false },
         ],
@@ -148,8 +144,8 @@ export default function EmailManagementPage() {
     }
     
     // Allow test mode even without API key configured
-    if (!settings.useSystemNotification && (!settings.resendApiKey || !settings.emailFromName || !settings.emailFromAddress)) {
-      toast.error("Please configure Resend settings first or enable System Notification (test mode)");
+    if (!settings.useSystemNotification && (!settings.emailFromName || !settings.emailFromAddress)) {
+      toast.error("Please configure SMTP settings first or enable System Notification (test mode)");
       return;
     }
     
@@ -157,7 +153,6 @@ export default function EmailManagementPage() {
     try {
       const result = await sendTestEmail({
         to: testEmail,
-        resendApiKey: settings.resendApiKey || "",
         fromName: settings.emailFromName || "Test",
         fromEmail: settings.emailFromAddress || "test@example.com",
         useTestMode: settings.useSystemNotification,
@@ -183,10 +178,6 @@ export default function EmailManagementPage() {
     }
   };
   
-  const handleCopyApiKey = () => {
-    navigator.clipboard.writeText(settings.resendApiKey);
-    toast.success("API key copied to clipboard!");
-  };
   
   const handleGenerateAllTemplates = async () => {
     setGeneratingAllTemplates(true);
@@ -466,7 +457,7 @@ export default function EmailManagementPage() {
           <Card>
             <CardHeader>
               <CardTitle>System Notification (Testing)</CardTitle>
-              <CardDescription>Log emails to database instead of sending via Resend - for testing purposes</CardDescription>
+              <CardDescription>Log emails to database instead of sending via SMTP - for testing purposes</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
@@ -718,45 +709,10 @@ export default function EmailManagementPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Resend Configuration</CardTitle>
-              <CardDescription>Configure your Resend API settings</CardDescription>
+              <CardTitle>SMTP Configuration</CardTitle>
+              <CardDescription>Email sending is configured via SMTP settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="resendApiKey">Resend API Key</Label>
-                <div className="relative">
-                  <Input
-                    id="resendApiKey"
-                    type={showApiKey ? "text" : "password"}
-                    placeholder="re_..."
-                    value={settings.resendApiKey}
-                    onChange={(e) => setSettings({ ...settings, resendApiKey: e.target.value })}
-                    className="pr-20"
-                  />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={handleCopyApiKey}
-                      disabled={!settings.resendApiKey}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="senderName">Sender Name</Label>
                 <Input
@@ -777,6 +733,11 @@ export default function EmailManagementPage() {
                   onChange={(e) => setSettings({ ...settings, emailFromAddress: e.target.value })}
                 />
               </div>
+
+              <p className="text-sm text-muted-foreground">
+                SMTP server settings (host, port, credentials) are managed in{" "}
+                <a href="/admin/settings/email" className="text-blue-600 underline">Settings → Email (SMTP)</a>.
+              </p>
             </CardContent>
           </Card>
 

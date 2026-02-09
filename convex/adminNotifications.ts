@@ -30,7 +30,13 @@ export const getNotifications = query({
       .order("desc")
       .take(10);
 
-    const notifications = [];
+    const appointments = await ctx.db
+      .query("chat_appointments")
+      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
+      .order("desc")
+      .take(10);
+
+    const notifications: { id: string; type: string; title: string; description: string; time: number; read: boolean }[] = [];
 
     // Get all read notifications for this user
     const readNotifications = await ctx.db
@@ -89,10 +95,23 @@ export const getNotifications = query({
       });
     }
 
+    // Add booking appointment notifications
+    for (const appt of appointments) {
+      const apptId = appt._id.toString();
+      notifications.push({
+        id: apptId,
+        type: "booking_appointment",
+        title: `Booking Appointment - ${appt.customerName}`,
+        description: `${appt.appointmentTime} | ${appt.purpose || "No purpose specified"}`,
+        time: appt.createdAt,
+        read: readIds.has(apptId),
+      });
+    }
+
     // Sort by time (most recent first)
     notifications.sort((a, b) => b.time - a.time);
 
-    return notifications.slice(0, 20);
+    return notifications.slice(0, 30);
   },
 });
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { Search, Book, MessageCircle, Send, CheckCircle } from "lucide-react";
+import { Search, Book, MessageCircle, Send, CheckCircle, HelpCircle } from "lucide-react";
 
 export default function HelpCenterPage() {
   const { user } = useUser();
@@ -64,89 +64,109 @@ export default function HelpCenterPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <div className="max-w-5xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-gray-900">Help Center</h1>
+    <div className="min-h-screen bg-[#f8f9fa]">
+      <div className="p-4 md:p-6 lg:p-8 max-w-[1100px] mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Help Center</h1>
+          <p className="text-[13px] text-gray-500 mt-0.5">Find answers, browse guides, or contact support</p>
+        </div>
 
         {/* Search Bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Search for help..."
-              className="w-full pl-12 pr-4 py-4 border-2 border-yellow-400 rounded-xl focus:outline-none focus:ring-2 focus:ring-yellow-500 text-gray-900 bg-white"
+              className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-300 text-gray-900 bg-gray-50 text-sm"
             />
           </div>
         </div>
 
         {/* Quick Links */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:border-yellow-400 transition cursor-pointer">
-            <Book className="w-8 h-8 text-yellow-600 mb-3" />
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Documentation</h3>
-            <p className="text-sm text-gray-600">Browse our comprehensive guides and tutorials</p>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="group bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-all cursor-pointer">
+            <div className="p-2.5 bg-blue-100 rounded-xl w-fit mb-3 group-hover:scale-110 transition-transform">
+              <Book className="w-5 h-5 text-blue-600" />
+            </div>
+            <h3 className="text-sm font-semibold mb-1 text-gray-900">Documentation</h3>
+            <p className="text-xs text-gray-500">Browse our comprehensive guides and tutorials</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:border-yellow-400 transition cursor-pointer">
-            <MessageCircle className="w-8 h-8 text-yellow-600 mb-3" />
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Community</h3>
-            <p className="text-sm text-gray-600">Join our community forum for discussions</p>
+          <div className="group bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-all cursor-pointer">
+            <div className="p-2.5 bg-violet-100 rounded-xl w-fit mb-3 group-hover:scale-110 transition-transform">
+              <MessageCircle className="w-5 h-5 text-violet-600" />
+            </div>
+            <h3 className="text-sm font-semibold mb-1 text-gray-900">Community</h3>
+            <p className="text-xs text-gray-500">Join our community forum for discussions</p>
           </div>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:border-yellow-400 transition cursor-pointer">
-            <Send className="w-8 h-8 text-yellow-600 mb-3" />
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">Contact Support</h3>
-            <p className="text-sm text-gray-600">Get help from our support team</p>
+          <div className="group bg-white rounded-xl border border-gray-100 p-5 hover:shadow-md transition-all cursor-pointer">
+            <div className="p-2.5 bg-emerald-100 rounded-xl w-fit mb-3 group-hover:scale-110 transition-transform">
+              <Send className="w-5 h-5 text-emerald-600" />
+            </div>
+            <h3 className="text-sm font-semibold mb-1 text-gray-900">Contact Support</h3>
+            <p className="text-xs text-gray-500">Get help from our support team</p>
           </div>
         </div>
 
         {/* FAQs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-          <h2 className="text-2xl font-semibold mb-6 text-gray-900">Frequently Asked Questions</h2>
+        <div className="bg-white rounded-xl border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="p-2 bg-amber-100 rounded-xl">
+              <HelpCircle className="w-5 h-5 text-amber-600" />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">Frequently Asked Questions</h2>
+          </div>
           <div className="space-y-4">
             {faqs.map((faq, index) => (
-              <div key={index} className="border-b border-gray-200 pb-4 last:border-0">
-                <h3 className="font-semibold text-gray-900 mb-2">{faq.question}</h3>
-                <p className="text-gray-600 text-sm">{faq.answer}</p>
+              <div key={index} className="pb-4 border-b border-gray-100 last:border-0 last:pb-0">
+                <h3 className="font-medium text-gray-900 mb-1 text-sm">{faq.question}</h3>
+                <p className="text-gray-500 text-xs">{faq.answer}</p>
               </div>
             ))}
           </div>
         </div>
 
         {/* Contact Support Form */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-2xl font-semibold mb-6 text-gray-900">Contact Support</h2>
+        <div className="bg-white rounded-xl border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="p-2 bg-indigo-100 rounded-xl">
+              <Send className="w-5 h-5 text-indigo-600" />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">Contact Support</h2>
+          </div>
           
           {submitted ? (
-            <div className="flex items-center gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+            <div className="flex items-center justify-center bg-[#f8f9fa] border border-emerald-200 rounded-xl">
+              <CheckCircle className="w-5 h-5 text-emerald-600" />
               <div>
-                <p className="font-semibold text-green-900">Message sent successfully!</p>
-                <p className="text-sm text-green-700">Our team will get back to you soon.</p>
+                <p className="font-medium text-emerald-900 text-sm">Message sent successfully!</p>
+                <p className="text-xs text-emerald-700">Our team will get back to you soon.</p>
               </div>
             </div>
           ) : (
-            <form onSubmit={handleSupportSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+            <form onSubmit={handleSupportSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Your Email
                 </label>
                 <input
                   type="email"
                   value={user?.primaryEmailAddress?.emailAddress || ""}
                   disabled
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-gray-50 text-gray-500 text-sm"
                 />
               </div>
               
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   How can we help?
                 </label>
                 <textarea
                   value={supportMessage}
                   onChange={(e) => setSupportMessage(e.target.value)}
-                  rows={6}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent text-gray-900 bg-white"
+                  rows={5}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-200 focus:border-gray-300 focus:outline-none text-gray-900 bg-white text-sm"
                   placeholder="Describe your issue or question..."
                   required
                 />
@@ -155,7 +175,7 @@ export default function HelpCenterPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || !supportMessage.trim()}
-                className="px-6 py-2.5 bg-yellow-400 text-black rounded-lg hover:bg-yellow-500 disabled:bg-gray-300 disabled:cursor-not-allowed font-semibold transition flex items-center gap-2"
+                className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed font-medium transition-all flex items-center gap-2 text-sm"
               >
                 <Send className="w-4 h-4" />
                 {isSubmitting ? "Sending..." : "Send Message"}

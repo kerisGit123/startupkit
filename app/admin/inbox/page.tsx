@@ -19,6 +19,8 @@ import {
   Bell,
   Send,
   Calendar,
+  CalendarPlus,
+  CreditCard,
   ExternalLink,
   Image as ImageIcon,
 } from "lucide-react";
@@ -104,8 +106,7 @@ export default function InboxPage() {
     activeType === "email" ? {} : "skip"
   );
   const notifications = useQuery(
-    api.adminNotifications.getNotifications,
-    activeType === "notification" ? undefined : "skip"
+    api.adminNotifications.getNotifications
   );
   const cleanupPreview = useQuery(
     api.inboxCleanup.getCleanupPreview,
@@ -406,129 +407,143 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] gap-4">
+    <div className="flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pb-3 shrink-0">
         <div>
-          <h1 className="text-3xl font-bold">Inbox</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl font-bold tracking-tight">Inbox</h1>
+          <p className="text-sm text-muted-foreground">
             {unreadCount} unread messages
           </p>
         </div>
-        <Button className="gap-2">
+        <Button size="sm" className="gap-2">
           <Mail className="w-4 h-4" />
           Compose
         </Button>
       </div>
 
       {/* Main Content - 3 Column Layout */}
-      <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
+      <div className="flex-1 grid grid-cols-12 gap-3 min-h-0">
         {/* Left Sidebar - Navigation */}
-        <Card className="col-span-2 p-4 overflow-y-auto">
-          <div className="space-y-2">
+        <Card className="col-span-2 p-2 overflow-y-auto">
+          <div className="space-y-0.5">
             <Button
               variant={activeType === "all" ? "default" : "ghost"}
-              className="w-full justify-start gap-2"
+              size="sm"
+              className="w-full justify-start gap-2 h-9"
               onClick={() => setActiveType("all")}
             >
-              <InboxIcon className="w-4 h-4" />
-              <span>All Inbox</span>
-              <Badge variant="secondary" className="ml-auto">
+              <InboxIcon className="w-4 h-4 shrink-0" />
+              <span className="truncate">All Inbox</span>
+              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
                 {groupedMessages?.length || 0}
               </Badge>
             </Button>
             <Button
               variant={activeType === "ticket" ? "default" : "ghost"}
-              className="w-full justify-start gap-2"
+              size="sm"
+              className="w-full justify-start gap-2 h-9"
               onClick={() => setActiveType("ticket")}
             >
-              <Ticket className="w-4 h-4" />
-              <span>Tickets</span>
-              <Badge variant="secondary" className="ml-auto">
+              <Ticket className="w-4 h-4 shrink-0" />
+              <span className="truncate">Tickets</span>
+              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
                 {groupedMessages?.filter((m: any) => m.channel === "ticket").length || 0}
               </Badge>
             </Button>
             <Button
               variant={activeType === "chatbot" ? "default" : "ghost"}
-              className="w-full justify-start gap-2"
+              size="sm"
+              className="w-full justify-start gap-2 h-9"
               onClick={() => { setActiveType("chatbot"); setSelectedMessage(null); }}
             >
-              <MessageSquare className="w-4 h-4" />
-              <span>Chatbot</span>
-              <Badge variant="secondary" className="ml-auto">
+              <MessageSquare className="w-4 h-4 shrink-0" />
+              <span className="truncate">Chatbot</span>
+              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
                 {chatbotConversations?.length || 0}
               </Badge>
             </Button>
             <Button
               variant={activeType === "email" ? "default" : "ghost"}
-              className="w-full justify-start gap-2"
+              size="sm"
+              className="w-full justify-start gap-2 h-9"
               onClick={() => { setActiveType("email" as MessageType); setSelectedMessage(null); }}
             >
-              <Mail className="w-4 h-4" />
-              <span>Email Logs</span>
-              <Badge variant="secondary" className="ml-auto">
+              <Mail className="w-4 h-4 shrink-0" />
+              <span className="truncate">Email Logs</span>
+              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
                 {emailLogs?.length || 0}
               </Badge>
             </Button>
             <Button
               variant={activeType === "notification" ? "default" : "ghost"}
-              className="w-full justify-start gap-2"
+              size="sm"
+              className="w-full justify-start gap-2 h-9"
               onClick={() => { setActiveType("notification" as MessageType); setSelectedMessage(null); }}
             >
-              <Bell className="w-4 h-4" />
-              <span>Notifications</span>
-              <Badge variant="secondary" className="ml-auto">
-                {notifications?.length || 0}
-              </Badge>
+              <Bell className="w-4 h-4 shrink-0" />
+              <span className="truncate">Notifications</span>
+              {(notifications?.length || 0) > 0 ? (
+                <Badge variant="default" className="ml-auto text-[10px] px-1.5 h-5 bg-blue-600">
+                  {notifications?.length}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">0</Badge>
+              )}
             </Button>
 
-            <div className="pt-4 border-t">
+            <div className="pt-3 mt-2 border-t">
               <Button
                 variant={starredFilter ? "default" : "ghost"}
-                className="w-full justify-start gap-2"
+                size="sm"
+                className="w-full justify-start gap-2 h-9"
                 onClick={() => { setStarredFilter(!starredFilter); setActiveType("ticket"); }}
               >
-                <Star className={cn("w-4 h-4", starredFilter && "fill-yellow-400 text-yellow-400")} />
+                <Star className={cn("w-4 h-4 shrink-0", starredFilter && "fill-yellow-400 text-yellow-400")} />
                 <span>Starred</span>
               </Button>
             </div>
 
-            <div className="pt-4 border-t">
-              <p className="text-xs font-semibold text-muted-foreground mb-2 px-2">LABELS</p>
+            <div className="pt-3 mt-1 border-t">
+              <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 px-2 uppercase tracking-wider">Labels</p>
               <Button
                 variant={labelFilter === "urgent" ? "default" : "ghost"}
-                className="w-full justify-start gap-2 text-xs"
+                size="sm"
+                className="w-full justify-start gap-2 h-8 text-xs"
                 onClick={() => setLabelFilter(labelFilter === "urgent" ? "all" : "urgent")}
               >
-                <div className="w-2 h-2 rounded-full bg-red-500" />
+                <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
                 <span>Urgent</span>
               </Button>
               <Button
                 variant={labelFilter === "follow-up" ? "default" : "ghost"}
-                className="w-full justify-start gap-2 text-xs"
+                size="sm"
+                className="w-full justify-start gap-2 h-8 text-xs"
                 onClick={() => setLabelFilter(labelFilter === "follow-up" ? "all" : "follow-up")}
               >
-                <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                <div className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
                 <span>Follow-up</span>
               </Button>
               <Button
                 variant={labelFilter === "resolved" ? "default" : "ghost"}
-                className="w-full justify-start gap-2 text-xs"
+                size="sm"
+                className="w-full justify-start gap-2 h-8 text-xs"
                 onClick={() => setLabelFilter(labelFilter === "resolved" ? "all" : "resolved")}
               >
-                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
                 <span>Resolved</span>
               </Button>
             </div>
 
             {/* Cleanup Section */}
-            <div className="pt-4 border-t">
+            <div className="pt-3 mt-1 border-t">
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                size="sm"
+                className="w-full justify-start gap-2 h-8 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                 onClick={() => setCleanupDialogOpen(true)}
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
                 <span>Cleanup Old Data</span>
               </Button>
             </div>
@@ -536,14 +551,14 @@ export default function InboxPage() {
         </Card>
 
         {/* Middle - Message List */}
-        <Card className="col-span-4 flex flex-col overflow-hidden">
+        <Card className="col-span-4 flex flex-col overflow-hidden border-l-0 border-r-0 rounded-none sm:rounded-lg sm:border">
           {/* Search and Filters */}
-          <div className="p-4 border-b space-y-3">
+          <div className="p-3 border-b space-y-2 shrink-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search messages..."
-                className="pl-10"
+                className="pl-10 h-9 text-sm"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -964,53 +979,109 @@ export default function InboxPage() {
                 ))
               )
             ) : activeType === "notification" ? (
-              /* Notifications tab */
-              !notifications || notifications.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <div className="text-center p-8">
-                    <Bell className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p className="font-medium">No notifications</p>
-                    <p className="text-xs mt-1">System notifications will appear here</p>
-                  </div>
-                </div>
-              ) : (
-                notifications.map((notif: any) => (
-                  <div
-                    key={notif.id}
-                    className={cn(
-                      "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors",
-                      !notif.isRead && "bg-blue-50/30 border-l-4 border-l-blue-500"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
-                        notif.type === "subscription" ? "bg-green-100 text-green-700" :
-                        notif.type === "purchase" ? "bg-blue-100 text-blue-700" :
-                        notif.type === "ticket" ? "bg-orange-100 text-orange-700" :
-                        "bg-gray-100 text-gray-600"
-                      )}>
-                        <Bell className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">{notif.title}</span>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
-                            {notif.type}
-                          </Badge>
-                          {!notif.isRead && (
-                            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                          )}
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            {formatDate(notif.createdAt)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate">{notif.description}</p>
+              /* Notifications tab - grouped by category */
+              (() => {
+                // Apply filters to notifications
+                const filtered = (notifications || []).filter((n: any) => {
+                  if (activeFilter === "unread" && n.read) return false;
+                  if (searchQuery && !n.title?.toLowerCase().includes(searchQuery.toLowerCase()) && !n.description?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                  if (!isWithinDateRange(n.time)) return false;
+                  return true;
+                });
+                const unreadCount = (notifications || []).filter((n: any) => !n.read).length;
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                      <div className="text-center p-8">
+                        <Bell className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                        <p className="font-medium">{activeFilter === "unread" ? "No unread notifications" : "No notifications"}</p>
+                        <p className="text-xs mt-1">System notifications will appear here</p>
                       </div>
                     </div>
-                  </div>
-                ))
-              )
+                  );
+                }
+
+                const categories = [
+                  { key: "subscription", label: "New Subscriptions", icon: <Star className="w-4 h-4" />, color: "bg-emerald-500", textColor: "text-emerald-700", bgColor: "bg-emerald-50", filter: (n: any) => n.type?.includes("subscription") },
+                  { key: "credit", label: "Credit Purchases", icon: <CreditCard className="w-4 h-4" />, color: "bg-violet-500", textColor: "text-violet-700", bgColor: "bg-violet-50", filter: (n: any) => n.type?.includes("credit") },
+                  { key: "ticket", label: "New Tickets", icon: <Ticket className="w-4 h-4" />, color: "bg-amber-500", textColor: "text-amber-700", bgColor: "bg-amber-50", filter: (n: any) => n.type?.includes("ticket") },
+                  { key: "booking", label: "Booking Appointments", icon: <CalendarPlus className="w-4 h-4" />, color: "bg-blue-500", textColor: "text-blue-700", bgColor: "bg-blue-50", filter: (n: any) => n.type?.includes("booking") },
+                ];
+
+                return (
+                  <>
+                    {/* Notification header with unread count and mark-all-read */}
+                    {unreadCount > 0 && (
+                      <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{unreadCount} unread notification{unreadCount !== 1 ? "s" : ""}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={async () => {
+                            try {
+                              for (const n of (notifications || []).filter((n: any) => !n.read)) {
+                                await markAsReadMutation({ notificationId: n.id });
+                              }
+                              toast.success("All notifications marked as read");
+                            } catch { toast.error("Failed to mark as read"); }
+                          }}
+                        >
+                          Mark all read
+                        </Button>
+                      </div>
+                    )}
+                    {categories.map(cat => {
+                      const items = filtered.filter(cat.filter);
+                      if (items.length === 0) return null;
+                      return (
+                        <div key={cat.key}>
+                          <div className={cn("px-4 py-2 flex items-center gap-2 sticky top-0 z-10 border-b", cat.bgColor)}>
+                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white", cat.color)}>
+                              {cat.icon}
+                            </div>
+                            <span className={cn("text-xs font-semibold uppercase tracking-wide", cat.textColor)}>{cat.label}</span>
+                            <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">{items.length}</Badge>
+                          </div>
+                          {items.map((notif: any) => (
+                            <div
+                              key={notif.id}
+                              className={cn(
+                                "px-4 py-3 border-b cursor-pointer hover:bg-muted/50 transition-colors",
+                                !notif.read && "bg-blue-50/40 border-l-2 border-l-blue-500"
+                              )}
+                              onClick={async () => {
+                                if (!notif.read) {
+                                  try { await markAsReadMutation({ notificationId: notif.id }); } catch {}
+                                }
+                              }}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", cat.bgColor, cat.textColor)}>
+                                  {cat.icon}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-sm truncate">{notif.title}</span>
+                                    {!notif.read && (
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                    )}
+                                    <span className="text-[11px] text-muted-foreground ml-auto whitespace-nowrap">
+                                      {formatDate(notif.time)}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.description}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()
             ) : (
               /* Ticket specific tab */
               <>

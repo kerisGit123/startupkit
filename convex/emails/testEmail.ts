@@ -5,12 +5,13 @@ import { internal } from "../_generated/api";
 export const sendTestEmail = action({
   args: {
     to: v.string(),
-    resendApiKey: v.string(),
-    fromName: v.string(),
-    fromEmail: v.string(),
+    fromName: v.optional(v.string()),
+    fromEmail: v.optional(v.string()),
     useTestMode: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    const fromName = args.fromName || "Your SaaS";
+    const fromEmail = args.fromEmail || "noreply@example.com";
     const htmlContent = `
           <!DOCTYPE html>
           <html>
@@ -29,28 +30,21 @@ export const sendTestEmail = action({
           <body>
             <div class="container">
               <div class="header">
-                <h1 style="margin: 0;">✓ Test Email Successful!</h1>
+                <h1 style="margin: 0;">Test Email Successful!</h1>
               </div>
               <div class="content">
                 <div class="success-badge">Configuration Verified</div>
-                <p>Congratulations! Your Resend email configuration is working correctly.</p>
+                <p>Your SMTP email configuration is working correctly.</p>
                 
                 <div class="info-box">
                   <h3 style="margin-top: 0;">Configuration Details:</h3>
-                  <p><strong>From Name:</strong> ${args.fromName}</p>
-                  <p><strong>From Email:</strong> ${args.fromEmail}</p>
+                  <p><strong>From Name:</strong> ${fromName}</p>
+                  <p><strong>From Email:</strong> ${fromEmail}</p>
                   <p><strong>To:</strong> ${args.to}</p>
                   <p class="timestamp">Sent at: ${new Date().toLocaleString()}</p>
                 </div>
                 
                 <p>You can now send emails to your users with confidence. All email notifications will be sent using these settings.</p>
-                
-                <p style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                  <strong>Next Steps:</strong><br>
-                  • Configure your email templates<br>
-                  • Set up email notification preferences<br>
-                  • Create your first email campaign
-                </p>
               </div>
               <div class="footer">
                 <p>This is an automated test email from your SaaS platform.</p>
@@ -67,8 +61,8 @@ export const sendTestEmail = action({
           to: args.to,
           subject: "Test Email from Your SaaS Platform",
           htmlContent,
-          fromName: args.fromName,
-          fromEmail: args.fromEmail,
+          fromName,
+          fromEmail,
         });
         
         return { 
@@ -77,30 +71,31 @@ export const sendTestEmail = action({
         };
       }
 
-      // Otherwise, actually send via Resend
-      const { Resend } = await import("resend");
-      const resend = new Resend(args.resendApiKey);
-
-      const { data, error } = await resend.emails.send({
-        from: `${args.fromName} <${args.fromEmail}>`,
-        to: [args.to],
-        subject: "Test Email from Your SaaS Platform",
-        html: htmlContent,
+      // Send via SMTP API route
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3000";
+      const res = await fetch(`${appUrl}/api/send-system-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: args.to,
+          subject: "Test Email from Your SaaS Platform",
+          html: htmlContent,
+        }),
       });
 
-      if (error) {
-        console.error("Resend API error:", error);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        console.error("SMTP send error:", data.error);
         return { 
           success: false, 
-          error: error.message || "Failed to send email" 
+          error: data.error || "Failed to send email" 
         };
       }
 
-      console.log("Test email sent successfully:", data);
       return { 
         success: true, 
-        messageId: data?.id,
-        message: "Test email sent successfully!"
+        messageId: data.messageId,
+        message: "Test email sent successfully via SMTP!"
       };
     } catch (error) {
       console.error("Test email error:", error);

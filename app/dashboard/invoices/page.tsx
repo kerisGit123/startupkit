@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+// Card components removed - using custom div styling for consistency
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -120,131 +120,118 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#f8f9fa]">
+      <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
         {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <FileText className="h-8 w-8 text-indigo-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Invoices</h1>
-          </div>
-          <p className="text-gray-600">
-            View and manage your invoices, subscriptions, and payments.
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Invoices</h1>
+          <p className="text-[13px] text-gray-500 mt-0.5">
+            View and manage your invoices, subscriptions, and payments
           </p>
         </div>
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Invoices</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                  </div>
-                  <FileText className="h-8 w-8 text-gray-400" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-blue-100">
+                  <FileText className="w-5 h-5 text-blue-600" />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <p className="text-sm font-medium text-gray-500 mb-0.5">Total Invoices</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+            </div>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Amount</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(stats.totalAmount)}
-                    </p>
-                  </div>
-                  <DollarSign className="h-8 w-8 text-gray-400" />
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-violet-100">
+                  <DollarSign className="w-5 h-5 text-violet-600" />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <p className="text-sm font-medium text-gray-500 mb-0.5">Total Amount</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalAmount)}</p>
+            </div>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Paid</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {formatCurrency(stats.totalPaid)}
-                    </p>
-                  </div>
-                  <Receipt className="h-8 w-8 text-green-400" />
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-emerald-100">
+                  <Receipt className="w-5 h-5 text-emerald-600" />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <p className="text-sm font-medium text-gray-500 mb-0.5">Paid</p>
+              <p className="text-2xl font-bold text-emerald-600">{formatCurrency(stats.totalPaid)}</p>
+            </div>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Pending</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {formatCurrency(stats.totalPending)}
-                    </p>
-                  </div>
-                  <Calendar className="h-8 w-8 text-orange-400" />
+            <div className="bg-white rounded-xl border border-gray-100 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 rounded-xl bg-amber-100">
+                  <Calendar className="w-5 h-5 text-amber-600" />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <p className="text-sm font-medium text-gray-500 mb-0.5">Pending</p>
+              <p className="text-2xl font-bold text-amber-600">{formatCurrency(stats.totalPending)}</p>
+            </div>
           </div>
         )}
 
         {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Search by invoice number, description..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search by invoice number, description..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 rounded-lg"
+                />
               </div>
-
-              <Select value={invoiceType} onValueChange={(value) => setInvoiceType(value as InvoiceType)}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="subscription">Subscription</SelectItem>
-                  <SelectItem value="payment">Payment</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? undefined : value as InvoiceStatus)}>
-                <SelectTrigger className="w-full md:w-[200px]">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="issued">Issued</SelectItem>
-                  <SelectItem value="overdue">Overdue</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
-          </CardContent>
-        </Card>
+
+            <Select value={invoiceType} onValueChange={(value) => setInvoiceType(value as InvoiceType)}>
+              <SelectTrigger className="w-full md:w-[200px] rounded-lg">
+                <SelectValue placeholder="Filter by type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="subscription">Subscription</SelectItem>
+                <SelectItem value="payment">Payment</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={statusFilter || "all"} onValueChange={(value) => setStatusFilter(value === "all" ? undefined : value as InvoiceStatus)}>
+              <SelectTrigger className="w-full md:w-[200px] rounded-lg">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+                <SelectItem value="issued">Issued</SelectItem>
+                <SelectItem value="overdue">Overdue</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
 
         {/* Invoices Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Invoice History</CardTitle>
-            <CardDescription>
-              {invoices ? `${invoices.length} invoice${invoices.length !== 1 ? 's' : ''} found` : 'Loading...'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <FileText className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Invoice History</h2>
+                <p className="text-xs text-gray-400">
+                  {invoices ? `${invoices.length} invoice${invoices.length !== 1 ? 's' : ''} found` : 'Loading...'}
+                </p>
+              </div>
+            </div>
+          </div>
             {!invoices ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
@@ -333,8 +320,7 @@ export default function InvoicesPage() {
                 </table>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Invoice Detail Modal */}
         <Dialog open={!!selectedInvoiceId} onOpenChange={() => setSelectedInvoiceId(null)}>

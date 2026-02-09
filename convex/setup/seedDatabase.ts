@@ -33,7 +33,6 @@ export const seedDatabase = mutation({
         sendPaymentNotifications: true,
         sendUsageAlerts: true,
         sendAdminNotifications: true,
-        resendApiKey: "",
         emailFromName: "Your Company",
         emailFromAddress: "noreply@yourcompany.com",
         // Credits

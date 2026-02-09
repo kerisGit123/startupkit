@@ -50,7 +50,7 @@ export function NotificationBell() {
         router.push("/admin/purchases");
         break;
       case "new_ticket":
-        router.push("/admin/tickets");
+        router.push("/admin/inbox?tab=ticket");
         break;
     }
   };

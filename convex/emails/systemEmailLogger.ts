@@ -35,7 +35,7 @@ export const logSystemEmail = internalMutation({
 
 /**
  * Helper function to send system emails (welcome, password reset, etc.)
- * Respects the System Notification toggle - logs to database if ON, sends via Resend if OFF
+ * Respects the System Notification toggle - logs to database if ON, sends via SMTP if OFF
  * This is a mutation-based version for test/log mode only
  */
 export const sendSystemEmail = mutation({
@@ -92,8 +92,8 @@ export const sendSystemEmail = mutation({
 });
 
 /**
- * Action-based email sender that can make HTTP calls to Resend.
- * Use this when you need to actually send emails.
+ * Action-based email sender that calls the Next.js SMTP API route.
+ * Use this when you need to actually send emails from Convex actions.
  */
 export const sendSystemEmailAction = action({
   args: {
@@ -128,36 +128,23 @@ export const sendSystemEmailAction = action({
       };
     }
 
-    // PRODUCTION MODE: Send via Resend
+    // PRODUCTION MODE: Send via SMTP API route
     try {
-      const resendApiKey = settings.resendApiKey;
-      if (!resendApiKey) {
-        await ctx.runMutation(internal.emails.systemEmailLogger.logSystemEmail, {
-          sentTo: args.recipientEmail,
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.SITE_URL || "http://localhost:3000";
+      const res = await fetch(`${appUrl}/api/send-system-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: args.recipientEmail,
           subject: args.subject,
-          htmlContent: args.htmlContent,
-          templateType: args.templateType,
-          variables: args.variables,
-          status: "failed",
-          errorMessage: "Resend API key not configured",
-        });
-        return { success: false, error: "Resend API key not configured" };
-      }
-
-      const { Resend } = await import("resend");
-      const resend = new Resend(resendApiKey);
-
-      const fromName = settings.emailFromName || "Support";
-      const fromAddress = settings.emailFromAddress || "noreply@yourdomain.com";
-
-      const { data, error } = await resend.emails.send({
-        from: `${fromName} <${fromAddress}>`,
-        to: [args.recipientEmail],
-        subject: args.subject,
-        html: args.htmlContent,
+          html: args.htmlContent,
+        }),
       });
 
-      if (error) {
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        const errorMsg = data.error || "SMTP send failed";
         await ctx.runMutation(internal.emails.systemEmailLogger.logSystemEmail, {
           sentTo: args.recipientEmail,
           subject: args.subject,
@@ -165,9 +152,9 @@ export const sendSystemEmailAction = action({
           templateType: args.templateType,
           variables: args.variables,
           status: "failed",
-          errorMessage: error.message || "Resend API error",
+          errorMessage: errorMsg,
         });
-        return { success: false, error: error.message };
+        return { success: false, error: errorMsg };
       }
 
       // Log successful send
@@ -183,8 +170,8 @@ export const sendSystemEmailAction = action({
       return {
         success: true,
         mode: "production",
-        messageId: data?.id,
-        message: "Email sent via Resend",
+        messageId: data.messageId,
+        message: "Email sent via SMTP",
       };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";

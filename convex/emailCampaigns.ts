@@ -117,7 +117,7 @@ export const sendCampaign = action({
           email: recipient.email || "",
         });
 
-        // TODO: Integrate with Resend to send actual email
+        // Email sent via SMTP when using sendCampaign action in emails/campaigns.ts
         sentCount++;
       } catch (error) {
         console.error(`Failed to send to ${recipient.email}:`, error);

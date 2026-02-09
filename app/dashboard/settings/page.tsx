@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+// Card components removed - using custom div styling for consistency
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,36 +63,34 @@ export default function SettingsPage() {
 
   if (companySettings === undefined) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      <div className="min-h-screen bg-[#f8f9fa] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-500 border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Building2 className="h-8 w-8 text-indigo-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Company Settings</h1>
-          </div>
-          <p className="text-gray-600">
-            Manage your company information and business details.
+    <div className="min-h-screen bg-[#f8f9fa]">
+      <div className="p-4 md:p-6 lg:p-8 max-w-[900px] mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Company Settings</h1>
+          <p className="text-[13px] text-gray-500 mt-0.5">
+            Manage your company information and business details
           </p>
         </div>
 
         {saveStatus === "success" && (
-          <Alert className="mb-6 bg-green-50 border-green-200">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
+          <Alert className="bg-emerald-50 border-emerald-200">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-emerald-800">
               Company settings saved successfully!
             </AlertDescription>
           </Alert>
         )}
 
         {saveStatus === "error" && (
-          <Alert className="mb-6 bg-red-50 border-red-200">
+          <Alert className="bg-red-50 border-red-200">
             <AlertCircle className="h-4 w-4 text-red-600" />
             <AlertDescription className="text-red-800">
               Failed to save settings. Please try again.
@@ -100,112 +98,108 @@ export default function SettingsPage() {
           </Alert>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Company Information</CardTitle>
-            <CardDescription>
-              Update your company details. These will be used in email templates and communications.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="companyName">Company Name *</Label>
-              <Input
-                id="companyName"
-                placeholder="Enter your company name"
-                value={localSettings.companyName}
-                onChange={(e) => setLocalSettings({ ...localSettings, companyName: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                Used in email templates as {"{company_name}"}
-              </p>
+        <div className="bg-white rounded-xl border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-indigo-100 rounded-xl">
+              <Building2 className="w-5 h-5 text-indigo-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Company Information</h2>
+              <p className="text-xs text-gray-400">Used in email templates and communications</p>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            <div className="grid md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <Label htmlFor="companyName" className="text-sm font-medium text-gray-700">Company Name *</Label>
+                <Input
+                  id="companyName"
+                  placeholder="Enter your company name"
+                  value={localSettings.companyName}
+                  onChange={(e) => setLocalSettings({ ...localSettings, companyName: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="companyEmail" className="text-sm font-medium text-gray-700">Company Email *</Label>
+                <Input
+                  id="companyEmail"
+                  type="email"
+                  placeholder="contact@company.com"
+                  value={localSettings.companyEmail}
+                  onChange={(e) => setLocalSettings({ ...localSettings, companyEmail: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <Label htmlFor="companyPhone" className="text-sm font-medium text-gray-700">Company Phone</Label>
+                <Input
+                  id="companyPhone"
+                  type="tel"
+                  placeholder="+1 (555) 000-0000"
+                  value={localSettings.companyPhone}
+                  onChange={(e) => setLocalSettings({ ...localSettings, companyPhone: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="companyCountry" className="text-sm font-medium text-gray-700">Company Country</Label>
+                <Input
+                  id="companyCountry"
+                  placeholder="United States"
+                  value={localSettings.companyCountry}
+                  onChange={(e) => setLocalSettings({ ...localSettings, companyCountry: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="companyEmail">Company Email *</Label>
-              <Input
-                id="companyEmail"
-                type="email"
-                placeholder="contact@company.com"
-                value={localSettings.companyEmail}
-                onChange={(e) => setLocalSettings({ ...localSettings, companyEmail: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                Main contact email for your company
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="companyPhone">Company Phone</Label>
-              <Input
-                id="companyPhone"
-                type="tel"
-                placeholder="+1 (555) 000-0000"
-                value={localSettings.companyPhone}
-                onChange={(e) => setLocalSettings({ ...localSettings, companyPhone: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                Contact phone number
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="companyAddress">Company Address</Label>
+              <Label htmlFor="companyAddress" className="text-sm font-medium text-gray-700">Company Address</Label>
               <Textarea
                 id="companyAddress"
                 placeholder="123 Business Street, Suite 100"
                 rows={3}
                 value={localSettings.companyAddress}
                 onChange={(e) => setLocalSettings({ ...localSettings, companyAddress: e.target.value })}
+                className="rounded-xl"
               />
-              <p className="text-sm text-muted-foreground">
-                Full company address
-              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="companyCountry">Company Country</Label>
-              <Input
-                id="companyCountry"
-                placeholder="United States"
-                value={localSettings.companyCountry}
-                onChange={(e) => setLocalSettings({ ...localSettings, companyCountry: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                Country where company is registered
-              </p>
-            </div>
+            <div className="grid md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <Label htmlFor="companyTin" className="text-sm font-medium text-gray-700">Tax ID (TIN)</Label>
+                <Input
+                  id="companyTin"
+                  placeholder="XX-XXXXXXX"
+                  value={localSettings.companyTin}
+                  onChange={(e) => setLocalSettings({ ...localSettings, companyTin: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="companyTin">Tax Identification Number (TIN)</Label>
-              <Input
-                id="companyTin"
-                placeholder="XX-XXXXXXX"
-                value={localSettings.companyTin}
-                onChange={(e) => setLocalSettings({ ...localSettings, companyTin: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                Tax Identification Number for your company
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="companyLicense">Business License Number</Label>
-              <Input
-                id="companyLicense"
-                placeholder="License number"
-                value={localSettings.companyLicense}
-                onChange={(e) => setLocalSettings({ ...localSettings, companyLicense: e.target.value })}
-              />
-              <p className="text-sm text-muted-foreground">
-                Business license or registration number
-              </p>
+              <div className="space-y-2">
+                <Label htmlFor="companyLicense" className="text-sm font-medium text-gray-700">Business License</Label>
+                <Input
+                  id="companyLicense"
+                  placeholder="License number"
+                  value={localSettings.companyLicense}
+                  onChange={(e) => setLocalSettings({ ...localSettings, companyLicense: e.target.value })}
+                  className="rounded-xl"
+                />
+              </div>
             </div>
 
             <Button 
               onClick={handleSave} 
               disabled={saveStatus === "saving"}
-              className="w-full"
+              className="w-full rounded-xl bg-gray-900 hover:bg-gray-800"
             >
               {saveStatus === "saving" ? (
                 <>
@@ -216,8 +210,8 @@ export default function SettingsPage() {
                 "Save Company Settings"
               )}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -49,11 +49,13 @@ export const generateDefaults = mutation({
       { key: "serviceTaxEnable", value: false, category: "invoice_po_config", description: "Enable service tax" },
       { key: "roundingEnable", value: false, category: "invoice_po_config", description: "Enable rounding" },
 
-      // Resend Email Defaults
-      { key: "resendApiKey", value: "", category: "resend", description: "Resend API Key" },
-      { key: "resendFromEmail", value: "noreply@mycompany.com", category: "resend", description: "Resend From Email" },
-      { key: "resendFromName", value: "My Company", category: "resend", description: "Resend From Name" },
-      { key: "resendReplyTo", value: "", category: "resend", description: "Resend Reply-To Email" },
+      // SMTP Email Defaults
+      { key: "smtpHost", value: "", category: "smtp", description: "SMTP Host" },
+      { key: "smtpPort", value: "587", category: "smtp", description: "SMTP Port" },
+      { key: "smtpUsername", value: "", category: "smtp", description: "SMTP Username" },
+      { key: "smtpFromEmail", value: "noreply@mycompany.com", category: "smtp", description: "SMTP From Email" },
+      { key: "smtpFromName", value: "My Company", category: "smtp", description: "SMTP From Name" },
+      { key: "smtpActive", value: "false", category: "smtp", description: "SMTP Active Toggle" },
 
       // Marker
       { key: "defaults_initialized", value: true, category: "system", description: "Whether default settings have been generated" },
@@ -74,7 +76,7 @@ export const generateDefaults = mutation({
           value: setting.value,
           category: setting.category,
           description: setting.description,
-          isEncrypted: setting.key === "resendApiKey",
+          isEncrypted: setting.key === "smtpPassword" || setting.key === "smtpApiKey",
           updatedAt: Date.now(),
           updatedBy: "system",
         });

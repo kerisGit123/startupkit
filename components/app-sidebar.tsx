@@ -4,9 +4,11 @@ import * as React from "react"
 import {
   IconLayoutDashboard,
   IconUsers,
+  IconUserCog,
   IconSettings,
   IconCreditCard,
   IconShield,
+  IconLock,
   IconFileInvoice,
   IconReceipt,
   IconMessageChatbot,
@@ -19,6 +21,11 @@ import {
   IconMail,
   IconTemplate,
   IconSend,
+  IconActivity,
+  IconBell,
+  IconCoins,
+  IconUserPlus,
+  IconGift,
 } from "@tabler/icons-react"
 
 import {
@@ -42,38 +49,6 @@ const navItems = [
     color: "text-blue-600",
   },
   {
-    title: "Finance",
-    icon: IconCurrencyDollar,
-    color: "text-green-600",
-    items: [
-      {
-        title: "Revenue Dashboard",
-        url: "/admin/revenue",
-        icon: IconChartBar,
-      },
-      {
-        title: "Transactions",
-        url: "/admin/revenue/transactions",
-        icon: IconReceipt,
-      },
-      {
-        title: "Subscriptions",
-        url: "/admin/subscriptions",
-        icon: IconCreditCard,
-      },
-      {
-        title: "Invoices & Sales Orders",
-        url: "/admin/invoices-and-pos",
-        icon: IconFileInvoice,
-      },
-      {
-        title: "Referral Program",
-        url: "/admin/referrals",
-        icon: IconShield,
-      },
-    ],
-  },
-  {
     title: "Customers",
     icon: IconUsers,
     color: "text-purple-600",
@@ -86,7 +61,54 @@ const navItems = [
       {
         title: "Leads",
         url: "/admin/leads",
-        icon: IconUsers,
+        icon: IconUserPlus,
+      },
+      {
+        title: "User Management",
+        url: "/admin/users",
+        icon: IconUserCog,
+      },
+      {
+        title: "User Activity",
+        url: "/admin/activity",
+        icon: IconActivity,
+      },
+    ],
+  },
+  {
+    title: "Finance",
+    icon: IconCurrencyDollar,
+    color: "text-green-600",
+    items: [
+      {
+        title: "Revenue Dashboard",
+        url: "/admin/revenue",
+        icon: IconChartBar,
+      },
+      {
+        title: "Subscriptions",
+        url: "/admin/subscriptions",
+        icon: IconCreditCard,
+      },
+      {
+        title: "Credit Purchases",
+        url: "/admin/purchases",
+        icon: IconCoins,
+      },
+      {
+        title: "Transactions",
+        url: "/admin/revenue/transactions",
+        icon: IconReceipt,
+      },
+      {
+        title: "Invoices & Sales Orders",
+        url: "/admin/invoices-and-pos",
+        icon: IconFileInvoice,
+      },
+      {
+        title: "Referral Program",
+        url: "/admin/referrals",
+        icon: IconGift,
       },
     ],
   },
@@ -99,7 +121,7 @@ const navItems = [
   {
     title: "Inbox",
     icon: IconInbox,
-    color: "text-blue-600",
+    color: "text-cyan-600",
     items: [
       {
         title: "All Messages",
@@ -107,9 +129,36 @@ const navItems = [
         icon: IconInbox,
       },
       {
-        title: "Chatbot Analytics",
+        title: "Alerts",
+        url: "/admin/alerts",
+        icon: IconBell,
+      },
+    ],
+  },
+  {
+    title: "Chatbot",
+    icon: IconMessageChatbot,
+    color: "text-indigo-600",
+    items: [
+      {
+        title: "Analytics",
         url: "/admin/chatbot-analytics",
         icon: IconChartBar,
+      },
+      {
+        title: "Settings",
+        url: "/admin/chatbot-settings",
+        icon: IconSettings,
+      },
+      {
+        title: "Widget Designer",
+        url: "/admin/chatbot-designer",
+        icon: IconPalette,
+      },
+      {
+        title: "Knowledge Base",
+        url: "/admin/knowledge-base",
+        icon: IconBook,
       },
     ],
   },
@@ -124,7 +173,7 @@ const navItems = [
         icon: IconMail,
       },
       {
-        title: "Email Templates",
+        title: "Templates",
         url: "/admin/email-templates",
         icon: IconTemplate,
       },
@@ -134,7 +183,7 @@ const navItems = [
         icon: IconSend,
       },
       {
-        title: "Analytics",
+        title: "Email Analytics",
         url: "/admin/email-management/analytics",
         icon: IconChartBar,
       },
@@ -151,19 +200,14 @@ const navItems = [
         icon: IconSettings,
       },
       {
-        title: "Chatbot",
-        url: "/admin/chatbot-settings",
-        icon: IconMessageChatbot,
+        title: "Email (SMTP)",
+        url: "/admin/settings/email",
+        icon: IconMail,
       },
       {
-        title: "Widget Designer",
-        url: "/admin/chatbot-designer",
-        icon: IconPalette,
-      },
-      {
-        title: "Knowledge Base",
-        url: "/admin/knowledge-base",
-        icon: IconBook,
+        title: "Security",
+        url: "/admin/security",
+        icon: IconLock,
       },
     ],
   },

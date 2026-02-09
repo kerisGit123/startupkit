@@ -3,7 +3,7 @@ import { mutation, query } from "../_generated/server";
 
 /**
  * Email Logs - For testing and debugging email sends
- * Logs emails to database instead of/in addition to sending via Resend
+ * Logs emails to database instead of/in addition to sending via SMTP
  */
 
 // List all email logs

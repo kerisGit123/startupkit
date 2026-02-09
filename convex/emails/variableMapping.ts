@@ -193,5 +193,5 @@ export function replaceTemplateVariables(
  * );
  * 
  * // Now send the email with replaced content
- * await sendEmailViaResend(user.email, subject, html);
+ * await sendEmail({ to: user.email, subject, html });
  */

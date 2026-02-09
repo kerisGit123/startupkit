@@ -4,9 +4,9 @@ export const dynamic = 'force-dynamic';
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { ShoppingCart, DollarSign, TrendingUp, Coins, Search, MoreHorizontal } from "lucide-react";
+import { ShoppingCart, DollarSign, TrendingUp, Coins, Search } from "lucide-react";
 import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,53 +56,60 @@ export default function PurchasesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-bold">Purchases</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="text-2xl font-bold tracking-tight">Credit Purchases</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
           Track all credit purchases and transactions
         </p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Gradient style matching Revenue & Subscriptions */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Purchases</CardTitle>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalPurchases || 0}</div>
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Total Purchases</p>
+              <ShoppingCart className="h-4 w-4 text-violet-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">{stats?.totalPurchases || 0}</p>
+            <p className="text-violet-200 text-xs mt-1.5">All-time purchases</p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><ShoppingCart className="h-20 w-20" /></div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">MYR {stats?.totalRevenue || "0.00"}</div>
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Total Revenue</p>
+              <DollarSign className="h-4 w-4 text-emerald-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">MYR {stats?.totalRevenue || "0.00"}</p>
+            <p className="text-emerald-200 text-xs mt-1.5">Lifetime credit revenue</p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><DollarSign className="h-20 w-20" /></div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">This Month</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">MYR {stats?.monthlyRevenue || "0.00"}</div>
-            <p className="text-xs text-muted-foreground mt-1">{stats?.thisMonthPurchases || 0} purchases</p>
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">This Month</p>
+              <TrendingUp className="h-4 w-4 text-blue-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">MYR {stats?.monthlyRevenue || "0.00"}</p>
+            <p className="text-blue-200 text-xs mt-1.5">{stats?.thisMonthPurchases || 0} purchases this month</p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><TrendingUp className="h-20 w-20" /></div>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Credits Sold</CardTitle>
-            <Coins className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalCredits || 0}</div>
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+          <CardContent className="pt-5 pb-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Credits Sold</p>
+              <Coins className="h-4 w-4 text-amber-200" />
+            </div>
+            <p className="text-3xl font-extrabold tracking-tight">{stats?.totalCredits || 0}</p>
+            <p className="text-amber-200 text-xs mt-1.5">Total credits distributed</p>
           </CardContent>
+          <div className="absolute -right-3 -bottom-3 opacity-10"><Coins className="h-20 w-20" /></div>
         </Card>
       </div>
 

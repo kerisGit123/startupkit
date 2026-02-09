@@ -3,16 +3,14 @@ import { sendEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
   try {
-    const { to, subject, message, fromName } = await req.json();
+    const { to, subject, body } = await req.json();
 
-    if (!to || !subject || !message) {
+    if (!to || !subject || !body) {
       return NextResponse.json(
-        { error: "to, subject, and message are required" },
+        { error: "to, subject, and body are required" },
         { status: 400 }
       );
     }
-
-    const senderName = fromName || "Support Team";
 
     const result = await sendEmail({
       to,
@@ -20,13 +18,9 @@ export async function POST(req: NextRequest) {
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
           <h2 style="color: #333;">${subject}</h2>
-          <div style="color: #666; font-size: 16px; line-height: 1.6; white-space: pre-wrap;">
-            ${message}
-          </div>
+          <div style="color: #666; font-size: 16px; line-height: 1.6; white-space: pre-wrap;">${body}</div>
           <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
-          <p style="color: #999; font-size: 12px;">
-            This email was sent by ${senderName}. Please do not reply directly to this email.
-          </p>
+          <p style="color: #999; font-size: 12px;">This email was sent from your SaaS platform.</p>
         </div>
       `,
     });
