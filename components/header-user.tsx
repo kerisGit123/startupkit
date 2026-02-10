@@ -16,11 +16,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { IconUser, IconSettings, IconLogout } from "@tabler/icons-react"
+import { IconUser, IconSettings, IconLogout, IconLayoutDashboard } from "@tabler/icons-react"
 import { SignOutButton } from "@clerk/nextjs"
+import { useRouter } from "next/navigation"
 
 export function HeaderUser() {
   const { user } = useUser()
+  const router = useRouter()
 
   if (!user) return null
 
@@ -47,13 +49,17 @@ export function HeaderUser() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/admin/users")}>
             <IconUser className="mr-2 h-4 w-4" />
             <span>Profile</span>
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/admin/settings")}>
             <IconSettings className="mr-2 h-4 w-4" />
             <span>Settings</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+            <IconLayoutDashboard className="mr-2 h-4 w-4" />
+            <span>User Dashboard</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

@@ -179,43 +179,17 @@ export const getUnreadCount = query({
     
     const readIds = new Set(readNotifications.map(n => n.notificationId));
     
-    // Debug: Log what we're comparing
-    console.log("=== NOTIFICATION DEBUG ===");
-    console.log("User ID:", identity.subject);
-    console.log("Read notification IDs:", Array.from(readIds));
-    console.log("Recent subscriptions:", recentSubscriptions.map(s => ({ id: s._id.toString(), plan: s.plan, createdAt: s.createdAt })));
-    console.log("Recent purchases:", recentPurchases.map(p => ({ id: p._id.toString(), tokens: p.tokens, createdAt: p.createdAt })));
-    console.log("Recent tickets:", recentTickets.map(t => ({ id: t._id.toString(), subject: t.subject, createdAt: t.createdAt })));
-    
-    // Count unread - convert IDs to strings for comparison
     let unreadCount = 0;
-    const unreadItems: any[] = [];
     
     for (const sub of recentSubscriptions) {
-      const subId = sub._id.toString();
-      if (!readIds.has(subId)) {
-        unreadCount++;
-        unreadItems.push({ type: 'subscription', id: subId, plan: sub.plan });
-      }
+      if (!readIds.has(sub._id.toString())) unreadCount++;
     }
     for (const purchase of recentPurchases) {
-      const purchaseId = purchase._id.toString();
-      if (!readIds.has(purchaseId)) {
-        unreadCount++;
-        unreadItems.push({ type: 'purchase', id: purchaseId, tokens: purchase.tokens });
-      }
+      if (!readIds.has(purchase._id.toString())) unreadCount++;
     }
     for (const ticket of recentTickets) {
-      const ticketId = ticket._id.toString();
-      if (!readIds.has(ticketId)) {
-        unreadCount++;
-        unreadItems.push({ type: 'ticket', id: ticketId, subject: ticket.subject });
-      }
+      if (!readIds.has(ticket._id.toString())) unreadCount++;
     }
-    
-    console.log("Unread items:", unreadItems);
-    console.log("Total unread count:", unreadCount);
-    console.log("=== END DEBUG ===");
     
     return unreadCount;
   },

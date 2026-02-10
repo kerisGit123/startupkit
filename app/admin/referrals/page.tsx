@@ -114,7 +114,7 @@ export default function AdminReferralsPage() {
 
       {/* Baremetrics-style Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Total Referrals</p>
@@ -126,7 +126,7 @@ export default function AdminReferralsPage() {
           <div className="absolute -right-3 -bottom-3 opacity-10"><Users className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Active Referrers</p>
@@ -138,7 +138,7 @@ export default function AdminReferralsPage() {
           <div className="absolute -right-3 -bottom-3 opacity-10"><TrendingUp className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Credits Distributed</p>
@@ -150,7 +150,7 @@ export default function AdminReferralsPage() {
           <div className="absolute -right-3 -bottom-3 opacity-10"><DollarSign className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Program Status</p>

@@ -45,11 +45,11 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   const config = await getSmtpConfig();
 
   if (!config) {
-    return { success: false, error: 'SMTP not configured' };
+    return { success: false, error: 'SMTP not configured. Go to Settings → Email Settings to configure SMTP.' };
   }
 
   if (!config.smtpHost && !config.smtpApiKey) {
-    return { success: false, error: 'SMTP host or API key required' };
+    return { success: false, error: 'SMTP host or API key required. Go to Settings → Email Settings to configure.' };
   }
 
   const toArray = Array.isArray(options.to) ? options.to : [options.to];

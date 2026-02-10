@@ -136,9 +136,11 @@ export const sendCampaign = mutation({
       smtpSettings[item.key] = String(item.value ?? "");
     }
     const smtpConfigured = !!(smtpSettings.smtpHost || smtpSettings.smtpApiKey);
+    const smtpActive = smtpSettings.smtpActive === "true";
 
     // Check if system notification (test mode) is enabled
-    const useTestMode = testMode || settings.useSystemNotification === true || !smtpConfigured;
+    // Also force test mode if SMTP is inactive
+    const useTestMode = testMode || settings.useSystemNotification === true || !smtpConfigured || !smtpActive;
 
     if (!useTestMode && !smtpConfigured) {
       throw new Error("SMTP not configured. Configure SMTP in Email Settings or use test mode to log emails.");

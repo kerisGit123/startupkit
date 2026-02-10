@@ -64,6 +64,9 @@ export default function InboxPage() {
   const [cleanupDays, setCleanupDays] = useState(90);
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [starredFilter, setStarredFilter] = useState(false);
+  const [notifCategoryFilter, setNotifCategoryFilter] = useState<string>("all");
+  const [notifPage, setNotifPage] = useState(0);
+  const NOTIF_PAGE_SIZE = 20;
   const [chatbotPage, setChatbotPage] = useState(0);
   const [allInboxPage, setAllInboxPage] = useState(0);
   const [ticketPage, setTicketPage] = useState(0);
@@ -121,6 +124,7 @@ export default function InboxPage() {
   const adminReplyToConversation = useMutation(api.chatbot.adminReplyToConversation);
   const updateConversationLabel = useMutation(api.chatbot.updateConversationLabel);
   const requestRatingMutation = useMutation(api.chatbot.requestRating);
+  const markAsReadMutation = useMutation(api.adminNotifications.markAsRead);
   const cleanOldChatbot = useMutation(api.inboxCleanup.cleanOldChatbot);
   const cleanOldInboxMessages = useMutation(api.inboxCleanup.cleanOldInboxMessages);
   const cleanOldEmailLogs = useMutation(api.inboxCleanup.cleanOldEmailLogs);
@@ -979,29 +983,8 @@ export default function InboxPage() {
                 ))
               )
             ) : activeType === "notification" ? (
-              /* Notifications tab - grouped by category */
+              /* Notifications tab - grouped by category with filter + pagination */
               (() => {
-                // Apply filters to notifications
-                const filtered = (notifications || []).filter((n: any) => {
-                  if (activeFilter === "unread" && n.read) return false;
-                  if (searchQuery && !n.title?.toLowerCase().includes(searchQuery.toLowerCase()) && !n.description?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                  if (!isWithinDateRange(n.time)) return false;
-                  return true;
-                });
-                const unreadCount = (notifications || []).filter((n: any) => !n.read).length;
-
-                if (filtered.length === 0) {
-                  return (
-                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                      <div className="text-center p-8">
-                        <Bell className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                        <p className="font-medium">{activeFilter === "unread" ? "No unread notifications" : "No notifications"}</p>
-                        <p className="text-xs mt-1">System notifications will appear here</p>
-                      </div>
-                    </div>
-                  );
-                }
-
                 const categories = [
                   { key: "subscription", label: "New Subscriptions", icon: <Star className="w-4 h-4" />, color: "bg-emerald-500", textColor: "text-emerald-700", bgColor: "bg-emerald-50", filter: (n: any) => n.type?.includes("subscription") },
                   { key: "credit", label: "Credit Purchases", icon: <CreditCard className="w-4 h-4" />, color: "bg-violet-500", textColor: "text-violet-700", bgColor: "bg-violet-50", filter: (n: any) => n.type?.includes("credit") },
@@ -1009,76 +992,166 @@ export default function InboxPage() {
                   { key: "booking", label: "Booking Appointments", icon: <CalendarPlus className="w-4 h-4" />, color: "bg-blue-500", textColor: "text-blue-700", bgColor: "bg-blue-50", filter: (n: any) => n.type?.includes("booking") },
                 ];
 
+                // Apply filters to notifications
+                const filtered = (notifications || []).filter((n: any) => {
+                  if (activeFilter === "unread" && n.read) return false;
+                  if (searchQuery && !n.title?.toLowerCase().includes(searchQuery.toLowerCase()) && !n.description?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                  if (!isWithinDateRange(n.time)) return false;
+                  // Category filter
+                  if (notifCategoryFilter !== "all") {
+                    const cat = categories.find(c => c.key === notifCategoryFilter);
+                    if (cat && !cat.filter(n)) return false;
+                  }
+                  return true;
+                });
+                const unreadCount = (notifications || []).filter((n: any) => !n.read).length;
+
+                // Paginate
+                const totalFiltered = filtered.length;
+                const paginatedNotifs = filtered.slice(notifPage * NOTIF_PAGE_SIZE, (notifPage + 1) * NOTIF_PAGE_SIZE);
+
                 return (
                   <>
-                    {/* Notification header with unread count and mark-all-read */}
-                    {unreadCount > 0 && (
-                      <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">{unreadCount} unread notification{unreadCount !== 1 ? "s" : ""}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={async () => {
-                            try {
-                              for (const n of (notifications || []).filter((n: any) => !n.read)) {
-                                await markAsReadMutation({ notificationId: n.id });
-                              }
-                              toast.success("All notifications marked as read");
-                            } catch { toast.error("Failed to mark as read"); }
-                          }}
-                        >
-                          Mark all read
-                        </Button>
-                      </div>
-                    )}
-                    {categories.map(cat => {
-                      const items = filtered.filter(cat.filter);
-                      if (items.length === 0) return null;
-                      return (
-                        <div key={cat.key}>
-                          <div className={cn("px-4 py-2 flex items-center gap-2 sticky top-0 z-10 border-b", cat.bgColor)}>
-                            <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white", cat.color)}>
-                              {cat.icon}
-                            </div>
-                            <span className={cn("text-xs font-semibold uppercase tracking-wide", cat.textColor)}>{cat.label}</span>
-                            <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">{items.length}</Badge>
-                          </div>
-                          {items.map((notif: any) => (
-                            <div
-                              key={notif.id}
-                              className={cn(
-                                "px-4 py-3 border-b cursor-pointer hover:bg-muted/50 transition-colors",
-                                !notif.read && "bg-blue-50/40 border-l-2 border-l-blue-500"
-                              )}
-                              onClick={async () => {
-                                if (!notif.read) {
-                                  try { await markAsReadMutation({ notificationId: notif.id }); } catch {}
+                    {/* Notification header: category filter + unread count + mark-all-read */}
+                    <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-2 flex-wrap">
+                      <select
+                        value={notifCategoryFilter}
+                        onChange={(e) => { setNotifCategoryFilter(e.target.value); setNotifPage(0); }}
+                        className="text-xs h-7 px-2 rounded-md border bg-background"
+                      >
+                        <option value="all">All Categories</option>
+                        {categories.map(cat => (
+                          <option key={cat.key} value={cat.key}>{cat.label}</option>
+                        ))}
+                      </select>
+                      {unreadCount > 0 && (
+                        <span className="text-xs text-muted-foreground">{unreadCount} unread</span>
+                      )}
+                      <div className="ml-auto">
+                        {unreadCount > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={async () => {
+                              try {
+                                for (const n of (notifications || []).filter((n: any) => !n.read)) {
+                                  await markAsReadMutation({ notificationId: n.id, type: n.type || "unknown" });
                                 }
-                              }}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", cat.bgColor, cat.textColor)}>
-                                  {cat.icon}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium text-sm truncate">{notif.title}</span>
-                                    {!notif.read && (
-                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                                    )}
-                                    <span className="text-[11px] text-muted-foreground ml-auto whitespace-nowrap">
-                                      {formatDate(notif.time)}
-                                    </span>
+                                toast.success("All notifications marked as read");
+                              } catch { toast.error("Failed to mark as read"); }
+                            }}
+                          >
+                            Mark all read
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {paginatedNotifs.length === 0 ? (
+                      <div className="flex items-center justify-center h-full text-muted-foreground">
+                        <div className="text-center p-8">
+                          <Bell className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                          <p className="font-medium">{activeFilter === "unread" ? "No unread notifications" : notifCategoryFilter !== "all" ? "No notifications in this category" : "No notifications"}</p>
+                          <p className="text-xs mt-1">System notifications will appear here</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Group by category within current page */}
+                        {notifCategoryFilter === "all" ? (
+                          categories.map(cat => {
+                            const items = paginatedNotifs.filter(cat.filter);
+                            if (items.length === 0) return null;
+                            return (
+                              <div key={cat.key}>
+                                <div className={cn("px-4 py-2 flex items-center gap-2 sticky top-0 z-10 border-b", cat.bgColor)}>
+                                  <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white", cat.color)}>
+                                    {cat.icon}
                                   </div>
-                                  <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.description}</p>
+                                  <span className={cn("text-xs font-semibold uppercase tracking-wide", cat.textColor)}>{cat.label}</span>
+                                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">{items.length}</Badge>
+                                </div>
+                                {items.map((notif: any) => (
+                                  <div
+                                    key={notif.id}
+                                    className={cn(
+                                      "px-4 py-3 border-b cursor-pointer hover:bg-muted/50 transition-colors",
+                                      !notif.read && "bg-blue-50/40 border-l-2 border-l-blue-500"
+                                    )}
+                                    onClick={async () => {
+                                      if (!notif.read) {
+                                        try { await markAsReadMutation({ notificationId: notif.id, type: notif.type || "unknown" }); } catch {}
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-start gap-3">
+                                      <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", cat.bgColor, cat.textColor)}>
+                                        {cat.icon}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium text-sm truncate">{notif.title}</span>
+                                          {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+                                          <span className="text-[11px] text-muted-foreground ml-auto whitespace-nowrap">{formatDate(notif.time)}</span>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.description}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          /* Single category - flat list */
+                          paginatedNotifs.map((notif: any) => {
+                            const cat = categories.find(c => c.filter(notif)) || categories[0];
+                            return (
+                              <div
+                                key={notif.id}
+                                className={cn(
+                                  "px-4 py-3 border-b cursor-pointer hover:bg-muted/50 transition-colors",
+                                  !notif.read && "bg-blue-50/40 border-l-2 border-l-blue-500"
+                                )}
+                                onClick={async () => {
+                                  if (!notif.read) {
+                                    try { await markAsReadMutation({ notificationId: notif.id, type: notif.type || "unknown" }); } catch {}
+                                  }
+                                }}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", cat.bgColor, cat.textColor)}>
+                                    {cat.icon}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-sm truncate">{notif.title}</span>
+                                      {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
+                                      <span className="text-[11px] text-muted-foreground ml-auto whitespace-nowrap">{formatDate(notif.time)}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.description}</p>
+                                  </div>
                                 </div>
                               </div>
+                            );
+                          })
+                        )}
+
+                        {/* Pagination */}
+                        {totalFiltered > NOTIF_PAGE_SIZE && (
+                          <div className="p-3 border-t flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              {notifPage * NOTIF_PAGE_SIZE + 1}-{Math.min((notifPage + 1) * NOTIF_PAGE_SIZE, totalFiltered)} of {totalFiltered}
+                            </span>
+                            <div className="flex gap-1">
+                              <Button variant="outline" size="sm" disabled={notifPage === 0} onClick={() => setNotifPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
+                              <Button variant="outline" size="sm" disabled={(notifPage + 1) * NOTIF_PAGE_SIZE >= totalFiltered} onClick={() => setNotifPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
                             </div>
-                          ))}
-                        </div>
-                      );
-                    })}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </>
                 );
               })()

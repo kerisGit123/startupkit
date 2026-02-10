@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Users, CreditCard, Ticket, DollarSign, ShoppingCart, Calendar, Download, Bell, Mail, UserPlus, CalendarPlus, TrendingUp, TrendingDown, Activity, Star, ArrowUpRight, BarChart3, Repeat } from "lucide-react";
@@ -20,6 +21,7 @@ import {
 import { BarChart, Bar, XAxis, CartesianGrid } from "recharts";
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const stats = useQuery(api.adminDashboard.getDashboardStats);
   const recentActivity = useQuery(api.adminDashboard.getRecentActivity);
   const analytics = useQuery(api.adminAnalytics.getAnalytics);
@@ -79,6 +81,39 @@ export default function AdminDashboard() {
   const totalPurchaseRevenue = analytics?.purchaseMonthlyData?.reduce((sum: number, d: { amount: number }) => sum + d.amount, 0) || 0;
   const totalSubRevenue = analytics?.subscriptionMonthlyData?.reduce((sum: number, d: { amount: number }) => sum + d.amount, 0) || 0;
   const totalSubs = analytics?.subscriptionMonthlyData?.reduce((sum: number, d: { count: number }) => sum + d.count, 0) || 0;
+
+  if (!stats) {
+    return (
+      <div className="flex flex-col gap-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="h-7 w-40 bg-muted animate-pulse rounded-md" />
+            <div className="h-4 w-64 bg-muted animate-pulse rounded-md mt-2" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="h-9 w-36 bg-muted animate-pulse rounded-md" />
+            <div className="h-9 w-36 bg-muted animate-pulse rounded-md" />
+            <div className="h-9 w-24 bg-muted animate-pulse rounded-md" />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-32 bg-muted animate-pulse rounded-xl" />
+          ))}
+        </div>
+        <div className="grid gap-2 md:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-10 bg-muted animate-pulse rounded-md" />
+          ))}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 bg-muted animate-pulse rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -168,7 +203,7 @@ export default function AdminDashboard() {
       {/* Quick Actions - Compact */}
       <div className="grid gap-2 md:grid-cols-4">
         <Button 
-          onClick={() => window.location.href = '/admin/booking'}
+          onClick={() => router.push('/admin/booking')}
           variant="outline"
           className="h-10 gap-2 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
         >
@@ -176,7 +211,7 @@ export default function AdminDashboard() {
           <span className="text-sm">New Booking</span>
         </Button>
         <Button 
-          onClick={() => window.location.href = '/admin/inbox?tab=ticket'}
+          onClick={() => router.push('/admin/inbox?tab=ticket')}
           variant="outline"
           className="h-10 gap-2 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
         >
@@ -184,7 +219,7 @@ export default function AdminDashboard() {
           <span className="text-sm">Create Ticket</span>
         </Button>
         <Button 
-          onClick={() => window.location.href = '/admin/customers'}
+          onClick={() => router.push('/admin/customers')}
           variant="outline"
           className="h-10 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
         >
@@ -192,7 +227,7 @@ export default function AdminDashboard() {
           <span className="text-sm">Add Customer</span>
         </Button>
         <Button 
-          onClick={() => window.location.href = '/admin/email-management'}
+          onClick={() => router.push('/admin/email-management')}
           variant="outline"
           className="h-10 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
         >
@@ -215,7 +250,7 @@ export default function AdminDashboard() {
 
           {/* Secondary Metric Cards */}
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="hover:shadow-md transition-all cursor-pointer" onClick={() => window.location.href = '/admin/booking'}>
+            <Card className="hover:shadow-md transition-all cursor-pointer" onClick={() => router.push('/admin/booking')}>
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -229,7 +264,7 @@ export default function AdminDashboard() {
                 <p className="text-xs text-muted-foreground mt-2">Click to view calendar</p>
               </CardContent>
             </Card>
-            <Card className="hover:shadow-md transition-all cursor-pointer" onClick={() => window.location.href = '/admin/inbox?tab=ticket'}>
+            <Card className="hover:shadow-md transition-all cursor-pointer" onClick={() => router.push('/admin/inbox?tab=ticket')}>
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -364,7 +399,7 @@ export default function AdminDashboard() {
                     <CardTitle className="text-base">Recent Activity</CardTitle>
                     <CardDescription>{recentActivity?.length || 0} transactions</CardDescription>
                   </div>
-                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => window.location.href = '/admin/revenue'}>
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => router.push('/admin/revenue')}>
                     View all
                   </Button>
                 </div>

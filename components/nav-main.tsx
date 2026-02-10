@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { type LucideIcon } from "lucide-react"
 import { ChevronRight } from "lucide-react"
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { cn } from "@/lib/utils"
 
 import {
@@ -39,21 +39,38 @@ export function NavMain({
   }[]
 }) {
   const pathname = usePathname()
-  const [openItems, setOpenItems] = useState<string[]>([])
+  const [manualToggles, setManualToggles] = useState<Record<string, boolean>>({})
+
+  // Derive which parents should be auto-expanded from the current pathname
+  const autoExpandedParents = useMemo(() => {
+    if (!pathname) return new Set<string>()
+    const parents = new Set<string>()
+    items.forEach((item) => {
+      if (item.items?.some((sub) => pathname === sub.url || pathname.startsWith(sub.url + "/"))) {
+        parents.add(item.title)
+      }
+    })
+    return parents
+  }, [pathname, items])
+
+  // Merge: auto-expanded parents are open unless manually closed, manual toggles override
+  const isItemOpen = (title: string) => {
+    if (title in manualToggles) return manualToggles[title]
+    return autoExpandedParents.has(title)
+  }
 
   const toggleItem = (title: string) => {
-    setOpenItems((prev) =>
-      prev.includes(title)
-        ? prev.filter((item) => item !== title)
-        : [...prev, title]
-    )
+    setManualToggles((prev) => ({
+      ...prev,
+      [title]: !(prev[title] ?? autoExpandedParents.has(title)),
+    }))
   }
 
   return (
     <>
       {items.map((item) => {
         const hasSubItems = item.items && item.items.length > 0
-        const isOpen = openItems.includes(item.title)
+        const isOpen = isItemOpen(item.title)
         const isActive = item.url ? pathname === item.url : false
 
         // If item has a direct URL and no sub-items, render as simple link

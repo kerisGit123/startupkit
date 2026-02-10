@@ -110,14 +110,15 @@ export default function LeadsPage() {
           body: emailBody.trim(),
         }),
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         toast.success(`Email sent to ${emailTo}`);
         setEmailDialogOpen(false);
         setEmailSubject("");
         setEmailBody("");
         setEmailTo("");
       } else {
-        toast.error("Failed to send email");
+        toast.error(data.error || "Failed to send email");
       }
     } catch {
       toast.error("Failed to send email");

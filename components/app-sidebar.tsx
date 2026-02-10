@@ -200,11 +200,6 @@ const navItems = [
         icon: IconSettings,
       },
       {
-        title: "Email (SMTP)",
-        url: "/admin/settings/email",
-        icon: IconMail,
-      },
-      {
         title: "Security",
         url: "/admin/security",
         icon: IconLock,

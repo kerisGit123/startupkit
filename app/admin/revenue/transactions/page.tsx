@@ -3,6 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Search,
   Filter,
@@ -37,6 +38,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export default function TransactionsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -202,7 +204,7 @@ export default function TransactionsPage() {
             variant="ghost" 
             size="icon"
             className="h-8 w-8"
-            onClick={() => window.location.href = '/admin/revenue'}
+            onClick={() => router.push('/admin/revenue')}
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
@@ -221,7 +223,7 @@ export default function TransactionsPage() {
 
       {/* Baremetrics-style Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Revenue</p>
@@ -237,7 +239,7 @@ export default function TransactionsPage() {
           </div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-red-100 text-xs font-semibold uppercase tracking-wider">Refunds</p>
@@ -253,7 +255,7 @@ export default function TransactionsPage() {
           </div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Net Revenue</p>

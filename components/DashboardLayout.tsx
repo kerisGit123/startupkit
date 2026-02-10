@@ -247,9 +247,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </Link>
               <Link 
                 href="/dashboard/settings" 
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
               >
                 <Settings className="w-[18px] h-[18px]" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
               </Link>
               <div className="w-px h-6 bg-gray-100 mx-1" />
               <UserButton afterSignOutUrl="/" />

@@ -24,14 +24,14 @@ export default function BookingAdminPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="flex-1 space-y-4 p-4 md:p-6 pt-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Booking Management</h1>
-          <p className="text-gray-600">Manage your appointments, availability, and event types</p>
+          <h1 className="text-2xl font-bold tracking-tight">Booking Management</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage your appointments, availability, and event types</p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)} size="lg">
-          <Plus className="w-4 h-4 mr-2" />
+        <Button onClick={() => setIsCreateModalOpen(true)} size="sm">
+          <Plus className="w-4 h-4 mr-1.5" />
           New Appointment
         </Button>
       </div>

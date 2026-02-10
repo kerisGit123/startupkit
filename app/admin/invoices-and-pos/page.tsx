@@ -454,7 +454,7 @@ export default function InvoicesAndPOsPage() {
                   </div>
                 ))}
                 
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mt-4">
+                <div className="bg-linear-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4 mt-4">
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Sub Total (Excl. SST):</span>
@@ -581,7 +581,7 @@ export default function InvoicesAndPOsPage() {
       {/* Baremetrics-style Statistics Cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+          <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
             <CardContent className="pt-5 pb-5">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Invoices</p>
@@ -592,7 +592,7 @@ export default function InvoicesAndPOsPage() {
             </CardContent>
             <div className="absolute -right-3 -bottom-3 opacity-10"><FileText className="h-20 w-20" /></div>
           </Card>
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+          <Card className="relative overflow-hidden border-0 bg-linear-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
             <CardContent className="pt-5 pb-5">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Sales Orders</p>
@@ -603,7 +603,7 @@ export default function InvoicesAndPOsPage() {
             </CardContent>
             <div className="absolute -right-3 -bottom-3 opacity-10"><ShoppingCart className="h-20 w-20" /></div>
           </Card>
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+          <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
             <CardContent className="pt-5 pb-5">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Subscriptions</p>
@@ -614,7 +614,7 @@ export default function InvoicesAndPOsPage() {
             </CardContent>
             <div className="absolute -right-3 -bottom-3 opacity-10"><RefreshCw className="h-20 w-20" /></div>
           </Card>
-          <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+          <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
             <CardContent className="pt-5 pb-5">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Total Amount</p>

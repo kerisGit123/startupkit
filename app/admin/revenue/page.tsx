@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { 
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function RevenueDashboard() {
+  const router = useRouter();
   const analytics = useQuery(api.financialLedger.getRevenueAnalytics);
   const allTransactions = useQuery(api.financialLedger.getAllLedgerEntries, {});
   const monthlyTrend = useQuery(api.financialLedger.getMonthlyRevenueTrend, { months: 6 });
@@ -125,7 +127,7 @@ export default function RevenueDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => window.location.href = '/admin/revenue/transactions'}>
+          <Button variant="outline" size="sm" onClick={() => router.push('/admin/revenue/transactions')}>
             <Receipt className="w-4 h-4 mr-1.5" />
             Transactions
           </Button>
@@ -157,7 +159,7 @@ export default function RevenueDashboard() {
       {/* Baremetrics-style Key Metrics */}
       <div className="grid gap-4 md:grid-cols-4">
         {/* MRR */}
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">MRR</p>
@@ -172,7 +174,7 @@ export default function RevenueDashboard() {
         </Card>
 
         {/* ARR */}
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">ARR</p>
@@ -187,7 +189,7 @@ export default function RevenueDashboard() {
         </Card>
 
         {/* Net Revenue */}
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Net Revenue</p>
@@ -214,7 +216,7 @@ export default function RevenueDashboard() {
         </Card>
 
         {/* Transactions */}
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
               <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Transactions</p>
@@ -487,7 +489,7 @@ export default function RevenueDashboard() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Recent Transactions</CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs" onClick={() => window.location.href = '/admin/revenue/transactions'}>
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => router.push('/admin/revenue/transactions')}>
               View All →
             </Button>
           </div>

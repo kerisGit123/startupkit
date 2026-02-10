@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 
 const THEMES = {
   default: {
@@ -144,13 +144,16 @@ export function ThemeSwitcher() {
   
   return (
     <Select value={theme} onValueChange={applyTheme}>
-      <SelectTrigger className="w-[180px]">
-        <SelectValue placeholder="Select theme" />
+      <SelectTrigger className="w-9 h-9 p-0 justify-center [&>svg:last-child]:hidden border-0 bg-transparent hover:bg-accent" aria-label="Select theme">
+        <div className="w-4 h-4 rounded-full border-2 border-foreground/30" style={{ background: THEMES[theme as keyof typeof THEMES]?.colors?.primary || "oklch(0.205 0 0)" }} />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent align="end">
         {Object.entries(THEMES).map(([key, value]) => (
           <SelectItem key={key} value={key}>
-            {value.label}
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full" style={{ background: value.colors.primary }} />
+              {value.label}
+            </div>
           </SelectItem>
         ))}
       </SelectContent>

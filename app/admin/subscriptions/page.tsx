@@ -117,7 +117,7 @@ export default function SubscriptionsPage() {
 
       {/* Baremetrics-style Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Total</p>
@@ -129,7 +129,7 @@ export default function SubscriptionsPage() {
           <div className="absolute -right-3 -bottom-3 opacity-10"><Users className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Active</p>
@@ -143,7 +143,7 @@ export default function SubscriptionsPage() {
           <div className="absolute -right-3 -bottom-3 opacity-10"><CheckCircle className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-red-100 text-xs font-semibold uppercase tracking-wider">Churn</p>
@@ -155,7 +155,7 @@ export default function SubscriptionsPage() {
           <div className="absolute -right-3 -bottom-3 opacity-10"><XCircle className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
               <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">MRR</p>
