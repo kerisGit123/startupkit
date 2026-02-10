@@ -13,14 +13,14 @@ export async function POST(req: NextRequest) {
 
     if (!n8nWebhookUrl) {
       return NextResponse.json(
-        { error: "n8nWebhookUrl is required", output: "Chatbot is not configured. Please contact support." },
+        { error: "Webhook URL is required", output: "Chatbot is not configured. Please contact support." },
         { status: 400 }
       );
     }
 
-    console.log("Calling n8n webhook:", n8nWebhookUrl);
+    console.log("Calling webhook:", n8nWebhookUrl);
 
-    // Forward the request to n8n webhook
+    // Forward the request to webhook
     // Chat Trigger expects chatInput and sessionId
     const response = await fetch(n8nWebhookUrl, {
       method: "POST",
@@ -42,9 +42,9 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => "No response body");
-      console.error(`n8n webhook error (${response.status}):`, errorText);
+      console.error(`Webhook error (${response.status}):`, errorText);
       
-      // Still store the user message even if n8n fails
+      // Still store the user message even if webhook fails
       try {
         let convexUserId = undefined;
         if (userId && type === "user_panel") {
@@ -55,18 +55,18 @@ export async function POST(req: NextRequest) {
           sessionId: chatId,
           type: type,
           userMessage: message,
-          aiResponse: "[n8n webhook unavailable]",
+          aiResponse: "[webhook unavailable]",
           userId: convexUserId,
         });
-        console.log("✅ User message stored despite n8n failure");
+        console.log("✅ User message stored despite webhook failure");
       } catch (storeErr) {
-        console.error("❌ Failed to store message on n8n failure:", storeErr);
+        console.error("❌ Failed to store message on webhook failure:", storeErr);
       }
       
       return NextResponse.json(
         { 
-          error: `n8n webhook returned ${response.status}`,
-          output: "Sorry, I'm having trouble connecting. Please check your n8n webhook URL and ensure the workflow is active."
+          error: `Webhook returned ${response.status}`,
+          output: "Sorry, I'm having trouble connecting. Please check your webhook URL and ensure the workflow is active."
         },
         { status: 200 } // Return 200 so the error message displays in chat
       );
@@ -80,13 +80,13 @@ export async function POST(req: NextRequest) {
       // Get response as text first to handle both JSON and streaming
       const textResponse = await response.text();
       
-      console.log("n8n response text:", textResponse);
-      console.log("n8n response length:", textResponse.length);
+      console.log("Webhook response text:", textResponse);
+      console.log("Webhook response length:", textResponse.length);
       
       if (!textResponse || textResponse.trim() === "") {
-        console.error("Empty response from n8n");
+        console.error("Empty response from webhook");
         return NextResponse.json({
-          output: "Sorry, the n8n workflow returned an empty response. Please check that your AI Agent has a prompt configured with {{ $json.chatInput }}"
+          output: "Sorry, the webhook returned an empty response. Please check that your AI Agent has a prompt configured correctly."
         });
       }
       
@@ -105,20 +105,20 @@ export async function POST(req: NextRequest) {
           } catch {
             console.error("Failed to parse extracted JSON:", jsonMatches[jsonMatches.length - 1]);
             return NextResponse.json({
-              output: "Sorry, I received an invalid response format from the AI. Please disable streaming in your n8n AI Agent node."
+              output: "Sorry, I received an invalid response format from the AI. Please disable streaming in your AI Agent node."
             });
           }
         } else {
-          console.error("Non-JSON response from n8n:", textResponse.substring(0, 200));
+          console.error("Non-JSON response from webhook:", textResponse.substring(0, 200));
           return NextResponse.json({
-            output: "Sorry, the chatbot returned an invalid response format. Please check your n8n workflow configuration."
+            output: "Sorry, the chatbot returned an invalid response format. Please check your workflow configuration."
           });
         }
       }
     } catch (parseError) {
-      console.error("Failed to parse n8n response:", parseError);
+      console.error("Failed to parse webhook response:", parseError);
       return NextResponse.json({
-        output: "Sorry, I'm having trouble processing the response. Please check your n8n workflow configuration."
+        output: "Sorry, I'm having trouble processing the response. Please check your workflow configuration."
       });
     }
     
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
     
     console.log("Final output being sent:", output);
     
-    // Extract quick replies if present in n8n response
+    // Extract quick replies if present in webhook response
     let quickReplies = undefined;
     if (data.quickReplies && Array.isArray(data.quickReplies)) {
       quickReplies = data.quickReplies;
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
       console.log("No quick replies in response. Data structure:", JSON.stringify(data));
     }
 
-    // Store conversation in Convex after successful n8n response
+    // Store conversation in Convex after successful webhook response
     try {
       console.log("Attempting to store conversation:", {
         sessionId: chatId,

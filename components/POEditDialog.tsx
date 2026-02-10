@@ -187,7 +187,7 @@ export function POEditDialog({ poId, isOpen, onClose, onSuccess }: POEditDialogP
           total: Math.round(totals.total * 100),
           notes,
           paymentTerms,
-          dueDate,
+          dueDate: dueDate ?? undefined,
           status,
         },
         clerkUserId: user.id,

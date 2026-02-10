@@ -12,39 +12,39 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 
 export default function POSettingsPage() {
-  const poConfig = useQuery(api.poConfig.getPOConfig);
-  const updateConfig = useMutation(api.poConfig.updatePOConfig);
-  const resetCounter = useMutation(api.poConfig.resetPOCounter);
+  const soConfig = useQuery(api.soConfig.getSOConfig);
+  const updateConfig = useMutation(api.soConfig.updateSOConfig);
+  const resetCounter = useMutation(api.soConfig.resetSOCounter);
 
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [localSettings, setLocalSettings] = useState({
-    poPrefix: "SO-",
-    poNumberFormat: "Year + Running",
-    poLeadingZeros: 4,
-    poCurrentCounter: 1,
+    soPrefix: "SO-",
+    soNumberFormat: "Year + Running",
+    soLeadingZeros: 4,
+    soCurrentCounter: 1,
   });
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    if (poConfig && !isInitialized) {
+    if (soConfig && !isInitialized) {
       setLocalSettings({
-        poPrefix: poConfig.poPrefix || "SO-",
-        poNumberFormat: poConfig.poNumberFormat || "Year + Running",
-        poLeadingZeros: poConfig.poLeadingZeros || 4,
-        poCurrentCounter: poConfig.poCurrentCounter || 1,
+        soPrefix: soConfig.soPrefix || "SO-",
+        soNumberFormat: soConfig.soNumberFormat || "Year + Running",
+        soLeadingZeros: soConfig.soLeadingZeros || 4,
+        soCurrentCounter: soConfig.soCurrentCounter || 1,
       });
       setIsInitialized(true);
     }
-  }, [poConfig, isInitialized]);
+  }, [soConfig, isInitialized]);
 
   const handleSave = async () => {
     setSaveStatus("saving");
     try {
       await updateConfig({
-        poPrefix: localSettings.poPrefix,
-        poNumberFormat: localSettings.poNumberFormat,
-        poLeadingZeros: localSettings.poLeadingZeros,
-        poCurrentCounter: localSettings.poCurrentCounter,
+        soPrefix: localSettings.soPrefix,
+        soNumberFormat: localSettings.soNumberFormat,
+        soLeadingZeros: localSettings.soLeadingZeros,
+        soCurrentCounter: localSettings.soCurrentCounter,
       });
       setSaveStatus("success");
       setTimeout(() => setSaveStatus("idle"), 3000);
@@ -59,21 +59,21 @@ export default function POSettingsPage() {
     const year = new Date().getFullYear();
     const yearShort = year.toString().slice(-2); // Last 2 digits (e.g., 26 for 2026)
     const month = (new Date().getMonth() + 1).toString().padStart(2, "0");
-    const paddedCounter = localSettings.poCurrentCounter.toString().padStart(localSettings.poLeadingZeros, "0");
+    const paddedCounter = localSettings.soCurrentCounter.toString().padStart(localSettings.soLeadingZeros, "0");
 
-    switch (localSettings.poNumberFormat) {
+    switch (localSettings.soNumberFormat) {
       case "Year + Running":
-        return `${localSettings.poPrefix}${yearShort}${paddedCounter}`;
+        return `${localSettings.soPrefix}${yearShort}${paddedCounter}`;
       case "Running Only":
-        return `${localSettings.poPrefix}${paddedCounter}`;
+        return `${localSettings.soPrefix}${paddedCounter}`;
       case "Month + Running":
-        return `${localSettings.poPrefix}${yearShort}${month}${paddedCounter}`;
+        return `${localSettings.soPrefix}${yearShort}${month}${paddedCounter}`;
       default:
-        return `${localSettings.poPrefix}${yearShort}${paddedCounter}`;
+        return `${localSettings.soPrefix}${yearShort}${paddedCounter}`;
     }
   };
 
-  if (poConfig === undefined) {
+  if (soConfig === undefined) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -119,10 +119,10 @@ export default function POSettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="poPrefix">SO Prefix</Label>
             <Input
-              id="poPrefix"
-              placeholder="PO-"
-              value={localSettings.poPrefix}
-              onChange={(e) => setLocalSettings({ ...localSettings, poPrefix: e.target.value })}
+              id="soPrefix"
+              placeholder="SO-"
+              value={localSettings.soPrefix}
+              onChange={(e) => setLocalSettings({ ...localSettings, soPrefix: e.target.value })}
             />
             <p className="text-sm text-muted-foreground">
               Prefix for all sales order numbers (e.g., SO-, SALE-, BILL-)
@@ -132,10 +132,10 @@ export default function POSettingsPage() {
           <div className="space-y-2">
             <Label htmlFor="poNumberFormat">SO Number Format</Label>
             <Select
-              value={localSettings.poNumberFormat}
-              onValueChange={(value) => setLocalSettings({ ...localSettings, poNumberFormat: value })}
+              value={localSettings.soNumberFormat}
+              onValueChange={(value) => setLocalSettings({ ...localSettings, soNumberFormat: value })}
             >
-              <SelectTrigger id="poNumberFormat">
+              <SelectTrigger id="soNumberFormat">
                 <SelectValue placeholder="Select format" />
               </SelectTrigger>
               <SelectContent>
@@ -156,8 +156,8 @@ export default function POSettingsPage() {
               type="number"
               min="1"
               max="10"
-              value={localSettings.poLeadingZeros}
-              onChange={(e) => setLocalSettings({ ...localSettings, poLeadingZeros: parseInt(e.target.value) || 4 })}
+              value={localSettings.soLeadingZeros}
+              onChange={(e) => setLocalSettings({ ...localSettings, soLeadingZeros: parseInt(e.target.value) || 4 })}
             />
             <p className="text-sm text-muted-foreground">
               Number of digits for running number (1-10)
@@ -183,8 +183,8 @@ export default function POSettingsPage() {
               id="poCurrentCounter"
               type="number"
               min="1"
-              value={localSettings.poCurrentCounter}
-              onChange={(e) => setLocalSettings({ ...localSettings, poCurrentCounter: parseInt(e.target.value) || 1 })}
+              value={localSettings.soCurrentCounter}
+              onChange={(e) => setLocalSettings({ ...localSettings, soCurrentCounter: parseInt(e.target.value) || 1 })}
             />
             <p className="text-sm text-muted-foreground">
               Current running number (auto-increments with each sales order)
@@ -208,7 +208,7 @@ export default function POSettingsPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => setLocalSettings({ ...localSettings, poCurrentCounter: 1 })}
+              onClick={() => setLocalSettings({ ...localSettings, soCurrentCounter: 1 })}
               disabled={saveStatus === "saving"}
             >
               Reset to 1

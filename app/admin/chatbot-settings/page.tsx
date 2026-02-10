@@ -20,7 +20,7 @@ export default function ChatbotSettingsPage() {
     <div className="p-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Chatbot Configuration</h1>
-        <p className="text-gray-500 mt-1">Configure your AI chatbots and n8n integration</p>
+        <p className="text-gray-500 mt-1">Configure your AI chatbots and webhook integration</p>
       </div>
       
       <Tabs defaultValue="frontend">
@@ -119,7 +119,7 @@ function ChatbotConfigCard({ config, type, onUpdate }: ChatbotConfigCardProps) {
     }
 
     try {
-      // Use the API route instead of calling n8n directly to avoid CORS
+      // Use the API route instead of calling webhook directly to avoid CORS
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -166,16 +166,16 @@ function ChatbotConfigCard({ config, type, onUpdate }: ChatbotConfigCardProps) {
           <Switch checked={isActive} onCheckedChange={setIsActive} />
         </div>
 
-        {/* n8n Webhook URL */}
+        {/* Webhook URL */}
         <div>
-          <Label>n8n Webhook URL</Label>
+          <Label>Webhook URL</Label>
           <Input
             value={webhookUrl}
             onChange={(e) => setWebhookUrl(e.target.value)}
-            placeholder="https://your-n8n-instance.com/webhook/..."
+            placeholder="https://your-instance.com/webhook/..."
           />
           <p className="text-sm text-gray-500 mt-1">
-            Create a webhook trigger in n8n and paste the URL here
+            Create a webhook trigger in your automation tool and paste the URL here
           </p>
         </div>
 

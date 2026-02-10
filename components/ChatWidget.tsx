@@ -153,17 +153,16 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
   };
 
   // Detect if the AI response indicates conversation is ending
+  // Only trigger on clear farewell phrases, NOT mid-conversation politeness
   const isConversationEnding = (aiResponse: string): boolean => {
-    const endPhrases = [
-      "glad i could help", "happy to help", "anything else",
-      "is there anything else", "have a great day", "have a good day",
+    const farewellPhrases = [
+      "glad i could help", "happy to help",
+      "have a great day", "have a good day",
       "take care", "goodbye", "bye for now", "talk to you soon",
       "thanks for chatting", "thank you for chatting",
-      "feel free to reach out", "don't hesitate to reach out",
-      "was there anything else", "let me know if you need",
     ];
     const lower = aiResponse.toLowerCase();
-    return endPhrases.some(phrase => lower.includes(phrase));
+    return farewellPhrases.some(phrase => lower.includes(phrase));
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -301,14 +300,14 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
 
       // Show rating only when conversation naturally ends AND user has exchanged enough messages
       const userMessageCount = messages.filter(m => m.role === "user").length + 1; // +1 for current
-      if (!ratingSubmitted && !showRating && userMessageCount >= 3 && isConversationEnding(data.output || "")) {
-        setTimeout(() => setShowRating(true), 2000);
+      if (!ratingSubmitted && !showRating && userMessageCount >= 5 && isConversationEnding(data.output || "")) {
+        setTimeout(() => setShowRating(true), 4000);
       }
     } catch (error) {
       console.error("Chat error:", error);
       const errorMessage: ChatMessage = {
         role: "assistant",
-        content: "Sorry, I'm having trouble connecting. Please check your n8n webhook URL and ensure the workflow is active.",
+        content: "Sorry, I'm having trouble connecting. Please try again later.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMessage]);

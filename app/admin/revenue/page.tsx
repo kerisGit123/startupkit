@@ -60,9 +60,9 @@ export default function RevenueDashboard() {
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "subscription_charge": return "bg-emerald-100 text-emerald-700 border-emerald-200";
-      case "one_time_payment": return "bg-blue-100 text-blue-700 border-blue-200";
-      case "credit_purchase": return "bg-violet-100 text-violet-700 border-violet-200";
+      case "subscription_charge": return "bg-primary/10 text-primary border-primary/20";
+      case "one_time_payment": return "bg-primary/10 text-primary border-primary/20";
+      case "credit_purchase": return "bg-primary/10 text-primary border-primary/20";
       case "refund": return "bg-red-100 text-red-700 border-red-200";
       default: return "bg-gray-100 text-gray-700 border-gray-200";
     }
@@ -81,11 +81,11 @@ export default function RevenueDashboard() {
 
   const getSourceColor = (source: string) => {
     switch (source) {
-      case "stripe_subscription": return "#8b5cf6";
-      case "stripe_payment": return "#3b82f6";
+      case "stripe_subscription": return "var(--chart-1)";
+      case "stripe_payment": return "var(--chart-2)";
       case "manual": return "#6b7280";
-      case "referral_bonus": return "#10b981";
-      case "credit_adjustment": return "#f59e0b";
+      case "referral_bonus": return "var(--chart-3)";
+      case "credit_adjustment": return "var(--chart-4)";
       default: return "#6b7280";
     }
   };
@@ -94,7 +94,7 @@ export default function RevenueDashboard() {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-violet-500 border-t-transparent mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-t-transparent mx-auto mb-4"></div>
           <p className="text-muted-foreground text-sm">Loading revenue data...</p>
         </div>
       </div>
@@ -159,14 +159,14 @@ export default function RevenueDashboard() {
       {/* Baremetrics-style Key Metrics */}
       <div className="grid gap-4 md:grid-cols-4">
         {/* MRR */}
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">MRR</p>
-              <RefreshCw className="h-4 w-4 text-emerald-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">MRR</p>
+              <RefreshCw className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{formatCurrency(analytics.mrr)}</p>
-            <p className="text-emerald-200 text-xs mt-2">Monthly Recurring Revenue</p>
+            <p className="text-xs mt-2 opacity-70">Monthly Recurring Revenue</p>
           </CardContent>
           <div className="absolute -right-4 -bottom-4 opacity-10">
             <RefreshCw className="h-24 w-24" />
@@ -174,14 +174,14 @@ export default function RevenueDashboard() {
         </Card>
 
         {/* ARR */}
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/90 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">ARR</p>
-              <TrendingUp className="h-4 w-4 text-blue-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">ARR</p>
+              <TrendingUp className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{formatCurrency(analytics.arr)}</p>
-            <p className="text-blue-200 text-xs mt-2">Annual Recurring Revenue</p>
+            <p className="text-xs mt-2 opacity-70">Annual Recurring Revenue</p>
           </CardContent>
           <div className="absolute -right-4 -bottom-4 opacity-10">
             <TrendingUp className="h-24 w-24" />
@@ -189,22 +189,22 @@ export default function RevenueDashboard() {
         </Card>
 
         {/* Net Revenue */}
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/80 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Net Revenue</p>
-              <Zap className="h-4 w-4 text-violet-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Net Revenue</p>
+              <Zap className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{formatCurrency(analytics.currentPeriod.netRevenue)}</p>
             <div className="flex items-center gap-1 mt-2">
               {analytics.growth >= 0 ? (
-                <ArrowUpRight className="w-3.5 h-3.5 text-emerald-300" />
+                <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
               ) : (
                 <ArrowDownRight className="w-3.5 h-3.5 text-red-300" />
               )}
               <span className={cn(
                 "text-xs font-semibold",
-                analytics.growth >= 0 ? "text-emerald-300" : "text-red-300"
+                analytics.growth >= 0 ? "opacity-70" : "text-red-300"
               )}>
                 {Math.abs(analytics.growth)}% vs last 30d
               </span>
@@ -216,14 +216,14 @@ export default function RevenueDashboard() {
         </Card>
 
         {/* Transactions */}
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/70 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Transactions</p>
-              <BarChart3 className="h-4 w-4 text-amber-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Transactions</p>
+              <BarChart3 className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{analytics.currentPeriod.transactionCount}</p>
-            <p className="text-amber-200 text-xs mt-2">
+            <p className="text-xs mt-2 opacity-70">
               {analytics.currentPeriod.refunds > 0 
                 ? `${formatCurrency(analytics.currentPeriod.refunds)} refunded`
                 : "Last 30 days"
@@ -243,7 +243,7 @@ export default function RevenueDashboard() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Active Subs</p>
-                <Users className="h-3.5 w-3.5 text-emerald-500" />
+                <Users className="h-3.5 w-3.5 text-primary" />
               </div>
               <p className="text-2xl font-extrabold">{analytics.saas.activeSubscriptions}</p>
               <p className="text-[11px] text-muted-foreground mt-1">{analytics.saas.canceledSubscriptions} canceled</p>
@@ -253,7 +253,7 @@ export default function RevenueDashboard() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Churn Rate</p>
-                <TrendingDown className="h-3.5 w-3.5 text-red-500" />
+                <TrendingDown className="h-3.5 w-3.5 text-primary" />
               </div>
               <p className="text-2xl font-extrabold">{analytics.saas.churnRate}%</p>
               <p className="text-[11px] text-muted-foreground mt-1">Last 30 days</p>
@@ -263,7 +263,7 @@ export default function RevenueDashboard() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Customer CLV</p>
-                <Zap className="h-3.5 w-3.5 text-violet-500" />
+                <Zap className="h-3.5 w-3.5 text-primary" />
               </div>
               <p className="text-2xl font-extrabold">{formatCurrency(analytics.saas.clv)}</p>
               <p className="text-[11px] text-muted-foreground mt-1">Avg {analytics.saas.avgSubMonths} mo</p>
@@ -273,7 +273,7 @@ export default function RevenueDashboard() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Signups</p>
-                <ArrowUpRight className="h-3.5 w-3.5 text-blue-500" />
+                <ArrowUpRight className="h-3.5 w-3.5 text-primary" />
               </div>
               <p className="text-2xl font-extrabold">{analytics.saas.newSignups}</p>
               <p className="text-[11px] text-muted-foreground mt-1">Last mo: {analytics.saas.lastMonthSignups}</p>
@@ -283,7 +283,7 @@ export default function RevenueDashboard() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Payments</p>
-                <Receipt className="h-3.5 w-3.5 text-emerald-500" />
+                <Receipt className="h-3.5 w-3.5 text-primary" />
               </div>
               <p className="text-2xl font-extrabold">{analytics.saas.paymentsCount}</p>
               <p className="text-[11px] text-muted-foreground mt-1">{analytics.saas.refundsCount} refunds</p>
@@ -293,7 +293,7 @@ export default function RevenueDashboard() {
             <CardContent className="pt-4 pb-3">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[11px] text-muted-foreground uppercase font-semibold tracking-wider">Today</p>
-                <BarChart3 className="h-3.5 w-3.5 text-amber-500" />
+                <BarChart3 className="h-3.5 w-3.5 text-primary" />
               </div>
               <p className="text-2xl font-extrabold">{formatCurrency(analytics.saas.todayRevenue)}</p>
               <p className="text-[11px] text-muted-foreground mt-1">{analytics.saas.totalCustomers} customers</p>
@@ -317,16 +317,16 @@ export default function RevenueDashboard() {
             <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="colorSubs" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="var(--chart-2)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--chart-2)" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="colorOneTime" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="var(--chart-3)" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="var(--chart-3)" stopOpacity={0}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -344,9 +344,9 @@ export default function RevenueDashboard() {
                 }}
               />
               <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Area type="monotone" dataKey="Revenue" stroke="#8b5cf6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
-              <Area type="monotone" dataKey="Subscriptions" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorSubs)" />
-              <Area type="monotone" dataKey="One-time" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorOneTime)" />
+              <Area type="monotone" dataKey="Revenue" stroke="var(--chart-1)" strokeWidth={2.5} fillOpacity={1} fill="url(#colorRevenue)" />
+              <Area type="monotone" dataKey="Subscriptions" stroke="var(--chart-2)" strokeWidth={2} fillOpacity={1} fill="url(#colorSubs)" />
+              <Area type="monotone" dataKey="One-time" stroke="var(--chart-3)" strokeWidth={2} fillOpacity={1} fill="url(#colorOneTime)" />
             </AreaChart>
           </ResponsiveContainer>
         </CardContent>

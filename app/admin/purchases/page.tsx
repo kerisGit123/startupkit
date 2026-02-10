@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ShoppingCart, DollarSign, TrendingUp, Coins, Search } from "lucide-react";
@@ -64,50 +62,50 @@ export default function PurchasesPage() {
 
       {/* Stats Cards - Gradient style matching Revenue & Subscriptions */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Total Purchases</p>
-              <ShoppingCart className="h-4 w-4 text-violet-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Total Purchases</p>
+              <ShoppingCart className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{stats?.totalPurchases || 0}</p>
-            <p className="text-violet-200 text-xs mt-1.5">All-time purchases</p>
+            <p className="text-xs mt-1.5 opacity-70">All-time purchases</p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><ShoppingCart className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/90 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Total Revenue</p>
-              <DollarSign className="h-4 w-4 text-emerald-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Total Revenue</p>
+              <DollarSign className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">MYR {stats?.totalRevenue || "0.00"}</p>
-            <p className="text-emerald-200 text-xs mt-1.5">Lifetime credit revenue</p>
+            <p className="text-xs mt-1.5 opacity-70">Lifetime credit revenue</p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><DollarSign className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/80 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">This Month</p>
-              <TrendingUp className="h-4 w-4 text-blue-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">This Month</p>
+              <TrendingUp className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">MYR {stats?.monthlyRevenue || "0.00"}</p>
-            <p className="text-blue-200 text-xs mt-1.5">{stats?.thisMonthPurchases || 0} purchases this month</p>
+            <p className="text-xs mt-1.5 opacity-70">{stats?.thisMonthPurchases || 0} purchases this month</p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><TrendingUp className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/70 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-amber-100 text-xs font-semibold uppercase tracking-wider">Credits Sold</p>
-              <Coins className="h-4 w-4 text-amber-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Credits Sold</p>
+              <Coins className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{stats?.totalCredits || 0}</p>
-            <p className="text-amber-200 text-xs mt-1.5">Total credits distributed</p>
+            <p className="text-xs mt-1.5 opacity-70">Total credits distributed</p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><Coins className="h-20 w-20" /></div>
         </Card>

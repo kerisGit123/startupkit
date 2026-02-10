@@ -407,6 +407,16 @@ export const createInvoice = mutation({
     stripePaymentIntentId: v.optional(v.string()),
     stripeInvoiceId: v.optional(v.string()),
     dueDate: v.optional(v.number()),
+    paymentTerms: v.optional(v.string()),
+    invoiceType: v.optional(v.union(
+      v.literal("subscription"),
+      v.literal("payment"),
+      v.literal("invoice")
+    )),
+    transactionType: v.optional(v.union(
+      v.literal("recurring"),
+      v.literal("one_time")
+    )),
     autoIssue: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -414,34 +424,15 @@ export const createInvoice = mutation({
     const { invoiceNo } = await generateInvoiceNumberInternal(ctx);
 
     const now = Date.now();
-    const invoiceData: {
-      invoiceNo: string;
-      userId?: typeof args.userId;
-      companyId?: string;
-      amount: number;
-      currency: string;
-      status: "draft" | "issued" | "paid" | "cancelled" | "overdue";
-      items: typeof args.items;
-      billingDetails: typeof args.billingDetails;
-      subtotal: number;
-      tax?: number;
-      taxRate?: number;
-      discount?: number;
-      total: number;
-      notes?: string;
-      stripePaymentIntentId?: string;
-      stripeInvoiceId?: string;
-      dueDate?: number;
-      issuedAt?: number;
-      createdAt: number;
-      updatedAt: number;
-    } = {
+    const invoiceData = {
       invoiceNo,
       userId: args.userId,
       companyId: args.companyId,
       amount: args.amount,
       currency: args.currency,
-      status: (args.autoIssue ? "issued" : "draft") as "draft" | "issued",
+      status: (args.autoIssue ? "issued" : "draft") as "draft" | "issued" | "paid" | "cancelled" | "overdue",
+      invoiceType: (args.invoiceType || "invoice") as "subscription" | "payment" | "invoice",
+      transactionType: (args.transactionType || "one_time") as "recurring" | "one_time",
       items: args.items,
       billingDetails: args.billingDetails,
       subtotal: args.subtotal,
@@ -453,6 +444,8 @@ export const createInvoice = mutation({
       stripePaymentIntentId: args.stripePaymentIntentId,
       stripeInvoiceId: args.stripeInvoiceId,
       dueDate: args.dueDate,
+      paymentTerms: args.paymentTerms,
+      issuedAt: undefined as number | undefined,
       createdAt: now,
       updatedAt: now,
     };

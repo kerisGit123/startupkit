@@ -6,7 +6,7 @@ export const getNotifications = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      return [];
     }
 
     // Get recent activity (last 7 days)

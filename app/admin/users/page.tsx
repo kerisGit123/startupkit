@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Users as UsersIcon, Search, Mail, Calendar, CreditCard, Tag, Activity, Bell, X } from "lucide-react";

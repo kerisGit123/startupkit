@@ -130,22 +130,21 @@ export default function EmailAnalyticsPage() {
               <CardTitle className="text-lg">Email Funnel</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4">
+              <div className="grid grid-cols-4 gap-3">
                 {funnelData.map((step, i) => (
-                  <div key={step.name} className="flex-1">
-                    <div
-                      className="rounded-lg p-3 text-center"
-                      style={{
-                        backgroundColor: [
-                          "rgb(219 234 254)", "rgb(209 250 229)",
-                          "rgb(237 233 254)", "rgb(254 249 195)",
-                        ][i],
-                      }}
-                    >
-                      <p className="text-xs font-medium text-muted-foreground uppercase">{step.name}</p>
-                      <p className="text-xl font-bold mt-1">{step.value.toLocaleString()}</p>
-                      <p className="text-xs font-medium">{step.pct}</p>
-                    </div>
+                  <div
+                    key={step.name}
+                    className="rounded-lg p-4 text-center"
+                    style={{
+                      backgroundColor: [
+                        "rgb(219 234 254)", "rgb(209 250 229)",
+                        "rgb(237 233 254)", "rgb(254 249 195)",
+                      ][i],
+                    }}
+                  >
+                    <p className="text-xs font-medium text-muted-foreground uppercase">{step.name}</p>
+                    <p className="text-xl font-bold mt-1">{step.value.toLocaleString()}</p>
+                    <p className="text-xs font-medium">{step.pct}</p>
                     {i < funnelData.length - 1 && (
                       <div className="flex justify-center mt-1">
                         <ArrowDownRight className="h-4 w-4 text-muted-foreground" />

@@ -851,6 +851,7 @@ export default defineSchema({
     discount: v.optional(v.number()),
     total: v.number(),
     dueDate: v.optional(v.number()),
+    paymentTerms: v.optional(v.string()),
     notes: v.optional(v.string()),
     stripePaymentIntentId: v.optional(v.string()),
     stripeInvoiceId: v.optional(v.string()),

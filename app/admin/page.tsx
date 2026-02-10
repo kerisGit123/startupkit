@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
@@ -149,52 +147,52 @@ export default function AdminDashboard() {
       {/* Top Hero Cards - Revenue, Customers, Bookings */}
       <div className="grid gap-4 md:grid-cols-3">
         {/* Total Revenue Card */}
-        <Card className="bg-linear-to-br from-violet-600 to-purple-700 text-white border-0 shadow-lg">
+        <Card className="bg-primary text-primary-foreground border-0 shadow-lg">
           <CardContent className="pt-5 pb-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-violet-100">Total Revenue</p>
-              <div className="p-2 bg-white/20 rounded-lg">
+              <p className="text-sm font-medium opacity-80">Total Revenue</p>
+              <div className="p-2 bg-white/15 rounded-lg">
                 <DollarSign className="w-4 h-4" />
               </div>
             </div>
             <p className="text-3xl font-bold">MYR {totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
             <div className="flex items-center gap-1 mt-2">
-              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-300" />
-              <span className="text-xs text-violet-200">MRR: MYR {stats?.mrr || "0"}</span>
+              <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+              <span className="text-xs opacity-70">MRR: MYR {stats?.mrr || "0"}</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Total Customers Card */}
-        <Card className="bg-linear-to-br from-emerald-500 to-teal-600 text-white border-0 shadow-lg">
+        <Card className="bg-primary/90 text-primary-foreground border-0 shadow-lg">
           <CardContent className="pt-5 pb-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-emerald-100">Total Customers</p>
-              <div className="p-2 bg-white/20 rounded-lg">
+              <p className="text-sm font-medium opacity-80">Total Customers</p>
+              <div className="p-2 bg-white/15 rounded-lg">
                 <Users className="w-4 h-4" />
               </div>
             </div>
             <p className="text-3xl font-bold">{stats?.totalUsers?.toLocaleString() || 0}</p>
             <div className="flex items-center gap-1 mt-2">
-              <ArrowUpRight className="w-3.5 h-3.5 text-emerald-200" />
-              <span className="text-xs text-emerald-100">+{stats?.newUsersThisMonth || 0} this month</span>
+              <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+              <span className="text-xs opacity-70">+{stats?.newUsersThisMonth || 0} this month</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Active Subscriptions Card */}
-        <Card className="bg-linear-to-br from-blue-500 to-indigo-600 text-white border-0 shadow-lg">
+        <Card className="bg-primary/80 text-primary-foreground border-0 shadow-lg">
           <CardContent className="pt-5 pb-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-sm font-medium text-blue-100">Active Subscriptions</p>
-              <div className="p-2 bg-white/20 rounded-lg">
+              <p className="text-sm font-medium opacity-80">Active Subscriptions</p>
+              <div className="p-2 bg-white/15 rounded-lg">
                 <Repeat className="w-4 h-4" />
               </div>
             </div>
             <p className="text-3xl font-bold">{stats?.activeSubscriptions || 0}</p>
             <div className="flex items-center gap-1 mt-2">
-              <ArrowUpRight className="w-3.5 h-3.5 text-blue-200" />
-              <span className="text-xs text-blue-100">+{stats?.newSubscriptionsThisMonth || 0} new subs</span>
+              <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+              <span className="text-xs opacity-70">+{stats?.newSubscriptionsThisMonth || 0} new subs</span>
             </div>
           </CardContent>
         </Card>
@@ -205,7 +203,7 @@ export default function AdminDashboard() {
         <Button 
           onClick={() => router.push('/admin/booking')}
           variant="outline"
-          className="h-10 gap-2 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+          className="h-10 gap-2"
         >
           <CalendarPlus className="w-4 h-4" />
           <span className="text-sm">New Booking</span>
@@ -213,7 +211,7 @@ export default function AdminDashboard() {
         <Button 
           onClick={() => router.push('/admin/inbox?tab=ticket')}
           variant="outline"
-          className="h-10 gap-2 border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+          className="h-10 gap-2"
         >
           <Ticket className="w-4 h-4" />
           <span className="text-sm">Create Ticket</span>
@@ -221,7 +219,7 @@ export default function AdminDashboard() {
         <Button 
           onClick={() => router.push('/admin/customers')}
           variant="outline"
-          className="h-10 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
+          className="h-10 gap-2"
         >
           <UserPlus className="w-4 h-4" />
           <span className="text-sm">Add Customer</span>
@@ -229,7 +227,7 @@ export default function AdminDashboard() {
         <Button 
           onClick={() => router.push('/admin/email-management')}
           variant="outline"
-          className="h-10 gap-2 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+          className="h-10 gap-2"
         >
           <Mail className="w-4 h-4" />
           <span className="text-sm">Send Email</span>
@@ -257,8 +255,8 @@ export default function AdminDashboard() {
                     <p className="text-xs text-muted-foreground font-medium">Today&apos;s Bookings</p>
                     <p className="text-2xl font-bold mt-1">{stats?.todaysBookings || 0}</p>
                   </div>
-                  <div className="p-2.5 bg-orange-100 rounded-xl">
-                    <Calendar className="w-5 h-5 text-orange-600" />
+                  <div className="p-2.5 bg-primary/10 rounded-xl">
+                    <Calendar className="w-5 h-5 text-primary" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">Click to view calendar</p>
@@ -271,12 +269,12 @@ export default function AdminDashboard() {
                     <p className="text-xs text-muted-foreground font-medium">Open Tickets</p>
                     <p className="text-2xl font-bold mt-1">{stats?.openTickets || 0}</p>
                   </div>
-                  <div className="p-2.5 bg-red-100 rounded-xl">
-                    <Ticket className="w-5 h-5 text-red-600" />
+                  <div className="p-2.5 bg-primary/10 rounded-xl">
+                    <Ticket className="w-5 h-5 text-primary" />
                   </div>
                 </div>
                 {(stats?.openTickets || 0) > 0 ? (
-                  <p className="text-xs text-red-600 font-medium mt-2">Needs attention</p>
+                  <p className="text-xs text-amber-600 font-medium mt-2">Needs attention</p>
                 ) : (
                   <p className="text-xs text-green-600 mt-2">All clear</p>
                 )}
@@ -289,8 +287,8 @@ export default function AdminDashboard() {
                     <p className="text-xs text-muted-foreground font-medium">Churn Rate</p>
                     <p className="text-2xl font-bold mt-1">{stats?.churnRate || "0"}%</p>
                   </div>
-                  <div className="p-2.5 bg-amber-100 rounded-xl">
-                    <TrendingDown className="w-5 h-5 text-amber-600" />
+                  <div className="p-2.5 bg-primary/10 rounded-xl">
+                    <TrendingDown className="w-5 h-5 text-primary" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">{stats?.canceledSubscriptions || 0} canceled</p>
@@ -303,8 +301,8 @@ export default function AdminDashboard() {
                     <p className="text-xs text-muted-foreground font-medium">Customer CLV</p>
                     <p className="text-2xl font-bold mt-1">MYR {stats?.clv || "0"}</p>
                   </div>
-                  <div className="p-2.5 bg-violet-100 rounded-xl">
-                    <Star className="w-5 h-5 text-violet-600" />
+                  <div className="p-2.5 bg-primary/10 rounded-xl">
+                    <Star className="w-5 h-5 text-primary" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">Lifetime value</p>
@@ -314,10 +312,10 @@ export default function AdminDashboard() {
 
           {/* SaaS Health Row */}
           <div className="grid gap-3 md:grid-cols-3">
-            <Card className="bg-linear-to-r from-slate-50 to-slate-100/50">
+            <Card>
               <CardContent className="pt-4 pb-3 flex items-center gap-4">
-                <div className="p-3 bg-green-100 rounded-xl">
-                  <Activity className="w-5 h-5 text-green-600" />
+                <div className="p-3 bg-primary/10 rounded-xl">
+                  <Activity className="w-5 h-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Net Revenue Retention</p>
@@ -325,10 +323,10 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-linear-to-r from-slate-50 to-slate-100/50">
+            <Card>
               <CardContent className="pt-4 pb-3 flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-xl">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                <div className="p-3 bg-primary/10 rounded-xl">
+                  <BarChart3 className="w-5 h-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">ARR</p>
@@ -336,10 +334,10 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-linear-to-r from-slate-50 to-slate-100/50">
+            <Card>
               <CardContent className="pt-4 pb-3 flex items-center gap-4">
-                <div className="p-3 bg-purple-100 rounded-xl">
-                  <TrendingUp className="w-5 h-5 text-purple-600" />
+                <div className="p-3 bg-primary/10 rounded-xl">
+                  <TrendingUp className="w-5 h-5 text-primary" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground font-medium">Avg Sub Length</p>
@@ -385,7 +383,7 @@ export default function AdminDashboard() {
                     />
                     <Bar
                       dataKey="revenue"
-                      fill="hsl(262, 83%, 58%)"
+                      fill="var(--chart-1)"
                       radius={[6, 6, 0, 0]}
                     />
                   </BarChart>
@@ -414,12 +412,10 @@ export default function AdminDashboard() {
                     {recentActivity.slice(0, 6).map((activity, index) => (
                       <div key={index} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                            activity.type === "subscription" ? "bg-violet-100" : "bg-emerald-100"
-                          }`}>
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-primary/10">
                             {activity.type === "subscription" 
-                              ? <CreditCard className="w-4 h-4 text-violet-600" />
-                              : <ShoppingCart className="w-4 h-4 text-emerald-600" />}
+                              ? <CreditCard className="w-4 h-4 text-primary" />
+                              : <ShoppingCart className="w-4 h-4 text-primary" />}
                           </div>
                           <div>
                             <p className="text-sm font-medium">
@@ -432,7 +428,7 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                         </div>
-                        <span className="text-sm font-semibold text-emerald-600">
+                        <span className="text-sm font-semibold text-primary">
                           +MYR {activity.type === "subscription" 
                             ? (activity.plan === "pro" ? "29.00" : activity.plan === "business" ? "99.00" : "19.90")
                             : ((activity.amount || 0) / 100).toFixed(2)}
@@ -464,7 +460,7 @@ export default function AdminDashboard() {
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => value.slice(0, 3)} />
                     <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" formatter={(value: number | string) => `MYR ${typeof value === 'number' ? value.toLocaleString() : value}`} />} />
-                    <Bar dataKey="revenue" fill="hsl(262, 83%, 58%)" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="revenue" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ChartContainer>
               </CardContent>
@@ -481,8 +477,8 @@ export default function AdminDashboard() {
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => value.slice(0, 3)} />
                     <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-                    <Bar dataKey="count" fill="hsl(262, 83%, 58%)" fillOpacity={0.3} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="amount" fill="hsl(262, 83%, 58%)" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="count" fill="var(--chart-2)" fillOpacity={0.3} radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="amount" fill="var(--chart-1)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ChartContainer>
               </CardContent>
@@ -499,8 +495,8 @@ export default function AdminDashboard() {
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} tickMargin={8} tickFormatter={(value) => value.slice(0, 3)} />
                     <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-                    <Bar dataKey="count" fill="hsl(160, 60%, 45%)" fillOpacity={0.3} radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="amount" fill="hsl(160, 60%, 45%)" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="count" fill="var(--chart-3)" fillOpacity={0.3} radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="amount" fill="var(--chart-2)" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ChartContainer>
               </CardContent>
@@ -522,22 +518,22 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 bg-violet-50 rounded-xl">
+                  <div className="flex items-center justify-between p-4 bg-primary/5 rounded-xl">
                     <div>
                       <p className="text-xs text-muted-foreground font-medium">Total Purchases</p>
                       <p className="text-2xl font-bold mt-1">{totalPurchases}</p>
                     </div>
-                    <div className="p-2.5 bg-violet-100 rounded-xl">
-                      <ShoppingCart className="w-5 h-5 text-violet-600" />
+                    <div className="p-2.5 bg-primary/10 rounded-xl">
+                      <ShoppingCart className="w-5 h-5 text-primary" />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-xl">
+                  <div className="flex items-center justify-between p-4 bg-primary/5 rounded-xl">
                     <div>
                       <p className="text-xs text-muted-foreground font-medium">Purchase Revenue</p>
                       <p className="text-2xl font-bold mt-1">MYR {totalPurchaseRevenue.toFixed(2)}</p>
                     </div>
-                    <div className="p-2.5 bg-emerald-100 rounded-xl">
-                      <DollarSign className="w-5 h-5 text-emerald-600" />
+                    <div className="p-2.5 bg-primary/10 rounded-xl">
+                      <DollarSign className="w-5 h-5 text-primary" />
                     </div>
                   </div>
                 </div>
@@ -555,22 +551,22 @@ export default function AdminDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 bg-blue-50 rounded-xl">
+                  <div className="flex items-center justify-between p-4 bg-primary/5 rounded-xl">
                     <div>
                       <p className="text-xs text-muted-foreground font-medium">Total Subscriptions</p>
                       <p className="text-2xl font-bold mt-1">{totalSubs}</p>
                     </div>
-                    <div className="p-2.5 bg-blue-100 rounded-xl">
-                      <Users className="w-5 h-5 text-blue-600" />
+                    <div className="p-2.5 bg-primary/10 rounded-xl">
+                      <Users className="w-5 h-5 text-primary" />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-xl">
+                  <div className="flex items-center justify-between p-4 bg-primary/5 rounded-xl">
                     <div>
                       <p className="text-xs text-muted-foreground font-medium">Subscription Revenue</p>
                       <p className="text-2xl font-bold mt-1">MYR {totalSubRevenue.toFixed(2)}</p>
                     </div>
-                    <div className="p-2.5 bg-indigo-100 rounded-xl">
-                      <CreditCard className="w-5 h-5 text-indigo-600" />
+                    <div className="p-2.5 bg-primary/10 rounded-xl">
+                      <CreditCard className="w-5 h-5 text-primary" />
                     </div>
                   </div>
                 </div>
@@ -590,8 +586,8 @@ export default function AdminDashboard() {
               const subs = recentActivity.filter(a => a.type === "subscription");
               const credits = recentActivity.filter(a => a.type === "credit_purchase" || a.type === "purchase");
               const groups = [
-                { key: "subs", label: "New Subscriptions", items: subs, icon: <Star className="w-4 h-4" />, color: "bg-emerald-500", bgColor: "bg-emerald-50", textColor: "text-emerald-700" },
-                { key: "credits", label: "Credit Purchases", items: credits, icon: <CreditCard className="w-4 h-4" />, color: "bg-violet-500", bgColor: "bg-violet-50", textColor: "text-violet-700" },
+                { key: "subs", label: "New Subscriptions", items: subs, icon: <Star className="w-4 h-4" />, color: "bg-primary", bgColor: "bg-primary/5", textColor: "text-primary" },
+                { key: "credits", label: "Credit Purchases", items: credits, icon: <CreditCard className="w-4 h-4" />, color: "bg-primary/80", bgColor: "bg-primary/5", textColor: "text-primary" },
               ];
               return groups.map(g => {
                 if (g.items.length === 0) return null;
@@ -622,7 +618,7 @@ export default function AdminDashboard() {
                                 {new Date(activity.createdAt).toLocaleString()}
                               </p>
                             </div>
-                            <span className="text-sm font-semibold text-emerald-600 whitespace-nowrap">
+                            <span className="text-sm font-semibold text-primary whitespace-nowrap">
                               +MYR {activity.type === "subscription" 
                                 ? (activity.plan === "pro" ? "29.00" : activity.plan === "business" ? "99.00" : "19.90")
                                 : ((activity.amount || 0) / 100).toFixed(2)}

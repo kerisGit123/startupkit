@@ -79,7 +79,7 @@ export const convertPOToInvoice = mutation({
       taxRate,
       discount,
       total,
-      notes: `Converted from PO-${po.poNo}${overrides?.notes ? `\n\n${overrides.notes}` : ""}${po.notes ? `\n\n${po.notes}` : ""}`,
+      notes: `Converted from ${po.poNo}${overrides?.notes ? `\n\n${overrides.notes}` : ""}${po.notes ? `\n\n${po.notes}` : ""}`,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

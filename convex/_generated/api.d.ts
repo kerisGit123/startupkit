@@ -94,6 +94,7 @@ import type * as seedKnowledgeBase from "../seedKnowledgeBase.js";
 import type * as settings from "../settings.js";
 import type * as setup_seedDatabase from "../setup/seedDatabase.js";
 import type * as smtpConfig from "../smtpConfig.js";
+import type * as soConfig from "../soConfig.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as syncUserData from "../syncUserData.js";
 import type * as tickets from "../tickets.js";
@@ -196,6 +197,7 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   "setup/seedDatabase": typeof setup_seedDatabase;
   smtpConfig: typeof smtpConfig;
+  soConfig: typeof soConfig;
   subscriptions: typeof subscriptions;
   syncUserData: typeof syncUserData;
   tickets: typeof tickets;

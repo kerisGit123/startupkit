@@ -55,17 +55,6 @@ export const createPurchaseOrder = mutation({
       createdBy: "admin",
     });
 
-    // Auto-increment PO counter in settings
-    const poConfig = await ctx.db
-      .query("po_config")
-      .first();
-    
-    if (poConfig) {
-      await ctx.db.patch(poConfig._id, {
-        currentCounter: (poConfig.currentCounter || 0) + 1,
-      });
-    }
-
     return { poId, success: true };
   },
 });

@@ -12,7 +12,9 @@ import {
   Calendar,
   TrendingUp,
   TrendingDown,
-  BarChart3
+  BarChart3,
+  Copy,
+  ExternalLink
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +38,8 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 export default function TransactionsPage() {
   const router = useRouter();
@@ -45,6 +49,7 @@ export default function TransactionsPage() {
   const [dateRange, setDateRange] = useState<string>("all");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
 
   const allTransactions = useQuery(api.financialLedger.getAllLedgerEntries, {});
 
@@ -223,14 +228,14 @@ export default function TransactionsPage() {
 
       {/* Baremetrics-style Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Revenue</p>
-              <TrendingUp className="h-4 w-4 text-emerald-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Revenue</p>
+              <TrendingUp className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-2xl font-extrabold tracking-tight">{formatCurrency(totalRevenue, 'MYR')}</p>
-            <p className="text-emerald-200 text-xs mt-1.5">
+            <p className="text-xs mt-1.5 opacity-70">
               {filteredTransactions.filter(t => t.amount > 0).length} transactions
             </p>
           </CardContent>
@@ -239,14 +244,14 @@ export default function TransactionsPage() {
           </div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/90 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-red-100 text-xs font-semibold uppercase tracking-wider">Refunds</p>
-              <TrendingDown className="h-4 w-4 text-red-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Refunds</p>
+              <TrendingDown className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-2xl font-extrabold tracking-tight">{formatCurrency(totalRefunds, 'MYR')}</p>
-            <p className="text-red-200 text-xs mt-1.5">
+            <p className="text-xs mt-1.5 opacity-70">
               {filteredTransactions.filter(t => t.amount < 0).length} refunds
             </p>
           </CardContent>
@@ -255,14 +260,14 @@ export default function TransactionsPage() {
           </div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/80 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">Net Revenue</p>
-              <BarChart3 className="h-4 w-4 text-violet-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Net Revenue</p>
+              <BarChart3 className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-2xl font-extrabold tracking-tight">{formatCurrency(netRevenue, 'MYR')}</p>
-            <p className="text-violet-200 text-xs mt-1.5">
+            <p className="text-xs mt-1.5 opacity-70">
               {filteredTransactions.length} total entries
             </p>
           </CardContent>
@@ -430,7 +435,7 @@ export default function TransactionsPage() {
                   filteredTransactions.map((transaction) => {
                     const sourceBadge = getSourceBadge(transaction.revenueSource);
                     return (
-                      <TableRow key={transaction._id} className="hover:bg-muted/30">
+                      <TableRow key={transaction._id} className="hover:bg-muted/30 cursor-pointer" onClick={() => setSelectedTransaction(transaction)}>
                         <TableCell className="font-mono text-xs">
                           {transaction.ledgerId}
                         </TableCell>
@@ -488,6 +493,186 @@ export default function TransactionsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Transaction Detail Dialog */}
+      <Dialog open={!!selectedTransaction} onOpenChange={(open) => !open && setSelectedTransaction(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Transaction Details</DialogTitle>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase font-medium">Ledger ID</p>
+                  <p className="font-mono font-medium">{selectedTransaction.ledgerId}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase font-medium">Date</p>
+                  <p>{formatDate(selectedTransaction.transactionDate)}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-muted-foreground text-xs uppercase font-medium">Description</p>
+                  <p className="font-medium">{selectedTransaction.description}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase font-medium">Type</p>
+                  <Badge variant="outline" className={getTypeColor(selectedTransaction.type)}>
+                    {selectedTransaction.type.replace(/_/g, ' ')}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase font-medium">Source</p>
+                  <Badge variant="outline" className={getSourceBadge(selectedTransaction.revenueSource).color}>
+                    {getSourceBadge(selectedTransaction.revenueSource).label}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase font-medium">Amount</p>
+                  <p className={cn("text-lg font-bold", selectedTransaction.amount >= 0 ? "text-emerald-600" : "text-red-600")}>
+                    {selectedTransaction.amount >= 0 ? "+" : ""}{formatCurrency(selectedTransaction.amount, selectedTransaction.currency)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs uppercase font-medium">Status</p>
+                  {selectedTransaction.isReconciled ? (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Reconciled</Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Recorded</Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Stripe IDs Section */}
+              {(selectedTransaction.stripePaymentIntentId || selectedTransaction.stripeSubscriptionId || selectedTransaction.stripeCustomerId) && (
+                <div className="border-t pt-4 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stripe Details</p>
+                  
+                  {selectedTransaction.stripePaymentIntentId && (
+                    <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Payment Intent ID</p>
+                        <p className="font-mono text-xs">{selectedTransaction.stripePaymentIntentId}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedTransaction.stripePaymentIntentId);
+                            toast.success("Copied to clipboard");
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          asChild
+                        >
+                          <a href={`https://dashboard.stripe.com/payments/${selectedTransaction.stripePaymentIntentId}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedTransaction.stripeSubscriptionId && (
+                    <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Subscription ID</p>
+                        <p className="font-mono text-xs">{selectedTransaction.stripeSubscriptionId}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedTransaction.stripeSubscriptionId);
+                            toast.success("Copied to clipboard");
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          asChild
+                        >
+                          <a href={`https://dashboard.stripe.com/subscriptions/${selectedTransaction.stripeSubscriptionId}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedTransaction.stripeCustomerId && (
+                    <div className="flex items-center justify-between bg-muted/30 rounded-md px-3 py-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Customer ID</p>
+                        <p className="font-mono text-xs">{selectedTransaction.stripeCustomerId}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedTransaction.stripeCustomerId);
+                            toast.success("Copied to clipboard");
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          asChild
+                        >
+                          <a href={`https://dashboard.stripe.com/customers/${selectedTransaction.stripeCustomerId}`} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Additional Info */}
+              {(selectedTransaction.notes || selectedTransaction.subscriptionPlan || selectedTransaction.tokensAmount) && (
+                <div className="border-t pt-4 space-y-2 text-sm">
+                  {selectedTransaction.subscriptionPlan && (
+                    <div>
+                      <p className="text-muted-foreground text-xs uppercase font-medium">Plan</p>
+                      <p className="capitalize font-medium">{selectedTransaction.subscriptionPlan}</p>
+                    </div>
+                  )}
+                  {selectedTransaction.tokensAmount && (
+                    <div>
+                      <p className="text-muted-foreground text-xs uppercase font-medium">Credits/Tokens</p>
+                      <p className="font-medium">{selectedTransaction.tokensAmount}</p>
+                    </div>
+                  )}
+                  {selectedTransaction.notes && (
+                    <div>
+                      <p className="text-muted-foreground text-xs uppercase font-medium">Notes</p>
+                      <p>{selectedTransaction.notes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,5 @@
 "use client";
 
-export const dynamic = 'force-dynamic';
-
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Users, CheckCircle, XCircle, Search, Download, Calendar, RefreshCw } from "lucide-react";
@@ -117,52 +115,52 @@ export default function SubscriptionsPage() {
 
       {/* Baremetrics-style Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-blue-100 text-xs font-semibold uppercase tracking-wider">Total</p>
-              <Users className="h-4 w-4 text-blue-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Total</p>
+              <Users className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{stats?.totalSubscriptions || 0}</p>
-            <p className="text-blue-200 text-xs mt-1.5">All-time subscriptions</p>
+            <p className="text-xs mt-1.5 opacity-70">All-time subscriptions</p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><Users className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/90 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-emerald-100 text-xs font-semibold uppercase tracking-wider">Active</p>
-              <CheckCircle className="h-4 w-4 text-emerald-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Active</p>
+              <CheckCircle className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{stats?.activeSubscriptions || 0}</p>
-            <p className="text-emerald-200 text-xs mt-1.5">
+            <p className="text-xs mt-1.5 opacity-70">
               {stats?.totalSubscriptions ? Math.round(((stats.activeSubscriptions || 0) / stats.totalSubscriptions) * 100) : 0}% of total
             </p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><CheckCircle className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-red-500 to-rose-600 text-white shadow-lg shadow-red-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/80 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-red-100 text-xs font-semibold uppercase tracking-wider">Churn</p>
-              <XCircle className="h-4 w-4 text-red-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">Churn</p>
+              <XCircle className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">{(stats?.canceledSubscriptions || 0) + (stats?.cancelingSubscriptions || 0)}</p>
-            <p className="text-red-200 text-xs mt-1.5">{stats?.churnRate || "0.0"}% churn rate</p>
+            <p className="text-xs mt-1.5 opacity-70">{stats?.churnRate || "0.0"}% churn rate</p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><XCircle className="h-20 w-20" /></div>
         </Card>
 
-        <Card className="relative overflow-hidden border-0 bg-linear-to-br from-violet-500 to-violet-600 text-white shadow-lg shadow-violet-500/20">
+        <Card className="relative overflow-hidden border-0 bg-primary/70 text-primary-foreground shadow-lg">
           <CardContent className="pt-5 pb-5">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-violet-100 text-xs font-semibold uppercase tracking-wider">MRR</p>
-              <RefreshCw className="h-4 w-4 text-violet-200" />
+              <p className="text-xs font-semibold uppercase tracking-wider opacity-80">MRR</p>
+              <RefreshCw className="h-4 w-4 opacity-70" />
             </div>
             <p className="text-3xl font-extrabold tracking-tight">MYR {stats?.mrr || "0.00"}</p>
-            <p className="text-violet-200 text-xs mt-1.5">Monthly Recurring Revenue</p>
+            <p className="text-xs mt-1.5 opacity-70">Monthly Recurring Revenue</p>
           </CardContent>
           <div className="absolute -right-3 -bottom-3 opacity-10"><RefreshCw className="h-20 w-20" /></div>
         </Card>
