@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useSyncExternalStore, useCallback } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 
 const THEMES = {
@@ -102,50 +102,71 @@ const THEMES = {
   },
 }
 
-export function ThemeSwitcher() {
-  const [theme, setTheme] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("admin-theme") || "default"
-    }
-    return "default"
-  })
+function applyThemeToDOM(themeName: string) {
+  const themeData = THEMES[themeName as keyof typeof THEMES]
+  if (!themeData) return
   
-  const applyTheme = (themeName: string) => {
-    const themeData = THEMES[themeName as keyof typeof THEMES]
-    if (!themeData) return
-    
-    document.documentElement.dataset.theme = themeName
-    
-    const { colors } = themeData
-    document.documentElement.style.setProperty("--primary", colors.primary)
-    document.documentElement.style.setProperty("--primary-foreground", colors.primaryForeground)
-    document.documentElement.style.setProperty("--ring", colors.ring)
-    
-    document.documentElement.style.setProperty("--chart-1", colors.chart1)
-    document.documentElement.style.setProperty("--chart-2", colors.chart2)
-    document.documentElement.style.setProperty("--chart-3", colors.chart3)
-    document.documentElement.style.setProperty("--chart-4", colors.chart4)
-    document.documentElement.style.setProperty("--chart-5", colors.chart5)
-    
-    if (colors.sidebarPrimary) {
-      document.documentElement.style.setProperty("--sidebar-primary", colors.sidebarPrimary)
-      document.documentElement.style.setProperty("--sidebar-primary-foreground", colors.sidebarPrimaryForeground!)
-      document.documentElement.style.setProperty("--sidebar-ring", colors.sidebarRing!)
-    }
-    
-    localStorage.setItem("admin-theme", themeName)
-    setTheme(themeName)
+  document.documentElement.dataset.theme = themeName
+  
+  const { colors } = themeData
+  document.documentElement.style.setProperty("--primary", colors.primary)
+  document.documentElement.style.setProperty("--primary-foreground", colors.primaryForeground)
+  document.documentElement.style.setProperty("--ring", colors.ring)
+  
+  document.documentElement.style.setProperty("--chart-1", colors.chart1)
+  document.documentElement.style.setProperty("--chart-2", colors.chart2)
+  document.documentElement.style.setProperty("--chart-3", colors.chart3)
+  document.documentElement.style.setProperty("--chart-4", colors.chart4)
+  document.documentElement.style.setProperty("--chart-5", colors.chart5)
+  
+  if (colors.sidebarPrimary) {
+    document.documentElement.style.setProperty("--sidebar-primary", colors.sidebarPrimary)
+    document.documentElement.style.setProperty("--sidebar-primary-foreground", colors.sidebarPrimaryForeground!)
+    document.documentElement.style.setProperty("--sidebar-ring", colors.sidebarRing!)
   }
   
-  useEffect(() => {
-    applyTheme(theme)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  localStorage.setItem("admin-theme", themeName)
+}
+
+const listeners = new Set<() => void>()
+
+function subscribe(callback: () => void) {
+  listeners.add(callback)
+  return () => listeners.delete(callback)
+}
+
+function getSnapshot() {
+  return localStorage.getItem("admin-theme") || "default"
+}
+
+function getServerSnapshot() {
+  return "default"
+}
+
+function setThemeAndNotify(themeName: string) {
+  applyThemeToDOM(themeName)
+  listeners.forEach(fn => fn())
+}
+
+export function ThemeSwitcher() {
+  const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
+  const handleThemeChange = useCallback((themeName: string) => {
+    setThemeAndNotify(themeName)
   }, [])
+
+  // Apply saved theme to DOM on first client render
+  const applied = typeof window !== "undefined" && document.documentElement.dataset.theme
+  if (typeof window !== "undefined" && !applied) {
+    applyThemeToDOM(theme)
+  }
+
+  const defaultColor = "oklch(0.205 0 0)"
   
   return (
-    <Select value={theme} onValueChange={applyTheme}>
+    <Select value={theme} onValueChange={handleThemeChange}>
       <SelectTrigger className="w-9 h-9 p-0 justify-center [&>svg:last-child]:hidden border-0 bg-transparent hover:bg-accent" aria-label="Select theme">
-        <div className="w-4 h-4 rounded-full border-2 border-foreground/30" style={{ background: THEMES[theme as keyof typeof THEMES]?.colors?.primary || "oklch(0.205 0 0)" }} />
+        <div className="w-4 h-4 rounded-full border-2 border-foreground/30" style={{ background: THEMES[theme as keyof typeof THEMES]?.colors?.primary || defaultColor }} />
       </SelectTrigger>
       <SelectContent align="end">
         {Object.entries(THEMES).map(([key, value]) => (

@@ -6,13 +6,11 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { 
   LayoutDashboard, 
-  CreditCard, 
   Settings, 
   HelpCircle,
   Users,
   BarChart3,
   Wallet,
-  UserCog,
   LogOut,
   Menu,
   X,
@@ -59,16 +57,16 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   
   const openTicketsCount = tickets?.filter(t => t.status === "open").length || 0;
 
-  const navigation = [
+  const mainNav = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Usage", href: "/dashboard/usage", icon: BarChart3 },
     { name: "Billing", href: "/dashboard/billing", icon: Wallet },
     { name: "Invoices", href: "/dashboard/invoices", icon: FileText },
-    { name: "Pricing", href: "/pricing", icon: CreditCard },
+  ];
+
+  const accountNav = [
     { name: "Team", href: "/dashboard/team", icon: Users },
-    { name: "User Management", href: "/dashboard/users", icon: UserCog },
     { name: "Support", href: "/support", icon: Ticket },
-    { name: "Referrals", href: "/dashboard/referrals", icon: Gift },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
 
@@ -142,9 +140,32 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 overflow-y-auto">
-            <p className="px-3 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Main Menu</p>
+            <p className="px-3 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Main</p>
             <div className="space-y-0.5">
-              {navigation.map((item) => {
+              {mainNav.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.href);
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-[13px] group ${
+                      active
+                        ? "bg-emerald-600 text-white font-medium shadow-sm"
+                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    }`}
+                  >
+                    <Icon className={`w-[16px] h-[16px] ${active ? "text-white" : "text-gray-400 group-hover:text-gray-600"}`} />
+                    <span className="flex-1">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <p className="px-3 mt-5 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Account</p>
+            <div className="space-y-0.5">
+              {accountNav.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
                 return (
@@ -232,10 +253,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            <div className="flex-1 md:flex-none" />
+            <div className="flex-1" />
 
             {/* Right Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Link 
                 href="/support" 
                 className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
