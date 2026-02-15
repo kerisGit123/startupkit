@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Studio Pro - AI-Powered Manga Creation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 3px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #505050;
+        }
+        
+        .panel-card {
+            transition: all 0.2s;
+        }
+        
+        .panel-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        .timeline-item {
+            position: relative;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            background: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-gray-100 overflow-hidden">
+    
+    <!-- Main Container -->
+    <div class="flex h-screen">
+        
+        <!-- Left Sidebar - Project & Assets -->
+        <div class="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col">
+            <!-- Logo & Project -->
+            <div class="p-4 border-b border-zinc-800">
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-book text-white text-sm"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-sm font-semibold">Manga Studio Pro</h1>
+                        <p class="text-xs text-gray-500">Chapter 1 - Draft</p>
+                    </div>
+                </div>
+                
+                <!-- Project Stats -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-zinc-800 rounded-lg p-2">
+                        <p class="text-xs text-gray-400">Pages</p>
+                        <p class="text-lg font-bold text-blue-400">12</p>
+                    </div>
+                    <div class="bg-zinc-800 rounded-lg p-2">
+                        <p class="text-xs text-gray-400">Panels</p>
+                        <p class="text-lg font-bold text-purple-400">68</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <div class="flex-1 overflow-y-auto scrollbar-thin p-3">
+                <div class="space-y-1">
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-600 text-white">
+                        <i class="fas fa-file-alt w-4"></i>
+                        <span class="text-sm font-medium">Script Editor</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 text-gray-400 hover:text-white transition">
+                        <i class="fas fa-layer-group w-4"></i>
+                        <span class="text-sm font-medium">Page Layout</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 text-gray-400 hover:text-white transition">
+                        <i class="fas fa-users w-4"></i>
+                        <span class="text-sm font-medium">Characters</span>
+                        <span class="ml-auto text-xs bg-zinc-700 px-2 py-0.5 rounded">8</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 text-gray-400 hover:text-white transition">
+                        <i class="fas fa-cube w-4"></i>
+                        <span class="text-sm font-medium">Assets</span>
+                        <span class="ml-auto text-xs bg-zinc-700 px-2 py-0.5 rounded">24</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 text-gray-400 hover:text-white transition">
+                        <i class="fas fa-images w-4"></i>
+                        <span class="text-sm font-medium">Panel Library</span>
+                    </button>
+                </div>
+                
+                <!-- Character Library -->
+                <div class="mt-6">
+                    <h3 class="text-xs font-semibold text-gray-400 mb-2 px-2">CHARACTERS</h3>
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer">
+                            <div class="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center text-xs font-bold">K</div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium truncate">Kaito</p>
+                                <p class="text-xs text-gray-500">Protagonist</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer">
+                            <div class="w-10 h-10 bg-gradient-to-br from-pink-500 to-purple-600 rounded-lg flex items-center justify-center text-xs font-bold">S</div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium truncate">Sakura</p>
+                                <p class="text-xs text-gray-500">Support</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer">
+                            <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center text-xs font-bold">R</div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium truncate">Ryu</p>
+                                <p class="text-xs text-gray-500">Rival</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Asset Library -->
+                <div class="mt-6">
+                    <h3 class="text-xs font-semibold text-gray-400 mb-2 px-2">ASSETS</h3>
+                    <div class="space-y-1">
+                        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm">
+                            <i class="fas fa-school text-blue-400 w-4"></i>
+                            <span>Classroom</span>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm">
+                            <i class="fas fa-fort-awesome text-purple-400 w-4"></i>
+                            <span>Castle</span>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm">
+                            <i class="fas fa-khanda text-orange-400 w-4"></i>
+                            <span>Dragon Katana</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bottom Actions -->
+            <div class="p-3 border-t border-zinc-800 space-y-2">
+                <button class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-plus"></i>
+                    <span>New Character</span>
+                </button>
+                <button class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-cube"></i>
+                    <span>New Asset</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Center - Script Editor & Timeline -->
+        <div class="flex-1 flex flex-col">
+            
+            <!-- Top Toolbar -->
+            <div class="h-14 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <button class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                            <i class="fas fa-file-alt mr-2"></i>Script
+                        </button>
+                        <button class="px-3 py-1.5 bg-zinc-800 text-gray-400 rounded-lg text-sm font-medium hover:bg-zinc-700 hover:text-white transition">
+                            <i class="fas fa-layer-group mr-2"></i>Layout
+                        </button>
+                        <button class="px-3 py-1.5 bg-zinc-800 text-gray-400 rounded-lg text-sm font-medium hover:bg-zinc-700 hover:text-white transition">
+                            <i class="fas fa-comment mr-2"></i>Dialogue
+                        </button>
+                    </div>
+                    
+                    <div class="h-6 w-px bg-zinc-700"></div>
+                    
+                    <div class="flex items-center gap-2">
+                        <button class="p-2 hover:bg-zinc-800 rounded-lg transition" title="Undo">
+                            <i class="fas fa-undo text-gray-400"></i>
+                        </button>
+                        <button class="p-2 hover:bg-zinc-800 rounded-lg transition" title="Redo">
+                            <i class="fas fa-redo text-gray-400"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="text-gray-500">Page:</span>
+                        <input type="number" value="1" class="w-16 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-center focus:outline-none focus:border-blue-500">
+                        <span class="text-gray-500">/ 12</span>
+                    </div>
+                    
+                    <div class="h-6 w-px bg-zinc-700"></div>
+                    
+                    <button class="px-4 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg text-sm font-medium transition">
+                        <i class="fas fa-magic mr-2"></i>Generate Page
+                    </button>
+                    
+                    <button class="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition">
+                        <i class="fas fa-download mr-2"></i>Export
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Script Editor Area -->
+            <div class="flex-1 overflow-hidden flex">
+                
+                <!-- Script Text Editor -->
+                <div class="flex-1 flex flex-col bg-zinc-900">
+                    <div class="flex items-center justify-between px-4 py-2 border-b border-zinc-800">
+                        <h2 class="text-sm font-semibold">Script Editor - Page 1</h2>
+                        <div class="flex items-center gap-2">
+                            <button class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition">
+                                <i class="fas fa-magic mr-1"></i>AI Assist
+                            </button>
+                            <button class="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 rounded text-xs transition">
+                                <i class="fas fa-check mr-1"></i>Validate
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto scrollbar-thin p-4">
+                        <div class="max-w-4xl mx-auto space-y-4">
+                            
+                            <!-- Page Header -->
+                            <div class="bg-zinc-800 rounded-lg p-4 border-l-4 border-blue-500">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="font-bold text-blue-400">PAGE 1</h3>
+                                    <div class="flex gap-2">
+                                        <span class="px-2 py-1 bg-blue-900 text-blue-300 rounded text-xs">Standard</span>
+                                        <span class="px-2 py-1 bg-purple-900 text-purple-300 rounded text-xs">RTL</span>
+                                    </div>
+                                </div>
+                                <p class="text-sm text-gray-400">Opening scene - Classroom confrontation</p>
+                            </div>
+                            
+                            <!-- Panel 1 -->
+                            <div class="bg-zinc-800 rounded-lg p-4 border-l-4 border-orange-500">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-3">
+                                        <h4 class="font-semibold text-orange-400">Panel 1</h4>
+                                        <span class="px-2 py-1 bg-orange-900 text-orange-300 rounded text-xs">Large</span>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button class="p-1.5 hover:bg-zinc-700 rounded transition">
+                                            <i class="fas fa-edit text-gray-400 text-xs"></i>
+                                        </button>
+                                        <button class="p-1.5 hover:bg-zinc-700 rounded transition">
+                                            <i class="fas fa-trash text-gray-400 text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="text-xs text-gray-500 block mb-1">Scene Description:</label>
+                                        <p class="text-sm bg-zinc-900 p-3 rounded border border-zinc-700">
+                                            Kaito stands in the center of a Japanese classroom, holding an ornate katana with dragon engravings. Sunlight streams through the windows behind him, creating dramatic backlighting. Low angle shot emphasizing his determined stance.
+                                        </p>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label class="text-xs text-gray-500 block mb-1">Characters:</label>
+                                            <div class="flex gap-1">
+                                                <span class="px-2 py-1 bg-blue-900 text-blue-300 rounded-full text-xs">Kaito</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs text-gray-500 block mb-1">Assets:</label>
+                                            <div class="flex gap-1">
+                                                <span class="px-2 py-1 bg-purple-900 text-purple-300 rounded-full text-xs">Classroom</span>
+                                                <span class="px-2 py-1 bg-purple-900 text-purple-300 rounded-full text-xs">Katana</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="text-xs text-gray-500 block mb-1">Dialogue:</label>
+                                        <div class="bg-zinc-900 p-3 rounded border border-zinc-700 space-y-2">
+                                            <div class="flex items-start gap-2">
+                                                <span class="text-xs font-semibold text-orange-400 mt-0.5">KAITO:</span>
+                                                <p class="text-sm flex-1">"I won't back down!"</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="text-xs text-gray-500 block mb-1">SFX:</label>
+                                        <div class="flex gap-2">
+                                            <span class="px-2 py-1 bg-red-900 text-red-300 rounded text-xs font-bold">SLASH!</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Panel 2 -->
+                            <div class="bg-zinc-800 rounded-lg p-4 border-l-4 border-green-500">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-3">
+                                        <h4 class="font-semibold text-green-400">Panel 2</h4>
+                                        <span class="px-2 py-1 bg-green-900 text-green-300 rounded text-xs">Medium</span>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button class="p-1.5 hover:bg-zinc-700 rounded transition">
+                                            <i class="fas fa-edit text-gray-400 text-xs"></i>
+                                        </button>
+                                        <button class="p-1.5 hover:bg-zinc-700 rounded transition">
+                                            <i class="fas fa-trash text-gray-400 text-xs"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-2">
+                                    <div>
+                                        <label class="text-xs text-gray-500 block mb-1">Scene Description:</label>
+                                        <p class="text-sm bg-zinc-900 p-3 rounded border border-zinc-700">
+                                            Close-up of Kaito's face. His blue eyes are intense and focused. The red whisker marks on his cheeks are clearly visible. Determined expression with slight sweat on his brow.
+                                        </p>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="text-xs text-gray-500 block mb-1">Dialogue:</label>
+                                        <div class="bg-zinc-900 p-3 rounded border border-zinc-700 space-y-2">
+                                            <div class="flex items-start gap-2">
+                                                <span class="text-xs font-semibold text-green-400 mt-0.5">KAITO:</span>
+                                                <p class="text-sm flex-1">"This is my ninja way!"</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Add Panel Button -->
+                            <button class="w-full py-3 border-2 border-dashed border-zinc-700 hover:border-blue-500 rounded-lg text-gray-500 hover:text-blue-400 transition">
+                                <i class="fas fa-plus mr-2"></i>Add Panel
+                            </button>
+                            
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Panel Preview Column -->
+                <div class="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col">
+                    <div class="px-4 py-2 border-b border-zinc-800">
+                        <h3 class="text-sm font-semibold">Panel Preview</h3>
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3">
+                        <!-- Panel 1 Preview -->
+                        <div class="panel-card bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700">
+                            <div class="aspect-video bg-gradient-to-br from-orange-900/20 to-red-900/20 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i class="fas fa-image text-4xl text-gray-600 mb-2"></i>
+                                    <p class="text-xs text-gray-500">Panel 1 - Large</p>
+                                    <button class="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs transition">
+                                        <i class="fas fa-magic mr-1"></i>Generate
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-2 border-t border-zinc-700">
+                                <p class="text-xs text-gray-400 line-clamp-2">Kaito in classroom with katana...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Panel 2 Preview -->
+                        <div class="panel-card bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700">
+                            <div class="aspect-video bg-gradient-to-br from-green-900/20 to-emerald-900/20 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i class="fas fa-image text-4xl text-gray-600 mb-2"></i>
+                                    <p class="text-xs text-gray-500">Panel 2 - Medium</p>
+                                    <button class="mt-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs transition">
+                                        <i class="fas fa-magic mr-1"></i>Generate
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-2 border-t border-zinc-700">
+                                <p class="text-xs text-gray-400 line-clamp-2">Close-up of Kaito's face...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Generation Queue -->
+                        <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
+                            <div class="flex items-center gap-2 mb-2">
+                                <i class="fas fa-clock text-blue-400"></i>
+                                <h4 class="text-xs font-semibold text-blue-400">Generation Queue</h4>
+                            </div>
+                            <p class="text-xs text-gray-400">0 panels in queue</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Generate All Button -->
+                    <div class="p-4 border-t border-zinc-800">
+                        <button class="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg text-sm font-medium transition">
+                            <i class="fas fa-magic mr-2"></i>Generate All Panels
+                        </button>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Timeline at Bottom -->
+            <div class="h-40 bg-zinc-900 border-t border-zinc-800">
+                <div class="flex items-center justify-between px-4 py-2 border-b border-zinc-800">
+                    <h3 class="text-sm font-semibold">Timeline - Page Sequence</h3>
+                    <div class="flex items-center gap-2">
+                        <button class="p-1.5 hover:bg-zinc-800 rounded transition">
+                            <i class="fas fa-search-plus text-gray-400 text-xs"></i>
+                        </button>
+                        <button class="p-1.5 hover:bg-zinc-800 rounded transition">
+                            <i class="fas fa-search-minus text-gray-400 text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-x-auto scrollbar-thin p-3">
+                    <div class="flex gap-3">
+                        <!-- Page 1 -->
+                        <div class="flex-shrink-0 w-32">
+                            <div class="bg-zinc-800 border-2 border-blue-500 rounded-lg overflow-hidden">
+                                <div class="aspect-[2/3] bg-gradient-to-br from-blue-900/20 to-purple-900/20 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <i class="fas fa-file-alt text-2xl text-blue-400 mb-1"></i>
+                                        <p class="text-xs font-semibold text-blue-400">Page 1</p>
+                                        <p class="text-xs text-gray-500">5 panels</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-center mt-1 text-blue-400 font-medium">Current</p>
+                        </div>
+                        
+                        <!-- Page 2 -->
+                        <div class="flex-shrink-0 w-32">
+                            <div class="bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded-lg overflow-hidden cursor-pointer transition">
+                                <div class="aspect-[2/3] bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <i class="fas fa-file-alt text-2xl text-gray-600 mb-1"></i>
+                                        <p class="text-xs font-semibold text-gray-400">Page 2</p>
+                                        <p class="text-xs text-gray-600">Draft</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-center mt-1 text-gray-500">Next</p>
+                        </div>
+                        
+                        <!-- Add Page -->
+                        <div class="flex-shrink-0 w-32">
+                            <div class="bg-zinc-800 border-2 border-dashed border-zinc-700 hover:border-blue-500 rounded-lg overflow-hidden cursor-pointer transition">
+                                <div class="aspect-[2/3] flex items-center justify-center">
+                                    <div class="text-center">
+                                        <i class="fas fa-plus text-2xl text-gray-600 mb-1"></i>
+                                        <p class="text-xs text-gray-500">Add Page</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- Right Sidebar - Generation Controls & History -->
+        <div class="w-80 bg-zinc-900 border-l border-zinc-800 flex flex-col">
+            
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-zinc-800">
+                <button class="flex-1 px-4 py-3 text-sm font-medium bg-blue-600 text-white border-b-2 border-blue-600">
+                    <i class="fas fa-sliders-h mr-2"></i>Controls
+                </button>
+                <button class="flex-1 px-4 py-3 text-sm font-medium text-gray-400 hover:text-white hover:bg-zinc-800 transition">
+                    <i class="fas fa-history mr-2"></i>History
+                </button>
+            </div>
+            
+            <!-- Generation Controls -->
+            <div class="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
+                
+                <!-- AI Model Settings -->
+                <div class="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
+                    <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <i class="fas fa-robot text-blue-400"></i>
+                        AI Model Settings
+                    </h3>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Model</label>
+                            <select class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-blue-500">
+                                <option>Kie.ai Nano Banana</option>
+                                <option>DALL-E 3</option>
+                                <option>Midjourney</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Style Preset</label>
+                            <select class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-blue-500">
+                                <option>Jujutsu Kaisen</option>
+                                <option>Naruto</option>
+                                <option>One Piece</option>
+                                <option>Attack on Titan</option>
+                                <option>Custom</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Quality</label>
+                            <div class="flex gap-2">
+                                <button class="flex-1 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs transition">Draft</button>
+                                <button class="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs">Standard</button>
+                                <button class="flex-1 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs transition">High</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Page Layout Settings -->
+                <div class="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
+                    <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <i class="fas fa-layer-group text-purple-400"></i>
+                        Page Layout
+                    </h3>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Page Type</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button class="px-3 py-1.5 bg-blue-600 text-white rounded text-xs">Standard</button>
+                                <button class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs transition">Action</button>
+                                <button class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs transition">Dialogue</button>
+                                <button class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs transition">Splash</button>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Reading Direction</label>
+                            <div class="flex gap-2">
+                                <button class="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs">RTL (Japanese)</button>
+                                <button class="flex-1 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded text-xs transition">LTR (Western)</button>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">Aspect Ratio</label>
+                            <select class="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm focus:outline-none focus:border-blue-500">
+                                <option>9:16 (Manga Page)</option>
+                                <option>16:9 (Widescreen)</option>
+                                <option>1:1 (Square)</option>
+                                <option>4:3 (Classic)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Consistency Settings -->
+                <div class="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
+                    <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <i class="fas fa-check-circle text-green-400"></i>
+                        Consistency
+                    </h3>
+                    
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs text-gray-400">Character Consistency</label>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none">
+                                <input type="checkbox" checked class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                <label class="toggle-label block overflow-hidden h-5 rounded-full bg-blue-600 cursor-pointer"></label>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs text-gray-400">Asset Consistency</label>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none">
+                                <input type="checkbox" checked class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                <label class="toggle-label block overflow-hidden h-5 rounded-full bg-blue-600 cursor-pointer"></label>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs text-gray-400">Style Transfer</label>
+                            <div class="relative inline-block w-10 mr-2 align-middle select-none">
+                                <input type="checkbox" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                <label class="toggle-label block overflow-hidden h-5 rounded-full bg-gray-600 cursor-pointer"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Batch Generation -->
+                <div class="bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-lg p-4 border border-green-800">
+                    <h3 class="text-sm font-semibold mb-3 flex items-center gap-2 text-green-400">
+                        <i class="fas fa-bolt"></i>
+                        Batch Generation
+                    </h3>
+                    
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-400">Panels to generate:</span>
+                            <span class="font-semibold text-green-400">5 panels</span>
+                        </div>
+                        
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-400">Est. time:</span>
+                            <span class="font-semibold">~2 min</span>
+                        </div>
+                        
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-400">Credits cost:</span>
+                            <span class="font-semibold text-orange-400">25 credits</span>
+                        </div>
+                        
+                        <button class="w-full py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg text-sm font-medium transition mt-2">
+                            <i class="fas fa-play mr-2"></i>Start Batch Generation
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Export Options -->
+                <div class="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
+                    <h3 class="text-sm font-semibold mb-3 flex items-center gap-2">
+                        <i class="fas fa-download text-orange-400"></i>
+                        Export
+                    </h3>
+                    
+                    <div class="space-y-2">
+                        <button class="w-full px-3 py-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm transition text-left flex items-center justify-between">
+                            <span><i class="fas fa-file-pdf mr-2 text-red-400"></i>Export as PDF</span>
+                            <i class="fas fa-chevron-right text-xs text-gray-500"></i>
+                        </button>
+                        <button class="w-full px-3 py-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm transition text-left flex items-center justify-between">
+                            <span><i class="fas fa-file-image mr-2 text-blue-400"></i>Export as PNG</span>
+                            <i class="fas fa-chevron-right text-xs text-gray-500"></i>
+                        </button>
+                        <button class="w-full px-3 py-2 bg-zinc-900 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm transition text-left flex items-center justify-between">
+                            <span><i class="fas fa-file-archive mr-2 text-purple-400"></i>Export as CBZ</span>
+                            <i class="fas fa-chevron-right text-xs text-gray-500"></i>
+                        </button>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Bottom Stats -->
+            <div class="p-4 border-t border-zinc-800 bg-zinc-900">
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-zinc-800 rounded-lg p-3 text-center">
+                        <p class="text-xs text-gray-400 mb-1">Credits</p>
+                        <p class="text-lg font-bold text-orange-400">1,250</p>
+                    </div>
+                    <div class="bg-zinc-800 rounded-lg p-3 text-center">
+                        <p class="text-xs text-gray-400 mb-1">Generated</p>
+                        <p class="text-lg font-bold text-blue-400">68</p>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+    </div>
+    
+    <style>
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #3b82f6;
+        }
+        .toggle-checkbox {
+            transition: all 0.3s ease;
+        }
+    </style>
+    
+</body>
+</html>

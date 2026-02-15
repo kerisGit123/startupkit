@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Studio Pro - AI-Powered Manga Creation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .glass-panel-strong {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(30px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        
+        .gradient-border {
+            position: relative;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+            border: 1px solid transparent;
+        }
+        
+        .gradient-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 10px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            border-radius: 10px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #7c3aed, #c084fc);
+        }
+        
+        .panel-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .panel-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.3);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(99, 102, 241, 0.5);
+        }
+        
+        .character-avatar {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .character-avatar::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, transparent 0%, rgba(99, 102, 241, 0.3) 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        
+        .character-avatar:hover::after {
+            opacity: 1;
+        }
+        
+        .floating-label {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); }
+            50% { box-shadow: 0 0 40px rgba(168, 85, 247, 0.8); }
+        }
+        
+        .slide-in {
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .tag-pill {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            backdrop-filter: blur(10px);
+        }
+        
+        .status-indicator {
+            position: relative;
+        }
+        
+        .status-indicator::before {
+            content: '';
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 10px #10b981;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="overflow-hidden">
+    
+    <!-- Main Container -->
+    <div class="flex h-screen">
+        
+        <!-- Left Sidebar - Navigation & Library -->
+        <div class="w-72 glass-panel-strong flex flex-col border-r border-white/10">
+            
+            <!-- Header -->
+            <div class="p-6 border-b border-white/10">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/50">
+                        <i class="fas fa-book-open text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-white">Manga Studio Pro</h1>
+                        <p class="text-xs text-gray-400">AI-Powered Creation</p>
+                    </div>
+                </div>
+                
+                <!-- Project Info -->
+                <div class="glass-panel rounded-xl p-4 border border-white/10">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-sm font-medium text-gray-300">Chapter 1</span>
+                        <span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-xs font-medium border border-yellow-500/30">Draft</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div class="text-center">
+                            <p class="text-2xl font-bold text-indigo-400">12</p>
+                            <p class="text-xs text-gray-500">Pages</p>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-2xl font-bold text-purple-400">68</p>
+                            <p class="text-xs text-gray-500">Panels</p>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-2xl font-bold text-pink-400">8</p>
+                            <p class="text-xs text-gray-500">Chars</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <div class="flex-1 overflow-y-auto scrollbar-custom p-4">
+                
+                <!-- Main Menu -->
+                <div class="space-y-1 mb-6">
+                    <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl btn-primary text-white font-medium shadow-lg shadow-indigo-500/30">
+                        <i class="fas fa-file-alt text-lg"></i>
+                        <span>Script Editor</span>
+                        <div class="ml-auto w-2 h-2 rounded-full bg-white"></div>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl btn-secondary text-gray-300 hover:text-white font-medium">
+                        <i class="fas fa-layer-group text-lg"></i>
+                        <span>Page Layout</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl btn-secondary text-gray-300 hover:text-white font-medium">
+                        <i class="fas fa-comment-dots text-lg"></i>
+                        <span>Dialogue Editor</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl btn-secondary text-gray-300 hover:text-white font-medium">
+                        <i class="fas fa-images text-lg"></i>
+                        <span>Panel Library</span>
+                        <span class="ml-auto px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full text-xs font-semibold">68</span>
+                    </button>
+                </div>
+                
+                <!-- Characters Section -->
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-3 px-2">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Characters</h3>
+                        <button class="text-indigo-400 hover:text-indigo-300 transition">
+                            <i class="fas fa-plus text-sm"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="character-avatar flex items-center gap-3 p-3 rounded-xl glass-panel hover:glass-panel-strong cursor-pointer transition-all group">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                K
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold text-white truncate">Kaito</p>
+                                <p class="text-xs text-gray-400">Protagonist • Ninja</p>
+                            </div>
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas fa-chevron-right text-gray-500 text-xs"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="character-avatar flex items-center gap-3 p-3 rounded-xl glass-panel hover:glass-panel-strong cursor-pointer transition-all group">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                S
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold text-white truncate">Sakura</p>
+                                <p class="text-xs text-gray-400">Support • Healer</p>
+                            </div>
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas fa-chevron-right text-gray-500 text-xs"></i>
+                            </div>
+                        </div>
+                        
+                        <div class="character-avatar flex items-center gap-3 p-3 rounded-xl glass-panel hover:glass-panel-strong cursor-pointer transition-all group">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                                R
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold text-white truncate">Ryu</p>
+                                <p class="text-xs text-gray-400">Rival • Lightning</p>
+                            </div>
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity">
+                                <i class="fas fa-chevron-right text-gray-500 text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Assets Section -->
+                <div>
+                    <div class="flex items-center justify-between mb-3 px-2">
+                        <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">Assets</h3>
+                        <button class="text-indigo-400 hover:text-indigo-300 transition">
+                            <i class="fas fa-plus text-sm"></i>
+                        </button>
+                    </div>
+                    <div class="space-y-1.5">
+                        <div class="flex items-center gap-3 p-2.5 rounded-lg glass-panel hover:glass-panel-strong cursor-pointer transition-all group">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                                <i class="fas fa-school text-blue-400 text-sm"></i>
+                            </div>
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">Classroom</span>
+                        </div>
+                        <div class="flex items-center gap-3 p-2.5 rounded-lg glass-panel hover:glass-panel-strong cursor-pointer transition-all group">
+                            <div class="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                <i class="fas fa-fort-awesome text-purple-400 text-sm"></i>
+                            </div>
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">Castle</span>
+                        </div>
+                        <div class="flex items-center gap-3 p-2.5 rounded-lg glass-panel hover:glass-panel-strong cursor-pointer transition-all group">
+                            <div class="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                                <i class="fas fa-khanda text-orange-400 text-sm"></i>
+                            </div>
+                            <span class="text-sm text-gray-300 group-hover:text-white transition">Dragon Katana</span>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Bottom Actions -->
+            <div class="p-4 border-t border-white/10 space-y-2">
+                <button class="w-full px-4 py-3 btn-primary rounded-xl text-white font-medium shadow-lg shadow-indigo-500/30">
+                    <i class="fas fa-plus mr-2"></i>New Character
+                </button>
+                <button class="w-full px-4 py-3 btn-secondary rounded-xl text-gray-300 font-medium">
+                    <i class="fas fa-cube mr-2"></i>New Asset
+                </button>
+            </div>
+            
+        </div>
+        
+        <!-- Center - Main Workspace -->
+        <div class="flex-1 flex flex-col">
+            
+            <!-- Top Toolbar -->
+            <div class="h-16 glass-panel-strong border-b border-white/10 flex items-center justify-between px-6">
+                
+                <div class="flex items-center gap-4">
+                    <!-- Mode Tabs -->
+                    <div class="flex items-center gap-2 glass-panel rounded-xl p-1">
+                        <button class="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg text-sm font-medium shadow-lg">
+                            <i class="fas fa-file-alt mr-2"></i>Script
+                        </button>
+                        <button class="px-4 py-2 text-gray-400 hover:text-white rounded-lg text-sm font-medium transition">
+                            <i class="fas fa-layer-group mr-2"></i>Layout
+                        </button>
+                        <button class="px-4 py-2 text-gray-400 hover:text-white rounded-lg text-sm font-medium transition">
+                            <i class="fas fa-comment mr-2"></i>Dialogue
+                        </button>
+                    </div>
+                    
+                    <div class="w-px h-6 bg-white/10"></div>
+                    
+                    <!-- Tools -->
+                    <div class="flex items-center gap-1">
+                        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition" title="Undo">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition" title="Redo">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button class="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition" title="AI Assist">
+                            <i class="fas fa-magic"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <!-- Page Navigation -->
+                    <div class="flex items-center gap-3 glass-panel rounded-xl px-4 py-2">
+                        <button class="text-gray-400 hover:text-white transition">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-400">Page</span>
+                            <input type="number" value="1" class="w-14 px-2 py-1 bg-white/5 border border-white/10 rounded-lg text-center text-white text-sm focus:outline-none focus:border-indigo-500 transition">
+                            <span class="text-sm text-gray-400">/ 12</span>
+                        </div>
+                        <button class="text-gray-400 hover:text-white transition">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="w-px h-6 bg-white/10"></div>
+                    
+                    <!-- Action Buttons -->
+                    <button class="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-green-500/30 transition-all hover:scale-105">
+                        <i class="fas fa-magic mr-2"></i>Generate Page
+                    </button>
+                    
+                    <button class="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-xl text-sm font-semibold shadow-lg shadow-orange-500/30 transition-all hover:scale-105">
+                        <i class="fas fa-download mr-2"></i>Export
+                    </button>
+                </div>
+                
+            </div>
+            
+            <!-- Main Content Area -->
+            <div class="flex-1 overflow-hidden flex">
+                
+                <!-- Script Editor -->
+                <div class="flex-1 flex flex-col">
+                    
+                    <!-- Editor Header -->
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                        <div>
+                            <h2 class="text-lg font-bold text-white">Script Editor - Page 1</h2>
+                            <p class="text-sm text-gray-400">Opening scene - Classroom confrontation</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button class="px-4 py-2 glass-panel rounded-lg text-sm text-gray-300 hover:text-white border border-white/10 hover:border-indigo-500/50 transition">
+                                <i class="fas fa-magic mr-2"></i>AI Assist
+                            </button>
+                            <button class="px-4 py-2 glass-panel rounded-lg text-sm text-gray-300 hover:text-white border border-white/10 hover:border-green-500/50 transition">
+                                <i class="fas fa-check mr-2"></i>Validate
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Script Content -->
+                    <div class="flex-1 overflow-y-auto scrollbar-custom p-6">
+                        <div class="max-w-5xl mx-auto space-y-6">
+                            
+                            <!-- Page Header Card -->
+                            <div class="gradient-border rounded-2xl p-6 slide-in">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                                            <i class="fas fa-file-alt text-white"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-xl font-bold text-white">PAGE 1</h3>
+                                            <p class="text-sm text-gray-400">5 panels • Standard layout</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <span class="tag-pill px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-300">Standard</span>
+                                        <span class="tag-pill px-3 py-1.5 rounded-full text-xs font-semibold text-purple-300">RTL</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Panel 1 -->
+                            <div class="panel-card glass-panel-strong rounded-2xl p-6 border-l-4 border-orange-500">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center text-white font-bold shadow-lg">
+                                            1
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-white">Panel 1</h4>
+                                            <p class="text-xs text-gray-400">Large • Hero shot</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition">
+                                            <i class="fas fa-edit text-sm"></i>
+                                        </button>
+                                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-red-400 transition">
+                                            <i class="fas fa-trash text-sm"></i>
+                                        </button>
+                                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition">
+                                            <i class="fas fa-ellipsis-v text-sm"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <!-- Scene Description -->
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Scene Description</label>
+                                        <div class="glass-panel rounded-xl p-4 border border-white/10">
+                                            <p class="text-sm text-gray-200 leading-relaxed">
+                                                Kaito stands in the center of a Japanese classroom, holding an ornate katana with dragon engravings. Sunlight streams through the windows behind him, creating dramatic backlighting. Low angle shot emphasizing his determined stance. The classroom is empty except for him, desks arranged in neat rows.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Tags Row -->
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Characters</label>
+                                            <div class="flex flex-wrap gap-2">
+                                                <span class="tag-pill px-3 py-1.5 rounded-full text-xs font-medium text-orange-300 flex items-center gap-2">
+                                                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white text-xs font-bold">K</div>
+                                                    Kaito
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Assets</label>
+                                            <div class="flex flex-wrap gap-2">
+                                                <span class="tag-pill px-3 py-1.5 rounded-full text-xs font-medium text-blue-300 flex items-center gap-1.5">
+                                                    <i class="fas fa-school text-xs"></i>
+                                                    Classroom
+                                                </span>
+                                                <span class="tag-pill px-3 py-1.5 rounded-full text-xs font-medium text-purple-300 flex items-center gap-1.5">
+                                                    <i class="fas fa-khanda text-xs"></i>
+                                                    Katana
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Dialogue -->
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Dialogue</label>
+                                        <div class="glass-panel rounded-xl p-4 border border-white/10 space-y-3">
+                                            <div class="flex items-start gap-3">
+                                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                                    K
+                                                </div>
+                                                <div class="flex-1">
+                                                    <p class="text-xs font-semibold text-orange-400 mb-1">KAITO</p>
+                                                    <p class="text-sm text-gray-200">"I won't back down!"</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- SFX -->
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Sound Effects</label>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="px-4 py-2 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/30 rounded-xl text-sm font-bold text-red-300">
+                                                SLASH!
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Panel 2 -->
+                            <div class="panel-card glass-panel-strong rounded-2xl p-6 border-l-4 border-green-500">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-white font-bold shadow-lg">
+                                            2
+                                        </div>
+                                        <div>
+                                            <h4 class="text-lg font-bold text-white">Panel 2</h4>
+                                            <p class="text-xs text-gray-400">Medium • Close-up</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition">
+                                            <i class="fas fa-edit text-sm"></i>
+                                        </button>
+                                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-red-400 transition">
+                                            <i class="fas fa-trash text-sm"></i>
+                                        </button>
+                                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition">
+                                            <i class="fas fa-ellipsis-v text-sm"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Scene Description</label>
+                                        <div class="glass-panel rounded-xl p-4 border border-white/10">
+                                            <p class="text-sm text-gray-200 leading-relaxed">
+                                                Close-up of Kaito's face. His blue eyes are intense and focused. The red whisker marks on his cheeks are clearly visible. Determined expression with slight sweat on his brow. Dramatic lighting from the side.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Characters</label>
+                                            <div class="flex flex-wrap gap-2">
+                                                <span class="tag-pill px-3 py-1.5 rounded-full text-xs font-medium text-green-300 flex items-center gap-2">
+                                                    <div class="w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white text-xs font-bold">K</div>
+                                                    Kaito
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Dialogue</label>
+                                        <div class="glass-panel rounded-xl p-4 border border-white/10 space-y-3">
+                                            <div class="flex items-start gap-3">
+                                                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                                    K
+                                                </div>
+                                                <div class="flex-1">
+                                                    <p class="text-xs font-semibold text-green-400 mb-1">KAITO</p>
+                                                    <p class="text-sm text-gray-200">"This is my ninja way!"</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Add Panel Button -->
+                            <button class="w-full py-6 border-2 border-dashed border-white/20 hover:border-indigo-500/50 rounded-2xl text-gray-400 hover:text-indigo-400 transition-all group">
+                                <i class="fas fa-plus text-2xl mb-2 group-hover:scale-110 transition-transform"></i>
+                                <p class="text-sm font-medium">Add New Panel</p>
+                            </button>
+                            
+                        </div>
+                    </div>
+                    
+                </div>
+                
+                <!-- Right Panel - Preview & Controls -->
+                <div class="w-96 glass-panel-strong border-l border-white/10 flex flex-col">
+                    
+                    <!-- Tab Navigation -->
+                    <div class="flex border-b border-white/10">
+                        <button class="flex-1 px-4 py-4 text-sm font-semibold bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-white border-b-2 border-indigo-500">
+                            <i class="fas fa-eye mr-2"></i>Preview
+                        </button>
+                        <button class="flex-1 px-4 py-4 text-sm font-medium text-gray-400 hover:text-white hover:bg-white/5 transition">
+                            <i class="fas fa-sliders-h mr-2"></i>Settings
+                        </button>
+                    </div>
+                    
+                    <!-- Preview Content -->
+                    <div class="flex-1 overflow-y-auto scrollbar-custom p-4 space-y-4">
+                        
+                        <!-- Panel 1 Preview -->
+                        <div class="panel-card glass-panel rounded-2xl overflow-hidden border border-white/10 group">
+                            <div class="aspect-video bg-gradient-to-br from-orange-900/20 via-red-900/20 to-purple-900/20 flex items-center justify-center relative overflow-hidden">
+                                <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div class="text-center z-10">
+                                    <div class="w-16 h-16 rounded-2xl bg-white/5 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                                        <i class="fas fa-image text-3xl text-gray-500"></i>
+                                    </div>
+                                    <p class="text-sm text-gray-400 mb-3">Panel 1 - Large</p>
+                                    <button class="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-xl text-sm font-semibold shadow-lg transition-all hover:scale-105">
+                                        <i class="fas fa-magic mr-2"></i>Generate
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-3 border-t border-white/10">
+                                <p class="text-xs text-gray-400 line-clamp-2">Kaito in classroom with katana, dramatic backlighting...</p>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <span class="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs font-medium">Large</span>
+                                    <span class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs font-medium">Hero</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Panel 2 Preview -->
+                        <div class="panel-card glass-panel rounded-2xl overflow-hidden border border-white/10 group">
+                            <div class="aspect-video bg-gradient-to-br from-green-900/20 via-emerald-900/20 to-teal-900/20 flex items-center justify-center relative overflow-hidden">
+                                <div class="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                <div class="text-center z-10">
+                                    <div class="w-16 h-16 rounded-2xl bg-white/5 backdrop-blur-sm flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+                                        <i class="fas fa-image text-3xl text-gray-500"></i>
+                                    </div>
+                                    <p class="text-sm text-gray-400 mb-3">Panel 2 - Medium</p>
+                                    <button class="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white rounded-xl text-sm font-semibold shadow-lg transition-all hover:scale-105">
+                                        <i class="fas fa-magic mr-2"></i>Generate
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="p-3 border-t border-white/10">
+                                <p class="text-xs text-gray-400 line-clamp-2">Close-up of Kaito's determined face...</p>
+                                <div class="flex items-center gap-2 mt-2">
+                                    <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs font-medium">Medium</span>
+                                    <span class="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs font-medium">Close-up</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Generation Queue -->
+                        <div class="glass-panel rounded-2xl p-4 border border-blue-500/30">
+                            <div class="flex items-center gap-3 mb-3">
+                                <div class="status-indicator pl-4">
+                                    <i class="fas fa-clock text-blue-400"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-semibold text-white">Generation Queue</h4>
+                                    <p class="text-xs text-gray-400">Ready to generate</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="text-gray-400">Panels in queue:</span>
+                                <span class="font-semibold text-indigo-400">0</span>
+                            </div>
+                        </div>
+                        
+                        <!-- AI Settings -->
+                        <div class="glass-panel rounded-2xl p-4 border border-white/10">
+                            <h4 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                                <i class="fas fa-robot text-indigo-400"></i>
+                                AI Settings
+                            </h4>
+                            
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 mb-2 block">Model</label>
+                                    <select class="w-full px-3 py-2.5 glass-panel border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 transition">
+                                        <option>Kie.ai Nano Banana</option>
+                                        <option>DALL-E 3</option>
+                                        <option>Midjourney</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 mb-2 block">Style</label>
+                                    <select class="w-full px-3 py-2.5 glass-panel border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 transition">
+                                        <option>Jujutsu Kaisen</option>
+                                        <option>Naruto</option>
+                                        <option>One Piece</option>
+                                        <option>Attack on Titan</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 mb-2 block">Quality</label>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <button class="px-3 py-2 glass-panel border border-white/10 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:border-indigo-500/50 transition">Draft</button>
+                                        <button class="px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-lg text-xs font-semibold text-white shadow-lg">Standard</button>
+                                        <button class="px-3 py-2 glass-panel border border-white/10 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:border-indigo-500/50 transition">High</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    
+                    <!-- Bottom Actions -->
+                    <div class="p-4 border-t border-white/10 space-y-3">
+                        <button class="w-full py-3.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-xl font-semibold shadow-lg shadow-green-500/30 transition-all hover:scale-105 pulse-glow">
+                            <i class="fas fa-magic mr-2"></i>Generate All Panels
+                        </button>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="glass-panel rounded-xl p-3 text-center border border-white/10">
+                                <p class="text-xs text-gray-400 mb-1">Credits</p>
+                                <p class="text-xl font-bold text-orange-400">1,250</p>
+                            </div>
+                            <div class="glass-panel rounded-xl p-3 text-center border border-white/10">
+                                <p class="text-xs text-gray-400 mb-1">Generated</p>
+                                <p class="text-xl font-bold text-indigo-400">68</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+                
+            </div>
+            
+            <!-- Bottom Timeline -->
+            <div class="h-44 glass-panel-strong border-t border-white/10">
+                <div class="flex items-center justify-between px-6 py-3 border-b border-white/10">
+                    <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+                        <i class="fas fa-film text-indigo-400"></i>
+                        Timeline - Page Sequence
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition">
+                            <i class="fas fa-search-plus text-sm"></i>
+                        </button>
+                        <button class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition">
+                            <i class="fas fa-search-minus text-sm"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 overflow-x-auto scrollbar-custom p-4">
+                    <div class="flex gap-4">
+                        <!-- Page 1 - Active -->
+                        <div class="flex-shrink-0 w-36">
+                            <div class="glass-panel-strong border-2 border-indigo-500 rounded-xl overflow-hidden shadow-lg shadow-indigo-500/30">
+                                <div class="aspect-[2/3] bg-gradient-to-br from-indigo-900/30 to-purple-900/30 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center mx-auto mb-2 shadow-lg">
+                                            <i class="fas fa-file-alt text-white text-xl"></i>
+                                        </div>
+                                        <p class="text-sm font-bold text-indigo-400">Page 1</p>
+                                        <p class="text-xs text-gray-400">5 panels</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mt-2 flex items-center justify-center gap-1">
+                                <div class="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                <p class="text-xs font-semibold text-indigo-400">Current</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Page 2 -->
+                        <div class="flex-shrink-0 w-36">
+                            <div class="glass-panel border border-white/10 hover:border-indigo-500/50 rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105">
+                                <div class="aspect-[2/3] bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 flex items-center justify-center">
+                                    <div class="text-center">
+                                        <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mx-auto mb-2">
+                                            <i class="fas fa-file-alt text-gray-600 text-xl"></i>
+                                        </div>
+                                        <p class="text-sm font-semibold text-gray-400">Page 2</p>
+                                        <p class="text-xs text-gray-600">Draft</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-xs text-center mt-2 text-gray-500">Next</p>
+                        </div>
+                        
+                        <!-- Add Page -->
+                        <div class="flex-shrink-0 w-36">
+                            <div class="glass-panel border-2 border-dashed border-white/20 hover:border-indigo-500/50 rounded-xl overflow-hidden cursor-pointer transition-all hover:scale-105 group">
+                                <div class="aspect-[2/3] flex items-center justify-center">
+                                    <div class="text-center">
+                                        <div class="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mx-auto mb-2 group-hover:bg-indigo-500/20 transition">
+                                            <i class="fas fa-plus text-gray-600 group-hover:text-indigo-400 text-xl transition"></i>
+                                        </div>
+                                        <p class="text-xs text-gray-500 group-hover:text-indigo-400 transition">Add Page</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+    </div>
+    
+</body>
+</html>

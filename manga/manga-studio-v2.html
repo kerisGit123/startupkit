@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Studio - Ultimate Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); }
+        .glass-strong { background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); }
+        .btn-primary { background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%); }
+        
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; padding: 1rem; }
+        .modal.active { display: flex; }
+        
+        .scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+        .scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 4px; }
+        .scrollbar::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.5); border-radius: 4px; }
+        .scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.7); }
+        
+        select { background-image: url("data:svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666666' d='M6 9L1 4h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 12px; appearance: none; }
+        
+        .fade-in { animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        .episode-card { transition: all 0.2s; }
+        .episode-card:hover { transform: translateY(-2px); }
+        
+        .dropdown-menu { display: none; position: absolute; right: 0; top: 100%; margin-top: 0.5rem; min-width: 160px; background: rgba(31, 41, 55, 0.95); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0.5rem; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); z-index: 50; }
+        .dropdown-menu.active { display: block; }
+        .dropdown-menu button { width: 100%; text-align: left; padding: 0.75rem 1rem; color: #d1d5db; font-size: 0.875rem; transition: all 0.15s; }
+        .dropdown-menu button:hover { background: rgba(255, 255, 255, 0.1); color: white; }
+        .dropdown-menu button:first-child { border-radius: 0.5rem 0.5rem 0 0; }
+        .dropdown-menu button:last-child { border-radius: 0 0 0.5rem 0.5rem; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white overflow-hidden">
+
+<div class="flex h-screen">
+    <!-- Left Sidebar -->
+    <div class="w-64 glass-strong border-r border-white/10 flex flex-col">
+        <!-- Header -->
+        <div class="p-4 border-b border-white/10">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <i class="fas fa-book-open text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold">Manga Studio</h1>
+                    <p class="text-xs text-gray-400">Ultimate Edition</p>
+                </div>
+            </div>
+            
+            <!-- Current Story Info -->
+            <div class="glass rounded-lg p-3">
+                <p class="text-xs text-gray-400 mb-1">Current Story</p>
+                <p class="text-sm font-bold text-white mb-3">Basketball Dreams</p>
+                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div><p class="text-base font-bold text-purple-400">12</p><p class="text-gray-500">Episodes</p></div>
+                    <div><p class="text-base font-bold text-pink-400">84</p><p class="text-gray-500">Pages</p></div>
+                    <div><p class="text-base font-bold text-blue-400">8</p><p class="text-gray-500">Chars</p></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="flex-1 overflow-y-auto scrollbar p-3 space-y-1">
+            <!-- Quick Start Guide -->
+            <div class="mb-4 p-3 glass-strong rounded-lg border border-purple-500/30">
+                <div class="text-xs font-bold text-purple-400 uppercase mb-2">Quick Start Guide</div>
+                <div class="text-xs text-gray-400 space-y-1">
+                    <div>1. Create Story & Episodes</div>
+                    <div>2. Build Assets (Characters, Scenes)</div>
+                    <div>3. Generate Panels</div>
+                    <div>4. Compose Pages</div>
+                </div>
+            </div>
+
+            <button onclick="switchView('editor')" id="navEditor" class="w-full flex items-center gap-3 px-3 py-3 rounded-lg btn-primary text-white font-medium shadow-lg">
+                <i class="fas fa-palette text-lg"></i>
+                <div class="flex-1 text-left">
+                    <div class="font-semibold">Manga Editor</div>
+                    <div class="text-xs opacity-80">Build pages & panels</div>
+                </div>
+            </button>
+            <button onclick="switchView('episodes')" id="navEpisodes" class="w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-list-ol text-lg"></i>
+                <div class="flex-1 text-left">
+                    <div class="font-semibold">Episodes</div>
+                    <div class="text-xs opacity-70">Manage episodes & arcs</div>
+                </div>
+            </button>
+            <button onclick="showStoryStructure()" class="w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-sitemap text-lg"></i>
+                <div class="flex-1 text-left">
+                    <div class="font-semibold">Story Structure</div>
+                    <div class="text-xs opacity-70">Organize story flow</div>
+                </div>
+            </button>
+            <button onclick="switchView('universe')" id="navUniverse" class="w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-globe text-lg"></i>
+                <div class="flex-1 text-left">
+                    <div class="font-semibold">Universe Manager</div>
+                    <div class="text-xs opacity-70">Rules, Locations, Lore</div>
+                </div>
+            </button>
+        </div>
+
+        <!-- Bottom Actions -->
+        <div class="p-3 border-t border-white/10 space-y-2">
+            <button onclick="showNewEpisodeModal()" class="w-full px-3 py-2.5 btn-primary rounded-lg text-white font-medium text-sm shadow-lg">
+                <i class="fas fa-plus mr-2"></i>New Episode
+            </button>
+            <button onclick="showStoryManager()" class="w-full px-3 py-2.5 glass hover:glass-strong rounded-lg text-gray-300 hover:text-white font-medium text-sm transition">
+                <i class="fas fa-book mr-2"></i>Manage Stories
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col">
+        <!-- Top Bar -->
+        <div class="h-14 glass-strong border-b border-white/10 flex items-center justify-between px-6">
+            <div class="flex items-center gap-4">
+                <h2 class="text-lg font-bold text-white" id="viewTitle">Manga Editor</h2>
+                <span class="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs font-medium">Episode 1</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="px-4 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-save mr-2"></i>Save
+                </button>
+                <button onclick="showAIGenerateMenu()" class="px-4 py-2 btn-primary text-white rounded-lg text-sm font-semibold shadow-lg">
+                    <i class="fas fa-magic mr-2"></i>AI Generate
+                </button>
+                <button class="px-4 py-2 glass hover:glass-strong text-white rounded-lg text-sm font-semibold transition">
+                    <i class="fas fa-download mr-2"></i>Export
+                </button>
+                <button onclick="showSettings()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-300 hover:text-white transition">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 overflow-hidden">
+            <!-- Episodes View -->
+            <div id="episodesView" style="display:none;" class="h-full overflow-y-auto scrollbar p-6">
+                <div class="max-w-6xl mx-auto">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white mb-1">Episodes</h2>
+                            <p class="text-sm text-gray-400">Manage your manga episodes and pages</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="showManageArcTags()" class="px-4 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-sm font-medium transition">
+                                <i class="fas fa-tags mr-2"></i>Manage Arc Tags
+                            </button>
+                            <button onclick="showManageSections()" class="px-4 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-sm font-medium transition">
+                                <i class="fas fa-layer-group mr-2"></i>Manage Sections
+                            </button>
+                            <button onclick="showNewEpisodeModal()" class="px-4 py-2 btn-primary text-white rounded-lg text-sm font-semibold shadow-lg">
+                                <i class="fas fa-plus mr-2"></i>New Episode
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Arc Filter Bar -->
+                    <div class="mb-6 glass-strong rounded-xl p-4">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-sm font-medium text-gray-400">Filter by Arc:</span>
+                            <button class="px-3 py-1.5 bg-purple-500/30 text-purple-300 rounded-lg text-xs font-medium">
+                                All Episodes
+                            </button>
+                            <button class="px-3 py-1.5 bg-purple-500/20 text-purple-400 rounded-lg text-xs font-medium hover:bg-purple-500/30">
+                                Training Arc
+                            </button>
+                            <button class="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs font-medium hover:bg-orange-500/30">
+                                Tournament Arc
+                            </button>
+                            <button class="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-500/30">
+                                Rivalry Arc
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <!-- Episode Card with 3-dot menu -->
+                        <div class="episode-card glass rounded-xl overflow-hidden border border-white/10">
+                            <div class="p-4">
+                                <div class="flex items-start justify-between mb-3">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <h3 class="text-lg font-bold text-white">Episode 1: The Beginning</h3>
+                                            <span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">Published</span>
+                                            <span class="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full text-xs font-medium">Training Arc</span>
+                                        </div>
+                                        <p class="text-sm text-gray-400 mb-3">Kaito's journey begins as he steps onto the basketball court for the first time...</p>
+                                        <div class="flex items-center gap-4 text-xs text-gray-500">
+                                            <span><i class="fas fa-file mr-1"></i>12 pages</span>
+                                            <span><i class="fas fa-th mr-1"></i>48 panels</span>
+                                            <span><i class="fas fa-users mr-1"></i>3 characters</span>
+                                        </div>
+                                    </div>
+                                    <div class="relative">
+                                        <button onclick="toggleEpisodeMenu('ep1')" class="w-8 h-8 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition">
+                                            <i class="fas fa-ellipsis-v"></i>
+                                        </button>
+                                        <div id="ep1Menu" class="dropdown-menu">
+                                            <button onclick="editEpisode('ep1')"><i class="fas fa-edit mr-2"></i>Edit</button>
+                                            <button onclick="duplicateEpisode('ep1')"><i class="fas fa-copy mr-2"></i>Duplicate</button>
+                                            <button onclick="deleteEpisode('ep1')" class="text-red-400 hover:text-red-300"><i class="fas fa-trash mr-2"></i>Delete</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Page Thumbnails -->
+                                <div class="flex gap-2 overflow-x-auto scrollbar pb-2">
+                                    <div class="flex-shrink-0 w-16 h-24 bg-gray-800 rounded border-2 border-purple-500/50 cursor-pointer"></div>
+                                    <div class="flex-shrink-0 w-16 h-24 bg-gray-800 rounded border border-white/10 cursor-pointer"></div>
+                                    <div class="flex-shrink-0 w-16 h-24 bg-gray-800 rounded border border-white/10 cursor-pointer"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manga Editor View -->
+            <div id="editorView" class="h-full flex">
+                <div class="flex-1 bg-gray-800 flex items-center justify-center">
+                    <div class="text-center text-gray-500">
+                        <div class="w-32 h-48 bg-gray-700 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                            <i class="fas fa-file-alt text-4xl"></i>
+                        </div>
+                        <p class="text-sm">Page 1 Preview</p>
+                        <p class="text-xs">B5 Format • 180 x 257mm</p>
+                    </div>
+                </div>
+                
+                <!-- Right Panel - Page Navigator -->
+                <div class="w-64 glass-strong border-l border-white/10 overflow-y-auto scrollbar p-4">
+                    <div class="mb-4">
+                        <h3 class="text-sm font-bold text-white mb-3">Page Navigator</h3>
+                        <div class="space-y-2">
+                            <div class="glass rounded-lg p-3 border-2 border-purple-500/50">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-semibold text-white">Page 1</span>
+                                    <span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">Current</span>
+                                </div>
+                                <p class="text-xs text-gray-400">4 panels</p>
+                            </div>
+                            <div class="glass rounded-lg p-3 border border-white/10 hover:border-purple-500/30 cursor-pointer">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-semibold text-white">Page 2</span>
+                                </div>
+                                <p class="text-xs text-gray-400">6 panels</p>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="showPageComposer()" class="w-full px-3 py-2 btn-primary text-white rounded-lg text-sm font-semibold shadow-lg">
+                        <i class="fas fa-plus mr-2"></i>Add Page
+                    </button>
+                </div>
+            </div>
+
+            <!-- Universe Manager View -->
+            <div id="universeView" style="display:none;" class="h-full overflow-y-auto scrollbar p-6">
+                <div class="max-w-6xl mx-auto">
+                    <h2 class="text-2xl font-bold text-white mb-6">Universe Manager</h2>
+                    <div class="glass-strong rounded-xl p-1 inline-flex mb-6">
+                        <button onclick="switchUniverseTab('rules')" id="universeTabRules" class="px-4 py-2 btn-primary rounded-lg text-white font-medium text-sm">
+                            <i class="fas fa-book mr-2"></i>Rules
+                        </button>
+                        <button onclick="switchUniverseTab('locations')" id="universeTabLocations" class="px-4 py-2 glass hover:glass-strong rounded-lg text-gray-300 hover:text-white font-medium text-sm transition">
+                            <i class="fas fa-map-marker-alt mr-2"></i>Locations
+                        </button>
+                        <button onclick="switchUniverseTab('characters')" id="universeTabCharacters" class="px-4 py-2 glass hover:glass-strong rounded-lg text-gray-300 hover:text-white font-medium text-sm transition">
+                            <i class="fas fa-users mr-2"></i>Character Database
+                        </button>
+                    </div>
+                    
+                    <div id="universeRules">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="glass rounded-xl p-4 border border-purple-500/30">
+                                <h4 class="text-base font-bold text-white mb-2">Zone Defense System</h4>
+                                <span class="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs">Power System</span>
+                                <p class="text-sm text-gray-400 mt-3">Players can create defensive zones that slow opponents...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="universeLocations" style="display:none;">
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="glass rounded-xl overflow-hidden border border-white/10">
+                                <div class="aspect-video bg-gray-800"></div>
+                                <div class="p-3">
+                                    <h4 class="text-sm font-bold text-white mb-1">Shibuya Court</h4>
+                                    <p class="text-xs text-gray-400">Outdoor basketball court</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="universeCharacters" style="display:none;">
+                        <div class="grid grid-cols-4 gap-4">
+                            <div class="glass rounded-xl overflow-hidden border border-white/10">
+                                <div class="aspect-square bg-gradient-to-br from-orange-900/20 to-red-900/20 flex items-center justify-center">
+                                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-3xl">K</div>
+                                </div>
+                                <div class="p-3">
+                                    <h4 class="text-sm font-bold text-white mb-1">Kaito</h4>
+                                    <p class="text-xs text-gray-400">Protagonist • Age 16</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Character Creator Modal -->
+<div id="addCharacterModal" class="modal">
+    <div class="glass-strong rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto scrollbar fade-in">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <i class="fas fa-user-plus text-white text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold text-white">Character Creator</h2>
+                    <p class="text-sm text-gray-400">Create detailed character profiles with AI generation</p>
+                </div>
+            </div>
+            <button onclick="hideAddCharacterModal()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="space-y-6">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">Character Name *</label>
+                    <input type="text" placeholder="e.g., Kaito Yamamoto" class="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">Role</label>
+                    <select class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-purple-500">
+                        <option>Protagonist</option>
+                        <option>Antagonist</option>
+                        <option>Supporting Character</option>
+                        <option>Rival</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">Age</label>
+                    <input type="number" placeholder="16" class="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">Height (cm)</label>
+                    <input type="number" placeholder="175" class="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500">
+                </div>
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">Build</label>
+                    <select class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-purple-500">
+                        <option>Athletic</option>
+                        <option>Slim</option>
+                        <option>Muscular</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-2">Character Description *</label>
+                <textarea rows="4" placeholder="A teenage ninja with spiky black hair, determined eyes, wearing an orange jacket..." class="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"></textarea>
+            </div>
+
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-2">Reference Images (Optional)</label>
+                <div class="glass rounded-xl p-6 border-2 border-dashed border-white/20 hover:border-purple-500/50 transition cursor-pointer text-center">
+                    <i class="fas fa-cloud-upload-alt text-purple-400 text-3xl mb-3"></i>
+                    <p class="text-sm font-medium text-white mb-1">Click to upload character references</p>
+                    <p class="text-xs text-gray-400">PNG, JPG up to 10MB</p>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-4 border-t border-white/10">
+                <button onclick="hideAddCharacterModal()" class="flex-1 px-4 py-3 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg font-medium transition">Cancel</button>
+                <button class="flex-1 px-4 py-3 btn-primary text-white rounded-lg font-semibold shadow-lg"><i class="fas fa-magic mr-2"></i>Generate Character</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Panel Generator Modal (with integrated Asset Library) -->
+<div id="panelGeneratorModal" class="modal">
+    <div class="glass-strong rounded-2xl p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto scrollbar fade-in">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center">
+                    <i class="fas fa-th-large text-white text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold text-white">Panel Generator</h2>
+                    <p class="text-sm text-gray-400">Select assets and generate manga panels</p>
+                </div>
+            </div>
+            <button onclick="hidePanelGenerator()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-4 gap-6">
+            <!-- Asset Selection Sidebar -->
+            <div class="col-span-1 space-y-4">
+                <div>
+                    <h3 class="text-sm font-bold text-white mb-3">Characters</h3>
+                    <div class="space-y-2">
+                        <div class="glass rounded-lg p-3 border-2 border-purple-500/50 cursor-pointer">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-lg mb-2 mx-auto">K</div>
+                            <p class="text-xs font-semibold text-white text-center">Kaito</p>
+                        </div>
+                        <div class="glass rounded-lg p-3 border border-white/10 hover:border-purple-500/50 cursor-pointer">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white font-bold text-lg mb-2 mx-auto">R</div>
+                            <p class="text-xs font-semibold text-white text-center">Ryu</p>
+                        </div>
+                        <button onclick="showAddCharacterModal()" class="w-full glass rounded-lg p-3 border-2 border-dashed border-white/20 hover:border-purple-500/50 cursor-pointer">
+                            <i class="fas fa-plus text-purple-400 text-xl mb-2"></i>
+                            <p class="text-xs text-gray-400">Add Character</p>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-bold text-white mb-3">Other Assets</h3>
+                    <div class="glass-strong rounded-lg p-1 mb-3">
+                        <button class="w-full px-3 py-2 bg-purple-500/20 text-purple-400 rounded text-xs font-medium mb-1">Scenes</button>
+                        <button class="w-full px-3 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded text-xs font-medium mb-1">Props</button>
+                        <button class="w-full px-3 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded text-xs font-medium">Tools</button>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="glass rounded-lg p-2 border border-white/10">
+                            <div class="aspect-video bg-gray-800 rounded mb-2"></div>
+                            <p class="text-xs text-white">Basketball Court</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Configuration -->
+            <div class="col-span-3 space-y-4">
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">Panel Description *</label>
+                    <textarea rows="4" placeholder="Character jumping through the air with sword drawn, dynamic action pose, speed lines in background..." class="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"></textarea>
+                </div>
+
+                <div>
+                    <label class="text-sm font-medium text-gray-300 block mb-2">Sketch Reference (Optional)</label>
+                    <div class="glass rounded-xl p-6 border-2 border-dashed border-white/20 hover:border-purple-500/50 transition cursor-pointer text-center">
+                        <i class="fas fa-pencil-alt text-blue-400 text-2xl mb-2"></i>
+                        <p class="text-sm font-medium text-white mb-1">Upload composition sketch</p>
+                        <p class="text-xs text-gray-400">Your rough sketch for panel layout</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-sm font-medium text-gray-300 block mb-2">Camera Angle</label>
+                        <select class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-purple-500">
+                            <option>Eye Level</option>
+                            <option>Low Angle</option>
+                            <option>High Angle</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-300 block mb-2">Shot Type</label>
+                        <select class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-purple-500">
+                            <option>Close-up</option>
+                            <option>Medium Shot</option>
+                            <option>Wide Shot</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-4 border-t border-white/10">
+                    <button onclick="hidePanelGenerator()" class="flex-1 px-4 py-3 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg font-medium transition">Cancel</button>
+                    <button class="flex-1 px-4 py-3 btn-primary text-white rounded-lg font-semibold shadow-lg"><i class="fas fa-magic mr-2"></i>Generate Panel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Page Composer Modal (with integrated Layout Templates) -->
+<div id="pageComposerModal" class="modal">
+    <div class="glass-strong rounded-2xl p-6 max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto scrollbar fade-in">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center">
+                    <i class="fas fa-file text-white text-xl"></i>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-bold text-white">Webtoon Layout Templates</h2>
+                    <p class="text-sm text-gray-400">Vertical scroll optimized for mobile</p>
+                </div>
+            </div>
+            <button onclick="hidePageComposer()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="space-y-6">
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-3">Select Layout Template</label>
+                <div class="grid grid-cols-3 gap-4">
+                    <!-- Standard Vertical -->
+                    <div class="glass rounded-xl overflow-hidden cursor-pointer hover:border-purple-500/50 border-2 border-white/10 transition">
+                        <div class="aspect-[9/16] bg-gray-800 p-4 flex flex-col gap-2">
+                            <div class="flex-1 border-2 border-dashed border-gray-600 rounded"></div>
+                            <div class="flex-1 border-2 border-dashed border-gray-600 rounded"></div>
+                            <div class="flex-1 border-2 border-dashed border-gray-600 rounded"></div>
+                        </div>
+                        <div class="p-3 border-t border-white/10">
+                            <h4 class="text-sm font-bold text-white mb-1">Standard Vertical</h4>
+                            <p class="text-xs text-gray-400">3-panel sequence</p>
+                        </div>
+                    </div>
+
+                    <!-- Hero Panel -->
+                    <div class="glass rounded-xl overflow-hidden cursor-pointer hover:border-purple-500/50 border-2 border-purple-500/50 transition">
+                        <div class="aspect-[9/16] bg-gray-800 p-4 flex flex-col gap-2">
+                            <div class="flex-[2] border-2 border-dashed border-gray-600 rounded"></div>
+                            <div class="flex-1 border-2 border-dashed border-gray-600 rounded"></div>
+                            <div class="flex-1 border-2 border-dashed border-gray-600 rounded"></div>
+                        </div>
+                        <div class="p-3 border-t border-white/10">
+                            <h4 class="text-sm font-bold text-white mb-1">Hero Panel</h4>
+                            <p class="text-xs text-gray-400">Large + small panels</p>
+                        </div>
+                    </div>
+
+                    <!-- Full Screen -->
+                    <div class="glass rounded-xl overflow-hidden cursor-pointer hover:border-purple-500/50 border-2 border-white/10 transition">
+                        <div class="aspect-[9/16] bg-gray-800 p-4">
+                            <div class="h-full border-2 border-dashed border-gray-600 rounded"></div>
+                        </div>
+                        <div class="p-3 border-t border-white/10">
+                            <h4 class="text-sm font-bold text-white mb-1">Full Screen</h4>
+                            <p class="text-xs text-gray-400">Single impactful panel</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-4 border-t border-white/10">
+                <button onclick="hidePageComposer()" class="flex-1 px-4 py-3 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg font-medium transition">Cancel</button>
+                <button class="flex-1 px-4 py-3 btn-primary text-white rounded-lg font-semibold shadow-lg"><i class="fas fa-file-image mr-2"></i>Create Page</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Sections Modal -->
+<div id="manageSectionsModal" class="modal">
+    <div class="glass-strong rounded-2xl p-6 max-w-2xl w-full mx-4 fade-in">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+            <h2 class="text-xl font-bold text-white">Manage Sections</h2>
+            <button onclick="hideManageSections()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="space-y-4 mb-6">
+            <div class="glass rounded-lg p-4 flex items-center justify-between">
+                <div>
+                    <h4 class="text-sm font-bold text-white">Section 1: The Beginning</h4>
+                    <p class="text-xs text-gray-400">4 episodes</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="px-3 py-1.5 glass hover:glass-strong rounded-lg text-xs text-gray-300 hover:text-white"><i class="fas fa-edit mr-1"></i>Edit</button>
+                    <button class="px-3 py-1.5 glass hover:glass-strong rounded-lg text-xs text-red-400"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass rounded-xl p-4 mb-4">
+            <h3 class="text-sm font-bold text-white mb-3">Add New Section</h3>
+            <input type="text" placeholder="Section name..." class="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500 mb-3">
+            <button class="w-full px-4 py-3 btn-primary text-white rounded-lg font-semibold"><i class="fas fa-plus mr-2"></i>Add Section</button>
+        </div>
+    </div>
+</div>
+
+<!-- Other Modals (simplified versions) -->
+<div id="newEpisodeModal" class="modal">
+    <div class="glass-strong rounded-2xl p-6 max-w-xl w-full mx-4 fade-in">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+            <h2 class="text-xl font-bold text-white">New Episode</h2>
+            <button onclick="hideNewEpisodeModal()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-2">Episode Title</label>
+                <input type="text" placeholder="Enter episode title..." class="w-full px-4 py-3 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500">
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-2">Section</label>
+                <select class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:border-purple-500">
+                    <option>Section 1: The Beginning</option>
+                    <option>Section 2: Rising Action</option>
+                </select>
+            </div>
+            <div class="flex gap-3 pt-4">
+                <button onclick="hideNewEpisodeModal()" class="flex-1 px-4 py-3 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg font-medium transition">Cancel</button>
+                <button class="flex-1 px-4 py-3 btn-primary text-white rounded-lg font-semibold shadow-lg">Create Episode</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="aiGenerateModal" class="modal">
+    <div class="glass-strong rounded-2xl p-6 max-w-3xl w-full mx-4 fade-in">
+        <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+            <h2 class="text-2xl font-bold text-white">AI Generation</h2>
+            <button onclick="hideAIGenerateMenu()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+            <button onclick="showAddCharacterModal(); hideAIGenerateMenu();" class="glass hover:glass-strong rounded-xl p-6 border-2 border-white/10 hover:border-purple-500/50 cursor-pointer transition text-left">
+                <i class="fas fa-user text-purple-400 text-2xl mb-3"></i>
+                <h3 class="text-lg font-bold text-white mb-2">Generate Character</h3>
+                <p class="text-sm text-gray-400">Create AI-generated character designs</p>
+            </button>
+            <button onclick="showPanelGenerator(); hideAIGenerateMenu();" class="glass hover:glass-strong rounded-xl p-6 border-2 border-white/10 hover:border-purple-500/50 cursor-pointer transition text-left">
+                <i class="fas fa-th-large text-pink-400 text-2xl mb-3"></i>
+                <h3 class="text-lg font-bold text-white mb-2">Generate Panel</h3>
+                <p class="text-sm text-gray-400">Generate individual manga panels</p>
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="storyManagerModal" class="modal"><div class="glass-strong rounded-2xl p-6 max-w-4xl w-full mx-4 fade-in"><div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10"><h2 class="text-xl font-bold text-white">Manage Stories</h2><button onclick="hideStoryManager()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button></div><p class="text-gray-400 text-center py-8">Story management interface</p></div></div>
+<div id="storyStructureModal" class="modal"><div class="glass-strong rounded-2xl p-6 max-w-4xl w-full mx-4 fade-in"><div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10"><h2 class="text-xl font-bold text-white">Story Structure</h2><button onclick="hideStoryStructure()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button></div><p class="text-gray-400 text-center py-8">Story structure view</p></div></div>
+<div id="manageArcTagsModal" class="modal"><div class="glass-strong rounded-2xl p-6 max-w-2xl w-full mx-4 fade-in"><div class="flex items-center justify-between mb-6 pb-4 border-white/10"><h2 class="text-xl font-bold text-white">Manage Arc Tags</h2><button onclick="hideManageArcTags()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button></div><p class="text-gray-400 text-center py-8">Arc tag management</p></div></div>
+<div id="settingsModal" class="modal"><div class="glass-strong rounded-2xl p-6 max-w-2xl w-full mx-4 fade-in"><div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10"><h2 class="text-xl font-bold text-white">Settings</h2><button onclick="hideSettings()" class="w-10 h-10 glass hover:glass-strong rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition"><i class="fas fa-times"></i></button></div><p class="text-gray-400 text-center py-8">Settings interface</p></div></div>
+
+<script>
+let currentView = 'editor';
+
+function switchView(view) {
+    currentView = view;
+    document.getElementById('editorView').style.display = 'none';
+    document.getElementById('episodesView').style.display = 'none';
+    document.getElementById('universeView').style.display = 'none';
+    
+    if (view === 'editor') document.getElementById('editorView').style.display = 'flex';
+    else if (view === 'episodes') document.getElementById('episodesView').style.display = 'block';
+    else if (view === 'universe') document.getElementById('universeView').style.display = 'flex';
+    
+    document.querySelectorAll('[id^="nav"]').forEach(btn => {
+        btn.className = 'w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition';
+    });
+    
+    const activeBtn = document.getElementById('nav' + view.charAt(0).toUpperCase() + view.slice(1));
+    if (activeBtn) activeBtn.className = 'w-full flex items-center gap-3 px-3 py-3 rounded-lg btn-primary text-white font-medium shadow-lg';
+}
+
+function switchUniverseTab(tab) {
+    document.getElementById('universeRules').style.display = 'none';
+    document.getElementById('universeLocations').style.display = 'none';
+    document.getElementById('universeCharacters').style.display = 'none';
+    
+    if (tab === 'rules') document.getElementById('universeRules').style.display = 'block';
+    else if (tab === 'locations') document.getElementById('universeLocations').style.display = 'block';
+    else if (tab === 'characters') document.getElementById('universeCharacters').style.display = 'block';
+    
+    ['rules', 'locations', 'characters'].forEach(t => {
+        const btn = document.getElementById('universeTab' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) btn.className = t === tab ? 'px-4 py-2 btn-primary rounded-lg text-white font-medium text-sm' : 'px-4 py-2 glass hover:glass-strong rounded-lg text-gray-300 hover:text-white font-medium text-sm transition';
+    });
+}
+
+function toggleEpisodeMenu(id) {
+    const menu = document.getElementById(id + 'Menu');
+    document.querySelectorAll('.dropdown-menu').forEach(m => { if (m !== menu) m.classList.remove('active'); });
+    menu.classList.toggle('active');
+}
+
+function editEpisode(id) { console.log('Edit', id); toggleEpisodeMenu(id); }
+function duplicateEpisode(id) { console.log('Duplicate', id); toggleEpisodeMenu(id); }
+function deleteEpisode(id) { console.log('Delete', id); toggleEpisodeMenu(id); }
+
+function showAddCharacterModal() { document.getElementById('addCharacterModal').classList.add('active'); }
+function hideAddCharacterModal() { document.getElementById('addCharacterModal').classList.remove('active'); }
+function showPanelGenerator() { document.getElementById('panelGeneratorModal').classList.add('active'); }
+function hidePanelGenerator() { document.getElementById('panelGeneratorModal').classList.remove('active'); }
+function showPageComposer() { document.getElementById('pageComposerModal').classList.add('active'); }
+function hidePageComposer() { document.getElementById('pageComposerModal').classList.remove('active'); }
+function showNewEpisodeModal() { document.getElementById('newEpisodeModal').classList.add('active'); }
+function hideNewEpisodeModal() { document.getElementById('newEpisodeModal').classList.remove('active'); }
+function showAIGenerateMenu() { document.getElementById('aiGenerateModal').classList.add('active'); }
+function hideAIGenerateMenu() { document.getElementById('aiGenerateModal').classList.remove('active'); }
+function showStoryManager() { document.getElementById('storyManagerModal').classList.add('active'); }
+function hideStoryManager() { document.getElementById('storyManagerModal').classList.remove('active'); }
+function showStoryStructure() { document.getElementById('storyStructureModal').classList.add('active'); }
+function hideStoryStructure() { document.getElementById('storyStructureModal').classList.remove('active'); }
+function showManageArcTags() { document.getElementById('manageArcTagsModal').classList.add('active'); }
+function hideManageArcTags() { document.getElementById('manageArcTagsModal').classList.remove('active'); }
+function showManageSections() { document.getElementById('manageSectionsModal').classList.add('active'); }
+function hideManageSections() { document.getElementById('manageSectionsModal').classList.remove('active'); }
+function showSettings() { document.getElementById('settingsModal').classList.add('active'); }
+function hideSettings() { document.getElementById('settingsModal').classList.remove('active'); }
+
+document.querySelectorAll('.modal').forEach(modal => {
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('active');
+    });
+});
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.dropdown-menu') && !e.target.closest('button[onclick^="toggleEpisodeMenu"]')) {
+        document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('active'));
+    }
+});
+
+switchView('episodes');
+</script>
+
+</body>
+</html>

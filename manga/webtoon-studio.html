@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webtoon Studio Pro - Multi-Story AI Manga Creator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        body { background: #0a0a0f; }
+        .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); }
+        .glass-strong { background: rgba(255,255,255,0.06); backdrop-filter: blur(30px); border: 1px solid rgba(255,255,255,0.1); }
+        .scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .scrollbar::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #6366f1, #a855f7); border-radius: 10px; }
+        .asset-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .asset-card:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(99, 102, 241, 0.3); }
+        .btn-primary { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); transition: all 0.3s; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5); }
+        .modal { display: none; position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.8); backdrop-filter: blur(10px); }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .story-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .story-card:hover { transform: translateX(4px); border-color: rgba(99, 102, 241, 0.5); }
+        .timeline-item { transition: all 0.2s; }
+        .timeline-item:hover { transform: scale(1.05); }
+    </style>
+</head>
+<body class="text-gray-100">
+
+<!-- Main Container -->
+<div class="flex h-screen overflow-hidden">
+
+    <!-- Left Sidebar - Project & Navigation -->
+    <div class="w-64 glass-strong border-r border-white/10 flex flex-col">
+        <div class="p-4 border-b border-white/10">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg">
+                    <i class="fas fa-scroll text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-sm font-bold text-white">Webtoon Studio</h1>
+                    <p class="text-xs text-gray-400">Mobile Optimized</p>
+                </div>
+            </div>
+            <div class="glass rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-gray-300" id="currentStoryName">Basketball Dreams</span>
+                    <button onclick="showStoryManager()" class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 rounded-full text-xs hover:bg-indigo-500/30 transition">
+                        <i class="fas fa-exchange-alt mr-1"></i>Switch
+                    </button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div><p class="text-lg font-bold text-indigo-400" id="episodeCount">12</p><p class="text-xs text-gray-500">Episodes</p></div>
+                    <div><p class="text-lg font-bold text-purple-400" id="panelCount">84</p><p class="text-xs text-gray-500">Panels</p></div>
+                    <div><p class="text-lg font-bold text-pink-400" id="charCount">8</p><p class="text-xs text-gray-500">Chars</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto scrollbar p-3 space-y-1">
+            <button onclick="switchView('editor')" id="navEditor" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg btn-primary text-white font-medium shadow-lg">
+                <i class="fas fa-scroll"></i><span>Webtoon Editor</span>
+            </button>
+            <button onclick="switchView('script')" id="navScript" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-file-alt"></i><span>Script Editor</span>
+            </button>
+            <button onclick="showStoryHierarchy()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-sitemap"></i><span>Story Structure</span>
+            </button>
+            <button onclick="showAssetLibrary()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-folder-open"></i><span>Asset Library</span>
+            </button>
+            <button onclick="showCharacterManager()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-users"></i><span>Characters</span><span class="ml-auto px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full text-xs">8</span>
+            </button>
+            <button onclick="showLayoutTemplates()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-th-large"></i><span>Layout Templates</span>
+            </button>
+            <button onclick="showSettings()" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                <i class="fas fa-cog"></i><span>Settings</span>
+            </button>
+        </div>
+
+        <div class="p-3 border-t border-white/10 space-y-2">
+            <button onclick="showNewEpisodeModal()" class="w-full px-3 py-2.5 btn-primary rounded-lg text-white font-medium text-sm shadow-lg">
+                <i class="fas fa-plus mr-2"></i>New Episode
+            </button>
+            <button onclick="showStoryManager()" class="w-full px-3 py-2.5 glass hover:glass-strong rounded-lg text-gray-300 hover:text-white font-medium text-sm transition">
+                <i class="fas fa-book mr-2"></i>Manage Stories
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col" id="mainContent">
+        <div class="h-14 glass-strong border-b border-white/10 flex items-center justify-between px-6">
+            <div class="flex items-center gap-4">
+                <h2 class="text-lg font-bold text-white">Episode 1 - The Beginning</h2>
+                <span class="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-xs font-medium">Webtoon Format</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-semibold shadow-lg transition">
+                    <i class="fas fa-magic mr-2"></i>Generate
+                </button>
+                <button class="px-4 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-mobile-alt mr-2"></i>Preview
+                </button>
+                <button class="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-lg text-sm font-semibold shadow-lg transition">
+                    <i class="fas fa-download mr-2"></i>Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Webtoon Editor View -->
+        <div id="editorView" class="flex-1 overflow-y-auto scrollbar p-6">
+            <div class="max-w-2xl mx-auto space-y-4">
+                <div class="glass-strong rounded-xl p-6 border border-indigo-500/30">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                                <i class="fas fa-mobile-alt text-white"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Webtoon Canvas</h3>
+                                <p class="text-sm text-gray-400">Vertical scroll • Mobile optimized</p>
+                            </div>
+                        </div>
+                        <button class="px-3 py-1.5 glass rounded-lg text-sm text-gray-300 hover:text-white transition">
+                            <i class="fas fa-cog mr-2"></i>Layout
+                        </button>
+                    </div>
+                    <div class="aspect-[9/16] bg-gradient-to-b from-zinc-900 to-zinc-800 rounded-lg border border-white/10 flex items-center justify-center">
+                        <div class="text-center">
+                            <i class="fas fa-mobile-alt text-6xl text-gray-700 mb-4"></i>
+                            <p class="text-gray-400">Vertical webtoon preview</p>
+                            <p class="text-sm text-gray-500 mt-2">800 x 1280px</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-strong rounded-xl p-5 border border-white/10">
+                    <h4 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <i class="fas fa-layer-group text-indigo-400"></i>Panel Sequence
+                    </h4>
+                    <div class="space-y-3">
+                        <div class="glass rounded-lg p-4 border-l-4 border-orange-500">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold text-white">Panel 1 - Opening</span>
+                                <span class="px-2 py-1 bg-orange-500/20 text-orange-400 rounded text-xs">Full Width</span>
+                            </div>
+                            <p class="text-xs text-gray-400">Establishing shot of the city at dawn...</p>
+                        </div>
+                        <div class="glass rounded-lg p-4 border-l-4 border-green-500">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold text-white">Panel 2 - Character Intro</span>
+                                <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">Portrait</span>
+                            </div>
+                            <p class="text-xs text-gray-400">Close-up of protagonist waking up...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timeline Section -->
+                <div class="glass-strong rounded-xl p-5 border border-white/10">
+                    <h4 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                        <i class="fas fa-film text-purple-400"></i>Episode Timeline
+                    </h4>
+                    <div class="flex gap-2 overflow-x-auto scrollbar pb-2">
+                        <div class="timeline-item glass rounded-lg p-3 min-w-[120px] border-2 border-indigo-500 cursor-pointer">
+                            <div class="text-xs font-semibold text-indigo-400 mb-1">Episode 1</div>
+                            <div class="text-xs text-gray-400">8 panels</div>
+                            <div class="mt-2 h-1 bg-indigo-500/30 rounded-full overflow-hidden">
+                                <div class="h-full bg-indigo-500 w-full"></div>
+                            </div>
+                        </div>
+                        <div class="timeline-item glass rounded-lg p-3 min-w-[120px] border border-white/10 cursor-pointer hover:border-indigo-500/50">
+                            <div class="text-xs font-semibold text-white mb-1">Episode 2</div>
+                            <div class="text-xs text-gray-400">6 panels</div>
+                            <div class="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
+                                <div class="h-full bg-purple-500 w-2/3"></div>
+                            </div>
+                        </div>
+                        <div class="timeline-item glass rounded-lg p-3 min-w-[120px] border border-white/10 cursor-pointer hover:border-indigo-500/50">
+                            <div class="text-xs font-semibold text-white mb-1">Episode 3</div>
+                            <div class="text-xs text-gray-400">0 panels</div>
+                            <div class="mt-2 h-1 bg-gray-700 rounded-full"></div>
+                        </div>
+                        <button class="timeline-item glass rounded-lg p-3 min-w-[120px] border border-dashed border-white/20 cursor-pointer hover:border-indigo-500/50 flex items-center justify-center">
+                            <i class="fas fa-plus text-gray-500"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Script Editor View -->
+        <div id="scriptView" class="flex-1 overflow-y-auto scrollbar p-6" style="display: none;">
+            <div class="max-w-4xl mx-auto space-y-4">
+                <div class="glass-strong rounded-xl p-6 border border-white/10">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-bold text-white">Script Editor</h3>
+                        <div class="flex gap-2">
+                            <button class="px-3 py-1.5 glass rounded-lg text-sm text-gray-300 hover:text-white transition">
+                                <i class="fas fa-save mr-2"></i>Save
+                            </button>
+                            <button class="px-3 py-1.5 btn-primary rounded-lg text-sm text-white">
+                                <i class="fas fa-magic mr-2"></i>AI Assist
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="glass rounded-lg p-4 border-l-4 border-orange-500">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold text-orange-400">Scene 1</span>
+                                    <span class="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs">Opening</span>
+                                </div>
+                                <button class="text-gray-400 hover:text-white transition">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 block mb-1">Scene Description</label>
+                                    <textarea rows="2" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="Describe the scene...">Basketball court at dawn. Empty bleachers. Morning light streaming through windows.</textarea>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Characters</label>
+                                        <input type="text" value="Kaito" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Assets</label>
+                                        <input type="text" value="Basketball, Court" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 block mb-1">Dialogue</label>
+                                    <textarea rows="2" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="Character dialogue...">Kaito: "This is where it all begins..."</textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass rounded-lg p-4 border-l-4 border-green-500">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold text-green-400">Scene 2</span>
+                                    <span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">Action</span>
+                                </div>
+                                <button class="text-gray-400 hover:text-white transition">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                            </div>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 block mb-1">Scene Description</label>
+                                    <textarea rows="2" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="Describe the scene...">Kaito dribbles the ball. Dynamic movement. Speed lines.</textarea>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Characters</label>
+                                        <input type="text" value="Kaito" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Effects</label>
+                                        <input type="text" value="Speed lines, Motion blur" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="w-full px-4 py-3 glass hover:glass-strong rounded-lg text-gray-300 hover:text-white transition border border-dashed border-white/20">
+                            <i class="fas fa-plus mr-2"></i>Add Scene
+                        </button>
+                    </div>
+                </div>
+
+                <!-- AI Generation Panel -->
+                <div class="glass-strong rounded-xl p-5 border border-purple-500/30">
+                    <h4 class="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                        <i class="fas fa-magic text-purple-400"></i>AI Generation Controls
+                    </h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Art Style</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500">
+                                <option>Webtoon Style</option>
+                                <option>Manhwa</option>
+                                <option>Anime</option>
+                                <option>Semi-Realistic</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Quality</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500">
+                                <option>High (Slow)</option>
+                                <option>Medium (Balanced)</option>
+                                <option>Fast (Draft)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="w-full mt-4 px-4 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-semibold shadow-lg transition">
+                        <i class="fas fa-wand-magic-sparkles mr-2"></i>Generate All Panels
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Asset Library Modal -->
+<div id="assetLibraryModal" class="modal">
+    <div class="glass-strong rounded-2xl w-[90vw] h-[85vh] max-w-7xl border border-white/10 shadow-2xl fade-in flex flex-col">
+        <div class="flex items-center justify-between p-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                    <i class="fas fa-folder-open text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Asset Library</h2>
+                    <p class="text-sm text-gray-400">Characters, Backgrounds, Props</p>
+                </div>
+            </div>
+            <button onclick="closeModal('assetLibraryModal')" class="w-10 h-10 rounded-lg glass hover:glass-strong text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-hidden flex">
+            <div class="w-64 border-r border-white/10 p-4 overflow-y-auto scrollbar">
+                <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">Categories</h3>
+                <div class="space-y-1">
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-indigo-500/20 text-indigo-400 font-medium text-sm">
+                        <i class="fas fa-users"></i><span>Characters</span><span class="ml-auto text-xs">12</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition text-sm">
+                        <i class="fas fa-image"></i><span>Backgrounds</span><span class="ml-auto text-xs">24</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition text-sm">
+                        <i class="fas fa-cube"></i><span>Props</span><span class="ml-auto text-xs">18</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-3 py-2 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition text-sm">
+                        <i class="fas fa-palette"></i><span>Effects</span><span class="ml-auto text-xs">8</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 p-6 overflow-y-auto scrollbar">
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="asset-card glass rounded-xl overflow-hidden border border-white/10 cursor-pointer">
+                        <div class="aspect-square bg-gradient-to-br from-orange-900/20 to-red-900/20 flex items-center justify-center">
+                            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-2xl">K</div>
+                        </div>
+                        <div class="p-3 border-t border-white/10">
+                            <p class="text-sm font-semibold text-white">Kaito</p>
+                            <p class="text-xs text-gray-400">Protagonist</p>
+                        </div>
+                    </div>
+                    <div class="asset-card glass rounded-xl overflow-hidden border border-white/10 cursor-pointer">
+                        <div class="aspect-square bg-gradient-to-br from-pink-900/20 to-purple-900/20 flex items-center justify-center">
+                            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl">S</div>
+                        </div>
+                        <div class="p-3 border-t border-white/10">
+                            <p class="text-sm font-semibold text-white">Sakura</p>
+                            <p class="text-xs text-gray-400">Support</p>
+                        </div>
+                    </div>
+                    <div class="asset-card glass rounded-xl overflow-hidden border border-white/10 cursor-pointer">
+                        <div class="aspect-square bg-gradient-to-br from-blue-900/20 to-cyan-900/20 flex items-center justify-center">
+                            <i class="fas fa-school text-5xl text-blue-400"></i>
+                        </div>
+                        <div class="p-3 border-t border-white/10">
+                            <p class="text-sm font-semibold text-white">Classroom</p>
+                            <p class="text-xs text-gray-400">Background</p>
+                        </div>
+                    </div>
+                    <div class="asset-card glass rounded-xl overflow-hidden border border-white/10 cursor-pointer">
+                        <div class="aspect-square bg-gradient-to-br from-purple-900/20 to-indigo-900/20 flex items-center justify-center">
+                            <i class="fas fa-fort-awesome text-5xl text-purple-400"></i>
+                        </div>
+                        <div class="p-3 border-t border-white/10">
+                            <p class="text-sm font-semibold text-white">Castle</p>
+                            <p class="text-xs text-gray-400">Background</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Character Manager Modal -->
+<div id="characterManagerModal" class="modal">
+    <div class="glass-strong rounded-2xl w-[90vw] h-[85vh] max-w-6xl border border-white/10 shadow-2xl fade-in flex flex-col">
+        <div class="flex items-center justify-between p-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                    <i class="fas fa-user text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Character: Kaito</h2>
+                    <p class="text-sm text-gray-400">Protagonist • Ninja</p>
+                </div>
+            </div>
+            <button onclick="closeModal('characterManagerModal')" class="w-10 h-10 rounded-lg glass hover:glass-strong text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-hidden flex">
+            <div class="flex-1 p-6 overflow-y-auto scrollbar">
+                <div class="grid grid-cols-2 gap-6">
+                    <div class="glass rounded-xl p-5 border border-white/10">
+                        <h3 class="text-sm font-semibold text-white mb-4">Reference Sheet</h3>
+                        <div class="aspect-square bg-gradient-to-br from-orange-900/20 to-red-900/20 rounded-lg border border-white/10 flex items-center justify-center mb-4">
+                            <i class="fas fa-image text-6xl text-gray-700"></i>
+                        </div>
+                        <button class="w-full px-4 py-2 btn-primary rounded-lg text-white font-medium text-sm">
+                            <i class="fas fa-upload mr-2"></i>Upload Reference
+                        </button>
+                    </div>
+
+                    <div class="glass rounded-xl p-5 border border-white/10">
+                        <h3 class="text-sm font-semibold text-white mb-4">Properties</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-1">Name</label>
+                                <input type="text" value="Kaito" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-1">Role</label>
+                                <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                    <option>Protagonist</option>
+                                    <option>Support</option>
+                                    <option>Antagonist</option>
+                                    <option>Side Character</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-1">Description</label>
+                                <textarea rows="4" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="Character description...">Young ninja with spiky blonde hair and blue eyes. Red whisker marks on cheeks. Wears orange and black outfit.</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-white/10 flex justify-end gap-3">
+            <button onclick="closeModal('characterManagerModal')" class="px-5 py-2.5 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg font-medium transition">Cancel</button>
+            <button class="px-5 py-2.5 btn-primary rounded-lg text-white font-medium shadow-lg">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- Layout Templates Modal -->
+<div id="layoutTemplatesModal" class="modal">
+    <div class="glass-strong rounded-2xl w-[90vw] h-[85vh] max-w-5xl border border-white/10 shadow-2xl fade-in flex flex-col">
+        <div class="flex items-center justify-between p-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <i class="fas fa-th-large text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Webtoon Layout Templates</h2>
+                    <p class="text-sm text-gray-400">Vertical scroll optimized for mobile</p>
+                </div>
+            </div>
+            <button onclick="closeModal('layoutTemplatesModal')" class="w-10 h-10 rounded-lg glass hover:glass-strong text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 p-6 overflow-y-auto scrollbar">
+            <div class="grid grid-cols-3 gap-6">
+                <div class="glass rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-indigo-500/50 transition">
+                    <div class="aspect-[9/16] bg-gradient-to-b from-zinc-900 to-zinc-800 p-4 flex flex-col gap-2">
+                        <div class="h-32 bg-white/5 rounded border border-white/10"></div>
+                        <div class="h-24 bg-white/5 rounded border border-white/10"></div>
+                        <div class="h-24 bg-white/5 rounded border border-white/10"></div>
+                    </div>
+                    <div class="p-4 border-t border-white/10">
+                        <p class="text-sm font-semibold text-white">Standard Vertical</p>
+                        <p class="text-xs text-gray-400">3-panel sequence</p>
+                    </div>
+                </div>
+
+                <div class="glass rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-indigo-500/50 transition">
+                    <div class="aspect-[9/16] bg-gradient-to-b from-zinc-900 to-zinc-800 p-4 flex flex-col gap-2">
+                        <div class="h-48 bg-white/5 rounded border border-white/10"></div>
+                        <div class="h-16 bg-white/5 rounded border border-white/10"></div>
+                        <div class="h-16 bg-white/5 rounded border border-white/10"></div>
+                    </div>
+                    <div class="p-4 border-t border-white/10">
+                        <p class="text-sm font-semibold text-white">Hero Panel</p>
+                        <p class="text-xs text-gray-400">Large + small panels</p>
+                    </div>
+                </div>
+
+                <div class="glass rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-indigo-500/50 transition">
+                    <div class="aspect-[9/16] bg-gradient-to-b from-zinc-900 to-zinc-800 p-4 flex flex-col gap-2">
+                        <div class="flex-1 bg-white/5 rounded border border-white/10"></div>
+                    </div>
+                    <div class="p-4 border-t border-white/10">
+                        <p class="text-sm font-semibold text-white">Full Screen</p>
+                        <p class="text-xs text-gray-400">Single impactful panel</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal">
+    <div class="glass-strong rounded-2xl w-[90vw] h-[85vh] max-w-4xl border border-white/10 shadow-2xl fade-in flex flex-col">
+        <div class="flex items-center justify-between p-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-500 to-gray-700 flex items-center justify-center">
+                    <i class="fas fa-cog text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Project Settings</h2>
+                    <p class="text-sm text-gray-400">Configure your webtoon project</p>
+                </div>
+            </div>
+            <button onclick="closeModal('settingsModal')" class="w-10 h-10 rounded-lg glass hover:glass-strong text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto scrollbar p-6">
+            <div class="space-y-6">
+                <div class="glass rounded-xl p-5 border border-white/10">
+                    <h3 class="text-sm font-semibold text-white mb-4">Canvas Settings</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Canvas Width</label>
+                            <input type="number" value="800" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Panel Height (Default)</label>
+                            <input type="number" value="400" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass rounded-xl p-5 border border-white/10">
+                    <h3 class="text-sm font-semibold text-white mb-4">AI Generation</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Model</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                <option>Kie.ai Nano Banana</option>
+                                <option>DALL-E 3</option>
+                                <option>Midjourney</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Default Style</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                <option>Webtoon Style</option>
+                                <option>Jujutsu Kaisen</option>
+                                <option>Naruto</option>
+                                <option>Manhwa</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass rounded-xl p-5 border border-white/10">
+                    <h3 class="text-sm font-semibold text-white mb-4">Export Settings</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Export Format</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500">
+                                <option>PNG (High Quality)</option>
+                                <option>JPEG (Optimized)</option>
+                                <option>WebP (Modern)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-300">Mobile Optimization</span>
+                            <label class="relative inline-block w-12 h-6">
+                                <input type="checkbox" checked class="sr-only peer">
+                                <div class="w-12 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-white/10 flex justify-end gap-3">
+            <button onclick="closeModal('settingsModal')" class="px-5 py-2.5 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg font-medium transition">Cancel</button>
+            <button class="px-5 py-2.5 btn-primary rounded-lg text-white font-medium shadow-lg">Save Settings</button>
+        </div>
+    </div>
+</div>
+
+<!-- Story Manager Modal -->
+<div id="storyManagerModal" class="modal">
+    <div class="glass-strong rounded-2xl w-[90vw] h-[85vh] max-w-6xl border border-white/10 shadow-2xl fade-in flex flex-col">
+        <div class="flex items-center justify-between p-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                    <i class="fas fa-book text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Story Manager</h2>
+                    <p class="text-sm text-gray-400">Manage multiple story projects</p>
+                </div>
+            </div>
+            <button onclick="closeModal('storyManagerModal')" class="w-10 h-10 rounded-lg glass hover:glass-strong text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto scrollbar p-6">
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div onclick="switchStory('basketball')" class="story-card glass rounded-xl p-5 border-2 border-indigo-500 cursor-pointer">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                                <i class="fas fa-basketball-ball text-white text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Basketball Dreams</h3>
+                                <p class="text-xs text-gray-400">Sports • Action</p>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium">Active</span>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-4">A young player's journey to become the best basketball player in the nation.</p>
+                    <div class="grid grid-cols-3 gap-3 text-center">
+                        <div><p class="text-lg font-bold text-orange-400">12</p><p class="text-xs text-gray-500">Episodes</p></div>
+                        <div><p class="text-lg font-bold text-red-400">84</p><p class="text-xs text-gray-500">Panels</p></div>
+                        <div><p class="text-lg font-bold text-pink-400">8</p><p class="text-xs text-gray-500">Characters</p></div>
+                    </div>
+                </div>
+
+                <div onclick="switchStory('fighting')" class="story-card glass rounded-xl p-5 border border-white/10 cursor-pointer hover:border-purple-500/50">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                                <i class="fas fa-fist-raised text-white text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Shadow Fighter</h3>
+                                <p class="text-xs text-gray-400">Action • Fantasy</p>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded-full text-xs font-medium">Draft</span>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-4">Underground martial arts tournament with supernatural powers.</p>
+                    <div class="grid grid-cols-3 gap-3 text-center">
+                        <div><p class="text-lg font-bold text-purple-400">8</p><p class="text-xs text-gray-500">Episodes</p></div>
+                        <div><p class="text-lg font-bold text-pink-400">52</p><p class="text-xs text-gray-500">Panels</p></div>
+                        <div><p class="text-lg font-bold text-indigo-400">6</p><p class="text-xs text-gray-500">Characters</p></div>
+                    </div>
+                </div>
+
+                <div onclick="switchStory('romance')" class="story-card glass rounded-xl p-5 border border-white/10 cursor-pointer hover:border-pink-500/50">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center">
+                                <i class="fas fa-heart text-white text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Starlight Café</h3>
+                                <p class="text-xs text-gray-400">Romance • Slice of Life</p>
+                            </div>
+                        </div>
+                        <span class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-full text-xs font-medium">Planning</span>
+                    </div>
+                    <p class="text-sm text-gray-300 mb-4">A barista and a regular customer's heartwarming love story.</p>
+                    <div class="grid grid-cols-3 gap-3 text-center">
+                        <div><p class="text-lg font-bold text-pink-400">5</p><p class="text-xs text-gray-500">Episodes</p></div>
+                        <div><p class="text-lg font-bold text-rose-400">28</p><p class="text-xs text-gray-500">Panels</p></div>
+                        <div><p class="text-lg font-bold text-purple-400">4</p><p class="text-xs text-gray-500">Characters</p></div>
+                    </div>
+                </div>
+
+                <div onclick="showNewStoryModal()" class="glass rounded-xl p-5 border-2 border-dashed border-white/20 cursor-pointer hover:border-indigo-500/50 transition flex flex-col items-center justify-center min-h-[200px]">
+                    <div class="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center mb-3">
+                        <i class="fas fa-plus text-3xl text-indigo-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-1">Create New Story</h3>
+                    <p class="text-sm text-gray-400">Start a new webtoon project</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Story Hierarchy Modal -->
+<div id="storyHierarchyModal" class="modal">
+    <div class="glass-strong rounded-2xl w-[90vw] h-[85vh] max-w-6xl border border-white/10 shadow-2xl fade-in flex flex-col">
+        <div class="flex items-center justify-between p-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+                    <i class="fas fa-sitemap text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">Story Structure</h2>
+                    <p class="text-sm text-gray-400">Story → Sections → Episodes → Panels</p>
+                </div>
+            </div>
+            <button onclick="closeModal('storyHierarchyModal')" class="w-10 h-10 rounded-lg glass hover:glass-strong text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto scrollbar p-6">
+            <div class="space-y-4">
+                <!-- Story Level -->
+                <div class="glass-strong rounded-xl p-5 border-l-4 border-indigo-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <i class="fas fa-book text-2xl text-indigo-400"></i>
+                            <div>
+                                <h3 class="text-lg font-bold text-white">Basketball Dreams</h3>
+                                <p class="text-sm text-gray-400">Main Story</p>
+                            </div>
+                        </div>
+                        <button class="px-3 py-1.5 glass rounded-lg text-sm text-gray-300 hover:text-white transition">
+                            <i class="fas fa-edit mr-2"></i>Edit
+                        </button>
+                    </div>
+
+                    <!-- Section Level -->
+                    <div class="ml-8 space-y-3">
+                        <div class="glass rounded-lg p-4 border-l-4 border-orange-500">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-layer-group text-orange-400"></i>
+                                    <h4 class="font-semibold text-white">Section 1: The Beginning</h4>
+                                    <span class="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs">4 Episodes</span>
+                                </div>
+                                <button class="text-gray-400 hover:text-white transition">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+
+                            <!-- Episode Level -->
+                            <div class="ml-6 space-y-2">
+                                <div class="glass rounded-lg p-3 border-l-2 border-green-500">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fas fa-file-alt text-green-400 text-sm"></i>
+                                            <span class="text-sm font-medium text-white">Episode 1: First Day</span>
+                                            <span class="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-xs">8 panels</span>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button class="text-xs text-indigo-400 hover:text-indigo-300">
+                                                <i class="fas fa-eye mr-1"></i>View
+                                            </button>
+                                            <button class="text-xs text-gray-400 hover:text-white">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="glass rounded-lg p-3 border-l-2 border-blue-500">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fas fa-file-alt text-blue-400 text-sm"></i>
+                                            <span class="text-sm font-medium text-white">Episode 2: The Challenge</span>
+                                            <span class="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs">6 panels</span>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button class="text-xs text-indigo-400 hover:text-indigo-300">
+                                                <i class="fas fa-eye mr-1"></i>View
+                                            </button>
+                                            <button class="text-xs text-gray-400 hover:text-white">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button class="w-full px-3 py-2 glass hover:glass-strong rounded-lg text-sm text-gray-400 hover:text-white transition border border-dashed border-white/20">
+                                    <i class="fas fa-plus mr-2"></i>Add Episode
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="glass rounded-lg p-4 border-l-4 border-purple-500">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-layer-group text-purple-400"></i>
+                                    <h4 class="font-semibold text-white">Section 2: Training Arc</h4>
+                                    <span class="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-xs">3 Episodes</span>
+                                </div>
+                                <button class="text-gray-400 hover:text-white transition">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button class="w-full px-4 py-3 glass hover:glass-strong rounded-lg text-gray-300 hover:text-white transition border border-dashed border-white/20">
+                            <i class="fas fa-plus mr-2"></i>Add Section
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Episode Modal -->
+<div id="newEpisodeModal" class="modal">
+    <div class="glass-strong rounded-2xl w-[600px] border border-white/10 shadow-2xl fade-in">
+        <div class="flex items-center justify-between p-6 border-b border-white/10">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                    <i class="fas fa-plus text-white"></i>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-white">New Episode</h2>
+                    <p class="text-sm text-gray-400">Create a new episode</p>
+                </div>
+            </div>
+            <button onclick="closeModal('newEpisodeModal')" class="w-10 h-10 rounded-lg glass hover:glass-strong text-gray-400 hover:text-white transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-2">Episode Title</label>
+                <input type="text" placeholder="Enter episode title..." class="w-full px-4 py-2.5 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-2">Section</label>
+                <select class="w-full px-4 py-2.5 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-indigo-500">
+                    <option>Section 1: The Beginning</option>
+                    <option>Section 2: Training Arc</option>
+                    <option>Section 3: Tournament</option>
+                </select>
+            </div>
+            <div>
+                <label class="text-sm font-medium text-gray-300 block mb-2">Description</label>
+                <textarea rows="3" placeholder="Brief episode description..." class="w-full px-4 py-2.5 glass border border-white/10 rounded-lg text-white focus:outline-none focus:border-indigo-500"></textarea>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-white/10 flex justify-end gap-3">
+            <button onclick="closeModal('newEpisodeModal')" class="px-5 py-2.5 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg font-medium transition">Cancel</button>
+            <button class="px-5 py-2.5 btn-primary rounded-lg text-white font-medium shadow-lg">Create Episode</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Modal Functions
+function showAssetLibrary() { document.getElementById('assetLibraryModal').classList.add('active'); }
+function showCharacterManager() { document.getElementById('characterManagerModal').classList.add('active'); }
+function showLayoutTemplates() { document.getElementById('layoutTemplatesModal').classList.add('active'); }
+function showSettings() { document.getElementById('settingsModal').classList.add('active'); }
+function showStoryManager() { document.getElementById('storyManagerModal').classList.add('active'); }
+function showStoryHierarchy() { document.getElementById('storyHierarchyModal').classList.add('active'); }
+function showNewEpisodeModal() { document.getElementById('newEpisodeModal').classList.add('active'); }
+function showNewStoryModal() { 
+    closeModal('storyManagerModal');
+    alert('New Story creation modal would open here');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+// View Switching
+function switchView(view) {
+    const editorView = document.getElementById('editorView');
+    const scriptView = document.getElementById('scriptView');
+    const navEditor = document.getElementById('navEditor');
+    const navScript = document.getElementById('navScript');
+    
+    if (view === 'editor') {
+        editorView.style.display = 'block';
+        scriptView.style.display = 'none';
+        navEditor.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg btn-primary text-white font-medium shadow-lg';
+        navScript.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition';
+    } else if (view === 'script') {
+        editorView.style.display = 'none';
+        scriptView.style.display = 'block';
+        navScript.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg btn-primary text-white font-medium shadow-lg';
+        navEditor.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition';
+    }
+}
+
+// Story Data
+const stories = {
+    basketball: {
+        name: 'Basketball Dreams',
+        episodes: 12,
+        panels: 84,
+        characters: 8
+    },
+    fighting: {
+        name: 'Shadow Fighter',
+        episodes: 8,
+        panels: 52,
+        characters: 6
+    },
+    romance: {
+        name: 'Starlight Café',
+        episodes: 5,
+        panels: 28,
+        characters: 4
+    }
+};
+
+let currentStory = 'basketball';
+
+// Switch Story
+function switchStory(storyId) {
+    currentStory = storyId;
+    const story = stories[storyId];
+    
+    document.getElementById('currentStoryName').textContent = story.name;
+    document.getElementById('episodeCount').textContent = story.episodes;
+    document.getElementById('panelCount').textContent = story.panels;
+    document.getElementById('charCount').textContent = story.characters;
+    
+    closeModal('storyManagerModal');
+    
+    // Show notification
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-4 right-4 glass-strong rounded-lg px-6 py-3 border border-indigo-500/50 shadow-2xl fade-in z-50';
+    notification.innerHTML = `
+        <div class="flex items-center gap-3">
+            <i class="fas fa-check-circle text-green-400"></i>
+            <span class="text-white font-medium">Switched to ${story.name}</span>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 3000);
+}
+</script>
+
+</body>
+</html>

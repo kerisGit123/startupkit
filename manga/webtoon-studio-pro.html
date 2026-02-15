@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webtoon Studio Pro - AI Manga Production System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        body { background: #0f0f14; }
+        .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); }
+        .glass-strong { background: rgba(255,255,255,0.06); backdrop-filter: blur(30px); border: 1px solid rgba(255,255,255,0.1); }
+        .scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .scrollbar::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #8b5cf6, #ec4899); border-radius: 10px; }
+        .workflow-step { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .workflow-step.active { background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); }
+        .shot-card { transition: all 0.2s; border: 2px solid transparent; }
+        .shot-card:hover { transform: translateY(-2px); border-color: rgba(139, 92, 246, 0.5); }
+        .shot-card.selected { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.1); }
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .panel-frame { border: 3px solid #374151; border-radius: 8px; position: relative; }
+        .panel-frame::before { content: attr(data-number); position: absolute; top: -12px; left: 8px; background: #374151; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    </style>
+</head>
+<body class="text-gray-100">
+
+<!-- Main Container -->
+<div class="flex h-screen overflow-hidden">
+
+    <!-- Left Sidebar - Project & Workflow Steps -->
+    <div class="w-72 glass-strong border-r border-white/10 flex flex-col">
+        <div class="p-4 border-b border-white/10">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+                    <i class="fas fa-film text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-sm font-bold text-white">Webtoon Studio Pro</h1>
+                    <p class="text-xs text-gray-400">AI Production System</p>
+                </div>
+            </div>
+            <div class="glass rounded-lg p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-gray-300" id="currentProjectName">Basketball Dreams</span>
+                    <button onclick="showProjectManager()" class="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded-full text-xs hover:bg-purple-500/30 transition">
+                        <i class="fas fa-exchange-alt mr-1"></i>Switch
+                    </button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                    <div><p class="text-base font-bold text-purple-400" id="sceneCount">12</p><p class="text-gray-500">Scenes</p></div>
+                    <div><p class="text-base font-bold text-pink-400" id="shotCount">48</p><p class="text-gray-500">Shots</p></div>
+                    <div><p class="text-base font-bold text-blue-400" id="charCount">8</p><p class="text-gray-500">Chars</p></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto scrollbar p-3">
+            <h3 class="text-xs font-bold text-gray-400 uppercase mb-3 px-2">Production Workflow</h3>
+            <div class="space-y-1">
+                <button onclick="switchWorkflowStep(1)" id="step1" class="workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg text-white font-medium shadow-lg">
+                    <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-sm font-bold">1</div>
+                    <div class="text-left flex-1">
+                        <div class="text-sm font-semibold">Script Editor</div>
+                        <div class="text-xs text-white/70">Characters & Scenes</div>
+                    </div>
+                </button>
+                <button onclick="switchWorkflowStep(2)" id="step2" class="workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                    <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-sm font-bold">2</div>
+                    <div class="text-left flex-1">
+                        <div class="text-sm font-semibold">Asset Manager</div>
+                        <div class="text-xs text-gray-400">Chars, Scenes, Props</div>
+                    </div>
+                </button>
+                <button onclick="switchWorkflowStep(3)" id="step3" class="workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                    <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-sm font-bold">3</div>
+                    <div class="text-left flex-1">
+                        <div class="text-sm font-semibold">Storyboard</div>
+                        <div class="text-xs text-gray-400">Shot Management</div>
+                    </div>
+                </button>
+                <button onclick="switchWorkflowStep(4)" id="step4" class="workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                    <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-sm font-bold">4</div>
+                    <div class="text-left flex-1">
+                        <div class="text-sm font-semibold">Shot Grouping</div>
+                        <div class="text-xs text-gray-400">Organize Angles</div>
+                    </div>
+                </button>
+                <button onclick="switchWorkflowStep(5)" id="step5" class="workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                    <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-sm font-bold">5</div>
+                    <div class="text-left flex-1">
+                        <div class="text-sm font-semibold">Video Prompts</div>
+                        <div class="text-xs text-gray-400">AI Generation</div>
+                    </div>
+                </button>
+                <button onclick="switchWorkflowStep(6)" id="step6" class="workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition">
+                    <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-sm font-bold">6</div>
+                    <div class="text-left flex-1">
+                        <div class="text-sm font-semibold">Video Output</div>
+                        <div class="text-xs text-gray-400">Preview & Export</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <div class="p-3 border-t border-white/10 space-y-2">
+            <button class="w-full px-3 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-lg text-white font-medium text-sm shadow-lg transition">
+                <i class="fas fa-plus mr-2"></i>New Project
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col">
+        <!-- Top Bar -->
+        <div class="h-14 glass-strong border-b border-white/10 flex items-center justify-between px-6">
+            <div class="flex items-center gap-4">
+                <h2 class="text-lg font-bold text-white" id="stepTitle">Step 1: Script Editor</h2>
+                <span class="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs font-medium">Episode 1</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <button class="px-4 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-sm font-medium transition">
+                    <i class="fas fa-save mr-2"></i>Save
+                </button>
+                <button class="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-semibold shadow-lg transition">
+                    <i class="fas fa-magic mr-2"></i>AI Generate
+                </button>
+                <button class="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-lg text-sm font-semibold shadow-lg transition">
+                    <i class="fas fa-download mr-2"></i>Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 1: Script Editor -->
+        <div id="workflowStep1" class="flex-1 overflow-hidden flex">
+            <div class="flex-1 overflow-y-auto scrollbar p-6">
+                <div class="max-w-5xl mx-auto space-y-4">
+                    <!-- Scene Card -->
+                    <div class="glass-strong rounded-xl p-5 border-l-4 border-purple-500">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                    <span class="text-lg font-bold text-purple-400">1</span>
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-white">Scene 1: Opening Shot</h3>
+                                    <p class="text-xs text-gray-400">Interior • Dawn</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="px-3 py-1.5 glass rounded-lg text-sm text-gray-300 hover:text-white transition">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="px-3 py-1.5 glass rounded-lg text-sm text-gray-300 hover:text-white transition">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-2">Characters</label>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="px-3 py-1 bg-orange-500/20 text-orange-400 rounded-full text-xs font-medium">Kaito</span>
+                                    <button class="px-2 py-1 glass rounded-full text-xs text-gray-400 hover:text-white transition">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-2">Location</label>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-xs font-medium">Basketball Court</span>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-2">Time</label>
+                                <div class="flex flex-wrap gap-2">
+                                    <span class="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs font-medium">Dawn</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-2">Stage Direction / Action</label>
+                                <textarea rows="2" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500" placeholder="Describe what happens in this scene...">Basketball court at dawn. Empty bleachers. Morning light streaming through windows. Kaito stands alone, dribbling the ball.</textarea>
+                            </div>
+                            <div>
+                                <label class="text-xs font-medium text-gray-400 block mb-2">Dialogue</label>
+                                <textarea rows="2" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500" placeholder="Character dialogue...">Kaito: "This is where it all begins... my journey to become the best."</textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Scene Button -->
+                    <button class="w-full px-4 py-4 glass hover:glass-strong rounded-xl text-gray-300 hover:text-white transition border-2 border-dashed border-white/20 hover:border-purple-500/50">
+                        <i class="fas fa-plus mr-2"></i>Add New Scene
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Panel - Script Overview -->
+            <div class="w-80 border-l border-white/10 glass-strong p-4 overflow-y-auto scrollbar">
+                <h3 class="text-sm font-bold text-white mb-4">Script Overview</h3>
+                <div class="space-y-2">
+                    <div class="glass rounded-lg p-3 border-l-2 border-purple-500 cursor-pointer hover:bg-white/5 transition">
+                        <div class="text-sm font-semibold text-white mb-1">Scene 1</div>
+                        <div class="text-xs text-gray-400">Basketball Court • 1 character</div>
+                    </div>
+                    <div class="glass rounded-lg p-3 border-l-2 border-pink-500 cursor-pointer hover:bg-white/5 transition">
+                        <div class="text-sm font-semibold text-white mb-1">Scene 2</div>
+                        <div class="text-xs text-gray-400">Locker Room • 2 characters</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Asset Manager -->
+        <div id="workflowStep2" class="flex-1 overflow-hidden" style="display: none;">
+            <div class="h-full flex">
+                <!-- Asset Categories -->
+                <div class="w-64 border-r border-white/10 glass-strong p-4 overflow-y-auto scrollbar">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">Categories</h3>
+                    <div class="space-y-1">
+                        <button onclick="switchAssetCategory('characters')" id="catCharacters" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-purple-500/20 text-purple-400 font-medium text-sm">
+                            <i class="fas fa-user"></i><span>Characters</span><span class="ml-auto text-xs">8</span>
+                        </button>
+                        <button onclick="switchAssetCategory('scenes')" id="catScenes" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition text-sm">
+                            <i class="fas fa-mountain"></i><span>Scenes</span><span class="ml-auto text-xs">12</span>
+                        </button>
+                        <button onclick="switchAssetCategory('props')" id="catProps" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition text-sm">
+                            <i class="fas fa-cube"></i><span>Props</span><span class="ml-auto text-xs">15</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Asset Grid -->
+                <div class="flex-1 p-6 overflow-y-auto scrollbar">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h3 class="text-lg font-bold text-white">Characters</h3>
+                        <button class="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg text-sm font-semibold shadow-lg transition">
+                            <i class="fas fa-plus mr-2"></i>Add Character
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-4 gap-4">
+                        <div class="glass rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-purple-500/50 transition">
+                            <div class="aspect-square bg-gradient-to-br from-orange-900/20 to-red-900/20 flex items-center justify-center">
+                                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white font-bold text-3xl">K</div>
+                            </div>
+                            <div class="p-3 border-t border-white/10">
+                                <p class="text-sm font-semibold text-white">Kaito</p>
+                                <p class="text-xs text-gray-400">Protagonist</p>
+                            </div>
+                        </div>
+                        <div class="glass rounded-xl overflow-hidden border border-white/10 cursor-pointer hover:border-purple-500/50 transition">
+                            <div class="aspect-square bg-gradient-to-br from-blue-900/20 to-cyan-900/20 flex items-center justify-center">
+                                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center text-white font-bold text-3xl">R</div>
+                            </div>
+                            <div class="p-3 border-t border-white/10">
+                                <p class="text-sm font-semibold text-white">Ryu</p>
+                                <p class="text-xs text-gray-400">Rival</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Storyboard -->
+        <div id="workflowStep3" class="flex-1 overflow-hidden" style="display: none;">
+            <div class="h-full flex">
+                <!-- Shot List -->
+                <div class="w-80 border-r border-white/10 glass-strong overflow-y-auto scrollbar">
+                    <div class="p-4 border-b border-white/10">
+                        <h3 class="text-sm font-bold text-white mb-3">Shot List</h3>
+                        <button class="w-full px-3 py-2 bg-purple-500/20 text-purple-400 rounded-lg text-sm font-medium hover:bg-purple-500/30 transition">
+                            <i class="fas fa-scissors mr-2"></i>Split Shot
+                        </button>
+                    </div>
+                    <div class="p-3 space-y-2">
+                        <div class="shot-card glass rounded-lg p-3 cursor-pointer selected">
+                            <div class="flex gap-3">
+                                <div class="w-16 h-16 rounded bg-gradient-to-br from-purple-900/30 to-pink-900/30 flex-shrink-0"></div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-semibold text-white mb-1">Shot 1</div>
+                                    <div class="text-xs text-gray-400 truncate">Wide shot - Court</div>
+                                    <div class="text-xs text-purple-400 mt-1">3.5s</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="shot-card glass rounded-lg p-3 cursor-pointer">
+                            <div class="flex gap-3">
+                                <div class="w-16 h-16 rounded bg-gradient-to-br from-blue-900/30 to-cyan-900/30 flex-shrink-0"></div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-semibold text-white mb-1">Shot 2</div>
+                                    <div class="text-xs text-gray-400 truncate">Close-up - Kaito</div>
+                                    <div class="text-xs text-pink-400 mt-1">2.0s</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storyboard Canvas -->
+                <div class="flex-1 p-6 overflow-y-auto scrollbar">
+                    <div class="max-w-4xl mx-auto">
+                        <div class="glass-strong rounded-xl p-6 mb-4">
+                            <h3 class="text-lg font-bold text-white mb-4">Shot 1: Wide Establishing Shot</h3>
+                            <div class="aspect-video bg-gradient-to-br from-purple-900/20 to-pink-900/20 rounded-lg border border-white/10 flex items-center justify-center mb-4">
+                                <div class="text-center">
+                                    <i class="fas fa-image text-6xl text-gray-700 mb-3"></i>
+                                    <p class="text-gray-400">Storyboard Frame</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 block mb-2">Camera Angle</label>
+                                    <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500">
+                                        <option>Wide Shot</option>
+                                        <option>Medium Shot</option>
+                                        <option>Close-up</option>
+                                        <option>Over-the-shoulder</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 block mb-2">Duration (seconds)</label>
+                                    <input type="number" value="3.5" step="0.5" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shot Properties -->
+                <div class="w-72 border-l border-white/10 glass-strong p-4 overflow-y-auto scrollbar">
+                    <h3 class="text-sm font-bold text-white mb-4">Shot Properties</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Camera Movement</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500">
+                                <option>Static</option>
+                                <option>Pan Left/Right</option>
+                                <option>Tilt Up/Down</option>
+                                <option>Zoom In/Out</option>
+                                <option>Dolly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Composition</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500">
+                                <option>Rule of Thirds</option>
+                                <option>Center Frame</option>
+                                <option>Golden Ratio</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-gray-400 block mb-2">Lighting</label>
+                            <select class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500">
+                                <option>Natural - Dawn</option>
+                                <option>Natural - Day</option>
+                                <option>Natural - Dusk</option>
+                                <option>Artificial - Warm</option>
+                                <option>Artificial - Cool</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Shot Grouping -->
+        <div id="workflowStep4" class="flex-1 overflow-y-auto scrollbar p-6" style="display: none;">
+            <div class="max-w-7xl mx-auto">
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white mb-2">Shot Groups</h3>
+                    <p class="text-sm text-gray-400">Group similar camera angles together for efficient production</p>
+                </div>
+
+                <!-- Group 1 -->
+                <div class="glass-strong rounded-xl p-5 mb-4 border-l-4 border-purple-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                <i class="fas fa-layer-group text-purple-400"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-base font-bold text-white">Group 1: Wide Shots</h4>
+                                <p class="text-xs text-gray-400">5 shots • Basketball Court</p>
+                            </div>
+                        </div>
+                        <button class="px-3 py-1.5 glass rounded-lg text-sm text-gray-300 hover:text-white transition">
+                            <i class="fas fa-edit mr-2"></i>Edit
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-5 gap-3">
+                        <div class="aspect-video bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer hover:border-purple-500/50 transition">
+                            <span class="text-xs font-bold text-white">Shot 1</span>
+                        </div>
+                        <div class="aspect-video bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer hover:border-purple-500/50 transition">
+                            <span class="text-xs font-bold text-white">Shot 5</span>
+                        </div>
+                        <div class="aspect-video bg-gradient-to-br from-purple-900/30 to-pink-900/30 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer hover:border-purple-500/50 transition">
+                            <span class="text-xs font-bold text-white">Shot 8</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 2 -->
+                <div class="glass-strong rounded-xl p-5 mb-4 border-l-4 border-pink-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-pink-500/20 flex items-center justify-center">
+                                <i class="fas fa-layer-group text-pink-400"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-base font-bold text-white">Group 2: Close-ups</h4>
+                                <p class="text-xs text-gray-400">3 shots • Character Focus</p>
+                            </div>
+                        </div>
+                        <button class="px-3 py-1.5 glass rounded-lg text-sm text-gray-300 hover:text-white transition">
+                            <i class="fas fa-edit mr-2"></i>Edit
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-5 gap-3">
+                        <div class="aspect-video bg-gradient-to-br from-pink-900/30 to-rose-900/30 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer hover:border-pink-500/50 transition">
+                            <span class="text-xs font-bold text-white">Shot 2</span>
+                        </div>
+                        <div class="aspect-video bg-gradient-to-br from-pink-900/30 to-rose-900/30 rounded-lg border border-white/10 flex items-center justify-center cursor-pointer hover:border-pink-500/50 transition">
+                            <span class="text-xs font-bold text-white">Shot 4</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="w-full px-4 py-4 glass hover:glass-strong rounded-xl text-gray-300 hover:text-white transition border-2 border-dashed border-white/20 hover:border-purple-500/50">
+                    <i class="fas fa-plus mr-2"></i>Create New Group
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 5: Video Prompts -->
+        <div id="workflowStep5" class="flex-1 overflow-y-auto scrollbar p-6" style="display: none;">
+            <div class="max-w-6xl mx-auto">
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white mb-2">AI Video Generation Prompts</h3>
+                    <p class="text-sm text-gray-400">Configure AI prompts for each shot to generate video</p>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Shot Prompt Card -->
+                    <div class="glass-strong rounded-xl p-5 border-l-4 border-purple-500">
+                        <div class="flex items-start gap-4 mb-4">
+                            <div class="w-32 h-20 rounded-lg bg-gradient-to-br from-purple-900/30 to-pink-900/30 flex-shrink-0 flex items-center justify-center">
+                                <span class="text-xs font-bold text-white">Shot 1</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-base font-bold text-white">Wide Shot - Basketball Court</h4>
+                                    <button class="px-3 py-1.5 bg-purple-500/20 text-purple-400 rounded-lg text-xs font-medium hover:bg-purple-500/30 transition">
+                                        <i class="fas fa-magic mr-1"></i>Auto-generate
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 mb-3">
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Camera</label>
+                                        <span class="text-sm text-white">Wide Shot (建立镜头)</span>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Duration</label>
+                                        <span class="text-sm text-white">3.5 seconds</span>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Resolution</label>
+                                        <span class="text-sm text-white">1080P</span>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Aspect Ratio</label>
+                                        <span class="text-sm text-white">16:9</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 block mb-2">Video Generation Prompt</label>
+                                    <textarea rows="3" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500" placeholder="Describe the video prompt...">Wide establishing shot, basketball court at dawn, empty bleachers, morning light streaming through windows, cinematic lighting, high quality, 4K, smooth camera movement</textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button class="px-4 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-sm transition">
+                                <i class="fas fa-eye mr-2"></i>Preview
+                            </button>
+                            <button class="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-semibold transition">
+                                <i class="fas fa-play mr-2"></i>Generate Video
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="glass-strong rounded-xl p-5 border-l-4 border-pink-500">
+                        <div class="flex items-start gap-4 mb-4">
+                            <div class="w-32 h-20 rounded-lg bg-gradient-to-br from-pink-900/30 to-rose-900/30 flex-shrink-0 flex items-center justify-center">
+                                <span class="text-xs font-bold text-white">Shot 2</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-base font-bold text-white">Close-up - Kaito's Face</h4>
+                                    <button class="px-3 py-1.5 bg-purple-500/20 text-purple-400 rounded-lg text-xs font-medium hover:bg-purple-500/30 transition">
+                                        <i class="fas fa-magic mr-1"></i>Auto-generate
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 mb-3">
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Camera</label>
+                                        <span class="text-sm text-white">Close-up (特写镜头)</span>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-medium text-gray-400 block mb-1">Duration</label>
+                                        <span class="text-sm text-white">2.0 seconds</span>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs font-medium text-gray-400 block mb-2">Video Generation Prompt</label>
+                                    <textarea rows="3" class="w-full px-3 py-2 glass border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-purple-500" placeholder="Describe the video prompt...">Close-up shot of Kaito's determined face, young Asian male, spiky hair, intense eyes, dramatic lighting, shallow depth of field, cinematic quality</textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button class="px-4 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-sm transition">
+                                <i class="fas fa-eye mr-2"></i>Preview
+                            </button>
+                            <button class="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg text-sm font-semibold transition">
+                                <i class="fas fa-play mr-2"></i>Generate Video
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex justify-end">
+                    <button class="px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg font-semibold shadow-lg transition">
+                        <i class="fas fa-wand-magic-sparkles mr-2"></i>Generate All Videos (Batch)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 6: Video Output -->
+        <div id="workflowStep6" class="flex-1 overflow-y-auto scrollbar p-6" style="display: none;">
+            <div class="max-w-7xl mx-auto">
+                <div class="mb-6 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-white mb-2">Generated Videos</h3>
+                        <p class="text-sm text-gray-400">Preview and export your generated manga videos</p>
+                    </div>
+                    <button class="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white rounded-lg font-semibold shadow-lg transition">
+                        <i class="fas fa-download mr-2"></i>Export All
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4">
+                    <!-- Video Card -->
+                    <div class="glass-strong rounded-xl overflow-hidden border border-white/10">
+                        <div class="aspect-video bg-gradient-to-br from-purple-900/30 to-pink-900/30 flex items-center justify-center relative group cursor-pointer">
+                            <i class="fas fa-play text-4xl text-white/50 group-hover:text-white/80 transition"></i>
+                            <div class="absolute top-2 right-2 px-2 py-1 bg-black/60 rounded text-xs text-white">3.5s</div>
+                        </div>
+                        <div class="p-4">
+                            <h4 class="text-sm font-bold text-white mb-1">Shot 1: Wide Shot</h4>
+                            <p class="text-xs text-gray-400 mb-3">Basketball Court • 1080P</p>
+                            <div class="flex gap-2">
+                                <button class="flex-1 px-3 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-xs transition">
+                                    <i class="fas fa-eye mr-1"></i>Preview
+                                </button>
+                                <button class="flex-1 px-3 py-2 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-lg text-xs transition">
+                                    <i class="fas fa-download mr-1"></i>Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass-strong rounded-xl overflow-hidden border border-white/10">
+                        <div class="aspect-video bg-gradient-to-br from-pink-900/30 to-rose-900/30 flex items-center justify-center relative group cursor-pointer">
+                            <i class="fas fa-play text-4xl text-white/50 group-hover:text-white/80 transition"></i>
+                            <div class="absolute top-2 right-2 px-2 py-1 bg-black/60 rounded text-xs text-white">2.0s</div>
+                        </div>
+                        <div class="p-4">
+                            <h4 class="text-sm font-bold text-white mb-1">Shot 2: Close-up</h4>
+                            <p class="text-xs text-gray-400 mb-3">Kaito's Face • 1080P</p>
+                            <div class="flex gap-2">
+                                <button class="flex-1 px-3 py-2 glass hover:glass-strong text-gray-300 hover:text-white rounded-lg text-xs transition">
+                                    <i class="fas fa-eye mr-1"></i>Preview
+                                </button>
+                                <button class="flex-1 px-3 py-2 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-lg text-xs transition">
+                                    <i class="fas fa-download mr-1"></i>Export
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Generating Card -->
+                    <div class="glass-strong rounded-xl overflow-hidden border border-white/10 opacity-60">
+                        <div class="aspect-video bg-gradient-to-br from-blue-900/30 to-cyan-900/30 flex items-center justify-center relative">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin text-3xl text-blue-400 mb-2"></i>
+                                <p class="text-xs text-gray-400">Generating...</p>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <h4 class="text-sm font-bold text-white mb-1">Shot 3: Medium Shot</h4>
+                            <p class="text-xs text-gray-400 mb-3">Action Sequence • 1080P</p>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div class="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full" style="width: 45%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentStep = 1;
+
+function switchWorkflowStep(step) {
+    currentStep = step;
+    
+    // Hide all steps
+    for (let i = 1; i <= 6; i++) {
+        const stepEl = document.getElementById(`workflowStep${i}`);
+        const btnEl = document.getElementById(`step${i}`);
+        if (stepEl) stepEl.style.display = 'none';
+        if (btnEl) {
+            btnEl.className = 'workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition';
+        }
+    }
+    
+    // Show current step
+    const currentStepEl = document.getElementById(`workflowStep${step}`);
+    const currentBtnEl = document.getElementById(`step${step}`);
+    if (currentStepEl) currentStepEl.style.display = 'flex';
+    if (currentBtnEl) {
+        currentBtnEl.className = 'workflow-step w-full flex items-center gap-3 px-3 py-3 rounded-lg text-white font-medium shadow-lg active';
+    }
+    
+    // Update title
+    const titles = {
+        1: 'Step 1: Script Editor',
+        2: 'Step 2: Asset Manager',
+        3: 'Step 3: Storyboard',
+        4: 'Step 4: Shot Grouping',
+        5: 'Step 5: Video Prompts',
+        6: 'Step 6: Video Output'
+    };
+    document.getElementById('stepTitle').textContent = titles[step];
+}
+
+function switchAssetCategory(category) {
+    // Update active category button
+    const categories = ['characters', 'scenes', 'props'];
+    categories.forEach(cat => {
+        const btn = document.getElementById(`cat${cat.charAt(0).toUpperCase() + cat.slice(1)}`);
+        if (btn) {
+            if (cat === category) {
+                btn.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-purple-500/20 text-purple-400 font-medium text-sm';
+            } else {
+                btn.className = 'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg glass hover:glass-strong text-gray-300 hover:text-white transition text-sm';
+            }
+        }
+    });
+}
+
+function showProjectManager() {
+    alert('Project Manager modal would open here');
+}
+
+// Initialize
+switchWorkflowStep(1);
+</script>
+
+</body>
+</html>
