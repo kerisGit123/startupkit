@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Bot, CheckCircle, Zap, Download, Settings } from "lucide-react";
+import { X, Bot, CheckCircle, Zap, Settings } from "lucide-react";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -21,7 +21,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Project Settings</h2>
-              <p className="text-sm text-gray-400">Configure your webtoon project</p>
+              <p className="text-sm text-gray-400">Configure your manga project</p>
             </div>
           </div>
           <button
@@ -50,15 +50,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-300 block mb-2">Style Preset</label>
-                <select className="w-full px-4 py-3 bg-[#1a1a24] border border-white/10 rounded-lg text-white focus:outline-none focus:border-blue-500">
-                  <option>Jujutsu Kaisen</option>
-                  <option>One Piece</option>
-                  <option>Attack on Titan</option>
-                  <option>My Hero Academia</option>
-                </select>
-              </div>
-              <div>
                 <label className="text-sm font-medium text-gray-300 block mb-2">Quality</label>
                 <div className="flex gap-2">
                   <button className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-medium transition">
@@ -71,6 +62,35 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     High
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Generation Defaults */}
+          <div className="bg-[#25252f] rounded-xl p-5 border border-white/10">
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-5 h-5 text-purple-400" />
+              <h3 className="text-base font-semibold text-white">Generation Defaults</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">Default settings applied to all panel generation. Override per-panel in Panel Builder.</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-400 block mb-1.5">Ratio</label>
+                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
+                  <option>9:16</option><option>3:4</option><option>1:1</option><option>4:3</option><option>16:9</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-400 block mb-1.5">Quantity</label>
+                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
+                  <option>1</option><option>2</option><option>3</option><option>4</option><option>6</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-400 block mb-1.5">Format</label>
+                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
+                  <option>Webtoon</option><option>Manga</option><option>Western Comic</option>
+                </select>
               </div>
             </div>
           </div>
@@ -128,37 +148,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <button className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold mt-2 transition">
                 <Zap className="w-4 h-4 inline mr-2" />
                 Start Batch Generation
-              </button>
-            </div>
-          </div>
-
-          {/* Export */}
-          <div className="bg-[#1a1a24] rounded-xl p-5 border border-orange-500/30">
-            <div className="flex items-center gap-2 mb-4">
-              <Download className="w-5 h-5 text-orange-400" />
-              <h3 className="text-lg font-bold text-white">Export</h3>
-            </div>
-            <div className="space-y-2">
-              <button className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm font-medium transition flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <i className="fas fa-file-pdf text-red-400"></i>
-                  <span>Export as PDF</span>
-                </div>
-                <i className="fas fa-chevron-right text-gray-500"></i>
-              </button>
-              <button className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm font-medium transition flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <i className="fas fa-file-image text-blue-400"></i>
-                  <span>Export as PNG</span>
-                </div>
-                <i className="fas fa-chevron-right text-gray-500"></i>
-              </button>
-              <button className="w-full px-4 py-3 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm font-medium transition flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <i className="fas fa-file-archive text-purple-400"></i>
-                  <span>Export as CBZ</span>
-                </div>
-                <i className="fas fa-chevron-right text-gray-500"></i>
               </button>
             </div>
           </div>
