@@ -8,6 +8,7 @@ import {
   Globe,
   Layers,
   Sparkles,
+  SlidersHorizontal,
 } from "lucide-react";
 
 export function MangaStudioSidebar({
@@ -26,6 +27,13 @@ export function MangaStudioSidebar({
       icon: Layers,
       href: "/manga-studio",
       description: "Build pages & panels",
+    },
+    {
+      id: "playground",
+      label: "Editor Playground",
+      icon: SlidersHorizontal,
+      href: "/manga-studio/playground",
+      description: "Test mask & bubbles",
     },
     {
       id: "episodes",
