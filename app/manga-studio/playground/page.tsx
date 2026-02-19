@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronLeft, ChevronRight, Eraser, Eye, EyeOff, GripVertical, Image as ImageIcon, LayoutGrid, Layers, MessageSquare, Move, Paintbrush, Plus, RotateCcw, RotateCw, SlidersHorizontal, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronLeft, ChevronRight, Eraser, Eye, EyeOff, GripVertical, Image as ImageIcon, LayoutGrid, Layers, MessageSquare, Move, Paintbrush, Plus, RotateCcw, RotateCw, SlidersHorizontal, Sparkles, Trash2, Type, Upload, Maximize2, X as XIcon } from "lucide-react";
 import Link from "next/link";
 
 // Note: For proper display of Noto fonts, add Google Fonts import:
@@ -681,10 +681,11 @@ export default function MangaStudioPlaygroundPage() {
   const [selectedTime, setSelectedTime] = useState("");
   const [stageDirection, setStageDirection] = useState("");
   const [dialogue, setDialogue] = useState("");
+  const [expandedField, setExpandedField] = useState<"stageDirection" | "dialogue" | null>(null);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [selectedProps, setSelectedProps] = useState<string[]>([]);
   const [techniqueActive, setTechniqueActive] = useState(false);
-  const [panelType, setPanelType] = useState("none");
+  const [weather, setWeather] = useState("");
   const [framing, setFraming] = useState("none");
   const [mangaAngle, setMangaAngle] = useState("none");
   const [inkStyle, setInkStyle] = useState("none");
@@ -4512,18 +4513,32 @@ export default function MangaStudioPlaygroundPage() {
                           </div>
                           <div className="grid grid-cols-2 gap-1.5">
                             <div>
-                              <label className="block text-[9px] text-gray-500 mb-0.5">Panel Type</label>
-                              <select value={panelType} onChange={(e) => setPanelType(e.target.value)}
-                                className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[10px] text-white focus:outline-none appearance-none cursor-pointer">
-                                <option value="none">Auto</option><option value="action">Action</option><option value="emotion">Emotion</option><option value="dramatic">Dramatic</option>
-                              </select>
-                            </div>
-                            <div>
                               <label className="block text-[9px] text-gray-500 mb-0.5">Framing</label>
                               <select value={framing} onChange={(e) => setFraming(e.target.value)}
                                 className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[10px] text-white focus:outline-none appearance-none cursor-pointer">
-                                <option value="none">Auto</option><option value="close">Close-up</option><option value="bust">Bust</option><option value="full">Full Body</option><option value="wide">Wide</option>
+                                <option value="none">Auto</option><option value="extreme-close">Extreme Close-up</option><option value="close">Close-up</option><option value="bust">Bust</option><option value="waist">Waist</option><option value="full">Full Body</option><option value="wide">Wide</option><option value="two-shot">Two-Shot</option><option value="group">Group</option>
                               </select>
+                            </div>
+                            <div>
+                              <label className="block text-[9px] text-gray-500 mb-0.5">Camera Angle</label>
+                              <select value={mangaAngle} onChange={(e) => setMangaAngle(e.target.value)}
+                                className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[10px] text-white focus:outline-none appearance-none cursor-pointer">
+                                <option value="none">Auto</option><option value="front-view">Front View</option><option value="eye-level">Eye Level</option><option value="from-above">From Above</option><option value="from-below">From Below</option><option value="from-behind">From Behind</option><option value="over-shoulder">Over Shoulder</option><option value="dutch">Dutch Angle</option><option value="dynamic">Dynamic</option><option value="cinematic">Cinematic</option><option value="aerial">Aerial</option><option value="side-profile">Side Profile</option><option value="three-quarter">3/4 View</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] text-gray-500 mb-0.5">Weather / Atmosphere</label>
+                            <input type="text" value={weather} onChange={(e) => setWeather(e.target.value)}
+                              placeholder="e.g. Rain, Fog, Snow... or blank for AI"
+                              className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[10px] text-white placeholder-gray-600 focus:outline-none focus:border-pink-500/50" />
+                            <div className="flex flex-wrap gap-0.5 mt-1">
+                              {["Clear", "Rain", "Snow", "Fog", "Storm", "Wind", "Night"].map(w => (
+                                <button key={w} type="button" onClick={() => setWeather(weather === w ? "" : w)}
+                                  className={`px-1 py-0.5 rounded text-[8px] transition ${weather === w ? "bg-pink-500/20 text-pink-400 border border-pink-500/30" : "bg-white/5 text-gray-500 hover:text-gray-300 border border-white/5"}`}>
+                                  {w}
+                                </button>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -4534,7 +4549,10 @@ export default function MangaStudioPlaygroundPage() {
                   {/* Stage Direction & Dialogue */}
                   <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
                     <div>
-                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">Stage Direction</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-semibold text-gray-400">Stage Direction</label>
+                        <button onClick={() => setExpandedField("stageDirection")} className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-purple-400 transition" title="Expand"><Maximize2 className="w-3 h-3" /></button>
+                      </div>
                       <textarea value={stageDirection} onChange={(e) => {
                         setStageDirection(e.target.value);
                         if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, stageDir: e.target.value } : p));
@@ -4543,7 +4561,10 @@ export default function MangaStudioPlaygroundPage() {
                         className="w-full h-16 px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-600 focus:border-purple-500/50 focus:outline-none resize-none" />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">Dialogue</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] font-semibold text-gray-400">Dialogue</label>
+                        <button onClick={() => setExpandedField("dialogue")} className="p-0.5 hover:bg-white/10 rounded text-gray-500 hover:text-purple-400 transition" title="Expand"><Maximize2 className="w-3 h-3" /></button>
+                      </div>
                       <textarea value={dialogue} onChange={(e) => {
                         setDialogue(e.target.value);
                         if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, dialogue: e.target.value } : p));
@@ -4707,6 +4728,50 @@ export default function MangaStudioPlaygroundPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expanded Text Dialog for Stage Direction / Dialogue */}
+      {expandedField && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-2xl shadow-2xl">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-white font-bold text-base">
+                {expandedField === "stageDirection" ? "Stage Direction" : "Dialogue"}
+              </h3>
+              <button onClick={() => setExpandedField(null)} className="w-8 h-8 rounded-lg hover:bg-white/10 transition flex items-center justify-center text-gray-400 hover:text-white">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              <textarea
+                value={expandedField === "stageDirection" ? stageDirection : dialogue}
+                onChange={(e) => {
+                  if (expandedField === "stageDirection") {
+                    setStageDirection(e.target.value);
+                    if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, stageDir: e.target.value } : p));
+                  } else {
+                    setDialogue(e.target.value);
+                    if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, dialogue: e.target.value } : p));
+                  }
+                }}
+                placeholder={expandedField === "stageDirection"
+                  ? "Describe the scene in detail: setting, character positions, camera angles, lighting, mood, actions, expressions, background elements..."
+                  : "Write dialogue for each character. Use format: Character: \"Line\"\nExample:\nKaito: \"This is where it all begins.\"\nRyu: \"Show me what you've got.\""}
+                className="w-full h-64 px-4 py-3 bg-[#13131a] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none leading-relaxed"
+                autoFocus
+              />
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-[10px] text-gray-500">
+                  {(expandedField === "stageDirection" ? stageDirection : dialogue).split(/\s+/).filter(Boolean).length} words
+                </p>
+                <button onClick={() => setExpandedField(null)}
+                  className="px-5 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-semibold transition">
+                  Done
+                </button>
               </div>
             </div>
           </div>

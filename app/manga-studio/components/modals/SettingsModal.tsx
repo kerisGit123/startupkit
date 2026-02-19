@@ -1,6 +1,8 @@
 "use client";
 
-import { X, Bot, CheckCircle, Zap, Settings } from "lucide-react";
+import { useState } from "react";
+import { X, Bot, CheckCircle, Zap, Settings, Palette } from "lucide-react";
+import { DrawingStylePicker } from "../DrawingStylePicker";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -8,11 +10,15 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const [selectedDrawingStyle, setSelectedDrawingStyle] = useState("normal-anime");
+  const [customStyle, setCustomStyle] = useState("");
+  const [activeSettingsTab, setActiveSettingsTab] = useState<"general" | "style" | "generation">("general");
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
-      <div className="bg-[#13131a] rounded-2xl p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-white/10">
+      <div className="bg-[#13131a] rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-white/10">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -32,8 +38,38 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </button>
         </div>
 
+        {/* Settings Tabs */}
+        <div className="flex gap-1 mb-5 bg-[#0f1117] rounded-lg p-1">
+          <button onClick={() => setActiveSettingsTab("general")}
+            className={`flex-1 px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${activeSettingsTab === "general" ? "bg-white/10 text-white" : "text-gray-400 hover:text-gray-300"}`}>
+            <Bot className="w-3.5 h-3.5" /> AI Model
+          </button>
+          <button onClick={() => setActiveSettingsTab("style")}
+            className={`flex-1 px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${activeSettingsTab === "style" ? "bg-purple-500/20 text-purple-400" : "text-gray-400 hover:text-gray-300"}`}>
+            <Palette className="w-3.5 h-3.5" /> Drawing Style
+          </button>
+          <button onClick={() => setActiveSettingsTab("generation")}
+            className={`flex-1 px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${activeSettingsTab === "generation" ? "bg-emerald-500/20 text-emerald-400" : "text-gray-400 hover:text-gray-300"}`}>
+            <Zap className="w-3.5 h-3.5" /> Generation
+          </button>
+        </div>
+
         <div className="space-y-4">
-          {/* AI Model Settings */}
+          {/* Drawing Style Tab */}
+          {activeSettingsTab === "style" && (
+            <div className="bg-[#25252f] rounded-xl p-5 border border-white/10">
+              <DrawingStylePicker
+                selectedStyle={selectedDrawingStyle}
+                onSelectStyle={setSelectedDrawingStyle}
+                customStyle={customStyle}
+                onCustomStyleChange={setCustomStyle}
+              />
+            </div>
+          )}
+
+          {/* AI Model Settings + Consistency */}
+          {activeSettingsTab === "general" && (
+          <>
           <div className="bg-[#25252f] rounded-xl p-5 border border-white/10">
             <div className="flex items-center gap-2 mb-4">
               <Bot className="w-5 h-5 text-blue-400" />
@@ -66,35 +102,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
           </div>
 
-          {/* Generation Defaults */}
-          <div className="bg-[#25252f] rounded-xl p-5 border border-white/10">
-            <div className="flex items-center gap-2 mb-4">
-              <Zap className="w-5 h-5 text-purple-400" />
-              <h3 className="text-base font-semibold text-white">Generation Defaults</h3>
-            </div>
-            <p className="text-xs text-gray-500 mb-3">Default settings applied to all panel generation. Override per-panel in Panel Builder.</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs font-medium text-gray-400 block mb-1.5">Ratio</label>
-                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
-                  <option>9:16</option><option>3:4</option><option>1:1</option><option>4:3</option><option>16:9</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-400 block mb-1.5">Quantity</label>
-                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
-                  <option>1</option><option>2</option><option>3</option><option>4</option><option>6</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-400 block mb-1.5">Format</label>
-                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
-                  <option>Webtoon</option><option>Manga</option><option>Western Comic</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
           {/* Consistency */}
           <div className="bg-[#25252f] rounded-xl p-5 border border-white/10">
             <div className="flex items-center gap-2 mb-4">
@@ -122,6 +129,40 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   <input type="checkbox" className="sr-only peer" />
                   <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
+              </div>
+            </div>
+          </div>
+          </>
+          )}
+
+          {/* Generation Tab */}
+          {activeSettingsTab === "generation" && (
+          <>
+          {/* Generation Defaults */}
+          <div className="bg-[#25252f] rounded-xl p-5 border border-white/10">
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-5 h-5 text-purple-400" />
+              <h3 className="text-base font-semibold text-white">Generation Defaults</h3>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">Default settings applied to all panel generation. Override per-panel in Panel Builder.</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium text-gray-400 block mb-1.5">Ratio</label>
+                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
+                  <option>9:16</option><option>3:4</option><option>1:1</option><option>4:3</option><option>16:9</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-400 block mb-1.5">Quantity</label>
+                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
+                  <option>1</option><option>2</option><option>3</option><option>4</option><option>6</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-400 block mb-1.5">Format</label>
+                <select className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 appearance-none cursor-pointer">
+                  <option>Webtoon</option><option>Manga</option><option>Western Comic</option>
+                </select>
               </div>
             </div>
           </div>
@@ -163,6 +204,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <div className="text-2xl font-bold text-blue-400">68</div>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>

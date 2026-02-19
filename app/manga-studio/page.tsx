@@ -1,18 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Sparkles, Settings, BookOpen, Plus, ChevronDown, Repeat, Trash2, Image as ImageIcon, Grid3x3, LayoutGrid, SlidersHorizontal, Download, FileText, RefreshCw, Archive, Timer, Save, GripHorizontal, Keyboard, ChevronLeft, ChevronRight, X as XIcon, Pencil } from "lucide-react";
+import Link from "next/link";
+import { Sparkles, Settings, BookOpen, Plus, ChevronDown, Repeat, Trash2, Image as ImageIcon, Grid3x3, LayoutGrid, SlidersHorizontal, Download, FileText, RefreshCw, Archive, Timer, Save, GripHorizontal, Keyboard, ChevronLeft, ChevronRight, X as XIcon, Pencil, Layers, Maximize2 } from "lucide-react";
 import { useMangaStudioUI } from "./MangaStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { AIGenerationModal } from "./components/modals/AIGenerationModal";
 import { NewPageModal } from "./components/modals/NewPageModal";
 import { AssetGeneratorModal } from "./components/modals/AssetGeneratorModal";
 import { NewEpisodeModal } from "./components/modals/NewEpisodeModal";
+import { PageGenerationModal } from "./components/modals/PageGenerationModal";
 
 export default function MangaStudioPage() {
   const { openNewEpisode, openStoryManager } = useMangaStudioUI();
   const [showSettings, setShowSettings] = useState(false);
   const [showAIGeneration, setShowAIGeneration] = useState(false);
+  const [showPageGeneration, setShowPageGeneration] = useState(false);
+  const [expandedField, setExpandedField] = useState<"stageDirection" | "dialogue" | null>(null);
   const [hasEpisode] = useState(true);
   const [showEpisodeDropdown, setShowEpisodeDropdown] = useState(false);
   const [selectedPage, setSelectedPage] = useState(1);
@@ -35,7 +39,7 @@ export default function MangaStudioPage() {
   const [activeBuilderTab, setActiveBuilderTab] = useState("characters");
   const [selectedProps, setSelectedProps] = useState<string[]>([]);
   const [techniqueActive, setTechniqueActive] = useState(false);
-  const [panelType, setPanelType] = useState("none");
+  const [weather, setWeather] = useState("");
   const [framing, setFraming] = useState("none");
   const [mangaAngle, setMangaAngle] = useState("none");
   const [inkStyle, setInkStyle] = useState("none");
@@ -255,12 +259,26 @@ export default function MangaStudioPage() {
             )}
             
             <button
+              onClick={() => setShowPageGeneration(true)}
+              className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
+            >
+              <Layers className="w-4 h-4" />
+              Page Mode
+            </button>
+            <button
               onClick={() => setShowAIGeneration(true)}
               className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
             >
               <Sparkles className="w-4 h-4" />
               AI Generate
             </button>
+            
+            <Link href="/manga-studio/script-breaker"
+              className="px-5 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-orange-500/20"
+            >
+              <BookOpen className="w-4 h-4" />
+              Script Breaker
+            </Link>
             
             <button
               onClick={() => setShowSettings(true)}
@@ -1106,21 +1124,6 @@ export default function MangaStudioPage() {
                       <div className={`space-y-3 transition-opacity ${techniqueActive ? "opacity-100" : "opacity-30 pointer-events-none"}`}>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block text-[10px] text-gray-500 mb-1">Panel Type</label>
-                            <select value={panelType} onChange={(e) => setPanelType(e.target.value)}
-                              className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[11px] text-white focus:outline-none focus:border-pink-500/50 appearance-none cursor-pointer">
-                              <option value="none">None (Auto)</option>
-                              <option value="action">Action / Fight</option>
-                              <option value="emotion">Emotion / Romance</option>
-                              <option value="establishing">Establishing</option>
-                              <option value="dramatic">Dramatic Reveal</option>
-                              <option value="reaction">Reaction Shot</option>
-                              <option value="flashback">Flashback</option>
-                              <option value="impact">Impact Moment</option>
-                              <option value="splash">Splash Page</option>
-                            </select>
-                          </div>
-                          <div>
                             <label className="block text-[10px] text-gray-500 mb-1">Framing</label>
                             <select value={framing} onChange={(e) => setFraming(e.target.value)}
                               className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[11px] text-white focus:outline-none focus:border-pink-500/50 appearance-none cursor-pointer">
@@ -1135,21 +1138,43 @@ export default function MangaStudioPage() {
                               <option value="group">Group Shot</option>
                             </select>
                           </div>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
                           <div>
-                            <label className="block text-[10px] text-gray-500 mb-1">Angle</label>
+                            <label className="block text-[10px] text-gray-500 mb-1">Camera Angle</label>
                             <select value={mangaAngle} onChange={(e) => setMangaAngle(e.target.value)}
                               className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[11px] text-white focus:outline-none focus:border-pink-500/50 appearance-none cursor-pointer">
                               <option value="none">None (Auto)</option>
+                              <option value="front-view">Front View</option>
                               <option value="eye-level">Eye Level</option>
-                              <option value="dramatic-up">Dramatic Up</option>
-                              <option value="birds-eye">Bird&apos;s Eye</option>
-                              <option value="dutch">Dutch Tilt</option>
+                              <option value="from-above">From Above (Bird&apos;s Eye)</option>
+                              <option value="from-below">From Below (Worm&apos;s Eye)</option>
+                              <option value="from-behind">From Behind</option>
+                              <option value="from-back">From Back</option>
                               <option value="over-shoulder">Over Shoulder</option>
-                              <option value="silhouette">Silhouette</option>
+                              <option value="dutch">Dutch Angle</option>
+                              <option value="dynamic">Dynamic Angle</option>
+                              <option value="cinematic">Cinematic Angle</option>
+                              <option value="dramatic-up">Dramatic Low Angle</option>
+                              <option value="aerial">Aerial / Overhead</option>
+                              <option value="side-profile">Side Profile</option>
+                              <option value="three-quarter">Three-Quarter View</option>
                             </select>
                           </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-gray-500 mb-1">Weather / Atmosphere</label>
+                          <input type="text" value={weather} onChange={(e) => setWeather(e.target.value)}
+                            placeholder="e.g. Rain, Sunny, Fog, Snow... or leave blank for AI"
+                            className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded text-[11px] text-white placeholder-gray-600 focus:outline-none focus:border-pink-500/50" />
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {["Clear", "Rain", "Snow", "Fog", "Storm", "Overcast", "Wind", "Night"].map(w => (
+                              <button key={w} type="button" onClick={() => setWeather(weather === w ? "" : w)}
+                                className={`px-1.5 py-0.5 rounded text-[9px] transition ${weather === w ? "bg-pink-500/20 text-pink-400 border border-pink-500/30" : "bg-white/5 text-gray-500 hover:text-gray-300 border border-white/5"}`}>
+                                {w}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
                           <div>
                             <label className="block text-[10px] text-gray-500 mb-1">Ink Style</label>
                             <select value={inkStyle} onChange={(e) => setInkStyle(e.target.value)}
@@ -1183,7 +1208,10 @@ export default function MangaStudioPage() {
 
                   {/* Stage Direction / Action - Always Visible */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-400 mb-2">Stage Direction / Action</label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-gray-400">Stage Direction / Action</label>
+                      <button onClick={() => setExpandedField("stageDirection")} className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-purple-400 transition" title="Expand"><Maximize2 className="w-3.5 h-3.5" /></button>
+                    </div>
                     <textarea
                       value={stageDirection}
                       onChange={(e) => setStageDirection(e.target.value)}
@@ -1194,7 +1222,10 @@ export default function MangaStudioPage() {
 
                   {/* Dialogue - Always Visible */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-400 mb-2">Dialogue (Optional)</label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-gray-400">Dialogue (Optional)</label>
+                      <button onClick={() => setExpandedField("dialogue")} className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-purple-400 transition" title="Expand"><Maximize2 className="w-3.5 h-3.5" /></button>
+                    </div>
                     <textarea
                       value={dialogue}
                       onChange={(e) => setDialogue(e.target.value)}
@@ -1333,6 +1364,43 @@ export default function MangaStudioPage() {
           setShowAIGeneration(false);
         }}
       />
+      <PageGenerationModal isOpen={showPageGeneration} onClose={() => setShowPageGeneration(false)} />
+
+      {/* Expanded Text Dialog for Stage Direction / Dialogue */}
+      {expandedField && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-2xl shadow-2xl">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-white font-bold text-base">
+                {expandedField === "stageDirection" ? "Stage Direction / Action" : "Dialogue"}
+              </h3>
+              <button onClick={() => setExpandedField(null)} className="w-8 h-8 rounded-lg hover:bg-white/10 transition flex items-center justify-center text-gray-400 hover:text-white">
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-5">
+              <textarea
+                value={expandedField === "stageDirection" ? stageDirection : dialogue}
+                onChange={(e) => expandedField === "stageDirection" ? setStageDirection(e.target.value) : setDialogue(e.target.value)}
+                placeholder={expandedField === "stageDirection"
+                  ? "Describe the scene in detail: setting, character positions, camera angles, lighting, mood, actions, expressions, background elements..."
+                  : "Write dialogue for each character. Use format: Character: \"Line\"\nExample:\nKaito: \"This is where it all begins.\"\nRyu: \"Show me what you've got.\""}
+                className="w-full h-64 px-4 py-3 bg-[#13131a] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none leading-relaxed"
+                autoFocus
+              />
+              <div className="flex items-center justify-between mt-3">
+                <p className="text-[10px] text-gray-500">
+                  {(expandedField === "stageDirection" ? stageDirection : dialogue).split(/\s+/).filter(Boolean).length} words
+                </p>
+                <button onClick={() => setExpandedField(null)}
+                  className="px-5 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-semibold transition">
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Layout Templates Modal */}
       {showLayoutTemplates && (

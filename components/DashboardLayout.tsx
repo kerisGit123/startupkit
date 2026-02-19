@@ -20,7 +20,9 @@ import {
   FileText,
   Search,
   Gift,
-  ChevronRight
+  ChevronRight,
+  BookOpen,
+  Sparkles
 } from "lucide-react";
 import { useClerk } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
@@ -59,6 +61,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const mainNav = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    { name: "Manga Studio", href: "/manga-studio", icon: BookOpen },
+    { name: "Script Breaker", href: "/manga-studio/script-breaker", icon: Sparkles },
+    { name: "Episodes", href: "/manga-studio/episodes", icon: FileText },
+    { name: "Playground", href: "/manga-studio/playground", icon: BarChart3 },
     { name: "Usage", href: "/dashboard/usage", icon: BarChart3 },
     { name: "Billing", href: "/dashboard/billing", icon: Wallet },
     { name: "Invoices", href: "/dashboard/invoices", icon: FileText },

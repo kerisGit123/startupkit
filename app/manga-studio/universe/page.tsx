@@ -1,14 +1,199 @@
 "use client";
 
 import { useState } from "react";
-import { Save, Sparkles, Download, Settings, BookOpen, MapPin, Users, Image, Wrench, Globe, Lock, Tag, Plus, Pencil, X as XIcon, BookImage } from "lucide-react";
+import { Save, Sparkles, Download, Settings, BookOpen, MapPin, Users, Image, Wrench, Globe, Lock, Tag, Plus, Pencil, X as XIcon, BookImage, Zap, Edit3 } from "lucide-react";
 
-type TabType = "rules" | "locations" | "characters" | "scenes" | "props" | "frontcover";
+type TabType = "basic-info" | "rules" | "locations" | "characters" | "scenes" | "props" | "frontcover";
+
+// Basic Info Tab Component
+function BasicInfoTab() {
+  const [isEditing, setIsEditing] = useState(false);
+  const [mangaInfo, setMangaInfo] = useState({
+    name: "Basketball Dreams",
+    author: "Yuki Tanaka",
+    description: "A high school basketball drama following Kaito's journey from zero to hero. With determination and friendship, he learns that basketball is more than just a game—it's a way of life.",
+    style: "Shonen Manga",
+    customStyle: ""
+  });
+
+  const handleSave = () => {
+    // TODO: Save to database
+    console.log("Saving manga info:", mangaInfo);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    // Reset to original values
+    setMangaInfo({
+      name: "Basketball Dreams",
+      author: "Yuki Tanaka", 
+      description: "A high school basketball drama following Kaito's journey from zero to hero. With determination and friendship, he learns that basketball is more than just a game—it's a way of life.",
+      style: "Shonen Manga",
+      customStyle: ""
+    });
+    setIsEditing(false);
+  };
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h3 className="text-2xl font-bold text-white mb-2">Basic Information</h3>
+          <p className="text-gray-400 text-sm">Core details about your manga comic</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {isEditing ? (
+            <>
+              <button
+                onClick={handleCancel}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm font-medium transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition"
+              >
+                Save Changes
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-medium transition flex items-center gap-2"
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit Info
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-[#13131a] rounded-xl border border-white/10 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Manga Name */}
+          <div>
+            <label className="text-sm font-medium text-gray-300 block mb-2">Manga Name</label>
+            {isEditing ? (
+              <input
+                type="text"
+                value={mangaInfo.name}
+                onChange={(e) => setMangaInfo(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500/50"
+              />
+            ) : (
+              <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white">
+                {mangaInfo.name}
+              </div>
+            )}
+          </div>
+
+          {/* Author */}
+          <div>
+            <label className="text-sm font-medium text-gray-300 block mb-2">Author</label>
+            {isEditing ? (
+              <input
+                type="text"
+                value={mangaInfo.author}
+                onChange={(e) => setMangaInfo(prev => ({ ...prev, author: e.target.value }))}
+                className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500/50"
+              />
+            ) : (
+              <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white">
+                {mangaInfo.author}
+              </div>
+            )}
+          </div>
+
+          {/* Art Style */}
+          <div>
+            <label className="text-sm font-medium text-gray-300 block mb-2">Art Style</label>
+            {isEditing ? (
+              <select
+                value={mangaInfo.style}
+                onChange={(e) => setMangaInfo(prev => ({ ...prev, style: e.target.value }))}
+                className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500/50"
+              >
+                <option value="Shonen Manga">Shonen Manga</option>
+                <option value="Shojo Manga">Shojo Manga</option>
+                <option value="Seinen Manga">Seinen Manga</option>
+                <option value="Manhwa">Manhwa</option>
+                <option value="Webtoon">Webtoon</option>
+                <option value="Western Comic">Western Comic</option>
+                <option value="Custom">Custom Style</option>
+              </select>
+            ) : (
+              <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white">
+                {mangaInfo.style}
+              </div>
+            )}
+          </div>
+
+          {/* Custom Style (if selected) */}
+          {mangaInfo.style === "Custom" && (
+            <div>
+              <label className="text-sm font-medium text-gray-300 block mb-2">Custom Style Description</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={mangaInfo.customStyle}
+                  onChange={(e) => setMangaInfo(prev => ({ ...prev, customStyle: e.target.value }))}
+                  placeholder="Describe your custom art style..."
+                  className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                />
+              ) : (
+                <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white">
+                  {mangaInfo.customStyle || "No custom style defined"}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Description */}
+          <div className="md:col-span-2">
+            <label className="text-sm font-medium text-gray-300 block mb-2">Brief Description</label>
+            {isEditing ? (
+              <textarea
+                value={mangaInfo.description}
+                onChange={(e) => setMangaInfo(prev => ({ ...prev, description: e.target.value }))}
+                rows={4}
+                className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500/50 resize-none"
+              />
+            ) : (
+              <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white min-h-[100px]">
+                {mangaInfo.description}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Status Information */}
+        <div className="mt-6 pt-6 border-t border-white/10">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="bg-[#25252f] rounded-lg p-4 border border-white/5">
+              <div className="text-2xl font-bold text-purple-400">12</div>
+              <div className="text-xs text-gray-400 mt-1">Episodes</div>
+            </div>
+            <div className="bg-[#25252f] rounded-lg p-4 border border-white/5">
+              <div className="text-2xl font-bold text-blue-400">48</div>
+              <div className="text-xs text-gray-400 mt-1">Pages</div>
+            </div>
+            <div className="bg-[#25252f] rounded-lg p-4 border border-white/5">
+              <div className="text-2xl font-bold text-emerald-400">8</div>
+              <div className="text-xs text-gray-400 mt-1">Characters</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function UniverseManagerPage() {
-  const [activeTab, setActiveTab] = useState<TabType>("rules");
+  const [activeTab, setActiveTab] = useState<TabType>("basic-info");
 
   const tabs = [
+    { id: "basic-info" as TabType, label: "Basic Info", icon: Edit3, category: "management" },
     { id: "rules" as TabType, label: "Rules", icon: BookOpen, category: "management" },
     { id: "frontcover" as TabType, label: "Front Cover", icon: BookImage, category: "management" },
     { id: "characters" as TabType, label: "Character Database", icon: Users, category: "assets" },
@@ -102,6 +287,7 @@ export default function UniverseManagerPage() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto bg-[#0a0a0f]">
+          {activeTab === "basic-info" && <BasicInfoTab />}
           {activeTab === "scenes" && <ScenesTab />}
           {activeTab === "props" && <PropsTab />}
           {activeTab === "rules" && <RulesTab />}
@@ -367,55 +553,165 @@ function PropsTab() {
 
 // Rules System Tab
 function RulesTab() {
+  const [rules, setRules] = useState([
+    { id: "zone-defense", name: "Zone Defense System", category: "Power System", description: "Players can create defensive zones that slow opponents. Each player has a unique zone ability that manifests as a visible aura on the court. Zones have a limited duration and cooldown period.", wiredToGeneration: true, priority: "high" as const },
+    { id: "court-tech", name: "Court Technology", category: "Technology", description: "Smart courts with holographic displays and AI analysis. The court surface can project real-time stats, replay highlights, and show tactical overlays visible to players and audience.", wiredToGeneration: true, priority: "medium" as const },
+    { id: "talent-ranking", name: "Talent Ranking System", category: "World Rule", description: "All high school players are ranked by the National Basketball Association into tiers: Unranked, Bronze, Silver, Gold, and Prodigy. Rankings update after each official tournament match.", wiredToGeneration: false, priority: "low" as const },
+    { id: "team-spirit", name: "Team Spirit Mechanic", category: "Power System", description: "When team synergy reaches a critical threshold, players enter Flow State \u2014 movements become instinctive, passes are perfect, and the team moves as one. Visually represented by connecting energy lines between players.", wiredToGeneration: true, priority: "high" as const },
+  ]);
+  const [showPromptPreview, setShowPromptPreview] = useState(false);
+
+  const toggleWired = (id: string) => {
+    setRules(prev => prev.map(r => r.id === id ? { ...r, wiredToGeneration: !r.wiredToGeneration } : r));
+  };
+
+  const cyclePriority = (id: string) => {
+    setRules(prev => prev.map(r => {
+      if (r.id !== id) return r;
+      const next = r.priority === "high" ? "medium" as const : r.priority === "medium" ? "low" as const : "high" as const;
+      return { ...r, priority: next };
+    }));
+  };
+
+  const wiredRules = rules.filter(r => r.wiredToGeneration);
+  const wiredHigh = wiredRules.filter(r => r.priority === "high");
+  const wiredMed = wiredRules.filter(r => r.priority === "medium");
+  const wiredLow = wiredRules.filter(r => r.priority === "low");
+
+  const catColor: Record<string, string> = {
+    "Power System": "bg-purple-500/20 text-purple-400",
+    "Technology": "bg-blue-500/20 text-blue-400",
+    "World Rule": "bg-emerald-500/20 text-emerald-400",
+  };
+
+  const prioColor: Record<string, string> = {
+    high: "bg-red-500/20 text-red-400 border-red-500/30",
+    medium: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+    low: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  };
+
   return (
     <div className="p-8 max-w-6xl mx-auto">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-bold text-white mb-2">Rules System</h3>
-          <p className="text-gray-400 text-sm">Define power systems, technologies, and laws of your world</p>
+          <p className="text-gray-400 text-sm">Define power systems, technologies, and laws &mdash; wire them into AI generation</p>
         </div>
-        <button className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:opacity-90 transition flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Rule
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowPromptPreview(!showPromptPreview)}
+            className={`px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 text-sm ${showPromptPreview ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400" : "bg-white/5 hover:bg-white/10 text-gray-300"}`}>
+            <Zap className="w-4 h-4" />
+            {showPromptPreview ? "Hide" : "Show"} AI Context
+          </button>
+          <button className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg font-medium hover:opacity-90 transition flex items-center gap-2 text-sm">
+            <Plus className="w-4 h-4" />Add Rule
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Zone Defense System */}
-        <div className="bg-[#13131a] rounded-xl p-6 border border-white/10 hover:border-purple-500/50 transition">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h4 className="text-lg font-bold text-white mb-2">Zone Defense System</h4>
-              <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded text-xs font-medium">Power System</span>
-            </div>
+      {/* Pipeline Status Bar */}
+      <div className="bg-[#13131a] rounded-xl p-4 border border-white/10 mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-emerald-400" />
           </div>
-          <p className="text-sm text-gray-400 mb-4">
-            Players can create defensive zones that slow opponents...
-          </p>
-          <div className="flex gap-2">
-            <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-xs transition">Edit</button>
-            <button className="px-3 py-1.5 bg-white/5 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition">Delete</button>
+          <div>
+            <span className="text-sm font-semibold text-white">Generation Pipeline</span>
+            <p className="text-[10px] text-gray-500">Rules injected into every AI panel generation prompt</p>
           </div>
         </div>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-gray-400"><span className="text-emerald-400 font-bold">{wiredRules.length}</span>/{rules.length} active</span>
+          <span className="text-gray-400"><span className="text-red-400 font-bold">{wiredHigh.length}</span> critical</span>
+          <span className="text-gray-400"><span className="text-yellow-400 font-bold">{wiredMed.length}</span> medium</span>
+          <span className="text-gray-400"><span className="text-gray-300 font-bold">{wiredLow.length}</span> low</span>
+        </div>
+      </div>
 
-        {/* Court Technology */}
-        <div className="bg-[#13131a] rounded-xl p-6 border border-white/10 hover:border-purple-500/50 transition">
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h4 className="text-lg font-bold text-white mb-2">Court Technology</h4>
-              <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs font-medium">Technology</span>
-            </div>
+      {/* AI Context Preview */}
+      {showPromptPreview && (
+        <div className="bg-[#0f1117] rounded-xl border border-emerald-500/20 p-5 mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm font-bold text-emerald-400">AI Context Preview</span>
+            <span className="text-[10px] text-gray-500 ml-2">Injected into every generation prompt</span>
           </div>
-          <p className="text-sm text-gray-400 mb-4">
-            Smart courts with holographic displays and AI analysis...
-          </p>
-          <div className="flex gap-2">
-            <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-xs transition">Edit</button>
-            <button className="px-3 py-1.5 bg-white/5 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition">Delete</button>
+          <div className="bg-[#0a0a0f] rounded-lg p-4 border border-white/5 font-mono text-xs text-gray-300 leading-relaxed max-h-48 overflow-y-auto whitespace-pre-line">
+            <span className="text-emerald-400">## Universe Rules Context</span>
+            {wiredRules.length === 0 ? (
+              <div className="text-gray-600 italic mt-2">No rules wired. Toggle rules below to include them.</div>
+            ) : (
+              <>
+                {wiredHigh.length > 0 && (
+                  <div className="mt-2">
+                    <span className="text-red-400">### CRITICAL (always enforce):</span>
+                    {wiredHigh.map(r => (
+                      <div key={r.id} className="mt-1">- <span className="text-white">{r.name}</span> [{r.category}]: {r.description}</div>
+                    ))}
+                  </div>
+                )}
+                {wiredMed.length > 0 && (
+                  <div className="mt-2">
+                    <span className="text-yellow-400">### IMPORTANT (apply when relevant):</span>
+                    {wiredMed.map(r => (
+                      <div key={r.id} className="mt-1">- <span className="text-white">{r.name}</span> [{r.category}]: {r.description}</div>
+                    ))}
+                  </div>
+                )}
+                {wiredLow.length > 0 && (
+                  <div className="mt-2">
+                    <span className="text-gray-400">### BACKGROUND (subtle influence):</span>
+                    {wiredLow.map(r => (
+                      <div key={r.id} className="mt-1">- <span className="text-white">{r.name}</span> [{r.category}]: {r.description}</div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Rules Cards */}
+      <div className="space-y-3">
+        {rules.map(rule => (
+          <div key={rule.id} className={`bg-[#13131a] rounded-xl border transition ${rule.wiredToGeneration ? "border-emerald-500/20" : "border-white/10"}`}>
+            <div className="flex items-center gap-4 p-5">
+              {/* Wire Toggle */}
+              <button onClick={() => toggleWired(rule.id)} title={rule.wiredToGeneration ? "Wired to AI" : "Not wired"}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition ${rule.wiredToGeneration ? "bg-emerald-500/20" : "bg-white/5"}`}>
+                  <Zap className={`w-5 h-5 ${rule.wiredToGeneration ? "text-emerald-400" : "text-gray-600"}`} />
+                </div>
+              </button>
+
+              {/* Rule Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="text-base font-bold text-white">{rule.name}</h4>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${catColor[rule.category] || "bg-gray-500/20 text-gray-400"}`}>{rule.category}</span>
+                  {rule.wiredToGeneration && (
+                    <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-semibold flex items-center gap-0.5">
+                      <Zap className="w-2.5 h-2.5" />Wired
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400 line-clamp-2">{rule.description}</p>
+              </div>
+
+              {/* Priority + Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                {rule.wiredToGeneration && (
+                  <button onClick={() => cyclePriority(rule.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition ${prioColor[rule.priority]}`}>
+                    {rule.priority === "high" ? "Critical" : rule.priority === "medium" ? "Medium" : "Low"}
+                  </button>
+                )}
+                <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-xs transition">Edit</button>
+                <button className="px-3 py-1.5 bg-white/5 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition">Delete</button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -891,3 +1187,4 @@ function FrontCoverTab() {
     </div>
   );
 }
+

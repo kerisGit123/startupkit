@@ -9,14 +9,18 @@ import {
   Layers,
   Sparkles,
   SlidersHorizontal,
+  FileText,
+  Plus,
 } from "lucide-react";
 
 export function MangaStudioSidebar({
-  onManageStories,
+  onManageComics,
   onSettings,
+  onNewComic,
 }: {
-  onManageStories: () => void;
+  onManageComics: () => void;
   onSettings: () => void;
+  onNewComic: () => void;
 }) {
   const pathname = usePathname();
 
@@ -34,6 +38,13 @@ export function MangaStudioSidebar({
       icon: SlidersHorizontal,
       href: "/manga-studio/playground",
       description: "Test mask & bubbles",
+    },
+    {
+      id: "script-breaker",
+      label: "Script Breaker",
+      icon: FileText,
+      href: "/manga-studio/script-breaker",
+      description: "Comic → Characters → Panels",
     },
     {
       id: "episodes",
@@ -79,7 +90,7 @@ export function MangaStudioSidebar({
           <div className="flex items-center justify-between mb-3">
             <span className="text-base font-semibold text-white">Basketball Dreams</span>
             <button
-              onClick={onManageStories}
+              onClick={onManageComics}
               className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 border border-purple-500/20"
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -134,11 +145,18 @@ export function MangaStudioSidebar({
       {/* Bottom Actions */}
       <div className="p-4 border-t border-white/5 space-y-2">
         <button
-          onClick={onManageStories}
+          onClick={onNewComic}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition shadow-lg shadow-emerald-500/20"
+        >
+          <Plus className="w-4 h-4" />
+          + New Comic
+        </button>
+        <button
+          onClick={onManageComics}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 text-gray-300 rounded-lg text-sm hover:bg-white/10 transition"
         >
           <BookOpen className="w-4 h-4" />
-          Manage Stories
+          Manage Comics
         </button>
         <button
           onClick={onSettings}
