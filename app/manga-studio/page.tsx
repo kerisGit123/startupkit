@@ -277,7 +277,7 @@ export default function MangaStudioPage() {
               className="px-5 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-orange-500/20"
             >
               <BookOpen className="w-4 h-4" />
-              Script Breaker
+              Episode Builder
             </Link>
             
             <button

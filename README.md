@@ -574,7 +574,11 @@ WHAT IS THIS FOR :
 8. Panel Templates ✅
 "Quick Templates" section below the panel list with 4 templates:
 3-Panel: Action sequence (400, 600, 400px)
-4-Panel Strip: Comic strip (4 × 400px)
+4-Panel Strip: Manga strip (4 × 400px)
 Splash + 2: Impact opener (1200, 600, 600px)
 Dialogue: 5 short panels (5 × 300px)
 One click creates all panels with correct sizes and presets
+
+
+
+Puppeteer 

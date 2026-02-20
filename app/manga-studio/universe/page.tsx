@@ -39,7 +39,7 @@ function BasicInfoTab() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h3 className="text-2xl font-bold text-white mb-2">Basic Information</h3>
-          <p className="text-gray-400 text-sm">Core details about your manga comic</p>
+          <p className="text-gray-400 text-sm">Core details about your manga universe</p>
         </div>
         <div className="flex items-center gap-3">
           {isEditing ? (
@@ -105,49 +105,73 @@ function BasicInfoTab() {
             )}
           </div>
 
-          {/* Art Style */}
-          <div>
-            <label className="text-sm font-medium text-gray-300 block mb-2">Art Style</label>
+          {/* Art Style (pic10 visual presets) */}
+          <div className="md:col-span-2">
+            <label className="text-sm font-medium text-gray-300 block mb-3">
+              <span className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-purple-400" /> Art Style</span>
+            </label>
             {isEditing ? (
-              <select
-                value={mangaInfo.style}
-                onChange={(e) => setMangaInfo(prev => ({ ...prev, style: e.target.value }))}
-                className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500/50"
-              >
-                <option value="Shonen Manga">Shonen Manga</option>
-                <option value="Shojo Manga">Shojo Manga</option>
-                <option value="Seinen Manga">Seinen Manga</option>
-                <option value="Manhwa">Manhwa</option>
-                <option value="Webtoon">Webtoon</option>
-                <option value="Western Comic">Western Comic</option>
-                <option value="Custom">Custom Style</option>
-              </select>
+              <div className="space-y-3">
+                {/* Preset / Custom toggle */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setMangaInfo(prev => ({ ...prev, style: prev.style === "Custom" ? "Normal Anime" : prev.style }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${mangaInfo.style !== "Custom" ? "bg-pink-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}
+                  >
+                    Preset Styles
+                  </button>
+                  <button
+                    onClick={() => setMangaInfo(prev => ({ ...prev, style: "Custom" }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${mangaInfo.style === "Custom" ? "bg-pink-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}
+                  >
+                    Custom Style
+                  </button>
+                </div>
+                {mangaInfo.style !== "Custom" ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: "Normal Anime", icon: "🔥", desc: "Classic anime aesthetic" },
+                      { id: "Neon Punk", icon: "🟣", desc: "Cyberpunk neon glow" },
+                      { id: "Monochrome", icon: "⚪", desc: "Black & white grayscale" },
+                      { id: "Gothic", icon: "🦇", desc: "Dark, ornate Victorian" },
+                      { id: "Heightened Line Art", icon: "✏️", desc: "Bold expressive linework" },
+                      { id: "Analog Film", icon: "📷", desc: "Vintage film grain" },
+                      { id: "Fantasy Art", icon: "🧝", desc: "Ethereal high fantasy" },
+                      { id: "Superhero Comic", icon: "💥", desc: "Bold dynamic hero style" },
+                      { id: "Heightened Reality", icon: "🌟", desc: "Photo-realistic anime" },
+                    ].map(s => (
+                      <button key={s.id}
+                        onClick={() => setMangaInfo(prev => ({ ...prev, style: s.id }))}
+                        className={`p-3 rounded-xl border text-left transition ${mangaInfo.style === s.id ? "bg-pink-500/15 border-pink-500/40" : "bg-[#25252f] border-white/5 hover:border-white/15"}`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-base">{s.icon}</span>
+                          <span className={`text-sm font-semibold ${mangaInfo.style === s.id ? "text-pink-300" : "text-white"}`}>{s.id}</span>
+                        </div>
+                        <div className="text-[11px] text-gray-500">{s.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    value={mangaInfo.customStyle}
+                    onChange={(e) => setMangaInfo(prev => ({ ...prev, customStyle: e.target.value }))}
+                    placeholder="Describe your custom art style..."
+                    className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
+                  />
+                )}
+              </div>
             ) : (
-              <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white">
-                {mangaInfo.style}
+              <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white flex items-center gap-2">
+                {(() => {
+                  const icons: Record<string, string> = { "Normal Anime": "🔥", "Neon Punk": "🟣", "Monochrome": "⚪", "Gothic": "🦇", "Heightened Line Art": "✏️", "Analog Film": "📷", "Fantasy Art": "🧝", "Superhero Comic": "💥", "Heightened Reality": "🌟", "Custom": "🎨" };
+                  return <span>{icons[mangaInfo.style] || "🎨"}</span>;
+                })()}
+                {mangaInfo.style === "Custom" ? mangaInfo.customStyle || "Custom Style" : mangaInfo.style}
               </div>
             )}
           </div>
-
-          {/* Custom Style (if selected) */}
-          {mangaInfo.style === "Custom" && (
-            <div>
-              <label className="text-sm font-medium text-gray-300 block mb-2">Custom Style Description</label>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={mangaInfo.customStyle}
-                  onChange={(e) => setMangaInfo(prev => ({ ...prev, customStyle: e.target.value }))}
-                  placeholder="Describe your custom art style..."
-                  className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50"
-                />
-              ) : (
-                <div className="px-4 py-3 bg-[#25252f] border border-white/5 rounded-lg text-white">
-                  {mangaInfo.customStyle || "No custom style defined"}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Description */}
           <div className="md:col-span-2">

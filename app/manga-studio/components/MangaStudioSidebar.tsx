@@ -41,10 +41,10 @@ export function MangaStudioSidebar({
     },
     {
       id: "script-breaker",
-      label: "Script Breaker",
+      label: "Episode Builder",
       icon: FileText,
       href: "/manga-studio/script-breaker",
-      description: "Comic → Characters → Panels",
+      description: "Manga → Characters → Panels",
     },
     {
       id: "episodes",

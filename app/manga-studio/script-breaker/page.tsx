@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
-import { FileText, Sparkles, ChevronDown, ChevronRight, Plus, Trash2, GripVertical, Layers, Upload, Wand2, BookOpen, Edit3, Check, RefreshCw, UserPlus, ChevronLeft, Palette, X as XIcon, ArrowRight, Image as ImageIcon, MapPin, Package, Camera } from "lucide-react";
+import { FileText, Sparkles, ChevronDown, ChevronRight, Plus, Trash2, GripVertical, Layers, Upload, Wand2, BookOpen, Edit3, Check, RefreshCw, UserPlus, ChevronLeft, Palette, X as XIcon, ArrowRight, ArrowLeft as ArrowLeftIcon, Image as ImageIcon, MapPin, Package, Camera } from "lucide-react";
 
 interface PanelBreakdown { id: number; description: string; panelType: string; framing: string; characters: string[]; dialogue: string; }
 interface PageBreakdown { id: number; pageNumber: number; panels: PanelBreakdown[]; expanded: boolean; }
@@ -12,7 +12,7 @@ interface ExtractedScene { id: string; title: string; description: string; chara
 interface ExtractedProp { id: string; name: string; description: string; category: string; scenes: string[]; selected: boolean; }
 interface Chapter { id: string; title: string; content: string; }
 
-type WizardStep = "comic-info" | "story" | "characters" | "scenes" | "breakdown";
+type WizardStep = "story" | "characters" | "scenes" | "breakdown";
 type StoryMode = "add-content" | "ai-generation";
 
 const DRAWING_STYLES = [
@@ -56,14 +56,12 @@ const DRAWING_STYLES = [
 
 export default function ScriptBreakerPage() {
   // Wizard
-  const [currentStep, setCurrentStep] = useState<WizardStep>("comic-info");
+  const [currentStep, setCurrentStep] = useState<WizardStep>("story");
 
-  // Step 1: Comic Info
-  const [comicTitle, setComicTitle] = useState("");
-  const [creatorName, setCreatorName] = useState("");
-  const [selectedStyle, setSelectedStyle] = useState("normal-anime");
-  const [customStyleActive, setCustomStyleActive] = useState(false);
-  const [customStyleText, setCustomStyleText] = useState("");
+  // Manga info (passed from universe)
+  const [mangaTitle] = useState("My Manga"); // This would come from universe context
+  const [creatorName] = useState("Creator"); // This would come from universe context
+  const [selectedStyle] = useState("normal-anime"); // This would come from universe context
 
   // Step 2: Story
   const [storyMode, setStoryMode] = useState<StoryMode>("add-content");
@@ -104,25 +102,23 @@ export default function ScriptBreakerPage() {
   const totalPages = episodes.reduce((sum, ep) => sum + ep.pages.length, 0);
 
   const steps: { id: WizardStep; label: string; num: number }[] = [
-    { id: "comic-info", label: "Style", num: 1 },
-    { id: "story", label: "Story", num: 2 },
-    { id: "characters", label: "Characters", num: 3 },
-    { id: "scenes", label: "Scenes & Props", num: 4 },
-    { id: "breakdown", label: "Panels", num: 5 },
+    { id: "story", label: "Story", num: 1 },
+    { id: "characters", label: "Characters", num: 2 },
+    { id: "scenes", label: "Scenes & Props", num: 3 },
+    { id: "breakdown", label: "Panels", num: 4 },
   ];
   const stepIdx = steps.findIndex(s => s.id === currentStep);
   const selectedChar = extractedCharacters.find(c => c.id === selectedCharId) || extractedCharacters[0] || null;
   const selectedScene = extractedScenes.find(s => s.id === selectedSceneId) || extractedScenes[0] || null;
 
   const canGoNext = () => {
-    if (currentStep === "comic-info") return comicTitle.trim().length > 0;
     if (currentStep === "story") return storyText.trim().length > 0;
     if (currentStep === "characters") return extractedCharacters.length > 0;
     if (currentStep === "scenes") return extractedScenes.length > 0;
     return true;
   };
 
-  const activeStyleLabel = customStyleActive ? (customStyleText || "Custom") : DRAWING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle;
+  const activeStyleLabel = DRAWING_STYLES.find(s => s.id === selectedStyle)?.label || selectedStyle;
 
   // Handlers
   const handleAIGenerate = () => {
@@ -241,25 +237,35 @@ export default function ScriptBreakerPage() {
 
   return (
     <div className="flex-1 flex flex-col bg-[#0f0f14] overflow-hidden">
-      {/* Header with step indicator */}
-      <div className="bg-[#13131a] border-b border-white/10 px-8 py-4">
+      {/* Header matching manga studio style */}
+      <div className="px-4 py-3 border-b border-white/10 bg-[#0f1117]">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center">
-              <BookOpen className="w-5 h-5 text-orange-400" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-white">Create Comic</h1>
-              <p className="text-[10px] text-gray-500 mt-0.5">{comicTitle || "Untitled"} {creatorName && <span>&bull; by {creatorName}</span>} {activeStyleLabel && <span>&bull; {activeStyleLabel}</span>}</p>
+          <div className="flex items-center gap-3">
+            <Link href="/manga-studio" className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition">
+              <ArrowLeftIcon className="w-4 h-4" />
+            </Link>
+            <div className="w-px h-5 bg-white/10" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                <BookOpen className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-white">Tell Episode Story</h1>
+                <p className="text-[10px] text-gray-500 mt-0.5">{mangaTitle || "Untitled"} • {activeStyleLabel}</p>
+              </div>
             </div>
           </div>
+          
+          {/* Progress Steps */}
           <div className="flex items-center gap-1">
             {steps.map((step, i) => (
               <button key={step.id} onClick={() => setCurrentStep(step.id)}
                 className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold transition flex items-center gap-1.5 ${
-                  step.id === currentStep ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" :
-                  i < stepIdx ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                  "bg-white/5 text-gray-500 border border-white/5"
+                  step.id === currentStep 
+                    ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" 
+                    : i < stepIdx 
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                    : "bg-white/5 text-gray-500 border border-white/5"
                 }`}>
                 <span className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${
                   i < stepIdx ? "bg-emerald-500 text-white" : step.id === currentStep ? "bg-purple-500 text-white" : "bg-white/10 text-gray-500"
@@ -271,175 +277,186 @@ export default function ScriptBreakerPage() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Content Area matching manga studio */}
+      <div className="flex-1 overflow-y-auto bg-[#0f0f14]">
         <div className="max-w-5xl mx-auto p-6">
 
-          {/* ═══ STEP 1: Comic Information ═══ */}
-          {currentStep === "comic-info" && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-white mb-1">Comic Information</h2>
-                <p className="text-sm text-gray-400">Set up your comic title, creator name, and choose a drawing style</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 mb-1.5">Comic Title</label>
-                  <input type="text" value={comicTitle} onChange={(e) => setComicTitle(e.target.value)} placeholder="Give your comic a name..."
-                    className="w-full px-4 py-3 bg-[#13131a] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 mb-1.5">Creator</label>
-                  <input type="text" value={creatorName} onChange={(e) => setCreatorName(e.target.value)} placeholder="Your pen name..."
-                    className="w-full px-4 py-3 bg-[#13131a] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50" />
-                </div>
-              </div>
-
-              {/* Drawing Style */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Choose A Drawing Style</label>
-                  <button onClick={() => { setCustomStyleActive(!customStyleActive); if (!customStyleActive) setSelectedStyle(""); }}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold transition flex items-center gap-1 ${customStyleActive ? "bg-pink-500/20 border border-pink-500/30 text-pink-400" : "bg-white/5 border border-white/10 text-gray-400 hover:text-gray-300"}`}>
-                    <Palette className="w-3 h-3" />{customStyleActive ? "Using Custom Style" : "Custom Style"}
-                  </button>
-                </div>
-
-                {customStyleActive && (
-                  <div className="mb-4">
-                    <div className="relative">
-                      <input type="text" value={customStyleText} onChange={(e) => setCustomStyleText(e.target.value)}
-                        placeholder="e.g. Naruto style, Bleach style, Ghibli style..."
-                        className="w-full px-4 py-3 bg-[#13131a] border border-pink-500/20 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-pink-500/50" />
-                      <Sparkles className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-pink-400" />
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-1.5">AI translates this into an IP-safe art direction automatically</p>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-6 gap-2.5">
-                  {DRAWING_STYLES.map((style) => (
-                    <button key={style.id} onClick={() => { setSelectedStyle(style.id); setCustomStyleActive(false); }}
-                      className={`relative rounded-xl overflow-hidden border-2 transition group ${
-                        !customStyleActive && selectedStyle === style.id ? "border-purple-500 ring-2 ring-purple-500/30" : "border-transparent hover:border-white/20"
-                      }`}>
-                      <div className={`aspect-4/3 bg-gradient-to-br ${style.gradient} flex items-center justify-center`}>
-                        <span className="text-3xl">{style.emoji}</span>
-                        {!customStyleActive && selectedStyle === style.id && (
-                          <div className="absolute top-2 right-2 w-5 h-5 bg-purple-500 rounded-full flex items-center justify-center">
-                            <Check className="w-3 h-3 text-white" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="p-2 bg-[#13131a]">
-                        <p className="text-[10px] font-semibold text-white truncate">{style.label}</p>
-                        <p className="text-[8px] text-gray-500 truncate">{style.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button onClick={() => setCurrentStep("story")} disabled={!canGoNext()}
-                  className="px-6 py-3 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center gap-2">
-                  Next <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
+          {/* Manga info comes from universe context - no need to set it here */}
 
           {/* ═══ STEP 2: Tell a Story (with chapters sidebar) ═══ */}
+          {/* ═══ STEP 1: Story ═══ */}
+          {/* ═══ STEP 1: Story - Enhanced Card Layout ═══ */}
           {currentStep === "story" && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-white mb-1">Tell a Story</h2>
-                  <p className="text-sm text-gray-400">Inputed content preferably within 1000 words</p>
+            <div className="space-y-6">
+              {/* Step Header */}
+              <div className="bg-[#13131a] border border-white/10 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white mb-1">Tell Your Story</h2>
+                    <p className="text-sm text-gray-400">Write your episode content or let AI help you create it (up to 10,000 words)</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-purple-400" />
+                  </div>
                 </div>
-                <div className="flex gap-1 bg-[#13131a] rounded-lg p-1">
+                
+                {/* Mode Toggle */}
+                <div className="flex gap-1 bg-[#1a1a24] rounded-lg p-1">
                   <button onClick={() => setStoryMode("add-content")}
-                    className={`px-5 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${storyMode === "add-content" ? "bg-white/10 text-white" : "text-gray-400 hover:text-gray-300"}`}>
-                    <Edit3 className="w-3.5 h-3.5" /> Add content
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      storyMode === "add-content" 
+                        ? "bg-white/10 text-white" 
+                        : "text-gray-400 hover:text-gray-300"
+                    }`}>
+                    <Edit3 className="w-3.5 h-3.5" /> Write Content
                   </button>
                   <button onClick={() => setStoryMode("ai-generation")}
-                    className={`px-5 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${storyMode === "ai-generation" ? "bg-purple-500/20 text-purple-400" : "text-gray-400 hover:text-gray-300"}`}>
-                    <Wand2 className="w-3.5 h-3.5" /> AI Generation
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 ${
+                      storyMode === "ai-generation" 
+                        ? "bg-purple-500/20 text-purple-400" 
+                        : "text-gray-400 hover:text-gray-300"
+                    }`}>
+                    <Wand2 className="w-3.5 h-3.5" /> AI Generate
                   </button>
                 </div>
               </div>
 
-              <div className="flex gap-4" style={{ minHeight: 440 }}>
+              <div className="flex gap-4">
                 {/* Left: Chapters sidebar */}
-                <div className="w-44 shrink-0 space-y-2">
-                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Chapters</p>
-                  <button onClick={addChapter} className="w-full px-3 py-2 border border-dashed border-white/10 hover:border-purple-500/30 rounded-xl text-[10px] text-gray-500 hover:text-purple-400 transition flex items-center justify-center gap-1"><Plus className="w-3 h-3" />New chapter</button>
-                  {chapters.map((ch) => (
-                    <button key={ch.id} onClick={() => setActiveChapterId(ch.id)}
-                      className={`w-full text-left px-3 py-2.5 rounded-xl border transition text-xs font-medium ${activeChapterId === ch.id ? "bg-purple-500/10 border-purple-500/30 text-white" : "bg-[#13131a] border-white/10 text-gray-400 hover:border-white/20"}`}>
-                      {ch.title}
-                    </button>
-                  ))}
+                <div className="w-44 shrink-0">
+                  <div className="bg-[#13131a] border border-white/10 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Chapters</h3>
+                      <button onClick={addChapter} className="p-1.5 bg-purple-500/20 hover:bg-purple-500/30 rounded-lg text-purple-400 transition">
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="space-y-1">
+                      {chapters.map((ch) => (
+                        <button key={ch.id} onClick={() => setActiveChapterId(ch.id)}
+                          className={`w-full text-left px-3 py-2 rounded-lg transition text-xs font-medium ${
+                            activeChapterId === ch.id 
+                              ? "bg-purple-500/10 text-purple-400 border border-purple-500/30" 
+                              : "text-gray-400 hover:bg-white/5"
+                          }`}>
+                          {ch.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Right: Content area */}
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-4">
                   {storyMode === "add-content" && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-semibold text-gray-400">Body Text</label>
-                        <div className="flex items-center gap-2">
+                    <div className="bg-[#13131a] border border-white/10 rounded-xl p-4">
+                      {/* Upload Section */}
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold text-white">Content</h3>
                           <input ref={fileInputRef} type="file" accept=".txt,.pdf,.md,.doc,.docx" onChange={handleFileUpload} className="hidden" />
                           <button onClick={() => fileInputRef.current?.click()}
-                            className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-lg text-[10px] font-semibold transition flex items-center gap-1">
-                            <Upload className="w-3 h-3" />Upload TXT/PDF
+                            className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                            <Upload className="w-3 h-3" /> Upload File
                           </button>
                         </div>
+                        
+                        {uploadedFileName && (
+                          <div className="flex items-center gap-2 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                            <FileText className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs text-emerald-400 font-semibold">{uploadedFileName}</span>
+                            <span className="text-xs text-gray-500">{wordCount} words</span>
+                            <button onClick={() => { setUploadedFileName(""); setScript(""); }} className="ml-auto text-gray-500 hover:text-red-400 transition">
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {uploadedFileName && (
-                        <div className="flex items-center gap-2 p-2 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
-                          <FileText className="w-4 h-4 text-emerald-400" />
-                          <span className="text-[10px] text-emerald-400 font-semibold">{uploadedFileName}</span>
-                          <span className="text-[10px] text-gray-500">{wordCount} words</span>
-                          <button onClick={() => { setUploadedFileName(""); setScript(""); }} className="ml-auto text-gray-500 hover:text-red-400 transition"><XIcon className="w-3 h-3" /></button>
-                        </div>
-                      )}
-                      <textarea value={script} onChange={(e) => setScript(e.target.value)} placeholder="Enter Your Story..."
-                        className="w-full bg-[#13131a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition resize-none leading-relaxed" rows={14} />
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] text-gray-500">{wordCount > 0 ? `${wordCount} words` : "Write or paste your story, or upload a file"}</p>
-                        <p className="text-[10px] text-gray-600">Skip story and start directly from the panel? <button onClick={() => setCurrentStep("breakdown")} className="text-purple-400 hover:text-purple-300 underline">Click to Skip</button></p>
+                      
+                      {/* Text Editor */}
+                      <div>
+                        <textarea 
+                          value={script} 
+                          onChange={(e) => setScript(e.target.value)} 
+                          placeholder="Start writing your story here... You can write up to 10,000 words."
+                          className="w-full bg-[#0f0f14] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition resize-none leading-relaxed" 
+                          rows={14} 
+                        />
                       </div>
-                    </>
+                      
+                      {/* Footer */}
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/10">
+                        <p className="text-xs text-gray-500">
+                          {wordCount > 0 ? (
+                            <span className="flex items-center gap-2">
+                              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                              {wordCount.toLocaleString()} words
+                            </span>
+                          ) : (
+                            "Start typing or upload a file to begin"
+                          )}
+                        </p>
+                        <button 
+                          onClick={() => setCurrentStep("breakdown")}
+                          className="text-xs text-purple-400 hover:text-purple-300 transition"
+                        >
+                          Skip to panels →
+                        </button>
+                      </div>
+                    </div>
                   )}
 
                   {storyMode === "ai-generation" && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Everything you know about the story</label>
-                        <div className="flex gap-3">
-                          <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
-                            placeholder="Describe your story idea briefly... e.g. A short high school student discovers basketball and must prove himself."
-                            className="flex-1 bg-[#13131a] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition resize-none" rows={3} />
-                          <button onClick={handleAIGenerate} disabled={!aiPrompt.trim() || isGeneratingStory}
-                            className="px-6 bg-[#13131a] border border-white/10 hover:border-purple-500/30 rounded-xl text-sm font-bold text-white transition disabled:opacity-50 flex items-center gap-2 shrink-0">
-                            {isGeneratingStory ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Sparkles className="w-4 h-4 text-purple-400" />}
-                            Generate
+                    <div className="bg-[#13131a] border border-white/10 rounded-xl p-4">
+                      <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-white mb-1">Story Idea</h3>
+                        <p className="text-xs text-gray-500 mb-3">Describe your story concept and AI will generate a complete episode for you</p>
+                        
+                        <div className="space-y-3">
+                          <textarea 
+                            value={aiPrompt} 
+                            onChange={(e) => setAiPrompt(e.target.value)}
+                            placeholder="Describe your story idea... For example: A short high school student discovers basketball and must prove himself to the team captain while dealing with academic pressure."
+                            className="w-full bg-[#0f0f14] border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/50 transition resize-none" 
+                            rows={3} 
+                          />
+                          
+                          <button 
+                            onClick={handleAIGenerate} 
+                            disabled={!aiPrompt.trim() || isGeneratingStory}
+                            className="w-full px-4 py-2.5 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-lg text-sm font-bold transition flex items-center justify-center gap-2"
+                          >
+                            {isGeneratingStory ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                Generating Story...
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-4 h-4" />
+                                Generate Episode
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
                       {generatedStory && (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-gray-400">Generated Story</span>
+                        <div className="mt-4 p-3 bg-purple-500/5 border border-purple-500/20 rounded-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-xs font-semibold text-purple-400">Generated Story</h4>
                             <div className="flex items-center gap-2">
-                              <button onClick={handleAIGenerate} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg text-[10px] transition flex items-center gap-1"><RefreshCw className="w-3 h-3" />Regenerate</button>
+                              <button onClick={handleAIGenerate} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg text-[10px] font-medium transition flex items-center gap-1">
+                                <RefreshCw className="w-3 h-3" /> Regenerate
+                              </button>
                               <button onClick={() => { setScript(generatedStory); setStoryMode("add-content"); }}
-                                className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-[10px] font-semibold transition flex items-center gap-1"><Edit3 className="w-3 h-3" />Edit</button>
+                                className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-400 rounded-lg text-[10px] font-semibold transition flex items-center gap-1">
+                                <Edit3 className="w-3 h-3" /> Edit Story
+                              </button>
                             </div>
                           </div>
-                          <div className="bg-[#13131a] border border-purple-500/10 rounded-xl px-5 py-4 text-sm text-gray-300 leading-relaxed max-h-72 overflow-y-auto whitespace-pre-line">{generatedStory}</div>
+                          <div className="bg-[#13131a] border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 leading-relaxed max-h-60 overflow-y-auto whitespace-pre-line">
+                            {generatedStory}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -447,34 +464,50 @@ export default function ScriptBreakerPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <button onClick={() => setCurrentStep("comic-info")} className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-400 rounded-xl text-sm font-medium transition flex items-center gap-1.5">
+              {/* Navigation */}
+              <div className="flex items-center justify-between pt-4">
+                <button disabled className="px-4 py-2.5 bg-white/5 text-gray-600 rounded-xl text-sm font-medium transition flex items-center gap-1.5 opacity-50 cursor-not-allowed">
                   <ChevronLeft className="w-4 h-4" /> Back
                 </button>
-                <button onClick={() => { if (storyText.trim()) { setCurrentStep("characters"); if (extractedCharacters.length === 0) handleExtractCharacters(); } }} disabled={!canGoNext()}
-                  className="px-6 py-3 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center gap-2">
+                <button 
+                  onClick={() => { if (storyText.trim()) { setCurrentStep("characters"); if (extractedCharacters.length === 0) handleExtractCharacters(); } }} 
+                  disabled={!canGoNext()}
+                  className="px-6 py-3 bg-purple-500 hover:bg-purple-600 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center gap-2"
+                >
                   Next <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* ═══ STEP 3: Characters (Comica.ai 3-column) ═══ */}
+          {/* ═══ STEP 2: Characters - Enhanced Card Layout ═══ */}
           {currentStep === "characters" && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-white mb-1">Character Design</h2>
-                  <p className="text-sm text-gray-400">AI identified {extractedCharacters.length} characters. Select one to preview and edit.</p>
+            <div className="space-y-6">
+              {/* Step Header */}
+              <div className="bg-[#13131a] border border-white/10 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-white mb-1">Character Design</h2>
+                    <p className="text-sm text-gray-400">AI identified {extractedCharacters.length} characters from your story. Select and customize each character.</p>
+                  </div>
+                  <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                    <UserPlus className="w-5 h-5 text-purple-400" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={confirmAllCharacters} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-[10px] font-semibold transition flex items-center gap-1"><Check className="w-3 h-3" />Confirm All</button>
-                  <button className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-400 rounded-lg text-[10px] font-semibold transition flex items-center gap-1"><UserPlus className="w-3 h-3" />Save to Library</button>
+                
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <button onClick={confirmAllCharacters} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Confirm All
+                  </button>
+                  <button className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-400 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                    <UserPlus className="w-3 h-3" /> Save to Library
+                  </button>
                 </div>
               </div>
 
               {isExtractingCharacters ? (
-                <div className="flex items-center justify-center py-16">
+                <div className="bg-[#13131a] border border-white/10 rounded-xl p-8">
                   <div className="text-center">
                     <div className="w-10 h-10 border-4 border-pink-500/30 border-t-pink-500 rounded-full animate-spin mx-auto mb-3" />
                     <p className="text-sm text-gray-400">Extracting characters from story...</p>

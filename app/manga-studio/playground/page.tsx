@@ -1,13 +1,37 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronLeft, ChevronRight, Eraser, Eye, EyeOff, GripVertical, Image as ImageIcon, LayoutGrid, Layers, MessageSquare, Move, Paintbrush, Plus, RotateCcw, RotateCw, SlidersHorizontal, Sparkles, Trash2, Type, Upload, Maximize2, X as XIcon } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronLeft, ChevronRight, Download, Eraser, Eye, EyeOff, GripVertical, Image as ImageIcon, LayoutGrid, Layers, MessageSquare, Move, Paintbrush, Plus, RotateCcw, RotateCw, SlidersHorizontal, Sparkles, Trash2, Type, Upload, Maximize2, X as XIcon, FileText, Archive } from "lucide-react";
 import Link from "next/link";
 
 // Note: For proper display of Noto fonts, add Google Fonts import:
 // @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&family=Noto+Serif:wght@400;700&family=Noto+Sans+JP:wght@400;700&family=Noto+Sans+KR:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Noto+Sans+TC:wght@400;700&family=Noto+Sans+Thai:wght@400;700&family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Montserrat:wght@400;700&family=Playfair+Display:wght@400;700&family=Oswald:wght@400;700&family=Raleway:wght@400;700&display=swap');
 
 type MaskDot = { x: number; y: number; r: number };
+
+type Scene = {
+  id: string;
+  description: string;
+  position: { x: number; y: number; width: number; height: number };
+  generated: boolean;
+  image?: string;
+};
+
+type Panel = {
+  id: string;
+  pageId: number;
+  order: number;
+  title: string;
+  height: number;
+  sizePreset: string;
+  characters: string[];
+  location: string;
+  time: string;
+  stageDir: string;
+  dialogue: string;
+  generationMode: "single" | "multi";
+  scenes: Scene[];
+};
 
 type BubbleType =
   | "speech"
@@ -566,10 +590,10 @@ export default function MangaStudioPlaygroundPage() {
   ]);
   const [currentPageId, setCurrentPageId] = useState(1);
   const episodePages = pages.filter(p => p.episodeId === currentEpisodeId).sort((a, b) => a.number - b.number);
-  const [panels, setPanels] = useState([
-    { id: "panel-1", pageId: 1, order: 0, title: "Opening Shot", height: 600, sizePreset: "standard" as string, characters: [] as string[], location: "", time: "", stageDir: "", dialogue: "" },
-    { id: "panel-2", pageId: 1, order: 1, title: "Determination", height: 400, sizePreset: "short" as string, characters: [] as string[], location: "", time: "", stageDir: "", dialogue: "" },
-    { id: "panel-3", pageId: 1, order: 2, title: "Flashback", height: 1000, sizePreset: "tall" as string, characters: [] as string[], location: "", time: "", stageDir: "", dialogue: "" },
+  const [panels, setPanels] = useState<Panel[]>([
+    { id: "panel-1", pageId: 1, order: 0, title: "Opening Shot", height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+    { id: "panel-2", pageId: 1, order: 1, title: "Determination", height: 400, sizePreset: "short", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+    { id: "panel-3", pageId: 1, order: 2, title: "Flashback", height: 1000, sizePreset: "tall", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
   ]);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>("panel-1");
   const [showTimeline, setShowTimeline] = useState(true);
@@ -589,6 +613,23 @@ export default function MangaStudioPlaygroundPage() {
   const [snapLines, setSnapLines] = useState<{ x?: number; y?: number }[]>([]);
   // Bubble presets library
   const [bubblePresets, setBubblePresets] = useState<{ id: string; name: string; bubbleType: BubbleType; tailMode: TailMode; tailDir: TailDir; flippedColors?: boolean; fontSize: number; autoFitFont: boolean; w: number; h: number }[]>([]);
+  
+  // AI Generator and Quick Start states
+  const [showAIGenerator, setShowAIGenerator] = useState(false);
+  const [showQuickStart, setShowQuickStart] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Multi-scene panel states
+  const [generationMode, setGenerationMode] = useState<"single" | "multi">("single");
+  const [sceneCount, setSceneCount] = useState(4);
+  const [sceneLayout, setSceneLayout] = useState<"grid" | "sequence" | "dynamic">("dynamic");
+  const [templateStyle, setTemplateStyle] = useState<"manga" | "storyboard">("manga");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const refImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [aiGenTab, setAiGenTab] = useState<"chars" | "scene" | "props" | "time" | "adv">("chars");
 
   const currentPage = pages.find(p => p.id === currentPageId);
   const currentPanels = panels.filter(p => p.pageId === currentPageId).sort((a, b) => a.order - b.order);
@@ -609,6 +650,7 @@ export default function MangaStudioPlaygroundPage() {
     setPanels(prev => [...prev, {
       id, pageId: currentPageId, order: maxOrder + 1, title: `Panel ${currentPanels.length + 1}`,
       height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "",
+      generationMode: "single", scenes: [],
     }]);
     setSelectedPanelId(id);
     setActiveTab("panel");
@@ -653,6 +695,113 @@ export default function MangaStudioPlaygroundPage() {
     setPanels(newPanels);
   };
 
+  // AI Generator Functions
+  const handleAIGenerator = () => {
+    setShowAIGenerator(true);
+    setActiveTab("aimanga");
+  };
+
+  const handleQuickStart = () => {
+    setShowQuickStart(true);
+    // Create a quick template with common panel layout
+    const quickTemplatePanels: Panel[] = [
+      { id: `panel-${Date.now()}-1`, pageId: currentPageId, order: 0, title: "Opening", height: 800, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+      { id: `panel-${Date.now()}-2`, pageId: currentPageId, order: 1, title: "Action", height: 600, sizePreset: "short", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+      { id: `panel-${Date.now()}-3`, pageId: currentPageId, order: 2, title: "Dialogue", height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+      { id: `panel-${Date.now()}-4`, pageId: currentPageId, order: 3, title: "Closing", height: 800, sizePreset: "tall", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+    ];
+    
+    setPanels(prev => [...prev, ...quickTemplatePanels]);
+    setSelectedPanelId(quickTemplatePanels[0].id);
+    setActiveTab("panel");
+    setShowQuickStart(false);
+  };
+
+  const generatePanelContent = async () => {
+    if (!aiPrompt.trim() || !selectedPanel) return;
+    
+    setIsGenerating(true);
+    try {
+      // Simulate AI generation
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      if (generationMode === "single") {
+        // Single panel generation
+        setPanels(prev => prev.map(p => 
+          p.id === selectedPanel.id 
+            ? { ...p, dialogue: aiPrompt, stageDir: "AI generated scene", generationMode: "single" as const, scenes: [] }
+            : p
+        ));
+      } else {
+        // Multi-scene generation
+        const scenes: Scene[] = [];
+        const panelWidth = 800;
+        const panelHeight = selectedPanel.height;
+        
+        if (sceneLayout === "grid") {
+          // 2x2 grid layout
+          const sceneWidth = panelWidth / 2;
+          const sceneHeight = panelHeight / 2;
+          for (let i = 0; i < Math.min(sceneCount, 4); i++) {
+            const row = Math.floor(i / 2);
+            const col = i % 2;
+            scenes.push({
+              id: `scene-${Date.now()}-${i}`,
+              description: `${aiPrompt} - Scene ${i + 1}`,
+              position: {
+                x: col * sceneWidth,
+                y: row * sceneHeight,
+                width: sceneWidth,
+                height: sceneHeight
+              },
+              generated: false
+            });
+          }
+        } else if (sceneLayout === "sequence") {
+          // Horizontal sequence
+          const sceneWidth = panelWidth / sceneCount;
+          for (let i = 0; i < sceneCount; i++) {
+            scenes.push({
+              id: `scene-${Date.now()}-${i}`,
+              description: `${aiPrompt} - Scene ${i + 1}`,
+              position: {
+                x: i * sceneWidth,
+                y: 0,
+                width: sceneWidth,
+                height: panelHeight
+              },
+              generated: false
+            });
+          }
+        } else {
+          // Dynamic layout
+          scenes.push({
+            id: `scene-${Date.now()}-0`,
+            description: aiPrompt,
+            position: {
+              x: 0,
+              y: 0,
+              width: panelWidth,
+              height: panelHeight
+            },
+            generated: false
+          });
+        }
+        
+        setPanels(prev => prev.map(p => 
+          p.id === selectedPanel.id 
+            ? { ...p, dialogue: aiPrompt, stageDir: "AI generated multi-scene", generationMode: "multi" as const, scenes }
+            : p
+        ));
+      }
+      
+      setAiPrompt("");
+      setShowAIGenerator(false);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Switch page and auto-select its first panel
   const switchToPage = (pageId: number) => {
     setCurrentPageId(pageId);
@@ -669,6 +818,7 @@ export default function MangaStudioPlaygroundPage() {
     setPanels(prev => [...prev, {
       id: newPanelId, pageId: newPageId, order: 0, title: "Panel 1",
       height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "",
+      generationMode: "single", scenes: [],
     }]);
     setCurrentPageId(newPageId);
     setSelectedPanelId(newPanelId);
@@ -1550,7 +1700,7 @@ export default function MangaStudioPlaygroundPage() {
   }, [showEpisodeDropdown, showPageDropdown]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" data-testid="manga-studio">
       <div className="px-4 py-3 border-b border-white/10 bg-[#0f1117] flex items-center justify-between">
         {/* Left: Back + Episode/Page breadcrumb */}
         <div className="flex items-center gap-3">
@@ -1632,7 +1782,7 @@ export default function MangaStudioPlaygroundPage() {
         {/* Center: Page navigation + panel count + timeline toggle */}
         <div className="flex items-center gap-2">
           <span className="text-[10px] text-gray-500">{currentPanels.length} Panels • 800px</span>
-          <button onClick={() => setShowTimeline(!showTimeline)}
+          <button onClick={() => setShowTimeline(!showTimeline)} data-testid="timeline-toggle-btn"
             className={`px-2 py-1 text-[10px] font-semibold rounded transition flex items-center gap-1 ${showTimeline ? "bg-pink-500/15 text-pink-400" : "bg-white/5 text-gray-500 hover:text-gray-300"}`}>
             <GripVertical className="w-3 h-3" /> Timeline
           </button>
@@ -1656,21 +1806,64 @@ export default function MangaStudioPlaygroundPage() {
           </div>
         </div>
 
-        {/* Right: Actions */}
+        {/* Center: Main Actions — matches manga editor nav (pic7) */}
+        <div className="flex items-center gap-2.5">
+          <button 
+            onClick={handleQuickStart}
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-white/10"
+          >
+            <BookOpen className="w-4 h-4" /> Quick Start
+          </button>
+          {/* Export with dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-orange-500/20"
+            >
+              <Download className="w-4 h-4" /> Export <ChevronDown className="w-3 h-3" />
+            </button>
+            {showExportMenu && (
+              <div className="absolute top-full mt-1 left-0 w-48 bg-[#1a1a24] border border-white/10 rounded-xl shadow-2xl z-50 py-1 overflow-hidden">
+                <button onClick={() => { exportWithAllLayers(); setShowExportMenu(false); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/5 transition flex items-center gap-3">
+                  <FileText className="w-4 h-4 text-red-400" />Export as PDF
+                </button>
+                <button onClick={() => { exportWithAllLayers(); setShowExportMenu(false); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/5 transition flex items-center gap-3">
+                  <ImageIcon className="w-4 h-4 text-blue-400" />Export as PNG
+                </button>
+                <button onClick={() => { exportWithAllLayers(); setShowExportMenu(false); }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-white hover:bg-white/5 transition flex items-center gap-3">
+                  <Archive className="w-4 h-4 text-purple-400" />Export as CBZ
+                </button>
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={() => setCanvasViewMode(canvasViewMode === "single" ? "fullpage" : "single")}
+            className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-purple-500/20"
+          >
+            <Layers className="w-4 h-4" /> Page Mode
+          </button>
+          <button 
+            onClick={() => setActiveTab("aimanga")}
+            className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+          >
+            <Sparkles className="w-4 h-4" /> AI Generate
+          </button>
+        </div>
+
+        {/* Right: Secondary Actions */}
         <div className="flex items-center gap-2">
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
             onChange={(e) => { const file = e.target.files?.[0]; if (file) uploadImage(file); }} />
           <button onClick={() => fileInputRef.current?.click()}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition flex items-center gap-1.5 border bg-white/5 border-white/10 text-gray-300 hover:bg-white/10">
-            <Upload className="w-3.5 h-3.5" /> Upload
+            <Upload className="w-3.5 h-3.5" />
           </button>
           <button onClick={() => setShowPagePreview(true)}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition flex items-center gap-1.5 border bg-white/5 border-white/10 text-gray-300 hover:bg-white/10">
-            <Eye className="w-3.5 h-3.5" /> Preview
-          </button>
-          <button onClick={exportWithAllLayers}
-            className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition flex items-center gap-1.5 border bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/20">
-            <ArrowLeft className="w-3.5 h-3.5 rotate-[270deg]" /> Export
+            <Eye className="w-3.5 h-3.5" />
           </button>
           <button onClick={addPage}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition flex items-center gap-1.5 border bg-purple-500/10 border-purple-500/20 text-purple-300 hover:bg-purple-500/20">
@@ -1694,7 +1887,7 @@ export default function MangaStudioPlaygroundPage() {
                 <div className="flex items-center bg-[#1a1a24] rounded-lg border border-white/10 ml-2">
                   <button onClick={() => setCanvasViewMode("single")}
                     className={`px-2 py-1 text-[10px] font-semibold rounded-l-lg transition ${canvasViewMode === "single" ? "bg-pink-500/20 text-pink-400" : "text-gray-500 hover:text-gray-300"}`}>Single</button>
-                  <button onClick={() => setCanvasViewMode("fullpage")}
+                  <button onClick={() => setCanvasViewMode("fullpage")} data-testid="fullpage-view-btn"
                     className={`px-2 py-1 text-[10px] font-semibold rounded-r-lg transition ${canvasViewMode === "fullpage" ? "bg-pink-500/20 text-pink-400" : "text-gray-500 hover:text-gray-300"}`}>Full Page</button>
                 </div>
               </div>
@@ -3225,6 +3418,7 @@ export default function MangaStudioPlaygroundPage() {
           ].map(({ id, icon: Icon, label, color }) => (
             <button
               key={id}
+              data-testid={`${id}-tab`}
               onClick={() => {
                 setActiveTab(id);
                 if (id === "bubbles") setTool("bubble");
@@ -3681,7 +3875,7 @@ export default function MangaStudioPlaygroundPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-300 font-semibold">Bubbles</span>
                   <div className="flex gap-2">
-                    <button onClick={addBubble} className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-200 rounded-lg text-xs font-semibold transition flex items-center gap-2">
+                    <button onClick={addBubble} data-testid="add-bubble-btn" className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-200 rounded-lg text-xs font-semibold transition flex items-center gap-2">
                       <Plus className="w-4 h-4" /> Add
                     </button>
                     <button onClick={deleteSelectedBubble} disabled={!effectiveSelectedBubbleId} className="px-3 py-2 bg-white/5 hover:bg-red-500/10 disabled:opacity-40 disabled:cursor-not-allowed text-gray-200 hover:text-red-300 rounded-lg text-xs font-semibold transition flex items-center gap-2">
@@ -4229,7 +4423,7 @@ export default function MangaStudioPlaygroundPage() {
                   </div>
                   );
                 })}
-                <button onClick={addPanel}
+                <button onClick={addPanel} data-testid="add-panel-btn"
                   className="w-full p-3 border-2 border-dashed border-white/10 hover:border-pink-500/30 rounded-xl text-center transition group">
                   <Plus className="w-4 h-4 mx-auto mb-1 text-pink-400 group-hover:scale-110 transition-transform" />
                   <div className="text-pink-400 text-xs font-semibold">+ Add Panel</div>
@@ -4241,14 +4435,14 @@ export default function MangaStudioPlaygroundPage() {
                   <div className="grid grid-cols-2 gap-1.5">
                     {[
                       { name: "3-Panel", desc: "Action sequence", count: 3, heights: [400, 600, 400] },
-                      { name: "4-Panel Strip", desc: "Comic strip", count: 4, heights: [400, 400, 400, 400] },
+                      { name: "4-Panel Strip", desc: "Manga strip", count: 4, heights: [400, 400, 400, 400] },
                       { name: "Splash + 2", desc: "Impact opener", count: 3, heights: [1200, 600, 600] },
                       { name: "Dialogue", desc: "5 short panels", count: 5, heights: [300, 300, 300, 300, 300] },
                     ].map(tpl => (
                       <button key={tpl.name} onClick={() => {
                         saveHistory();
                         const base = currentPanels.length > 0 ? Math.max(...currentPanels.map(p => p.order)) + 1 : 0;
-                        const newPanels = tpl.heights.map((h, i) => ({
+                        const newPanels: Panel[] = tpl.heights.map((h, i) => ({
                           id: `panel-${Date.now()}-${i}`,
                           pageId: currentPageId,
                           order: base + i,
@@ -4260,6 +4454,8 @@ export default function MangaStudioPlaygroundPage() {
                           time: "",
                           stageDir: "",
                           dialogue: "",
+                          generationMode: "single" as const,
+                          scenes: [] as Scene[],
                         }));
                         setPanels(prev => [...prev, ...newPanels]);
                         setSelectedPanelId(newPanels[0].id);
@@ -4329,7 +4525,7 @@ export default function MangaStudioPlaygroundPage() {
               )}
             </div>
           ) : activeTab === "aimanga" ? (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div>
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-violet-400" />
@@ -4347,32 +4543,170 @@ export default function MangaStudioPlaygroundPage() {
                     <button onClick={() => setActiveTab("panel")} className="text-[9px] text-gray-400 hover:text-white transition">← Panels</button>
                   </div>
 
-                  {/* Reference Image */}
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-4 space-y-2">
-                    <span className="text-xs text-gray-300 font-semibold">Reference Image</span>
-                    {panelRefImages[selectedPanel.id] ? (
-                      <div className="relative">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={panelRefImages[selectedPanel.id]} alt="Reference" className="w-full h-24 object-cover rounded-lg border border-white/10" />
-                        <button onClick={() => setPanelRefImages(prev => { const n = { ...prev }; delete n[selectedPanel.id]; return n; })}
-                          className="absolute top-1 right-1 p-1 bg-black/60 hover:bg-red-500/40 rounded text-[10px] text-gray-300 hover:text-red-300 transition">✕</button>
+                  {/* Single / Multi-Scene Toggle */}
+                  <div className="flex gap-1.5">
+                    <button onClick={() => setGenerationMode("single")}
+                      className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition border ${generationMode === "single" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-500 border-white/10"}`}>
+                      Single Scene
+                    </button>
+                    <button onClick={() => setGenerationMode("multi")}
+                      className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition border ${generationMode === "multi" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-500 border-white/10"}`}>
+                      Multi-Scene
+                    </button>
+                  </div>
+
+                  {/* Multi-scene: scene count + manga/storyboard layout templates */}
+                  {generationMode === "multi" && (
+                    <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-gray-400">Scenes per Panel</span>
+                        <span className="text-[9px] text-emerald-400 font-semibold">Save ~{Math.round((1 - 1/Math.max(sceneCount, 2)) * 100)}%</span>
+                      </div>
+                      <div className="grid grid-cols-6 gap-1">
+                        {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                          <button key={n} onClick={() => setSceneCount(n)}
+                            className={`py-1 rounded text-[10px] font-bold transition border ${sceneCount === n ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-600 border-white/5 hover:text-gray-400"}`}>
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Manga / Storyboard style toggle */}
+                      <div className="flex gap-1">
+                        <button onClick={() => setTemplateStyle("manga")}
+                          className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition border ${templateStyle === "manga" ? "bg-purple-500/15 text-purple-300 border-purple-500/30" : "bg-white/5 text-gray-500 border-white/5"}`}>
+                          Manga
+                        </button>
+                        <button onClick={() => setTemplateStyle("storyboard")}
+                          className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition border ${templateStyle === "storyboard" ? "bg-blue-500/15 text-blue-300 border-blue-500/30" : "bg-white/5 text-gray-500 border-white/5"}`}>
+                          Storyboard
+                        </button>
+                      </div>
+
+                      {/* Layout Template thumbnails */}
+                      <div>
+                        <span className="text-[9px] text-gray-500 font-medium">Layout Template</span>
+                        <div className="grid grid-cols-3 gap-1.5 mt-1">
+                          {templateStyle === "manga" ? (
+                            <>
+                              {/* Manga templates — asymmetric traditional layouts */}
+                              {[
+                                { id: "m2", label: "2-Panel", src: "/manga-studio/images/panel template/manga-2panel.svg",
+                                  cells: [{x:0,y:0,w:2,h:1},{x:0,y:1,w:2,h:1}] },
+                                { id: "m3a", label: "3-Panel A", src: "/manga-studio/images/panel template/manga-3panel-a.svg",
+                                  cells: [{x:0,y:0,w:1,h:2},{x:1,y:0,w:1,h:1},{x:1,y:1,w:1,h:1}] },
+                                { id: "m3b", label: "3-Panel B", src: "/manga-studio/images/panel template/manga-3panel-b.svg",
+                                  cells: [{x:0,y:0,w:2,h:1},{x:0,y:1,w:1,h:1},{x:1,y:1,w:1,h:1}] },
+                                { id: "m4", label: "4-Panel", src: "/manga-studio/images/panel template/manga-4panel.svg",
+                                  cells: [{x:0,y:0,w:1,h:1},{x:1,y:0,w:1,h:1},{x:0,y:1,w:1,h:1},{x:1,y:1,w:1,h:1}] },
+                                { id: "m4d", label: "4-Dynamic", src: "/manga-studio/images/panel template/manga-4panel-dynamic.svg",
+                                  cells: [{x:0,y:0,w:2,h:1},{x:0,y:1,w:1,h:1},{x:1,y:1,w:1,h:2},{x:0,y:2,w:1,h:1}] },
+                                { id: "m5", label: "5-Panel", src: "/manga-studio/images/panel template/manga-5panel.svg",
+                                  cells: [{x:0,y:0,w:1,h:2},{x:1,y:0,w:1,h:1},{x:1,y:1,w:1,h:1},{x:0,y:2,w:1,h:1},{x:1,y:2,w:1,h:1}] },
+                              ].map(tpl => (
+                                <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setSceneLayout("dynamic"); setSceneCount(tpl.cells.length); }}
+                                  className={`p-1 rounded-lg border transition ${selectedTemplateId === tpl.id ? "bg-purple-500/15 border-purple-500/40" : "bg-[#1a1a24] border-white/10 hover:border-purple-500/30"}`}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={tpl.src} alt={tpl.label} className="w-full h-14 object-contain" />
+                                  <span className="text-[8px] text-gray-500 block text-center mt-0.5">{tpl.label}</span>
+                                </button>
+                              ))}
+                            </>
+                          ) : (
+                            <>
+                              {/* Storyboard templates — uniform grids for 6-12 scenes */}
+                              {[
+                                { id: "sb6", label: "6-Grid", src: "/manga-studio/images/storyboard/storyboard-6.svg", count: 6, r: 3, c: 2 },
+                                { id: "sb8", label: "8-Grid", src: "/manga-studio/images/storyboard/storyboard-8.svg", count: 8, r: 4, c: 2 },
+                                { id: "sb9", label: "9-Grid", src: "/manga-studio/images/storyboard/storyboard-9.svg", count: 9, r: 3, c: 3 },
+                                { id: "sb12", label: "12-Grid", src: "/manga-studio/images/storyboard/storyboard-12.svg", count: 12, r: 3, c: 4 },
+                              ].map(tpl => (
+                                <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setSceneLayout("grid"); setSceneCount(tpl.count); }}
+                                  className={`p-1 rounded-lg border transition ${selectedTemplateId === tpl.id ? "bg-blue-500/15 border-blue-500/40" : "bg-[#1a1a24] border-white/10 hover:border-blue-500/30"}`}>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={tpl.src} alt={tpl.label} className="w-full h-14 object-contain" />
+                                  <span className="text-[8px] text-gray-500 block text-center mt-0.5">{tpl.label}</span>
+                                </button>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Shot Type visual selector (pic5) */}
+                  {generationMode === "single" && (
+                    <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
+                      <span className="text-[10px] font-semibold text-gray-400 mb-1.5 block">Shot Type</span>
+                      <div className="grid grid-cols-3 gap-1">
+                        {[
+                          { id: "establishing", label: "Establishing", desc: "Wide view" },
+                          { id: "full", label: "Full Shot", desc: "Full body" },
+                          { id: "medium", label: "Medium", desc: "Waist up" },
+                          { id: "medium-close", label: "Med Close", desc: "Chest up" },
+                          { id: "close", label: "Close-up", desc: "Face" },
+                          { id: "extreme-close", label: "Extreme CU", desc: "Eyes/detail" },
+                        ].map(shot => (
+                          <button key={shot.id} onClick={() => setFraming(framing === shot.id ? "none" : shot.id)}
+                            className={`p-1.5 rounded-lg border text-center transition ${framing === shot.id ? "bg-violet-500/15 border-violet-500/30 text-violet-300" : "bg-[#1a1a24] border-white/10 text-gray-500 hover:text-gray-300"}`}>
+                            <div className="text-[10px] font-semibold">{shot.label}</div>
+                            <div className="text-[8px] text-gray-600">{shot.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reference Images — multi-upload (compact for sidebar) */}
+                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
+                    <span className="text-[10px] font-semibold text-gray-400 mb-1.5 block">Reference Images</span>
+                    <input ref={refImageInputRef} type="file" accept="image/*" multiple className="hidden"
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files) return;
+                        Array.from(files).forEach(file => {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) setReferenceImages(prev => [...prev, ev.target!.result as string]);
+                          };
+                          reader.readAsDataURL(file);
+                        });
+                        e.target.value = "";
+                      }}
+                    />
+                    {referenceImages.length > 0 || panelRefImages[selectedPanel.id] ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {panelRefImages[selectedPanel.id] && (
+                          <div className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-violet-500/40 group">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={panelRefImages[selectedPanel.id]} alt="Main ref" className="w-full h-full object-cover" />
+                            <button onClick={() => setPanelRefImages(prev => { const n = { ...prev }; delete n[selectedPanel.id]; return n; })}
+                              className="absolute top-0 right-0 p-0.5 bg-red-500/80 rounded-bl opacity-0 group-hover:opacity-100 transition">
+                              <XIcon className="w-2.5 h-2.5 text-white" />
+                            </button>
+                          </div>
+                        )}
+                        {referenceImages.map((img, i) => (
+                          <div key={i} className="relative w-12 h-12 rounded-lg overflow-hidden border border-white/10 group">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={img} alt={`ref-${i}`} className="w-full h-full object-cover" />
+                            <button onClick={() => setReferenceImages(prev => prev.filter((_, idx) => idx !== i))}
+                              className="absolute top-0 right-0 p-0.5 bg-red-500/80 rounded-bl opacity-0 group-hover:opacity-100 transition">
+                              <XIcon className="w-2.5 h-2.5 text-white" />
+                            </button>
+                          </div>
+                        ))}
+                        <button onClick={() => refImageInputRef.current?.click()}
+                          className="w-12 h-12 rounded-lg border border-dashed border-white/15 flex items-center justify-center hover:border-white/30 transition">
+                          <Plus className="w-3.5 h-3.5 text-gray-600" />
+                        </button>
                       </div>
                     ) : (
-                      <label className="flex items-center justify-center gap-2 px-3 py-3 bg-[#1a1a24] border border-dashed border-white/10 hover:border-violet-500/30 rounded-lg cursor-pointer transition">
-                        <Upload className="w-3.5 h-3.5 text-gray-500" />
-                        <span className="text-[10px] text-gray-500">Upload reference image</span>
-                        <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const dataUrl = await new Promise<string>((resolve, reject) => {
-                            const reader = new FileReader();
-                            reader.onload = () => resolve(String(reader.result));
-                            reader.onerror = reject;
-                            reader.readAsDataURL(file);
-                          });
-                          setPanelRefImages(prev => ({ ...prev, [selectedPanel.id]: dataUrl }));
-                        }} />
-                      </label>
+                      <button onClick={() => refImageInputRef.current?.click()}
+                        className="w-full py-2.5 border border-dashed border-white/10 hover:border-violet-500/30 rounded-lg text-[10px] text-gray-500 hover:text-gray-300 transition flex items-center justify-center gap-1.5">
+                        <Upload className="w-3 h-3" /> Upload reference images
+                      </button>
                     )}
                   </div>
 
@@ -4575,9 +4909,13 @@ export default function MangaStudioPlaygroundPage() {
                   </div>
 
                   {/* Generate Button */}
-                  <button className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 text-sm shadow-lg shadow-purple-500/20">
-                    <Sparkles className="w-4 h-4" />
-                    Generate with AI Manga
+                  <button onClick={generatePanelContent} disabled={isGenerating}
+                    className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 text-sm shadow-lg shadow-purple-500/20">
+                    {isGenerating ? (
+                      <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating...</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" /> Generate with AI Manga{generationMode === "multi" ? ` (${sceneCount})` : ""}</>
+                    )}
                   </button>
 
                   {/* Use as Background button */}
@@ -4734,7 +5072,7 @@ export default function MangaStudioPlaygroundPage() {
         </div>
       )}
 
-      {/* Expanded Text Dialog for Stage Direction / Dialogue */}
+      {/* Expanded Text Dialog for Stage Direction / Dialogue — with prompt template badges */}
       {expandedField && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-2xl shadow-2xl">
@@ -4746,7 +5084,60 @@ export default function MangaStudioPlaygroundPage() {
                 <XIcon className="w-4 h-4" />
               </button>
             </div>
-            <div className="p-5">
+            <div className="p-5 space-y-3">
+              {/* Prompt template badges */}
+              <div>
+                <span className="text-[10px] text-gray-500 font-medium mb-1.5 block">Quick Templates — click to insert</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {expandedField === "stageDirection" ? (
+                    <>
+                      {[
+                        { label: "Establishing Shot", text: "[ESTABLISHING SHOT] Wide view of the location. Show the environment, time of day, and atmosphere. Characters are small in frame to emphasize the setting." },
+                        { label: "Character Entrance", text: "[CHARACTER ENTRANCE] [Character] enters the scene from [direction]. Expression: [emotion]. Pose: [describe stance/gesture]. Background characters react." },
+                        { label: "Close-up Reaction", text: "[CLOSE-UP] Focus on [Character]'s face. Expression shifts from [emotion A] to [emotion B]. Eyes [detail]. Sweat/tears/blush effect: [yes/no]." },
+                        { label: "Action Sequence", text: "[ACTION] [Character] performs [action]. Motion lines from [direction]. Impact effect: [type]. Camera follows the movement dynamically." },
+                        { label: "Dramatic Reveal", text: "[DRAMATIC REVEAL] Slow pan/zoom to reveal [subject]. Dramatic lighting from [direction]. Shadow effects. Other characters shown reacting in shock/awe." },
+                        { label: "Conversation", text: "[CONVERSATION] [Character A] and [Character B] face each other. Shot alternates between speakers. Setting: [location]. Mood: [tense/casual/emotional]." },
+                        { label: "Transition", text: "[TRANSITION] Scene shifts from [scene A] to [scene B]. Visual bridge: [overlay/fade/cut/panel break]. Time indicator: [same day/next day/flashback]." },
+                        { label: "Multi-Panel Action", text: "[SEQUENTIAL PANELS] Panel 1: [setup action]. Panel 2: [mid-action]. Panel 3: [impact/result]. Speed lines increase across panels. Sound effects: [describe]." },
+                      ].map(t => (
+                        <button key={t.label} onClick={() => {
+                          const val = stageDirection ? stageDirection + "\n\n" + t.text : t.text;
+                          setStageDirection(val);
+                          if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, stageDir: val } : p));
+                        }}
+                          className="px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/30 transition font-medium">
+                          {t.label}
+                        </button>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      {[
+                        { label: "Standard Line", text: '[Character]: "Your dialogue here."' },
+                        { label: "Inner Thought", text: "[Character] (thinking): *If only I could tell them the truth...*" },
+                        { label: "Narration", text: "[NARRATOR]: The sun set on another day, and nothing would ever be the same." },
+                        { label: "Shout", text: '[Character]: "STOP RIGHT THERE!" (bold, large text, jagged bubble)' },
+                        { label: "Whisper", text: '[Character]: "...don\'t look now, but..." (small text, dotted bubble)' },
+                        { label: "Group Talk", text: '[Character A]: "Line A."\n[Character B]: "Line B."\n[Character C]: "Line C."' },
+                        { label: "Confrontation", text: '[Character A]: "How could you do this?!"\n[Character B]: "You left me no choice."\n[Character A]: "..."' },
+                        { label: "Sound Effect", text: "[SFX]: *CRASH!* / *whoooosh* / *thud*" },
+                      ].map(t => (
+                        <button key={t.label} onClick={() => {
+                          const val = dialogue ? dialogue + "\n\n" + t.text : t.text;
+                          setDialogue(val);
+                          if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, dialogue: val } : p));
+                        }}
+                          className="px-2.5 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-[11px] text-pink-300 hover:bg-pink-500/20 hover:border-pink-500/30 transition font-medium">
+                          {t.label}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Textarea */}
               <textarea
                 value={expandedField === "stageDirection" ? stageDirection : dialogue}
                 onChange={(e) => {
@@ -4760,17 +5151,316 @@ export default function MangaStudioPlaygroundPage() {
                 }}
                 placeholder={expandedField === "stageDirection"
                   ? "Describe the scene in detail: setting, character positions, camera angles, lighting, mood, actions, expressions, background elements..."
-                  : "Write dialogue for each character. Use format: Character: \"Line\"\nExample:\nKaito: \"This is where it all begins.\"\nRyu: \"Show me what you've got.\""}
-                className="w-full h-64 px-4 py-3 bg-[#13131a] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none leading-relaxed"
+                  : 'Write dialogue for each character. Use format:\nCharacter: "Line..."\n\nExample:\nKaito: "This is where it all begins."\nRyu: "Show me what you\'ve got."'}
+                className="w-full h-64 px-4 py-3 bg-[#13131a] border border-purple-500/30 rounded-xl text-sm text-white placeholder-gray-500 focus:border-purple-500/50 focus:outline-none resize-none leading-relaxed"
                 autoFocus
               />
-              <div className="flex items-center justify-between mt-3">
+              <div className="flex items-center justify-between">
                 <p className="text-[10px] text-gray-500">
                   {(expandedField === "stageDirection" ? stageDirection : dialogue).split(/\s+/).filter(Boolean).length} words
                 </p>
                 <button onClick={() => setExpandedField(null)}
                   className="px-5 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm font-semibold transition">
                   Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Generator Modal — redesigned with single + multi-scene support */}
+      {showAIGenerator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowAIGenerator(false)}>
+          <div className="relative max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#13131a] border border-white/10 rounded-xl">
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">AI Manga</h3>
+                    <p className="text-[10px] text-gray-500">Scene builder & AI generator</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowAIGenerator(false)} className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition">
+                  <XIcon className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-5">
+                {/* Current Panel indicator */}
+                {selectedPanel && (
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-md bg-pink-500/20 text-pink-400 text-xs font-bold flex items-center justify-center">
+                      {currentPanels.findIndex(p => p.id === selectedPanel.id) + 1}
+                    </span>
+                    <span className="text-sm font-semibold text-white">{selectedPanel.title}</span>
+                    <span className="text-[10px] text-gray-500 ml-auto">← Panels</span>
+                  </div>
+                )}
+
+                {/* Generation Mode Toggle */}
+                <div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setGenerationMode("single")}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition border ${
+                        generationMode === "single" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-400 border-white/10 hover:border-white/20"
+                      }`}>
+                      Single Scene
+                    </button>
+                    <button onClick={() => setGenerationMode("multi")}
+                      className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition border ${
+                        generationMode === "multi" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-400 border-white/10 hover:border-white/20"
+                      }`}>
+                      Multi-Scene
+                    </button>
+                  </div>
+                </div>
+
+                {/* Multi-scene settings */}
+                {generationMode === "multi" && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-400 mb-2">Scenes per Panel:</label>
+                      <div className="grid grid-cols-6 gap-1.5">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
+                          <button key={num} onClick={() => setSceneCount(num)}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-bold transition border ${
+                              sceneCount === num ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"
+                            }`}>
+                            {num}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Layout visual preview */}
+                    <div className="p-3 bg-[#0a0a10] rounded-lg border border-white/5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] text-gray-500 font-medium">Layout Preview</span>
+                        <span className="text-[10px] text-emerald-400 font-semibold">Save ~{Math.round((1 - 1/sceneCount) * 100)}% tokens</span>
+                      </div>
+                      <div className="grid gap-1" style={{
+                        gridTemplateColumns: `repeat(${sceneCount <= 3 ? sceneCount : sceneCount <= 6 ? 3 : 4}, 1fr)`,
+                        gridTemplateRows: `repeat(${Math.ceil(sceneCount / (sceneCount <= 3 ? sceneCount : sceneCount <= 6 ? 3 : 4))}, 1fr)`
+                      }}>
+                        {[...Array(sceneCount)].map((_, i) => (
+                          <div key={i} className="aspect-[4/3] bg-[#1a1a24] rounded border border-purple-500/20 flex items-center justify-center">
+                            <span className="text-[9px] text-purple-400/60 font-bold">{i + 1}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Reference Images — multi-upload */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-2">Reference Images</label>
+                  <input ref={refImageInputRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={(e) => {
+                      const files = e.target.files;
+                      if (!files) return;
+                      Array.from(files).forEach(file => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          if (ev.target?.result) setReferenceImages(prev => [...prev, ev.target!.result as string]);
+                        };
+                        reader.readAsDataURL(file);
+                      });
+                      e.target.value = "";
+                    }}
+                  />
+                  {referenceImages.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {referenceImages.map((img, i) => (
+                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                          <img src={img} alt={`ref-${i}`} className="w-full h-full object-cover" />
+                          <button onClick={() => setReferenceImages(prev => prev.filter((_, idx) => idx !== i))}
+                            className="absolute top-0 right-0 p-0.5 bg-red-500/80 rounded-bl-lg opacity-0 group-hover:opacity-100 transition">
+                            <XIcon className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      ))}
+                      <button onClick={() => refImageInputRef.current?.click()}
+                        className="w-16 h-16 rounded-lg border border-dashed border-white/20 flex items-center justify-center hover:border-white/40 transition">
+                        <Plus className="w-4 h-4 text-gray-500" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => refImageInputRef.current?.click()}
+                      className="w-full py-3 border border-dashed border-white/15 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:border-white/30 transition flex items-center justify-center gap-2">
+                      <Upload className="w-3.5 h-3.5" /> Upload reference images (multiple)
+                    </button>
+                  )}
+                </div>
+
+                {/* Tabs: Chars, Scene, Props, Time, Adv */}
+                <div className="flex gap-0 border-b border-white/10">
+                  {([["chars", "Chars"], ["scene", "Scene"], ["props", "Props"], ["time", "Time"], ["adv", "Adv"]] as const).map(([key, label]) => (
+                    <button key={key} onClick={() => setAiGenTab(key)}
+                      className={`px-4 py-2 text-xs font-semibold transition border-b-2 ${
+                        aiGenTab === key ? "text-orange-400 border-orange-400" : "text-gray-500 border-transparent hover:text-gray-300"
+                      }`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Tab Content */}
+                <div className="min-h-[80px]">
+                  {aiGenTab === "chars" && (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-gray-300">CHARACTERS</span>
+                        <button className="text-[10px] text-emerald-400 hover:text-emerald-300 transition font-semibold flex items-center gap-1">
+                          <Plus className="w-3 h-3" /> Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(selectedPanel?.characters?.length ? selectedPanel.characters : ["Kaito", "Ryu"]).map((char, i) => (
+                          <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1a24] rounded-lg border border-white/10">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${
+                              i % 3 === 0 ? "bg-orange-500" : i % 3 === 1 ? "bg-red-500" : "bg-blue-500"
+                            }`}>{(typeof char === "string" ? char : "C")[0]}</div>
+                            <span className="text-xs text-gray-300">{typeof char === "string" ? char : `Char ${i+1}`}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {aiGenTab === "scene" && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold text-gray-300">SCENE DESCRIPTION</span>
+                      <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
+                        placeholder="Describe what happens in this scene..."
+                        className="w-full h-20 px-3 py-2 bg-[#0f0f14] border border-white/10 rounded-lg text-xs text-white placeholder-gray-600 focus:border-emerald-500/50 focus:outline-none resize-none" />
+                    </div>
+                  )}
+                  {aiGenTab === "props" && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold text-gray-300">PROPS & OBJECTS</span>
+                      <input placeholder="e.g. sword, book, phone..." className="w-full px-3 py-2 bg-[#0f0f14] border border-white/10 rounded-lg text-xs text-white placeholder-gray-600 focus:border-emerald-500/50 focus:outline-none" />
+                    </div>
+                  )}
+                  {aiGenTab === "time" && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold text-gray-300">TIME & SETTING</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {["Day", "Night", "Dawn", "Dusk", "Rain", "Snow", "Indoor", "Outdoor"].map(t => (
+                          <button key={t} className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-[#1a1a24] text-gray-400 border border-white/10 hover:border-purple-500/30 hover:text-purple-300 transition">{t}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {aiGenTab === "adv" && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold text-gray-300">ADVANCED</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-gray-500 mb-1 block">Shot Type</label>
+                          <select className="w-full px-2 py-1.5 bg-[#0f0f14] border border-white/10 rounded-lg text-xs text-white focus:outline-none">
+                            <option>Auto</option>
+                            <option>Close-up</option>
+                            <option>Medium Shot</option>
+                            <option>Full Shot</option>
+                            <option>Establishing Shot</option>
+                            <option>Extreme Close-up</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-500 mb-1 block">Style</label>
+                          <select className="w-full px-2 py-1.5 bg-[#0f0f14] border border-white/10 rounded-lg text-xs text-white focus:outline-none">
+                            <option>Manga B&W</option>
+                            <option>Full Color</option>
+                            <option>Webtoon</option>
+                            <option>Realistic</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Stage Direction */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-gray-400">Stage Direction</label>
+                    <button className="text-gray-600 hover:text-gray-400 transition"><Maximize2 className="w-3 h-3" /></button>
+                  </div>
+                  <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Describe the scene action..."
+                    className="w-full h-16 px-3 py-2 bg-[#0f0f14] border border-white/10 rounded-lg text-xs text-white placeholder-gray-600 focus:border-emerald-500/50 focus:outline-none resize-none" />
+                </div>
+
+                {/* Dialogue */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-gray-400">Dialogue</label>
+                    <button className="text-gray-600 hover:text-gray-400 transition"><Maximize2 className="w-3 h-3" /></button>
+                  </div>
+                  <textarea placeholder='Character: "Line..."'
+                    className="w-full h-12 px-3 py-2 bg-[#0f0f14] border border-white/10 rounded-lg text-xs text-white placeholder-gray-600 focus:border-emerald-500/50 focus:outline-none resize-none" />
+                </div>
+
+                {/* Generate Button */}
+                <button
+                  onClick={generatePanelContent}
+                  disabled={isGenerating}
+                  className="w-full py-3 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:opacity-90 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      Generate with AI Manga {generationMode === "multi" ? `(${sceneCount} scenes)` : ""}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Start Guide (pic2) */}
+      {showQuickStart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowQuickStart(false)}>
+          <div className="relative max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-[#13131a] border border-white/10 rounded-2xl p-8">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-black text-white tracking-tight">QUICK START GUIDE</h3>
+                <button onClick={() => setShowQuickStart(false)} className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition">
+                  <XIcon className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <button onClick={() => { setShowQuickStart(false); }}
+                  className="w-full flex items-center gap-4 px-5 py-4 bg-[#1a1a24] hover:bg-[#1f1f2c] border border-white/5 hover:border-white/10 rounded-xl transition group">
+                  <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">1</div>
+                  <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition">Create Story & Episodes</span>
+                </button>
+                <button onClick={() => { setShowQuickStart(false); }}
+                  className="w-full flex items-center gap-4 px-5 py-4 bg-[#1a1a24] hover:bg-[#1f1f2c] border border-white/5 hover:border-white/10 rounded-xl transition group">
+                  <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm shrink-0">2</div>
+                  <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition">Build Assets <span className="text-gray-500 font-normal">(Characters, Scenes)</span></span>
+                </button>
+                <button onClick={() => { setShowQuickStart(false); setActiveTab("aimanga"); }}
+                  className="w-full flex items-center gap-4 px-5 py-4 bg-[#1a1a24] hover:bg-[#1f1f2c] border border-white/5 hover:border-white/10 rounded-xl transition group">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold text-sm shrink-0">3</div>
+                  <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition">Generate Panels</span>
+                </button>
+                <button onClick={() => { setShowQuickStart(false); setCanvasViewMode("fullpage"); }}
+                  className="w-full flex items-center gap-4 px-5 py-4 bg-[#1a1a24] hover:bg-[#1f1f2c] border border-white/5 hover:border-white/10 rounded-xl transition group">
+                  <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold text-sm shrink-0">4</div>
+                  <span className="text-sm font-semibold text-gray-200 group-hover:text-white transition">Compose Pages</span>
                 </button>
               </div>
             </div>
