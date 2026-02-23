@@ -26,11 +26,18 @@ export function MangaStudioSidebar({
 
   const navItems = [
     {
+      id: "projects",
+      label: "Projects",
+      icon: Globe,
+      href: "/manga-studio/projects",
+      description: "Manage storyboard projects",
+    },
+    {
       id: "editor",
       label: "Manga Editor",
       icon: Layers,
       href: "/manga-studio",
-      description: "Build pages & panels",
+      description: "Build scenes & shots",
     },
     {
       id: "playground",
@@ -41,17 +48,17 @@ export function MangaStudioSidebar({
     },
     {
       id: "script-breaker",
-      label: "Episode Builder",
+      label: "Storyboard Builder",
       icon: FileText,
       href: "/manga-studio/script-breaker",
-      description: "Manga → Characters → Panels",
+      description: "Script → Characters → Shots",
     },
     {
       id: "episodes",
-      label: "Episodes",
+      label: "Shot Manager",
       icon: Film,
       href: "/manga-studio/episodes",
-      description: "Episodes, panels & scripts",
+      description: "Manage shots & status",
     },
     {
       id: "universe",

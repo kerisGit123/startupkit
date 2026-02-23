@@ -4,9 +4,9 @@ import { useState, useRef } from "react";
 import Link from "next/link";
 import { FileText, Sparkles, ChevronDown, ChevronRight, Plus, Trash2, GripVertical, Layers, Upload, Wand2, BookOpen, Edit3, Check, RefreshCw, UserPlus, ChevronLeft, Palette, X as XIcon, ArrowRight, ArrowLeft as ArrowLeftIcon, Image as ImageIcon, MapPin, Package, Camera } from "lucide-react";
 
-interface PanelBreakdown { id: number; description: string; panelType: string; framing: string; characters: string[]; dialogue: string; }
-interface PageBreakdown { id: number; pageNumber: number; panels: PanelBreakdown[]; expanded: boolean; }
-interface EpisodeBreakdown { id: number; title: string; summary: string; pages: PageBreakdown[]; expanded: boolean; }
+interface ShotBreakdown { id: number; description: string; shotType: string; framing: string; characters: string[]; dialogue: string; }
+interface SceneBreakdown { id: number; sceneNumber: number; shots: ShotBreakdown[]; expanded: boolean; }
+interface ProjectBreakdown { id: number; title: string; summary: string; scenes: SceneBreakdown[]; expanded: boolean; }
 interface ExtractedCharacter { id: string; name: string; role: "main" | "supporting" | "minor"; appearance: string; shortDescription: string; storySummary: string; confirmed: boolean; selected: boolean; }
 interface ExtractedScene { id: string; title: string; description: string; characters: string[]; location: string; mood: string; cameraAngle: string; selected: boolean; }
 interface ExtractedProp { id: string; name: string; description: string; category: string; scenes: string[]; selected: boolean; }
@@ -89,17 +89,17 @@ export default function ScriptBreakerPage() {
   const [scenesPropsTab, setScenesPropsTab] = useState<"scenes" | "props">("scenes");
 
   // Step 5: Breakdown
-  const [episodes, setEpisodes] = useState<EpisodeBreakdown[]>([]);
+  const [episodes, setEpisodes] = useState<ProjectBreakdown[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [targetEpisodes, setTargetEpisodes] = useState("auto");
-  const [panelsPerPage, setPanelsPerPage] = useState("5");
+  const [shotsPerPage, setPanelsPerPage] = useState("5");
   const [mangaFormat, setMangaFormat] = useState("webtoon");
 
   // Derived
   const storyText = script || generatedStory;
   const wordCount = storyText.trim() ? storyText.trim().split(/\s+/).length : 0;
-  const totalPanels = episodes.reduce((sum, ep) => sum + ep.pages.reduce((ps, pg) => ps + pg.panels.length, 0), 0);
-  const totalPages = episodes.reduce((sum, ep) => sum + ep.pages.length, 0);
+  const totalPanels = episodes.reduce((sum, ep) => sum + ep.scenes.reduce((ps, pg) => ps + pg.shots.length, 0), 0);
+  const totalPages = episodes.reduce((sum, ep) => sum + ep.scenes.length, 0);
 
   const steps: { id: WizardStep; label: string; num: number }[] = [
     { id: "story", label: "Story", num: 1 },
@@ -186,7 +186,7 @@ export default function ScriptBreakerPage() {
   const confirmCharacter = (id: string) => { setExtractedCharacters(prev => prev.map(c => c.id === id ? { ...c, confirmed: true } : c)); };
   const confirmAllCharacters = () => { setExtractedCharacters(prev => prev.map(c => ({ ...c, confirmed: true }))); };
   const toggleEpisode = (id: number) => { setEpisodes(prev => prev.map(ep => ep.id === id ? { ...ep, expanded: !ep.expanded } : ep)); };
-  const togglePage = (epId: number, pgId: number) => { setEpisodes(prev => prev.map(ep => ep.id === epId ? { ...ep, pages: ep.pages.map(pg => pg.id === pgId ? { ...pg, expanded: !pg.expanded } : pg) } : ep)); };
+  const togglePage = (epId: number, pgId: number) => { setEpisodes(prev => prev.map(ep => ep.id === epId ? { ...ep, scenes: ep.scenes.map(pg => pg.id === pgId ? { ...pg, expanded: !pg.expanded } : pg) } : ep)); };
   const addChapter = () => {
     const id = `ch-${Date.now()}`;
     setChapters(prev => [...prev, { id, title: `Chapter ${prev.length + 1}`, content: "" }]);
@@ -197,37 +197,37 @@ export default function ScriptBreakerPage() {
     setIsProcessing(true);
     setTimeout(() => {
       setEpisodes([
-        { id: 1, title: "Episode 1: The Beginning", summary: "Kaito discovers basketball.", expanded: true, pages: [
-          { id: 1, pageNumber: 1, expanded: true, panels: [
-            { id: 1, description: "Wide establishing shot — school rooftop, sunset. Kaito watches a street game below.", panelType: "Establishing", framing: "Wide", characters: ["Kaito"], dialogue: "" },
-            { id: 2, description: "Close-up of Kaito's eyes reflecting the game.", panelType: "Close-up", framing: "Extreme Close-up", characters: ["Kaito"], dialogue: "" },
-            { id: 3, description: "Action panel — a player dunks with speed lines.", panelType: "Action", framing: "Full Body", characters: ["Street Player"], dialogue: "" },
+        { id: 1, title: "Episode 1: The Beginning", summary: "Kaito discovers basketball.", expanded: true, scenes: [
+          { id: 1, sceneNumber: 1, expanded: true, shots: [
+            { id: 1, description: "Wide establishing shot — school rooftop, sunset. Kaito watches a street game below.", shotType: "Establishing", framing: "Wide", characters: ["Kaito"], dialogue: "" },
+            { id: 2, description: "Close-up of Kaito's eyes reflecting the game.", shotType: "Close-up", framing: "Extreme Close-up", characters: ["Kaito"], dialogue: "" },
+            { id: 3, description: "Action panel — a player dunks with speed lines.", shotType: "Action", framing: "Full Body", characters: ["Street Player"], dialogue: "" },
           ]},
-          { id: 2, pageNumber: 2, expanded: false, panels: [
-            { id: 4, description: "Next morning — Kaito at the gym door, nervous.", panelType: "Dramatic Reveal", framing: "Bust Shot", characters: ["Kaito", "Coach"], dialogue: "Kaito: \"I want to join the basketball team.\"" },
-            { id: 5, description: "Coach looks at Kaito's small frame. Skeptical.", panelType: "Reaction", framing: "Close-up", characters: ["Coach"], dialogue: "Coach: \"Have you ever played before?\"" },
-            { id: 6, description: "Silent panel — Kaito shakes his head.", panelType: "Silent", framing: "Bust Shot", characters: ["Kaito"], dialogue: "" },
-          ]},
-        ]},
-        { id: 2, title: "Episode 2: First Practice", summary: "Kaito's first practice is a disaster.", expanded: false, pages: [
-          { id: 3, pageNumber: 1, expanded: false, panels: [
-            { id: 7, description: "Morning gym — team warming up.", panelType: "Establishing", framing: "Wide", characters: ["Kaito", "Team"], dialogue: "" },
-            { id: 8, description: "Montage — Kaito failing at drills, tripping over.", panelType: "Action", framing: "Various", characters: ["Kaito"], dialogue: "" },
-            { id: 9, description: "Team members whispering, laughing.", panelType: "Reaction", framing: "Two-Shot", characters: ["Team Members"], dialogue: "\"Who let this guy in?\"" },
-          ]},
-          { id: 4, pageNumber: 2, expanded: false, panels: [
-            { id: 10, description: "Kaito alone at court. Moon rising through windows.", panelType: "Establishing", framing: "Wide", characters: ["Kaito"], dialogue: "" },
-            { id: 11, description: "Ryu watches from doorway, arms crossed.", panelType: "Close-up", framing: "Bust Shot", characters: ["Ryu"], dialogue: "" },
+          { id: 2, sceneNumber: 2, expanded: false, shots: [
+            { id: 4, description: "Next morning — Kaito at the gym door, nervous.", shotType: "Dramatic Reveal", framing: "Bust Shot", characters: ["Kaito", "Coach"], dialogue: "Kaito: \"I want to join the basketball team.\"" },
+            { id: 5, description: "Coach looks at Kaito's small frame. Skeptical.", shotType: "Reaction", framing: "Close-up", characters: ["Coach"], dialogue: "Coach: \"Have you ever played before?\"" },
+            { id: 6, description: "Silent panel — Kaito shakes his head.", shotType: "Silent", framing: "Bust Shot", characters: ["Kaito"], dialogue: "" },
           ]},
         ]},
-        { id: 3, title: "Episode 3: The Challenge", summary: "Ryu challenges Kaito to a one-on-one.", expanded: false, pages: [
-          { id: 5, pageNumber: 1, expanded: false, panels: [
-            { id: 12, description: "Ryu approaches Kaito. Tension.", panelType: "Two-Shot", framing: "Bust Shot", characters: ["Kaito", "Ryu"], dialogue: "Ryu: \"One-on-one. Score once, you stay.\"" },
-            { id: 13, description: "Splash — gym packed, center court.", panelType: "Splash Page", framing: "Wide", characters: ["Kaito", "Ryu", "Crowd"], dialogue: "" },
+        { id: 2, title: "Episode 2: First Practice", summary: "Kaito's first practice is a disaster.", expanded: false, scenes: [
+          { id: 3, sceneNumber: 1, expanded: false, shots: [
+            { id: 7, description: "Morning gym — team warming up.", shotType: "Establishing", framing: "Wide", characters: ["Kaito", "Team"], dialogue: "" },
+            { id: 8, description: "Montage — Kaito failing at drills, tripping over.", shotType: "Action", framing: "Various", characters: ["Kaito"], dialogue: "" },
+            { id: 9, description: "Team members whispering, laughing.", shotType: "Reaction", framing: "Two-Shot", characters: ["Team Members"], dialogue: "\"Who let this guy in?\"" },
           ]},
-          { id: 6, pageNumber: 2, expanded: false, panels: [
-            { id: 14, description: "Action — Ryu dribbles past Kaito.", panelType: "Action", framing: "Full Body", characters: ["Kaito", "Ryu"], dialogue: "" },
-            { id: 15, description: "Kaito falls but gets back up.", panelType: "Impact", framing: "Close-up", characters: ["Kaito"], dialogue: "Kaito: \"Again.\"" },
+          { id: 4, sceneNumber: 2, expanded: false, shots: [
+            { id: 10, description: "Kaito alone at court. Moon rising through windows.", shotType: "Establishing", framing: "Wide", characters: ["Kaito"], dialogue: "" },
+            { id: 11, description: "Ryu watches from doorway, arms crossed.", shotType: "Close-up", framing: "Bust Shot", characters: ["Ryu"], dialogue: "" },
+          ]},
+        ]},
+        { id: 3, title: "Episode 3: The Challenge", summary: "Ryu challenges Kaito to a one-on-one.", expanded: false, scenes: [
+          { id: 5, sceneNumber: 1, expanded: false, shots: [
+            { id: 12, description: "Ryu approaches Kaito. Tension.", shotType: "Two-Shot", framing: "Bust Shot", characters: ["Kaito", "Ryu"], dialogue: "Ryu: \"One-on-one. Score once, you stay.\"" },
+            { id: 13, description: "Splash — gym packed, center court.", shotType: "Splash Page", framing: "Wide", characters: ["Kaito", "Ryu", "Crowd"], dialogue: "" },
+          ]},
+          { id: 6, sceneNumber: 2, expanded: false, shots: [
+            { id: 14, description: "Action — Ryu dribbles past Kaito.", shotType: "Action", framing: "Full Body", characters: ["Kaito", "Ryu"], dialogue: "" },
+            { id: 15, description: "Kaito falls but gets back up.", shotType: "Impact", framing: "Close-up", characters: ["Kaito"], dialogue: "Kaito: \"Again.\"" },
           ]},
         ]},
       ]);
@@ -400,7 +400,7 @@ export default function ScriptBreakerPage() {
                           onClick={() => setCurrentStep("breakdown")}
                           className="text-xs text-purple-400 hover:text-purple-300 transition"
                         >
-                          Skip to panels →
+                          Skip to shots →
                         </button>
                       </div>
                     </div>
@@ -600,7 +600,7 @@ export default function ScriptBreakerPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-white mb-1">Scenes & Props</h2>
-                  <p className="text-sm text-gray-400">AI extracted scenes and props from your story. Review and edit before generating panels.</p>
+                  <p className="text-sm text-gray-400">AI extracted scenes and props from your story. Review and edit before generating shots.</p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-400 font-semibold">{extractedScenes.length} Scenes</span>
@@ -712,7 +712,7 @@ export default function ScriptBreakerPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-white mb-1">Panel Breakdown</h2>
-                  <p className="text-sm text-gray-400">AI has broken your story into episodes and panels</p>
+                  <p className="text-sm text-gray-400">AI has broken your story into episodes and shots</p>
                 </div>
                 {episodes.length > 0 && (
                   <div className="flex items-center gap-2 text-xs">
@@ -732,7 +732,7 @@ export default function ScriptBreakerPage() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-gray-500 mb-1 uppercase tracking-wide">Panels / Page</label>
-                  <select value={panelsPerPage} onChange={(e) => setPanelsPerPage(e.target.value)} className="w-full px-3 py-2 bg-[#13131a] border border-white/10 rounded-lg text-xs text-white focus:outline-none appearance-none cursor-pointer">
+                  <select value={shotsPerPage} onChange={(e) => setPanelsPerPage(e.target.value)} className="w-full px-3 py-2 bg-[#13131a] border border-white/10 rounded-lg text-xs text-white focus:outline-none appearance-none cursor-pointer">
                     <option value="3">3 (spacious)</option><option value="4">4 (webtoon)</option><option value="5">5 (manga)</option><option value="6">6 (dense)</option>
                   </select>
                 </div>
@@ -748,13 +748,13 @@ export default function ScriptBreakerPage() {
                 <div className="flex items-center justify-center py-16">
                   <div className="text-center">
                     <div className="w-10 h-10 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-sm text-gray-400">Breaking story into episodes and panels...</p>
+                    <p className="text-sm text-gray-400">Breaking story into episodes and shots...</p>
                   </div>
                 </div>
               ) : episodes.length > 0 ? (
                 <>
                   {episodes.map((episode) => {
-                    const epPanelCount = episode.pages.reduce((s, pg) => s + pg.panels.length, 0);
+                    const epPanelCount = episode.scenes.reduce((s, pg) => s + pg.shots.length, 0);
                     return (
                       <div key={episode.id} className="bg-[#13131a] rounded-xl border border-white/10 overflow-hidden">
                         <button onClick={() => toggleEpisode(episode.id)} className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition">
@@ -767,26 +767,26 @@ export default function ScriptBreakerPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3 text-xs text-gray-500">
-                            <span>{episode.pages.length} pages</span><span>&bull;</span><span>{epPanelCount} panels</span>
+                            <span>{episode.scenes.length} scenes</span><span>&bull;</span><span>{epPanelCount} shots</span>
                           </div>
                         </button>
                         {episode.expanded && (
                           <div className="border-t border-white/5">
-                            {episode.pages.map((page) => (
+                            {episode.scenes.map((page) => (
                               <div key={page.id} className="border-b border-white/5 last:border-0">
                                 {/* Page header */}
                                 <button onClick={() => togglePage(episode.id, page.id)} className="w-full flex items-center justify-between px-6 py-2.5 bg-[#0f0f14]/50 hover:bg-white/5 transition">
                                   <div className="flex items-center gap-2.5">
                                     {page.expanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
-                                    <div className="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold">Page {page.pageNumber}</div>
-                                    <span className="text-[10px] text-gray-500">{page.panels.length} panels</span>
+                                    <div className="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold">Page {page.sceneNumber}</div>
+                                    <span className="text-[10px] text-gray-500">{page.shots.length} shots</span>
                                   </div>
-                                  <Link href={`/manga-studio?ep=${episode.id}&page=${page.pageNumber}`} onClick={(e) => e.stopPropagation()} className="text-[9px] px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded hover:bg-emerald-500/20 transition font-semibold">Open in Editor</Link>
+                                  <Link href={`/manga-studio?ep=${episode.id}&page=${page.sceneNumber}`} onClick={(e) => e.stopPropagation()} className="text-[9px] px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded hover:bg-emerald-500/20 transition font-semibold">Open in Editor</Link>
                                 </button>
                                 {/* Panels inside page */}
                                 {page.expanded && (
                                   <div>
-                                    {page.panels.map((panel, pi) => (
+                                    {page.shots.map((panel, pi) => (
                                       <div key={panel.id} className="flex items-start gap-3 px-8 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/5 transition">
                                         <div className="flex items-center gap-2 pt-0.5">
                                           <GripVertical className="w-3 h-3 text-gray-600 cursor-grab" />
@@ -794,7 +794,7 @@ export default function ScriptBreakerPage() {
                                         </div>
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-1.5 mb-1">
-                                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-semibold">{panel.panelType}</span>
+                                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-semibold">{panel.shotType}</span>
                                             <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-gray-400 rounded">{panel.framing}</span>
                                             {panel.characters.map(c => (<span key={c} className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded">{c}</span>))}
                                           </div>

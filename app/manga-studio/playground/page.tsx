@@ -17,9 +17,9 @@ type Scene = {
   image?: string;
 };
 
-type Panel = {
+type Shot = {
   id: string;
-  pageId: number;
+  sceneId: number;
   order: number;
   title: string;
   height: number;
@@ -575,27 +575,27 @@ export default function MangaStudioPlaygroundPage() {
   const [activeTab, setActiveTab] = useState<"layers" | "bubbles" | "text" | "assets" | "paint" | "panel" | "aimanga">("layers");
   const [hiddenObjectIds, setHiddenObjectIds] = useState<Set<string>>(new Set());
 
-  // Episode, Page & Panel management
-  const [episodes] = useState([
-    { id: 1, number: 1, title: "Episode 1" },
-    { id: 2, number: 2, title: "Episode 2" },
+  // Project, Scene & Shot management
+  const [projects] = useState([
+    { id: 1, number: 1, title: "Project 1" },
+    { id: 2, number: 2, title: "Project 2" },
   ]);
-  const [currentEpisodeId, setCurrentEpisodeId] = useState(1);
-  const currentEpisode = episodes.find(e => e.id === currentEpisodeId);
+  const [currentProjectId, setCurrentProjectId] = useState(1);
+  const currentProject = projects.find(e => e.id === currentProjectId);
 
-  const [pages, setPages] = useState([
-    { id: 1, number: 1, episodeId: 1, status: "drawing" as const, template: "standard-vertical" },
-    { id: 2, number: 2, episodeId: 1, status: "queued" as const, template: "standard-vertical" },
-    { id: 3, number: 1, episodeId: 2, status: "queued" as const, template: "standard-vertical" },
+  const [scenes, setScenes] = useState([
+    { id: 1, number: 1, projectId: 1, status: "drawing" as const, template: "standard-vertical" },
+    { id: 2, number: 2, projectId: 1, status: "queued" as const, template: "standard-vertical" },
+    { id: 3, number: 1, projectId: 2, status: "queued" as const, template: "standard-vertical" },
   ]);
   const [currentPageId, setCurrentPageId] = useState(1);
-  const episodePages = pages.filter(p => p.episodeId === currentEpisodeId).sort((a, b) => a.number - b.number);
-  const [panels, setPanels] = useState<Panel[]>([
-    { id: "panel-1", pageId: 1, order: 0, title: "Opening Shot", height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
-    { id: "panel-2", pageId: 1, order: 1, title: "Determination", height: 400, sizePreset: "short", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
-    { id: "panel-3", pageId: 1, order: 2, title: "Flashback", height: 1000, sizePreset: "tall", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+  const projectScenes = scenes.filter(p => p.projectId === currentProjectId).sort((a, b) => a.number - b.number);
+  const [shots, setShots] = useState<Shot[]>([
+    { id: "shot-1", sceneId: 1, order: 0, title: "Opening Shot", height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+    { id: "shot-2", sceneId: 1, order: 1, title: "Determination", height: 400, sizePreset: "short", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+    { id: "shot-3", sceneId: 1, order: 2, title: "Flashback", height: 1000, sizePreset: "tall", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
   ]);
-  const [selectedPanelId, setSelectedPanelId] = useState<string | null>("panel-1");
+  const [selectedShotId, setSelectedShotId] = useState<string | null>("panel-1");
   const [showTimeline, setShowTimeline] = useState(true);
   const [showEpisodeDropdown, setShowEpisodeDropdown] = useState(false);
   const [showPageDropdown, setShowPageDropdown] = useState(false);
@@ -621,21 +621,21 @@ export default function MangaStudioPlaygroundPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // Multi-scene panel states
+  // Multi-shot panel states
   const [generationMode, setGenerationMode] = useState<"single" | "multi">("single");
-  const [sceneCount, setSceneCount] = useState(4);
-  const [sceneLayout, setSceneLayout] = useState<"grid" | "sequence" | "dynamic">("dynamic");
+  const [shotCount, setShotCount] = useState(4);
+  const [shotLayout, setShotLayout] = useState<"grid" | "sequence" | "dynamic">("dynamic");
   const [templateStyle, setTemplateStyle] = useState<"manga" | "storyboard">("manga");
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const refImageInputRef = useRef<HTMLInputElement | null>(null);
   const [aiGenTab, setAiGenTab] = useState<"chars" | "scene" | "props" | "time" | "adv">("chars");
 
-  const currentPage = pages.find(p => p.id === currentPageId);
-  const currentPanels = panels.filter(p => p.pageId === currentPageId).sort((a, b) => a.order - b.order);
-  const selectedPanel = panels.find(p => p.id === selectedPanelId);
+  const currentScene = scenes.find(p => p.id === currentPageId);
+  const currentShots = shots.filter(p => p.sceneId === currentPageId).sort((a, b) => a.order - b.order);
+  const selectedShot = shots.find(p => p.id === selectedShotId);
 
-  const panelSizePresets = [
+  const shotSizePresets = [
     { id: "short", name: "Short", height: 400, desc: "Action / Close-up" },
     { id: "standard", name: "Standard", height: 600, desc: "Dialogue / Mid-shot" },
     { id: "tall", name: "Tall", height: 1000, desc: "Establishing / Drama" },
@@ -643,56 +643,55 @@ export default function MangaStudioPlaygroundPage() {
     { id: "custom", name: "Custom", height: 600, desc: "Set your own size" },
   ];
 
-  const addPanel = () => {
+  const addShot = () => {
     saveHistory();
-    const maxOrder = currentPanels.length > 0 ? Math.max(...currentPanels.map(p => p.order)) : -1;
-    const id = `panel-${Date.now()}`;
-    setPanels(prev => [...prev, {
-      id, pageId: currentPageId, order: maxOrder + 1, title: `Panel ${currentPanels.length + 1}`,
+    const maxOrder = currentShots.length > 0 ? Math.max(...currentShots.map(p => p.order)) : -1;
+    const id = `shot-${Date.now()}`;
+    setShots(prev => [...prev, {
+      id, sceneId: currentPageId, order: maxOrder + 1, title: `Shot ${currentShots.length + 1}`,
       height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "",
       generationMode: "single", scenes: [],
     }]);
-    setSelectedPanelId(id);
+    setSelectedShotId(id);
     setActiveTab("panel");
   };
 
-  const duplicatePanel = (panelId: string) => {
+  const duplicateShot = (shotId: string) => {
     saveHistory();
-    const src = panels.find(p => p.id === panelId);
+    const src = shots.find(p => p.id === shotId);
     if (!src) return;
-    const maxOrder = currentPanels.length > 0 ? Math.max(...currentPanels.map(p => p.order)) : -1;
-    const newId = `panel-${Date.now()}`;
-    setPanels(prev => [...prev, { ...src, id: newId, order: maxOrder + 1, title: `${src.title} (copy)` }]);
-    // Duplicate bubbles, text, assets for this panel
-    const srcBubbles = bubbles.filter(b => b.panelId === panelId);
-    const srcTexts = textElements.filter(t => t.panelId === panelId);
-    const srcAssets = assetElements.filter(a => a.panelId === panelId);
+    const maxOrder = currentShots.length > 0 ? Math.max(...currentShots.map(p => p.order)) : -1;
+    const newId = `shot-${Date.now()}`;
+    setShots(prev => [...prev, { ...src, id: newId, order: maxOrder + 1, title: `${src.title} (copy)` }]);
+    // Duplicate bubbles, text, assets for this shot
+    const srcBubbles = bubbles.filter(b => b.panelId === shotId);
+    const srcTexts = textElements.filter(t => t.panelId === shotId);
+    const srcAssets = assetElements.filter(a => a.panelId === shotId);
     if (srcBubbles.length) setBubbles(prev => [...prev, ...srcBubbles.map(b => ({ ...b, id: `bub-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, panelId: newId }))]);
     if (srcTexts.length) setTextElements(prev => [...prev, ...srcTexts.map(t => ({ ...t, id: `txt-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, panelId: newId }))]);
     if (srcAssets.length) setAssetElements(prev => [...prev, ...srcAssets.map(a => ({ ...a, id: `asset-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, panelId: newId }))]);
-    // Copy panel image if exists
-    if (panelImages[panelId]) setPanelImages(prev => ({ ...prev, [newId]: prev[panelId] }));
-    setSelectedPanelId(newId);
+    // Copy shot image if exists
+    if (panelImages[shotId]) setPanelImages(prev => ({ ...prev, [newId]: prev[shotId] }));
+    setSelectedShotId(newId);
   };
 
-  const deletePanel = (id: string) => {
+  const deleteShot = (id: string) => {
     saveHistory();
-    setPanels(prev => prev.filter(p => p.id !== id));
-    if (selectedPanelId === id) setSelectedPanelId(currentPanels.find(p => p.id !== id)?.id || null);
+    setShots(prev => prev.filter(p => p.id !== id));
+    if (selectedShotId === id) setSelectedShotId(currentShots.find(p => p.id !== id)?.id || null);
   };
 
-  const movePanelOrder = (panelId: string, direction: "up" | "down") => {
+  const moveShotOrder = (shotId: string, direction: "up" | "down") => {
     saveHistory();
-    const sorted = [...currentPanels];
-    const idx = sorted.findIndex(p => p.id === panelId);
-    if (idx < 0) return;
+    const newShots = [...shots];
+    const sorted = newShots.filter(p => p.sceneId === currentPageId).sort((a, b) => a.order - b.order);
+    const idx = sorted.findIndex(p => p.id === shotId);
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= sorted.length) return;
-    const newPanels = [...panels];
-    const a = newPanels.find(p => p.id === sorted[idx].id)!;
-    const b = newPanels.find(p => p.id === sorted[swapIdx].id)!;
+    const a = newShots.find(p => p.id === sorted[idx].id)!;
+    const b = newShots.find(p => p.id === sorted[swapIdx].id)!;
     const tmp = a.order; a.order = b.order; b.order = tmp;
-    setPanels(newPanels);
+    setShots(newShots);
   };
 
   // AI Generator Functions
@@ -704,21 +703,21 @@ export default function MangaStudioPlaygroundPage() {
   const handleQuickStart = () => {
     setShowQuickStart(true);
     // Create a quick template with common panel layout
-    const quickTemplatePanels: Panel[] = [
-      { id: `panel-${Date.now()}-1`, pageId: currentPageId, order: 0, title: "Opening", height: 800, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
-      { id: `panel-${Date.now()}-2`, pageId: currentPageId, order: 1, title: "Action", height: 600, sizePreset: "short", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
-      { id: `panel-${Date.now()}-3`, pageId: currentPageId, order: 2, title: "Dialogue", height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
-      { id: `panel-${Date.now()}-4`, pageId: currentPageId, order: 3, title: "Closing", height: 800, sizePreset: "tall", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+    const quickTemplatePanels: Shot[] = [
+      { id: `panel-${Date.now()}-1`, sceneId: currentPageId, order: 0, title: "Opening", height: 800, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+      { id: `panel-${Date.now()}-2`, sceneId: currentPageId, order: 1, title: "Action", height: 600, sizePreset: "short", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+      { id: `panel-${Date.now()}-3`, sceneId: currentPageId, order: 2, title: "Dialogue", height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
+      { id: `panel-${Date.now()}-4`, sceneId: currentPageId, order: 3, title: "Closing", height: 800, sizePreset: "tall", characters: [], location: "", time: "", stageDir: "", dialogue: "", generationMode: "single", scenes: [] },
     ];
     
-    setPanels(prev => [...prev, ...quickTemplatePanels]);
-    setSelectedPanelId(quickTemplatePanels[0].id);
+    setShots(prev => [...prev, ...quickTemplatePanels]);
+    setSelectedShotId(quickTemplatePanels[0].id);
     setActiveTab("panel");
     setShowQuickStart(false);
   };
 
-  const generatePanelContent = async () => {
-    if (!aiPrompt.trim() || !selectedPanel) return;
+  const generateShotContent = async () => {
+    if (!aiPrompt.trim() || !selectedShot) return;
     
     setIsGenerating(true);
     try {
@@ -726,9 +725,9 @@ export default function MangaStudioPlaygroundPage() {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       if (generationMode === "single") {
-        // Single panel generation
-        setPanels(prev => prev.map(p => 
-          p.id === selectedPanel.id 
+        // Single shot generation
+        setShots(prev => prev.map(p => 
+          p.id === selectedShot.id 
             ? { ...p, dialogue: aiPrompt, stageDir: "AI generated scene", generationMode: "single" as const, scenes: [] }
             : p
         ));
@@ -736,13 +735,13 @@ export default function MangaStudioPlaygroundPage() {
         // Multi-scene generation
         const scenes: Scene[] = [];
         const panelWidth = 800;
-        const panelHeight = selectedPanel.height;
+        const shotHeight = selectedShot.height;
         
-        if (sceneLayout === "grid") {
+        if (shotLayout === "grid") {
           // 2x2 grid layout
           const sceneWidth = panelWidth / 2;
-          const sceneHeight = panelHeight / 2;
-          for (let i = 0; i < Math.min(sceneCount, 4); i++) {
+          const sceneHeight = shotHeight / 2;
+          for (let i = 0; i < Math.min(shotCount, 4); i++) {
             const row = Math.floor(i / 2);
             const col = i % 2;
             scenes.push({
@@ -757,10 +756,10 @@ export default function MangaStudioPlaygroundPage() {
               generated: false
             });
           }
-        } else if (sceneLayout === "sequence") {
+        } else if (shotLayout === "sequence") {
           // Horizontal sequence
-          const sceneWidth = panelWidth / sceneCount;
-          for (let i = 0; i < sceneCount; i++) {
+          const sceneWidth = panelWidth / shotCount;
+          for (let i = 0; i < shotCount; i++) {
             scenes.push({
               id: `scene-${Date.now()}-${i}`,
               description: `${aiPrompt} - Scene ${i + 1}`,
@@ -768,7 +767,7 @@ export default function MangaStudioPlaygroundPage() {
                 x: i * sceneWidth,
                 y: 0,
                 width: sceneWidth,
-                height: panelHeight
+                height: shotHeight
               },
               generated: false
             });
@@ -782,14 +781,14 @@ export default function MangaStudioPlaygroundPage() {
               x: 0,
               y: 0,
               width: panelWidth,
-              height: panelHeight
+              height: shotHeight
             },
             generated: false
           });
         }
         
-        setPanels(prev => prev.map(p => 
-          p.id === selectedPanel.id 
+        setShots(prev => prev.map(p => 
+          p.id === selectedShot.id 
             ? { ...p, dialogue: aiPrompt, stageDir: "AI generated multi-scene", generationMode: "multi" as const, scenes }
             : p
         ));
@@ -802,29 +801,29 @@ export default function MangaStudioPlaygroundPage() {
     }
   };
 
-  // Switch page and auto-select its first panel
-  const switchToPage = (pageId: number) => {
-    setCurrentPageId(pageId);
-    const pagePanels = panels.filter(p => p.pageId === pageId).sort((a, b) => a.order - b.order);
-    setSelectedPanelId(pagePanels.length > 0 ? pagePanels[0].id : null);
+  // Switch scene and auto-select its first shot
+  const switchToScene = (sceneId: number) => {
+    setCurrentPageId(sceneId);
+    const sceneShots = shots.filter(p => p.sceneId === sceneId).sort((a, b) => a.order - b.order);
+    setSelectedShotId(sceneShots.length > 0 ? sceneShots[0].id : null);
   };
 
-  const addPage = () => {
-    const epPages = pages.filter(p => p.episodeId === currentEpisodeId);
-    const maxNum = epPages.length > 0 ? Math.max(...epPages.map(p => p.number)) : 0;
-    const newPageId = Date.now();
-    const newPanelId = `panel-${newPageId}`;
-    setPages(prev => [...prev, { id: newPageId, number: maxNum + 1, episodeId: currentEpisodeId, status: "queued" as const, template: "standard-vertical" }]);
-    setPanels(prev => [...prev, {
-      id: newPanelId, pageId: newPageId, order: 0, title: "Panel 1",
+  const addScene = () => {
+    const projectScenes = scenes.filter(p => p.projectId === currentProjectId);
+    const maxNum = projectScenes.length > 0 ? Math.max(...projectScenes.map(p => p.number)) : 0;
+    const newSceneId = Date.now();
+    const newShotId = `shot-${newSceneId}`;
+    setScenes(prev => [...prev, { id: newSceneId, number: maxNum + 1, projectId: currentProjectId, status: "queued" as const, template: "standard-vertical" }]);
+    setShots(prev => [...prev, {
+      id: newShotId, sceneId: newSceneId, order: 0, title: "Shot 1",
       height: 600, sizePreset: "standard", characters: [], location: "", time: "", stageDir: "", dialogue: "",
       generationMode: "single", scenes: [],
     }]);
-    setCurrentPageId(newPageId);
-    setSelectedPanelId(newPanelId);
+    setCurrentPageId(newSceneId);
+    setSelectedShotId(newShotId);
   };
 
-  // Panel Builder state
+  // Shot Builder state
   const [activeBuilderTab, setActiveBuilderTab] = useState("characters");
   const [selectedCharacters, setSelectedCharacters] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState("");
@@ -842,16 +841,16 @@ export default function MangaStudioPlaygroundPage() {
   const [moodTone, setMoodTone] = useState("none");
   const [styleModel, setStyleModel] = useState("nano-banana");
 
-  // Sync builder fields when selectedPanel changes
+  // Sync builder fields when selectedShot changes
   useEffect(() => {
-    if (selectedPanel) {
-      setSelectedCharacters(selectedPanel.characters || []);
-      setSelectedLocation(selectedPanel.location || "");
-      setSelectedTime(selectedPanel.time || "");
-      setStageDirection(selectedPanel.stageDir || "");
-      setDialogue(selectedPanel.dialogue || "");
+    if (selectedShot) {
+      setSelectedCharacters(selectedShot.characters || []);
+      setSelectedLocation(selectedShot.location || "");
+      setSelectedTime(selectedShot.time || "");
+      setStageDirection(selectedShot.stageDir || "");
+      setDialogue(selectedShot.dialogue || "");
     }
-  }, [selectedPanelId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedShotId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const characters = [
     { id: "kaito", name: "Kaito", avatar: "K" },
@@ -893,37 +892,37 @@ export default function MangaStudioPlaygroundPage() {
   const [panelRefImages, setPanelRefImages] = useState<Record<string, string>>({});
 
   // Derived per-panel image/mask for current panel
-  const imageUrl = selectedPanelId ? panelImages[selectedPanelId] || null : null;
-  const mask = selectedPanelId ? panelMasks[selectedPanelId] || [] : [];
-  const undoStack = selectedPanelId ? panelMaskUndoStacks[selectedPanelId] || [] : [];
-  const redoStack = selectedPanelId ? panelMaskRedoStacks[selectedPanelId] || [] : [];
+  const imageUrl = selectedShotId ? panelImages[selectedShotId] || null : null;
+  const mask = selectedShotId ? panelMasks[selectedShotId] || [] : [];
+  const undoStack = selectedShotId ? panelMaskUndoStacks[selectedShotId] || [] : [];
+  const redoStack = selectedShotId ? panelMaskRedoStacks[selectedShotId] || [] : [];
 
   const setImageUrl = (url: string | null) => {
-    if (!selectedPanelId) return;
-    setPanelImages(prev => url ? { ...prev, [selectedPanelId]: url } : (() => { const n = { ...prev }; delete n[selectedPanelId]; return n; })());
+    if (!selectedShotId) return;
+    setPanelImages(prev => url ? { ...prev, [selectedShotId]: url } : (() => { const n = { ...prev }; delete n[selectedShotId]; return n; })());
   };
   const setMask = (updater: MaskDot[] | ((prev: MaskDot[]) => MaskDot[])) => {
-    if (!selectedPanelId) return;
+    if (!selectedShotId) return;
     setPanelMasks(prev => {
-      const curr = prev[selectedPanelId] || [];
+      const curr = prev[selectedShotId] || [];
       const next = typeof updater === "function" ? updater(curr) : updater;
-      return { ...prev, [selectedPanelId]: next };
+      return { ...prev, [selectedShotId]: next };
     });
   };
   const setUndoStack = (updater: MaskDot[][] | ((prev: MaskDot[][]) => MaskDot[][])) => {
-    if (!selectedPanelId) return;
+    if (!selectedShotId) return;
     setPanelMaskUndoStacks(prev => {
-      const curr = prev[selectedPanelId] || [];
+      const curr = prev[selectedShotId] || [];
       const next = typeof updater === "function" ? updater(curr) : updater;
-      return { ...prev, [selectedPanelId]: next };
+      return { ...prev, [selectedShotId]: next };
     });
   };
   const setRedoStack = (updater: MaskDot[][] | ((prev: MaskDot[][]) => MaskDot[][])) => {
-    if (!selectedPanelId) return;
+    if (!selectedShotId) return;
     setPanelMaskRedoStacks(prev => {
-      const curr = prev[selectedPanelId] || [];
+      const curr = prev[selectedShotId] || [];
       const next = typeof updater === "function" ? updater(curr) : updater;
-      return { ...prev, [selectedPanelId]: next };
+      return { ...prev, [selectedShotId]: next };
     });
   };
 
@@ -942,12 +941,12 @@ export default function MangaStudioPlaygroundPage() {
     bubbles: Bubble[];
     textElements: typeof textElements;
     assetElements: typeof assetElements;
-    panels: typeof panels;
+    shots: typeof shots;
   };
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const saveHistory = () => {
-    const state: HistoryState = { bubbles, textElements, assetElements, panels };
+    const state: HistoryState = { bubbles, textElements, assetElements, shots };
     setHistory(prev => [...prev.slice(0, historyIndex + 1), state]);
     setHistoryIndex(prev => prev + 1);
   };
@@ -957,7 +956,7 @@ export default function MangaStudioPlaygroundPage() {
       setBubbles(prevState.bubbles);
       setTextElements(prevState.textElements);
       setAssetElements(prevState.assetElements);
-      setPanels(prevState.panels);
+      setShots(prevState.shots);
       setHistoryIndex(prev => prev - 1);
     }
   };
@@ -967,7 +966,7 @@ export default function MangaStudioPlaygroundPage() {
       setBubbles(nextState.bubbles);
       setTextElements(nextState.textElements);
       setAssetElements(nextState.assetElements);
-      setPanels(nextState.panels);
+      setShots(nextState.shots);
       setHistoryIndex(prev => prev + 1);
     }
   };
@@ -1232,9 +1231,9 @@ export default function MangaStudioPlaygroundPage() {
   const [bubbleDrag, setBubbleDrag] = useState<DragMode>(null);
 
   // Per-panel filtered views: only show objects belonging to current panel
-  const panelBubbles = bubbles.filter(b => b.panelId === selectedPanelId);
-  const panelTextElements = textElements.filter(t => t.panelId === selectedPanelId);
-  const panelAssetElements = assetElements.filter(a => a.panelId === selectedPanelId);
+  const panelBubbles = bubbles.filter(b => b.panelId === selectedShotId);
+  const panelTextElements = textElements.filter(t => t.panelId === selectedShotId);
+  const panelAssetElements = assetElements.filter(a => a.panelId === selectedShotId);
 
   const padding = 18;
 
@@ -1315,7 +1314,7 @@ export default function MangaStudioPlaygroundPage() {
     const x = rect ? clamp(rect.width * 0.5 - w / 2, padding, rect.width - padding - w) : 300;
     const y = rect ? clamp(rect.height * 0.5 - h / 2, padding, rect.height - padding - h) : 300;
     
-    setAssetElements((prev) => [...prev, { id, panelId: selectedPanelId || "panel-1", assetId, x, y, w, h }]);
+    setAssetElements((prev) => [...prev, { id, panelId: selectedShotId || "panel-1", assetId, x, y, w, h }]);
     setSelectedAssetId(id);
     setTool("asset");
   };
@@ -1491,31 +1490,31 @@ export default function MangaStudioPlaygroundPage() {
   const exportWithAllLayers = async () => {
     const w = 800;
     if (canvasViewMode === "fullpage") {
-      // Export ALL panels stitched vertically
-      const totalH = currentPanels.reduce((sum, p) => sum + p.height, 0) + gutterSize * (currentPanels.length - 1);
+      // Export ALL shots stitched vertically
+      const totalH = currentShots.reduce((sum, p) => sum + p.height, 0) + gutterSize * (currentShots.length - 1);
       const canvas = document.createElement("canvas");
       canvas.width = w; canvas.height = totalH;
       const ctx = canvas.getContext("2d")!;
       ctx.fillStyle = "#0a0a0f"; ctx.fillRect(0, 0, w, totalH);
       let yOff = 0;
-      for (const p of currentPanels) {
+      for (const p of currentShots) {
         await renderPanelToCtx(ctx, p.id, w, p.height, yOff);
         yOff += p.height + gutterSize;
       }
       const link = document.createElement("a");
-      link.download = `page-${currentPage?.number || 1}-full.png`;
+      link.download = `scene-${currentScene?.number || 1}-full.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } else {
-      // Export single panel
-      const h = selectedPanel?.height || 600;
+      // Export single shot
+      const h = selectedShot?.height || 600;
       const canvas = document.createElement("canvas");
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext("2d")!;
       ctx.fillStyle = "#0a0a0f"; ctx.fillRect(0, 0, w, h);
-      if (selectedPanelId) await renderPanelToCtx(ctx, selectedPanelId, w, h, 0);
+      if (selectedShotId) await renderPanelToCtx(ctx, selectedShotId, w, h, 0);
       const link = document.createElement("a");
-      link.download = `panel-${selectedPanelId || "export"}.png`;
+      link.download = `panel-${selectedShotId || "export"}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     }
@@ -1533,7 +1532,7 @@ export default function MangaStudioPlaygroundPage() {
 
     const next: Bubble = {
       id,
-      panelId: selectedPanelId || "panel-1",
+      panelId: selectedShotId || "panel-1",
       x,
       y,
       w,
@@ -1574,7 +1573,7 @@ export default function MangaStudioPlaygroundPage() {
 
     const newTextElement = {
       id,
-      panelId: selectedPanelId || "panel-1",
+      panelId: selectedShotId || "panel-1",
       x,
       y,
       w,
@@ -1632,7 +1631,7 @@ export default function MangaStudioPlaygroundPage() {
       // Ctrl+V: Paste to current panel
       if ((e.ctrlKey || e.metaKey) && e.key === "v" && !isInput && clipboard) {
         e.preventDefault();
-        const pid = selectedPanelId || "panel-1";
+        const pid = selectedShotId || "panel-1";
         const newId = `${clipboard.type[0]}-${Date.now()}`;
         if (clipboard.type === "bubble") {
           const nb: Bubble = { ...clipboard.data, id: newId, panelId: pid, x: clipboard.data.x + 20, y: clipboard.data.y + 20 };
@@ -1659,11 +1658,11 @@ export default function MangaStudioPlaygroundPage() {
         if (e.key === "p") setActiveTab("panel");
         if (e.key === "l") setActiveTab("layers");
 
-        // Panel switching: [ and ]
+        // Shot switching: [ and ]
         if (e.key === "[" || e.key === "]") {
-          const idx = currentPanels.findIndex(p => p.id === selectedPanelId);
-          if (e.key === "[" && idx > 0) setSelectedPanelId(currentPanels[idx - 1].id);
-          if (e.key === "]" && idx < currentPanels.length - 1) setSelectedPanelId(currentPanels[idx + 1].id);
+          const idx = currentShots.findIndex(p => p.id === selectedShotId);
+          if (e.key === "[" && idx > 0) setSelectedShotId(currentShots[idx - 1].id);
+          if (e.key === "]" && idx < currentShots.length - 1) setSelectedShotId(currentShots[idx + 1].id);
         }
 
         // Ctrl+Z / Ctrl+Y undo/redo mask (handled by ctrl check above, but let's add)
@@ -1688,7 +1687,7 @@ export default function MangaStudioPlaygroundPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [effectiveSelectedBubbleId, selectedTextId, selectedAssetId, clipboard, selectedPanelId, currentPanels, bubbles, textElements, assetElements]);
+  }, [effectiveSelectedBubbleId, selectedTextId, selectedAssetId, clipboard, selectedShotId, currentShots, bubbles, textElements, assetElements]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -1708,36 +1707,36 @@ export default function MangaStudioPlaygroundPage() {
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div className="w-px h-5 bg-white/10" />
-          {/* Custom Episode Dropdown */}
+          {/* Custom Project Dropdown */}
           <div className="relative">
             <button onClick={() => { setShowEpisodeDropdown(!showEpisodeDropdown); setShowPageDropdown(false); }}
               className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1a24] hover:bg-[#222233] border border-white/10 rounded-lg transition cursor-pointer">
               <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-white text-sm font-semibold">{episodes.find(e => e.id === currentEpisodeId)?.title || "Episode"}</span>
+              <span className="text-white text-sm font-semibold">{projects.find(e => e.id === currentProjectId)?.title || "Project"}</span>
               <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
             </button>
             {showEpisodeDropdown && (
               <div className="absolute top-full left-0 mt-2 w-64 bg-[#13131a] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
                 <div className="p-1">
-                  {episodes.map(ep => {
-                    const epPages = pages.filter(p => p.episodeId === ep.id);
+                  {projects.map(project => {
+                    const projectScenes = scenes.filter(p => p.projectId === project.id);
                     return (
-                      <button key={ep.id} onClick={() => {
-                        setCurrentEpisodeId(ep.id);
-                        const firstPage = pages.find(p => p.episodeId === ep.id);
-                        if (firstPage) switchToPage(firstPage.id);
+                      <button key={project.id} onClick={() => {
+                        setCurrentProjectId(project.id);
+                        const firstScene = scenes.find(p => p.projectId === project.id);
+                        if (firstScene) switchToScene(firstScene.id);
                         setShowEpisodeDropdown(false);
                       }}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg transition ${ep.id === currentEpisodeId ? "bg-purple-500/15 border border-purple-500/30" : "hover:bg-white/5"}`}>
-                        <div className="text-sm font-semibold text-white">Episode {ep.id}: {ep.title}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{epPages.length} pages • {ep.id === currentEpisodeId ? "Current" : "Draft"}</div>
+                        className={`w-full text-left px-3 py-2.5 rounded-lg transition ${project.id === currentProjectId ? "bg-purple-500/15 border border-purple-500/30" : "hover:bg-white/5"}`}>
+                        <div className="text-sm font-semibold text-white">Project {project.id}: {project.title}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{projectScenes.length} scenes • {project.id === currentProjectId ? "Current" : "Draft"}</div>
                       </button>
                     );
                   })}
                 </div>
                 <div className="border-t border-white/10 p-2">
                   <button className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition">
-                    <Plus className="w-3.5 h-3.5" /> New Episode
+                    <Plus className="w-3.5 h-3.5" /> New Project
                   </button>
                 </div>
               </div>
@@ -1748,40 +1747,40 @@ export default function MangaStudioPlaygroundPage() {
           <div className="relative">
             <button onClick={() => { setShowPageDropdown(!showPageDropdown); setShowEpisodeDropdown(false); }}
               className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1a24] hover:bg-[#222233] border border-white/10 rounded-lg transition cursor-pointer">
-              <span className="text-white text-sm font-semibold">Page {currentPage?.number || 1}</span>
+              <span className="text-white text-sm font-semibold">Scene {currentScene?.number || 1}</span>
               <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
             </button>
             {showPageDropdown && (
               <div className="absolute top-full left-0 mt-2 w-56 bg-[#13131a] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
                 <div className="p-1">
-                  {episodePages.map(pg => {
-                    const pgPanels = panels.filter(p => p.pageId === pg.id);
+                  {projectScenes.map(scene => {
+                    const sceneShots = shots.filter(p => p.sceneId === scene.id);
                     return (
-                      <button key={pg.id} onClick={() => { switchToPage(pg.id); setShowPageDropdown(false); }}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg transition ${pg.id === currentPageId ? "bg-blue-500/15 border border-blue-500/30" : "hover:bg-white/5"}`}>
-                        <div className="text-sm font-semibold text-white">Page {pg.number}</div>
-                        <div className="text-[10px] text-gray-500 mt-0.5">{pgPanels.length} panels</div>
+                      <button key={scene.id} onClick={() => { switchToScene(scene.id); setShowPageDropdown(false); }}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg transition ${scene.id === currentPageId ? "bg-blue-500/15 border border-blue-500/30" : "hover:bg-white/5"}`}>
+                        <div className="text-sm font-semibold text-white">Scene {scene.number}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{sceneShots.length} shots</div>
                       </button>
                     );
                   })}
                 </div>
                 <div className="border-t border-white/10 p-2">
-                  <button onClick={() => { addPage(); setShowPageDropdown(false); }}
+                  <button onClick={() => { addScene(); setShowPageDropdown(false); }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition">
-                    <Plus className="w-3.5 h-3.5" /> Add New Page
+                    <Plus className="w-3.5 h-3.5" /> Add New Scene
                   </button>
                 </div>
               </div>
             )}
           </div>
           <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
-            currentPage?.status === "drawing" ? "bg-blue-500/20 text-blue-400" : "bg-gray-500/20 text-gray-400"
-          }`}>{currentPage?.status === "drawing" ? "Drawing" : "Queued"}</span>
+            currentScene?.status === "drawing" ? "bg-blue-500/20 text-blue-400" : "bg-gray-500/20 text-gray-400"
+          }`}>{currentScene?.status === "drawing" ? "Drawing" : "Queued"}</span>
         </div>
 
         {/* Center: Page navigation + panel count + timeline toggle */}
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-500">{currentPanels.length} Panels • 800px</span>
+          <span className="text-[10px] text-gray-500">{currentShots.length} Shots • 800px</span>
           <button onClick={() => setShowTimeline(!showTimeline)} data-testid="timeline-toggle-btn"
             className={`px-2 py-1 text-[10px] font-semibold rounded transition flex items-center gap-1 ${showTimeline ? "bg-pink-500/15 text-pink-400" : "bg-white/5 text-gray-500 hover:text-gray-300"}`}>
             <GripVertical className="w-3 h-3" /> Timeline
@@ -1789,17 +1788,17 @@ export default function MangaStudioPlaygroundPage() {
           <div className="w-px h-4 bg-white/10" />
           <div className="flex items-center gap-0.5">
             <button onClick={() => {
-              const idx = episodePages.findIndex(p => p.id === currentPageId);
-              if (idx > 0) switchToPage(episodePages[idx - 1].id);
+              const idx = projectScenes.findIndex(p => p.id === currentPageId);
+              if (idx > 0) switchToScene(projectScenes[idx - 1].id);
             }} className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition">
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
             <span className="text-[10px] text-gray-500 font-mono min-w-[32px] text-center">
-              {episodePages.findIndex(p => p.id === currentPageId) + 1}/{episodePages.length}
+              Scene {projectScenes.findIndex(p => p.id === currentPageId) + 1}/{projectScenes.length}
             </span>
             <button onClick={() => {
-              const idx = episodePages.findIndex(p => p.id === currentPageId);
-              if (idx < episodePages.length - 1) switchToPage(episodePages[idx + 1].id);
+              const idx = projectScenes.findIndex(p => p.id === currentPageId);
+              if (idx < projectScenes.length - 1) switchToScene(projectScenes[idx + 1].id);
             }} className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition">
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -1865,23 +1864,23 @@ export default function MangaStudioPlaygroundPage() {
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition flex items-center gap-1.5 border bg-white/5 border-white/10 text-gray-300 hover:bg-white/10">
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button onClick={addPage}
+          <button onClick={addScene}
             className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition flex items-center gap-1.5 border bg-purple-500/10 border-purple-500/20 text-purple-300 hover:bg-purple-500/20">
-            <Plus className="w-3.5 h-3.5" /> Page
+            <Plus className="w-3.5 h-3.5" /> Scene
           </button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden relative">
         <div className="flex-1 p-6 bg-[#0a0a0f] overflow-auto pb-28">
-          {/* Panel indicator bar */}
-          {currentPanels.length > 0 && (
+          {/* Shot indicator bar */}
+          {currentShots.length > 0 && (
             <div className="flex items-center justify-between mb-3 px-1">
               <div className="flex items-center gap-2">
-                {selectedPanel && <>
-                  <span className="w-6 h-6 rounded-md bg-pink-500/20 text-pink-400 text-xs font-bold flex items-center justify-center">{currentPanels.findIndex(p => p.id === selectedPanel.id) + 1}</span>
-                  <span className="text-sm font-semibold text-white">{selectedPanel.title}</span>
-                  <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded">{panelSizePresets.find(s => s.id === selectedPanel.sizePreset)?.name} • {selectedPanel.height}px</span>
+                {selectedShot && <>
+                  <span className="w-6 h-6 rounded-md bg-pink-500/20 text-pink-400 text-xs font-bold flex items-center justify-center">{currentShots.findIndex(p => p.id === selectedShot.id) + 1}</span>
+                  <span className="text-sm font-semibold text-white">{selectedShot.title}</span>
+                  <span className="text-[10px] text-gray-500 bg-white/5 px-2 py-0.5 rounded">{shotSizePresets.find(s => s.id === selectedShot.sizePreset)?.name} • {selectedShot.height}px</span>
                 </>}
                 {/* View mode toggle */}
                 <div className="flex items-center bg-[#1a1a24] rounded-lg border border-white/10 ml-2">
@@ -1926,12 +1925,12 @@ export default function MangaStudioPlaygroundPage() {
           {/* Full Page Vertical View */}
           {canvasViewMode === "fullpage" && (
             <div className="mx-auto mb-4" style={{ width: "800px", maxWidth: "100%" }}>
-              {currentPanels.map((p, idx) => {
+              {currentShots.map((p, idx) => {
                 const pImg = panelImages[p.id];
                 const pBubbles = bubbles.filter(b => b.panelId === p.id);
                 const pTexts = textElements.filter(t => t.panelId === p.id);
                 const pAssets = assetElements.filter(a => a.panelId === p.id);
-                const isSelected = selectedPanelId === p.id;
+                const isSelected = selectedShotId === p.id;
                 return (
                   <div key={p.id}>
                     <div
@@ -1939,8 +1938,8 @@ export default function MangaStudioPlaygroundPage() {
                         isSelected ? "border-pink-500/60 ring-2 ring-pink-500/20" : "border-white/10 hover:border-white/20"
                       }`}
                       style={{ height: `${Math.min(p.height, 720)}px`, backgroundColor: "#0a0a0f" }}
-                      onClick={() => setSelectedPanelId(p.id)}
-                      onDoubleClick={() => { setSelectedPanelId(p.id); setCanvasViewMode("single"); }}
+                      onClick={() => setSelectedShotId(p.id)}
+                      onDoubleClick={() => { setSelectedShotId(p.id); setCanvasViewMode("single"); }}
                     >
                       {pImg ? (
                         <div className="absolute inset-0">
@@ -2073,7 +2072,7 @@ export default function MangaStudioPlaygroundPage() {
                         </div>
                       )}
                     </div>
-                    {idx < currentPanels.length - 1 && (
+                    {idx < currentShots.length - 1 && (
                       <div style={{ height: gutterSize }} className="bg-[#0a0a0f] flex items-center justify-center">
                         <div className="w-16 h-px bg-white/10" />
                       </div>
@@ -2088,7 +2087,7 @@ export default function MangaStudioPlaygroundPage() {
           <div
             ref={containerRef}
             className="relative mx-auto rounded-2xl border border-white/10 bg-gradient-to-br from-purple-900/15 via-[#13131a] to-blue-900/15 overflow-hidden"
-            style={{ width: "800px", maxWidth: "100%", height: selectedPanel ? `${Math.min(selectedPanel.height, 720)}px` : "720px", cursor: isPanning ? "grabbing" : tool === "paint" ? "crosshair" : tool === "text" ? "text" : "default", display: canvasViewMode === "fullpage" ? "none" : "block" }}
+            style={{ width: "800px", maxWidth: "100%", height: selectedShot ? `${Math.min(selectedShot.height, 720)}px` : "720px", cursor: isPanning ? "grabbing" : tool === "paint" ? "crosshair" : tool === "text" ? "text" : "default", display: canvasViewMode === "fullpage" ? "none" : "block" }}
             onWheel={(e) => {
               e.preventDefault();
               const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -3392,13 +3391,13 @@ export default function MangaStudioPlaygroundPage() {
             )}
           </div>
 
-          {/* + Add Panel button below canvas */}
-          <button onClick={addPanel}
+          {/* + Add Shot button below canvas */}
+          <button onClick={addShot}
             className="mx-auto mt-4 py-3 border-2 border-dashed border-white/10 hover:border-pink-500/30 rounded-xl text-center transition group block"
             style={{ width: "800px", maxWidth: "100%" }}>
             <div className="flex items-center justify-center gap-2">
               <Plus className="w-4 h-4 text-pink-400 group-hover:scale-110 transition-transform" />
-              <span className="text-pink-400 text-xs font-semibold">+ Add Panel</span>
+              <span className="text-pink-400 text-xs font-semibold">+ Add Shot</span>
             </div>
           </button>
         </div>
@@ -4056,7 +4055,7 @@ export default function MangaStudioPlaygroundPage() {
                       const w = 240; const h = 110;
                       const x = rect ? clamp(Math.random() * (rect.width - w - 40) + 20, padding, rect.width - padding - w) : 200;
                       const y = rect ? clamp(Math.random() * (rect.height - h - 40) + 20, padding, rect.height - padding - h) : 100;
-                      setBubbles(prev => [...prev, { id, panelId: selectedPanelId!, x, y, w, h, tailMode: p.tail, tailDir: "bottom-left" as TailDir, tailX: x + w * 0.3, tailY: y + h + 20, text: p.label === "SFX" ? "BOOM!" : "...", bubbleType: p.type, autoFitFont: true, fontSize: 16 }]);
+                      setBubbles(prev => [...prev, { id, panelId: selectedShotId!, x, y, w, h, tailMode: p.tail, tailDir: "bottom-left" as TailDir, tailX: x + w * 0.3, tailY: y + h + 20, text: p.label === "SFX" ? "BOOM!" : "...", bubbleType: p.type, autoFitFont: true, fontSize: 16 }]);
                       setSelectedBubbleId(id);
                     }} className="p-1.5 bg-[#1a1a24] border border-white/10 hover:border-emerald-500/30 rounded text-[9px] text-gray-300 hover:text-white transition text-center">
                       {p.label}
@@ -4346,13 +4345,13 @@ export default function MangaStudioPlaygroundPage() {
           ) : activeTab === "panel" ? (
             <div className="space-y-4">
               <div>
-                <h2 className="text-white font-bold text-lg">Panels</h2>
-                <p className="text-[11px] text-gray-500 mt-0.5">Page {currentPage?.number || 1} • {currentPanels.length} panels</p>
+                <h2 className="text-white font-bold text-lg">Shots</h2>
+                <p className="text-[11px] text-gray-500 mt-0.5">Scene {currentScene?.number || 1} • {currentShots.length} shots</p>
               </div>
 
-              {/* Panel List Header with detail toggle */}
+              {/* Shot List Header with detail toggle */}
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Panel List</span>
+                <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Shot List</span>
                 <div className="flex items-center bg-[#1a1a24] rounded border border-white/10">
                   <button onClick={() => setPanelDetailView("simple")}
                     className={`px-1.5 py-0.5 text-[9px] font-semibold rounded-l transition ${panelDetailView === "simple" ? "bg-white/10 text-white" : "text-gray-500 hover:text-gray-300"}`}>Simple</button>
@@ -4361,37 +4360,37 @@ export default function MangaStudioPlaygroundPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                {currentPanels.map((p, idx) => {
+                {currentShots.map((p, idx) => {
                   const locName = locations.find(l => l.id === p.location)?.name;
                   const timeName = times.find(t => t.id === p.time)?.name;
                   const charNames = p.characters.map(cid => characters.find(c => c.id === cid)?.name).filter(Boolean);
                   return (
-                  <div key={p.id} onClick={() => setSelectedPanelId(p.id)}
-                    role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedPanelId(p.id); }}
+                  <div key={p.id} onClick={() => setSelectedShotId(p.id)}
+                    role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelectedShotId(p.id); }}
                     className={`w-full text-left p-3 rounded-xl border transition group cursor-pointer ${
-                      selectedPanelId === p.id
+                      selectedShotId === p.id
                         ? "bg-pink-500/10 border-pink-500/30 ring-1 ring-pink-500/20"
                         : "bg-[#0f1117] border-white/10 hover:border-white/20"
                     }`}>
                     <div className="flex items-center gap-2">
                       <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 text-[10px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
-                      <span className="text-xs font-semibold text-white truncate flex-1">Scene {idx + 1}: {p.title}</span>
+                      <span className="text-xs font-semibold text-white truncate flex-1">Shot {idx + 1}: {p.title}</span>
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-                        <button onClick={(e) => { e.stopPropagation(); movePanelOrder(p.id, "up"); }}
+                        <button onClick={(e) => { e.stopPropagation(); moveShotOrder(p.id, "up"); }}
                           className="p-0.5 hover:bg-white/10 rounded text-gray-400 hover:text-white"><ChevronLeft className="w-3 h-3 rotate-90" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); movePanelOrder(p.id, "down"); }}
+                        <button onClick={(e) => { e.stopPropagation(); moveShotOrder(p.id, "down"); }}
                           className="p-0.5 hover:bg-white/10 rounded text-gray-400 hover:text-white"><ChevronRight className="w-3 h-3 rotate-90" /></button>
-                        <button onClick={(e) => { e.stopPropagation(); duplicatePanel(p.id); }}
+                        <button onClick={(e) => { e.stopPropagation(); duplicateShot(p.id); }}
                           className="p-0.5 hover:bg-white/10 rounded text-gray-400 hover:text-white" title="Duplicate">
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); deletePanel(p.id); }}
+                        <button onClick={(e) => { e.stopPropagation(); deleteShot(p.id); }}
                           className="p-0.5 hover:bg-red-500/20 rounded text-gray-400 hover:text-red-400"><Trash2 className="w-3 h-3" /></button>
                       </div>
                     </div>
                     {/* Simple view: just size info */}
                     {panelDetailView === "simple" && (
-                      <div className="text-[9px] text-gray-600 mt-1">{panelSizePresets.find(s => s.id === p.sizePreset)?.name || "Standard"} • {p.height}px</div>
+                      <div className="text-[9px] text-gray-600 mt-1">{shotSizePresets.find(s => s.id === p.sizePreset)?.name || "Standard"} • {p.height}px</div>
                     )}
                     {/* Detailed view: tags, stage direction, dialogue like pic3 */}
                     {panelDetailView === "detailed" && (
@@ -4412,8 +4411,8 @@ export default function MangaStudioPlaygroundPage() {
                           <p className="text-[10px] text-purple-400/70 mt-0.5 italic line-clamp-1">{p.dialogue}</p>
                         )}
                         <div className="flex items-center justify-between mt-1">
-                          <div className="text-[9px] text-gray-600">{panelSizePresets.find(s => s.id === p.sizePreset)?.name || "Standard"} • {p.height}px</div>
-                          <button onClick={(e) => { e.stopPropagation(); setSelectedPanelId(p.id); setActiveTab("aimanga"); }}
+                          <div className="text-[9px] text-gray-600">{shotSizePresets.find(s => s.id === p.sizePreset)?.name || "Standard"} • {p.height}px</div>
+                          <button onClick={(e) => { e.stopPropagation(); setSelectedShotId(p.id); setActiveTab("aimanga"); }}
                             className="text-[9px] text-violet-400 hover:text-violet-300 flex items-center gap-0.5 transition">
                             <Sparkles className="w-2.5 h-2.5" /> Edit
                           </button>
@@ -4423,13 +4422,13 @@ export default function MangaStudioPlaygroundPage() {
                   </div>
                   );
                 })}
-                <button onClick={addPanel} data-testid="add-panel-btn"
+                <button onClick={addShot} data-testid="add-shot-btn"
                   className="w-full p-3 border-2 border-dashed border-white/10 hover:border-pink-500/30 rounded-xl text-center transition group">
                   <Plus className="w-4 h-4 mx-auto mb-1 text-pink-400 group-hover:scale-110 transition-transform" />
-                  <div className="text-pink-400 text-xs font-semibold">+ Add Panel</div>
+                  <div className="text-pink-400 text-xs font-semibold">+ Add Shot</div>
                 </button>
 
-                {/* Panel Templates */}
+                {/* Shot Templates */}
                 <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
                   <span className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Quick Templates</span>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -4441,12 +4440,12 @@ export default function MangaStudioPlaygroundPage() {
                     ].map(tpl => (
                       <button key={tpl.name} onClick={() => {
                         saveHistory();
-                        const base = currentPanels.length > 0 ? Math.max(...currentPanels.map(p => p.order)) + 1 : 0;
-                        const newPanels: Panel[] = tpl.heights.map((h, i) => ({
-                          id: `panel-${Date.now()}-${i}`,
-                          pageId: currentPageId,
+                        const base = currentShots.length > 0 ? Math.max(...currentShots.map(p => p.order)) + 1 : 0;
+                        const newShots: Shot[] = tpl.heights.map((h, i) => ({
+                          id: `shot-${Date.now()}-${i}`,
+                          sceneId: currentPageId,
                           order: base + i,
-                          title: `Panel ${currentPanels.length + i + 1}`,
+                          title: `Shot ${currentShots.length + i + 1}`,
                           height: h,
                           sizePreset: h <= 400 ? "short" : h <= 600 ? "standard" : h <= 1000 ? "tall" : "splash",
                           characters: [] as string[],
@@ -4457,38 +4456,38 @@ export default function MangaStudioPlaygroundPage() {
                           generationMode: "single" as const,
                           scenes: [] as Scene[],
                         }));
-                        setPanels(prev => [...prev, ...newPanels]);
-                        setSelectedPanelId(newPanels[0].id);
+                        setShots(prev => [...prev, ...newShots]);
+                        setSelectedShotId(newShots[0].id);
                       }}
                         className="p-2 bg-[#1a1a24] border border-white/10 hover:border-pink-500/30 rounded-lg text-left transition">
                         <div className="text-[11px] font-semibold text-white">{tpl.name}</div>
-                        <div className="text-[9px] text-gray-500">{tpl.desc} • {tpl.count} panels</div>
+                        <div className="text-[9px] text-gray-500">{tpl.desc} • {tpl.count} shots</div>
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
 
-              {/* Selected Panel Settings */}
-              {selectedPanel && (
+              {/* Selected Shot Settings */}
+              {selectedShot && (
                 <div className="space-y-3">
                   <div className="bg-[#0f1117] rounded-xl border border-white/10 p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-300 font-semibold">Panel Settings</span>
-                      <span className="text-[10px] text-gray-500">#{currentPanels.findIndex(p => p.id === selectedPanel.id) + 1}</span>
+                      <span className="text-xs text-gray-300 font-semibold">Shot Settings</span>
+                      <span className="text-[10px] text-gray-500">#{currentShots.findIndex(p => p.id === selectedShot.id) + 1}</span>
                     </div>
                     <div>
                       <label className="block text-[10px] text-gray-500 mb-1">Title</label>
-                      <input value={selectedPanel.title} onChange={(e) => setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, title: e.target.value } : p))}
+                      <input value={selectedShot.title} onChange={(e) => setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, title: e.target.value } : p))}
                         className="w-full px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-xs text-white focus:border-pink-500/50 focus:outline-none" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-gray-500 mb-1.5">Panel Size</label>
+                      <label className="block text-[10px] text-gray-500 mb-1.5">Shot Size</label>
                       <div className="grid grid-cols-2 gap-1.5">
-                        {panelSizePresets.map(preset => (
-                          <button key={preset.id} onClick={() => setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, sizePreset: preset.id, height: preset.height } : p))}
+                        {shotSizePresets.map(preset => (
+                          <button key={preset.id} onClick={() => setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, sizePreset: preset.id, height: preset.height } : p))}
                             className={`p-2 rounded-lg border text-left transition ${
-                              selectedPanel.sizePreset === preset.id
+                              selectedShot.sizePreset === preset.id
                                 ? "bg-pink-500/10 border-pink-500/30 text-pink-300"
                                 : "bg-[#1a1a24] border-white/10 text-gray-300 hover:border-pink-500/20"
                             }`}>
@@ -4497,8 +4496,8 @@ export default function MangaStudioPlaygroundPage() {
                           </button>
                         ))}
                       </div>
-                      {selectedPanel.sizePreset === "custom" && (
-                        <input type="number" value={selectedPanel.height} onChange={(e) => setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, height: Number(e.target.value) } : p))}
+                      {selectedShot.sizePreset === "custom" && (
+                        <input type="number" value={selectedShot.height} onChange={(e) => setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, height: Number(e.target.value) } : p))}
                           className="w-full mt-2 px-3 py-2 bg-[#1a1a24] border border-white/10 rounded-lg text-xs text-white focus:border-pink-500/50 focus:outline-none" placeholder="Height in px" />
                       )}
                     </div>
@@ -4534,13 +4533,13 @@ export default function MangaStudioPlaygroundPage() {
                 <p className="text-[11px] text-gray-500 mt-0.5">Scene builder & AI generator</p>
               </div>
 
-              {selectedPanel ? (
+              {selectedShot ? (
                 <div className="space-y-3">
-                  {/* Current panel indicator */}
+                  {/* Current shot indicator */}
                   <div className="flex items-center gap-2 px-3 py-2 bg-pink-500/10 border border-pink-500/20 rounded-lg">
-                    <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 text-[10px] font-bold flex items-center justify-center">{currentPanels.findIndex(p => p.id === selectedPanel.id) + 1}</span>
-                    <span className="text-xs font-semibold text-white flex-1">{selectedPanel.title}</span>
-                    <button onClick={() => setActiveTab("panel")} className="text-[9px] text-gray-400 hover:text-white transition">← Panels</button>
+                    <span className="w-5 h-5 rounded bg-pink-500/20 text-pink-400 text-[10px] font-bold flex items-center justify-center">{currentShots.findIndex(p => p.id === selectedShot.id) + 1}</span>
+                    <span className="text-xs font-semibold text-white flex-1">{selectedShot.title}</span>
+                    <button onClick={() => setActiveTab("panel")} className="text-[9px] text-gray-400 hover:text-white transition">← Shots</button>
                   </div>
 
                   {/* Single / Multi-Scene Toggle */}
@@ -4551,21 +4550,21 @@ export default function MangaStudioPlaygroundPage() {
                     </button>
                     <button onClick={() => setGenerationMode("multi")}
                       className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition border ${generationMode === "multi" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-500 border-white/10"}`}>
-                      Multi-Scene
+                      Multi-Shot
                     </button>
                   </div>
 
-                  {/* Multi-scene: scene count + manga/storyboard layout templates */}
+                  {/* Multi-shot: shot count + manga/storyboard layout templates */}
                   {generationMode === "multi" && (
                     <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-gray-400">Scenes per Panel</span>
-                        <span className="text-[9px] text-emerald-400 font-semibold">Save ~{Math.round((1 - 1/Math.max(sceneCount, 2)) * 100)}%</span>
+                        <span className="text-[10px] font-semibold text-gray-400">Shots per Scene</span>
+                        <span className="text-[9px] text-emerald-400 font-semibold">Save ~{Math.round((1 - 1/Math.max(shotCount, 2)) * 100)}%</span>
                       </div>
                       <div className="grid grid-cols-6 gap-1">
                         {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                          <button key={n} onClick={() => setSceneCount(n)}
-                            className={`py-1 rounded text-[10px] font-bold transition border ${sceneCount === n ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-600 border-white/5 hover:text-gray-400"}`}>
+                          <button key={n} onClick={() => setShotCount(n)}
+                            className={`py-1 rounded text-[10px] font-bold transition border ${shotCount === n ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-600 border-white/5 hover:text-gray-400"}`}>
                             {n}
                           </button>
                         ))}
@@ -4604,7 +4603,7 @@ export default function MangaStudioPlaygroundPage() {
                                 { id: "m5", label: "5-Panel", src: "/manga-studio/images/panel template/manga-5panel.svg",
                                   cells: [{x:0,y:0,w:1,h:2},{x:1,y:0,w:1,h:1},{x:1,y:1,w:1,h:1},{x:0,y:2,w:1,h:1},{x:1,y:2,w:1,h:1}] },
                               ].map(tpl => (
-                                <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setSceneLayout("dynamic"); setSceneCount(tpl.cells.length); }}
+                                <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setShotLayout("dynamic"); setShotCount(tpl.cells.length); }}
                                   className={`p-1 rounded-lg border transition ${selectedTemplateId === tpl.id ? "bg-purple-500/15 border-purple-500/40" : "bg-[#1a1a24] border-white/10 hover:border-purple-500/30"}`}>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img src={tpl.src} alt={tpl.label} className="w-full h-14 object-contain" />
@@ -4621,7 +4620,7 @@ export default function MangaStudioPlaygroundPage() {
                                 { id: "sb9", label: "9-Grid", src: "/manga-studio/images/storyboard/storyboard-9.svg", count: 9, r: 3, c: 3 },
                                 { id: "sb12", label: "12-Grid", src: "/manga-studio/images/storyboard/storyboard-12.svg", count: 12, r: 3, c: 4 },
                               ].map(tpl => (
-                                <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setSceneLayout("grid"); setSceneCount(tpl.count); }}
+                                <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setShotLayout("grid"); setShotCount(tpl.count); }}
                                   className={`p-1 rounded-lg border transition ${selectedTemplateId === tpl.id ? "bg-blue-500/15 border-blue-500/40" : "bg-[#1a1a24] border-white/10 hover:border-blue-500/30"}`}>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img src={tpl.src} alt={tpl.label} className="w-full h-14 object-contain" />
@@ -4675,13 +4674,13 @@ export default function MangaStudioPlaygroundPage() {
                         e.target.value = "";
                       }}
                     />
-                    {referenceImages.length > 0 || panelRefImages[selectedPanel.id] ? (
+                    {referenceImages.length > 0 || panelRefImages[selectedShot.id] ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {panelRefImages[selectedPanel.id] && (
+                        {panelRefImages[selectedShot.id] && (
                           <div className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-violet-500/40 group">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={panelRefImages[selectedPanel.id]} alt="Main ref" className="w-full h-full object-cover" />
-                            <button onClick={() => setPanelRefImages(prev => { const n = { ...prev }; delete n[selectedPanel.id]; return n; })}
+                            <img src={panelRefImages[selectedShot.id]} alt="Main ref" className="w-full h-full object-cover" />
+                            <button onClick={() => setPanelRefImages(prev => { const n = { ...prev }; delete n[selectedShot.id]; return n; })}
                               className="absolute top-0 right-0 p-0.5 bg-red-500/80 rounded-bl opacity-0 group-hover:opacity-100 transition">
                               <XIcon className="w-2.5 h-2.5 text-white" />
                             </button>
@@ -4742,7 +4741,7 @@ export default function MangaStudioPlaygroundPage() {
                                 onClick={() => {
                                   const next = selectedCharacters.includes(char.id) ? selectedCharacters.filter(id => id !== char.id) : [...selectedCharacters, char.id];
                                   setSelectedCharacters(next);
-                                  if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, characters: next } : p));
+                                  if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, characters: next } : p));
                                 }}
                                 className={`flex items-center gap-2 p-2 rounded-lg border transition ${
                                   selectedCharacters.includes(char.id)
@@ -4770,7 +4769,7 @@ export default function MangaStudioPlaygroundPage() {
                               <button key={loc.id} onClick={() => {
                                 const next = loc.id === selectedLocation ? "" : loc.id;
                                 setSelectedLocation(next);
-                                if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, location: next } : p));
+                                if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, location: next } : p));
                               }}
                                 className={`p-2 rounded-lg border transition text-left ${
                                   selectedLocation === loc.id ? "bg-blue-500/10 border-blue-500/30" : "bg-[#1a1a24] border-white/10 hover:border-blue-500/30"
@@ -4824,7 +4823,7 @@ export default function MangaStudioPlaygroundPage() {
                               <button key={time.id} onClick={() => {
                                 const next = time.id === selectedTime ? "" : time.id;
                                 setSelectedTime(next);
-                                if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, time: next } : p));
+                                if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, time: next } : p));
                               }}
                                 className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition ${
                                   selectedTime === time.id ? "bg-purple-500/20 text-purple-400 border border-purple-500/50" : "bg-[#1a1a24] text-gray-300 border border-white/10 hover:border-purple-500/30"
@@ -4889,7 +4888,7 @@ export default function MangaStudioPlaygroundPage() {
                       </div>
                       <textarea value={stageDirection} onChange={(e) => {
                         setStageDirection(e.target.value);
-                        if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, stageDir: e.target.value } : p));
+                        if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, stageDir: e.target.value } : p));
                       }}
                         placeholder="Describe the scene action..."
                         className="w-full h-16 px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-600 focus:border-purple-500/50 focus:outline-none resize-none" />
@@ -4901,7 +4900,7 @@ export default function MangaStudioPlaygroundPage() {
                       </div>
                       <textarea value={dialogue} onChange={(e) => {
                         setDialogue(e.target.value);
-                        if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, dialogue: e.target.value } : p));
+                        if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, dialogue: e.target.value } : p));
                       }}
                         placeholder='Character: "Line..."'
                         className="w-full h-12 px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-600 focus:border-purple-500/50 focus:outline-none resize-none" />
@@ -4909,42 +4908,42 @@ export default function MangaStudioPlaygroundPage() {
                   </div>
 
                   {/* Generate Button */}
-                  <button onClick={generatePanelContent} disabled={isGenerating}
+                  <button onClick={generateShotContent} disabled={isGenerating}
                     className="w-full px-4 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 disabled:opacity-50 text-white rounded-xl font-bold transition flex items-center justify-center gap-2 text-sm shadow-lg shadow-purple-500/20">
                     {isGenerating ? (
                       <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating...</>
                     ) : (
-                      <><Sparkles className="w-4 h-4" /> Generate with AI Manga{generationMode === "multi" ? ` (${sceneCount})` : ""}</>
+                      <><Sparkles className="w-4 h-4" /> Generate with AI Manga{generationMode === "multi" ? ` (${shotCount})` : ""}</>
                     )}
                   </button>
 
                   {/* Use as Background button */}
-                  {selectedPanel && panelRefImages[selectedPanel.id] && (
+                  {selectedShot && panelRefImages[selectedShot.id] && (
                     <button onClick={() => {
-                      if (!selectedPanel) return;
-                      const refImg = panelRefImages[selectedPanel.id];
+                      if (!selectedShot) return;
+                      const refImg = panelRefImages[selectedShot.id];
                       if (refImg) {
-                        setPanelImages(prev => ({ ...prev, [selectedPanel.id]: refImg }));
+                        setPanelImages(prev => ({ ...prev, [selectedShot.id]: refImg }));
                         setCanvasViewMode("single");
                       }
                     }}
                     className="w-full px-3 py-2 bg-violet-500/10 border border-violet-500/20 hover:bg-violet-500/20 text-violet-300 rounded-lg font-semibold transition flex items-center justify-center gap-2 text-[11px]">
                       <ImageIcon className="w-3.5 h-3.5" />
-                      Use Reference as Panel Background
+                      Use Reference as Shot Background
                     </button>
                   )}
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500 text-sm">
-                  Select a panel first to configure AI generation
+                  Select a shot first to configure AI generation
                 </div>
               )}
             </div>
           ) : null}
         </div>
 
-        {/* Panel Timeline Strip */}
-        {showTimeline && currentPanels.length > 0 && (
+        {/* Shot Timeline Strip */}
+        {showTimeline && currentShots.length > 0 && (
           <div className="absolute bottom-0 left-0 right-0 h-24 bg-[#0a0a0f]/95 border-t border-white/10 backdrop-blur-sm flex items-center px-4 gap-2 z-30">
             <div className="flex flex-col items-start gap-0.5 mr-2 shrink-0">
               <div className="flex items-center gap-1.5">
@@ -4954,7 +4953,7 @@ export default function MangaStudioPlaygroundPage() {
               <span className="text-[9px] text-gray-600">Drag to reorder</span>
             </div>
             <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1">
-              {currentPanels.map((p, idx) => (
+              {currentShots.map((p, idx) => (
                 <div
                   key={p.id}
                   draggable
@@ -4967,7 +4966,7 @@ export default function MangaStudioPlaygroundPage() {
                     e.preventDefault();
                     if (dragPanelId && dragPanelId !== p.id) {
                       saveHistory();
-                      setPanels(prev => {
+                      setShots(prev => {
                         const next = prev.map(x => ({ ...x }));
                         const dragPanel = next.find(x => x.id === dragPanelId);
                         const dropPanel = next.find(x => x.id === p.id);
@@ -4982,11 +4981,11 @@ export default function MangaStudioPlaygroundPage() {
                     setDragPanelId(null);
                   }}
                   onDragEnd={() => setDragPanelId(null)}
-                  onClick={() => { setSelectedPanelId(p.id); setActiveTab("panel"); }}
+                  onClick={() => { setSelectedShotId(p.id); setActiveTab("panel"); }}
                   className={`flex flex-col items-center gap-1 px-2 py-1.5 rounded-lg border transition shrink-0 cursor-grab active:cursor-grabbing ${
                     dragPanelId === p.id ? "opacity-50" : ""
                   } ${
-                    selectedPanelId === p.id
+                    selectedShotId === p.id
                       ? "bg-pink-500/15 border-pink-500/30"
                       : "bg-[#13131a] border-white/10 hover:border-white/20"
                   }`}>
@@ -5001,20 +5000,20 @@ export default function MangaStudioPlaygroundPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className={`w-4 h-4 rounded text-[8px] font-bold flex items-center justify-center ${
-                      selectedPanelId === p.id ? "bg-pink-500/30 text-pink-300" : "bg-white/10 text-gray-500"
+                      selectedShotId === p.id ? "bg-pink-500/30 text-pink-300" : "bg-white/10 text-gray-500"
                     }`}>{idx + 1}</span>
-                    <span className={`text-[10px] font-medium truncate max-w-[60px] ${selectedPanelId === p.id ? "text-pink-300" : "text-gray-400"}`}>{p.title}</span>
+                    <span className={`text-[10px] font-medium truncate max-w-[60px] ${selectedShotId === p.id ? "text-pink-300" : "text-gray-400"}`}>{p.title}</span>
                   </div>
                 </div>
               ))}
-              <button onClick={addPanel}
+              <button onClick={addShot}
                 className="flex flex-col items-center gap-1 px-3 py-3 rounded-lg border-2 border-dashed border-white/10 hover:border-pink-500/30 text-pink-400 transition shrink-0">
                 <Plus className="w-4 h-4" />
                 <span className="text-[9px] font-medium">Add</span>
               </button>
             </div>
             <div className="flex items-center gap-1 ml-2 shrink-0">
-              <span className="text-[10px] text-gray-500 font-mono">{currentPanels.findIndex(p => p.id === selectedPanelId) + 1}/{currentPanels.length}</span>
+              <span className="text-[10px] text-gray-500 font-mono">{currentShots.findIndex(p => p.id === selectedShotId) + 1}/{currentShots.length}</span>
               <button onClick={() => setShowTimeline(false)} className="p-1 hover:bg-white/10 rounded text-gray-500 hover:text-white transition">
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
@@ -5029,8 +5028,8 @@ export default function MangaStudioPlaygroundPage() {
           <div className="relative max-w-[860px] w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 bg-[#0f1117] border-b border-white/10 rounded-t-xl">
               <div className="flex items-center gap-3">
-                <h3 className="text-white font-bold text-sm">Page {currentPage?.number || 1} — Full Preview</h3>
-                <span className="text-[10px] text-gray-500">{currentPanels.length} panels • 800px wide • Gutter {gutterSize}px</span>
+                <h3 className="text-white font-bold text-sm">Scene {currentScene?.number || 1} — Full Preview</h3>
+                <span className="text-[10px] text-gray-500">{currentShots.length} shots • 800px wide • Gutter {gutterSize}px</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
@@ -5044,24 +5043,24 @@ export default function MangaStudioPlaygroundPage() {
             </div>
             <div className="flex-1 overflow-y-auto bg-[#1a1a24] p-6 rounded-b-xl">
               <div className="mx-auto" style={{ width: 400 }}>
-                {currentPanels.map((p, idx) => (
+                {currentShots.map((p, idx) => (
                   <div key={p.id}>
                     <div
-                      className={`relative w-full border transition cursor-pointer ${selectedPanelId === p.id ? "border-pink-500/50 ring-1 ring-pink-500/30" : "border-white/10"}`}
+                      className={`relative w-full border transition cursor-pointer ${selectedShotId === p.id ? "border-pink-500/50 ring-1 ring-pink-500/30" : "border-white/10"}`}
                       style={{ height: Math.round(p.height * 0.5), backgroundColor: "#0a0a0f" }}
-                      onClick={() => { setSelectedPanelId(p.id); setShowPagePreview(false); }}
+                      onClick={() => { setSelectedShotId(p.id); setShowPagePreview(false); }}
                     >
                       {panelImages[p.id] ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={panelImages[p.id]} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-xs text-gray-600">Panel {idx + 1}: {p.title}</span>
+                          <span className="text-xs text-gray-600">Shot {idx + 1}: {p.title}</span>
                         </div>
                       )}
                       <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/60 rounded text-[9px] text-gray-300 font-mono">{idx + 1}</div>
                     </div>
-                    {idx < currentPanels.length - 1 && (
+                    {idx < currentShots.length - 1 && (
                       <div style={{ height: Math.round(gutterSize * 0.5) }} className="bg-[#1a1a24]" />
                     )}
                   </div>
@@ -5104,7 +5103,7 @@ export default function MangaStudioPlaygroundPage() {
                         <button key={t.label} onClick={() => {
                           const val = stageDirection ? stageDirection + "\n\n" + t.text : t.text;
                           setStageDirection(val);
-                          if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, stageDir: val } : p));
+                          if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, stageDir: val } : p));
                         }}
                           className="px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-[11px] text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/30 transition font-medium">
                           {t.label}
@@ -5126,7 +5125,7 @@ export default function MangaStudioPlaygroundPage() {
                         <button key={t.label} onClick={() => {
                           const val = dialogue ? dialogue + "\n\n" + t.text : t.text;
                           setDialogue(val);
-                          if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, dialogue: val } : p));
+                          if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, dialogue: val } : p));
                         }}
                           className="px-2.5 py-1 rounded-full bg-pink-500/10 border border-pink-500/20 text-[11px] text-pink-300 hover:bg-pink-500/20 hover:border-pink-500/30 transition font-medium">
                           {t.label}
@@ -5143,10 +5142,10 @@ export default function MangaStudioPlaygroundPage() {
                 onChange={(e) => {
                   if (expandedField === "stageDirection") {
                     setStageDirection(e.target.value);
-                    if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, stageDir: e.target.value } : p));
+                    if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, stageDir: e.target.value } : p));
                   } else {
                     setDialogue(e.target.value);
-                    if (selectedPanel) setPanels(prev => prev.map(p => p.id === selectedPanel.id ? { ...p, dialogue: e.target.value } : p));
+                    if (selectedShot) setShots(prev => prev.map(p => p.id === selectedShot.id ? { ...p, dialogue: e.target.value } : p));
                   }
                 }}
                 placeholder={expandedField === "stageDirection"
@@ -5191,14 +5190,14 @@ export default function MangaStudioPlaygroundPage() {
               </div>
 
               <div className="p-6 space-y-5">
-                {/* Current Panel indicator */}
-                {selectedPanel && (
+                {/* Current Shot indicator */}
+                {selectedShot && (
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-md bg-pink-500/20 text-pink-400 text-xs font-bold flex items-center justify-center">
-                      {currentPanels.findIndex(p => p.id === selectedPanel.id) + 1}
+                      {currentShots.findIndex(p => p.id === selectedShot.id) + 1}
                     </span>
-                    <span className="text-sm font-semibold text-white">{selectedPanel.title}</span>
-                    <span className="text-[10px] text-gray-500 ml-auto">← Panels</span>
+                    <span className="text-sm font-semibold text-white">{selectedShot.title}</span>
+                    <span className="text-[10px] text-gray-500 ml-auto">← Shots</span>
                   </div>
                 )}
 
@@ -5224,12 +5223,12 @@ export default function MangaStudioPlaygroundPage() {
                 {generationMode === "multi" && (
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-2">Scenes per Panel:</label>
+                      <label className="block text-xs font-medium text-gray-400 mb-2">Shots per Scene:</label>
                       <div className="grid grid-cols-6 gap-1.5">
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(num => (
-                          <button key={num} onClick={() => setSceneCount(num)}
+                          <button key={num} onClick={() => setShotCount(num)}
                             className={`px-2 py-1.5 rounded-lg text-xs font-bold transition border ${
-                              sceneCount === num ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"
+                              shotCount === num ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-white/5 text-gray-500 border-white/10 hover:text-gray-300"
                             }`}>
                             {num}
                           </button>
@@ -5241,13 +5240,13 @@ export default function MangaStudioPlaygroundPage() {
                     <div className="p-3 bg-[#0a0a10] rounded-lg border border-white/5">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[10px] text-gray-500 font-medium">Layout Preview</span>
-                        <span className="text-[10px] text-emerald-400 font-semibold">Save ~{Math.round((1 - 1/sceneCount) * 100)}% tokens</span>
+                        <span className="text-[10px] text-emerald-400 font-semibold">Save ~{Math.round((1 - 1/shotCount) * 100)}% tokens</span>
                       </div>
                       <div className="grid gap-1" style={{
-                        gridTemplateColumns: `repeat(${sceneCount <= 3 ? sceneCount : sceneCount <= 6 ? 3 : 4}, 1fr)`,
-                        gridTemplateRows: `repeat(${Math.ceil(sceneCount / (sceneCount <= 3 ? sceneCount : sceneCount <= 6 ? 3 : 4))}, 1fr)`
+                        gridTemplateColumns: `repeat(${shotCount <= 3 ? shotCount : shotCount <= 6 ? 3 : 4}, 1fr)`,
+                        gridTemplateRows: `repeat(${Math.ceil(shotCount / (shotCount <= 3 ? shotCount : shotCount <= 6 ? 3 : 4))}, 1fr)`
                       }}>
-                        {[...Array(sceneCount)].map((_, i) => (
+                        {[...Array(shotCount)].map((_, i) => (
                           <div key={i} className="aspect-[4/3] bg-[#1a1a24] rounded border border-purple-500/20 flex items-center justify-center">
                             <span className="text-[9px] text-purple-400/60 font-bold">{i + 1}</span>
                           </div>
@@ -5321,7 +5320,7 @@ export default function MangaStudioPlaygroundPage() {
                         </button>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {(selectedPanel?.characters?.length ? selectedPanel.characters : ["Kaito", "Ryu"]).map((char, i) => (
+                        {(selectedShot?.characters?.length ? selectedShot.characters : ["Kaito", "Ryu"]).map((char, i) => (
                           <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1a24] rounded-lg border border-white/10">
                             <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${
                               i % 3 === 0 ? "bg-orange-500" : i % 3 === 1 ? "bg-red-500" : "bg-blue-500"
@@ -5408,7 +5407,7 @@ export default function MangaStudioPlaygroundPage() {
 
                 {/* Generate Button */}
                 <button
-                  onClick={generatePanelContent}
+                  onClick={generateShotContent}
                   disabled={isGenerating}
                   className="w-full py-3 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 hover:opacity-90 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20"
                 >
@@ -5420,7 +5419,7 @@ export default function MangaStudioPlaygroundPage() {
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      Generate with AI Manga {generationMode === "multi" ? `(${sceneCount} scenes)` : ""}
+                      Generate with AI Manga {generationMode === "multi" ? `(${shotCount} shots)` : ""}
                     </>
                   )}
                 </button>

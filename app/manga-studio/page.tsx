@@ -6,10 +6,10 @@ import { Sparkles, Settings, BookOpen, Plus, ChevronDown, Repeat, Trash2, Image 
 import { useMangaStudioUI } from "./MangaStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { AIGenerationModal } from "./components/modals/AIGenerationModal";
-import { NewPageModal } from "./components/modals/NewPageModal";
+import { NewSceneModal } from "./components/modals/NewPageModal";
 import { AssetGeneratorModal } from "./components/modals/AssetGeneratorModal";
 import { NewEpisodeModal } from "./components/modals/NewEpisodeModal";
-import { PageGenerationModal } from "./components/modals/PageGenerationModal";
+import { SceneGenerationModal } from "./components/modals/PageGenerationModal";
 
 export default function MangaStudioPage() {
   const { openNewEpisode, openStoryManager } = useMangaStudioUI();
@@ -17,17 +17,17 @@ export default function MangaStudioPage() {
   const [showAIGeneration, setShowAIGeneration] = useState(false);
   const [showPageGeneration, setShowPageGeneration] = useState(false);
   const [expandedField, setExpandedField] = useState<"stageDirection" | "dialogue" | null>(null);
-  const [hasEpisode] = useState(true);
-  const [showEpisodeDropdown, setShowEpisodeDropdown] = useState(false);
-  const [selectedPage, setSelectedPage] = useState(1);
-  const [showPageDropdown, setShowPageDropdown] = useState(false);
+  const [hasProject] = useState(true);
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const [selectedScene, setSelectedScene] = useState(1);
+  const [showSceneDropdown, setShowSceneDropdown] = useState(false);
   const [showQuickStart, setShowQuickStart] = useState(false);
   const [showLayoutTemplates, setShowLayoutTemplates] = useState(false);
   const [showNewPage, setShowNewPage] = useState(false);
   const [showAssetGenerator, setShowAssetGenerator] = useState(false);
   const [assetGeneratorType, setAssetGeneratorType] = useState<"character" | "location" | "prop" | "scene">("character");
-  const [currentEpisode, setCurrentEpisode] = useState("Episode 1");
-  const [showNewEpisode, setShowNewEpisode] = useState(false);
+  const [currentProject, setCurrentProject] = useState("Project 1");
+  const [showNewProject, setShowNewProject] = useState(false);
   const [selectedCharacters, setSelectedCharacters] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
@@ -71,8 +71,8 @@ export default function MangaStudioPage() {
   };
 
   const handleEpisodeChange = (episodeName: string) => {
-    setCurrentEpisode(episodeName);
-    setShowEpisodeDropdown(false);
+    setCurrentProject(episodeName);
+    setShowProjectDropdown(false);
   };
 
   const openAssetGenerator = (type: "character" | "location" | "prop" | "scene") => {
@@ -198,12 +198,12 @@ export default function MangaStudioPage() {
             </div>
             
             {/* Episode Info with Switch */}
-            {hasEpisode && (
+            {hasProject && (
               <>
                 <div className="h-8 w-px bg-white/10"></div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">{currentEpisode}</span>
+                    <span className="text-xs text-gray-400">{currentProject}</span>
                     <span className="text-gray-600">•</span>
                     <span className="text-base text-white font-semibold">Basketball Dreams</span>
                   </div>
@@ -221,7 +221,7 @@ export default function MangaStudioPage() {
           
           <div className="flex items-center gap-3">
             {/* Quick Actions */}
-            {hasEpisode && (
+            {hasProject && (
               <button
                 onClick={() => setShowQuickStart(!showQuickStart)}
                 className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm font-medium transition flex items-center gap-2"
@@ -232,7 +232,7 @@ export default function MangaStudioPage() {
             )}
 
             {/* Export Dropdown */}
-            {hasEpisode && (
+            {hasProject && (
               <div className="relative">
                 <button
                   onClick={() => setShowExportMenu(!showExportMenu)}
@@ -291,29 +291,29 @@ export default function MangaStudioPage() {
 
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar - Episode, Page, Panel Sequence */}
-          {hasEpisode && (
+          {hasProject && (
             <div className="w-72 bg-[#13131a] border-r border-white/10 flex flex-col">
-              {/* Episode Selector */}
+              {/* Project Selector */}
               <div className="p-4 border-b border-white/10">
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Episode</label>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Project</label>
                   <button
-                    onClick={() => setShowNewEpisode(true)}
+                    onClick={() => setShowNewProject(true)}
                     className="text-xs text-purple-400 hover:text-purple-300 transition font-semibold flex items-center gap-1.5"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    New Episode
+                    New Project
                   </button>
                 </div>
                 <div className="relative">
                   <button
-                    onClick={() => setShowEpisodeDropdown(!showEpisodeDropdown)}
+                    onClick={() => setShowProjectDropdown(!showProjectDropdown)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-[#1a1a24] text-white rounded-lg text-sm font-semibold hover:bg-[#1f1f2a] transition-all duration-200 border border-white/10 hover:border-purple-500/30 group"
                   >
-                    <span>Episode 1</span>
+                    <span>Project 1</span>
                     <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-purple-400 transition" />
                   </button>
-                  {showEpisodeDropdown && (
+                  {showProjectDropdown && (
                     <div className="absolute top-full left-0 mt-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
                       <div className="p-2">
                         {episodes.map((ep) => (
@@ -330,20 +330,20 @@ export default function MangaStudioPage() {
                       <div className="border-t border-white/10 p-2">
                         <button
                           onClick={() => {
-                            setShowNewEpisode(true);
-                            setShowEpisodeDropdown(false);
+                            setShowNewProject(true);
+                            setShowProjectDropdown(false);
                           }}
                           className="w-full px-3 py-2 text-left text-sm text-purple-400 hover:bg-purple-500/10 rounded-lg transition flex items-center gap-2"
                         >
                           <Plus className="w-4 h-4" />
-                          + New Episode
+                          + New Project
                         </button>
                       </div>
                       <div className="border-t border-white/10 p-2">
                         <button
                           onClick={() => {
                             openStoryManager();
-                            setShowEpisodeDropdown(false);
+                            setShowProjectDropdown(false);
                           }}
                           className="w-full px-3 py-2 text-left text-sm text-gray-400 hover:bg-white/5 rounded-lg transition flex items-center gap-2"
                         >
@@ -356,38 +356,38 @@ export default function MangaStudioPage() {
                 </div>
               </div>
 
-              {/* Page Selector */}
+              {/* Scene Selector */}
               <div className="p-4 border-b border-white/10">
                 <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Page</label>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Scene</label>
                   <button
                     onClick={() => setShowNewPage(true)}
                     className="text-xs text-purple-400 hover:text-purple-300 transition font-semibold flex items-center gap-1.5"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    New Page
+                    New Scene
                   </button>
                 </div>
                 <div className="relative">
                   <button
-                    onClick={() => setShowPageDropdown(!showPageDropdown)}
+                    onClick={() => setShowSceneDropdown(!showSceneDropdown)}
                     className="w-full flex items-center justify-between px-4 py-3 bg-[#1a1a24] text-white rounded-lg text-sm font-semibold hover:bg-[#1f1f2a] transition-all duration-200 border border-white/10 hover:border-blue-500/30 group"
                   >
-                    <span>Page {selectedPage}</span>
+                    <span>Scene {selectedScene}</span>
                     <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition" />
                   </button>
-                  {showPageDropdown && (
+                  {showSceneDropdown && (
                     <div className="absolute top-full left-0 mt-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
                       <div className="p-2">
                         {pages.map((page) => (
                           <button
                             key={page.id}
                             onClick={() => {
-                              setSelectedPage(page.number);
-                              setShowPageDropdown(false);
+                              setSelectedScene(page.number);
+                              setShowSceneDropdown(false);
                             }}
                             className={`w-full px-3 py-2 text-left rounded-lg transition mb-1 ${
-                              selectedPage === page.number
+                              selectedScene === page.number
                                 ? "bg-blue-500/20 text-blue-400"
                                 : "text-gray-300 hover:bg-white/5"
                             }`}
@@ -470,7 +470,7 @@ export default function MangaStudioPage() {
           {/* Center - Page Canvas */}
           <div className="flex-1 flex flex-col overflow-hidden bg-[#0f1117]">
             <div className="flex-1 p-6 overflow-auto">
-              {!hasEpisode ? (
+              {!hasProject ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-center">
@@ -498,7 +498,7 @@ export default function MangaStudioPage() {
                   <div className="mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div>
-                        <h3 className="text-white font-bold text-lg">Page {selectedPage}</h3>
+                        <h3 className="text-white font-bold text-lg">Scene {selectedScene}</h3>
                         <p className="text-gray-400 text-sm">Webtoon Format • 3 Panels</p>
                       </div>
                       <select
@@ -731,7 +731,7 @@ export default function MangaStudioPage() {
             </div>
 
             {/* Timeline Strip - Below Canvas (Drag to reorder, visually distinct) */}
-            {hasEpisode && showTimeline && (
+            {hasProject && showTimeline && (
               <div className="h-24 bg-[#0a0a0f] border-t-2 border-purple-500/20 flex flex-col shrink-0">
                 <div className="flex items-center justify-between px-4 py-1 bg-[#0f1117]">
                   <div className="flex items-center gap-2">
@@ -791,13 +791,13 @@ export default function MangaStudioPage() {
           </div>
 
           {/* Right Sidebar - Panel Builder */}
-          {hasEpisode && (
+          {hasProject && (
             <div className="w-[400px] bg-[#13131a] border-l border-white/10 flex flex-col">
               <div className="p-4 border-b border-white/10">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-white font-bold text-base">Panel Builder</h3>
-                    <p className="text-xs text-gray-400 mt-1">Scene {editingPanelId || panels.length + 1} • Page {selectedPage}</p>
+                    <p className="text-xs text-gray-400">Scene {editingPanelId || panels.length + 1} • Project {selectedScene}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <button onClick={() => setShowPresets(!showPresets)} className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition flex items-center gap-1 ${showPresets ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" : "bg-white/5 hover:bg-white/10 text-gray-400 border border-white/5"}`}>
@@ -1364,7 +1364,7 @@ export default function MangaStudioPage() {
           setShowAIGeneration(false);
         }}
       />
-      <PageGenerationModal isOpen={showPageGeneration} onClose={() => setShowPageGeneration(false)} />
+      <SceneGenerationModal isOpen={showPageGeneration} onClose={() => setShowPageGeneration(false)} />
 
       {/* Expanded Text Dialog for Stage Direction / Dialogue */}
       {expandedField && (
@@ -1538,10 +1538,10 @@ export default function MangaStudioPage() {
       )}
 
       {/* Modals */}
-      <NewPageModal
+      <NewSceneModal
         isOpen={showNewPage}
         onClose={() => setShowNewPage(false)}
-        onCreatePage={handleCreatePage}
+        onCreateScene={handleCreatePage}
       />
       
       <AssetGeneratorModal
@@ -1551,8 +1551,8 @@ export default function MangaStudioPage() {
       />
       
       <NewEpisodeModal
-        isOpen={showNewEpisode}
-        onClose={() => setShowNewEpisode(false)}
+        isOpen={showNewProject}
+        onClose={() => setShowNewProject(false)}
       />
     </>
   );

@@ -11,17 +11,17 @@ interface Suggestion {
   action: Record<string, any>;
 }
 
-interface SmartPanelSuggestionsProps {
+interface SmartShotSuggestionsProps {
   dialogue: string;
   stageDirection: string;
   onApplySuggestion: (suggestion: Record<string, any>) => void;
 }
 
-export function SmartPanelSuggestions({ 
+export function SmartShotSuggestions({ 
   dialogue, 
   stageDirection, 
   onApplySuggestion 
-}: SmartPanelSuggestionsProps) {
+}: SmartShotSuggestionsProps) {
   
   // AI analysis based on dialogue length and content
   const analyzeDialogue = () => {
@@ -38,24 +38,24 @@ export function SmartPanelSuggestions({
 
   const suggestions: Suggestion[] = [];
 
-  // Panel layout suggestions
+  // Shot layout suggestions
   if (wordCount > 50) {
     suggestions.push({
       type: "layout",
-      title: "Wide Panel Recommended",
+      title: "Wide Shot Recommended",
       desc: "Long dialogue needs more space",
       icon: Layout,
       color: "blue",
-      action: { layout: "wide", panels: 2 }
+      action: { layout: "wide", shots: 2 }
     });
   } else if (wordCount < 10) {
     suggestions.push({
       type: "layout",
-      title: "Compact Panel",
-      desc: "Short dialogue - use smaller panel",
+      title: "Compact Shot",
+      desc: "Short dialogue - use smaller shot",
       icon: Layout,
       color: "green",
-      action: { layout: "compact", panels: 4 }
+      action: { layout: "compact", shots: 4 }
     });
   }
 
@@ -78,7 +78,7 @@ export function SmartPanelSuggestions({
       desc: "Emotional dialogue - focus on character face",
       icon: Camera,
       color: "orange",
-      action: { cameraAngle: "close-up", panelSize: "large" }
+      action: { cameraAngle: "close-up", shotSize: "large" }
     });
   }
 
@@ -86,11 +86,11 @@ export function SmartPanelSuggestions({
   if (wordCount > 30 && hasAction) {
     suggestions.push({
       type: "composition",
-      title: "Split Panel",
-      desc: "Balance action and dialogue with 2-panel layout",
+      title: "Split Shot",
+      desc: "Balance action and dialogue with 2-shot layout",
       icon: Zap,
       color: "yellow",
-      action: { composition: "split", panels: 2 }
+      action: { composition: "split", shots: 2 }
     });
   }
 

@@ -12,38 +12,38 @@ import { SettingsModal } from "../components/modals/SettingsModal";
 import { ManageArcTagsModal } from "../components/modals/ManageArcTagsModal";
 import { ManageSectionsModal } from "../components/modals/ManageSectionsModal";
 
-type EpisodeStatus = "todo" | "in_progress" | "review" | "completed" | "archived";
-type PanelStatus = "queued" | "drawing" | "review" | "approved" | "redo";
+type ProjectStatus = "todo" | "in_progress" | "review" | "completed" | "archived";
+type ShotStatus = "queued" | "drawing" | "review" | "approved" | "redo";
 
-interface MangaPanel {
+interface StoryboardShot {
   id: number;
   name: string;
-  page: number;
-  panelType: string;
+  scene: number;
+  shotType: string;
   description: string;
   dialogue?: string;
   characters?: string[];
-  scene?: string;
+  location?: string;
   props?: string[];
   artStyle: string;
   ratio: string;
-  status: PanelStatus;
+  status: ShotStatus;
   thumbnail?: string;
 }
 
-interface Episode {
+interface Project {
   id: number;
   title: string;
-  status: EpisodeStatus;
+  status: ProjectStatus;
   arc: string;
-  pages: number;
+  scenes: number;
   characters: number;
   summary: string;
   expanded: boolean;
-  panels: MangaPanel[];
+  shots: StoryboardShot[];
 }
 
-const episodeStatusConfig: Record<EpisodeStatus, { label: string; color: string; bg: string; icon: typeof Circle }> = {
+const projectStatusConfig: Record<ProjectStatus, { label: string; color: string; bg: string; icon: typeof Circle }> = {
   todo: { label: "To Do", color: "text-gray-400", bg: "bg-gray-500/10", icon: Circle },
   in_progress: { label: "In Progress", color: "text-blue-400", bg: "bg-blue-500/10", icon: Clock },
   review: { label: "Review", color: "text-orange-400", bg: "bg-orange-500/10", icon: Pencil },
@@ -51,7 +51,7 @@ const episodeStatusConfig: Record<EpisodeStatus, { label: string; color: string;
   archived: { label: "Archived", color: "text-gray-500", bg: "bg-gray-500/10", icon: Archive },
 };
 
-const panelStatusConfig: Record<PanelStatus, { label: string; color: string; bg: string }> = {
+const shotStatusConfig: Record<ShotStatus, { label: string; color: string; bg: string }> = {
   queued: { label: "Queued", color: "text-gray-400", bg: "bg-gray-500/10" },
   drawing: { label: "Drawing", color: "text-blue-400", bg: "bg-blue-500/10" },
   review: { label: "Review", color: "text-orange-400", bg: "bg-orange-500/10" },
@@ -59,20 +59,20 @@ const panelStatusConfig: Record<PanelStatus, { label: string; color: string; bg:
   redo: { label: "Redo", color: "text-red-400", bg: "bg-red-500/10" },
 };
 
-export default function EpisodesPage() {
+export default function ProjectsPage() {
   const { openNewEpisode } = useMangaStudioUI();
   const [showSettings, setShowSettings] = useState(false);
   const [showArcTags, setShowArcTags] = useState(false);
   const [showSections, setShowSections] = useState(false);
   const [showScriptBreaker, setShowScriptBreaker] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<EpisodeStatus | "active" | "all">("active");
-  const [selectedEpisodeId, setSelectedEpisodeId] = useState<number | null>(1);
+  const [filterStatus, setFilterStatus] = useState<ProjectStatus | "active" | "all">("active");
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(1);
   const [scriptText, setScriptText] = useState("");
   const [isBreaking, setIsBreaking] = useState(false);
   const [targetEpisode, setTargetEpisode] = useState<string>("new");
   const [breakdownResult, setBreakdownResult] = useState<{
-    episodes: { title: string; pages: { pageNum: number; description: string; panels: { name: string; type: string; description: string; dialogue: string; characters: string[]; scene: string; props: string[] }[] }[] }[];
+    episodes: { title: string; scenes: { pageNum: number; description: string; shots: { name: string; type: string; description: string; dialogue: string; characters: string[]; scene: string; props: string[] }[] }[] }[];
     characters: { name: string; role: string; mentions: number; tags: string[] }[];
     locations: { name: string; mentions: number; tags: string[] }[];
     props: { name: string; mentions: number; tags: string[] }[];
@@ -80,64 +80,64 @@ export default function EpisodesPage() {
     suggestedStart: number;
   } | null>(null);
 
-  const [episodes, setEpisodes] = useState<Episode[]>([
+  const [episodes, setEpisodes] = useState<Project[]>([
     {
-      id: 1, title: "The Beginning", status: "in_progress", arc: "Training Arc", pages: 3, characters: 3, expanded: false,
+      id: 1, title: "The Beginning", status: "in_progress", arc: "Training Arc", scenes: 3, characters: 3, expanded: false,
       summary: "Kaito discovers basketball from the rooftop. He joins the team despite zero experience.",
-      panels: [
-        { id: 1, name: "Panel 1", page: 1, panelType: "Establishing", description: "Wide shot — school rooftop, sunset. Kaito watches a street basketball game below.", dialogue: '"Someday... I want to fly like that."', characters: ["Kaito"], scene: "School Rooftop", props: ["Basketball"], artStyle: "Shonen", ratio: "3:4", status: "review", thumbnail: "🌅" },
-        { id: 2, name: "Panel 2", page: 1, panelType: "Close-up", description: "Close-up of Kaito's eyes reflecting the game, sparkling with excitement.", characters: ["Kaito"], scene: "School Rooftop", props: [], artStyle: "Shonen", ratio: "3:4", status: "approved", thumbnail: "👁️" },
-        { id: 3, name: "Panel 3", page: 1, panelType: "Action", description: "A player dunks. Speed lines, impact effect. Kaito grips the railing.", characters: ["Kaito", "Ryu"], scene: "Basketball Court", props: ["Basketball"], artStyle: "Shonen", ratio: "16:9", status: "drawing", thumbnail: "🏀" },
-        { id: 4, name: "Panel 4", page: 2, panelType: "Dramatic Reveal", description: "Next morning — Kaito at the gym door, nervous. Coach inside.", dialogue: '"Is... is this where I sign up?"', characters: ["Kaito", "Coach"], scene: "Training Gym", props: [], artStyle: "Shonen", ratio: "3:4", status: "queued" },
-        { id: 5, name: "Panel 5", page: 2, panelType: "Reaction", description: "Coach looks at Kaito's small frame. Skeptical expression.", dialogue: '"You? Basketball? ...Show me what you got."', characters: ["Coach", "Kaito"], scene: "Training Gym", props: ["Whistle"], artStyle: "Shonen", ratio: "3:4", status: "queued" },
-        { id: 6, name: "Panel 6", page: 3, panelType: "Silent", description: "Kaito shakes his head. Embarrassed but determined.", characters: ["Kaito"], scene: "Training Gym", props: [], artStyle: "Shonen", ratio: "3:4", status: "queued" },
+      shots: [
+        { id: 1, name: "Shot 1", scene: 1, shotType: "Establishing", description: "Wide shot — school rooftop, sunset. Kaito watches a street basketball game below.", dialogue: '"Someday... I want to fly like that."', characters: ["Kaito"], location: "School Rooftop", props: ["Basketball"], artStyle: "Shonen", ratio: "3:4", status: "review", thumbnail: "🌅" },
+        { id: 2, name: "Shot 2", scene: 1, shotType: "Close-up", description: "Close-up of Kaito's eyes reflecting the game, sparkling with excitement.", characters: ["Kaito"], location: "School Rooftop", props: [], artStyle: "Shonen", ratio: "3:4", status: "approved", thumbnail: "👁️" },
+        { id: 3, name: "Shot 3", scene: 1, shotType: "Action", description: "A player dunks. Speed lines, impact effect. Kaito grips the railing.", characters: ["Kaito", "Ryu"], location: "Basketball Court", props: ["Basketball"], artStyle: "Shonen", ratio: "16:9", status: "drawing", thumbnail: "🏀" },
+        { id: 4, name: "Shot 4", scene: 2, shotType: "Dramatic Reveal", description: "Next morning — Kaito at the gym door, nervous. Coach inside.", dialogue: '"Is... is this where I sign up?"', characters: ["Kaito", "Coach"], location: "Training Gym", props: [], artStyle: "Shonen", ratio: "3:4", status: "queued" },
+        { id: 5, name: "Shot 5", scene: 2, shotType: "Reaction", description: "Coach looks at Kaito's small frame. Skeptical expression.", dialogue: '"You? Basketball? ...Show me what you got."', characters: ["Coach", "Kaito"], location: "Training Gym", props: ["Whistle"], artStyle: "Shonen", ratio: "3:4", status: "queued" },
+        { id: 6, name: "Shot 6", scene: 3, shotType: "Silent", description: "Kaito shakes his head. Embarrassed but determined.", characters: ["Kaito"], location: "Training Gym", props: [], artStyle: "Shonen", ratio: "3:4", status: "queued" },
       ],
     },
     {
-      id: 2, title: "First Practice", status: "todo", arc: "Training Arc", pages: 2, characters: 5, expanded: false,
+      id: 2, title: "First Practice", status: "todo", arc: "Training Arc", scenes: 2, characters: 5, expanded: false,
       summary: "Kaito's first practice is a disaster. He can't dribble, can't shoot. But Ryu sees something.",
-      panels: [
-        { id: 7, name: "Panel 1", page: 1, panelType: "Establishing", description: "Morning gym — team warming up. Kaito enters in oversized uniform.", artStyle: "Shonen", ratio: "3:4", status: "queued" },
-        { id: 8, name: "Panel 2", page: 1, panelType: "Action", description: "Montage — Kaito failing at drills. Ball bouncing off foot, tripping.", artStyle: "Shonen", ratio: "3:4", status: "queued" },
-        { id: 9, name: "Panel 3", page: 2, panelType: "Reaction", description: "Team members whispering and laughing.", artStyle: "Shonen", ratio: "3:4", status: "queued" },
-        { id: 10, name: "Panel 4", page: 2, panelType: "Close-up", description: "Ryu watches from the doorway. Arms crossed. Small smile.", artStyle: "Seinen", ratio: "3:4", status: "queued" },
+      shots: [
+        { id: 7, name: "Shot 7", scene: 1, shotType: "Establishing", description: "Morning gym — team warming up. Kaito enters in oversized uniform.", artStyle: "Shonen", ratio: "3:4", status: "queued" },
+        { id: 8, name: "Shot 8", scene: 1, shotType: "Action", description: "Montage — Kaito failing at drills. Ball bouncing off foot, tripping.", artStyle: "Shonen", ratio: "3:4", status: "queued" },
+        { id: 9, name: "Shot 9", scene: 2, shotType: "Reaction", description: "Team members whispering and laughing.", artStyle: "Shonen", ratio: "3:4", status: "queued" },
+        { id: 10, name: "Shot 10", scene: 2, shotType: "Close-up", description: "Ryu watches from the doorway. Arms crossed. Small smile.", artStyle: "Seinen", ratio: "3:4", status: "queued" },
       ],
     },
     {
-      id: 3, title: "The Rival", status: "review", arc: "Rivalry Arc", pages: 2, characters: 4, expanded: false,
+      id: 3, title: "The Rival", status: "review", arc: "Rivalry Arc", scenes: 2, characters: 4, expanded: false,
       summary: "Ryu challenges Kaito to a one-on-one. Score once, you stay.",
-      panels: [
-        { id: 11, name: "Panel 1", page: 1, panelType: "Two-Shot", description: "Ryu approaches Kaito. Dramatic tension lines.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
-        { id: 12, name: "Panel 2", page: 1, panelType: "Splash Page", description: "Gym is packed. Students in bleachers. Center court.", artStyle: "Shonen", ratio: "16:9", status: "review" },
-        { id: 13, name: "Panel 3", page: 2, panelType: "Action", description: "Ryu dribbles past Kaito effortlessly.", artStyle: "Shonen", ratio: "3:4", status: "review" },
-        { id: 14, name: "Panel 4", page: 2, panelType: "Impact", description: "Kaito falls. Gets back up immediately.", artStyle: "Shonen", ratio: "3:4", status: "drawing" },
+      shots: [
+        { id: 11, name: "Shot 11", scene: 1, shotType: "Two-Shot", description: "Ryu approaches Kaito. Dramatic tension lines.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
+        { id: 12, name: "Shot 12", scene: 1, shotType: "Splash Page", description: "Gym is packed. Students in bleachers. Center court.", artStyle: "Shonen", ratio: "16:9", status: "review" },
+        { id: 13, name: "Shot 13", scene: 2, shotType: "Action", description: "Ryu dribbles past Kaito effortlessly.", artStyle: "Shonen", ratio: "3:4", status: "review" },
+        { id: 14, name: "Shot 14", scene: 2, shotType: "Impact", description: "Kaito falls. Gets back up immediately.", artStyle: "Shonen", ratio: "3:4", status: "drawing" },
       ],
     },
     {
-      id: 4, title: "Tournament Begins", status: "todo", arc: "Tournament Arc", pages: 0, characters: 8, expanded: false,
+      id: 4, title: "Tournament Begins", status: "todo", arc: "Tournament Arc", scenes: 0, characters: 8, expanded: false,
       summary: "The school enters the regional tournament. Stakes are high.",
-      panels: [],
+      shots: [],
     },
     {
-      id: 5, title: "Training Montage", status: "completed", arc: "Training Arc", pages: 3, characters: 2, expanded: false,
+      id: 5, title: "Training Montage", status: "completed", arc: "Training Arc", scenes: 3, characters: 2, expanded: false,
       summary: "Kaito trains alone every night. Slow improvement montage.",
-      panels: [
-        { id: 15, name: "Panel 1", page: 1, panelType: "Establishing", description: "Empty court at night. Single light on.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
-        { id: 16, name: "Panel 2", page: 2, panelType: "Action", description: "Montage of Kaito shooting, dribbling, running.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
+      shots: [
+        { id: 15, name: "Shot 15", scene: 1, shotType: "Establishing", description: "Empty court at night. Single light on.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
+        { id: 16, name: "Shot 16", scene: 2, shotType: "Action", description: "Montage of Kaito shooting, dribbling, running.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
       ],
     },
     {
-      id: 6, title: "Origin Story", status: "archived", arc: "Flashback Arc", pages: 4, characters: 3, expanded: false,
+      id: 6, title: "Origin Story", status: "archived", arc: "Flashback Arc", scenes: 4, characters: 3, expanded: false,
       summary: "Flashback to Kaito's childhood. Why he fears competition.",
-      panels: [
-        { id: 17, name: "Panel 1", page: 1, panelType: "Establishing", description: "Young Kaito at a track meet. Nervous.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
+      shots: [
+        { id: 17, name: "Shot 17", scene: 1, shotType: "Establishing", description: "Young Kaito at a track meet. Nervous.", artStyle: "Shonen", ratio: "3:4", status: "approved" },
       ],
     },
   ]);
 
   const router = useRouter();
-  const totalPanels = episodes.reduce((sum, ep) => sum + ep.panels.length, 0);
-  const totalPages = episodes.reduce((sum, ep) => sum + ep.pages, 0);
+  const totalPanels = episodes.reduce((sum, ep) => sum + ep.shots.length, 0);
+  const totalPages = episodes.reduce((sum, ep) => sum + ep.scenes, 0);
 
   const editPage = (episodeId: number, page: number) => {
     router.push(`/manga-studio?episode=${episodeId}&page=${page}`);
@@ -149,7 +149,7 @@ export default function EpisodesPage() {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const matchEp = ep.title.toLowerCase().includes(q) || ep.summary.toLowerCase().includes(q);
-      const matchPanel = ep.panels.some(p => p.description.toLowerCase().includes(q) || p.panelType.toLowerCase().includes(q));
+      const matchPanel = ep.shots.some(p => p.description.toLowerCase().includes(q) || p.shotType.toLowerCase().includes(q));
       if (!matchEp && !matchPanel) return false;
     }
     return true;
@@ -157,7 +157,7 @@ export default function EpisodesPage() {
 
   const toggleExpand = (id: number) => {
     setEpisodes(prev => prev.map(ep => ep.id === id ? { ...ep, expanded: !ep.expanded } : ep));
-    setSelectedEpisodeId(id);
+    setSelectedProjectId(id);
   };
 
   const changeEpisodeStatus = (id: number, newStatus: EpisodeStatus) => {
@@ -166,7 +166,7 @@ export default function EpisodesPage() {
 
   const changePanelStatus = (episodeId: number, panelId: number, newStatus: PanelStatus) => {
     setEpisodes(prev => prev.map(ep =>
-      ep.id === episodeId ? { ...ep, panels: ep.panels.map(p => p.id === panelId ? { ...p, status: newStatus } : p) } : ep
+      ep.id === episodeId ? { ...ep, shots: ep.shots.map(p => p.id === panelId ? { ...p, status: newStatus } : p) } : ep
     ));
   };
 
@@ -211,27 +211,27 @@ export default function EpisodesPage() {
         });
       }
 
-      // Build episodes with pages → panels structure including dialogue/characters/scene/props
+      // Build episodes with scenes → shots structure including dialogue/characters/scene/props
       const epCount = Math.max(1, Math.ceil(sceneCount / 3));
       const newId = Math.max(...episodes.map(e => e.id)) + 1;
-      const panelTypes = ["Establishing", "Close-up", "Action", "Reaction", "Dramatic Reveal", "Silent"];
+      const shotTypes = ["Establishing", "Close-up", "Action", "Reaction", "Dramatic Reveal", "Silent"];
       const charNames = extractedChars.map(c => c.name);
       const locNames = extractedLocations.map(l => l.name);
       const propNames = extractedProps.map(p => p.name);
 
-      type PageDef = { pageNum: number; description: string; panels: { name: string; type: string; description: string; dialogue: string; characters: string[]; scene: string; props: string[] }[] };
+      type PageDef = { pageNum: number; description: string; shots: { name: string; type: string; description: string; dialogue: string; characters: string[]; scene: string; props: string[] }[] };
 
-      const generatedEpisodes: { title: string; pages: PageDef[] }[] = [];
+      const generatedEpisodes: { title: string; scenes: PageDef[] }[] = [];
 
       for (let ep = 0; ep < epCount; ep++) {
         const epScenes = extractedScenes.slice(ep * 3, (ep + 1) * 3);
         const epPages: PageDef[] = [];
         let currentPage = 1;
-        let currentPanels: PageDef["panels"] = [];
+        let currentPanels: PageDef["shots"] = [];
 
         epScenes.forEach((scene, si) => {
           if (si > 0 && si % 2 === 0) {
-            epPages.push({ pageNum: currentPage, description: `Page ${currentPage}: ${currentPanels.map(p => p.scene).join(", ")}`, panels: currentPanels });
+            epPages.push({ pageNum: currentPage, description: `Page ${currentPage}: ${currentPanels.map(p => p.scene).join(", ")}`, shots: currentPanels });
             currentPage++;
             currentPanels = [];
           }
@@ -243,7 +243,7 @@ export default function EpisodesPage() {
 
           currentPanels.push({
             name: `Panel ${si + 1}`,
-            type: panelTypes[si % panelTypes.length],
+            type: shotTypes[si % shotTypes.length],
             description: scene.description,
             dialogue: si === 0 ? `"This is where it begins..."` : si === sceneCount - 1 ? `"I won't give up!"` : "",
             characters: panelChars,
@@ -252,12 +252,12 @@ export default function EpisodesPage() {
           });
         });
         if (currentPanels.length > 0) {
-          epPages.push({ pageNum: currentPage, description: `Page ${currentPage}: ${currentPanels.map(p => p.scene).join(", ")}`, panels: currentPanels });
+          epPages.push({ pageNum: currentPage, description: `Page ${currentPage}: ${currentPanels.map(p => p.scene).join(", ")}`, shots: currentPanels });
         }
 
         generatedEpisodes.push({
           title: ep === 0 ? "Opening Arc" : ep === epCount - 1 ? "Climax" : `Development ${ep}`,
-          pages: epPages,
+          scenes: epPages,
         });
       }
 
@@ -275,14 +275,14 @@ export default function EpisodesPage() {
 
   const applyBreakdown = () => {
     if (!breakdownResult) return;
-    let panelId = Math.max(...episodes.flatMap(e => e.panels.map(p => p.id)), 0) + 1;
+    let panelId = Math.max(...episodes.flatMap(e => e.shots.map(p => p.id)), 0) + 1;
 
     if (targetEpisode !== "new") {
-      // Append panels to existing episode
+      // Append shots to existing episode
       const epId = parseInt(targetEpisode);
       const allPanels: MangaPanel[] = breakdownResult.episodes.flatMap(ep =>
-        ep.pages.flatMap(pg => pg.panels.map(p => ({
-          id: panelId++, name: p.name, page: pg.pageNum, panelType: p.type,
+        ep.scenes.flatMap(pg => pg.shots.map(p => ({
+          id: panelId++, name: p.name, page: pg.pageNum, shotType: p.type,
           description: p.description, dialogue: p.dialogue, characters: p.characters,
           scene: p.scene, props: p.props,
           artStyle: "Shonen", ratio: "3:4", status: "queued" as PanelStatus,
@@ -290,10 +290,10 @@ export default function EpisodesPage() {
       );
       setEpisodes(prev => prev.map(ep => ep.id === epId ? {
         ...ep,
-        panels: [...ep.panels, ...allPanels],
-        pages: ep.pages + breakdownResult.episodes.reduce((s, e) => s + e.pages.length, 0),
+        shots: [...ep.shots, ...allPanels],
+        scenes: ep.scenes + breakdownResult.episodes.reduce((s, e) => s + e.scenes.length, 0),
       } : ep));
-      setSelectedEpisodeId(epId);
+      setSelectedProjectId(epId);
     } else {
       // Create new episodes
       const newId = Math.max(...episodes.map(e => e.id)) + 1;
@@ -302,19 +302,19 @@ export default function EpisodesPage() {
         title: ep.title,
         status: "todo" as EpisodeStatus,
         arc: "From Script",
-        pages: ep.pages.length,
+        scenes: ep.scenes.length,
         characters: breakdownResult.characters.length,
         expanded: i === 0,
-        summary: ep.pages.flatMap(pg => pg.panels.map(p => p.description)).join(" ").slice(0, 120) + "...",
-        panels: ep.pages.flatMap(pg => pg.panels.map(p => ({
-          id: panelId++, name: p.name, page: pg.pageNum, panelType: p.type,
+        summary: ep.scenes.flatMap(pg => pg.shots.map(p => p.description)).join(" ").slice(0, 120) + "...",
+        shots: ep.scenes.flatMap(pg => pg.shots.map(p => ({
+          id: panelId++, name: p.name, page: pg.pageNum, shotType: p.type,
           description: p.description, dialogue: p.dialogue, characters: p.characters,
           scene: p.scene, props: p.props,
           artStyle: "Shonen", ratio: "3:4", status: "queued" as PanelStatus,
         }))),
       }));
       setEpisodes(prev => [...prev, ...newEpisodes]);
-      setSelectedEpisodeId(newId);
+      setSelectedProjectId(newId);
     }
 
     setBreakdownResult(null);
@@ -347,21 +347,21 @@ export default function EpisodesPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {episodes.filter(e => filterStatus === "all" || filterStatus === "archived" ? true : e.status !== "archived").map((ep) => {
-              const sc = episodeStatusConfig[ep.status];
+              const sc = projectStatusConfig[ep.status];
               const Icon = sc.icon;
-              const isSelected = selectedEpisodeId === ep.id;
+              const isSelected = selectedProjectId === ep.id;
               return (
-                <button key={ep.id} onClick={() => { setSelectedEpisodeId(ep.id); toggleExpand(ep.id); }}
+                <button key={ep.id} onClick={() => { setSelectedProjectId(ep.id); toggleExpand(ep.id); }}
                   className={`w-full text-left px-3 py-2.5 rounded-lg transition ${isSelected ? "bg-purple-500/20 border border-purple-500/30" : "hover:bg-white/5 border border-transparent"} ${ep.status === "archived" ? "opacity-50" : ""}`}>
                   <div className="flex items-center gap-2 mb-1">
                     <Icon className={`w-3 h-3 ${sc.color}`} />
                     <span className="text-xs font-semibold text-white truncate">Ep {ep.id}</span>
-                    <span className="text-[9px] text-gray-500 ml-auto">{ep.panels.length}p</span>
+                    <span className="text-[9px] text-gray-500 ml-auto">{ep.shots.length}p</span>
                   </div>
                   <div className="text-[10px] text-gray-400 truncate">{ep.title}</div>
-                  {ep.panels.length > 0 && (
+                  {ep.shots.length > 0 && (
                     <div className="mt-1.5 w-full bg-white/5 rounded-full h-1">
-                      <div className="h-1 rounded-full bg-purple-500 transition-all" style={{ width: `${Math.round((ep.panels.filter(p => p.status === "approved").length / ep.panels.length) * 100)}%` }} />
+                      <div className="h-1 rounded-full bg-purple-500 transition-all" style={{ width: `${Math.round((ep.shots.filter(p => p.status === "approved").length / ep.shots.length) * 100)}%` }} />
                     </div>
                   )}
                 </button>
@@ -387,15 +387,15 @@ export default function EpisodesPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-lg font-bold text-white">Episodes</h1>
-                <p className="text-[10px] text-gray-400 mt-0.5">Manage episodes, pages & panels — expand episodes to see their panels</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Manage episodes, scenes & shots — expand episodes to see their shots</p>
               </div>
               <div className="flex items-center gap-4 text-xs">
                 <div className="flex items-center gap-3">
                   <span className="text-gray-500">{episodes.length} episodes</span>
                   <span className="text-gray-600">•</span>
-                  <span className="text-gray-500">{totalPages} pages</span>
+                  <span className="text-gray-500">{totalPages} scenes</span>
                   <span className="text-gray-600">•</span>
-                  <span className="text-gray-500">{totalPanels} panels</span>
+                  <span className="text-gray-500">{totalPanels} shots</span>
                 </div>
                 <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-xs font-medium transition flex items-center gap-1.5">
                   <Download className="w-3.5 h-3.5" />Export
@@ -418,23 +418,23 @@ export default function EpisodesPage() {
               <div className="shrink-0 bg-[#1a1a24] rounded-lg border border-white/5 p-3 min-w-[140px]">
                 <div className="text-[9px] text-gray-500 uppercase font-semibold mb-1">Overall</div>
                 <div className="text-lg font-bold text-white mb-1.5">
-                  {episodes.length > 0 ? Math.round(episodes.reduce((sum, ep) => sum + (ep.panels.length > 0 ? (ep.panels.filter(p => p.status === "approved").length / ep.panels.length) * 100 : 0), 0) / episodes.filter(e => e.panels.length > 0).length || 0) : 0}%
+                  {episodes.length > 0 ? Math.round(episodes.reduce((sum, ep) => sum + (ep.shots.length > 0 ? (ep.shots.filter(p => p.status === "approved").length / ep.shots.length) * 100 : 0), 0) / episodes.filter(e => e.shots.length > 0).length || 0) : 0}%
                 </div>
                 <div className="w-full bg-white/5 rounded-full h-1.5">
-                  <div className="h-1.5 rounded-full bg-purple-500 transition-all" style={{ width: `${episodes.length > 0 ? Math.round(episodes.reduce((sum, ep) => sum + (ep.panels.length > 0 ? (ep.panels.filter(p => p.status === "approved").length / ep.panels.length) * 100 : 0), 0) / (episodes.filter(e => e.panels.length > 0).length || 1)) : 0}%` }} />
+                  <div className="h-1.5 rounded-full bg-purple-500 transition-all" style={{ width: `${episodes.length > 0 ? Math.round(episodes.reduce((sum, ep) => sum + (ep.shots.length > 0 ? (ep.shots.filter(p => p.status === "approved").length / ep.shots.length) * 100 : 0), 0) / (episodes.filter(e => e.shots.length > 0).length || 1)) : 0}%` }} />
                 </div>
               </div>
               {/* Per-Episode Progress */}
               {episodes.filter(e => e.status !== "archived").map(ep => {
-                const approved = ep.panels.filter(p => p.status === "approved").length;
-                const pct = ep.panels.length > 0 ? Math.round((approved / ep.panels.length) * 100) : 0;
+                const approved = ep.shots.filter(p => p.status === "approved").length;
+                const pct = ep.shots.length > 0 ? Math.round((approved / ep.shots.length) * 100) : 0;
                 const barColor = pct === 100 ? "bg-emerald-500" : pct > 50 ? "bg-blue-500" : pct > 0 ? "bg-orange-500" : "bg-gray-600";
                 return (
                   <div key={ep.id} className="shrink-0 bg-[#1a1a24] rounded-lg border border-white/5 p-3 min-w-[120px]">
                     <div className="text-[9px] text-gray-500 truncate mb-1">Ep {ep.id}: {ep.title}</div>
                     <div className="flex items-baseline gap-1 mb-1.5">
                       <span className="text-sm font-bold text-white">{pct}%</span>
-                      <span className="text-[8px] text-gray-600">{approved}/{ep.panels.length}</span>
+                      <span className="text-[8px] text-gray-600">{approved}/{ep.shots.length}</span>
                     </div>
                     <div className="w-full bg-white/5 rounded-full h-1.5">
                       <div className={`h-1.5 rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
@@ -474,7 +474,7 @@ export default function EpisodesPage() {
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-4 h-4 text-orange-400" />
                 <span className="text-sm font-bold text-white">Script Breaker</span>
-                <span className="text-[10px] text-gray-500">— Paste story → AI extracts characters, locations, props → creates episodes &amp; panels</span>
+                <span className="text-[10px] text-gray-500">— Paste story → AI extracts characters, locations, props → creates episodes &amp; shots</span>
                 <button onClick={() => { setShowScriptBreaker(false); setBreakdownResult(null); setTargetEpisode("new"); }} className="ml-auto p-1 text-gray-500 hover:text-white transition"><X className="w-3.5 h-3.5" /></button>
               </div>
 
@@ -510,7 +510,7 @@ export default function EpisodesPage() {
                   <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span className="text-xs text-emerald-400 font-medium">
-                      Analysis complete — {breakdownResult.episodes.length} ep, {breakdownResult.episodes.reduce((s, e) => s + e.pages.length, 0)} pages, {breakdownResult.episodes.reduce((s, e) => s + e.pages.reduce((s2, pg) => s2 + pg.panels.length, 0), 0)} panels, {breakdownResult.characters.length} chars, {breakdownResult.locations.length} locs
+                      Analysis complete — {breakdownResult.episodes.length} ep, {breakdownResult.episodes.reduce((s, e) => s + e.scenes.length, 0)} scenes, {breakdownResult.episodes.reduce((s, e) => s + e.scenes.reduce((s2, pg) => s2 + pg.shots.length, 0), 0)} shots, {breakdownResult.characters.length} chars, {breakdownResult.locations.length} locs
                     </span>
                     <span className="text-[9px] text-emerald-500/60 ml-auto">
                       {targetEpisode !== "new" ? `→ Append to Ep ${targetEpisode}` : `→ Create new episode(s)`}
@@ -560,15 +560,15 @@ export default function EpisodesPage() {
                         <div className="text-[11px] text-white font-bold mb-1.5 flex items-center gap-2">
                           <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded text-[9px]">Ep {ei + 1}</span>
                           {ep.title}
-                          <span className="text-[8px] text-gray-500 font-normal ml-auto">{ep.pages.length} pages, {ep.pages.reduce((s, pg) => s + pg.panels.length, 0)} panels</span>
+                          <span className="text-[8px] text-gray-500 font-normal ml-auto">{ep.scenes.length} scenes, {ep.scenes.reduce((s, pg) => s + pg.shots.length, 0)} shots</span>
                         </div>
-                        {ep.pages.map((pg, pi) => (
+                        {ep.scenes.map((pg, pi) => (
                           <div key={pi} className="ml-3 mb-2 last:mb-0 border-l-2 border-purple-500/20 pl-3">
                             <div className="text-[10px] text-gray-300 font-semibold mb-1 flex items-center gap-1.5">
                               <span className="px-1 py-0.5 bg-white/5 text-gray-400 rounded text-[8px]">Pg {pg.pageNum}</span>
                               {pg.description}
                             </div>
-                            {pg.panels.map((panel, panelIdx) => (
+                            {pg.shots.map((panel, panelIdx) => (
                               <div key={panelIdx} className="ml-3 mb-1.5 last:mb-0 bg-[#13131a] rounded-md p-2 border border-white/5">
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="text-[8px] px-1 py-0.5 bg-purple-500/10 text-purple-300 rounded">{panel.type}</span>
@@ -616,10 +616,10 @@ export default function EpisodesPage() {
                 </div>
               )}
               {filtered.map((ep) => {
-                const sc = episodeStatusConfig[ep.status];
+                const sc = projectStatusConfig[ep.status];
                 const Icon = sc.icon;
-                const approvedCount = ep.panels.filter(p => p.status === "approved").length;
-                const progress = ep.panels.length > 0 ? Math.round((approvedCount / ep.panels.length) * 100) : 0;
+                const approvedCount = ep.shots.filter(p => p.status === "approved").length;
+                const progress = ep.shots.length > 0 ? Math.round((approvedCount / ep.shots.length) * 100) : 0;
                 return (
                   <div key={ep.id} className={`bg-[#13131a] rounded-lg border border-white/5 overflow-hidden ${ep.status === "archived" ? "opacity-60" : ""}`}>
                     {/* Episode Row */}
@@ -633,9 +633,9 @@ export default function EpisodesPage() {
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
-                          <span>{ep.pages}pg</span><span>•</span><span>{ep.panels.length}pn</span>
+                          <span>{ep.scenes}pg</span><span>•</span><span>{ep.shots.length}pn</span>
                         </div>
-                        {ep.panels.length > 0 && (
+                        {ep.shots.length > 0 && (
                           <div className="w-16 bg-white/5 rounded-full h-1.5">
                             <div className={`h-1.5 rounded-full transition-all ${progress === 100 ? "bg-emerald-500" : "bg-purple-500"}`} style={{ width: `${progress}%` }} />
                           </div>
@@ -656,9 +656,9 @@ export default function EpisodesPage() {
                     {/* Expanded Panels (Panel Manager) */}
                     {ep.expanded && (
                       <div className="border-t border-white/5 bg-[#0f1117]">
-                        {ep.panels.length === 0 ? (
+                        {ep.shots.length === 0 ? (
                           <div className="px-6 py-6 text-center">
-                            <p className="text-xs text-gray-500 mb-2">No panels yet</p>
+                            <p className="text-xs text-gray-500 mb-2">No shots yet</p>
                             <button className="px-4 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 rounded-lg text-xs font-medium transition border border-purple-500/20">
                               + Add Panel
                             </button>
@@ -666,8 +666,8 @@ export default function EpisodesPage() {
                         ) : (
                           <>
                             <div className="px-5 py-3 space-y-2">
-                              {ep.panels.map((panel, pi) => {
-                                const ps = panelStatusConfig[panel.status];
+                              {ep.shots.map((panel, pi) => {
+                                const ps = shotStatusConfig[panel.status];
                                 return (
                                   <div key={panel.id} className="bg-[#13131a] rounded-lg border border-white/5 hover:border-white/10 transition overflow-hidden">
                                     {/* Panel header row */}
@@ -678,8 +678,8 @@ export default function EpisodesPage() {
                                       </div>
                                       <div className="flex items-center gap-2 flex-1 min-w-0">
                                         <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded text-[9px] font-bold shrink-0">P{pi + 1}</span>
-                                        <span className="text-[10px] text-gray-400 font-mono shrink-0">Pg {panel.page}</span>
-                                        <span className="text-[10px] text-gray-500 shrink-0">{panel.panelType}</span>
+                                        <span className="text-[10px] text-gray-400 font-mono shrink-0">Sc {panel.scene}</span>
+                                        <span className="text-[10px] text-gray-500 shrink-0">{panel.shotType}</span>
                                       </div>
                                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${ps.bg} ${ps.color}`}>{ps.label}</span>
                                       <div className="flex items-center gap-1 shrink-0">
@@ -689,7 +689,7 @@ export default function EpisodesPage() {
                                             <button onClick={() => changePanelStatus(ep.id, panel.id, "redo")} className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 transition" title="Redo"><X className="w-3 h-3" /></button>
                                           </>
                                         )}
-                                        <button onClick={() => editPage(ep.id, panel.page)} className="p-1 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 transition" title="Edit"><ExternalLink className="w-3 h-3" /></button>
+                                        <button onClick={() => editPage(ep.id, panel.scene)} className="p-1 rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 transition" title="Edit"><ExternalLink className="w-3 h-3" /></button>
                                         <button className="p-1 rounded bg-white/5 hover:bg-white/10 text-gray-400 transition" title="Regenerate"><RefreshCw className="w-3 h-3" /></button>
                                         <button className="p-1 rounded bg-white/5 hover:bg-white/10 text-gray-500 hover:text-red-400 transition" title="Delete"><Trash2 className="w-3 h-3" /></button>
                                       </div>

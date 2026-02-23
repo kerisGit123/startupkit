@@ -3,28 +3,28 @@
 import { useState } from "react";
 import { X, FileText } from "lucide-react";
 
-interface NewPageModalProps {
+interface NewSceneModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreatePage?: (pageName: string, template: string) => void;
+  onCreateScene?: (sceneName: string, template: string) => void;
 }
 
-export function NewPageModal({ isOpen, onClose, onCreatePage }: NewPageModalProps) {
-  const [pageName, setPageName] = useState("");
+export function NewSceneModal({ isOpen, onClose, onCreateScene }: NewSceneModalProps) {
+  const [sceneName, setSceneName] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("standard");
 
   if (!isOpen) return null;
 
   const templates = [
-    { id: "standard", name: "Standard Vertical", panels: 3, description: "3-panel webtoon" },
-    { id: "hero", name: "Hero Panel", panels: 4, description: "Large + small panels" },
-    { id: "fullscroll", name: "Full Scroll", panels: 1, description: "Single column" },
+    { id: "standard", name: "Standard Vertical", shots: 3, description: "3-shot webtoon" },
+    { id: "hero", name: "Hero Panel", shots: 4, description: "Large + small shots" },
+    { id: "fullscroll", name: "Full Scroll", shots: 1, description: "Single column" },
   ];
 
   const handleCreate = () => {
-    if (pageName.trim()) {
-      onCreatePage?.(pageName, selectedTemplate);
-      setPageName("");
+    if (sceneName.trim()) {
+      onCreateScene?.(sceneName, selectedTemplate);
+      setSceneName("");
       setSelectedTemplate("standard");
       onClose();
     }
@@ -41,8 +41,8 @@ export function NewPageModal({ isOpen, onClose, onCreatePage }: NewPageModalProp
                 <FileText className="w-6 h-6 text-blue-400" />
               </div>
               <div>
-                <h2 className="text-white font-bold text-xl">Add New Page</h2>
-                <p className="text-sm text-gray-400 mt-0.5">Create a new page for your episode</p>
+                <h2 className="text-white font-bold text-xl">Add New Scene</h2>
+                <p className="text-sm text-gray-400 mt-0.5">Create a new scene for your project</p>
               </div>
             </div>
             <button
@@ -56,15 +56,15 @@ export function NewPageModal({ isOpen, onClose, onCreatePage }: NewPageModalProp
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Page Name */}
+          {/* Scene Name */}
           <div>
             <label className="block text-sm font-semibold text-white mb-2">
-              Page Name
+              Scene Name
             </label>
             <input
               type="text"
-              value={pageName}
-              onChange={(e) => setPageName(e.target.value)}
+              value={sceneName}
+              onChange={(e) => setSceneName(e.target.value)}
               placeholder="e.g., Page 1, Opening Scene, etc."
               className="w-full bg-[#0f1117] border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
               autoFocus
@@ -74,7 +74,7 @@ export function NewPageModal({ isOpen, onClose, onCreatePage }: NewPageModalProp
           {/* Template Selection */}
           <div>
             <label className="block text-sm font-semibold text-white mb-3">
-              Page Template
+              Scene Template
             </label>
             <div className="grid grid-cols-3 gap-3">
               {templates.map((template) => (
@@ -125,10 +125,10 @@ export function NewPageModal({ isOpen, onClose, onCreatePage }: NewPageModalProp
           </button>
           <button
             onClick={handleCreate}
-            disabled={!pageName.trim()}
+            disabled={!sceneName.trim()}
             className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Create Page
+            Create Scene
           </button>
         </div>
       </div>
