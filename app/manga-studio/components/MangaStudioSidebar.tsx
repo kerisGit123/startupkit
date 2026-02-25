@@ -11,6 +11,7 @@ import {
   SlidersHorizontal,
   FileText,
   Plus,
+  Clapperboard,
 } from "lucide-react";
 
 export function MangaStudioSidebar({
@@ -26,11 +27,11 @@ export function MangaStudioSidebar({
 
   const navItems = [
     {
-      id: "projects",
-      label: "Projects",
-      icon: Globe,
-      href: "/manga-studio/projects",
-      description: "Manage storyboard projects",
+      id: "storyboard",
+      label: "Storyboard",
+      icon: Clapperboard,
+      href: "/manga-studio/storyboard",
+      description: "AI storyboard generation",
     },
     {
       id: "editor",

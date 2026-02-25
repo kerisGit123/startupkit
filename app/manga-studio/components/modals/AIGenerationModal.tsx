@@ -1,6 +1,6 @@
 "use client";
 
-import { X, User, Mountain, Grid, FileText } from "lucide-react";
+import { X, User, Mountain, Grid, FileText, Crop } from "lucide-react";
 
 interface AIGenerationModalProps {
   isOpen: boolean;
@@ -11,7 +11,28 @@ interface AIGenerationModalProps {
 export function AIGenerationModal({ isOpen, onClose, onSelectOption }: AIGenerationModalProps) {
   if (!isOpen) return null;
 
+  // Check if we have rectangle mask data
+  const maskData = typeof window !== 'undefined' ? sessionStorage.getItem('kieRectangleMask') : null;
+  const hasRectangleMask = !!maskData;
+  
+  let rectangleMaskData: { image: string; rectangle: { x: number; y: number; width: number; height: number }; prompt: string; model: string } | null = null;
+  if (hasRectangleMask) {
+    try {
+      rectangleMaskData = JSON.parse(maskData);
+    } catch (e) {
+      console.error('Failed to parse rectangle mask data:', e);
+    }
+  }
+
   const options = [
+    ...(hasRectangleMask && rectangleMaskData ? [{
+      id: "rectangle-mask",
+      icon: Crop,
+      title: "Edit Rectangle Mask",
+      description: "Generate closer look of selected area from different angles",
+      color: "from-emerald-500 to-emerald-600",
+      badge: "Rectangle: " + Math.round(rectangleMaskData.rectangle.width) + "×" + Math.round(rectangleMaskData.rectangle.height)
+    }] : []),
     {
       id: "character",
       icon: User,
@@ -28,13 +49,6 @@ export function AIGenerationModal({ isOpen, onClose, onSelectOption }: AIGenerat
     },
     {
       id: "panel",
-      icon: Grid,
-      title: "Generate Panel",
-      description: "Generate individual manga panels from descriptions",
-      color: "from-pink-500 to-pink-600"
-    },
-    {
-      id: "panel2",
       icon: Grid,
       title: "Generate Panel",
       description: "Generate individual manga panels from descriptions",
@@ -87,7 +101,14 @@ export function AIGenerationModal({ isOpen, onClose, onSelectOption }: AIGenerat
                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${option.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                   <Icon className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">{option.title}</h3>
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-lg font-bold text-white">{option.title}</h3>
+                  {option.badge && (
+                    <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs rounded-full font-medium">
+                      {option.badge}
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-400">{option.description}</p>
               </button>
             );

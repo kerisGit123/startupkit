@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { MangaStudioSidebar } from "./components/MangaStudioSidebar";
 import { MangaStudioUIProvider } from "./MangaStudioUIContext";
 import { NewEpisodeModal } from "./components/modals/NewEpisodeModal";
@@ -13,6 +14,9 @@ export default function MangaStudioLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const hideStudioSidebar = pathname?.startsWith("/manga-studio/storyboard");
+
   const [showNewEpisode, setShowNewEpisode] = useState(false);
   const [showStoryManager, setShowStoryManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -26,11 +30,13 @@ export default function MangaStudioLayout({
           openStoryManager: () => setShowStoryManager(true),
         }}
       >
-        <MangaStudioSidebar
-          onManageComics={() => setShowStoryManager(true)}
-          onSettings={() => setShowSettings(true)}
-          onNewComic={() => setShowNewComic(true)}
-        />
+        {!hideStudioSidebar && (
+          <MangaStudioSidebar
+            onManageComics={() => setShowStoryManager(true)}
+            onSettings={() => setShowSettings(true)}
+            onNewComic={() => setShowNewComic(true)}
+          />
+        )}
 
         <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
 
