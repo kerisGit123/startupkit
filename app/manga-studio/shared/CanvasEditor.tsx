@@ -25,7 +25,7 @@ export function emptyCanvasState(): CanvasEditorState {
   return { bubbles: [], textElements: [], assetElements: [], assetLibrary: [], mask: [], undoStack: [], redoStack: [] };
 }
 
-export type CanvasActiveTool = "layers" | "bubbles" | "text" | "assets" | "paint" | "panel" | "aimanga" | "comments";
+export type CanvasActiveTool = "layers" | "bubbles" | "text" | "assets" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments";
 
 export interface CanvasSelection {
   selectedBubbleId: string | null;
@@ -52,7 +52,8 @@ interface CanvasEditorProps {
   /** Rectangle support for Closer Look */
   rectangle?: { x: number; y: number; width: number; height: number } | null;
   onRectangleChange?: (rect: { x: number; y: number; width: number; height: number } | null) => void;
-  activePaintTab?: "brushInpaint" | "rectangleInpaint" | "crop";
+  rectangleVisible?: boolean;
+  canvasTool?: CanvasActiveTool;
   /** Whether aspect ratio animation is in progress */
   isAspectRatioAnimating?: boolean;
 }
@@ -82,7 +83,7 @@ export function CanvasEditor({
   panelId, imageUrl, activeTool, state, onStateChange,
   brushSize, isEraser, maskOpacity, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
-  rectangle, onRectangleChange, activePaintTab, isAspectRatioAnimating = false,
+  rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -90,7 +91,7 @@ export function CanvasEditor({
   const rotDragRef = useRef<RotDragInfo>(null);
   const [outerSize, setOuterSize] = useState({ w: 0, h: 0 });
   const [isPainting, setIsPainting] = useState(false);
-  const [isRightMouseDown, setIsRightMouseDown] = useState(false);
+  const [isMouseDown, setIsMouseDown] = useState(false);
   const [_selectedBubbleId, _setSelectedBubbleId] = useState<string | null>(null);
   const [_selectedTextId, _setSelectedTextId] = useState<string | null>(null);
   const [_selectedAssetId, _setSelectedAssetId] = useState<string | null>(null);
@@ -143,11 +144,12 @@ export function CanvasEditor({
 
   // ── Mouse down ──
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (activeTool === "paint" && e.button === 2) {
-      // Only paint with right mouse button (button === 2)
+    if (canvasTool === "inpaint" && e.button === 0) {
+      // Paint with left mouse button (button === 0) - only for brush inpaint
+      console.log('[CanvasEditor] Brush painting started - canvasTool:', canvasTool);
       e.preventDefault();
       commitMaskSnapshot();
-      setIsRightMouseDown(true);
+      setIsMouseDown(true);
       setIsPainting(true);
       addMaskDot(e);
       return;
@@ -161,7 +163,7 @@ export function CanvasEditor({
   // ── Global mouse move/up ──
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (isPainting && activeTool === "paint" && isRightMouseDown) { addMaskDot(e); return; }
+      if (isPainting && canvasTool === "inpaint" && isMouseDown) { addMaskDot(e); return; }
 
       if (rotDragRef.current) {
         const rd = rotDragRef.current;
@@ -198,8 +200,8 @@ export function CanvasEditor({
     const onUp = () => {
       dragRef.current = null;
       rotDragRef.current = null;
-      if (isRightMouseDown) {
-        setIsRightMouseDown(false);
+      if (isMouseDown) {
+        setIsMouseDown(false);
         setIsPainting(false);
       }
     };
@@ -207,7 +209,7 @@ export function CanvasEditor({
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, [isPainting, isRightMouseDown, activeTool, state, dragRef, rotDragRef]);
+  }, [isPainting, isMouseDown, activeTool, state, dragRef, rotDragRef]);
 
   
   // ── Drag start helpers ──
@@ -423,7 +425,7 @@ export function CanvasEditor({
     return () => { ro.disconnect(); cancelAnimationFrame(raf); };
   }, []);
 
-  const cursor = activeTool === "paint" ? (isEraser ? "cell" : "crosshair") : "default";
+  const cursor = canvasTool === "inpaint" ? (isEraser ? "cell" : "crosshair") : "default";
   const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1 };
   const ar = aspectRatio ? (arMap[aspectRatio] ?? null) : null;
 
@@ -460,7 +462,7 @@ export function CanvasEditor({
             </div>
         }
         {mask.length > 0 && <MaskCanvas mask={mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} />}
-        {activePaintTab === "rectangleInpaint" && rectangle && (
+        {canvasTool === "rectInpaint" && rectangle && rectangleVisible && (
           <RectangleCanvas 
             rectangle={rectangle} 
             width={containerSize.w} 
@@ -482,7 +484,7 @@ export function CanvasEditor({
             }}
           />
         )}
-        {activePaintTab === "crop" && rectangle && (
+        {canvasTool === "crop" && rectangle && rectangleVisible && (
           <RectangleCanvas 
             rectangle={rectangle} 
             width={containerSize.w} 

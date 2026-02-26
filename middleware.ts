@@ -11,6 +11,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/n8n/callback(.*)",
   "/api/booking/(.*)",
   "/api/chat(.*)",
+  "/api/inpaint(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, request) => {

@@ -4,8 +4,8 @@ import {
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Image as ImageIcon, MessageSquare,
   Mic, List, MoreHorizontal, Check, X, Send,
   Pencil, ZoomIn, ZoomOut, Play, Plus, Upload, Tag,
-  Layers, Type, Paintbrush, Eraser, Eye, EyeOff, Trash2,
-  RotateCcw, RotateCw,
+  Layers, Type, Paintbrush, Eraser, Eye, EyeOff, Trash2, Square,
+  RotateCcw, RotateCw, Sparkles,
 } from "lucide-react";
 import { useState, useRef } from "react";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
@@ -42,14 +42,24 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [inpaintError, setInpaintError] = useState<string | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [showGenPanel, setShowGenPanel] = useState(false);
-  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok">("openai-4o");
+  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image">("openai-4o");
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [showBubbleStyleModal, setShowBubbleStyleModal] = useState(false);
   const [selectedBubbleStyle, setSelectedBubbleStyle] = useState<"realistic" | "cartoon" | "manga" | "custom">("manga");
   
-  const [activePaintTab, setActivePaintTab] = useState<"brushInpaint" | "rectangleInpaint" | "crop">("brushInpaint");
+  
+  // Image tab independent state
+  const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
+  const [imageInpaintPrompt, setImageInpaintPrompt] = useState("");
+  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "grok" | "qwen-z-image" | "seedream-5.0-lite" | "qwen" | "seedream-4.5" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "seedream-v4">("nano-banana");
+  const [imageRectangle, setImageRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [imageIsRectangleVisible, setImageIsRectangleVisible] = useState(true);
+  const [imageIsInpainting, setImageIsInpainting] = useState(false);
+  const [imageInpaintError, setImageInpaintError] = useState<string | null>(null);
+  const [imageGeneratedImages, setImageGeneratedImages] = useState<string[]>([]);
+  const [imageShowGenPanel, setImageShowGenPanel] = useState(false);
   
   // Rectangle state
   const [rectangle, setRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -441,7 +451,193 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
   };
 
-  // ── Generate Image with Bubbles and Text ─────────────────────────────────────
+  // ── Crop + Generate + Combine Workflow ───────────────────────────────────────────────────────
+  const runCropGenerateCombine = async () => {
+    const imageUrl = backgroundImage || activeShot?.imageUrl;
+    if (!imageUrl || !rectangle) {
+      setCloserLookError("No image or rectangle selected for crop and generate");
+      return;
+    }
+
+    setIsCloserLookGenerating(true);
+    setCloserLookError(null);
+
+    try {
+      // Store original image if not already stored
+      if (!originalImage) {
+        setOriginalImage(imageUrl);
+      }
+
+      // Convert background image to base64
+      let imageBase64: string;
+      if (imageUrl.startsWith("data:")) {
+        imageBase64 = imageUrl;
+      } else {
+        // Validate and construct proper URL
+        let validUrl = imageUrl;
+        if (!imageUrl.startsWith("http") && !imageUrl.startsWith("/")) {
+          validUrl = `${window.location.origin}/${imageUrl.startsWith("/") ? imageUrl.slice(1) : imageUrl}`;
+        }
+        
+        try {
+          const res = await fetch(validUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache'
+          });
+          
+          if (!res.ok) {
+            throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
+          }
+          
+          const blob = await res.blob();
+          if (blob.size === 0) {
+            throw new Error("Empty image blob received");
+          }
+          
+          imageBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          
+        } catch (fetchError) {
+          console.error("Image fetch error:", fetchError);
+          setCloserLookError(`Unable to load image: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
+          return;
+        }
+      }
+
+      // Get canvas display size for coordinate scaling
+      const canvasEl = canvasContainerRef.current?.querySelector('[data-editor="true"]') as HTMLElement;
+      const canvasRect = canvasEl?.getBoundingClientRect();
+      const canvasDisplaySize = canvasRect
+        ? { width: canvasRect.width, height: canvasRect.height }
+        : undefined;
+
+      // Step 1: Crop the image to the rectangle
+      console.log("Step 1: Cropping image to rectangle:", rectangle);
+      const croppedImage = await cropImageToRectangle(imageBase64, rectangle, canvasDisplaySize);
+      console.log("Step 1: Image cropped successfully");
+
+      // Step 2: Send cropped image to KIE for generation
+      console.log("Step 2: Sending cropped image to KIE for generation...");
+      const generatedImage = await runInpaintAPI(croppedImage, "", "Enhance the cropped area with AI", "nano-banana");
+      console.log("Step 2: Generated image received:", generatedImage);
+
+      // Step 3: Combine generated image with original image
+      console.log("Step 3: Combining generated image with original image...");
+      const combinedImage = await combineImages(originalImage, generatedImage, rectangle, canvasDisplaySize);
+      console.log("Step 3: Images combined successfully");
+
+      // Set the combined image as the new background
+      setBackgroundImage(combinedImage);
+      
+      // Add combined image to generated images panel
+      setGeneratedImages(prev => [...prev, croppedImage, generatedImage, combinedImage]);
+      setShowGenPanel(true);
+
+      // Clear the crop rectangle after successful generation
+      setRectangle(null);
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setCloserLookError(msg);
+      console.error("Crop+Generate+Combine error:", err);
+    } finally {
+      setIsCloserLookGenerating(false);
+    }
+  };
+
+  // Helper function to call inpaint API (similar to runInpaint but more generic)
+  const runInpaintAPI = async (image: string, mask: string, prompt: string, model: string): Promise<string> => {
+    const response = await fetch("/api/inpaint", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image,
+        mask: mask,
+        prompt: prompt,
+        model: model,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      const errorMessage = err.error || err.message || err.suggestion || "Inpaint failed";
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+    const resultImage = result.image ?? result.url ?? result.output ?? result.data;
+    if (!resultImage) {
+      throw new Error("No image returned from inpaint API");
+    }
+    
+    return resultImage;
+  };
+
+  // Helper function to combine two images with a mask
+  const combineImages = async (originalImage: string, generatedImage: string, rectangle: any, canvasDisplaySize?: { width: number; height: number }): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img1 = new Image();
+      const img2 = new Image();
+      
+      img1.onload = () => {
+        img2.onload = () => {
+          // Create canvas for combining
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Set canvas size to match display size
+          const width = canvasDisplaySize?.width || 800;
+          const height = canvasDisplaySize?.height || 600;
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw original image
+          ctx.drawImage(img1, 0, 0, width, height);
+          
+          // Draw generated image in the cropped area
+          if (rectangle) {
+            const scaleX = width / (canvasDisplaySize?.width || 800);
+            const scaleY = height / (canvasDisplaySize?.height || 600);
+            
+            const drawX = rectangle.x * scaleX;
+            const drawY = rectangle.y * scaleY;
+            const drawWidth = rectangle.width * scaleX;
+            const drawHeight = rectangle.height * scaleY;
+            
+            ctx.drawImage(img2, drawX, drawY, drawWidth, drawHeight);
+          } else {
+            // If no rectangle, overlay the generated image
+            ctx.globalAlpha = 0.5; // Semi-transparent overlay
+            ctx.drawImage(img2, 0, 0, width, height);
+            ctx.globalAlpha = 1.0;
+          }
+          
+          // Convert to base64
+          const combinedBase64 = canvas.toDataURL('image/png');
+          resolve(combinedBase64);
+        };
+        
+        img1.onerror = () => reject(new Error('Failed to load original image'));
+        img2.onerror = () => reject(new Error('Failed to load generated image'));
+        
+        img1.src = originalImage;
+        img2.src = generatedImage;
+      };
+      
+      img1.onerror = () => reject(new Error('Failed to load original image'));
+      img2.onerror = () => reject(new Error('Failed to load generated image'));
+      
+      img1.src = originalImage;
+      img2.src = generatedImage;
+    });
+  };
+
+  // ── Generate Image with Bubbles and Text ───────────────────────────────────────────────────────
   const generateImageWithElements = async () => {
     const imageUrl = backgroundImage || activeShot?.imageUrl;
     if (!imageUrl) {
@@ -832,135 +1028,221 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     setIsInpainting(true);
     setInpaintError(null);
 
-    // Get the current image
+    try {
+      // 1. Get the original image
       const imageUrl = backgroundImage || activeShot?.imageUrl;
-      if (!imageUrl) {
-        setInpaintError("No image available");
-        setIsInpainting(false);
-        return;
-      }
+      if (!imageUrl) throw new Error("No image available");
 
-      // Convert background image to base64 (reuse the logic from runCloserLook)
+      // 2. Convert to base64 if needed
       let imageBase64: string;
       if (imageUrl.startsWith("data:")) {
         imageBase64 = imageUrl;
       } else {
-        // Validate and construct proper URL
         let validUrl = imageUrl;
         if (!imageUrl.startsWith("http") && !imageUrl.startsWith("/")) {
           validUrl = `${window.location.origin}/${imageUrl.startsWith("/") ? imageUrl.slice(1) : imageUrl}`;
         }
+        const res = await fetch(validUrl, { method: 'GET', mode: 'cors', cache: 'no-cache' });
+        if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+        const blob = await res.blob();
+        imageBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      // 3. Get canvas display size for coordinate scaling
+      const canvasEl = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]');
+      const canvasRect = canvasEl?.getBoundingClientRect();
+      const canvasDisplaySize = canvasRect
+        ? { width: canvasRect.width, height: canvasRect.height }
+        : undefined;
+
+      // 4. Crop the rectangle area from the original image
+      console.log("[rectInpaint] Step 1: Cropping rectangle from original image...");
+      const croppedImage = await cropImageToRectangle(imageBase64, rectangle, canvasDisplaySize);
+      console.log("[rectInpaint] Cropped image size:", croppedImage.length);
+
+      // 5. Send the CROPPED image to KIE for generation
+      console.log("[rectInpaint] Step 2: Sending cropped image to KIE...");
+      
+      let requestBody: any = {
+        image: croppedImage,
+        prompt: inpaintPrompt,
+        model: inpaintModel,
+      };
+
+      // OpenAI 4o requires a mask - create a full white mask for the cropped image
+      if (inpaintModel === "openai-4o") {
+        // Create a full white mask (same size as cropped image) - OpenAI 4o will inpaint the entire cropped area
+        const maskCanvas = document.createElement("canvas");
+        const img = new Image();
+        await new Promise<void>((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = croppedImage;
+        });
         
-        try {
-          const res = await fetch(validUrl, {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-cache'
-          });
-          
-          if (!res.ok) {
-            throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
-          }
-          
-          const blob = await res.blob();
-          if (blob.size === 0) {
-            throw new Error("Empty image blob received");
-          }
-          
-          imageBase64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-          
-        } catch (fetchError) {
-          console.error("Image fetch error:", fetchError);
-          setInpaintError(`Unable to load image: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
-          setIsInpainting(false);
-          return;
+        maskCanvas.width = img.naturalWidth;
+        maskCanvas.height = img.naturalHeight;
+        const ctx = maskCanvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, img.naturalWidth, img.naturalHeight);
+          requestBody.mask = maskCanvas.toDataURL("image/png");
+          console.log("[rectInpaint] Added full white mask for OpenAI 4o");
         }
       }
 
-      // Get canvas display size for coordinate scaling
-      const canvasElInpaint = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]');
-      const canvasRectInpaint = canvasElInpaint?.getBoundingClientRect();
-      const canvasDisplaySizeInpaint = canvasRectInpaint
-        ? { width: canvasRectInpaint.width, height: canvasRectInpaint.height }
-        : undefined;
+      const response = await fetch("/api/inpaint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(300000),
+      });
 
-      // Create a proper mask for rectangle inpaint
-      // Get actual image dimensions for mask canvas
-      const img = new Image();
-      img.onload = () => {
-        const maskCanvas = document.createElement("canvas");
-        maskCanvas.width = img.width;
-        maskCanvas.height = img.height;
-        const ctx = maskCanvas.getContext("2d");
-        if (!ctx) throw new Error("Cannot get canvas context");
-        
-        // Scale rectangle coordinates from canvas to image dimensions
-        const canvasEl = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]');
-        const canvasRect = canvasEl?.getBoundingClientRect();
-        const scaleX = img.width / (canvasRect?.width ?? 800);
-        const scaleY = img.height / (canvasRect?.height ?? 450);
-        
-        // Create mask: white background (keep), black rectangle (inpaint)
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, img.width, img.height);
-        
-        // Draw black rectangle for inpaint area (scaled to image dimensions)
-        ctx.fillStyle = "black";
-        ctx.fillRect(
-          rectangle.x * scaleX,
-          rectangle.y * scaleY,
-          rectangle.width * scaleX,
-          rectangle.height * scaleY
-        );
-        
-        const maskBase64 = maskCanvas.toDataURL("image/png");
-        
-        // Call the inpaint API with FULL original image and proper rectangle mask
-        fetch("/api/inpaint", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image: imageBase64, // Send FULL original image, not cropped
-            mask: maskBase64,  // Proper mask with black rectangle on white background
-            prompt: inpaintPrompt,
-            model: inpaintModel,
-          }),
-          signal: AbortSignal.timeout(300000),
-        }).then(response => {
-          if (!response.ok) {
-            return response.json().then(err => {
-              throw new Error(err.error ?? "Rectangle inpaint failed");
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || err.message || err.suggestion || "Rectangle inpaint failed");
+      }
+
+      const result = await response.json();
+      const generatedImageUrl = result.image ?? result.url ?? result.output ?? result.data;
+      if (!generatedImageUrl) throw new Error("No image returned from KIE");
+      console.log("[rectInpaint] Step 2 done: Got generated image from KIE");
+
+      // 6. Load the generated image and resolve to base64 if it's a URL
+      let generatedBase64 = generatedImageUrl;
+      if (generatedImageUrl.startsWith("http")) {
+        try {
+          const genRes = await fetch(generatedImageUrl, { mode: 'cors', cache: 'no-cache' });
+          if (genRes.ok) {
+            const genBlob = await genRes.blob();
+            generatedBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(genBlob);
             });
           }
-          return response.json();
-        }).then(result => {
-          const resultImage = result.image ?? result.url ?? result.output ?? result.data;
-          if (resultImage) {
-            setGeneratedImages(prev => [...prev, resultImage]);
-            setShowGenPanel(true);
-          } else {
-            throw new Error("No image returned from rectangle inpaint");
-          }
-        }).catch(err => {
-          const msg = err instanceof Error ? err.message : "Unknown error";
-          setInpaintError(msg);
-          console.error("Rectangle inpaint error:", err);
-        }).finally(() => {
-          setIsInpainting(false);
-        });
-      };
-      
-      img.onerror = () => {
-        setInpaintError("Failed to load image for mask creation");
-        setIsInpainting(false);
-      };
-      
-      img.src = imageBase64;
+        } catch { /* use URL directly if fetch fails */ }
+      }
+
+      // 7. Composite: draw original image, then paste generated image into the rectangle area
+      console.log("[rectInpaint] Step 3: Combining generated image back into original...");
+      const combinedImage = await new Promise<string>((resolve, reject) => {
+        const origImg = new Image();
+        origImg.crossOrigin = "anonymous";
+        origImg.onload = () => {
+          const genImg = new Image();
+          genImg.crossOrigin = "anonymous";
+          genImg.onload = () => {
+            // Canvas at original image natural dimensions
+            const canvas = document.createElement("canvas");
+            canvas.width = origImg.naturalWidth;
+            canvas.height = origImg.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { reject(new Error("Cannot get canvas context")); return; }
+
+            // Draw full original image
+            ctx.drawImage(origImg, 0, 0);
+
+            // IMPORTANT: Use the same scaling logic as cropImageToRectangle to avoid distortion
+            let destRect = { ...rectangle };
+            if (canvasDisplaySize && canvasDisplaySize.width > 0 && canvasDisplaySize.height > 0) {
+              const containerW = canvasDisplaySize.width;
+              const containerH = canvasDisplaySize.height;
+
+              // Calculate how the image is rendered inside the container (object-contain logic)
+              const imgAspect = origImg.naturalWidth / origImg.naturalHeight;
+              const containerAspect = containerW / containerH;
+
+              let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
+              if (imgAspect > containerAspect) {
+                // Image is wider relative to container → pillarbox (black bars top/bottom)
+                renderedW = containerW;
+                renderedH = containerW / imgAspect;
+                offsetX = 0;
+                offsetY = (containerH - renderedH) / 2;
+              } else {
+                // Image is taller relative to container → letterbox (black bars left/right)
+                renderedH = containerH;
+                renderedW = containerH * imgAspect;
+                offsetX = (containerW - renderedW) / 2;
+                offsetY = 0;
+              }
+
+              const scaleX = origImg.naturalWidth / renderedW;
+              const scaleY = origImg.naturalHeight / renderedH;
+
+              // Subtract letterbox offset before scaling (same as cropImageToRectangle)
+              destRect = {
+                x: (rectangle.x - offsetX) * scaleX,
+                y: (rectangle.y - offsetY) * scaleY,
+                width: rectangle.width * scaleX,
+                height: rectangle.height * scaleY,
+              };
+              
+              console.log("[rectInpaint] Compositing details:", {
+                canvasDisplaySize,
+                origImgSize: { width: origImg.naturalWidth, height: origImg.naturalHeight },
+                scale: { x: scaleX, y: scaleY },
+                rectangle,
+                destRect,
+                genImgSize: { width: genImg.naturalWidth, height: genImg.naturalHeight }
+              });
+            } else {
+              // Fallback: simple scaling if no canvas display size
+              const scaleX = origImg.naturalWidth  / (canvasDisplaySize?.width  ?? 800);
+              const scaleY = origImg.naturalHeight / (canvasDisplaySize?.height ?? 450);
+              destRect = {
+                x: rectangle.x * scaleX,
+                y: rectangle.y * scaleY,
+                width: rectangle.width * scaleX,
+                height: rectangle.height * scaleY,
+              };
+              
+              console.log("[rectInpaint] Compositing details (fallback):", {
+                canvasDisplaySize,
+                origImgSize: { width: origImg.naturalWidth, height: origImg.naturalHeight },
+                scale: { x: scaleX, y: scaleY },
+                rectangle,
+                destRect,
+                genImgSize: { width: genImg.naturalWidth, height: genImg.naturalHeight }
+              });
+            }
+
+            // CRITICAL: Use the calculated destRect to avoid stretching
+            // The generated image should have the same aspect ratio as the cropped area
+            ctx.drawImage(genImg, destRect.x, destRect.y, destRect.width, destRect.height);
+
+            const combined = canvas.toDataURL("image/png");
+            console.log("[rectInpaint] Step 3 done: Combined image created");
+            resolve(combined);
+          };
+          genImg.onerror = () => reject(new Error("Failed to load generated image"));
+          genImg.src = generatedBase64;
+        };
+        origImg.onerror = () => reject(new Error("Failed to load original image"));
+        origImg.src = imageBase64;
+      });
+
+      // 8. Show all three results: cropped, generated, combined
+      setGeneratedImages(prev => [...prev, croppedImage, generatedImageUrl, combinedImage]);
+      setShowGenPanel(true);
+      // Update background to the combined result
+      setBackgroundImage(combinedImage);
+      console.log("[rectInpaint] ✅ Done - combined image set as background");
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setInpaintError(msg);
+      console.error("Rectangle inpaint error:", err);
+    } finally {
+      setIsInpainting(false);
+    }
   };
 
   // ── Inpaint via n8n ───────────────────────────────────────────────────────
@@ -1035,7 +1317,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error ?? "Inpaint failed");
+        // Handle both error formats: direct error field or nested error
+        const errorMessage = err.error || err.message || err.suggestion || "Inpaint failed";
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
@@ -1194,7 +1478,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     ));
                     
                     // Update rectangle to match new aspect ratio if it exists
-                    if (rectangle && (activePaintTab === "rectangleInpaint" || activePaintTab === "crop")) {
+                    if (rectangle && canvasTool === "rectInpaint") {
                       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
                       if (container) {
                         const rect = container.getBoundingClientRect();
@@ -1545,7 +1829,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               aspectRatio={activeShot.aspectRatio || "16:9"}
               rectangle={rectangle}
               onRectangleChange={setRectangle}
-              activePaintTab={activePaintTab}
+              canvasTool={canvasTool}
               isAspectRatioAnimating={isAspectRatioAnimating}
               resetAllTransformations={() => {
                 // Reset all transformations for all objects
@@ -1661,7 +1945,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             { id: "bubbles"  as CanvasTool, Icon: MessageSquare, label: "Bubbles",  color: "emerald" },
             { id: "text"     as CanvasTool, Icon: Type,          label: "Text",     color: "purple"  },
             { id: "assets"   as CanvasTool, Icon: ImageIcon,     label: "Asset",    color: "orange"  },
-            { id: "paint"    as CanvasTool, Icon: Paintbrush,    label: "Inpaint",  color: "blue"    },
+            { id: "inpaint"  as CanvasTool, Icon: Paintbrush,    label: "Inpaint",  color: "blue"    },
+            { id: "rectInpaint" as CanvasTool, Icon: Square,       label: "Rect",     color: "cyan"   },
+            { id: "image"    as CanvasTool, Icon: ImageIcon,     label: "Image",    color: "purple"  },
+            { id: "crop"     as CanvasTool, Icon: ImageIcon,     label: "Crop",     color: "orange"  },
             { id: "comments" as CanvasTool, Icon: MessageSquare, label: "Comments", color: "gray"    },
           ] as { id: CanvasTool; Icon: React.ElementType; label: string; color: string }[]).map(({ id, Icon, label, color }) => (
             <button key={id} onClick={() => setCanvasTool(id)}
@@ -1671,6 +1958,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   : color === "purple"  ? "bg-purple-500/15 text-purple-300"
                   : color === "orange"  ? "bg-orange-500/15 text-orange-300"
                   : color === "blue"    ? "bg-blue-500/15 text-blue-300"
+                  : color === "cyan"    ? "bg-cyan-500/15 text-cyan-300"
                   : color === "gray"    ? "bg-white/10 text-gray-300"
                   : "bg-white/10 text-white"
                   : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
@@ -1958,319 +2246,426 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             );
           })()}
 
-          {/* ── Mask / Inpaint ── */}
-          {canvasTool === "paint" && (
+          {/* ── Brush Inpaint ── */}
+          {canvasTool === "inpaint" && (
             <div className="p-3 space-y-3">
-              <div><h3 className="text-white font-bold text-sm">Mask / Inpaint</h3><p className="text-[10px] text-gray-500 mt-0.5">Paint areas to inpaint with AI</p></div>
+              <div><h3 className="text-white font-bold text-sm">Brush Inpaint</h3><p className="text-[10px] text-gray-500 mt-0.5">Paint areas to inpaint with AI</p></div>
               
-              {/* Tabs */}
-              <div className="grid grid-cols-3 gap-1 bg-[#0f1117] rounded-lg p-1">
-                <button
-                  onClick={() => setActivePaintTab("brushInpaint")}
-                  className={`px-2 py-2 rounded-md text-[10px] font-semibold transition ${
-                    activePaintTab === "brushInpaint"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Brush Inpaint
-                </button>
-                <button
-                  onClick={() => setActivePaintTab("rectangleInpaint")}
-                  className={`px-2 py-2 rounded-md text-[10px] font-semibold transition ${
-                    activePaintTab === "rectangleInpaint"
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Rectangle Inpaint
-                </button>
-                <button
-                  onClick={() => setActivePaintTab("crop")}
-                  className={`px-2 py-2 rounded-md text-[10px] font-semibold transition ${
-                    activePaintTab === "crop"
-                      ? "bg-orange-600 text-white"
-                      : "text-gray-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  Crop
+              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setIsEraser(false)}
+                    className={`px-2 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${!isEraser?"bg-blue-500/20 border-blue-500/40 text-blue-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>
+                    <Paintbrush className="w-3.5 h-3.5" /> Brush
+                  </button>
+                  <button onClick={() => setIsEraser(true)}
+                    className={`px-2 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${isEraser?"bg-red-500/20 border-red-500/40 text-red-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>
+                    <Eraser className="w-3.5 h-3.5" /> Eraser
+                  </button>
+                </div>
+                <div className="flex items-center justify-center py-1">
+                  <div className="rounded-full border-2" style={{ width: Math.min(maskBrushSize*1.5, 64), height: Math.min(maskBrushSize*1.5, 64), borderColor: isEraser?"rgba(239,68,68,0.5)":"rgba(59,130,246,0.5)", backgroundColor: isEraser?"rgba(239,68,68,0.15)":"rgba(59,130,246,0.15)" }} />
+                </div>
+                <div>
+                  <div className="flex justify-between mb-1"><span className="text-[11px] text-gray-300 font-semibold">Size</span><span className="text-[11px] text-blue-300 font-mono">{maskBrushSize}px</span></div>
+                  <input type="range" min={4} max={80} value={maskBrushSize} onChange={e => setMaskBrushSize(Number(e.target.value))} className="w-full accent-blue-500" />
+                </div>
+                <div>
+                  <div className="flex justify-between mb-1"><span className="text-[11px] text-gray-300 font-semibold">Opacity</span><span className="text-[11px] text-gray-400 font-mono">{Math.round(maskOpacity*100)}%</span></div>
+                  <input type="range" min={0.05} max={1} step={0.05} value={maskOpacity} onChange={e => setMaskOpacity(Number(e.target.value))} className="w-full accent-blue-500" />
+                </div>
+              </div>
+              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
+                <div className="flex gap-2">
+                  <button onClick={() => setCanvasState(s => undoMask(s))} disabled={canvasState.undoStack.length === 0}
+                    className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 text-gray-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1">
+                    <RotateCcw className="w-3 h-3" /> Undo
+                  </button>
+                  <button onClick={() => setCanvasState(s => redoMask(s))} disabled={canvasState.redoStack.length === 0}
+                    className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 text-gray-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1">
+                    <RotateCw className="w-3 h-3" /> Redo
+                  </button>
+                </div>
+                <button onClick={() => setCanvasState(s => ({ ...s, mask: [] }))} disabled={canvasState.mask.length === 0}
+                  className="w-full px-2 py-1.5 bg-white/5 hover:bg-red-500/10 disabled:opacity-30 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition">
+                  Clear Mask
                 </button>
               </div>
-              
-              {/* Brush Inpaint Tab Content */}
-              {activePaintTab === "brushInpaint" && (
-                <>
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => setIsEraser(false)}
-                        className={`px-2 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${!isEraser?"bg-blue-500/20 border-blue-500/40 text-blue-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>
-                        <Paintbrush className="w-3.5 h-3.5" /> Brush
-                      </button>
-                      <button onClick={() => setIsEraser(true)}
-                        className={`px-2 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${isEraser?"bg-red-500/20 border-red-500/40 text-red-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>
-                        <Eraser className="w-3.5 h-3.5" /> Eraser
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-center py-1">
-                      <div className="rounded-full border-2" style={{ width: Math.min(maskBrushSize*1.5, 64), height: Math.min(maskBrushSize*1.5, 64), borderColor: isEraser?"rgba(239,68,68,0.5)":"rgba(59,130,246,0.5)", backgroundColor: isEraser?"rgba(239,68,68,0.15)":"rgba(59,130,246,0.15)" }} />
-                    </div>
-                    <div>
-                      <div className="flex justify-between mb-1"><span className="text-[11px] text-gray-300 font-semibold">Size</span><span className="text-[11px] text-blue-300 font-mono">{maskBrushSize}px</span></div>
-                      <input type="range" min={4} max={80} value={maskBrushSize} onChange={e => setMaskBrushSize(Number(e.target.value))} className="w-full accent-blue-500" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between mb-1"><span className="text-[11px] text-gray-300 font-semibold">Opacity</span><span className="text-[11px] text-gray-400 font-mono">{Math.round(maskOpacity*100)}%</span></div>
-                      <input type="range" min={0.05} max={1} step={0.05} value={maskOpacity} onChange={e => setMaskOpacity(Number(e.target.value))} className="w-full accent-blue-500" />
-                    </div>
-                  </div>
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                    <div className="flex gap-2">
-                      <button onClick={() => setCanvasState(s => undoMask(s))} disabled={canvasState.undoStack.length === 0}
-                        className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 text-gray-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1">
-                        <RotateCcw className="w-3 h-3" /> Undo
-                      </button>
-                      <button onClick={() => setCanvasState(s => redoMask(s))} disabled={canvasState.redoStack.length === 0}
-                        className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 text-gray-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1">
-                        <RotateCw className="w-3 h-3" /> Redo
-                      </button>
-                    </div>
-                    <button onClick={() => setCanvasState(s => ({ ...s, mask: [] }))} disabled={canvasState.mask.length === 0}
-                      className="w-full px-2 py-1.5 bg-white/5 hover:bg-red-500/10 disabled:opacity-30 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition">
-                      Clear Mask
-                    </button>
-                  </div>
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                    <label className="text-[11px] text-gray-300 font-semibold">Inpaint Prompt</label>
-                    <textarea value={inpaintPrompt} onChange={e => setInpaintPrompt(e.target.value)}
-                      placeholder='e.g. "Remove logo" or "Add sweat drops"' rows={3}
-                      className="w-full px-2 py-1.5 bg-[#13131a] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 resize-none" />
-                    {/* Model selector */}
-                    <label className="text-[10px] text-gray-500 font-semibold">Model</label>
-                    <select
-                      value={inpaintModel}
-                      onChange={e => setInpaintModel(e.target.value as typeof inpaintModel)}
-                      className="w-full px-2 py-1.5 bg-[#13131a] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-blue-500/50 cursor-pointer">
-                      <option value="nano-banana">Nano Banana (google/nano-banana-edit)</option>
-                      <option value="flux-kontext-pro">Flux Kontext Pro (flux-kontext-pro)</option>
-                      <option value="openai-4o">OpenAI 4o Image (gpt-image/1.5) ✨</option>
-                      <option value="grok">Grok Imagine (grok-imagine)</option>
-                    </select>
-                    {inpaintModel !== "openai-4o" && activePaintTab === "rectangleInpaint" && (
-                      <p className="text-yellow-500 text-[9px] mt-1">⚠️ Use OpenAI 4o for proper rectangle inpainting</p>
-                    )}
-                    <button
-                      onClick={runInpaint}
-                      disabled={canvasState.mask.length === 0 || !inpaintPrompt.trim() || isInpainting}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
-                      {isInpainting ? (
-                        <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                      ) : "Generate"}
-                    </button>
-                    {inpaintError && (
-                      <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
-                    )}
-                  </div>
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${canvasState.mask.length > 0 ? "bg-blue-400 animate-pulse" : "bg-gray-600"}`} />
-                      <span className={`text-[11px] font-medium ${canvasState.mask.length > 0 ? "text-blue-300" : "text-gray-500"}`}>
-                        {canvasState.mask.length > 0 ? `${canvasState.mask.length} points painted` : "No mask painted"}
-                      </span>
-                    </div>
-                    <button
-                        onClick={() => setShowGenPanel(v => !v)}
-                        className="w-full py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                        <ImageIcon className="w-3 h-3" />
-                        {showGenPanel ? "Hide Results" : generatedImages.length > 0 ? `View Results (${generatedImages.length})` : "View Panel"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* Rectangle Inpaint Tab Content */}
-              {activePaintTab === "rectangleInpaint" && (
-                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] text-gray-300 font-semibold">Rectangle Selection</label>
-                      <div className="flex gap-1">
-                        <button 
-                          onClick={() => {
-                            // Create centered rectangle (50% of canvas size)
-                            const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-                            if (container) {
-                              const rect = container.getBoundingClientRect();
-                              const width = rect.width * 0.5;
-                              const height = rect.height * 0.5;
-                              const x = (rect.width - width) / 2;
-                              const y = (rect.height - height) / 2;
-                              setRectangle({ x, y, width, height });
-                            }
-                          }}
-                          className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-semibold transition">
-                          Add Rectangle
-                        </button>
-                        <button 
-                          onClick={() => setRectangle(null)}
-                          disabled={!rectangle}
-                          className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded text-[10px] font-semibold transition">
-                          Clear
-                        </button>
-                      </div>
-                    </div>
-                    {rectangle && (
-                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2">
-                        <p className="text-[10px] text-blue-300">
-                          Rectangle: {Math.round(rectangle.width)}×{Math.round(rectangle.height)} at ({Math.round(rectangle.x)}, {Math.round(rectangle.y)})
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-[11px] text-gray-300 font-semibold">Inpaint Prompt</label>
-                    <textarea
-                      value={inpaintPrompt}
-                      onChange={(e) => setInpaintPrompt(e.target.value)}
-                      placeholder="Describe what to generate in the rectangle area..."
-                      className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 resize-none h-16 focus:outline-none focus:border-blue-500/50"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-[11px] text-gray-300 font-semibold">Model</label>
-                    <select
-                      value={inpaintModel}
-                      onChange={(e) => setInpaintModel(e.target.value as any)}
-                      className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-blue-500/50"
-                    >
-                      <option value="nano-banana">Nano Banana</option>
-                      <option value="flux-kontext-pro">Flux Kontext Pro</option>
-                      <option value="openai-4o">OpenAI 4o</option>
-                      <option value="grok">Grok</option>
-                    </select>
-                    <button
-                      onClick={runRectangleInpaint}
-                      disabled={!rectangle || !inpaintPrompt.trim() || isInpainting}
-                      className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
-                      {isInpainting ? (
-                        <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                      ) : "Generate Rectangle Inpaint"}
-                    </button>
-                    {inpaintError && (
-                      <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
-                    )}
-                  </div>
-                  
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${rectangle ? "bg-blue-400 animate-pulse" : "bg-gray-600"}`} />
-                      <span className={`text-[11px] font-medium ${rectangle ? "text-blue-300" : "text-gray-500"}`}>
-                        {rectangle ? `Rectangle ready: ${Math.round(rectangle.width)}×${Math.round(rectangle.height)}` : "No rectangle selected"}
-                      </span>
-                    </div>
-                    <button
-                        onClick={() => setShowGenPanel(v => !v)}
-                        className="w-full py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                        <ImageIcon className="w-3 h-3" />
-                        {showGenPanel ? "Hide Results" : generatedImages.length > 0 ? `View Results (${generatedImages.length})` : "View Panel"}
-                    </button>
-                  </div>
+              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
+                <label className="text-[11px] text-gray-300 font-semibold">Inpaint Prompt</label>
+                <textarea value={inpaintPrompt} onChange={e => setInpaintPrompt(e.target.value)}
+                  placeholder='e.g. "Remove logo" or "Add sweat drops"' rows={3}
+                  className="w-full px-2 py-1.5 bg-[#13131a] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 resize-none" />
+                <label className="text-[10px] text-gray-500 font-semibold">Model</label>
+                <select
+                  value={inpaintModel}
+                  onChange={e => setInpaintModel(e.target.value as typeof inpaintModel)}
+                  className="w-full px-2 py-1.5 bg-[#13131a] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-blue-500/50 cursor-pointer">
+                  <option value="nano-banana">Nano Banana (google/nano-banana-edit)</option>
+                  <option value="flux-kontext-pro">Flux Kontext Pro (flux-kontext-pro)</option>
+                  <option value="openai-4o">OpenAI 4o Image (gpt-image/1.5) ✨</option>
+                  <option value="grok">Grok Imagine (grok-imagine/image-to-image) ✨</option>
+                  <option value="qwen-z-image">Qwen Z Image (qwen-z-image)</option>
+                </select>
+                <button
+                  onClick={runInpaint}
+                  disabled={canvasState.mask.length === 0 || !inpaintPrompt.trim() || isInpainting}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
+                  {isInpainting ? (
+                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
+                  ) : "Generate"}
+                </button>
+                {inpaintError && (
+                  <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
+                )}
+              </div>
+              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${canvasState.mask.length > 0 ? "bg-blue-400 animate-pulse" : "bg-gray-600"}`} />
+                  <span className={`text-[11px] font-medium ${canvasState.mask.length > 0 ? "text-blue-300" : "text-gray-500"}`}>
+                    {canvasState.mask.length > 0 ? `${canvasState.mask.length} points painted` : "No mask painted"}
+                  </span>
                 </div>
-              )}
+                <button
+                    onClick={() => setShowGenPanel(v => !v)}
+                    className="w-full py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                    <ImageIcon className="w-3 h-3" />
+                    {showGenPanel ? "Hide Results" : generatedImages.length > 0 ? `View Results (${generatedImages.length})` : "View Panel"}
+                </button>
+              </div>
             </div>
           )}
 
-              {/* Crop Tab Content */}
-              {activePaintTab === "crop" && (
-                <>
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                    <div><h3 className="text-white font-bold text-sm">Crop Image</h3><p className="text-[10px] text-gray-500 mt-0.5">Crop the image to a specific area</p></div>
-                    
-                    <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            // Create rectangle with aspect ratio for crop
-                            const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-                            if (container) {
-                              const rect = container.getBoundingClientRect();
-                              const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1 };
-                              const targetRatio = arMap[activeShot?.aspectRatio ?? "16:9"] ?? 16/9;
-                              
-                              // Calculate maximum dimensions that fit within canvas bounds
-                              // Start with 80% of canvas dimensions to ensure it fits
-                              let width = rect.width * 0.8;
-                              let height = rect.height * 0.8;
-                              
-                              // Adjust dimensions to fit aspect ratio
-                              if (targetRatio >= 1) {
-                                // Landscape or square - width is primary
-                                height = width / targetRatio;
-                                // If height exceeds canvas, recalculate based on height
-                                if (height > rect.height * 0.8) {
-                                  height = rect.height * 0.8;
-                                  width = height * targetRatio;
-                                }
-                              } else {
-                                // Portrait - height is primary
-                                width = height * targetRatio;
-                                // If width exceeds canvas, recalculate based on width
-                                if (width > rect.width * 0.8) {
-                                  width = rect.width * 0.8;
-                                  height = width / targetRatio;
-                                }
-                              }
-                              
-                              // Ensure rectangle fits within canvas bounds (with small padding)
-                              const padding = 10;
-                              width = Math.min(width, rect.width - padding * 2);
-                              height = Math.min(height, rect.height - padding * 2);
-                              
-                              // Recalculate to maintain aspect ratio after bounds constraint
-                              if (targetRatio >= 1) {
-                                height = width / targetRatio;
-                              } else {
-                                width = height * targetRatio;
-                              }
-                              
-                              // Center the rectangle
-                              const x = (rect.width - width) / 2;
-                              const y = (rect.height - height) / 2;
-                              
-                              const aspectRatioRect = { x, y, width, height };
-                              setRectangle(aspectRatioRect);
-                            }
-                          }}
-                          className="flex-1 px-2 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                            <Plus className="w-3 h-3" />
-                            Add Crop
-                          </button>
-                        <button
-                          onClick={() => setRectangle(null)}
-                          className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-red-500/10 border border-white/10 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                            <X className="w-3 h-3" />
-                            Clear
-                          </button>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${rectangle ? "bg-orange-400 animate-pulse" : "bg-gray-600"}`} />
-                        <span className={`text-[11px] font-medium ${rectangle ? "text-orange-300" : "text-gray-500"}`}>
-                          {rectangle ? `Crop area: ${Math.round(rectangle.width)}×${Math.round(rectangle.height)}` : "No crop area selected"}
-                        </span>
-                      </div>
-                      <button
-                        onClick={runCrop}
+          {/* ── Rectangle Inpaint ── */}
+          {canvasTool === "rectInpaint" && (
+            <div className="p-3 space-y-3">
+              <div><h3 className="text-white font-bold text-sm">Rectangle Inpaint</h3><p className="text-[10px] text-gray-500 mt-0.5">Select rectangle areas to inpaint with AI</p></div>
+              
+              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] text-gray-300 font-semibold">Rectangle Selection</label>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={() => {
+                          const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                          if (container) {
+                            const rect = container.getBoundingClientRect();
+                            const width = rect.width * 0.5;
+                            const height = rect.height * 0.5;
+                            const x = (rect.width - width) / 2;
+                            const y = (rect.height - height) / 2;
+                            setRectangle({ x, y, width, height });
+                          }
+                        }}
+                        className="px-2 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-[10px] font-semibold transition">
+                        Add Rectangle
+                      </button>
+                      <button 
+                        onClick={() => setRectangle(null)}
                         disabled={!rectangle}
-                        className="w-full py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        Crop Image
+                        className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded text-[10px] font-semibold transition">
+                        Clear
                       </button>
                     </div>
                   </div>
-                </>
-              )}
+                  {rectangle && (
+                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2">
+                      <p className="text-[10px] text-cyan-300">
+                        Rectangle: {Math.round(rectangle.width)}×{Math.round(rectangle.height)} at ({Math.round(rectangle.x)}, {Math.round(rectangle.y)})
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Inpaint Prompt</label>
+                  <textarea
+                    value={inpaintPrompt}
+                    onChange={(e) => setInpaintPrompt(e.target.value)}
+                    placeholder="Describe what to generate in the rectangle area..."
+                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 resize-none h-16 focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Model</label>
+                  <select
+                    value={inpaintModel}
+                    onChange={(e) => setInpaintModel(e.target.value as any)}
+                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-cyan-500/50"
+                  >
+                    <option value="nano-banana">Nano Banana</option>
+                    <option value="flux-kontext-pro">Flux Kontext Pro</option>
+                    <option value="openai-4o">OpenAI 4o</option>
+                    <option value="grok">Grok Imagine</option>
+                    <option value="qwen-z-image">Qwen Z Image</option>
+                  </select>
+                  {inpaintModel !== "openai-4o" && (
+                    <p className="text-yellow-500 text-[9px] mt-1">⚠️ Use OpenAI 4o for proper rectangle inpainting</p>
+                  )}
+                  <button
+                    onClick={runRectangleInpaint}
+                    disabled={!rectangle || !inpaintPrompt.trim() || isInpainting}
+                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
+                    {isInpainting ? (
+                      <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
+                    ) : "Generate Rectangle Inpaint"}
+                  </button>
+                  {inpaintError && (
+                    <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
+                  )}
+                </div>
+                
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${rectangle ? "bg-cyan-400 animate-pulse" : "bg-gray-600"}`} />
+                    <span className={`text-[11px] font-medium ${rectangle ? "text-cyan-300" : "text-gray-500"}`}>
+                      {rectangle ? `Rectangle ready: ${Math.round(rectangle.width)}×${Math.round(rectangle.height)}` : "No rectangle selected"}
+                    </span>
+                  </div>
+                  <button
+                      onClick={() => setShowGenPanel(v => !v)}
+                      className="w-full py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                      <ImageIcon className="w-3 h-3" />
+                      {showGenPanel ? "Hide Results" : generatedImages.length > 0 ? `View Results (${generatedImages.length})` : "View Panel"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+              
+          {/* ── Image Generation ── */}
+          {canvasTool === "image" && (
+            <>
+              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                <div><h3 className="text-white font-bold text-sm">Image Generation</h3><p className="text-[10px] text-gray-500 mt-0.5">Generate images with AI models</p></div>
+                
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Prompt</label>
+                  <textarea
+                    value={imageInpaintPrompt}
+                    onChange={(e) => setImageInpaintPrompt(e.target.value)}
+                    placeholder="Describe the image you want to generate..."
+                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 resize-none h-16 focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Model</label>
+                  <select
+                    value={imageInpaintModel}
+                    onChange={(e) => setImageInpaintModel(e.target.value as any)}
+                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-purple-500/50"
+                  >
+                    <option value="nano-banana">Nano Banana</option>
+                    <option value="flux-kontext-pro">Flux Kontext Pro</option>
+                    <option value="flux-fill">Flux Fill</option>
+                    <option value="openai-4o">OpenAI 4o</option>
+                    <option value="grok">Grok Imagine</option>
+                    <option value="qwen-z-image">Qwen Z Image</option>
+                    <option value="seedream-5.0-lite">Seedream 5.0 Lite</option>
+                    <option value="qwen">Qwen (Image Edit)</option>
+                    <option value="seedream-4.5">Seedream 4.5 (Text-to-Image)</option>
+                    <option value="flux-2-flex-image-to-image">Flux 2 Flex (Image-to-Image)</option>
+                    <option value="flux-2-flex-text-to-image">Flux 2 Flex (Text-to-Image)</option>
+                    <option value="seedream-v4">Seedream V4 (Text-to-Image)</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Reference Images</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[0, 1, 2].map((i) => (
+                      <div 
+                        key={i} 
+                        className="aspect-square bg-[#1a1d29] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-white/40 transition-colors relative group"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const dataUrl = event.target?.result as string;
+                                const newRefImages = [...imageReferenceImages];
+                                newRefImages[i] = dataUrl;
+                                setImageReferenceImages(newRefImages);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          };
+                          input.click();
+                        }}
+                      >
+                        {imageReferenceImages[i] ? (
+                          <>
+                            <img src={imageReferenceImages[i]} alt={`Reference ${i + 1}`} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-white text-[8px] font-medium">Change</span>
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-[8px] text-gray-500">Ref {i + 1}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <button
+                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
+                  disabled={!imageInpaintPrompt.trim() || imageIsInpainting}
+                >
+                  {imageIsInpainting ? (
+                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
+                  ) : "Generate Image"}
+                </button>
+                
+                {imageInpaintError && (
+                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2">
+                    <p className="text-[10px] text-red-300">{imageInpaintError}</p>
+                  </div>
+                )}
+                
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
+                  <span className="text-[10px] text-purple-300">
+                    {imageIsInpainting ? "Generating image..." : imageGeneratedImages.length > 0 ? `${imageGeneratedImages.length} images generated` : "Ready to generate"}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ── Crop ── */}
+          {canvasTool === "crop" && (
+            <>
+              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                <div><h3 className="text-white font-bold text-sm">Crop Image</h3><p className="text-[10px] text-gray-500 mt-0.5">Crop the image to a specific area</p></div>
+                
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        // Create rectangle with aspect ratio for crop
+                        const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                        if (container) {
+                          const rect = container.getBoundingClientRect();
+                          const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1 };
+                          const targetRatio = arMap[activeShot?.aspectRatio ?? "16:9"] ?? 16/9;
+                          
+                          // Calculate maximum dimensions that fit within canvas bounds
+                          // Start with 80% of canvas dimensions to ensure it fits
+                          let width = rect.width * 0.8;
+                          let height = rect.height * 0.8;
+                          
+                          // Adjust dimensions to fit aspect ratio
+                          if (targetRatio >= 1) {
+                            // Landscape or square - width is primary
+                            height = width / targetRatio;
+                            // If height exceeds canvas, recalculate based on height
+                            if (height > rect.height * 0.8) {
+                              height = rect.height * 0.8;
+                              width = height * targetRatio;
+                            }
+                          } else {
+                            // Portrait - height is primary
+                            width = height * targetRatio;
+                            // If width exceeds canvas, recalculate based on width
+                            if (width > rect.width * 0.8) {
+                              width = rect.width * 0.8;
+                              height = width / targetRatio;
+                            }
+                          }
+                          
+                          // Ensure rectangle fits within canvas bounds (with small padding)
+                          const padding = 10;
+                          width = Math.min(width, rect.width - padding * 2);
+                          height = Math.min(height, rect.height - padding * 2);
+                          
+                          // Recalculate to maintain aspect ratio after bounds constraint
+                          if (targetRatio >= 1) {
+                            height = width / targetRatio;
+                          } else {
+                            width = height * targetRatio;
+                          }
+                          
+                          // Center the rectangle
+                          const x = (rect.width - width) / 2;
+                          const y = (rect.height - height) / 2;
+                          
+                          const aspectRatioRect = { x, y, width, height };
+                          setRectangle(aspectRatioRect);
+                        }
+                      }}
+                      className="flex-1 px-2 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                      <Plus className="w-3 h-3" />
+                      Add Crop
+                    </button>
+                    <button
+                      onClick={() => setRectangle(null)}
+                      className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-red-500/10 border border-white/10 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                      <X className="w-3 h-3" />
+                      Clear
+                    </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-2">
+                    {["16:9", "9:16", "1:1", "4:3", "3:2", "2:3", "3:4"].map(aspect => (
+                      <button
+                        key={aspect}
+                        onClick={() => {
+                          const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                          if (container) {
+                            const rect = container.getBoundingClientRect();
+                            const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1, "4:3": 4/3, "3:2": 3/2, "2:3": 2/3, "3:4": 3/4 };
+                            const ar = arMap[aspect] ?? 1;
+                            
+                            const width = rect.width * 0.8;
+                            const height = width / ar;
+                            const x = (rect.width - width) / 2;
+                            const y = (rect.height - height) / 2;
+                            
+                            setRectangle({ x, y, width, height });
+                          }
+                        }}
+                        className={`px-2 py-1 rounded text-[10px] font-medium transition ${
+                          activeShot.aspectRatio === aspect
+                            ? "bg-orange-500/20 text-orange-300"
+                            : "bg-white/5 text-gray-400 hover:bg-white/10"
+                        }`}
+                      >
+                        {aspect}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${rectangle ? "bg-orange-400 animate-pulse" : "bg-gray-600"}`} />
+                    <span className={`text-[11px] font-medium ${rectangle ? "text-orange-300" : "text-gray-500"}`}>
+                      {rectangle ? `Crop area: ${Math.round(rectangle.width)}×${Math.round(rectangle.height)}` : "No crop area selected"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={runCrop}
+                    disabled={!rectangle}
+                    className="w-full py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
+                    <ImageIcon className="w-3.5 h-3.5" />
+                    Crop Image
+                  </button>
+                  <button
+                    onClick={runCropGenerateCombine}
+                    disabled={!rectangle}
+                    className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Crop + Generate + Combine
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* ── Comments ── */}
           {canvasTool === "comments" && (
@@ -2293,6 +2688,54 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                     <MessageSquare className="w-8 h-8 text-gray-700" />
                     <p className="text-gray-600 text-xs">No comments yet</p>
+                    
+                    {/* Background Image Upload */}
+                    <div className="w-full max-w-xs">
+                      <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-semibold text-gray-300">Background Image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const dataUrl = event.target?.result as string;
+                                  // Set as original image and background
+                                  setOriginalImage(dataUrl);
+                                  setBackgroundImage(dataUrl);
+                                  // Clear previous generated images when new original is uploaded
+                                  setGeneratedImages([]);
+                                  // Show the generated panel to display the new original
+                                  setShowGenPanel(true);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="hidden"
+                            id="bg-upload-selected"
+                          />
+                          <label
+                            htmlFor="bg-upload-selected"
+                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] cursor-pointer transition"
+                          >
+                            Upload
+                          </label>
+                        </div>
+                        <div 
+                          className="w-full h-16 bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-500/40 transition-colors"
+                          onClick={() => document.getElementById('bg-upload-selected')?.click()}
+                        >
+                          {backgroundImage ? (
+                            <img src={backgroundImage} alt="Background" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[9px] text-gray-500">No background image (click to upload)</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {commentTab === "selected" && activeShot.comments.map(c => (
@@ -2309,6 +2752,54 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
                     <MessageSquare className="w-8 h-8 text-gray-700" />
                     <p className="text-gray-600 text-xs">No comments yet</p>
+                    
+                    {/* Background Image Upload */}
+                    <div className="w-full max-w-xs">
+                      <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-semibold text-gray-300">Background Image</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const dataUrl = event.target?.result as string;
+                                  // Set as original image and background
+                                  setOriginalImage(dataUrl);
+                                  setBackgroundImage(dataUrl);
+                                  // Clear previous generated images when new original is uploaded
+                                  setGeneratedImages([]);
+                                  // Show the generated panel to display the new original
+                                  setShowGenPanel(true);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="hidden"
+                            id="bg-upload-all"
+                          />
+                          <label
+                            htmlFor="bg-upload-all"
+                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] cursor-pointer transition"
+                          >
+                            Upload
+                          </label>
+                        </div>
+                        <div 
+                          className="w-full h-16 bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-500/40 transition-colors"
+                          onClick={() => document.getElementById('bg-upload-all')?.click()}
+                        >
+                          {backgroundImage ? (
+                            <img src={backgroundImage} alt="Background" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[9px] text-gray-500">No background image (click to upload)</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {commentTab === "all" && allComments.map(c => (
@@ -2351,20 +2842,23 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                           }
                         }}
                         className="hidden"
-                        id="bg-upload"
+                        id="bg-upload-testing"
                       />
                       <label
-                        htmlFor="bg-upload"
+                        htmlFor="bg-upload-testing"
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] cursor-pointer transition"
                       >
                         Upload
                       </label>
                     </div>
-                    <div className="w-full h-16 bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden">
+                    <div 
+                      className="w-full h-16 bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-500/40 transition-colors"
+                      onClick={() => document.getElementById('bg-upload-testing')?.click()}
+                    >
                       {backgroundImage ? (
                         <img src={backgroundImage} alt="Background" className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-[9px] text-gray-500">No background image</span>
+                        <span className="text-[9px] text-gray-500">No background image (click to upload)</span>
                       )}
                     </div>
                   </div>
