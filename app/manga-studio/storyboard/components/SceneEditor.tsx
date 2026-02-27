@@ -7,7 +7,8 @@ import {
   Layers, Type, Paintbrush, Eraser, Eye, EyeOff, Trash2, Square,
   RotateCcw, RotateCw, Sparkles,
 } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import UseCaseInfoModal from "./UseCaseInfoModal";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
 import { TAG_COLORS } from "../constants";
 import {
@@ -26,6 +27,7 @@ interface SceneEditorProps {
   onClose: () => void;
   onShotsChange: (shots: Shot[]) => void;
 }
+
 
 export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: SceneEditorProps) {
   const [activeShotId, setActiveShotId] = useState(initialShotId);
@@ -53,17 +55,18 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Image tab independent state
   const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
   const [imageInpaintPrompt, setImageInpaintPrompt] = useState("");
-  const [imageUseCase, setImageUseCase] = useState<string>("character-swap");
-  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "grok" | "qwen-z-image" | "seedream-5.0-lite" | "qwen" | "seedream-4.5" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "seedream-v4">("nano-banana");
+  const [imageUseCase, setImageUseCase] = useState<string>("character-design");
+  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "nano-banana-edit" | "nano-banana-pro" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "gpt-image" | "grok" | "grok-text" | "qwen-z-image" | "qwen" | "qwen-text" | "seedream-5.0-lite" | "seedream-4.5" | "seedream-v4" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "flux-2-pro-image-to-image" | "flux-2-pro-text-to-image">("nano-banana-edit");
   const [imageRectangle, setImageRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [imageIsRectangleVisible, setImageIsRectangleVisible] = useState(true);
   const [imageIsInpainting, setImageIsInpainting] = useState(false);
   const [imageInpaintError, setImageInpaintError] = useState<string | null>(null);
   const [imageGeneratedImages, setImageGeneratedImages] = useState<string[]>([]);
-  const [imageShowGenPanel, setImageShowGenPanel] = useState(false);
   
   // Rectangle state
   const [rectangle, setRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [isSquareMode, setIsSquareMode] = useState(false); // Track if Add Square mode is active
   
   // Minimal state for removed Closer Look functionality (to prevent build errors)
   const [isAspectRatioAnimating] = useState(false);
@@ -332,21 +335,33 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               return;
             }
 
-            // Set canvas size to rectangle dimensions
-            canvas.width = rectangle.width;
-            canvas.height = rectangle.height;
-            console.log("Canvas dimensions:", canvas.width, "x", canvas.height);
+            // Set canvas size to rectangle dimensions, but resize if too large for GPT-4o
+            const MAX_SIZE = 1024; // Using URLs now, so size limits are less strict
+            let canvasWidth = rectangle.width;
+            let canvasHeight = rectangle.height;
+            
+            // Resize if dimensions exceed limits
+            if (canvasWidth > MAX_SIZE || canvasHeight > MAX_SIZE) {
+              const scale = Math.min(MAX_SIZE / canvasWidth, MAX_SIZE / canvasHeight);
+              canvasWidth = Math.round(canvasWidth * scale);
+              canvasHeight = Math.round(canvasHeight * scale);
+              console.log("Resizing canvas from", rectangle.width, "x", rectangle.height, "to", canvasWidth, "x", canvasHeight);
+            }
+            
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            console.log("Final canvas dimensions:", canvas.width, "x", canvas.height);
 
-            // Draw the cropped portion of the image
+            // Draw the cropped portion of the image (with resizing if needed)
             ctx.drawImage(
               img,
               rectangle.x, rectangle.y, rectangle.width, rectangle.height, // Source rectangle
-              0, 0, rectangle.width, rectangle.height  // Destination rectangle
+              0, 0, canvasWidth, canvasHeight  // Destination rectangle (resized)
             );
 
-            // Convert to base64
+            // Convert to base64 (will be uploaded as URL)
             const croppedBase64 = canvas.toDataURL('image/png');
-            console.log("Canvas converted to base64, length:", croppedBase64.length);
+            console.log("Canvas converted to base64 (PNG), length:", croppedBase64.length);
             resolve(croppedBase64);
           } catch (error) {
             console.error("Error in canvas processing:", error);
@@ -644,20 +659,77 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     bestModel: typeof imageInpaintModel; bestModelLabel: string;
     models: { value: typeof imageInpaintModel; label: string; sub: string }[];
   }> = {
-    "character-swap":  { label: "Character Swap",     emoji: "👤", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Up to 10 refs" }, { value: "nano-banana",   label: "Nano Banana",    sub: "High fidelity" }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Budget" }] },
-    "clothing-swap":   { label: "Clothing Swap",      emoji: "👕", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Multi-style"  }, { value: "qwen",         label: "Qwen Edit",     sub: "Precise"      }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Reliable"  }] },
-    "background-swap": { label: "Background Swap",   emoji: "🏞️", refMode: "single", bestModel: "flux-2-flex-image-to-image", bestModelLabel: "Flux 2 Flex",     models: [{ value: "flux-2-flex-image-to-image", label: "Flux 2 Flex",       sub: "Specialist"  }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Budget"    }] },
-    "style-transfer":  { label: "Style Transfer",     emoji: "🎨", refMode: "single", bestModel: "flux-kontext-pro",          bestModelLabel: "Flux Kontext",    models: [{ value: "flux-kontext-pro",           label: "Flux Kontext",      sub: "Context-aware" }, { value: "nano-banana",  label: "Nano Banana",   sub: "4K fidelity"  }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Style expert" }] },
-    "object-edit":     { label: "Object Edit",        emoji: "🔧", refMode: "single", bestModel: "flux-kontext-pro",          bestModelLabel: "Flux Kontext",    models: [{ value: "flux-kontext-pro",           label: "Flux Kontext",      sub: "Context-aware" }, { value: "qwen",         label: "Qwen Edit",     sub: "Precise"      }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Advanced"    }] },
-    "face-edit":       { label: "Face & Expression",  emoji: "😊", refMode: "single", bestModel: "seedream-5.0-lite",         bestModelLabel: "Seedream 5.0",    models: [{ value: "seedream-5.0-lite",          label: "Seedream 5.0",      sub: "Facial expert" }, { value: "nano-banana",  label: "Nano Banana",   sub: "Detail"       }, { value: "qwen",         label: "Qwen Edit",    sub: "Targeted"    }] },
-    "color-lighting":  { label: "Color & Lighting",   emoji: "🌈", refMode: "single", bestModel: "flux-2-flex-image-to-image", bestModelLabel: "Flux 2 Flex",     models: [{ value: "flux-2-flex-image-to-image", label: "Flux 2 Flex",       sub: "Enhanced"    }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Scene consistent" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Detail"      }] },
-    "texture-material":{ label: "Texture & Material", emoji: "🎯", refMode: "single", bestModel: "nano-banana",              bestModelLabel: "Nano Banana",     models: [{ value: "nano-banana",               label: "Nano Banana",       sub: "4K textures"  }, { value: "qwen",         label: "Qwen Edit",     sub: "Targeted"     }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Style transfer" }] },
-    "pose-adjustment": { label: "Pose & Position",    emoji: "🤸", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Spatial expert" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Enhanced"     }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Basic"       }] },
-    "accessory-add":   { label: "Accessory Addition", emoji: "👒", refMode: "single", bestModel: "qwen",                    bestModelLabel: "Qwen Edit",       models: [{ value: "qwen",                      label: "Qwen Edit",         sub: "Precise"      }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Scene integration" }, { value: "nano-banana", label: "Nano Banana",   sub: "Detail"      }] },
-    "age-gender":      { label: "Age & Gender",       emoji: "👥", refMode: "single", bestModel: "openai-4o",               bestModelLabel: "OpenAI 4o",       models: [{ value: "openai-4o",                 label: "OpenAI 4o",         sub: "World knowledge" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Detail"       }, { value: "nano-banana",  label: "Nano Banana",  sub: "Realistic"   }] },
-    "composition":     { label: "Scene Composition",  emoji: "📐", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Scene structure" }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Layout"      }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Basic"       }] },
-    "product-edit":    { label: "Product Editing",    emoji: "📦", refMode: "single", bestModel: "flux-kontext-pro",          bestModelLabel: "Flux Kontext",    models: [{ value: "flux-kontext-pro",           label: "Flux Kontext",      sub: "Product specialist" }, { value: "flux-2-flex-image-to-image", label: "Flux 2 Flex", sub: "Backgrounds" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Quick"       }] },
-    "text-to-image":   { label: "Text to Image",      emoji: "✍️", refMode: "text",   bestModel: "flux-2-flex-text-to-image", bestModelLabel: "Flux 2 Flex",     models: [{ value: "flux-2-flex-text-to-image", label: "Flux 2 Flex",       sub: "Fast"         }, { value: "seedream-v4",  label: "Seedream V4",  sub: "Quality"      }] },
+    "character-design": { 
+      label: "Character Design", 
+      emoji: "👤", 
+      refMode: "multi",  
+      bestModel: "seedream-4.5",             
+      bestModelLabel: "Seedream 4.5",    
+      models: [
+        { value: "seedream-4.5", label: "Seedream 4.5", sub: "Multi-reference expert" }, 
+        { value: "gpt-image", label: "GPT Image 1.5", sub: "World knowledge" }, 
+        { value: "nano-banana-edit", label: "Nano Banana Edit", sub: "High fidelity" }
+      ] 
+    },
+    "clothing-accessories": { 
+      label: "Clothing & Accessories", 
+      emoji: "👕", 
+      refMode: "multi",  
+      bestModel: "flux-2-pro-image-to-image", 
+      bestModelLabel: "Flux 2 Pro", 
+      models: [
+        { value: "flux-2-pro-image-to-image", label: "Flux 2 Pro", sub: "High quality" }, 
+        { value: "gpt-image", label: "GPT Image 1.5", sub: "Reliable" }
+      ] 
+    },
+    "environment-products": { 
+      label: "Environment & Products", 
+      emoji: "🏞️", 
+      refMode: "single", 
+      bestModel: "flux-2-flex-image-to-image", 
+      bestModelLabel: "Flux 2 Flex",     
+      models: [
+        { value: "flux-2-flex-image-to-image", label: "Flux 2 Flex", sub: "Specialist" },  
+        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, 
+        { value: "gpt-image", label: "GPT Image 1.5", sub: "Budget" }
+      ] 
+    },
+    "style-enhancement": { 
+      label: "Style & Enhancement", 
+      emoji: "🎨", 
+      refMode: "single", 
+      bestModel: "flux-kontext-pro",          
+      bestModelLabel: "Flux Kontext",    
+      models: [
+        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, 
+        { value: "nano-banana-pro", label: "Nano Banana Pro", sub: "4K fidelity" }, 
+        { value: "gpt-image", label: "GPT Image 1.5", sub: "Style expert" }
+      ] 
+    },
+    "composition-objects": { 
+      label: "Composition & Objects", 
+      emoji: "📐", 
+      refMode: "multi", 
+      bestModel: "seedream-4.5",             
+      bestModelLabel: "Seedream 4.5",    
+      models: [
+        { value: "seedream-4.5", label: "Seedream 4.5", sub: "Spatial expert" }, 
+        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Layout" }, 
+        { value: "qwen-z-image", label: "Qwen Image Edit", sub: "Precise" }
+      ] 
+    },
+    "text-to-image": { 
+      label: "Text to Image", 
+      emoji: "✍️", 
+      refMode: "text",   
+      bestModel: "flux-2-flex-text-to-image", 
+      bestModelLabel: "Flux 2 Flex",     
+      models: [
+        { value: "flux-2-flex-text-to-image", label: "Flux 2 Flex", sub: "Fast" }, 
+        { value: "flux-2-pro-text-to-image", label: "Flux 2 Pro", sub: "High quality" }, 
+        { value: "seedream-5.0-lite", label: "Seedream 5 Lite", sub: "Detailed" }
+      ] 
+    },
   };
 
   const refModeBadge: Record<RefMode, { label: string; color: string }> = {
@@ -666,48 +738,49 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     text:   { label: "📝 Text-Only",         color: "bg-gray-500/20 text-gray-300 border-gray-500/30" },
   };
 
-  // ── Generate Image (Image Tab) ─────────────────────────────────────────────────────────────────
+  
+// ── Generate Image (Image Tab) ─────────────────────────────────────────────────────────────────
   const generateImageTab = async () => {
     if (!imageInpaintPrompt.trim()) return;
     setImageIsInpainting(true);
     setImageInpaintError(null);
     try {
-      const uc = USE_CASES[imageUseCase] ?? USE_CASES["character-swap"];
-      const refSlots = uc.refMode === "multi" ? 3 : uc.refMode === "single" ? 1 : 0;
+      // Base image = current canvas background (what the user is working on)
+      const baseImage = backgroundImage ?? activeShot?.imageUrl ?? "";
 
-      // Use first reference image as primary input (or current background for context)
-      const primaryImage = imageReferenceImages[0] ?? backgroundImage ?? activeShot?.imageUrl ?? "";
+      // Reference images = all uploaded reference images (optional style/character refs)
+      const refImages = imageReferenceImages.filter(Boolean);
 
-      // For multi-ref, gather additional reference images
-      const additionalRefs = refSlots > 1
-        ? imageReferenceImages.slice(1).filter(Boolean)
-        : [];
-
-      // Build prompt enriched with use-case context
-      const enrichedPrompt = `${imageInpaintPrompt}`;
-
-      const body: Record<string, unknown> = {
-        prompt: enrichedPrompt,
+      const proxyBody: Record<string, unknown> = {
+        prompt: imageInpaintPrompt,
         model: imageInpaintModel,
-        image: primaryImage,
+        image: baseImage,
+        aspectRatio: activeShot?.aspectRatio ?? "16:9",
       };
-      if (additionalRefs.length > 0) {
-        body.referenceImages = additionalRefs;
+      if (refImages.length > 0) {
+        proxyBody.referenceImages = refImages;
       }
 
-      const res = await fetch("/api/inpaint", {
+      // Call proxy which handles: base64→URL upload, n8n webhook, KIE polling
+      const proxyRes = await fetch("/api/n8n-image-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(proxyBody),
       });
 
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error ?? `HTTP ${res.status}`);
+      const proxyData = await proxyRes.json();
+      if (!proxyRes.ok || proxyData.error) {
+        throw new Error(proxyData.error ?? `Generation failed: ${proxyRes.status}`);
       }
-      if (!data.image) throw new Error("No image returned");
 
-      setImageGeneratedImages((prev) => [data.image, ...prev]);
+      if (!proxyData.image) throw new Error("No image returned from generation");
+
+      setImageGeneratedImages((prev) => [proxyData.image, ...prev]);
+      // Also push to left Generated panel so it appears below the original thumbnail
+      setGeneratedImages((prev) => [proxyData.image, ...prev]);
+      // Auto-apply to canvas so the user immediately sees the generated result
+      setBackgroundImage(proxyData.image);
+      setShowGenPanel(true);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       
@@ -1152,43 +1225,93 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         ? { width: canvasRect.width, height: canvasRect.height }
         : undefined;
 
-      // 4. Crop the rectangle area from the original image
-      console.log("[rectInpaint] Step 1: Cropping rectangle from original image...");
-      const croppedImage = await cropImageToRectangle(imageBase64, rectangle, canvasDisplaySize);
-      console.log("[rectInpaint] Cropped image size:", croppedImage.length);
-
-      // 5. Send the CROPPED image to KIE for generation
-      console.log("[rectInpaint] Step 2: Sending cropped image to KIE...");
+      // 4. For square mode, send full image + rectangle coordinates to backend
+      // For normal mode, crop and send cropped image
+      console.log("[rectInpaint] Step 1: Preparing image data...");
+      console.log("[rectInpaint] Square mode:", isSquareMode);
       
       let requestBody: any = {
-        image: croppedImage,
         prompt: inpaintPrompt,
         model: inpaintModel,
       };
 
-      // OpenAI 4o requires a mask - create a full white mask for the cropped image
-      if (inpaintModel === "openai-4o") {
-        // Create a full white mask (same size as cropped image) - OpenAI 4o will inpaint the entire cropped area
-        const maskCanvas = document.createElement("canvas");
-        const img = new Image();
-        await new Promise<void>((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-          img.src = croppedImage;
-        });
+      if (isSquareMode) {
+        // Square mode: crop square on frontend, send to GPT-1.5, then composite back
+        console.log("[rectInpaint] Square mode: cropping square on frontend");
         
-        maskCanvas.width = img.naturalWidth;
-        maskCanvas.height = img.naturalHeight;
-        const ctx = maskCanvas.getContext("2d");
-        if (ctx) {
-          ctx.fillStyle = "white";
-          ctx.fillRect(0, 0, img.naturalWidth, img.naturalHeight);
-          requestBody.mask = maskCanvas.toDataURL("image/png");
-          console.log("[rectInpaint] Added full white mask for OpenAI 4o");
+        // Step 1: Crop square region from full image
+        const croppedImage = await cropImageToRectangle(imageBase64, rectangle, canvasDisplaySize);
+        console.log("[rectInpaint] Square cropped, sending to GPT-1.5");
+        
+        // Step 2: Send cropped square to GPT-1.5
+        requestBody.image = croppedImage;
+        requestBody.isSquareMode = true;
+        requestBody.rectangle = rectangle;
+        requestBody.canvasDisplaySize = canvasDisplaySize;
+        
+        // Add reference images for GPT-1.5
+        if (imageReferenceImages.length > 0) {
+          requestBody.referenceImages = imageReferenceImages;
+          console.log("[rectInpaint] Adding", imageReferenceImages.length, "reference images for square mode");
+        }
+      } else {
+        // Normal mode: crop and send cropped image
+        const croppedImage = await cropImageToRectangle(imageBase64, rectangle, canvasDisplaySize);
+        console.log("[rectInpaint] Cropped image size:", croppedImage.length);
+        requestBody.image = croppedImage;
+        
+        // Add reference images for normal mode (model-specific)
+        if (imageReferenceImages.length > 0) {
+          // Only add reference images for models that support them
+          const modelsWithReferenceSupport = ["gpt-image", "openai-4o", "nano-banana", "nano-banana-edit", "nano-banana-pro"];
+          if (modelsWithReferenceSupport.includes(inpaintModel)) {
+            requestBody.referenceImages = imageReferenceImages;
+            console.log("[rectInpaint] Adding", imageReferenceImages.length, "reference images for", inpaintModel);
+          } else {
+            console.log("[rectInpaint] Skipping reference images for", inpaintModel, "(not supported)");
+          }
+        }
+        console.log("[rectInpaint] Sending cropped image for normal mode");
+      }
+
+      // OpenAI 4o requires a mask - create a full white mask
+      if (inpaintModel === "openai-4o") {
+        if (isSquareMode) {
+          // Square mode: create mask for the square region
+          const maskCanvas = document.createElement("canvas");
+          maskCanvas.width = rectangle.width;
+          maskCanvas.height = rectangle.height;
+          const maskCtx = maskCanvas.getContext("2d");
+          if (maskCtx) {
+            maskCtx.fillStyle = "white";
+            maskCtx.fillRect(0, 0, rectangle.width, rectangle.height);
+          }
+          const maskData = maskCanvas.toDataURL();
+          requestBody.mask = maskData;
+        } else {
+          // Normal mode: create mask for cropped image
+          const maskCanvas = document.createElement("canvas");
+          const img = new Image();
+          await new Promise<void>((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = croppedImage;
+          });
+          maskCanvas.width = img.width;
+          maskCanvas.height = img.height;
+          const maskCtx = maskCanvas.getContext("2d");
+          if (maskCtx) {
+            maskCtx.fillStyle = "white";
+            maskCtx.fillRect(0, 0, img.width, img.height);
+          }
+          const maskData = maskCanvas.toDataURL();
+          requestBody.mask = maskData;
         }
       }
 
-      const response = await fetch("/api/inpaint", {
+      // 5. Send request to n8n-image-proxy
+      console.log("[rectInpaint] Step 2: Sending to n8n-image-proxy...");
+      const response = await fetch("/api/n8n-image-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -1224,18 +1347,24 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       // 7. Composite: draw original image, then paste generated image into the rectangle area
       console.log("[rectInpaint] Step 3: Combining generated image back into original...");
-      const combinedImage = await new Promise<string>((resolve, reject) => {
-        const origImg = new Image();
-        origImg.crossOrigin = "anonymous";
-        origImg.onload = () => {
-          const genImg = new Image();
-          genImg.crossOrigin = "anonymous";
-          genImg.onload = () => {
-            // Canvas at original image natural dimensions
-            const canvas = document.createElement("canvas");
-            canvas.width = origImg.naturalWidth;
-            canvas.height = origImg.naturalHeight;
-            const ctx = canvas.getContext("2d");
+      
+      let finalImage = generatedBase64;
+      
+      // For square mode, we need to composite the generated square back into the original image
+      if (isSquareMode) {
+        console.log("[rectInpaint] Square mode: compositing generated square back into original");
+        finalImage = await new Promise<string>((resolve, reject) => {
+          const origImg = new Image();
+          origImg.crossOrigin = "anonymous";
+          origImg.onload = () => {
+            const genImg = new Image();
+            genImg.crossOrigin = "anonymous";
+            genImg.onload = () => {
+              // Canvas at original image natural dimensions
+              const canvas = document.createElement("canvas");
+              canvas.width = origImg.naturalWidth;
+              canvas.height = origImg.naturalHeight;
+              const ctx = canvas.getContext("2d");
             if (!ctx) { reject(new Error("Cannot get canvas context")); return; }
 
             // Draw full original image
@@ -1320,13 +1449,60 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         origImg.onerror = () => reject(new Error("Failed to load original image"));
         origImg.src = imageBase64;
       });
+      } else {
+        // Rectangle mode: composite the generated image back into the original
+        console.log("[rectInpaint] Rectangle mode: compositing generated image back into original");
+        finalImage = await new Promise<string>((resolve, reject) => {
+          const origImg = new Image();
+          origImg.crossOrigin = "anonymous";
+          origImg.onload = () => {
+            const genImg = new Image();
+            genImg.crossOrigin = "anonymous";
+            genImg.onload = () => {
+              // Canvas at original image natural dimensions
+              const canvas = document.createElement("canvas");
+              canvas.width = origImg.naturalWidth;
+              canvas.height = origImg.naturalHeight;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) { reject(new Error("Cannot get canvas context")); return; }
+
+              // Draw full original image
+              ctx.drawImage(origImg, 0, 0);
+
+              // Calculate destination rectangle for the generated image
+              let destRect = { ...rectangle };
+              if (canvasDisplaySize && canvasDisplaySize.width > 0 && canvasDisplaySize.height > 0) {
+                const scaleX = origImg.naturalWidth / canvasDisplaySize.width;
+                const scaleY = origImg.naturalHeight / canvasDisplaySize.height;
+                destRect = {
+                  x: rectangle.x * scaleX,
+                  y: rectangle.y * scaleY,
+                  width: rectangle.width * scaleX,
+                  height: rectangle.height * scaleY,
+                };
+              }
+
+              // Draw generated image into the rectangle area
+              ctx.drawImage(genImg, destRect.x, destRect.y, destRect.width, destRect.height);
+
+              const combined = canvas.toDataURL("image/png");
+              console.log("[rectInpaint] Rectangle mode: Combined image created");
+              resolve(combined);
+            };
+            genImg.onerror = () => reject(new Error("Failed to load generated image"));
+            genImg.src = generatedBase64;
+          };
+          origImg.onerror = () => reject(new Error("Failed to load original image"));
+          origImg.src = imageBase64;
+        });
+      }
 
       // 8. Only show the final combined result (not intermediate cropped/generated images)
-      setGeneratedImages(prev => [...prev, combinedImage]);
+      setGeneratedImages(prev => [...prev, finalImage]);
       setShowGenPanel(true);
-      // Update background to the combined result
-      setBackgroundImage(combinedImage);
-      console.log("[rectInpaint] ✅ Done - combined image set as background");
+      // Update background to the final result
+      setBackgroundImage(finalImage);
+      console.log("[rectInpaint] ✅ Done - final image set as background");
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -1682,26 +1858,114 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       const bgImage = canvasEditor.querySelector('img');
                       if (bgImage) {
                         const img = new Image();
+                        img.crossOrigin = "anonymous";
                         img.onload = () => {
                           ctx.drawImage(img, 0, 0, rect.width, rect.height);
                           finishDownload();
                         };
                         img.onerror = () => {
-                          finishDownload();
+                          console.warn('Image failed to load with CORS, trying without crossOrigin');
+                          // Try again without crossOrigin as fallback
+                          const fallbackImg = new Image();
+                          fallbackImg.onload = () => {
+                            ctx.drawImage(fallbackImg, 0, 0, rect.width, rect.height);
+                            finishDownload();
+                          };
+                          fallbackImg.onerror = () => {
+                            finishDownload();
+                          };
+                          fallbackImg.src = bgImage.src;
                         };
                         img.src = bgImage.src;
                       } else {
                         finishDownload();
                       }
                       
+                      // Helper function to provide user-friendly alternatives when CORS fails
+                      function captureElementAsImage(element: HTMLElement, link: HTMLAnchorElement) {
+                        console.warn('CORS restrictions prevent image export. Providing user alternatives...');
+                        
+                        // Try to find the original image source for user to download manually
+                        const imgElement = element.querySelector('img') || document.querySelector('img');
+                        const originalCanvas = element.querySelector('canvas') || document.querySelector('canvas');
+                        
+                        let userMessage = 'Unable to export image due to CORS restrictions.\n\n';
+                        userMessage += 'This happens when the image comes from an external source that doesn\'t allow cross-origin access.\n\n';
+                        userMessage += 'ALTERNATIVE SOLUTIONS:\n\n';
+                        
+                        if (imgElement && imgElement.src) {
+                          userMessage += '1. Download the original image directly:\n';
+                          userMessage += '   Right-click the image in your browser and select "Save image as"\n\n';
+                        }
+                        
+                        userMessage += '2. Use browser screenshot:\n';
+                        userMessage += '   • Windows: Win+Shift+S (Snipping Tool)\n';
+                        userMessage += '   • Mac: Cmd+Shift+4 (Screenshot)\n';
+                        userMessage += '   • Chrome: Ctrl+Shift+S (Desktop capture)\n\n';
+                        
+                        userMessage += '3. Fix CORS issues:\n';
+                        userMessage += '   • Host images on the same domain\n';
+                        userMessage += '   • Add CORS headers to image server\n';
+                        userMessage += '   • Use a proxy server for external images\n\n';
+                        
+                        userMessage += '4. Use a different image source:\n';
+                        userMessage += '   • Download the image and upload it locally\n';
+                        userMessage += '   • Use images from CORS-enabled sources';
+                        
+                        console.info('CORS restrictions detected - providing user with alternative download methods');
+                        alert(userMessage);
+                        
+                        // Try to open the image in a new tab as a last resort
+                        if (imgElement && imgElement.src) {
+                          try {
+                            window.open(imgElement.src, '_blank');
+                            console.log('Opened image in new tab for manual download');
+                          } catch (openError) {
+                            console.log('Could not open image in new tab:', openError);
+                          }
+                        }
+                      }
+                      
                       function finishDownload() {
                         // Try to capture the content
                         const link = document.createElement('a');
                         link.download = `frame-${String(activeIdx + 1).padStart(2, "0")}.png`;
-                        link.href = tempCanvas.toDataURL('image/png', 1.0);
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
+                        
+                        try {
+                          link.href = tempCanvas.toDataURL('image/png', 1.0);
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        } catch (error) {
+                          console.warn('Canvas is tainted, trying DOM capture method...');
+                          // Fallback: capture the DOM element directly
+                          try {
+                            const canvasElement = canvasEditor.querySelector('canvas');
+                            if (canvasElement) {
+                              // Use html2canvas-like approach with the actual canvas element
+                              canvasElement.toBlob((blob) => {
+                                if (blob) {
+                                  link.href = URL.createObjectURL(blob);
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  // Clean up blob URL
+                                  setTimeout(() => URL.revokeObjectURL(link.href), 100);
+                                } else {
+                                  // Final fallback: take a screenshot of the DOM element
+                                  captureElementAsImage(canvasEditor, link);
+                                }
+                              }, 'image/png');
+                            } else {
+                              // Final fallback: take a screenshot of the DOM element
+                              captureElementAsImage(canvasEditor, link);
+                            }
+                          } catch (domError) {
+                            console.error('DOM capture failed, trying screenshot method:', domError);
+                            // Final fallback: take a screenshot of the DOM element
+                            captureElementAsImage(canvasEditor, link);
+                          }
+                        }
                       }
                       
                       return;
@@ -1924,6 +2188,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               rectangleVisible={imageIsRectangleVisible}
               canvasTool={canvasTool}
               isAspectRatioAnimating={isAspectRatioAnimating}
+              isSquareMode={isSquareMode}
               resetAllTransformations={() => {
                 // Reset all transformations for all objects
                 setCanvasState(prev => ({
@@ -1981,7 +2246,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     onClick={() => setBackgroundImage(originalImage || activeShot?.imageUrl || null)}
                     title="Click to show original image">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={originalImage || activeShot?.imageUrl} alt="Original" className="w-full aspect-video object-cover" />
+                    <img src={originalImage || activeShot?.imageUrl} alt="Original" className="w-full object-contain bg-[#0d0d14]" />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
                       <span className="text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition bg-black/60 px-1.5 py-0.5 rounded">Original</span>
                     </div>
@@ -2006,7 +2271,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   onClick={() => setBackgroundImage(imgUrl)}
                   title="Click to apply">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imgUrl} alt={`Generated ${i + 1}`} className="w-full aspect-video object-cover" />
+                  <img src={imgUrl} alt={`Generated ${i + 1}`} className="w-full object-contain bg-[#0d0d14]" />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
                     <span className="text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition bg-black/60 px-1.5 py-0.5 rounded">Apply</span>
                   </div>
@@ -2438,24 +2703,45 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] text-gray-300 font-semibold">Rectangle Selection</label>
                   </div>
-                  {/* Row 1: Add Rectangle (full width) */}
-                  <button 
-                    onClick={() => {
-                      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-                      if (container) {
-                        const rect = container.getBoundingClientRect();
-                        const width = rect.width * 0.5;
-                        const height = rect.height * 0.5;
-                        const x = (rect.width - width) / 2;
-                        const y = (rect.height - height) / 2;
-                        setRectangle({ x, y, width, height });
-                        setImageIsRectangleVisible(true); // Show rectangle when created
-                      }
-                    }}
-                    className="w-full px-3 py-2 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-600/30 text-cyan-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                    <Plus className="w-3 h-3 flex-shrink-0" />
-                    Add Rectangle
-                  </button>
+                  {/* Row 1: Add Rectangle | Add Square (half width each) */}
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                        if (container) {
+                          const rect = container.getBoundingClientRect();
+                          const width = rect.width * 0.5;
+                          const height = rect.height * 0.5;
+                          const x = (rect.width - width) / 2;
+                          const y = (rect.height - height) / 2;
+                          setRectangle({ x, y, width, height });
+                          setImageIsRectangleVisible(true); // Show rectangle when created
+                          setIsSquareMode(false); // Normal rectangle mode
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-600/30 text-cyan-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                      <Plus className="w-3 h-3 flex-shrink-0" />
+                      Add Rectangle
+                    </button>
+                    <button 
+                      onClick={() => {
+                        const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                        if (container) {
+                          const rect = container.getBoundingClientRect();
+                          const size = Math.min(rect.width, rect.height) * 0.4; // Square size: 40% of smaller dimension
+                          const x = (rect.width - size) / 2;
+                          const y = (rect.height - size) / 2;
+                          setRectangle({ x, y, width: size, height: size });
+                          setImageIsRectangleVisible(true); // Show rectangle when created
+                          setIsSquareMode(true); // Square mode for GPT-1.5
+                          setInpaintModel("gpt-image" as any); // Force GPT-1.5 model
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 bg-purple-600/10 hover:bg-purple-600/20 border border-purple-600/30 text-purple-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                      <Plus className="w-3 h-3 flex-shrink-0" />
+                      Add Square
+                    </button>
+                  </div>
                   
                   {/* Row 2: Hide/Show | Clear (half width each) */}
                   <div className="flex gap-2">
@@ -2469,7 +2755,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       {imageIsRectangleVisible ? "Hide" : "Show"}
                     </button>
                     <button 
-                      onClick={() => setRectangle(null)}
+                      onClick={() => {
+                        setRectangle(null);
+                        setIsSquareMode(false);
+                      }}
                       disabled={!rectangle}
                       className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-red-500/10 border border-white/10 text-gray-300 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
                       <X className="w-3 h-3 flex-shrink-0" />
@@ -2477,9 +2766,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     </button>
                   </div>
                   {rectangle && (
-                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2">
-                      <p className="text-[10px] text-cyan-300">
-                        Rectangle: {Math.round(rectangle.width)}×{Math.round(rectangle.height)} at ({Math.round(rectangle.x)}, {Math.round(rectangle.y)})
+                    <div className={`${isSquareMode ? "bg-purple-500/10 border-purple-500/30" : "bg-cyan-500/10 border-cyan-500/30"} rounded-lg p-2`}>
+                      <p className={`text-[10px] ${isSquareMode ? "text-purple-300" : "text-cyan-300"}`}>
+                        {isSquareMode ? "Square" : "Rectangle"}: {Math.round(rectangle.width)}×{Math.round(rectangle.height)} at ({Math.round(rectangle.x)}, {Math.round(rectangle.y)})
                       </p>
                     </div>
                   )}
@@ -2495,34 +2784,110 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   />
                 </div>
                 
-                <div className="space-y-2">
-                  <label className="text-[11px] text-gray-300 font-semibold">Model</label>
-                  <select
-                    value={inpaintModel}
-                    onChange={(e) => setInpaintModel(e.target.value as any)}
-                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-cyan-500/50"
-                  >
-                    <option value="nano-banana">Nano Banana</option>
-                    <option value="flux-kontext-pro">Flux Kontext Pro</option>
-                    <option value="openai-4o">OpenAI 4o</option>
-                    <option value="grok">Grok Imagine</option>
-                    <option value="qwen-z-image">Qwen Z Image</option>
-                  </select>
-                  {inpaintModel !== "openai-4o" && (
-                    <p className="text-yellow-500 text-[9px] mt-1">⚠️ Use OpenAI 4o for proper rectangle inpainting</p>
-                  )}
-                  <button
-                    onClick={runRectangleInpaint}
-                    disabled={!rectangle || !inpaintPrompt.trim() || isInpainting}
-                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
-                    {isInpainting ? (
-                      <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                    ) : "Generate Rectangle Inpaint"}
-                  </button>
-                  {inpaintError && (
-                    <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
-                  )}
-                </div>
+                {/* Reference Images - Only show for square mode (GPT-1.5) */}
+                {isSquareMode && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] text-gray-300 font-semibold">Reference Images (Optional)</label>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          files.forEach(file => {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                              const result = e.target?.result as string;
+                              setImageReferenceImages(prev => [...prev, result]);
+                            };
+                            reader.readAsDataURL(file);
+                          });
+                        }}
+                        className="hidden"
+                        id="square-ref-images"
+                      />
+                      <label
+                        htmlFor="square-ref-images"
+                        className="block w-full px-3 py-2 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 text-purple-300 rounded-lg text-[11px] font-semibold transition cursor-pointer text-center"
+                      >
+                        📎 Add Reference Images
+                      </label>
+                      
+                      {imageReferenceImages.length > 0 && (
+                        <div className="grid grid-cols-3 gap-1">
+                          {imageReferenceImages.map((img, idx) => (
+                            <div key={idx} className="relative group">
+                              <img
+                                src={img}
+                                alt={`Reference ${idx + 1}`}
+                                className="w-full h-16 object-cover rounded border border-purple-500/30"
+                              />
+                              <button
+                                onClick={() => setImageReferenceImages(prev => prev.filter((_, i) => i !== idx))}
+                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[9px] hover:bg-red-600 opacity-0 group-hover:opacity-100 transition"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {imageReferenceImages.length > 0 && (
+                        <button
+                          onClick={() => setImageReferenceImages([])}
+                          className="w-full px-2 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 rounded text-[10px] transition"
+                        >
+                          Clear All References
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {!isSquareMode ? (
+                  <div className="space-y-2">
+                    <label className="text-[11px] text-gray-300 font-semibold">Model</label>
+                    <select
+                      value={inpaintModel}
+                      onChange={(e) => setInpaintModel(e.target.value as any)}
+                      className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="flux-kontext-pro">Flux Kontext Pro</option>
+                      <option value="grok">Grok Imagine</option>
+                      <option value="qwen-z-image">Qwen Z Image</option>
+                    </select>
+                    {inpaintModel !== "openai-4o" && (
+                      <p className="text-yellow-500 text-[9px] mt-1">⚠️ Use OpenAI 4o for proper rectangle inpainting</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-[11px] text-gray-300 font-semibold">Model</label>
+                    <select
+  value={inpaintModel}
+  onChange={(e) => setInpaintModel(e.target.value as any)}
+  className="w-full px-3 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg text-[11px] text-purple-300 focus:outline-none focus:border-purple-500/50 cursor-pointer">
+  <option value="gpt-image">🟦 GPT Image 1.5 (Square Mode)</option>
+  <option value="nano-banana-edit">🟩 Nano Banana Edit (Square Mode)</option>
+</select>
+<p className="text-[9px] text-purple-400/70 mt-1">Square crop → AI generation → Composite</p>
+                  </div>
+                )}
+                
+                <button
+                  onClick={runRectangleInpaint}
+                  disabled={!rectangle || !inpaintPrompt.trim() || isInpainting}
+                  className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
+                  {isInpainting ? (
+                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
+                  ) : (isSquareMode ? "Generate Square Inpaint" : "Generate Rectangle Inpaint")}
+                </button>
+                {inpaintError && (
+                  <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
+                )}
+              </div>
                 
                 <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
                   <div className="flex items-center gap-2">
@@ -2539,7 +2904,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   </button>
                 </div>
               </div>
-            </div>
+            
+            
           )}
 
               
@@ -2585,10 +2951,23 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg>
                     </div>
                   </div>
-                  {/* Badge */}
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${badge.color}`}>
-                    {badge.label}
-                  </span>
+                  {/* Badge with info */}
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${badge.color}`}>
+                      {badge.label}
+                    </span>
+                    {/* Info icon with modal */}
+                    <button 
+                      onClick={() => setShowInfoModal(true)}
+                      className="flex items-center justify-center w-5 h-5 text-gray-400 hover:text-gray-300 transition-colors rounded-full hover:bg-white/10"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 16v-4"/>
+                        <path d="M12 8h.01"/>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Model dropdown — pic3 style with sub-label */}
@@ -3256,6 +3635,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           </div>
         </div>
       )}
+
+      {/* Info Modal */}
+      <UseCaseInfoModal
+        isOpen={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+        useCaseLabel={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).label}
+        useCaseEmoji={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).emoji}
+        refMode={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).refMode}
+        models={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).models}
+      />
     </div>
   );
 }

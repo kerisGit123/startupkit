@@ -56,6 +56,8 @@ interface CanvasEditorProps {
   canvasTool?: CanvasActiveTool;
   /** Whether aspect ratio animation is in progress */
   isAspectRatioAnimating?: boolean;
+  /** Whether rectangle is in square mode (GPT-1.5) */
+  isSquareMode?: boolean;
 }
 
 // ── Drag state ─────────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ export function CanvasEditor({
   panelId, imageUrl, activeTool, state, onStateChange,
   brushSize, isEraser, maskOpacity, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
-  rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false,
+  rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -467,19 +469,20 @@ export function CanvasEditor({
             rectangle={rectangle} 
             width={containerSize.w} 
             height={containerSize.h}
-            color="blue"
+            color={isSquareMode ? "purple" : "cyan"}
             aspectRatio={aspectRatio}
             selected={false}
+            isSquareMode={isSquareMode}
             onResize={(handle, x, y, w, h) => {
               // Handle rectangle resize
               if (onRectangleChange) {
                 onRectangleChange({ x, y, width: w, height: h });
               }
             }}
-            onDrag={(newX, newY, newWidth, newHeight) => {
+            onDrag={(x, y, w, h) => {
               // Handle rectangle drag
               if (onRectangleChange) {
-                onRectangleChange({ x: newX, y: newY, width: newWidth, height: newHeight });
+                onRectangleChange({ x, y, width: w, height: h });
               }
             }}
           />

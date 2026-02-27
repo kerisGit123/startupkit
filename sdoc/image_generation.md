@@ -93,3 +93,11 @@ The system is designed to work with the n8n workflow (`edit_image_n8n`) via MCP:
 - Frontend sends: `{ useCase, model, prompt, referenceImages[] }`
 - n8n processes via KIE API and returns `taskId`
 - Frontend polls for completion
+
+
+
+
+
+
+calling to send image.
+https://freeimage.host/

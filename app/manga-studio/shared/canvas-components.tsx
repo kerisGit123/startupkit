@@ -267,16 +267,17 @@ export function MaskCanvas({
 
 // ── RectangleCanvas ─────────────────────────────────────────────────────────
 export function RectangleCanvas({
-  rectangle, width, height, selected, onResize, onDrag, color = "blue", aspectRatio, isAspectRatioAnimating = false,
+  rectangle, width, height, selected, onResize, onDrag, color = "blue", aspectRatio, isAspectRatioAnimating = false, isSquareMode = false,
 }: {
   rectangle: { x: number; y: number; width: number; height: number } | null;
   width: number; height: number;
   selected?: boolean;
   onResize?: (handle: string, newX: number, newY: number, newWidth: number, newHeight: number) => void;
   onDrag?: (newX: number, newY: number, newWidth: number, newHeight: number) => void;
-  color?: "blue" | "orange";
+  color?: "blue" | "orange" | "purple" | "cyan";
   aspectRatio?: string; // e.g., "16:9", "9:16", "1:1"
   isAspectRatioAnimating?: boolean;
+  isSquareMode?: boolean; // Square mode for GPT-1.5
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -299,6 +300,10 @@ export function RectangleCanvas({
     // Define colors based on color prop
     const colors = color === "orange" 
       ? { fill: "rgba(251,146,60,1)", border: "rgba(251,146,60,0.8)", selected: "rgba(251,146,60,1)" }
+      : color === "purple"
+      ? { fill: "rgba(168,85,247,1)", border: "rgba(168,85,247,0.8)", selected: "rgba(168,85,247,1)" }
+      : color === "cyan"
+      ? { fill: "rgba(6,182,212,1)", border: "rgba(6,182,212,0.8)", selected: "rgba(6,182,212,1)" }
       : { fill: "rgba(59,130,246,1)", border: "rgba(59,130,246,0.8)", selected: "rgba(59,130,246,1)" };
     
     // Always show fill overlay for Rectangle Inpaint (even with aspect ratio)
@@ -311,13 +316,20 @@ export function RectangleCanvas({
     ctx.lineWidth = selected ? 3 : 2;
     ctx.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
     
-    // Draw dots only when not selected
+    // Draw dots when not selected, and edge handles for rectangle mode
     if (!selected) {
       const dotSize = 12; // Increased from 6 to 12 for better usability
       
-      // Blue inpaint (Rectangle Inpaint): always show all 8 dots for full resizing control (corners + edges)
+      // Rectangle Inpaint: 
+      // - Purple square mode: show only 4 corner dots for scale-only resizing
+      // - Cyan/Blue normal mode: show all 8 dots for full resizing control (corners + edges)
       // Orange crop (Crop): show 4 corner dots when aspect ratio is set, 8 dots when free scaling
-      const dots = color === "blue" ? [
+      const dots = isSquareMode ? [
+        { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
+        { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
+        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
+        { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
+      ] : (color === "blue" || color === "cyan") ? [
         { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
         { x: rectangle.x + rectangle.width / 2, y: rectangle.y, type: "n" }, // top-center
         { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
@@ -375,6 +387,26 @@ export function RectangleCanvas({
         
         // Reset alpha for other elements
         ctx.globalAlpha = 1;
+      });
+    }
+    
+    // Draw edge handles for rectangle mode (cyan) even when not selected
+    if (!selected && (color === "cyan" || color === "blue")) {
+      const handleSize = 8;
+      ctx.fillStyle = "rgba(6,182,212,0.8)";
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.lineWidth = 1;
+      
+      const handles = [
+        { x: rectangle.x + rectangle.width / 2, y: rectangle.y, cursor: "n-resize", type: "n" }, // top-center
+        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height / 2, cursor: "e-resize", type: "e" }, // right-center
+        { x: rectangle.x + rectangle.width / 2, y: rectangle.y + rectangle.height, cursor: "s-resize", type: "s" }, // bottom-center
+        { x: rectangle.x, y: rectangle.y + rectangle.height / 2, cursor: "w-resize", type: "w" }, // left-center
+      ];
+      
+      handles.forEach(handle => {
+        ctx.fillRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
+        ctx.strokeRect(handle.x - handleSize/2, handle.y - handleSize/2, handleSize, handleSize);
       });
     }
     
@@ -436,7 +468,10 @@ export function RectangleCanvas({
           
           // Parse aspect ratio if provided (e.g., "16:9" -> 1.777...)
           let targetRatio: number | null = null;
-          if (aspectRatio) {
+          if (isSquareMode) {
+            // Square mode always enforces 1:1 aspect ratio
+            targetRatio = 1;
+          } else if (aspectRatio) {
             const [w, h] = aspectRatio.split(':').map(Number);
             if (!isNaN(w) && !isNaN(h) && h > 0) {
               targetRatio = w / h;
@@ -610,8 +645,8 @@ export function RectangleCanvas({
         if (!selected) {
           const dotSize = 12; // Match the new dot size
           
-          // Use same dot logic as drawing - blue inpaint always 8 dots, orange crop 4 dots when aspect ratio is set
-          const dots = color === "blue" ? [
+          // Use same dot logic as drawing - blue/cyan inpaint always 8 dots, orange crop 4 dots when aspect ratio is set
+          const dots = (color === "blue" || color === "cyan") ? [
             { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
             { x: rectangle.x + rectangle.width / 2, y: rectangle.y, type: "n" }, // top-center
             { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
