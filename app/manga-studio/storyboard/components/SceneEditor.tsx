@@ -666,6 +666,69 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     text:   { label: "📝 Text-Only",         color: "bg-gray-500/20 text-gray-300 border-gray-500/30" },
   };
 
+  // ── Generate Image (Image Tab) ─────────────────────────────────────────────────────────────────
+  const generateImageTab = async () => {
+    if (!imageInpaintPrompt.trim()) return;
+    setImageIsInpainting(true);
+    setImageInpaintError(null);
+    try {
+      const uc = USE_CASES[imageUseCase] ?? USE_CASES["character-swap"];
+      const refSlots = uc.refMode === "multi" ? 3 : uc.refMode === "single" ? 1 : 0;
+
+      // Use first reference image as primary input (or current background for context)
+      const primaryImage = imageReferenceImages[0] ?? backgroundImage ?? activeShot?.imageUrl ?? "";
+
+      // For multi-ref, gather additional reference images
+      const additionalRefs = refSlots > 1
+        ? imageReferenceImages.slice(1).filter(Boolean)
+        : [];
+
+      // Build prompt enriched with use-case context
+      const enrichedPrompt = `${imageInpaintPrompt}`;
+
+      const body: Record<string, unknown> = {
+        prompt: enrichedPrompt,
+        model: imageInpaintModel,
+        image: primaryImage,
+      };
+      if (additionalRefs.length > 0) {
+        body.referenceImages = additionalRefs;
+      }
+
+      const res = await fetch("/api/inpaint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      if (!data.image) throw new Error("No image returned");
+
+      setImageGeneratedImages((prev) => [data.image, ...prev]);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
+      // Handle specific model failures gracefully
+      if (errorMessage.includes("Grok") || errorMessage.includes("grok")) {
+        setImageInpaintError("Grok model is temporarily unavailable. Please try again with a different model (Nano Banana, Flux Kontext Pro, or OpenAI 4o).");
+      } else if (errorMessage.includes("no image URL found") || errorMessage.includes("500")) {
+        setImageInpaintError("The model encountered an issue generating your image. Please try again or select a different model.");
+      } else if (errorMessage.includes("timeout") || errorMessage.includes("401") || errorMessage.includes("403")) {
+        setImageInpaintError("Service temporarily unavailable. Please wait a moment and try again.");
+      } else if (errorMessage.includes("rate limit") || errorMessage.includes("too many requests")) {
+        setImageInpaintError("Too many requests. Please wait a moment and try again.");
+      } else {
+        // Generic error for other cases
+        setImageInpaintError(`Generation failed: ${errorMessage}. Please try again or select a different model.`);
+      }
+    } finally {
+      setImageIsInpainting(false);
+    }
+  };
+
   // ── Generate Image with Bubbles and Text ───────────────────────────────────────────────────────
   const generateImageWithElements = async () => {
     const imageUrl = backgroundImage || activeShot?.imageUrl;
@@ -1258,8 +1321,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         origImg.src = imageBase64;
       });
 
-      // 8. Show all three results: cropped, generated, combined
-      setGeneratedImages(prev => [...prev, croppedImage, generatedImageUrl, combinedImage]);
+      // 8. Only show the final combined result (not intermediate cropped/generated images)
+      setGeneratedImages(prev => [...prev, combinedImage]);
       setShowGenPanel(true);
       // Update background to the combined result
       setBackgroundImage(combinedImage);
@@ -1858,6 +1921,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               aspectRatio={activeShot.aspectRatio || "16:9"}
               rectangle={rectangle}
               onRectangleChange={setRectangle}
+              rectangleVisible={imageIsRectangleVisible}
               canvasTool={canvasTool}
               isAspectRatioAnimating={isAspectRatioAnimating}
               resetAllTransformations={() => {
@@ -2373,29 +2437,44 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] text-gray-300 font-semibold">Rectangle Selection</label>
-                    <div className="flex gap-1">
-                      <button 
-                        onClick={() => {
-                          const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-                          if (container) {
-                            const rect = container.getBoundingClientRect();
-                            const width = rect.width * 0.5;
-                            const height = rect.height * 0.5;
-                            const x = (rect.width - width) / 2;
-                            const y = (rect.height - height) / 2;
-                            setRectangle({ x, y, width, height });
-                          }
-                        }}
-                        className="px-2 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-[10px] font-semibold transition">
-                        Add Rectangle
-                      </button>
-                      <button 
-                        onClick={() => setRectangle(null)}
-                        disabled={!rectangle}
-                        className="px-2 py-1 bg-red-600 hover:bg-red-700 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded text-[10px] font-semibold transition">
-                        Clear
-                      </button>
-                    </div>
+                  </div>
+                  {/* Row 1: Add Rectangle (full width) */}
+                  <button 
+                    onClick={() => {
+                      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                      if (container) {
+                        const rect = container.getBoundingClientRect();
+                        const width = rect.width * 0.5;
+                        const height = rect.height * 0.5;
+                        const x = (rect.width - width) / 2;
+                        const y = (rect.height - height) / 2;
+                        setRectangle({ x, y, width, height });
+                        setImageIsRectangleVisible(true); // Show rectangle when created
+                      }
+                    }}
+                    className="w-full px-3 py-2 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-600/30 text-cyan-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                    <Plus className="w-3 h-3 flex-shrink-0" />
+                    Add Rectangle
+                  </button>
+                  
+                  {/* Row 2: Hide/Show | Clear (half width each) */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setImageIsRectangleVisible(!imageIsRectangleVisible)}
+                      disabled={!rectangle}
+                      className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-blue-500/10 border border-white/10 text-gray-300 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5"
+                      title={rectangle ? (imageIsRectangleVisible ? "Hide rectangle" : "Show rectangle") : "Add a rectangle first"}
+                    >
+                      {imageIsRectangleVisible ? <Eye className="w-3 h-3 flex-shrink-0" /> : <EyeOff className="w-3 h-3 flex-shrink-0" />}
+                      {imageIsRectangleVisible ? "Hide" : "Show"}
+                    </button>
+                    <button 
+                      onClick={() => setRectangle(null)}
+                      disabled={!rectangle}
+                      className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-red-500/10 border border-white/10 text-gray-300 hover:text-red-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
+                      <X className="w-3 h-3 flex-shrink-0" />
+                      Clear
+                    </button>
                   </div>
                   {rectangle && (
                     <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2">
@@ -2586,12 +2665,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
                 {/* Generate button */}
                 <button
+                  onClick={generateImageTab}
                   className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
                   disabled={!imageInpaintPrompt.trim() || imageIsInpainting}
                 >
                   {imageIsInpainting
                     ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                    : "Generate Image"}
+                    : "✨ Generate Image"}
                 </button>
 
                 {imageInpaintError && (
@@ -2600,11 +2680,55 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   </div>
                 )}
 
+                {/* Status bar */}
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
                   <span className="text-[10px] text-purple-300">
-                    {imageIsInpainting ? "Generating image..." : imageGeneratedImages.length > 0 ? `${imageGeneratedImages.length} images generated` : "Ready to generate"}
+                    {imageIsInpainting ? "Generating image..." : imageGeneratedImages.length > 0 ? `${imageGeneratedImages.length} image${imageGeneratedImages.length > 1 ? "s" : ""} generated` : "Ready to generate"}
                   </span>
                 </div>
+
+                {/* Generated images results */}
+                {imageGeneratedImages.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Generated</label>
+                      <button
+                        onClick={() => setImageGeneratedImages([])}
+                        className="text-[9px] text-gray-600 hover:text-red-400 transition-colors"
+                      >Clear all</button>
+                    </div>
+                    <div className="space-y-2">
+                      {imageGeneratedImages.map((imgUrl, idx) => (
+                        <div key={idx} className="relative group rounded-lg overflow-hidden border border-white/10">
+                          <img
+                            src={imgUrl}
+                            alt={`Generated ${idx + 1}`}
+                            className="w-full object-contain bg-[#0d0d14]"
+                          />
+                          {/* Overlay actions */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => setBackgroundImage(imgUrl)}
+                              className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-[9px] font-semibold transition"
+                              title="Set as scene background"
+                            >Set as BG</button>
+                            <a
+                              href={imgUrl}
+                              download={`generated-${idx + 1}.png`}
+                              className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[9px] font-semibold transition"
+                            >↓ Save</a>
+                            <button
+                              onClick={() => setImageGeneratedImages((prev) => prev.filter((_, i) => i !== idx))}
+                              className="px-2 py-1 bg-red-500/70 hover:bg-red-500 text-white rounded text-[9px] font-semibold transition"
+                            >✕</button>
+                          </div>
+                          {/* Index badge */}
+                          <span className="absolute top-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded-full">#{imageGeneratedImages.length - idx}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -2668,11 +2792,21 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                           
                           const aspectRatioRect = { x, y, width, height };
                           setRectangle(aspectRatioRect);
+                          setImageIsRectangleVisible(true); // Show rectangle when created
                         }
                       }}
                       className="flex-1 px-2 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
                       <Plus className="w-3 h-3" />
-                      Add Crop
+                      Add Rectangle
+                    </button>
+                    <button
+                      onClick={() => setImageIsRectangleVisible(!imageIsRectangleVisible)}
+                      disabled={!rectangle}
+                      className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-blue-500/10 border border-white/10 text-gray-300 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5"
+                      title={rectangle ? (imageIsRectangleVisible ? "Hide rectangle" : "Show rectangle") : "Add a rectangle first"}
+                    >
+                      {imageIsRectangleVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                      {imageIsRectangleVisible ? "Hide" : "Show"}
                     </button>
                     <button
                       onClick={() => setRectangle(null)}
