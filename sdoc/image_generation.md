@@ -101,3 +101,12 @@ The system is designed to work with the n8n workflow (`edit_image_n8n`) via MCP:
 
 calling to send image.
 https://freeimage.host/
+
+
+Flux Kontext model limitation Flux Kontext Pro is labeled "Product specialist"
+
+Shoes are challenging for all models because:
+
+Small detail area
+Complex shape/texture
+Need to maintain perspective
