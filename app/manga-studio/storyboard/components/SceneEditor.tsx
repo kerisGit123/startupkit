@@ -53,6 +53,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Image tab independent state
   const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
   const [imageInpaintPrompt, setImageInpaintPrompt] = useState("");
+  const [imageUseCase, setImageUseCase] = useState<string>("character-swap");
   const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "grok" | "qwen-z-image" | "seedream-5.0-lite" | "qwen" | "seedream-4.5" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "seedream-v4">("nano-banana");
   const [imageRectangle, setImageRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [imageIsRectangleVisible, setImageIsRectangleVisible] = useState(true);
@@ -635,6 +636,34 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       img1.src = originalImage;
       img2.src = generatedImage;
     });
+  };
+
+  type RefMode = "multi" | "single" | "text";
+  const USE_CASES: Record<string, {
+    label: string; emoji: string; refMode: RefMode;
+    bestModel: typeof imageInpaintModel; bestModelLabel: string;
+    models: { value: typeof imageInpaintModel; label: string; sub: string }[];
+  }> = {
+    "character-swap":  { label: "Character Swap",     emoji: "👤", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Up to 10 refs" }, { value: "nano-banana",   label: "Nano Banana",    sub: "High fidelity" }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Budget" }] },
+    "clothing-swap":   { label: "Clothing Swap",      emoji: "👕", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Multi-style"  }, { value: "qwen",         label: "Qwen Edit",     sub: "Precise"      }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Reliable"  }] },
+    "background-swap": { label: "Background Swap",   emoji: "🏞️", refMode: "single", bestModel: "flux-2-flex-image-to-image", bestModelLabel: "Flux 2 Flex",     models: [{ value: "flux-2-flex-image-to-image", label: "Flux 2 Flex",       sub: "Specialist"  }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Budget"    }] },
+    "style-transfer":  { label: "Style Transfer",     emoji: "🎨", refMode: "single", bestModel: "flux-kontext-pro",          bestModelLabel: "Flux Kontext",    models: [{ value: "flux-kontext-pro",           label: "Flux Kontext",      sub: "Context-aware" }, { value: "nano-banana",  label: "Nano Banana",   sub: "4K fidelity"  }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Style expert" }] },
+    "object-edit":     { label: "Object Edit",        emoji: "🔧", refMode: "single", bestModel: "flux-kontext-pro",          bestModelLabel: "Flux Kontext",    models: [{ value: "flux-kontext-pro",           label: "Flux Kontext",      sub: "Context-aware" }, { value: "qwen",         label: "Qwen Edit",     sub: "Precise"      }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Advanced"    }] },
+    "face-edit":       { label: "Face & Expression",  emoji: "😊", refMode: "single", bestModel: "seedream-5.0-lite",         bestModelLabel: "Seedream 5.0",    models: [{ value: "seedream-5.0-lite",          label: "Seedream 5.0",      sub: "Facial expert" }, { value: "nano-banana",  label: "Nano Banana",   sub: "Detail"       }, { value: "qwen",         label: "Qwen Edit",    sub: "Targeted"    }] },
+    "color-lighting":  { label: "Color & Lighting",   emoji: "🌈", refMode: "single", bestModel: "flux-2-flex-image-to-image", bestModelLabel: "Flux 2 Flex",     models: [{ value: "flux-2-flex-image-to-image", label: "Flux 2 Flex",       sub: "Enhanced"    }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Scene consistent" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Detail"      }] },
+    "texture-material":{ label: "Texture & Material", emoji: "🎯", refMode: "single", bestModel: "nano-banana",              bestModelLabel: "Nano Banana",     models: [{ value: "nano-banana",               label: "Nano Banana",       sub: "4K textures"  }, { value: "qwen",         label: "Qwen Edit",     sub: "Targeted"     }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Style transfer" }] },
+    "pose-adjustment": { label: "Pose & Position",    emoji: "🤸", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Spatial expert" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Enhanced"     }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Basic"       }] },
+    "accessory-add":   { label: "Accessory Addition", emoji: "👒", refMode: "single", bestModel: "qwen",                    bestModelLabel: "Qwen Edit",       models: [{ value: "qwen",                      label: "Qwen Edit",         sub: "Precise"      }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Scene integration" }, { value: "nano-banana", label: "Nano Banana",   sub: "Detail"      }] },
+    "age-gender":      { label: "Age & Gender",       emoji: "👥", refMode: "single", bestModel: "openai-4o",               bestModelLabel: "OpenAI 4o",       models: [{ value: "openai-4o",                 label: "OpenAI 4o",         sub: "World knowledge" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Detail"       }, { value: "nano-banana",  label: "Nano Banana",  sub: "Realistic"   }] },
+    "composition":     { label: "Scene Composition",  emoji: "📐", refMode: "multi",  bestModel: "seedream-4.5",             bestModelLabel: "Seedream 4.5",    models: [{ value: "seedream-4.5",              label: "Seedream 4.5",      sub: "Scene structure" }, { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Layout"      }, { value: "openai-4o",   label: "OpenAI 4o",    sub: "Basic"       }] },
+    "product-edit":    { label: "Product Editing",    emoji: "📦", refMode: "single", bestModel: "flux-kontext-pro",          bestModelLabel: "Flux Kontext",    models: [{ value: "flux-kontext-pro",           label: "Flux Kontext",      sub: "Product specialist" }, { value: "flux-2-flex-image-to-image", label: "Flux 2 Flex", sub: "Backgrounds" }, { value: "qwen-z-image", label: "Qwen Z Image", sub: "Quick"       }] },
+    "text-to-image":   { label: "Text to Image",      emoji: "✍️", refMode: "text",   bestModel: "flux-2-flex-text-to-image", bestModelLabel: "Flux 2 Flex",     models: [{ value: "flux-2-flex-text-to-image", label: "Flux 2 Flex",       sub: "Fast"         }, { value: "seedream-v4",  label: "Seedream V4",  sub: "Quality"      }] },
+  };
+
+  const refModeBadge: Record<RefMode, { label: string; color: string }> = {
+    multi:  { label: "📸 Multi-Reference",  color: "bg-green-500/20 text-green-300 border-green-500/30" },
+    single: { label: "📸 Single Reference", color: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+    text:   { label: "📝 Text-Only",         color: "bg-gray-500/20 text-gray-300 border-gray-500/30" },
   };
 
   // ── Generate Image with Bubbles and Text ───────────────────────────────────────────────────────
@@ -2436,108 +2465,149 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
               
           {/* ── Image Generation ── */}
-          {canvasTool === "image" && (
-            <>
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+          {canvasTool === "image" && (() => {
+            const uc = USE_CASES[imageUseCase] ?? USE_CASES["character-swap"];
+            const badge = refModeBadge[uc.refMode];
+            const refSlots = uc.refMode === "multi" ? 3 : uc.refMode === "single" ? 1 : 0;
+            return (
+              <div className="p-3 space-y-3">
                 <div><h3 className="text-white font-bold text-sm">Image Generation</h3><p className="text-[10px] text-gray-500 mt-0.5">Generate images with AI models</p></div>
-                
-                <div className="space-y-2">
-                  <label className="text-[11px] text-gray-300 font-semibold">Prompt</label>
+
+                {/* Prompt */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Prompt</label>
                   <textarea
                     value={imageInpaintPrompt}
                     onChange={(e) => setImageInpaintPrompt(e.target.value)}
                     placeholder="Describe the image you want to generate..."
-                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 resize-none h-16 focus:outline-none focus:border-purple-500/50"
+                    className="w-full px-2.5 py-2 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-600 resize-none h-16 focus:outline-none focus:border-purple-500/50"
                   />
                 </div>
-                
-                <div className="space-y-2">
-                  <label className="text-[11px] text-gray-300 font-semibold">Model</label>
-                  <select
-                    value={imageInpaintModel}
-                    onChange={(e) => setImageInpaintModel(e.target.value as any)}
-                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-purple-500/50"
-                  >
-                    <option value="nano-banana">Nano Banana</option>
-                    <option value="flux-kontext-pro">Flux Kontext Pro</option>
-                    <option value="flux-fill">Flux Fill</option>
-                    <option value="openai-4o">OpenAI 4o</option>
-                    <option value="grok">Grok Imagine</option>
-                    <option value="qwen-z-image">Qwen Z Image</option>
-                    <option value="seedream-5.0-lite">Seedream 5.0 Lite</option>
-                    <option value="qwen">Qwen (Image Edit)</option>
-                    <option value="seedream-4.5">Seedream 4.5 (Text-to-Image)</option>
-                    <option value="flux-2-flex-image-to-image">Flux 2 Flex (Image-to-Image)</option>
-                    <option value="flux-2-flex-text-to-image">Flux 2 Flex (Text-to-Image)</option>
-                    <option value="seedream-v4">Seedream V4 (Text-to-Image)</option>
-                  </select>
-                </div>
-                
-                <div className="space-y-2">
-                  <label className="text-[11px] text-gray-300 font-semibold">Reference Images</label>
-                  <div className="grid grid-cols-3 gap-1">
-                    {[0, 1, 2].map((i) => (
-                      <div 
-                        key={i} 
-                        className="aspect-square bg-[#1a1d29] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-white/40 transition-colors relative group"
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*';
-                          input.onchange = (e) => {
-                            const file = (e.target as HTMLInputElement).files?.[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = (event) => {
-                                const dataUrl = event.target?.result as string;
-                                const newRefImages = [...imageReferenceImages];
-                                newRefImages[i] = dataUrl;
-                                setImageReferenceImages(newRefImages);
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                          };
-                          input.click();
-                        }}
-                      >
-                        {imageReferenceImages[i] ? (
-                          <>
-                            <img src={imageReferenceImages[i]} alt={`Reference ${i + 1}`} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <span className="text-white text-[8px] font-medium">Change</span>
-                            </div>
-                          </>
-                        ) : (
-                          <span className="text-[8px] text-gray-500">Ref {i + 1}</span>
-                        )}
-                      </div>
-                    ))}
+
+                {/* Use Case dropdown — pic3 style */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Use Case</label>
+                  <div className="relative">
+                    <select
+                      value={imageUseCase}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setImageUseCase(next);
+                        const nextUc = USE_CASES[next];
+                        if (nextUc) setImageInpaintModel(nextUc.bestModel);
+                      }}
+                      className="w-full px-3 py-2.5 bg-[#13131a] border border-white/10 rounded-xl text-[11px] text-white appearance-none cursor-pointer focus:outline-none focus:border-purple-500/50 hover:border-white/20 transition-colors"
+                    >
+                      {Object.entries(USE_CASES).map(([key, info]) => (
+                        <option key={key} value={key}>{info.emoji} {info.label}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg>
+                    </div>
                   </div>
+                  {/* Badge */}
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${badge.color}`}>
+                    {badge.label}
+                  </span>
                 </div>
-                
+
+                {/* Model dropdown — pic3 style with sub-label */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Model</label>
+                  <div className="relative">
+                    <select
+                      value={imageInpaintModel}
+                      onChange={(e) => setImageInpaintModel(e.target.value as typeof imageInpaintModel)}
+                      className="w-full px-3 py-2.5 bg-[#13131a] border border-white/10 rounded-xl text-[11px] text-white appearance-none cursor-pointer focus:outline-none focus:border-purple-500/50 hover:border-white/20 transition-colors"
+                    >
+                      {uc.models.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label} — {m.sub}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg>
+                    </div>
+                  </div>
+                  {/* Selected model sub-label hint */}
+                  <p className="text-[10px] text-gray-600">{uc.models.find(m => m.value === imageInpaintModel)?.sub ?? ""}</p>
+                </div>
+
+                {/* Reference Images — dynamic slots */}
+                {refSlots > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">
+                      Reference Images <span className="text-gray-600 normal-case font-normal">({refSlots} max)</span>
+                    </label>
+                    <div className={`grid gap-1.5 ${refSlots === 1 ? "grid-cols-1" : "grid-cols-3"}`}>
+                      {Array.from({ length: refSlots }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="aspect-square bg-[#13131a] border border-dashed border-white/15 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/40 transition-colors relative group"
+                          onClick={() => {
+                            const input = document.createElement("input");
+                            input.type = "file";
+                            input.accept = "image/*";
+                            input.onchange = (ev) => {
+                              const file = (ev.target as HTMLInputElement).files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const dataUrl = event.target?.result as string;
+                                  const updated = [...imageReferenceImages];
+                                  updated[i] = dataUrl;
+                                  setImageReferenceImages(updated);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            };
+                            input.click();
+                          }}
+                        >
+                          {imageReferenceImages[i] ? (
+                            <>
+                              <img src={imageReferenceImages[i]} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <span className="text-white text-[8px] font-medium">Change</span>
+                              </div>
+                              <button
+                                className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/80 rounded-full text-white text-[8px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                onClick={(ev) => { ev.stopPropagation(); const u = [...imageReferenceImages]; u[i] = ""; setImageReferenceImages(u); }}
+                              >✕</button>
+                            </>
+                          ) : (
+                            <span className="text-[9px] text-gray-600">+ Ref {i + 1}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Generate button */}
                 <button
-                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
+                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
                   disabled={!imageInpaintPrompt.trim() || imageIsInpainting}
                 >
-                  {imageIsInpainting ? (
-                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                  ) : "Generate Image"}
+                  {imageIsInpainting
+                    ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
+                    : "Generate Image"}
                 </button>
-                
+
                 {imageInpaintError && (
                   <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2">
                     <p className="text-[10px] text-red-300">{imageInpaintError}</p>
                   </div>
                 )}
-                
+
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
                   <span className="text-[10px] text-purple-300">
                     {imageIsInpainting ? "Generating image..." : imageGeneratedImages.length > 0 ? `${imageGeneratedImages.length} images generated` : "Ready to generate"}
                   </span>
                 </div>
               </div>
-            </>
-          )}
+            );
+          })()}
 
           {/* ── Crop ── */}
           {canvasTool === "crop" && (
