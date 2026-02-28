@@ -66,17 +66,21 @@ export function TransformControls({
 
 // ── ResizeHandles ──────────────────────────────────────────────────────────
 export function ResizeHandles({
-  isSelected, onResizeStart, onRotateStart, accentColor = "emerald",
+  isSelected, onResizeStart, onRotateStart, accentColor = "emerald", rotation = 0,
 }: {
   isSelected: boolean;
   onResizeStart: (handle: string, event: React.MouseEvent) => void;
   onRotateStart: (event: React.MouseEvent) => void;
   accentColor?: string;
+  rotation?: number;
 }) {
   if (!isSelected) return null;
   const col   = accentColor === "emerald" ? "#10b981" : accentColor === "purple" ? "#9333ea" : "#f97316";
   const colBg = accentColor === "emerald" ? "#34d399" : accentColor === "purple" ? "#a855f7" : "#fb923c";
   const shadow = `0 0 0 3px ${col}44, 0 2px 6px rgba(0,0,0,0.4)`;
+  
+  // Show rotation degree indicator when rotation is not 0
+  const showRotationIndicator = rotation !== undefined && rotation !== 0;
 
   return (
     <>
@@ -107,6 +111,23 @@ export function ResizeHandles({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
       </div>
+      
+      {/* Rotation degree indicator in center */}
+      {showRotationIndicator && (
+        <div 
+          className="absolute pointer-events-none flex items-center justify-center"
+          style={{
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            zIndex: 60
+          }}
+        >
+          <div className="px-2 py-1 bg-black/80 rounded text-xs text-white font-mono border border-white/20 backdrop-blur-sm">
+            {rotation}°
+          </div>
+        </div>
+      )}
     </>
   );
 }

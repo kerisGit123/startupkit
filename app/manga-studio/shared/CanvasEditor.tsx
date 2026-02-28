@@ -25,7 +25,7 @@ export function emptyCanvasState(): CanvasEditorState {
   return { bubbles: [], textElements: [], assetElements: [], assetLibrary: [], mask: [], undoStack: [], redoStack: [] };
 }
 
-export type CanvasActiveTool = "layers" | "bubbles" | "text" | "assets" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments";
+export type CanvasActiveTool = "layers" | "bubbles" | "text" | "elements" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments";
 
 export interface CanvasSelection {
   selectedBubbleId: string | null;
@@ -97,7 +97,7 @@ export function CanvasEditor({
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
   const [editingBubbleId, setEditingBubbleId] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset"; id: string } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas"; id?: string } | null>(null);
   const [copiedObject, setCopiedObject] = useState<{ type: "bubble" | "text" | "asset"; data: any } | null>(null);
 
   // Use controlled selection if provided, else internal
@@ -119,7 +119,8 @@ export function CanvasEditor({
   const panelBubbles = bubbles.filter(b => b.panelId === panelId && !hiddenObjectIds.has(b.id));
   const panelTexts = textElements.filter(t => t.panelId === panelId && !hiddenObjectIds.has(t.id));
   const panelAssets = assetElements.filter(a => a.panelId === panelId && !hiddenObjectIds.has(a.id));
-
+  
+  
   const getPos = (e: React.MouseEvent | MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -451,7 +452,7 @@ export function CanvasEditor({
         style={{ ...canvasStyle, cursor }}
         onMouseDown={handleMouseDown}
         onClick={e => { if (e.target === containerRef.current) { setSelection(null, null, null); } setCtxMenu(null); }}
-        onContextMenu={e => { if (e.target === containerRef.current) { e.preventDefault(); setCtxMenu(null); } }}
+        onContextMenu={e => { if (e.target === containerRef.current) { e.preventDefault(); e.stopPropagation(); const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return; setCtxMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, kind: "canvas" }); } }}
       >
         {imageUrl
           ? <img key={imageUrl} src={imageUrl} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" /> // eslint-disable-line @next/next/no-img-element
@@ -512,21 +513,39 @@ export function CanvasEditor({
           const lib = assetLibrary.find(l => l.id === a.assetId); if (!lib) return null;
           const isSel = selectedAssetId === a.id;
           return (
-            <div key={a.id} className={`absolute transition-all duration-200 ${isSel ? "drop-shadow-[0_0_12px_rgba(251,146,60,0.6)]" : ""}`} style={{ left: a.x, top: a.y, width: a.w, height: a.h, transform: `rotate(${a.rotation??0}deg) scaleX(${a.flipX?-1:1}) scaleY(${a.flipY?-1:1})`, transformOrigin: "center", zIndex: a.zIndex??2, cursor: "move", overflow: "visible" }}
+            <div key={a.id} className={`absolute ${dragRef.current?.id === a.id ? "transition-none" : "transition-all duration-200"} ${isSel ? "drop-shadow-[0_0_12px_rgba(251,146,60,0.6)]" : ""}`} style={{ 
+              left: a.x, 
+              top: a.y, 
+              width: a.w, 
+              height: a.h, 
+              transform: `rotate(${a.rotation??0}deg) scaleX(${a.flipX?-1:1}) scaleY(${a.flipY?-1:1})`, 
+              transformOrigin: "center", 
+              zIndex: a.zIndex??2, 
+              cursor: "move", 
+              overflow: "visible",
+              backgroundColor: 'rgba(255, 255, 255, 0.01)',
+              mixBlendMode: (dragRef.current?.id === a.id ? 'source-over' : 'normal') as any,
+              isolation: 'isolate',
+              willChange: dragRef.current?.id === a.id ? 'transform' : 'auto'
+            }}
               onMouseDown={e => { setSelection(null, null, a.id); startDrag("asset", a.id, e); }}
               onClick={e => { e.stopPropagation(); setSelection(null, null, a.id); }}
               onContextMenu={e => { setSelection(null, null, a.id); openCtxMenu(e, "asset", a.id); }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={lib.url} alt={lib.name} style={{ width:"100%", height:"100%", objectFit:"contain", pointerEvents:"none" }} />
-              {isSel && (<><ResizeHandles isSelected={isSel} accentColor="orange" onResizeStart={(h,e)=>startDrag("asset",a.id,e,"resize",h)} onRotateStart={e=>startRotate("asset",a.id,e)} /><PlaygroundActionBar 
-                onDuplicate={()=>duplicateAsset(a.id)} 
-                onDelete={()=>deleteAsset(a.id)} 
-                onFlipV={()=>patchAsset(a.id,{flipY:!a.flipY})} 
-                onFlipH={()=>patchAsset(a.id,{flipX:!a.flipX})}
-                onReset={()=>patchAsset(a.id,{rotation:0, flipX:false, flipY:false})}
-                rotation={a.rotation??0}
-              /></>)}
+              <img 
+                src={lib.url} 
+                alt={lib.name} 
+                style={{ 
+                  width:"100%", 
+                  height:"100%", 
+                  objectFit:"contain", 
+                  pointerEvents:"none",
+                  backgroundColor: 'transparent',
+                  mixBlendMode: 'normal'
+                }} 
+              />
+              {isSel && (<><ResizeHandles isSelected={isSel} accentColor="orange" rotation={a.rotation} onResizeStart={(h,e)=>startDrag("asset",a.id,e,"resize",h)} onRotateStart={e=>startRotate("asset",a.id,e)} /></>)}
             </div>
           );
         })}
@@ -536,7 +555,7 @@ export function CanvasEditor({
           const isSel = selectedTextId === t.id;
           const isEditingText = editingTextId === t.id;
           return (
-            <div key={t.id} className={`absolute transition-all duration-200 ${isSel ? "drop-shadow-[0_0_12px_rgba(168,85,247,0.6)]" : ""}`} style={{ left: t.x, top: t.y, width: t.w, height: t.h, transform: `rotate(${t.rotation??0}deg) scaleX(${t.flipX?-1:1}) scaleY(${t.flipY?-1:1})`, transformOrigin: "center", zIndex: t.zIndex??3, cursor: isEditingText ? "text" : (isSel ? "move" : "pointer"), backgroundColor: t.backgroundColor||"transparent", overflow: "visible" }}
+            <div key={t.id} className={`absolute ${dragRef.current?.id === t.id ? "transition-none" : "transition-all duration-200"} ${isSel ? "drop-shadow-[0_0_12px_rgba(168,85,247,0.6)]" : ""}`} style={{ left: t.x, top: t.y, width: t.w, height: t.h, transform: `rotate(${t.rotation??0}deg) scaleX(${t.flipX?-1:1}) scaleY(${t.flipY?-1:1})`, transformOrigin: "center", zIndex: t.zIndex??3, cursor: isEditingText ? "text" : (isSel ? "move" : "pointer"), backgroundColor: t.backgroundColor||"transparent", overflow: "visible", mixBlendMode: (dragRef.current?.id === t.id ? 'source-over' : 'normal') as any, isolation: 'isolate', willChange: dragRef.current?.id === t.id ? 'transform' : 'auto' }}
               onMouseDown={e => {
                 if (isEditingText) { e.stopPropagation(); return; }
                 e.stopPropagation();
@@ -572,15 +591,7 @@ export function CanvasEditor({
               >{t.text}</div>
               {isSel && !isEditingText && (
                 <>
-                  <ResizeHandles isSelected={isSel} accentColor="purple" onResizeStart={(h,e)=>startDrag("text",t.id,e,"resize",h)} onRotateStart={e=>startRotate("text",t.id,e)} />
-                  <PlaygroundActionBar 
-                    onDuplicate={()=>duplicateText(t.id)} 
-                    onDelete={()=>deleteText(t.id)} 
-                    onFlipV={()=>patchText(t.id,{flipY:!t.flipY})} 
-                    onFlipH={()=>patchText(t.id,{flipX:!t.flipX})}
-                    onReset={()=>patchText(t.id,{rotation:0, flipX:false, flipY:false})}
-                    rotation={t.rotation??0}
-                  />
+                  <ResizeHandles isSelected={isSel} accentColor="purple" rotation={t.rotation} onResizeStart={(h,e)=>startDrag("text",t.id,e,"resize",h)} onRotateStart={e=>startRotate("text",t.id,e)} />
                 </>
               )}
             </div>
@@ -625,11 +636,15 @@ export function CanvasEditor({
             
             const nl = Math.hypot(rotatedDx, rotatedDy), ux = rotatedDx / nl, uy = rotatedDy / nl;
             
+            // Use the same color logic as regular bubbles
+            const fillColor = b.flippedColors ? "#1a1a2e" : (b.bubbleType === "whisper" ? "rgba(240,240,255,0.85)" : "rgba(255,255,255,0.97)");
+            const strokeColor = b.flippedColors ? "rgba(255,255,255,0.9)" : "#1a1a2e";
+            
             return (
               <g key={`tc-${b.id}`}>
-                <circle cx={transformX + ux * 14} cy={transformY + uy * 14} r={10} fill="#fff" stroke="#1a1a1a" strokeWidth={2} />
-                <circle cx={transformX + ux * 36} cy={transformY + uy * 36} r={7} fill="#fff" stroke="#1a1a1a" strokeWidth={2} />
-                <circle cx={transformX + ux * 52} cy={transformY + uy * 52} r={4.5} fill="#fff" stroke="#1a1a1a" strokeWidth={2} />
+                <circle cx={transformX + ux * 14} cy={transformY + uy * 14} r={10} fill={fillColor} stroke={strokeColor} strokeWidth={2} />
+                <circle cx={transformX + ux * 36} cy={transformY + uy * 36} r={7} fill={fillColor} stroke={strokeColor} strokeWidth={2} />
+                <circle cx={transformX + ux * 52} cy={transformY + uy * 52} r={4.5} fill={fillColor} stroke={strokeColor} strokeWidth={2} />
               </g>
             );
           })}
@@ -672,11 +687,14 @@ export function CanvasEditor({
           const wSw = 3.5, wStroke = "#333", wDash = "10 8";
 
           return (
-            <div key={b.id} className={`absolute transition-all duration-200 ${isSel ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.6)]" : ""}`}
+            <div key={b.id} className={`absolute ${dragRef.current?.id === b.id ? "transition-none" : "transition-all duration-200"} ${isSel ? "drop-shadow-[0_0_12px_rgba(16,185,129,0.6)]" : ""}`}
               style={{ left: b.x, top: b.y, width: b.w, height: b.h,
                 filter: isSel ? "drop-shadow(0 0 12px rgba(16,185,129,0.6))" : "drop-shadow(0 2px 8px rgba(0,0,0,0.15))",
                 transform: `rotate(${b.rotation||0}deg) scaleX(${b.flipX?-1:1}) scaleY(${b.flipY?-1:1})`,
-                transformOrigin: "center", zIndex: b.zIndex??4, overflow: "visible" }}
+                transformOrigin: "center", zIndex: b.zIndex??4, overflow: "visible",
+                mixBlendMode: (dragRef.current?.id === b.id ? 'source-over' : 'normal') as any,
+                isolation: 'isolate',
+                willChange: dragRef.current?.id === b.id ? 'transform' : 'auto' }}
               onContextMenu={ev => { if (!isEditingBubble) { setSelection(b.id, null, null); openCtxMenu(ev, "bubble", b.id); } }}
             >
               {/* SVG shape — click/drag to select/move */}
@@ -767,119 +785,285 @@ export function CanvasEditor({
 
               {/* Resize handles + ActionBar only when selected and not editing */}
               {!isEditingBubble && (
-                <ResizeHandles isSelected={isSel} accentColor="emerald"
+                <ResizeHandles isSelected={isSel} accentColor="emerald" rotation={b.rotation}
                   onResizeStart={(h,ev) => { setSelection(b.id, null, null); startDrag("bubble",b.id,ev,"resize",h); }}
                   onRotateStart={ev => { setSelection(b.id, null, null); startRotate("bubble",b.id,ev); }}
                 />
               )}
-              {isSel && !isEditingBubble && (
-                <PlaygroundActionBar 
-                  onDuplicate={()=>duplicateBubble(b.id)} 
-                  onDelete={()=>deleteBubble(b.id)} 
-                  onFlipV={()=>patchBubble(b.id,{flipY:!b.flipY})} 
-                  onFlipH={()=>patchBubble(b.id,{flipX:!b.flipX})}
-                  onReset={()=>patchBubble(b.id,{rotation:0, flipX:false, flipY:false})}
-                  rotation={b.rotation||0}
-                />
-              )}
-            </div>
+                          </div>
           );
         })}
         {/* Context menu */}
-        {ctxMenu && (
-          <div
-            className="absolute z-200 bg-[#1a1a24] border border-white/15 rounded-xl shadow-2xl py-1 min-w-[190px]"
-            style={{ left: ctxMenu.x, top: ctxMenu.y }}
-            onMouseDown={e => e.stopPropagation()}
-          >
-            {([
-              { label: "Bring Forward",  shortcut: "Ctrl+]",     icon: "M12 5l7 7-7 7M5 5l7 7-7 7",      action: () => { bringForward(ctxMenu.kind, ctxMenu.id); setCtxMenu(null); } },
-              { label: "Bring to Front", shortcut: "Ctrl+Alt+]", icon: "M5 3h14M12 7l7 7-7 7M5 7l7 7-7 7", action: () => { bringToFront(ctxMenu.kind, ctxMenu.id); setCtxMenu(null); } },
-              { label: "Send Backward",  shortcut: "Ctrl+[",     icon: "M12 19l-7-7 7-7M19 19l-7-7 7-7", action: () => { sendBackward(ctxMenu.kind, ctxMenu.id); setCtxMenu(null); } },
-              { label: "Send to Back",   shortcut: "Ctrl+Alt+[", icon: "M19 21H5M12 17l-7-7 7-7M19 17l-7-7 7-7", action: () => { sendToBack(ctxMenu.kind, ctxMenu.id); setCtxMenu(null); } },
-            ] as { label: string; shortcut: string; icon: string; action: () => void }[]).map(item => (
-              <button key={item.label}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
-                onClick={item.action}
-              >
-                <div className="flex items-center gap-2.5">
-                  <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={item.icon} />
+        {ctxMenu && (() => {
+          // Calculate smart positioning to prevent clipping
+          const menuWidth = 200;
+          const menuHeight = ctxMenu.kind === "canvas" ? 400 : 300; // Approximate heights - increased for action menus
+          const containerRect = containerRef.current?.getBoundingClientRect();
+          const outerRect = outerRef.current?.getBoundingClientRect();
+          
+          let adjustedX = ctxMenu.x;
+          let adjustedY = ctxMenu.y;
+          
+          if (containerRect && outerRect) {
+            // Calculate the actual available width (outer container minus any right panel)
+            const availableWidth = outerRect.width;
+            const availableHeight = outerRect.height;
+            
+            // Check if menu would go beyond right edge of available space
+            // If so, position it to the left of the cursor instead of to the right
+            if (ctxMenu.x + menuWidth > availableWidth) {
+              adjustedX = ctxMenu.x - menuWidth - 10; // Position to the left of cursor
+              
+              // If that would go beyond the left edge, clamp to left with padding
+              if (adjustedX < 10) {
+                adjustedX = 10;
+              }
+            }
+            
+            // Check if menu would go beyond bottom edge of available space
+            // Add extra margin for bottom panel (approximately 180px for panel + padding)
+            const bottomPanelHeight = 180; // Approximate bottom panel height + safety margin
+            const safeBottomHeight = availableHeight - bottomPanelHeight;
+            
+            if (ctxMenu.y + menuHeight > safeBottomHeight) {
+              // Position menu above the cursor instead of below
+              adjustedY = ctxMenu.y - menuHeight - 10; // Position above cursor
+              
+              // If that would go above the top edge, position at top with padding
+              if (adjustedY < 10) {
+                adjustedY = 10;
+              }
+            }
+            
+            // Ensure menu doesn't go beyond left edge (double-check)
+            if (adjustedX < 10) {
+              adjustedX = 10;
+            }
+            
+            // Ensure menu doesn't go beyond right edge (final check)
+            if (adjustedX + menuWidth > availableWidth) {
+              adjustedX = availableWidth - menuWidth - 10;
+            }
+          }
+          
+          return (
+            <div
+              className="absolute z-200 bg-[#1a1a24] border border-white/15 rounded-xl shadow-2xl py-2 w-[200px]"
+              style={{ left: adjustedX, top: adjustedY }}
+              onMouseDown={e => e.stopPropagation()}
+            >
+            {ctxMenu.kind === "canvas" ? (
+              // Canvas context menu - creation options
+              <>
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
+                  onClick={() => {
+                    const textId = makeId();
+                    onStateChange({
+                      ...state,
+                      textElements: [...state.textElements, {
+                        id: textId,
+                        panelId: panelId,
+                        x: ctxMenu.x - 50,
+                        y: ctxMenu.y - 15,
+                        w: 100,
+                        h: 30,
+                        text: "New Text",
+                        fontSize: 16,
+                        fontWeight: "normal",
+                        fontStyle: "normal",
+                        fontFamily: "Arial",
+                        color: "#000000",
+                        backgroundColor: "transparent",
+                        zIndex: 3
+                      }]
+                    });
+                    setSelection(null, textId, null);
+                    setCtxMenu(null);
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-[13px] font-medium">Text Element</span>
+                  </div>
+                </button>
+                
+                <div className="mx-3 my-1 h-px bg-white/10" />
+                
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
+                  onClick={() => {
+                    const bubbleId = makeId();
+                    onStateChange({
+                      ...state,
+                      bubbles: [...state.bubbles, {
+                        id: bubbleId,
+                        panelId: panelId,
+                        x: ctxMenu.x - 100,
+                        y: ctxMenu.y - 50,
+                        w: 200,
+                        h: 100,
+                        text: "Speech",
+                        bubbleType: "speech" as const,
+                        tailMode: "auto" as const,
+                        tailDir: "bottom-left" as const,
+                        tailX: 50,
+                        tailY: 130,
+                        autoFitFont: true,
+                        fontSize: 15,
+                        flippedColors: false,
+                        rotation: 0,
+                        flipX: false,
+                        flipY: false,
+                        zIndex: 4
+                      }]
+                    });
+                    setSelection(bubbleId, null, null);
+                    setCtxMenu(null);
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    <span className="text-[13px] font-medium">Bubble Text</span>
+                  </div>
+                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <span className="text-[12px] font-medium">{item.label}</span>
+                </button>
+                
+                {/* Bubble sub-menu */}
+                <div className="pl-8 pr-4 py-2">
+                  <div className="text-[11px] text-gray-500 font-medium mb-2">Bubble Types:</div>
+                  {[
+                    { type: "speech", label: "Speech" },
+                    { type: "speechRough", label: "Speech (Rough)" },
+                    { type: "thought", label: "Thought" },
+                    { type: "shout", label: "Shout" },
+                    { type: "whisper", label: "Whisper" },
+                    { type: "sfx", label: "Sfx" },
+                    { type: "rectRound", label: "RndRect" },
+                    { type: "rect", label: "Rect" },
+                    { type: "oval", label: "Oval" }
+                  ].map(({ type, label }) => (
+                    <button
+                      key={type}
+                      className="w-full text-left px-3 py-2 text-[12px] text-gray-400 hover:text-white hover:bg-white/5 rounded transition-colors"
+                      onClick={() => {
+                        const bubbleId = makeId();
+                        onStateChange({
+                          ...state,
+                          bubbles: [...state.bubbles, {
+                            id: bubbleId,
+                            panelId: panelId,
+                            x: ctxMenu.x - 100,
+                            y: ctxMenu.y - 50,
+                            w: 200,
+                            h: 100,
+                            text: label,
+                            bubbleType: type as any,
+                            tailMode: "auto" as const,
+                            tailDir: "bottom-left" as const,
+                            tailX: 50,
+                            tailY: 130,
+                            autoFitFont: true,
+                            fontSize: 15,
+                            flippedColors: false,
+                            rotation: 0,
+                            flipX: false,
+                            flipY: false,
+                            zIndex: 4
+                          }]
+                        });
+                        setSelection(bubbleId, null, null);
+                        setCtxMenu(null);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-                <span className="text-[10px] text-gray-500 font-mono ml-4">{item.shortcut}</span>
-              </button>
-            ))}
-          </div>
-        )}
+              </>
+            ) : (
+              // Element context menu - editing options
+              ([
+                { label: "Duplicate",      shortcut: "Ctrl+D",     icon: "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z", action: () => { 
+                  if (ctxMenu.id) {
+                    if (ctxMenu.kind === "asset") duplicateAsset(ctxMenu.id);
+                    else if (ctxMenu.kind === "text") duplicateText(ctxMenu.id);
+                    else if (ctxMenu.kind === "bubble") duplicateBubble(ctxMenu.id);
+                  }
+                  setCtxMenu(null); 
+                } },
+                { label: "Reset Position", shortcut: "Ctrl+R",     icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15", action: () => { 
+                  if (ctxMenu.id) {
+                    if (ctxMenu.kind === "asset") patchAsset(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
+                    else if (ctxMenu.kind === "text") patchText(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
+                    else if (ctxMenu.kind === "bubble") patchBubble(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
+                  }
+                  setCtxMenu(null); 
+                } },
+                { label: "Flip Horizontal", shortcut: "H",         icon: "M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4", action: () => { 
+                  if (ctxMenu.id) {
+                    if (ctxMenu.kind === "asset") {
+                      const asset = assetElements.find(a => a.id === ctxMenu.id);
+                      if (asset) patchAsset(ctxMenu.id, { flipX: !asset.flipX });
+                    } else if (ctxMenu.kind === "text") {
+                      const text = textElements.find(t => t.id === ctxMenu.id);
+                      if (text) patchText(ctxMenu.id, { flipX: !text.flipX });
+                    } else if (ctxMenu.kind === "bubble") {
+                      const bubble = bubbles.find(b => b.id === ctxMenu.id);
+                      if (bubble) patchBubble(ctxMenu.id, { flipX: !bubble.flipX });
+                    }
+                  }
+                  setCtxMenu(null); 
+                } },
+                { label: "Flip Vertical",   shortcut: "V",         icon: "M7 16V8m0 0l3 3m-3-3l-3 3m14 8V8m0 0l-3 3m3-3l3 3", action: () => { 
+                  if (ctxMenu.id) {
+                    if (ctxMenu.kind === "asset") {
+                      const asset = assetElements.find(a => a.id === ctxMenu.id);
+                      if (asset) patchAsset(ctxMenu.id, { flipY: !asset.flipY });
+                    } else if (ctxMenu.kind === "text") {
+                      const text = textElements.find(t => t.id === ctxMenu.id);
+                      if (text) patchText(ctxMenu.id, { flipY: !text.flipY });
+                    } else if (ctxMenu.kind === "bubble") {
+                      const bubble = bubbles.find(b => b.id === ctxMenu.id);
+                      if (bubble) patchBubble(ctxMenu.id, { flipY: !bubble.flipY });
+                    }
+                  }
+                  setCtxMenu(null); 
+                } },
+                null, // Divider
+                { label: "Bring Forward",  shortcut: "Ctrl+]",     icon: "M12 5l7 7-7 7M5 5l7 7-7 7",      action: () => { if (ctxMenu.id) { bringForward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+                { label: "Bring to Front", shortcut: "Ctrl+Alt+]", icon: "M5 3h14M12 7l7 7-7 7M5 7l7 7-7 7", action: () => { if (ctxMenu.id) { bringToFront(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+                { label: "Send Backward",  shortcut: "Ctrl+[",     icon: "M12 19l-7-7 7-7M19 19l-7-7 7-7", action: () => { if (ctxMenu.id) { sendBackward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+                { label: "Send to Back",   shortcut: "Ctrl+Alt+[", icon: "M19 21H5M12 17l-7-7 7-7M19 17l-7-7 7-7", action: () => { if (ctxMenu.id) { sendToBack(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+              ] as ({ label: string; shortcut: string; icon: string; action: () => void } | null)[]).map((item, index) => {
+                if (item === null) {
+                  return <div key={`divider-${index}`} className="mx-3 my-1 h-px bg-white/10" />;
+                }
+                return (
+                  <button key={item.label}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
+                    onClick={item.action}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={item.icon} />
+                      </svg>
+                      <span className="text-[13px] font-medium">{item.label}</span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 font-mono ml-4">{item.shortcut}</span>
+                  </button>
+                );
+              }))}
+            </div>
+          );
+        })()}
       </div>
-    </div>
-  );
-}
-
-// ── PlaygroundActionBar — Transformation controls with optional duplicate/delete ──────────────
-function PlaygroundActionBar({ onDuplicate, onDelete, onFlipV, onFlipH, onReset, rotation }: {
-  onDuplicate?: () => void;
-  onDelete?: () => void;
-  onFlipV?: () => void;
-  onFlipH?: () => void;
-  onReset?: () => void;
-  rotation?: number;
-}) {
-  const btn = "w-9 h-9 bg-[#1a1a1f] hover:bg-[#2a2a2f] rounded-xl flex items-center justify-center text-white transition-all duration-200 border border-white/10 hover:shadow-lg hover:border-white/20 active:scale-95 active:shadow-sm";
-  return (
-    <div className="absolute flex gap-1.5 z-50"
-      style={{ 
-        top: -50, 
-        left: "50%", 
-        transform: "translateX(-50%)", 
-        background: "rgba(255,255,255,0.08)", 
-        backdropFilter: "blur(12px) saturate(180%)", 
-        borderRadius: 12, 
-        padding: "8px 10px", 
-        boxShadow: "0 8px 32px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1)", 
-        border: "1px solid rgba(255,255,255,0.2)", 
-        whiteSpace: "nowrap"
-      }}
-      onMouseDown={e => e.stopPropagation()}
-    >
-      {onDelete && (
-        <button className={btn} title="Delete (Delete/Backspace)" onClick={e => { e.stopPropagation(); onDelete(); }}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-        </button>
-      )}
-      {onDuplicate && (
-        <button className={btn} title="Duplicate (Ctrl+C → Ctrl+V)" onClick={e => { e.stopPropagation(); onDuplicate(); }}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-        </button>
-      )}
-      {(onDelete || onDuplicate) && (onReset || rotation !== undefined) && (
-        <div className="w-px h-5 bg-white/20" />
-      )}
-      {onReset && (
-        <button className={btn} title="Reset Transform" onClick={e => { e.stopPropagation(); onReset(); }}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-        </button>
-      )}
-      {rotation !== undefined && (
-        <div className="px-2 py-1 bg-[#111] rounded text-xs text-gray-300 font-mono border border-white/10">
-          {rotation}°
-        </div>
-      )}
-      {(onReset || rotation !== undefined) && (onFlipV || onFlipH) && (
-        <div className="w-px h-5 bg-white/20" />
-      )}
-      {onFlipV && (
-        <button className={btn} title="Flip Vertical (V)" onClick={e => { e.stopPropagation(); onFlipV(); }}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 12h16M12 4l-4 4h8l-4-4zm0 16l4-4H8l4 4z" /></svg>
-        </button>
-      )}
-      {onFlipH && (
-        <button className={btn} title="Flip Horizontal (H)" onClick={e => { e.stopPropagation(); onFlipH(); }}>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16M4 12l4-4v8l-4-4zm16 0l-4 4V8l4 4z" /></svg>
-        </button>
-      )}
     </div>
   );
 }

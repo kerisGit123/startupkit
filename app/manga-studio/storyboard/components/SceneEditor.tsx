@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
-  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Image as ImageIcon, MessageSquare,
+  ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, MessageSquare,
   Mic, List, MoreHorizontal, Check, X, Send,
   Pencil, ZoomIn, ZoomOut, Play, Plus, Upload, Tag,
   Layers, Type, Paintbrush, Eraser, Eye, EyeOff, Trash2, Square,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import RectangleInpaintPanel from "./RectangleInpaintPanel";
+import { BrushInpaintPanel } from "./BrushInpaint";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
 import { TAG_COLORS } from "../constants";
 import {
@@ -28,7 +29,6 @@ interface SceneEditorProps {
   onClose: () => void;
   onShotsChange: (shots: Shot[]) => void;
 }
-
 
 export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: SceneEditorProps) {
   const [activeShotId, setActiveShotId] = useState(initialShotId);
@@ -57,8 +57,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Image tab independent state
   const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
   const [imageInpaintPrompt, setImageInpaintPrompt] = useState("");
-  const [imageUseCase, setImageUseCase] = useState<string>("composition-objects");
-  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "nano-banana-2" | "nano-banana-edit" | "nano-banana-pro" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "gpt-image" | "grok" | "grok-text" | "qwen-z-image" | "qwen" | "qwen-text" | "seedream-5.0-lite" | "seedream-5.0-lite-text" | "seedream-5.0-lite-image" | "seedream-4.5" | "seedream-v4" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "flux-2-pro-image-to-image" | "flux-2-pro-text-to-image">("nano-banana-edit");
+  const [imageUseCase, setImageUseCase] = useState<string>("image-composition");
+  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "nano-banana-2" | "nano-banana-edit" | "nano-banana-pro" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "gpt-image" | "grok" | "grok-text" | "qwen-z-image" | "qwen" | "qwen-text" | "seedream-5.0-lite" | "seedream-5.0-lite-text" | "seedream-5.0-lite-image" | "seedream-4.5" | "seedream-v4" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "flux-2-pro-image-to-image" | "flux-2-pro-text-to-image" | "ideogram-reframe" | "character-remix" | "topaz-upscale">("nano-banana-edit");
   const [imageRectangle, setImageRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [imageIsRectangleVisible, setImageIsRectangleVisible] = useState(true);
@@ -80,7 +80,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [showKIEModal, setShowKIEModal] = useState(false);
 
   // ── Canvas tool panel state ────────────────────────────────────────────────
-  const [canvasTool, setCanvasTool] = useState<CanvasTool>("layers");
+  const [canvasTool, setCanvasTool] = useState<CanvasTool>("elements");
   const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -88,7 +88,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [newBubbleType, setNewBubbleType] = useState<BubbleType>("speech");
   const [newTextContent, setNewTextContent] = useState("test...");
   const [newTextSize, setNewTextSize] = useState(16);
-  const [newTextColor, setNewTextColor] = useState("#ffffff");
+  const [newTextColor, setNewTextColor] = useState("#000000");
+  
+  // Collapsible property cards state
+  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
   const [maskBrushSize, setMaskBrushSize] = useState(20);
   const [maskOpacity, setMaskOpacity] = useState(0.45);
   const [isEraser, setIsEraser] = useState(false);
@@ -117,6 +120,18 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       assetElements: prev.assetElements.filter(a => a.id !== id),
     }));
     if (selectedLayerId === id) setSelectedLayerId(null);
+  };
+
+  const toggleCardCollapsed = (cardId: string) => {
+    setCollapsedCards(prev => {
+      const next = new Set(prev);
+      if (next.has(cardId)) {
+        next.delete(cardId);
+      } else {
+        next.add(cardId);
+      }
+      return next;
+    });
   };
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
@@ -234,12 +249,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
   };
 
-  const allLayers = [
-    ...panelBubbles.map(b => ({ id: b.id, label: `Bubble: ${b.text.slice(0, 12)}`, color: "emerald", type: "bubble" as const, zIndex: b.zIndex ?? 0 })),
-    ...panelTexts.map(t => ({ id: t.id, label: `Text: ${t.text.slice(0, 12)}`, color: "purple", type: "text" as const, zIndex: t.zIndex ?? 0 })),
-    ...panelAssets.map(a => { const lib = canvasState.assetLibrary.find(l => l.id === a.assetId); return { id: a.id, label: `Asset: ${lib?.name.slice(0, 12) ?? a.id}`, color: "orange", type: "asset" as const, zIndex: a.zIndex ?? 0 }; }),
-  ].sort((a, b) => b.zIndex - a.zIndex); // Sort by z-index (highest at top)
-
+  
   const activeIdx = shots.findIndex(s => s.id === activeShotId);
   const activeShot = shots[activeIdx];
 
@@ -702,22 +712,22 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       models: [
         { value: "flux-2-flex-image-to-image", label: "Flux 2 Flex", sub: "Specialist" },  
         { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, 
-        { value: "gpt-image", label: "GPT Image 1.5", sub: "Budget" }
+        { value: "gpt-image", label: "GPT Image 1.5", sub: "Reliable" },
+        { value: "ideogram-reframe", label: "Ideogram Reframe", sub: "Resize expert" },
+        { value: "character-remix", label: "Character Remix", sub: "Character expert" }
       ] 
     },
- 
-    "composition-objects": { 
-      label: "Composition & Objects", 
-      emoji: "📐", 
+    "image-composition": { 
+      label: "Image Composition", 
+      emoji: "🎨", 
       refMode: "multi", 
       bestModel: "seedream-5.0-lite-image",             
       bestModelLabel: "Seedream 5 Lite",    
       models: [
-        { value: "seedream-5.0-lite-image", label: "Seedream 5 Lite", sub: "Spatial expert" }, 
-        { value: "nano-banana-2", label: "Nano Banana 2", sub: "Enhanced" },
-        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Layout" }, 
-        { value: "gpt-image", label: "GPT Image 1.5", sub: "Style expert 1:1" },
-        { value: "qwen-z-image", label: "Qwen Image Edit", sub: "Precise" }
+        { value: "seedream-5.0-lite-image", label: "Seedream 5 Lite", sub: "Multi-reference expert" }, 
+        { value: "nano-banana-2", label: "Nano Banana 2", sub: "Google search integrated" },
+        { value: "flux-kontext-pro", label: "Flux Kontext Pro", sub: "Multi-reference expert" },
+        { value: "gpt-image", label: "GPT Image 1.5", sub: "World knowledge" }
       ] 
     },
     "text-to-image": { 
@@ -874,6 +884,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       captureCanvas.width  = cssW;
       captureCanvas.height = cssH;
 
+      // Clear canvas with white background to prevent blue screen
+      captureCtx.fillStyle = '#ffffff';
+      captureCtx.fillRect(0, 0, cssW, cssH);
+
       // Draw background image with object-contain behavior to prevent stretching
       const imgRatio = img.naturalWidth / img.naturalHeight;
       const containerRatio = cssW / cssH;
@@ -1003,7 +1017,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           const bImg = new Image();
           bImg.onload = () => {
             captureCtx.save();
-            captureCtx.translate(b.x + imageOffsetX + b.w / 2, b.y + imageOffsetY + b.h / 2);
+            captureCtx.translate(b.x + b.w / 2, b.y + b.h / 2);
             captureCtx.rotate(((b.rotation || 0) * Math.PI) / 180);
             captureCtx.scale(b.flipX ? -1 : 1, b.flipY ? -1 : 1);
             captureCtx.drawImage(bImg, -b.w / 2 - pad, -b.h / 2 - pad, svgW, svgH);
@@ -1045,7 +1059,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
         // Bubble text — raw CSS coords
         captureCtx.save();
-        captureCtx.translate(b.x + imageOffsetX + b.w / 2, b.y + imageOffsetY + b.h / 2);
+        captureCtx.translate(b.x + b.w / 2, b.y + b.h / 2);
         captureCtx.rotate(((b.rotation || 0) * Math.PI) / 180);
         captureCtx.scale(b.flipX ? -1 : 1, b.flipY ? -1 : 1);
         const fontWeight = ["sfx", "shout"].includes(b.bubbleType) ? 900 : 400;
@@ -1067,6 +1081,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         .filter(a => a.panelId === activeShotId)
         .sort((a, b) => (a.zIndex ?? 2) - (b.zIndex ?? 2));
 
+      // Reset composite operation before drawing assets
+      captureCtx.globalCompositeOperation = 'source-over';
+
       for (const a of assetElements) {
         const libItem = canvasState.assetLibrary.find(lib => lib.id === a.assetId);
         if (!libItem?.url) continue;
@@ -1084,17 +1101,35 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 reader.onerror = reject;
                 reader.readAsDataURL(blob);
               });
+            } else {
+              console.warn("Failed to fetch asset image, using original URL");
             }
-          } catch { /* use original url */ }
+          } catch (error) {
+            console.warn("Error fetching asset image:", error);
+          }
         }
 
         await new Promise<void>((resolve) => {
           const aImg = new Image();
+          
+          // Set crossOrigin to handle CORS issues
+          aImg.crossOrigin = 'anonymous';
+          
           aImg.onload = () => {
             captureCtx.save();
-            captureCtx.translate(a.x + imageOffsetX + a.w / 2, a.y + imageOffsetY + a.h / 2);
+            
+            // Set composite operation for proper transparency handling
+            captureCtx.globalCompositeOperation = 'source-over';
+            
+            // Create clipping path to prevent drawing outside asset bounds
+            captureCtx.beginPath();
+            captureCtx.rect(a.x, a.y, a.w, a.h);
+            captureCtx.clip();
+            
+            captureCtx.translate(a.x + a.w / 2, a.y + a.h / 2);
             captureCtx.rotate(((a.rotation || 0) * Math.PI) / 180);
             captureCtx.scale(a.flipX ? -1 : 1, a.flipY ? -1 : 1);
+            
             // Preserve aspect ratio like CanvasEditor's objectFit:"contain"
             const imgRatio = aImg.naturalWidth / aImg.naturalHeight;
             const boundRatio = a.w / a.h;
@@ -1114,11 +1149,30 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               drawY = -a.h / 2;
             }
             
+            // Add a subtle background to prevent blue screen when overlapping
+            if (drawW < a.w || drawH < a.h) {
+              // Fill the bounds with a neutral background when image doesn't fill the entire area
+              captureCtx.fillStyle = 'rgba(245, 245, 245, 0.05)';
+              captureCtx.fillRect(-a.w / 2, -a.h / 2, a.w, a.h);
+            }
+            
             captureCtx.drawImage(aImg, drawX, drawY, drawW, drawH);
             captureCtx.restore();
             resolve();
           };
-          aImg.onerror = () => resolve();
+          
+          aImg.onerror = (error) => {
+            console.warn('Failed to load asset image:', error);
+            // Draw a placeholder rectangle when image fails to load
+            captureCtx.save();
+            captureCtx.fillStyle = 'rgba(200, 200, 200, 0.3)';
+            captureCtx.fillRect(a.x, a.y, a.w, a.h);
+            captureCtx.strokeStyle = 'rgba(150, 150, 150, 0.5)';
+            captureCtx.strokeRect(a.x, a.y, a.w, a.h);
+            captureCtx.restore();
+            resolve();
+          };
+          
           aImg.src = assetUrl;
         });
       }
@@ -1131,7 +1185,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       textElements.forEach(text => {
         captureCtx.save();
         // Translate to top-left corner (like CanvasEditor div positioning)
-        captureCtx.translate(text.x + imageOffsetX, text.y + imageOffsetY + 7);
+        captureCtx.translate(text.x, text.y + 7);
         captureCtx.rotate(((text.rotation || 0) * Math.PI) / 180);
         captureCtx.scale(text.flipX ? -1 : 1, text.flipY ? -1 : 1);
 
@@ -2512,10 +2566,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         {/* Right: vertical icon strip */}
         <div className="w-[52px] border-l border-white/6 bg-[#0a0a0f] flex flex-col items-center py-3 gap-0.5 shrink-0">
           {([
-            { id: "layers"   as CanvasTool, Icon: Layers,       label: "Layers",   color: "white"   },
-            { id: "bubbles"  as CanvasTool, Icon: MessageSquare, label: "Bubbles",  color: "emerald" },
-            { id: "text"     as CanvasTool, Icon: Type,          label: "Text",     color: "purple"  },
-            { id: "assets"   as CanvasTool, Icon: ImageIcon,     label: "Asset",    color: "orange"  },
+            { id: "elements" as CanvasTool, Icon: Layers,       label: "Elements", color: "white"   },
             { id: "inpaint"  as CanvasTool, Icon: Paintbrush,    label: "Inpaint",  color: "blue"    },
             { id: "rectInpaint" as CanvasTool, Icon: Square,       label: "Rect",     color: "cyan"   },
             { id: "image"    as CanvasTool, Icon: ImageIcon,     label: "Image",    color: "purple"  },
@@ -2543,162 +2594,254 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         {/* Right: tool content panel */}
         <div className="w-60 border-l border-white/6 flex flex-col bg-[#111118] shrink-0 overflow-y-auto">
 
-          {/* ── Layers ── */}
-          {canvasTool === "layers" && (
-            <div className="p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-white text-xs font-bold">All Objects</span>
-                  <span className="text-gray-500 text-[10px] font-mono">{allLayers.length}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => {
-                    // Reset all transformations for all objects
-                    setCanvasState(prev => ({
-                      ...prev,
-                      bubbles: prev.bubbles.map(b => ({ ...b, rotation: 0, flipX: false, flipY: false })),
-                      textElements: prev.textElements.map(t => ({ ...t, rotation: 0, flipX: false, flipY: false })),
-                      assetElements: prev.assetElements.map(a => ({ ...a, rotation: 0, flipX: false, flipY: false })),
-                    }));
-                  }} className="text-[10px] text-gray-400 hover:text-blue-400 transition flex items-center gap-1" title="Reset All Transformations">
-                    <RotateCcw className="w-3 h-3" />
-                    Reset
-                  </button>
-                  <button onClick={toggleAllVisibility} className="text-[10px] text-gray-400 hover:text-gray-200 transition flex items-center gap-1">
-                    {[...panelBubbles, ...panelTexts, ...panelAssets].every(o => hiddenIds.has(o.id)) ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                    {[...panelBubbles, ...panelTexts, ...panelAssets].every(o => hiddenIds.has(o.id)) ? "Show All" : "Hide All"}
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-1">
-                {allLayers.length === 0 && <div className="text-center py-8 text-gray-600 text-[10px]">No objects yet.<br/>Use the tools to add bubbles, text, or assets.</div>}
-                {allLayers.map((layer, index) => {
-                  const isSelected = canvasSelection.selectedBubbleId === layer.id || 
-                                   canvasSelection.selectedTextId === layer.id || 
-                                   canvasSelection.selectedAssetId === layer.id;
-                  const isTopLayer = index === 0;
-                  const isBottomLayer = index === allLayers.length - 1;
-                  
-                  return (
-                    <div key={layer.id} onClick={() => {
-                      setSelectedLayerId(layer.id);
-                      // Select the object on canvas
-                      if (layer.type === "bubble") setCanvasSelection({ selectedBubbleId: layer.id, selectedTextId: null, selectedAssetId: null });
-                      else if (layer.type === "text") setCanvasSelection({ selectedBubbleId: null, selectedTextId: layer.id, selectedAssetId: null });
-                      else setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: layer.id });
-                    }}
-                      className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition border ${
-                        isSelected ? "bg-white/15 border-white/30" : 
-                        selectedLayerId === layer.id ? "bg-white/10 border-white/20" : 
-                        "bg-white/5 hover:bg-white/8 border-transparent"
-                      }`}>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${
-                          layer.color === "emerald" ? "bg-emerald-500" : 
-                          layer.color === "purple" ? "bg-purple-500" : 
-                          "bg-orange-500"
-                        } ${isSelected ? "ring-2 ring-white ring-offset-1 ring-offset-[#0f1117]" : ""}`} />
-                        <div className="flex-1 min-w-0">
-                          <span className={`text-[10px] truncate block ${
-                            hiddenIds.has(layer.id) ? "text-gray-600 line-through" : 
-                            isSelected ? "text-white font-medium" : "text-gray-300"
-                          }`}>{layer.label}</span>
-                          <span className="text-[8px] text-gray-600">z: {layer.zIndex}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        {/* Layering controls */}
-                        <button onClick={e => { e.stopPropagation(); moveLayer(layer.id, "forward"); }} 
-                          disabled={isTopLayer}
-                          className={`p-0.5 transition ${
-                            isTopLayer ? "text-gray-700 cursor-not-allowed" : "text-gray-600 hover:text-blue-400"
-                          }`} title="Move Forward">
-                          <ChevronUp className="w-3 h-3" />
-                        </button>
-                        <button onClick={e => { e.stopPropagation(); moveLayer(layer.id, "backward"); }} 
-                          disabled={isBottomLayer}
-                          className={`p-0.5 transition ${
-                            isBottomLayer ? "text-gray-700 cursor-not-allowed" : "text-gray-600 hover:text-blue-400"
-                          }`} title="Move Backward">
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                        <button onClick={e => { e.stopPropagation(); toggleVisibility(layer.id); }} 
-                          className="p-0.5 text-gray-600 hover:text-gray-300 transition" 
-                          title={hiddenIds.has(layer.id) ? "Show" : "Hide"}>
-                          {hiddenIds.has(layer.id) ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        </button>
-                        <button onClick={e => { e.stopPropagation(); deleteLayer(layer.id); }} 
-                          className="p-0.5 text-gray-600 hover:text-red-400 transition" 
-                          title="Delete">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="text-[9px] text-gray-600 pt-1 border-t border-white/6">
-                Click to select • ↑↓ Move layers • 👁 Show/Hide • Highest z-index at top
-              </div>
-            </div>
-          )}
-
-          {/* ── Bubbles ── */}
-          {canvasTool === "bubbles" && (() => {
+                                      
+          {/* ── Unified Properties Panel ── */}
+          {canvasTool === "elements" && (() => {
+            // Get selected elements
             const selBubble = panelBubbles.find(b => b.id === canvasSelection.selectedBubbleId) ?? null;
+            const selText = panelTexts.find(t => t.id === canvasSelection.selectedTextId) ?? null;
+            const selAsset = panelAssets.find(a => a.id === canvasSelection.selectedAssetId) ?? null;
+            
+                        
+            // Update functions
             const updBubble = (patch: Record<string, unknown>) => {
               if (!selBubble) return;
               setCanvasState(s => ({ ...s, bubbles: s.bubbles.map(b => b.id === selBubble.id ? { ...b, ...patch } : b) }));
             };
             return (
             <div className="p-3 space-y-3">
-              <div><h3 className="text-white font-bold text-sm">Bubble Tool</h3><p className="text-[10px] text-gray-500 mt-0.5">Place & style manga speech bubbles</p></div>
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-gray-300 font-semibold">Bubbles ({panelBubbles.length})</span>
-                  <button onClick={addBubble} className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-semibold transition flex items-center gap-1"><Plus className="w-3 h-3" />Add</button>
+              {/* Dynamic Header */}
+              {canvasTool === "bubbles" && (
+                <div><h3 className="text-white font-bold text-sm">Bubble Text</h3><p className="text-[10px] text-gray-500 mt-0.5">Place & style manga speech bubbles</p></div>
+              )}
+              {canvasTool === "text" && (
+                <div><h3 className="text-white font-bold text-sm">Text Tool</h3><p className="text-[10px] text-gray-500 mt-0.5">Add & style standalone text elements</p></div>
+              )}
+              {canvasTool === "elements" && (
+                <div><h3 className="text-white font-bold text-sm">Elements</h3><p className="text-[10px] text-gray-500 mt-0.5">Create bubbles, text, and upload images</p></div>
+              )}
+
+              {/* Creation Section */}
+              {canvasTool === "bubbles" && (
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-gray-300 font-semibold">Bubbles ({panelBubbles.length})</span>
+                    <button onClick={addBubble} className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-semibold transition flex items-center gap-1"><Plus className="w-3 h-3" />Add</button>
+                  </div>
+                  <textarea value={newBubbleText} onChange={e => setNewBubbleText(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), addBubble())}
+                    placeholder="Type text, then Add..." rows={2}
+                    className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[10px] text-white placeholder-gray-600 focus:outline-none resize-none" />
+                  <select value={newBubbleType} onChange={e => setNewBubbleType(e.target.value as BubbleType)}
+                    className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[10px] text-white focus:outline-none">
+                    <option value="speech">Speech</option><option value="speechRough">Speech (Rough)</option>
+                    <option value="thought">Thought (Cloud)</option><option value="whisper">Whisper (Dashed)</option>
+                    <option value="shout">Shout (Burst)</option><option value="sfx">SFX (Spiky)</option>
+                    <option value="rect">Rectangle</option><option value="rectRound">Rectangle (Round)</option><option value="oval">Oval</option>
+                  </select>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(["speech","thought","shout","whisper","sfx","rectRound"] as BubbleType[]).map(t => (
+                      <button key={t} onClick={() => {
+                        const id = makeId();
+                        const { cx: bcx, cy: bcy } = getCanvasCenter();
+                        setCanvasState(s => ({ ...s, bubbles: [...s.bubbles, { id, panelId, x: bcx - 100, y: bcy - 50, w: 200, h: 100, text: t==="sfx"?"BOOM!":"test...", bubbleType: t, tailMode: t==="shout"||t==="sfx"?"none":"auto", tailDir: "bottom-left" as TailDir, tailX: 80, tailY: 140, autoFitFont: true, fontSize: 16 }] }));
+                        setCanvasSelection({ selectedBubbleId: id, selectedTextId: null, selectedAssetId: null });
+                      }} className="p-1 bg-[#1a1a24] border border-white/10 hover:border-emerald-500/40 rounded text-[9px] text-gray-300 hover:text-white transition text-center capitalize">
+                        {t==="speechRough"?"Rough":t==="rectRound"?"RndRect":t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <textarea value={newBubbleText} onChange={e => setNewBubbleText(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), addBubble())}
-                  placeholder="Type text, then Add..." rows={2}
-                  className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[10px] text-white placeholder-gray-600 focus:outline-none resize-none" />
-                <select value={newBubbleType} onChange={e => setNewBubbleType(e.target.value as BubbleType)}
-                  className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[10px] text-white focus:outline-none">
-                  <option value="speech">Speech</option><option value="speechRough">Speech (Rough)</option>
-                  <option value="thought">Thought (Cloud)</option><option value="whisper">Whisper (Dashed)</option>
-                  <option value="shout">Shout (Burst)</option><option value="sfx">SFX (Spiky)</option>
-                  <option value="rect">Rectangle</option><option value="rectRound">Rectangle (Round)</option><option value="oval">Oval</option>
-                </select>
-                <div className="grid grid-cols-3 gap-1">
-                  {(["speech","thought","shout","whisper","sfx","rectRound"] as BubbleType[]).map(t => (
-                    <button key={t} onClick={() => {
-                      const id = makeId();
-                      const { cx: bcx, cy: bcy } = getCanvasCenter();
-                      setCanvasState(s => ({ ...s, bubbles: [...s.bubbles, { id, panelId, x: bcx - 100, y: bcy - 50, w: 200, h: 100, text: t==="sfx"?"BOOM!":"test...", bubbleType: t, tailMode: t==="shout"||t==="sfx"?"none":"auto", tailDir: "bottom-left" as TailDir, tailX: 80, tailY: 140, autoFitFont: true, fontSize: 16 }] }));
-                      setCanvasSelection({ selectedBubbleId: id, selectedTextId: null, selectedAssetId: null });
-                    }} className="p-1 bg-[#1a1a24] border border-white/10 hover:border-emerald-500/40 rounded text-[9px] text-gray-300 hover:text-white transition text-center capitalize">
-                      {t==="speechRough"?"Rough":t==="rectRound"?"RndRect":t}
-                    </button>
-                  ))}
+              )}
+
+              {canvasTool === "text" && (
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-gray-300 font-semibold">Text ({panelTexts.length})</span>
+                    <button onClick={addText} className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-semibold transition flex items-center gap-1"><Plus className="w-3 h-3" />Add</button>
+                  </div>
+                  <textarea value={newTextContent} onChange={e => setNewTextContent(e.target.value)} placeholder="Type text, then Add..." rows={2}
+                    className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[10px] text-white placeholder-gray-600 focus:outline-none resize-none" />
+                  <div className="flex gap-2">
+                    <div className="flex-1"><label className="text-[9px] text-gray-500 block mb-0.5">Size</label><input type="number" value={newTextSize} onChange={e => setNewTextSize(Number(e.target.value))} min={8} max={72} className="w-full px-2 py-1 bg-[#1a1a24] border border-white/10 rounded text-[10px] text-white focus:outline-none" /></div>
+                    <div className="flex-1"><label className="text-[9px] text-gray-500 block mb-0.5">Color</label><input type="color" value={newTextColor} onChange={e => setNewTextColor(e.target.value)} className="w-full h-[26px] bg-[#1a1a24] border border-white/10 rounded cursor-pointer" /></div>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1">
-                {panelBubbles.length === 0 && <div className="text-center py-3 text-gray-600 text-[10px]">No bubbles yet</div>}
-                {panelBubbles.map((b, i) => (
-                  <button key={b.id} onClick={() => setCanvasSelection({ selectedBubbleId: b.id, selectedTextId: null, selectedAssetId: null })}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition ${b.id===canvasSelection.selectedBubbleId?"bg-emerald-500/10 border-emerald-500/30 text-emerald-200":"bg-[#13131a] border-white/10 text-gray-300 hover:bg-white/5"}`}>
-                    <span className="text-[10px] font-semibold">Bubble {i+1}</span>
-                    <span className="text-[9px] text-gray-500">{b.bubbleType}</span>
+              )}
+
+              {canvasTool === "elements" && (
+                <>
+                  <input ref={assetInputRef} type="file" accept="image/*" className="hidden" onChange={handleAssetUpload} />
+                  <button onClick={() => assetInputRef.current?.click()}
+                    className="w-full py-2.5 border border-dashed border-white/15 hover:border-orange-500/40 rounded-lg text-[11px] text-gray-500 hover:text-orange-300 transition flex items-center justify-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5" />
+                    Upload Image
                   </button>
-                ))}
+                </>
+              )}
+
+              {/* Elements List - All Elements in Asset Panel */}
+              <div className="space-y-1">
+                {canvasTool === "elements" && (
+                  <>
+                    {/* Elements Header with Hide/Show All */}
+                    {(() => {
+                      const allElementIds = [...panelBubbles, ...panelTexts, ...panelAssets].map(o => o.id);
+                      const allElementsHidden = allElementIds.every(id => hiddenIds.has(id));
+                      
+                                            
+                      return (
+                        <div className="flex items-center justify-between px-2 py-2 border-b border-white/10">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white text-xs font-bold">All Elements</span>
+                            <span className="text-gray-500 text-[10px] font-mono">{panelBubbles.length + panelTexts.length + panelAssets.length}</span>
+                          </div>
+                          <button onClick={() => {
+                            if (allElementsHidden) {
+                              // Show all elements - remove all element IDs from hiddenIds
+                              setHiddenIds(prev => {
+                                const newSet = new Set(prev);
+                                allElementIds.forEach(id => newSet.delete(id));
+                                return newSet;
+                              });
+                            } else {
+                              // Hide all elements - add all element IDs to hiddenIds
+                              setHiddenIds(prev => {
+                                const newSet = new Set(prev);
+                                allElementIds.forEach(id => newSet.add(id));
+                                return newSet;
+                              });
+                            }
+                          }} className="text-gray-500 hover:text-white transition-colors p-1" 
+                           title={allElementsHidden ? "Show All Elements" : "Hide All Elements"}>
+                            {allElementsHidden ? (
+                              <Eye className="w-3 h-3" />
+                            ) : (
+                              <EyeOff className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })()}
+                    
+                    {/* Bubbles Section */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between px-2 py-1">
+                        <span className="text-[10px] text-emerald-400 font-semibold">Bubbles ({panelBubbles.length})</span>
+                      </div>
+                      {panelBubbles.length === 0 && <div className="text-center py-2 text-gray-600 text-[9px] px-2">No bubbles yet</div>}
+                      {panelBubbles.map((b, i) => (
+                        <button key={b.id} onClick={() => setCanvasSelection({ selectedBubbleId: b.id, selectedTextId: null, selectedAssetId: null })}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition ${b.id===canvasSelection.selectedBubbleId?"bg-emerald-500/10 border-emerald-500/30 text-emerald-200":"bg-[#13131a] border-white/10 text-gray-300 hover:bg-white/5"}`}>
+                          <span className="text-[10px] font-semibold">Bubble {i+1}</span>
+                          <span className="text-[9px] text-gray-500">{b.bubbleType}</span>
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* Text Section */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between px-2 py-1">
+                        <span className="text-[10px] text-purple-400 font-semibold">Text ({panelTexts.length})</span>
+                      </div>
+                      {panelTexts.length === 0 && <div className="text-center py-2 text-gray-600 text-[9px] px-2">No text yet</div>}
+                      {panelTexts.map((t, i) => (
+                        <button key={t.id} onClick={() => setCanvasSelection({ selectedBubbleId: null, selectedTextId: t.id, selectedAssetId: null })}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition ${t.id===canvasSelection.selectedTextId?"bg-purple-500/10 border-purple-500/30 text-purple-200":"bg-[#13131a] border-white/10 text-gray-300 hover:bg-white/5"}`}>
+                          <span className="text-[10px] font-semibold truncate flex-1">Text {i+1}: {t.text.slice(0,12)}</span>
+                          <span onClick={e => { e.stopPropagation(); deleteLayer(t.id); }} className="text-gray-600 hover:text-red-400 ml-1 shrink-0 cursor-pointer"><Trash2 className="w-3 h-3" /></span>
+                        </button>
+                      ))}
+                    </div>
+                    
+                    {/* Text Elements Section */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between px-2 py-1">
+                        <span className="text-[10px] text-orange-400 font-semibold">Text Elements ({panelAssets.length})</span>
+                      </div>
+                      {panelAssets.length === 0 && <div className="text-center py-2 text-gray-600 text-[9px] px-2">No text elements yet</div>}
+                      {panelAssets.map((a, i) => {
+                        const lib = canvasState.assetLibrary.find(l => l.id === a.libraryId);
+                        return (
+                          <div key={a.id} onClick={() => setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: a.id })}
+                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition cursor-pointer ${a.id===canvasSelection.selectedAssetId?"bg-orange-500/10 border-orange-500/30":"bg-[#13131a] border-white/10 hover:bg-white/5"}`}>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {lib && <img src={lib.url} alt={lib.name} className="w-6 h-6 object-cover rounded shrink-0" />}
+                              <span className={`text-[10px] truncate ${a.id===canvasSelection.selectedAssetId?"text-orange-200":"text-gray-300"}`}>Text Element {i+1}</span>
+                            </div>
+                            <button onClick={e => { e.stopPropagation(); deleteLayer(a.id); }} className="text-gray-600 hover:text-red-400 ml-1 shrink-0"><Trash2 className="w-3 h-3" /></button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
-              {selBubble ? (
+
+              {/* Combine Button - Always Visible in Elements Panel */}
+              {canvasTool === "elements" && (
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
+                  <button
+                    onClick={() => {
+                      // Generate image with all elements combined with background
+                      generateImageWithElements();
+                    }}
+                    disabled={!backgroundImage || isInpainting}
+                    className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-2"
+                    title="Combine all elements with background image">
+                    {isInpainting ? (
+                      <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Combining...</>
+                    ) : (
+                      <>
+                        <ImageIcon className="w-3.5 h-3.5 ml-1" />
+                        <span>Combine with Background</span>
+                      </>
+                    )}
+                  </button>
+                  {inpaintError && (
+                    <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Selected Element Properties */}
+              {selBubble && (
                 <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                  <span className="text-[11px] text-emerald-400 font-semibold block">Selected Bubble</span>
-                  <div><span className="text-[10px] text-gray-300 block mb-1">Text</span><textarea value={selBubble.text} onChange={e => updBubble({ text: e.target.value })} className="w-full bg-[#1a1a24] border border-white/10 rounded px-2 py-1 text-[10px] text-white resize-none focus:outline-none" rows={2} /></div>
-                  <div><span className="text-[10px] text-gray-300 block mb-1">Bubble Type</span><div className="grid grid-cols-3 gap-1">{(["speech","thought","shout","whisper","rect","rectRound"] as const).map(type => (<button key={type} onClick={() => updBubble({ bubbleType: type })} className={`py-1 rounded text-[9px] font-semibold border transition ${type===selBubble.bubbleType?"bg-emerald-500/15 border-emerald-500/30 text-emerald-200":"bg-[#1a1a24] border-white/10 text-gray-400 hover:bg-white/5"}`}>{type}</button>))}</div></div>
-                  {selBubble.bubbleType !== "thought" && (
-                    <div><span className="text-[10px] text-gray-300 block mb-1">Tail Direction</span><div className="grid grid-cols-2 gap-1">{(["bottom-left","bottom-right","left","right"] as const).map(dir => (<button key={dir} onClick={() => updBubble({ tailDir: dir })} className={`py-1 rounded text-[9px] font-semibold border transition ${selBubble.tailDir===dir?"bg-emerald-500/15 border-emerald-500/30 text-emerald-200":"bg-[#1a1a24] border-white/10 text-gray-400 hover:bg-white/5"}`}>{dir==="bottom-left"?"↙BL":dir==="bottom-right"?"↘BR":dir==="left"?"←L":"→R"}</button>))}</div></div>
+                  <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleCardCollapsed('bubble')}>
+                    <span className="text-[11px] text-emerald-400 font-semibold block">Selected Bubble</span>
+                    <ChevronDown className={`w-4 h-4 text-emerald-400 transition-transform ${collapsedCards.has('bubble') ? 'rotate-180' : ''}`} />
+                  </div>
+                  {!collapsedCards.has('bubble') && (
+                    <div className="space-y-3">
+                      <div><span className="text-[10px] text-gray-300 block mb-1">Text</span><textarea value={selBubble.text} onChange={e => updBubble({ text: e.target.value })} className="w-full bg-[#1a1a24] border border-white/10 rounded px-2 py-1 text-[10px] text-white resize-none focus:outline-none" rows={2} /></div>
+                  <div><span className="text-[10px] text-gray-300 block mb-1">Bubble Type</span><div className="grid grid-cols-3 gap-1">{(["speech","thought","shout","whisper","rect","rectRound","sfx"] as const).map(type => (<button key={type} onClick={() => updBubble({ bubbleType: type })} className={`py-1 rounded text-[9px] font-semibold border transition ${type===selBubble.bubbleType?"bg-emerald-500/15 border-emerald-500/30 text-emerald-200":"bg-[#1a1a24] border-white/10 text-gray-400 hover:bg-white/5"}`}>{type}</button>))}</div></div>
+                  {(selBubble.bubbleType !== "sfx") && (
+                    <div>
+                      <span className="text-[10px] text-gray-300 block mb-1">Tail Direction</span>
+                      <div className="grid grid-cols-2 gap-1">
+                        {(["bottom-left","bottom-right","left","right"] as const).map(dir => (
+                          <button 
+                            key={dir} 
+                            onClick={() => updBubble({ tailDir: dir })} 
+                            className={`py-1 rounded text-[9px] font-semibold border transition ${
+                              selBubble.tailDir===dir
+                                ?"bg-emerald-500/15 border-emerald-500/30 text-emerald-200"
+                                :"bg-[#1a1a24] border-white/10 text-gray-400 hover:bg-white/5"
+                            }`}
+                          >
+                            {(() => {
+                      const labels: Record<string, string> = {
+                        "bottom-left": "BL",
+                        "bottom-right": "BR", 
+                        "left": "L",
+                        "right": "R"
+                      };
+                      return labels[dir] || dir;
+                    })()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-gray-300">Auto-fit font</span>
@@ -2714,346 +2857,92 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     <span className="text-[10px] text-gray-300">Flip Colors</span>
                     <button onClick={() => updBubble({ flippedColors: !selBubble.flippedColors })} className={`px-2 py-0.5 rounded text-[10px] font-semibold border transition ${selBubble.flippedColors?"bg-blue-500/15 border-blue-500/30 text-blue-200":"bg-white/5 border-white/10 text-gray-300"}`}>{selBubble.flippedColors?"Flipped":"Normal"}</button>
                   </div>
-                </div>
-              ) : <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3"><p className="text-[10px] text-gray-500 text-center">Click a bubble on canvas or in the list to edit its properties</p></div>}
-              
-              {/* Generate Image Button */}
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
-                <button
-                  onClick={generateImageWithElements}
-                  disabled={!backgroundImage || isInpainting}
-                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
-                  title="Generate image with all text bubbles and assets">
-                  {isInpainting ? (
-                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                  ) : (
-                    <>
-                      <ImageIcon className="w-3.5 h-3.5" />
-                      Generate Image with Bubbles
-                    </>
+                    </div>
                   )}
-                </button>
-                {inpaintError && (
-                  <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
-                )}
-              </div>
-            </div>
-            );
-          })()}
-
-          {/* ── Text ── */}
-          {canvasTool === "text" && (() => {
-            const selText = panelTexts.find(t => t.id === canvasSelection.selectedTextId) ?? null;
-            const updText = (patch: Record<string, unknown>) => { if (!selText) return; setCanvasState(s => ({ ...s, textElements: s.textElements.map(t => t.id === selText.id ? { ...t, ...patch } : t) })); };
-            return (
-            <div className="p-3 space-y-3">
-              <div><h3 className="text-white font-bold text-sm">Text Tool</h3><p className="text-[10px] text-gray-500 mt-0.5">Add & style standalone text elements</p></div>
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-gray-300 font-semibold">Text ({panelTexts.length})</span>
-                  <button onClick={addText} className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[10px] font-semibold transition flex items-center gap-1"><Plus className="w-3 h-3" />Add</button>
                 </div>
-                <textarea value={newTextContent} onChange={e => setNewTextContent(e.target.value)} placeholder="Type text, then Add..." rows={2}
-                  className="w-full px-2 py-1.5 bg-[#1a1a24] border border-white/10 rounded-lg text-[10px] text-white placeholder-gray-600 focus:outline-none resize-none" />
-                <div className="flex gap-2">
-                  <div className="flex-1"><label className="text-[9px] text-gray-500 block mb-0.5">Size</label><input type="number" value={newTextSize} onChange={e => setNewTextSize(Number(e.target.value))} min={8} max={72} className="w-full px-2 py-1 bg-[#1a1a24] border border-white/10 rounded text-[10px] text-white focus:outline-none" /></div>
-                  <div className="flex-1"><label className="text-[9px] text-gray-500 block mb-0.5">Color</label><input type="color" value={newTextColor} onChange={e => setNewTextColor(e.target.value)} className="w-full h-[26px] bg-[#1a1a24] border border-white/10 rounded cursor-pointer" /></div>
-                </div>
-              </div>
-              <div className="space-y-1">
-                {panelTexts.length === 0 && <div className="text-center py-3 text-gray-600 text-[10px]">No text yet</div>}
-                {panelTexts.map((t, i) => (
-                  <button key={t.id} onClick={() => setCanvasSelection({ selectedBubbleId: null, selectedTextId: t.id, selectedAssetId: null })}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition ${t.id===canvasSelection.selectedTextId?"bg-purple-500/10 border-purple-500/30 text-purple-200":"bg-[#13131a] border-white/10 text-gray-300 hover:bg-white/5"}`}>
-                    <span className="text-[10px] font-semibold truncate flex-1">Text {i+1}: {t.text.slice(0,12)}</span>
-                    <span onClick={e => { e.stopPropagation(); deleteLayer(t.id); }} className="text-gray-600 hover:text-red-400 ml-1 shrink-0 cursor-pointer"><Trash2 className="w-3 h-3" /></span>
-                  </button>
-                ))}
-              </div>
-              {selText ? (
-                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                  <span className="text-[11px] text-purple-400 font-semibold block">Selected Text</span>
-                  <div><div className="flex justify-between mb-1"><span className="text-[10px] text-gray-300">Font Size</span><span className="text-[10px] text-purple-300 font-mono">{selText.fontSize}px</span></div><input type="range" min={12} max={72} value={selText.fontSize} onChange={e => updText({ fontSize: Number(e.target.value) })} className="w-full accent-purple-500" /></div>
-                  <div><span className="text-[10px] text-gray-300 block mb-1">Weight</span><div className="grid grid-cols-2 gap-1">{(["400","700"] as const).map(w => (<button key={w} onClick={() => updText({ fontWeight: w })} className={`py-1 rounded text-[10px] border transition ${selText.fontWeight===w?"bg-purple-500/20 border-purple-500/40 text-purple-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>{w==="400"?"Normal":"Bold"}</button>))}</div></div>
-                  <div><span className="text-[10px] text-gray-300 block mb-1">Style</span><div className="grid grid-cols-2 gap-1">{(["normal","italic"] as const).map(s => (<button key={s} onClick={() => updText({ fontStyle: s })} className={`py-1 rounded text-[10px] border transition capitalize ${selText.fontStyle===s?"bg-purple-500/20 border-purple-500/40 text-purple-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>{s}</button>))}</div></div>
-                  <div><label className="text-[10px] text-gray-300 block mb-1">Font Family</label><select value={selText.fontFamily} onChange={e => updText({ fontFamily: e.target.value as FontFamily })} className="w-full bg-[#1a1a24] border border-white/10 rounded px-2 py-1 text-[10px] text-white focus:outline-none"><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Comic Sans MS">Comic Sans MS</option><option value="Impact">Impact</option><option value="Verdana">Verdana</option><option value="Georgia">Georgia</option><option value="Noto Sans JP">Noto Sans JP</option><option value="Roboto">Roboto</option><option value="Montserrat">Montserrat</option></select></div>
-                  <div className="flex gap-2"><div className="flex-1"><label className="text-[10px] text-gray-300 block mb-1">Color</label><input type="color" value={selText.color} onChange={e => updText({ color: e.target.value })} className="w-full h-7 rounded cursor-pointer border border-white/10" /></div><div className="flex-1"><label className="text-[10px] text-gray-300 block mb-1">Border px</label><input type="range" min={0} max={10} value={selText.borderWidth ?? 0} onChange={e => updText({ borderWidth: Number(e.target.value) })} className="w-full accent-purple-500 mt-2" /></div></div>
-                  {(selText.borderWidth ?? 0) > 0 && (<div><label className="text-[10px] text-gray-300 block mb-1">Border Color</label><input type="color" value={selText.borderColor ?? "#000000"} onChange={e => updText({ borderColor: e.target.value })} className="w-full h-7 rounded cursor-pointer border border-white/10" /></div>)}
-                                  </div>
-              ) : <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3"><p className="text-[10px] text-gray-500 text-center">Click a text element on canvas or in the list to edit its properties</p></div>}
-            </div>
-            );
-          })()}
-
-          {/* ── Asset ── */}
-          {canvasTool === "assets" && (() => {
-            const selAsset = panelAssets.find(a => a.id === canvasSelection.selectedAssetId) ?? null;
-            const updAsset = (patch: Record<string, unknown>) => { if (!selAsset) return; setCanvasState(s => ({ ...s, assetElements: s.assetElements.map(a => a.id === selAsset.id ? { ...a, ...patch } : a) })); };
-            return (
-            <div className="p-3 space-y-3">
-              <div><h3 className="text-white font-bold text-sm">Asset Tool</h3><p className="text-[10px] text-gray-500 mt-0.5">Upload & place images on canvas</p></div>
-              <input ref={assetInputRef} type="file" accept="image/*" className="hidden" onChange={handleAssetUpload} />
-              <button onClick={() => assetInputRef.current?.click()}
-                className="w-full py-2.5 border border-dashed border-white/15 hover:border-orange-500/40 rounded-lg text-[11px] text-gray-500 hover:text-orange-300 transition flex items-center justify-center gap-1.5">
-                <Upload className="w-3.5 h-3.5" /> Upload Asset
-              </button>
-              <div className="space-y-1">
-                {panelAssets.length === 0 && <div className="text-center py-3 text-gray-600 text-[10px]">No assets yet</div>}
-                {panelAssets.map((a, i) => {
-                  const lib = canvasState.assetLibrary.find(l => l.id === a.assetId);
-                  return (
-                    <div key={a.id} onClick={() => setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: a.id })}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-left transition cursor-pointer ${a.id===canvasSelection.selectedAssetId?"bg-orange-500/10 border-orange-500/30":"bg-[#13131a] border-white/10 hover:bg-white/5"}`}>
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {lib && <img src={lib.url} alt={lib.name} className="w-6 h-6 object-cover rounded shrink-0" />} {/* eslint-disable-line @next/next/no-img-element */}
-                        <span className={`text-[10px] truncate ${a.id===canvasSelection.selectedAssetId?"text-orange-200":"text-gray-300"}`}>Asset {i+1}</span>
-                      </div>
-                      <button onClick={e => { e.stopPropagation(); deleteLayer(a.id); }} className="text-gray-600 hover:text-red-400 ml-1 shrink-0"><Trash2 className="w-3 h-3" /></button>
-                    </div>
-                  );
-                })}
-              </div>
-                          </div>
-            );
-          })()}
-
-          {/* ── Brush Inpaint ── */}
-          {canvasTool === "inpaint" && (
-            <div className="p-3 space-y-3">
-              <div>
-                <h3 className="text-white font-bold text-sm">Brush Inpaint</h3>
-                <p className="text-[10px] text-gray-500 mt-0.5">Paint areas to inpaint with AI</p>
-              </div>
-
-              {/* Brush Controls */}
-              {inpaintModel === "character-edit" && (
-                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                <div className="space-y-2">
-                  <label className="text-[11px] text-gray-300 font-semibold">Brush Tool</label>
-                  
-                  {/* Brush/Eraser Toggle */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setIsEraser(false)}
-                      className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${
-                        !isEraser
-                          ? "bg-blue-500/20 border-blue-500/40 text-blue-200"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                      }`}
-                    >
-                      <Paintbrush className="w-3 h-3" />
-                      Brush
-                    </button>
-                    <button
-                      onClick={() => setIsEraser(true)}
-                      className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${
-                        isEraser
-                          ? "bg-red-500/20 border-red-500/40 text-red-200"
-                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
-                      }`}
-                    >
-                      <Eraser className="w-3 h-3" />
-                      Eraser
-                    </button>
-                  </div>
-
-                  {/* Brush Preview */}
-                  <div className="flex justify-center py-2">
-                    <div
-                      className="rounded-full border-2"
-                      style={{
-                        width: Math.min(maskBrushSize * 1.5, 64),
-                        height: Math.min(maskBrushSize * 1.5, 64),
-                        borderColor: isEraser ? "rgba(239,68,68,0.5)" : "rgba(59,130,246,0.5)",
-                        backgroundColor: isEraser ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)",
-                      }}
-                    />
-                  </div>
-
-                  {/* Brush Size */}
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[11px] text-gray-300 font-semibold">Size</span>
-                      <span className="text-[11px] text-blue-300 font-mono">{maskBrushSize}px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={4}
-                      max={80}
-                      value={maskBrushSize}
-                      onChange={e => setMaskBrushSize(Number(e.target.value))}
-                      className="w-full accent-blue-500"
-                    />
-                  </div>
-
-                  {/* Brush Opacity */}
-                  <div>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-[11px] text-gray-300 font-semibold">Opacity</span>
-                      <span className="text-[11px] text-gray-400 font-mono">{Math.round(maskOpacity * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0.05}
-                      max={1}
-                      step={0.05}
-                      value={maskOpacity}
-                      onChange={e => setMaskOpacity(Number(e.target.value))}
-                      className="w-full accent-blue-500"
-                    />
-                  </div>
-
-                  {/* Clear Mask */}
-                  <button
-                    onClick={() => setCanvasState(s => ({ ...s, mask: [] }))}
-                    disabled={canvasState.mask.length === 0}
-                    className="w-full px-2 py-1.5 bg-white/5 hover:bg-red-500/10 disabled:opacity-30 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition"
-                  >
-                    Clear Mask
-                  </button>
-                </div>
-
-                              </div>
               )}
 
-              
-              {/* Generation Settings */}
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                <div className="space-y-2">
-                  <label className="text-[11px] text-gray-300 font-semibold">Inpaint Prompt</label>
-                  <textarea
-                    value={inpaintPrompt}
-                    onChange={e => setInpaintPrompt(e.target.value)}
-                    placeholder='e.g. "Remove logo" or "Add sweat drops"'
-                    rows={3}
-                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 resize-none"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Model</label>
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowBrushModelDropdown(!showBrushModelDropdown)}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-[#1a1a24] text-white rounded-lg text-sm font-semibold hover:bg-[#1f1f2a] transition-all duration-200 border border-white/10 hover:border-purple-500/30 group"
-                    >
-                      <span>{inpaintModel === "ideogram" ? "Ideogram" : "Character Edit"}</span>
-                      <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-purple-400 transition" />
-                    </button>
-                    {showBrushModelDropdown && (
-                      <div className="absolute top-full left-0 mt-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                        <div className="p-2">
-                          <button
-                            onClick={() => {
-                              setInpaintModel("ideogram");
-                              setShowBrushModelDropdown(false);
-                            }}
-                            className="w-full px-3 py-2 text-left hover:bg-white/5 rounded-lg transition"
-                          >
-                            <div className="text-sm font-medium text-white">🎨 Ideogram</div>
-                            <div className="text-xs text-gray-400 mt-0.5">ideogram-v2 • Artistic inpainting</div>
-                          </button>
-                          <button
-                            onClick={() => {
-                              setInpaintModel("character-edit");
-                              setShowBrushModelDropdown(false);
-                            }}
-                            className="w-full px-3 py-2 text-left hover:bg-white/5 rounded-lg transition"
-                          >
-                            <div className="text-sm font-medium text-white">👥 Character Edit</div>
-                            <div className="text-xs text-gray-400 mt-0.5">character-remix • Character modifications</div>
-                          </button>
-                        </div>
+              {selText && (() => {
+                const updText = (patch: Record<string, unknown>) => { if (!selText) return; setCanvasState(s => ({ ...s, textElements: s.textElements.map(t => t.id === selText.id ? { ...t, ...patch } : t) })); };
+                return (
+                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                    <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleCardCollapsed('text')}>
+                      <span className="text-[11px] text-purple-400 font-semibold block">Selected Text</span>
+                      <ChevronDown className={`w-4 h-4 text-purple-400 transition-transform ${collapsedCards.has('text') ? 'rotate-180' : ''}`} />
+                    </div>
+                    {!collapsedCards.has('text') && (
+                      <div className="space-y-3">
+                    <div><div className="flex justify-between mb-1"><span className="text-[10px] text-gray-300">Font Size</span><span className="text-[10px] text-purple-300 font-mono">{selText.fontSize}px</span></div><input type="range" min={12} max={72} value={selText.fontSize} onChange={e => updText({ fontSize: Number(e.target.value) })} className="w-full accent-purple-500" /></div>
+                    <div><span className="text-[10px] text-gray-300 block mb-1">Weight</span><div className="grid grid-cols-2 gap-1">{(["400","700"] as const).map(w => (<button key={w} onClick={() => updText({ fontWeight: w })} className={`py-1 rounded text-[10px] border transition ${selText.fontWeight===w?"bg-purple-500/20 border-purple-500/40 text-purple-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>{w==="400"?"Normal":"Bold"}</button>))}</div></div>
+                    <div><span className="text-[10px] text-gray-300 block mb-1">Style</span><div className="grid grid-cols-2 gap-1">{(["normal","italic"] as const).map(s => (<button key={s} onClick={() => updText({ fontStyle: s })} className={`py-1 rounded text-[10px] border transition capitalize ${selText.fontStyle===s?"bg-purple-500/20 border-purple-500/40 text-purple-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>{s}</button>))}</div></div>
+                    <div><label className="text-[10px] text-gray-300 block mb-1">Font Family</label><select value={selText.fontFamily} onChange={e => updText({ fontFamily: e.target.value as FontFamily })} className="w-full bg-[#1a1a24] border border-white/10 rounded px-2 py-1 text-[10px] text-white focus:outline-none"><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Comic Sans MS">Comic Sans MS</option><option value="Impact">Impact</option><option value="Verdana">Verdana</option><option value="Georgia">Georgia</option><option value="Noto Sans JP">Noto Sans JP</option><option value="Roboto">Roboto</option><option value="Montserrat">Montserrat</option></select></div>
+                    <div className="flex gap-2"><div className="flex-1"><label className="text-[10px] text-gray-300 block mb-1">Color</label><input type="color" value={selText.color} onChange={e => updText({ color: e.target.value })} className="w-full h-7 rounded cursor-pointer border border-white/10" /></div><div className="flex-1"><label className="text-[10px] text-gray-300 block mb-1">Border px</label><input type="range" min={0} max={10} value={selText.borderWidth ?? 0} onChange={e => updText({ borderWidth: Number(e.target.value) })} className="w-full accent-purple-500 mt-2" /></div></div>
+                    {(selText.borderWidth ?? 0) > 0 && (<div><label className="text-[10px] text-gray-300 block mb-1">Border Color</label><input type="color" value={selText.borderColor ?? "#000000"} onChange={e => updText({ borderColor: e.target.value })} className="w-full h-7 rounded cursor-pointer border border-white/10" /></div>)}
                       </div>
                     )}
                   </div>
+                );
+              })()}
+
+              {selAsset && (() => {
+                const updAsset = (patch: Record<string, unknown>) => { if (!selAsset) return; setCanvasState(s => ({ ...s, assetElements: s.assetElements.map(a => a.id === selAsset.id ? { ...a, ...patch } : a) })); };
+                return (
+                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                    <span className="text-[11px] text-orange-400 font-semibold block">Selected Asset</span>
+                    <div className="text-[10px] text-gray-500">Asset properties and transformations will appear here</div>
+                  </div>
+                );
+              })()}
+
+              
+              {/* No Selection Message */}
+              {!selBubble && !selText && !selAsset && (
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
+                  <p className="text-[10px] text-gray-500 text-center">Click an element on canvas or in the list to edit its properties</p>
                 </div>
+              )}
 
-                {/* Reference Image - positioned between model dropdown and generate button */}
-                <div className="space-y-2">
-                  <label className="text-[11px] text-gray-300 font-semibold">Reference Image (Optional)</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => {
-                          const result = e.target?.result as string;
-                          setRefImages([result]); // Only allow one image
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                    className="hidden"
-                    id="brush-ref-image"
-                  />
-                  <label
-                    htmlFor="brush-ref-image"
-                    className="block w-full px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-[11px] font-semibold transition cursor-pointer text-center"
-                  >
-                    📎 Add Reference Image
-                  </label>
-                  
-                  {refImages.length > 0 && (
-                    <div className="relative group">
-                      <img src={refImages[0]} alt="Reference" className="w-full h-20 object-cover rounded-lg border border-blue-500/30" />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <span className="text-white text-[8px] font-medium">Change</span>
-                      </div>
-                      <button
-                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/80 rounded-full text-white text-[8px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                        onClick={() => setRefImages([])}
-                      >✕</button>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => {
-                    if (inpaintModel === "character-edit" || inpaintModel === "character-remix") {
-                      runCharacterEditInpaint();
-                    } else {
-                      runInpaint();
-                    }
-                  }}
-                  disabled={canvasState.mask.length === 0 || !inpaintPrompt.trim() || isInpainting}
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
-                >
-                  {isInpainting ? (
-                    <>
-                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      {inpaintModel === "character-edit" || inpaintModel === "character-remix" ? "Generate Character Edit" : "Generate Inpaint"}
-                    </>
-                  )}
-                </button>
-
-                {inpaintError && (
-                  <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
-                )}
-              </div>
-
-              {/* Status */}
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${canvasState.mask.length > 0 ? "bg-blue-400 animate-pulse" : "bg-gray-600"}`} />
-                  <span className={`text-[11px] font-medium ${canvasState.mask.length > 0 ? "text-blue-300" : "text-gray-500"}`}>
-                    {canvasState.mask.length > 0 ? `${canvasState.mask.length} points painted` : "No mask painted"}
-                  </span>
-                </div>
-                <button
-                    onClick={() => setShowGenPanel(v => !v)}
-                    className="w-full py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                    <ImageIcon className="w-3 h-3" />
-                    {showGenPanel ? "Hide Results" : generatedImages.length > 0 ? `View Results (${generatedImages.length})` : "View Panel"}
-                </button>
-              </div>
+              {/* Generate Image Button */}
+             
             </div>
+            );
+          })()}
+
+          
+          
+          {/* ── Brush Inpaint ── */}
+          {canvasTool === "inpaint" && (
+            <BrushInpaintPanel
+              // Header
+              title="Brush Inpaint - FaceShift"
+              description="Paint areas to inpaint with FaceShift AI"
+              
+              // Brush Settings
+              isEraser={isEraser}
+              setIsEraser={setIsEraser}
+              maskBrushSize={maskBrushSize}
+              setMaskBrushSize={setMaskBrushSize}
+              maskOpacity={maskOpacity}
+              setMaskOpacity={setMaskOpacity}
+              
+              // Canvas State
+              canvasState={canvasState}
+              setCanvasState={setCanvasState}
+              
+              // Generation
+              inpaintPrompt={inpaintPrompt}
+              setInpaintPrompt={setInpaintPrompt}
+              refImages={refImages}
+              setRefImages={setRefImages}
+              isInpainting={isInpainting}
+              inpaintError={inpaintError}
+              onGenerate={runCharacterEditInpaint}
+              
+              // Results Panel
+              generatedImages={generatedImages}
+              showGenPanel={showGenPanel}
+              setShowGenPanel={setShowGenPanel}
+            />
           )}
 
           {/* ── Rectangle Inpaint ── */}
@@ -3245,7 +3134,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           {/* ── Crop ── */}
           {canvasTool === "crop" && (
             <>
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+              <div className=" p-3 space-y-3">
                 <div><h3 className="text-white font-bold text-sm">Crop Image</h3><p className="text-[10px] text-gray-500 mt-0.5">Crop the image to a specific area</p></div>
                 
                 <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
@@ -3308,6 +3197,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       <Plus className="w-3 h-3" />
                       Add Rectangle
                     </button>
+                  </div>
+                  
+                  {/* Second row - Hide and Clear buttons */}
+                  <></>
+                  <div className="flex gap-2">
                     <button
                       onClick={() => setImageIsRectangleVisible(!imageIsRectangleVisible)}
                       disabled={!rectangle}
@@ -3368,15 +3262,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     <ImageIcon className="w-3.5 h-3.5" />
                     Crop Image
                   </button>
-                  <button
-                    onClick={runCropGenerateCombine}
-                    disabled={!rectangle}
-                    className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    Crop + Generate + Combine
-                  </button>
+             
                 </div>
               </div>
+           
             </>
           )}
 

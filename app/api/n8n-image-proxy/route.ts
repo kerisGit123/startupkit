@@ -3,6 +3,577 @@ import { NextRequest, NextResponse } from "next/server";
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 // Increase body size limit to 50MB for large image uploads
+
+// ── Centralized Model Configuration ─────────────────────────────────────────────────────
+
+type ModelCapability = 'text-to-image' | 'image-to-image' | 'multi-reference' | 'single-reference' | 'text-only';
+type ModelFamily = 'seedream' | 'flux' | 'nano-banana' | 'gpt-image' | 'qwen' | 'grok' | 'ideogram' | 'topaz';
+
+interface KieModelConfig {
+  frontendModel: string;
+  kieApiModel: string;
+  displayName: string;
+  family: ModelFamily;
+  capabilities: ModelCapability[];
+  refMode: 'multi' | 'single' | 'text';
+  supportsImages: boolean;
+  supportsMultipleReferences: boolean;
+  supportsTextOnly: boolean;
+  defaultAspectRatio?: string;
+  defaultQuality?: string;
+  requestTemplate: {
+    required: string[];
+    optional: string[];
+    excluded: string[];
+  };
+  fallbackModel?: string;
+}
+
+const MODEL_CONFIGS: Record<string, KieModelConfig> = {
+  // Seedream 5 Lite Family
+  'seedream-5.0-lite-text': {
+    frontendModel: 'seedream-5.0-lite-text',
+    kieApiModel: 'seedream/5-lite-text-to-image',
+    displayName: 'Seedream 5 Lite',
+    family: 'seedream',
+    capabilities: ['text-to-image', 'text-only'],
+    refMode: 'text',
+    supportsImages: false,
+    supportsMultipleReferences: false,
+    supportsTextOnly: true,
+    defaultAspectRatio: '1:1',
+    defaultQuality: 'basic',
+    requestTemplate: {
+      required: ['prompt', 'aspect_ratio', 'quality'],
+      optional: [],
+      excluded: ['image_urls', 'input_urls', 'image_size', 'image_resolution', 'max_images', 'num_outputs', 'guidance_scale']
+    }
+  },
+  
+  'seedream-5.0-lite-image': {
+    frontendModel: 'seedream-5.0-lite-image',
+    kieApiModel: 'seedream/5-lite-image-to-image',
+    displayName: 'Seedream 5 Lite',
+    family: 'seedream',
+    capabilities: ['image-to-image', 'multi-reference', 'single-reference'],
+    refMode: 'multi',
+    supportsImages: true,
+    supportsMultipleReferences: true,
+    supportsTextOnly: false,
+    defaultQuality: 'basic',
+    requestTemplate: {
+      required: ['prompt', 'image_urls'],
+      optional: ['aspect_ratio', 'quality'],
+      excluded: ['input_urls', 'image_size', 'image_resolution', 'max_images', 'num_outputs', 'guidance_scale']
+    },
+    fallbackModel: 'seedream/4.5-text-to-image'
+  },
+  
+  // Nano Banana Family
+  'nano-banana-2': {
+    frontendModel: 'nano-banana-2',
+    kieApiModel: 'nano-banana-2',
+    displayName: 'Nano Banana 2',
+    family: 'nano-banana',
+    capabilities: ['image-to-image', 'multi-reference'],
+    refMode: 'multi',
+    supportsImages: true,
+    supportsMultipleReferences: true,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'nano-banana-edit': {
+    frontendModel: 'nano-banana-edit',
+    kieApiModel: 'nano-banana/image-to-image',
+    displayName: 'Nano Banana Edit',
+    family: 'nano-banana',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  // GPT Image Family
+  'gpt-image': {
+    frontendModel: 'gpt-image',
+    kieApiModel: 'gpt-image',
+    displayName: 'GPT Image 1.5',
+    family: 'gpt-image',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'gpt-image-1-1': {
+    frontendModel: 'gpt-image-1-1',
+    kieApiModel: 'gpt-image',
+    displayName: 'GPT Image 1.5',
+    family: 'gpt-image',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    defaultAspectRatio: '1:1',
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  // Flux Family
+  'flux-2-flex-text-to-image': {
+    frontendModel: 'flux-2-flex-text-to-image',
+    kieApiModel: 'flux-2/flex-text-to-image',
+    displayName: 'Flux 2 Flex',
+    family: 'flux',
+    capabilities: ['text-to-image', 'text-only'],
+    refMode: 'text',
+    supportsImages: false,
+    supportsMultipleReferences: false,
+    supportsTextOnly: true,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['aspect_ratio'],
+      excluded: ['image_urls']
+    }
+  },
+  
+  'flux-2-flex-image-to-image': {
+    frontendModel: 'flux-2-flex-image-to-image',
+    kieApiModel: 'flux-2/flex-image-to-image',
+    displayName: 'Flux 2 Flex',
+    family: 'flux',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'flux-kontext-pro': {
+    frontendModel: 'flux-kontext-pro',
+    kieApiModel: 'flux-kontext-pro',
+    displayName: 'Flux Kontext',
+    family: 'flux',
+    capabilities: ['image-to-image', 'multi-reference'],
+    refMode: 'multi',
+    supportsImages: true,
+    supportsMultipleReferences: true,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  // Qwen Family
+  'qwen-z-image': {
+    frontendModel: 'qwen-z-image',
+    kieApiModel: 'qwen/image-edit',
+    displayName: 'Qwen Image Edit',
+    family: 'qwen',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'qwen': {
+    frontendModel: 'qwen',
+    kieApiModel: 'qwen/image-to-image',
+    displayName: 'Qwen',
+    family: 'qwen',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'qwen-text': {
+    frontendModel: 'qwen-text',
+    kieApiModel: 'qwen/text-to-image',
+    displayName: 'Qwen',
+    family: 'qwen',
+    capabilities: ['text-to-image', 'text-only'],
+    refMode: 'text',
+    supportsImages: false,
+    supportsMultipleReferences: false,
+    supportsTextOnly: true,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['aspect_ratio'],
+      excluded: ['image_urls']
+    }
+  },
+  
+  // Legacy models (for backward compatibility)
+  'seedream-4.5': {
+    frontendModel: 'seedream-4.5',
+    kieApiModel: 'seedream/4.5-text-to-image',
+    displayName: 'Seedream 4.5',
+    family: 'seedream',
+    capabilities: ['image-to-image', 'multi-reference'],
+    refMode: 'multi',
+    supportsImages: true,
+    supportsMultipleReferences: true,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'seedream-v4': {
+    frontendModel: 'seedream-v4',
+    kieApiModel: 'bytedance/seedream-v4',
+    displayName: 'Seedream V4',
+    family: 'seedream',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_url', 'image_size', 'image_resolution'],
+      excluded: []
+    }
+  },
+  
+  // Other models
+  'flux-fill': {
+    frontendModel: 'flux-fill',
+    kieApiModel: 'black-forest-labs/flux-1.1-fill',
+    displayName: 'Flux Fill',
+    family: 'flux',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'character-edit': {
+    frontendModel: 'character-edit',
+    kieApiModel: 'ideogram/character-edit',
+    displayName: 'Character Edit',
+    family: 'ideogram',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'character-remix': {
+    frontendModel: 'character-remix',
+    kieApiModel: 'ideogram/character-remix',
+    displayName: 'Character Remix',
+    family: 'ideogram',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt', 'image_url'],
+      optional: ['reference_image_urls', 'rendering_speed', 'style', 'expand_prompt', 'image_size', 'num_images', 'strength'],
+      excluded: ['image_urls', 'aspect_ratio', 'quality']
+    }
+  },
+  
+  'grok': {
+    frontendModel: 'grok',
+    kieApiModel: 'grok-imagine/image-to-image',
+    displayName: 'Grok',
+    family: 'grok',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'topaz-upscale': {
+    frontendModel: 'topaz-upscale',
+    kieApiModel: 'topaz/image-upscale',
+    displayName: 'Topaz Upscale',
+    family: 'topaz',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['image_url'],
+      optional: ['upscale_factor'],
+      excluded: ['prompt', 'image_urls', 'aspect_ratio', 'quality']
+    }
+  },
+  
+  'ideogram-reframe': {
+    frontendModel: 'ideogram-reframe',
+    kieApiModel: 'ideogram/v3-reframe',
+    displayName: 'Ideogram Reframe',
+    family: 'ideogram',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['image_url'],
+      optional: ['image_size', 'rendering_speed', 'style', 'num_images', 'seed'],
+      excluded: ['prompt', 'image_urls', 'aspect_ratio', 'quality', 'reference_image_urls']
+    }
+  }
+};
+
+// Helper functions
+function getModelConfig(frontendModel: string): KieModelConfig | undefined {
+  return MODEL_CONFIGS[frontendModel];
+}
+
+function validateModelUsage(frontendModel: string, context: {
+  hasImages: boolean;
+  hasMultipleReferences: boolean;
+  refMode: string;
+}): void {
+  const config = getModelConfig(frontendModel);
+  
+  if (!config) {
+    throw new Error(`Unknown model: ${frontendModel}`);
+  }
+  
+  // Check ref mode compatibility
+  if (config.refMode !== context.refMode) {
+    throw new Error(`Model ${config.displayName} requires ${config.refMode} reference mode, but got ${context.refMode}`);
+  }
+  
+  // Check image support
+  if (context.hasImages && !config.supportsImages) {
+    throw new Error(`Model ${config.displayName} doesn't support images`);
+  }
+  
+  if (!context.hasImages && !config.supportsTextOnly) {
+    throw new Error(`Model ${config.displayName} requires images`);
+  }
+  
+  // Check multiple reference support
+  if (context.hasMultipleReferences && !config.supportsMultipleReferences) {
+    throw new Error(`Model ${config.displayName} doesn't support multiple references`);
+  }
+}
+
+async function detectImageAspectRatio(imageUrl: string): Promise<string> {
+  try {
+    // Fetch image headers to get dimensions
+    const response = await fetch(imageUrl, { method: 'HEAD' });
+    if (!response.ok) {
+      console.warn('Failed to fetch image headers, using default aspect ratio');
+      return 'square_hd';
+    }
+
+    // For now, default to square_hd
+    // TODO: Implement actual image dimension detection
+    // This would require downloading the image or using a service to get dimensions
+    return 'square_hd';
+  } catch (error) {
+    console.warn('Error detecting image aspect ratio:', error);
+    return 'square_hd';
+  }
+}
+
+async function buildRequestFromConfig(config: KieModelConfig, params: {
+  prompt: string;
+  imageUrl?: string | null;
+  refUrls: string[];
+  aspectRatio?: string;
+}): Promise<Record<string, unknown>> {
+  const request: Record<string, unknown> = {};
+  
+  // Add required fields
+  config.requestTemplate.required.forEach(field => {
+    switch (field) {
+      case 'prompt':
+        request.prompt = params.prompt;
+        break;
+      case 'image_urls':
+        if (config.supportsImages) {
+          const allUrls = params.imageUrl ? [params.imageUrl, ...params.refUrls] : params.refUrls;
+          if (allUrls.length > 0) {
+            request.image_urls = allUrls;
+          }
+        }
+        break;
+      case 'image_url':
+        if (config.supportsImages) {
+          const primaryUrl = params.imageUrl || params.refUrls[0];
+          if (primaryUrl) {
+            request.image_url = primaryUrl;
+          }
+        }
+        break;
+      case 'reference_image_urls':
+        if (config.supportsImages && params.refUrls.length > 0) {
+          request.reference_image_urls = params.refUrls;
+        }
+        break;
+      case 'rendering_speed':
+        request.rendering_speed = 'BALANCED';
+        break;
+      case 'style':
+        request.style = 'AUTO';
+        break;
+      case 'expand_prompt':
+        request.expand_prompt = true;
+        break;
+      case 'image_size':
+        request.image_size = 'square_hd';
+        break;
+      case 'num_images':
+        request.num_images = '1';
+        break;
+      case 'strength':
+        request.strength = 0.8;
+        break;
+      case 'upscale_factor':
+        request.upscale_factor = '2';
+        break;
+      case 'seed':
+        request.seed = 0;
+        break;
+      case 'aspect_ratio':
+        request.aspect_ratio = params.aspectRatio || config.defaultAspectRatio || '1:1';
+        break;
+      case 'quality':
+        request.quality = config.defaultQuality || 'basic';
+        break;
+      default:
+        console.warn(`Unknown required field: ${field}`);
+    }
+  });
+  
+  // Add optional fields if available
+  for (const field of config.requestTemplate.optional) {
+    switch (field) {
+      case 'aspect_ratio':
+        if (params.aspectRatio && !request.aspect_ratio) {
+          request.aspect_ratio = params.aspectRatio;
+        }
+        break;
+      case 'image_size':
+        if (!request.image_size) {
+          // For character-remix, detect aspect ratio from the first image
+          if (config.kieApiModel === 'ideogram/character-remix' && params.imageUrl) {
+            request.image_size = await detectImageAspectRatio(params.imageUrl);
+          } else if (params.aspectRatio) {
+            // Fallback to aspect ratio mapping for other models
+            const aspectRatioMap: Record<string, string> = {
+              '1:1': 'square',
+              '4:3': 'landscape_4_3', 
+              '16:9': 'landscape_16_9',
+              '3:4': 'portrait_4_3',
+              '9:16': 'portrait_16_9'
+            };
+            request.image_size = aspectRatioMap[params.aspectRatio] || 'square_hd';
+          } else {
+            request.image_size = 'square_hd';
+          }
+        }
+        break;
+      case 'quality':
+        if (!request.quality) {
+          request.quality = config.defaultQuality || 'basic';
+        }
+        break;
+      case 'image_urls':
+        if (config.supportsImages && !request.image_urls) {
+          const allUrls = params.imageUrl ? [params.imageUrl, ...params.refUrls] : params.refUrls;
+          if (allUrls.length > 0) {
+            request.image_urls = allUrls;
+          }
+        }
+        break;
+      case 'image_size':
+        request.image_size = 'landscape_16_9';
+        break;
+      case 'image_resolution':
+        request.image_resolution = '1K';
+        break;
+      default:
+        // Add other optional fields if they exist in params
+        if ((params as Record<string, unknown>)[field]) {
+          request[field] = (params as Record<string, unknown>)[field];
+        }
+        break;
+    }
+  }
+  
+  // Always include output_format for PNG
+  request.output_format = 'png';
+  
+  return request;
+}
+
+// Generate backward-compatible MODEL_MAP
+const MODEL_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(MODEL_CONFIGS).map(([key, config]) => [key, config.kieApiModel])
+);
 export const runtime = 'nodejs';
 export const preferredRegion = 'auto';
 
@@ -185,137 +756,50 @@ async function pollGpt4o(taskId: string): Promise<string> {
 
 // ── Model handlers ─────────────────────────────────────────────────────────────
 
-// Build model-specific input object for Market API
-function buildMarketInput(
+// Build model-specific input object for Market API using configuration
+async function buildMarketInput(
   kieModel: string,
   frontendModel: string,
   prompt: string,
   imageUrl: string | null,
   refUrls: string[],
   aspectRatio?: string
-): Record<string, unknown> {
-  const base: Record<string, unknown> = {
-    prompt,
-    output_format: "png",
-  };
-
-  // Nano Banana 2: uses image_input array and specific fields
-  if (kieModel === "nano-banana-2") {
-    const allUrls = [...(imageUrl ? [imageUrl] : []), ...refUrls];
-    if (allUrls.length > 0) base.image_input = allUrls;
-    if (aspectRatio) base.aspect_ratio = aspectRatio;
-    base.google_search = false;
-    base.resolution = "1K";
-    base.output_format = "png";
-    return base;
-  }
-
-  // Nano Banana family: uses image_urls array (supports multi-ref)
-  if (kieModel.startsWith("google/nano-banana")) {
+): Promise<Record<string, unknown>> {
+  // Get model configuration
+  const config = getModelConfig(frontendModel);
+  
+  if (!config) {
+    console.warn(`[img-proxy] Unknown model: ${frontendModel}, using fallback`);
+    // Fallback to basic structure
+    const base: Record<string, unknown> = { prompt, output_format: "png" };
     const allUrls = [...(imageUrl ? [imageUrl] : []), ...refUrls];
     if (allUrls.length > 0) base.image_urls = allUrls;
     if (aspectRatio) base.aspect_ratio = aspectRatio;
     return base;
   }
 
-  // Seedream 5 Lite text-to-image: pure text generation, no images
-  if (kieModel === "seedream/5-lite-text-to-image" && frontendModel === "seedream-5.0-lite-text") {
-    // For text-to-image, only use prompt, aspect_ratio, and quality
-    base.aspect_ratio = "1:1";
-    base.quality = "basic";
-    // Do NOT include image_urls, image_size, etc. for text-to-image
-    return base;
+  // Validate model usage
+  try {
+    validateModelUsage(frontendModel, {
+      hasImages: !!(imageUrl || refUrls.length > 0),
+      hasMultipleReferences: refUrls.length > 1,
+      refMode: refUrls.length > 1 ? 'multi' : refUrls.length > 0 ? 'single' : 'text'
+    });
+  } catch (error) {
+    console.warn(`[img-proxy] Model validation failed: ${error}`);
+    // Continue with request anyway for backward compatibility
   }
 
-  // Seedream 5 Lite image-to-image: use seedream/5-lite-image-to-image with correct API structure
-  if (kieModel === "seedream/5-lite-image-to-image" && frontendModel === "seedream-5.0-lite-image") {
-    const allUrls = imageUrl ? [imageUrl, ...refUrls] : refUrls;
-    if (allUrls.length > 0) {
-      base.image_urls = allUrls;
-    }
-    // Use dynamic aspect ratio from system, default to 1:1 if not provided
-    base.aspect_ratio = aspectRatio || "1:1";
-    base.quality = "basic";
-    // Only include the fields from the API example
-    return base;
-  }
+  // Build request using configuration
+  const request = await buildRequestFromConfig(config, {
+    prompt,
+    imageUrl,
+    refUrls,
+    aspectRatio
+  });
 
-  // Seedream V4 / bytedance: uses image_url (single)
-  if (kieModel === "bytedance/seedream-v4") {
-    const primaryUrl = imageUrl ?? refUrls[0] ?? null;
-    if (primaryUrl) base.image_url = primaryUrl;
-    base.image_size = "landscape_16_9";
-    base.image_resolution = "1K";
-    base.max_images = 1;
-    return base;
-  }
-
-  // Flux-2 image-to-image variants: require input_urls array + resolution field
-  if (kieModel === "flux-2/flex-image-to-image" || kieModel === "flux-2/pro-image-to-image") {
-    const allUrls = [...(imageUrl ? [imageUrl] : []), ...refUrls];
-    if (allUrls.length > 0) base.input_urls = allUrls;
-    base.image_size = "landscape_16_9";
-    base.resolution = "1K";
-    base.max_images = 1;
-    if (aspectRatio) base.aspect_ratio = aspectRatio;
-    return base;
-  }
-
-  // Flux-2 text-to-image variants: use image_url (single, optional)
-  if (kieModel === "flux-2/flex-text-to-image" || kieModel === "flux-2/pro-text-to-image") {
-    const primaryUrl = imageUrl ?? refUrls[0] ?? null;
-    if (primaryUrl) base.image_url = primaryUrl;
-    base.image_size = "landscape_16_9";
-    base.resolution = "1K";
-    base.max_images = 1;
-    if (aspectRatio) base.aspect_ratio = aspectRatio;
-    return base;
-  }
-
-  // Character Edit models: use image_url (singular) + reference_image_urls (plural array)
-  if (kieModel === "ideogram/character-edit" || kieModel === "ideogram/character-remix") {
-    // Character Edit expects image_url (singular) for the main image
-    if (imageUrl) base.image_url = imageUrl;
-    // Add reference images array (plural) for character consistency
-    if (refUrls.length > 0) base.reference_image_urls = refUrls;
-    // Add required Character Edit fields
-    base.rendering_speed = "BALANCED";
-    base.style = "AUTO";
-    base.expand_prompt = true;
-    base.num_images = "1";
-    if (aspectRatio) base.aspect_ratio = aspectRatio;
-    return base;
-  }
-
-  // Qwen image-edit / image-to-image: uses image_url (single, first image wins)
-  if (kieModel === "qwen/image-edit" || kieModel === "qwen/image-to-image") {
-    // qwen/image-edit uses the reference image as the primary edit target
-    const primaryUrl = refUrls[0] ?? imageUrl ?? null;
-    if (primaryUrl) base.image_url = primaryUrl;
-    if (aspectRatio) base.aspect_ratio = aspectRatio;
-    return base;
-  }
-
-  // Qwen text-to-image: no image input needed
-  if (kieModel === "qwen/text-to-image") {
-    if (aspectRatio) base.aspect_ratio = aspectRatio;
-    return base;
-  }
-
-  // Grok: uses image_urls array but only supports 1 image
-  if (kieModel.startsWith("grok-imagine/")) {
-    // For Grok, prioritize base image over reference images (only 1 image supported)
-    const primaryUrl = imageUrl ?? refUrls[0] ?? null;
-    if (primaryUrl) base.image_urls = [primaryUrl];
-    if (aspectRatio) base.aspect_ratio = aspectRatio;
-    return base;
-  }
-
-  // Default fallback: image_urls array
-  const allUrls = [...(imageUrl ? [imageUrl] : []), ...refUrls];
-  if (allUrls.length > 0) base.image_urls = allUrls;
-  if (aspectRatio) base.aspect_ratio = aspectRatio;
-  return base;
+  console.log(`[img-proxy] Built request for ${config.displayName} (${config.kieApiModel})`);
+  return request;
 }
 
 // Market API — routes each model family to correct input structure
@@ -327,7 +811,7 @@ async function callMarketModel(
   refUrls: string[],
   aspectRatio?: string
 ): Promise<string> {
-  const input = buildMarketInput(kieModel, frontendModel, prompt, imageUrl, refUrls, aspectRatio);
+  const input = await buildMarketInput(kieModel, frontendModel, prompt, imageUrl, refUrls, aspectRatio);
   const requestBody = { model: kieModel, input };
   console.log("[img-proxy] Market API request:", JSON.stringify({ model: kieModel, imageCount: (imageUrl ? 1 : 0) + refUrls.length }));
   console.log("[img-proxy] Request body:", JSON.stringify(requestBody, null, 2));
@@ -473,29 +957,7 @@ async function callGpt4o(
 }
 
 // ── KIE model name mapping (frontend key → KIE model ID) ──────────────────────
-const MODEL_MAP: Record<string, string> = {
-  "nano-banana":                 "nano-banana/text-to-image",
-  "nano-banana-2":               "nano-banana-2",
-  "nano-banana-edit":           "nano-banana/image-to-image",
-  "nano-banana-pro":            "nano-banana-pro/text-to-image",
-  "flux-kontext-pro":           "flux-kontext-pro",
-  "flux-2-flex-image-to-image": "flux-2/flex-image-to-image",
-  "flux-2-flex-text-to-image":  "flux-2/flex-text-to-image",
-  "flux-2-pro-image-to-image":  "flux-2/pro-image-to-image",
-  "flux-2-pro-text-to-image":   "flux-2/pro-text-to-image",
-  "flux-fill":                  "black-forest-labs/flux-1.1-fill",
-  "character-edit":             "ideogram/character-edit",
-  "character-remix":            "ideogram/character-remix",
-  "grok":                       "grok-imagine/image-to-image",
-  "gpt-image":                   "gpt-image",
-  "qwen":                       "qwen/image-to-image",
-  "qwen-text":                  "qwen/text-to-image",
-  "qwen-z-image":               "qwen/image-edit",
-  "seedream-5.0-lite":          "seedream/5-lite-text-to-image",
-  "seedream-5.0-lite-text":    "seedream/5-lite-text-to-image",
-  "seedream-5.0-lite-image":   "seedream/5-lite-image-to-image",
-  "seedream-v4":                "bytedance/seedream-v4",
-};
+// MODEL_MAP is now generated automatically from MODEL_CONFIGS above
 
 export async function POST(req: NextRequest) {
   try {
