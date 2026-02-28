@@ -135,6 +135,7 @@ export function CanvasEditor({
     const newMask = isEraser
       ? mask.filter(d => Math.hypot(d.x - x, d.y - y) > brushSize / 2)
       : [...mask, { x, y, r: brushSize }];
+    console.log('[CanvasEditor] Adding mask dot:', { x, y, r: brushSize, isEraser, maskLength: newMask.length });
     onStateChange({ ...state, mask: newMask });
   }, [state, mask, isEraser, brushSize, onStateChange]);
 
@@ -144,9 +145,9 @@ export function CanvasEditor({
 
   // ── Mouse down ──
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (canvasTool === "inpaint" && e.button === 0) {
+    if (activeTool === "inpaint" && e.button === 0) {
       // Paint with left mouse button (button === 0) - only for brush inpaint
-      console.log('[CanvasEditor] Brush painting started - canvasTool:', canvasTool);
+      console.log('[CanvasEditor] Brush painting started - activeTool:', activeTool);
       e.preventDefault();
       commitMaskSnapshot();
       setIsMouseDown(true);
@@ -163,7 +164,7 @@ export function CanvasEditor({
   // ── Global mouse move/up ──
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (isPainting && canvasTool === "inpaint" && isMouseDown) { addMaskDot(e); return; }
+      if (isPainting && activeTool === "inpaint" && isMouseDown) { addMaskDot(e); return; }
 
       if (rotDragRef.current) {
         const rd = rotDragRef.current;
@@ -425,13 +426,13 @@ export function CanvasEditor({
     return () => { ro.disconnect(); cancelAnimationFrame(raf); };
   }, []);
 
-  const cursor = canvasTool === "inpaint" ? (isEraser ? "cell" : "crosshair") : "default";
+  const cursor = activeTool === "inpaint" ? (isEraser ? "cell" : "crosshair") : "default";
   const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1 };
   const ar = aspectRatio ? (arMap[aspectRatio] ?? null) : null;
 
   // Compute exact pixel box that fits inside outer container preserving aspect ratio
-  // Leave 10px padding on all sides so the canvas never touches the edges
-  const PAD = 10;
+  // Leave 50px padding on all sides so the canvas never touches the edges
+  const PAD = 50;
   let canvasStyle: React.CSSProperties = { width: "100%", height: "100%" };
   if (ar && outerSize.w > 0 && outerSize.h > 0) {
     const maxW = outerSize.w - PAD * 2;

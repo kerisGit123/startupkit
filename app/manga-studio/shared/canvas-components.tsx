@@ -261,6 +261,7 @@ export function MaskCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    console.log('[MaskCanvas] Rendering mask:', { maskLength: mask.length, opacity, width, height });
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");

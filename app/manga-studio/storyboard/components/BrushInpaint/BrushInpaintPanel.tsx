@@ -1,5 +1,5 @@
-import React from 'react';
-import { Paintbrush, Eraser, ImageIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Paintbrush, Eraser, ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface BrushInpaintPanelProps {
@@ -24,6 +24,8 @@ interface BrushInpaintPanelProps {
   // Generation
   inpaintPrompt: string;
   setInpaintPrompt: (value: string) => void;
+  inpaintModel: string;
+  setInpaintModel: (value: "nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix") => void;
   refImages: string[];
   setRefImages: (value: string[]) => void;
   isInpainting: boolean;
@@ -50,6 +52,8 @@ export function BrushInpaintPanel({
   setCanvasState,
   inpaintPrompt,
   setInpaintPrompt,
+  inpaintModel,
+  setInpaintModel,
   refImages,
   setRefImages,
   isInpainting,
@@ -59,37 +63,54 @@ export function BrushInpaintPanel({
   showGenPanel,
   setShowGenPanel,
 }: BrushInpaintPanelProps) {
+  const [isPanelVisible, setIsPanelVisible] = useState(true);
+
   return (
     <div className="p-3 space-y-3">
-      {/* Header */}
-      <div>
-        <h3 className="text-white font-bold text-sm">{title}</h3>
-        <p className="text-[10px] text-gray-500 mt-0.5">{description}</p>
+      {/* Header with Hide/Show Toggle */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-white font-bold text-sm">Brush Inpaint - Faceshift</h3>
+          <p className="text-[10px] text-gray-500 mt-0.5">Paint mask for character face editing</p>
+        </div>
+        <button
+          onClick={() => setIsPanelVisible(!isPanelVisible)}
+          className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-white/10"
+        >
+          {isPanelVisible ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
       </div>
 
-      {/* Brush Controls */}
-      <BrushControls
-        isEraser={isEraser}
-        setIsEraser={setIsEraser}
-        maskBrushSize={maskBrushSize}
-        setMaskBrushSize={setMaskBrushSize}
-        maskOpacity={maskOpacity}
-        setMaskOpacity={setMaskOpacity}
-        canvasState={canvasState}
-        setCanvasState={setCanvasState}
-      />
+      {/* Panel Content - Conditionally Rendered */}
+      {isPanelVisible && (
+        <>
+          {/* Brush Controls */}
+          <BrushControls
+            isEraser={isEraser}
+            setIsEraser={setIsEraser}
+            maskBrushSize={maskBrushSize}
+            setMaskBrushSize={setMaskBrushSize}
+            maskOpacity={maskOpacity}
+            setMaskOpacity={setMaskOpacity}
+            canvasState={canvasState}
+            setCanvasState={setCanvasState}
+          />
 
-      {/* Generation Settings */}
-      <GenerationSettings
-        inpaintPrompt={inpaintPrompt}
-        setInpaintPrompt={setInpaintPrompt}
-        refImages={refImages}
-        setRefImages={setRefImages}
-        isInpainting={isInpainting}
-        inpaintError={inpaintError}
-        onGenerate={onGenerate}
-        canvasState={canvasState}
-      />
+          {/* Generation Settings */}
+          <GenerationSettings
+            inpaintPrompt={inpaintPrompt}
+            setInpaintPrompt={setInpaintPrompt}
+            inpaintModel={inpaintModel}
+            setInpaintModel={setInpaintModel}
+            refImages={refImages}
+            setRefImages={setRefImages}
+            isInpainting={isInpainting}
+            inpaintError={inpaintError}
+            onGenerate={onGenerate}
+            canvasState={canvasState}
+          />
+        </>
+      )}
 
       {/* Status */}
       <StatusPanel
@@ -220,6 +241,8 @@ function BrushControls({
 interface GenerationSettingsProps {
   inpaintPrompt: string;
   setInpaintPrompt: (value: string) => void;
+  inpaintModel: string;
+  setInpaintModel: (value: "nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix") => void;
   refImages: string[];
   setRefImages: (value: string[]) => void;
   isInpainting: boolean;
@@ -233,6 +256,8 @@ interface GenerationSettingsProps {
 function GenerationSettings({
   inpaintPrompt,
   setInpaintPrompt,
+  inpaintModel,
+  setInpaintModel,
   refImages,
   setRefImages,
   isInpainting,
@@ -345,7 +370,7 @@ function StatusPanel({
         </span>
       </div>
       <button
-        onClick={() => setShowGenPanel(v => !v)}
+        onClick={() => setShowGenPanel(!showGenPanel)}
         className="w-full py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5"
       >
         <ImageIcon className="w-3 h-3" />

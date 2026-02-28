@@ -574,10 +574,34 @@ async function buildRequestFromConfig(config: KieModelConfig, params: {
 const MODEL_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(MODEL_CONFIGS).map(([key, config]) => [key, config.kieApiModel])
 );
-export const runtime = 'nodejs';
+console.log('[img-proxy] MODEL_MAP generated:', MODEL_MAP);
+console.log('[img-proxy] Available models:', Object.keys(MODEL_MAP));
 export const preferredRegion = 'auto';
 
 const KIE_API_KEY      = process.env.KIE_AI_API_KEY;
+console.log('[img-proxy] API Key status:', !!KIE_API_KEY ? 'Present' : 'Missing');
+console.log('[img-proxy] API Key length:', KIE_API_KEY?.length || 0);
+console.log('[img-proxy] API Key format:', KIE_API_KEY?.startsWith('eyJ') ? 'JWT format' : 'Other format');
+
+// Validate JWT token (without exposing sensitive data)
+if (KIE_API_KEY && KIE_API_KEY.startsWith('eyJ')) {
+  try {
+    const parts = KIE_API_KEY.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+      console.log('[img-proxy] JWT payload:', {
+        sub: payload.sub,
+        iss: payload.iss,
+        aud: payload.aud,
+        iat: new Date(payload.iat * 1000).toISOString(),
+        exp: new Date(payload.exp * 1000).toISOString(),
+        isExpired: payload.exp * 1000 < Date.now()
+      });
+    }
+  } catch (err) {
+    console.log('[img-proxy] JWT parsing error:', err instanceof Error ? err.message : 'Unknown error');
+  }
+}
 const KIE_CREATE_URL   = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_POLL_URL     = "https://api.kie.ai/api/v1/jobs/recordInfo";
 const KIE_FLUX_URL     = "https://api.kie.ai/api/v1/flux/kontext/generate";
@@ -982,8 +1006,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve frontend model key → KIE model ID
-    const kieModel = MODEL_MAP[frontendModel] ?? frontendModel;
+    let kieModel = MODEL_MAP[frontendModel] ?? frontendModel;
     console.log(`[img-proxy] model: ${frontendModel} → ${kieModel}`);
+    
+    // Debug: Check if character-edit exists in MODEL_MAP
+    if (frontendModel === 'character-edit') {
+      console.log('[img-proxy] Character edit model detected in MODEL_MAP:', !!MODEL_MAP['character-edit']);
+      console.log('[img-proxy] MODEL_MAP keys:', Object.keys(MODEL_MAP));
+    }
+    
+    // Fallback for character-edit if not in MODEL_MAP
+    if (frontendModel === 'character-edit' && (!MODEL_MAP['character-edit'] || MODEL_MAP['character-edit'] !== 'ideogram/character-edit')) {
+      console.log('[img-proxy] Character edit not found in MODEL_MAP, using direct mapping');
+      kieModel = 'ideogram/character-edit';
+      console.log(`[img-proxy] Using fallback mapping: ${frontendModel} → ${kieModel}`);
+    }
 
     // Upload any base64 images to public URLs
     let imageUrl: string | null = null;

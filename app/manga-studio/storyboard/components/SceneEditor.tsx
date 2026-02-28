@@ -2,15 +2,13 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
-  ChevronLeft, ChevronRight, ChevronDown, Image as ImageIcon, MessageSquare,
-  Mic, List, MoreHorizontal, Check, X, Send,
-  Pencil, ZoomIn, ZoomOut, Play, Plus, Upload, Tag,
-  Layers, Type, Paintbrush, Eraser, Eye, EyeOff, Trash2, Square,
-  RotateCcw, RotateCw, Sparkles,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, ImageIcon, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Layers, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check,
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import RectangleInpaintPanel from "./RectangleInpaintPanel";
 import { BrushInpaintPanel } from "./BrushInpaint";
+import { CanvasArea } from "./CanvasArea";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
 import { TAG_COLORS } from "../constants";
 import {
@@ -33,7 +31,7 @@ interface SceneEditorProps {
 export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: SceneEditorProps) {
   const [activeShotId, setActiveShotId] = useState(initialShotId);
   const [commentText, setCommentText] = useState("");
-  const [commentTab, setCommentTab] = useState<"selected" | "all" | "testing">("selected");
+  const [commentTab, setCommentTab] = useState<"upload" | "history">("upload");
   const [editingField, setEditingField] = useState<"voice" | "notes" | "action" | null>(null);
   const [fieldDraft, setFieldDraft] = useState("");
   const [zoom, setZoom] = useState(53);
@@ -45,7 +43,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [inpaintError, setInpaintError] = useState<string | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [showGenPanel, setShowGenPanel] = useState(false);
-  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("ideogram");
+  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("character-edit");
   const [showBrushModelDropdown, setShowBrushModelDropdown] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [newTagName, setNewTagName] = useState("");
@@ -84,6 +82,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [hideBrushMask, setHideBrushMask] = useState(false); // Hide/show blue brush mask on canvas
   const [newBubbleText, setNewBubbleText] = useState("test...");
   const [newBubbleType, setNewBubbleType] = useState<BubbleType>("speech");
   const [newTextContent, setNewTextContent] = useState("test...");
@@ -136,14 +135,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
 
-  // Computed canvas active tool - hide brush for ideogram, show for character-edit
+  // Computed canvas active tool - enable brush for all inpaint models
   const canvasActiveTool = useMemo(() => {
     if (canvasTool === "inpaint") {
-      // Hide brush for ideogram, show only for character-edit
-      return inpaintModel === "character-edit" ? "inpaint" : "layers";
+      // Enable brush for all inpaint models
+      return "inpaint";
     }
     return canvasTool;
-  }, [canvasTool, inpaintModel]);
+  }, [canvasTool]);
 
   const getCanvasCenter = () => {
     const el = canvasContainerRef.current;
@@ -1675,7 +1674,86 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
   };
 
-  // New Character Edit inpaint function - uses n8n-image-proxy pattern like rectangle inpaint
+  // Helper functions for image processing
+  const convertToWebP = async (imageUrl: string, quality: number = 0.8): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/webp", quality));
+        } else {
+          reject(new Error("Cannot get canvas context"));
+        }
+      };
+      img.onerror = reject;
+      img.src = imageUrl;
+    });
+  };
+
+  const convertMaskToWebP = async (mask: Array<{ x: number; y: number; r?: number }>, imageUrl: string, quality: number = 0.8): Promise<string> => {
+    // Load the original image to get dimensions
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = reject;
+      img.src = imageUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Cannot get canvas context");
+
+    // Create black background
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw white circles for mask dots
+    ctx.fillStyle = "white";
+    const scaleX = canvas.width / 800; // Assuming original canvas is 800px wide
+    const scaleY = canvas.height / 450; // Assuming original canvas is 450px high
+    
+    for (const dot of mask) {
+      ctx.beginPath();
+      ctx.arc(dot.x * scaleX, dot.y * scaleY, (dot.r || 15) * Math.min(scaleX, scaleY), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    return canvas.toDataURL("image/webp", quality);
+  };
+
+  const uploadImageToServer = async (base64Image: string): Promise<string> => {
+    // Convert base64 to blob
+    const response = await fetch(base64Image);
+    const blob = await response.blob();
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('file', blob, `image-${Date.now()}.webp`);
+    
+    // Upload to server (you'll need to implement this endpoint)
+    const uploadResponse = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!uploadResponse.ok) {
+      throw new Error('Upload failed');
+    }
+    
+    const result = await uploadResponse.json();
+    return result.url;
+  };
+
+  // New Character Edit inpaint function - uses direct KIE API
   const runCharacterEditInpaint = async () => {
     const mask = canvasState.mask;
     if (mask.length === 0 || !inpaintPrompt.trim()) return;
@@ -1785,57 +1863,61 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           const canvas = document.createElement("canvas");
           canvas.width = img.width;
           canvas.height = img.height;
-          const ctx = canvas.getContext("2d")!;
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL("image/webp", 0.9));
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/webp", 0.8));
+          }
         };
-        img.onerror = () => resolve(imageBase64); // fallback
         img.src = imageBase64;
       });
 
       // Convert reference images to WebP
       const refWebpImages = await Promise.all(
-        refImages.map((refImg) => 
-          new Promise<string>((resolve) => {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => {
-              const canvas = document.createElement("canvas");
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext("2d")!;
-              ctx.drawImage(img, 0, 0);
-              resolve(canvas.toDataURL("image/webp", 0.9));
-            };
-            img.onerror = () => resolve(refImg); // fallback
-            img.src = refImg;
-          })
-        )
+        refImages.map(img => convertToWebP(img, 0.8))
       );
 
-      // 4. Send to n8n-image-proxy with all WebP images
-      const requestBody = {
+      // Upload images to get URLs
+      const uploadedImageUrl = await uploadImageToServer(imageWebpBase64);
+      const uploadedMaskUrl = await uploadImageToServer(maskBase64);
+      const uploadedRefUrls = await Promise.all(
+        refWebpImages.map(img => uploadImageToServer(img))
+      );
+
+      console.log("[brushCharacterEdit] Uploading images complete:", {
+        imageUrl: uploadedImageUrl,
+        maskUrl: uploadedMaskUrl,
+        refUrls: uploadedRefUrls
+      });
+
+      // Use the proxy like other models do
+      const proxyRequestBody = {
         prompt: inpaintPrompt,
-        model: inpaintModel,
+        model: 'character-edit',  // Use frontend model name, proxy will map to ideogram/character-edit
         image: imageWebpBase64,
         mask: maskBase64,
         referenceImages: refWebpImages.length > 0 ? refWebpImages : undefined,
       };
 
       console.log("[brushCharacterEdit] Sending to n8n-image-proxy:", {
-        model: inpaintModel,
-        hasImage: !!imageBase64,
+        model: 'character-edit',
+        hasImage: !!imageWebpBase64,
         hasMask: !!maskBase64,
-        hasReferenceImages: refImages.length > 0,
-        promptLength: inpaintPrompt.length
+        hasReferenceImages: refWebpImages.length > 0,
+        imageLength: imageWebpBase64?.length,
+        maskLength: maskBase64?.length,
+        refImagesCount: refWebpImages.length
       });
 
       const response = await fetch("/api/n8n-image-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(proxyRequestBody),
         signal: AbortSignal.timeout(300000),
       });
+
+      console.log("[brushCharacterEdit] Proxy response status:", response.status);
+      console.log("[brushCharacterEdit] Proxy response ok:", response.ok);
 
       if (!response.ok) {
         const err = await response.json();
@@ -1844,10 +1926,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       const result = await response.json();
       const generatedImageUrl = result.image ?? result.url ?? result.output ?? result.data;
+      
       if (!generatedImageUrl) throw new Error("No image returned from Character Edit");
-      console.log("[brushCharacterEdit] Got generated image from KIE");
+      console.log("[brushCharacterEdit] Got generated image from proxy");
 
-      // 5. Load the generated image and resolve to base64 if it's a URL (same as rectangle)
+      // Convert to base64 if needed
       let generatedBase64 = generatedImageUrl;
       if (generatedImageUrl.startsWith("http")) {
         const imgRes = await fetch(generatedImageUrl);
@@ -1861,26 +1944,58 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         });
       }
 
-      // 6. Store result (newest first like Image Generation)
-      setGeneratedImages(prev => [generatedBase64, ...prev]); // Prepend to beginning
+      setGeneratedImages(prev => [generatedBase64, ...prev]);
       setShowGenPanel(true);
-      // Don't clear mask for Character Edit - user might want to iterate
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
-      setInpaintError(msg);
+      
+      if (msg.includes("KIE_AI_API_KEY not configured")) {
+        setInpaintError("AI service not configured. Please contact administrator to set up the API key.");
+      } else if (msg.includes("Authentication failed") || msg.includes("Unauthorized")) {
+        setInpaintError("API authentication failed. The API key may be invalid, expired, or incorrectly formatted.");
+      } else if (msg.includes("401")) {
+        setInpaintError("API access denied. Please verify your API key is valid and has the necessary permissions.");
+      } else if (msg.includes("403")) {
+        setInpaintError("API access forbidden. Your API key may not have permission to use this service.");
+      } else if (msg.includes("429")) {
+        setInpaintError("API rate limit exceeded. Please wait a moment and try again.");
+      } else if (msg.includes("500")) {
+        setInpaintError("API server error. Please try again later or contact support if the issue persists.");
+      } else {
+        setInpaintError(msg);
+      }
+      
       console.error("Character Edit inpaint error:", err);
     } finally {
       setIsInpainting(false);
     }
   };
 
-  const goTo = (id: string) => setActiveShotId(id);
-  const goPrev = () => { if (activeIdx > 0) setActiveShotId(shots[activeIdx - 1].id); };
-  const goNext = () => { if (activeIdx < shots.length - 1) setActiveShotId(shots[activeIdx + 1].id); };
+  // Navigation functions
+  const goTo = (shotId: string) => {
+    setActiveShotId(shotId);
+  };
 
-  const saveField = (field: "voiceOver" | "notes" | "action") => {
-    onShotsChange(shots.map(s => s.id === activeShotId ? { ...s, [field]: fieldDraft } : s));
+  const goPrev = () => {
+    const currentIndex = shots.findIndex(s => s.id === activeShotId);
+    if (currentIndex > 0) {
+      setActiveShotId(shots[currentIndex - 1].id);
+    }
+  };
+
+  const goNext = () => {
+    const currentIndex = shots.findIndex(s => s.id === activeShotId);
+    if (currentIndex < shots.length - 1) {
+      setActiveShotId(shots[currentIndex + 1].id);
+    }
+  };
+
+  // Helper functions that were removed but needed - functions restored
+  const saveField = (field: "voice" | "notes" | "action") => {
+    if (!editingField || !activeShotId) return;
+    const map = { voice: "voiceOver", notes: "notes", action: "action" } as const;
+    onShotsChange(shots.map(s => s.id === activeShotId ? { ...s, [map[field]]: fieldDraft } : s));
     setEditingField(null);
   };
 
@@ -1899,8 +2014,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   const handleAddTag = () => {
     if (!newTagName.trim()) return;
-    const tag: TagType = { id: `t${Date.now()}`, name: newTagName.trim(), color: newTagColor };
-    onShotsChange(shots.map(s => s.id === activeShotId ? { ...s, tags: [...s.tags, tag] } : s));
+    const nt: TagItem = { id: `tg${Date.now()}`, name: newTagName, color: newTagColor };
+    onShotsChange(shots.map(s => s.id === activeShotId ? { ...s, tags: [...s.tags, nt] } : s));
     setNewTagName("");
     setShowTagPicker(false);
   };
@@ -1909,11 +2024,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     onShotsChange(shots.map(s => s.id === activeShotId ? { ...s, tags: s.tags.filter(t => t.id !== tagId) } : s));
   };
 
-  const handleRefUpload = () => {
-    setRefImages(prev => [...prev, `ref-${Date.now()}`]);
+  const handleRefUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const urls = Array.from(files).map(f => URL.createObjectURL(f));
+    setRefImages(prev => [...prev, ...urls]);
   };
 
-  const allComments = shots.flatMap(s => s.comments.map(c => ({ ...c, shotNum: s.shot })));
+  const allComments = shots.flatMap(s => s.comments);
 
   if (!activeShot) return null;
 
@@ -2342,7 +2460,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   <textarea value={fieldDraft} onChange={e => setFieldDraft(e.target.value)}
                     className="w-full bg-[#1c1c26] border border-white/10 rounded-lg p-2 text-white text-xs resize-none focus:outline-none focus:border-violet-500/50 h-20" autoFocus />
                   <div className="flex gap-1.5 mt-1">
-                    <button onClick={() => saveField("voiceOver")} className="text-green-400"><Check className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => saveField("voice")} className="text-green-400"><Check className="w-3.5 h-3.5" /></button>
                     <button onClick={() => setEditingField(null)} className="text-gray-500"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 </div>
@@ -2418,88 +2536,66 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
         {/* Center: large image */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Prev / Next arrows */}
-          <button
-            onClick={goPrev}
-            disabled={activeIdx === 0}
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition disabled:opacity-20"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={goNext}
-            disabled={activeIdx === shots.length - 1}
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-8 h-8 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition disabled:opacity-20"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          <CanvasArea
+            activeIdx={activeIdx}
+            shots={shots}
+            goPrev={goPrev}
+            goNext={goNext}
+            panelId={panelId}
+            backgroundImage={backgroundImage || undefined}
+            activeShot={activeShot}
+            canvasActiveTool={canvasActiveTool}
+            canvasState={canvasState}
+            setCanvasState={setCanvasState}
+            canvasContainerRef={canvasContainerRef as React.RefObject<HTMLDivElement>}
+            maskBrushSize={maskBrushSize}
+            isEraser={isEraser}
+            maskOpacity={maskOpacity}
+            hideBrushMask={hideBrushMask}
+            setHideBrushMask={setHideBrushMask}
+            hiddenIds={hiddenIds}
+            setCanvasSelection={setCanvasSelection}
+            canvasSelection={canvasSelection}
+            rectangle={rectangle}
+            setRectangle={setRectangle}
+            imageIsRectangleVisible={imageIsRectangleVisible}
+            canvasTool={canvasTool}
+            isAspectRatioAnimating={isAspectRatioAnimating}
+            isSquareMode={isSquareMode}
+          />
+        </div>
 
-          <div ref={canvasContainerRef} className="flex-1 overflow-hidden bg-[#0d0d12]">
-            <CanvasEditor
-              panelId={panelId}
-              imageUrl={backgroundImage || activeShot.imageUrl}
-              activeTool={canvasActiveTool}
-              state={canvasState}
-              onStateChange={setCanvasState}
-              // Only pass brush props when character-edit is selected
-              brushSize={inpaintModel === "character-edit" ? maskBrushSize : undefined}
-              isEraser={inpaintModel === "character-edit" ? isEraser : undefined}
-              maskOpacity={inpaintModel === "character-edit" ? maskOpacity : undefined}
-              hideMask={inpaintModel === "ideogram"} // Hide mask when ideogram is selected
-              hiddenObjectIds={hiddenIds}
-              onSelectionChange={setCanvasSelection}
-              selection={canvasSelection}
-              aspectRatio={activeShot.aspectRatio || "16:9"}
-              rectangle={rectangle}
-              onRectangleChange={setRectangle}
-              rectangleVisible={imageIsRectangleVisible}
-              canvasTool={canvasTool}
-              isAspectRatioAnimating={isAspectRatioAnimating}
-              isSquareMode={isSquareMode}
-              resetAllTransformations={() => {
-                // Reset all transformations for all objects
-                setCanvasState(prev => ({
-                  ...prev,
-                  bubbles: prev.bubbles.map(b => ({ ...b, rotation: 0, flipX: false, flipY: false })),
-                  textElements: prev.textElements.map(t => ({ ...t, rotation: 0, flipX: false, flipY: false })),
-                  assetElements: prev.assetElements.map(a => ({ ...a, rotation: 0, flipX: false, flipY: false })),
-                }));
-              }}
+        {/* Bottom: AI prompt bar */}
+        <div className="border-t border-white/6 bg-[#111118] shrink-0">
+          <div className="flex border-b border-white/6">
+            <button className="flex-1 py-2.5 text-xs text-violet-400 border-b-2 border-violet-500 font-medium">Fine-tune current image</button>
+            <button className="flex-1 py-2.5 text-xs text-gray-500 hover:text-gray-300 transition">Create new image</button>
+          </div>
+          <div className="flex items-center gap-3 px-4 py-3">
+            <input
+              placeholder="Describe your edit. Mention characters with @..."
+              className="flex-1 bg-transparent text-white text-sm placeholder-gray-600 focus:outline-none"
             />
-                      </div>
-
-          {/* Bottom: AI prompt bar */}
-          <div className="border-t border-white/6 bg-[#111118] shrink-0">
-            <div className="flex border-b border-white/6">
-              <button className="flex-1 py-2.5 text-xs text-violet-400 border-b-2 border-violet-500 font-medium">Fine-tune current image</button>
-              <button className="flex-1 py-2.5 text-xs text-gray-500 hover:text-gray-300 transition">Create new image</button>
+            <div className="flex items-center gap-2 text-gray-500 text-xs">
+              <button className="hover:text-gray-300 transition">Upload</button>
+              <span>|</span>
+              <button className="hover:text-gray-300 transition"><MoreHorizontal className="w-4 h-4" /></button>
             </div>
-            <div className="flex items-center gap-3 px-4 py-3">
-              <input
-                placeholder="Describe your edit. Mention characters with @..."
-                className="flex-1 bg-transparent text-white text-sm placeholder-gray-600 focus:outline-none"
-              />
-              <div className="flex items-center gap-2 text-gray-500 text-xs">
-                <button className="hover:text-gray-300 transition">Upload</button>
-                <span>|</span>
-                <button className="hover:text-gray-300 transition"><MoreHorizontal className="w-4 h-4" /></button>
-              </div>
-              <button className="w-8 h-8 bg-violet-600 hover:bg-violet-700 rounded-full flex items-center justify-center transition">
-                <Send className="w-3.5 h-3.5 text-white" />
-              </button>
-            </div>
+            <button className="w-8 h-8 bg-violet-600 hover:bg-violet-700 rounded-full flex items-center justify-center transition">
+              <Send className="w-3.5 h-3.5 text-white" />
+            </button>
           </div>
         </div>
 
-        {/* Generated Images Panel (shown after inpaint) */}
-        {showGenPanel && (
-          <div className="w-[130px] border-l border-white/6 bg-[#0d0d14] flex flex-col shrink-0">
-            <div className="flex items-center justify-between px-2 py-2 border-b border-white/6">
-              <span className="text-[10px] text-gray-400 font-semibold">Generated</span>
-              <button onClick={() => setShowGenPanel(false)} className="text-gray-600 hover:text-gray-300 transition">
-                <X className="w-3 h-3" />
-              </button>
-            </div>
+      {/* Generated Images Panel (shown after inpaint) */}
+      {showGenPanel && (
+        <div className="w-[130px] border-l border-white/6 bg-[#0d0d14] flex flex-col shrink-0">
+          <div className="flex items-center justify-between px-2 py-2 border-b border-white/6">
+            <span className="text-[10px] text-gray-400 font-semibold">Generated</span>
+            <button onClick={() => setShowGenPanel(false)} className="text-gray-600 hover:text-gray-300 transition">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
             <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
               {/* Original image always at top */}
               {(originalImage || activeShot?.imageUrl) && (
@@ -2571,7 +2667,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             { id: "rectInpaint" as CanvasTool, Icon: Square,       label: "Rect",     color: "cyan"   },
             { id: "image"    as CanvasTool, Icon: ImageIcon,     label: "Image",    color: "purple"  },
             { id: "crop"     as CanvasTool, Icon: ImageIcon,     label: "Crop",     color: "orange"  },
-            { id: "comments" as CanvasTool, Icon: MessageSquare, label: "Comments", color: "gray"    },
+            { id: "comments" as CanvasTool, Icon: Upload, label: "Upload", color: "purple" },
           ] as { id: CanvasTool; Icon: React.ElementType; label: string; color: string }[]).map(({ id, Icon, label, color }) => (
             <button key={id} onClick={() => setCanvasTool(id)}
               className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
@@ -2914,9 +3010,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           {canvasTool === "inpaint" && (
             <BrushInpaintPanel
               // Header
-              title="Brush Inpaint - FaceShift"
-              description="Paint areas to inpaint with FaceShift AI"
-              
+              title="Brush Inpaint"
+              description="Paint areas to edit with AI"
               // Brush Settings
               isEraser={isEraser}
               setIsEraser={setIsEraser}
@@ -2924,21 +3019,19 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               setMaskBrushSize={setMaskBrushSize}
               maskOpacity={maskOpacity}
               setMaskOpacity={setMaskOpacity}
-              
               // Canvas State
               canvasState={canvasState}
               setCanvasState={setCanvasState}
-              
               // Generation
               inpaintPrompt={inpaintPrompt}
               setInpaintPrompt={setInpaintPrompt}
+              inpaintModel={inpaintModel}
+              setInpaintModel={setInpaintModel}
               refImages={refImages}
               setRefImages={setRefImages}
               isInpainting={isInpainting}
               inpaintError={inpaintError}
               onGenerate={runCharacterEditInpaint}
-              
-              // Results Panel
               generatedImages={generatedImages}
               showGenPanel={showGenPanel}
               setShowGenPanel={setShowGenPanel}
@@ -3269,160 +3362,17 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             </>
           )}
 
-          {/* ── Comments ── */}
+          // ── Upload ──
           {canvasTool === "comments" && (
             <>
-              <div className="flex items-center gap-1 px-3 py-2.5 border-b border-white/6 shrink-0">
-                {(["selected", "all", "testing"] as const).map(tab => (
-                  <button key={tab} onClick={() => setCommentTab(tab)}
-                    className={`px-3 py-1 rounded text-[10px] font-medium transition ${
-                      commentTab === tab
-                        ? "bg-white/10 text-white"
-                        : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-                    }`}
-                  >
-                    {tab === "selected" ? "Selected" : tab === "all" ? "All" : "Testing"}
-                  </button>
-                ))}
-              </div>
               <div className="flex-1 overflow-y-auto p-3">
-                {commentTab === "selected" && activeShot.comments.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                    <MessageSquare className="w-8 h-8 text-gray-700" />
-                    <p className="text-gray-600 text-xs">No comments yet</p>
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                  <div className="space-y-2">
+                    <label className="text-[11px] text-gray-300 font-semibold">Background Image Upload</label>
                     
-                    {/* Background Image Upload */}
-                    <div className="w-full max-w-xs">
-                      <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] font-semibold text-gray-300">Background Image</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  const dataUrl = event.target?.result as string;
-                                  // Set as original image and background
-                                  setOriginalImage(dataUrl);
-                                  setBackgroundImage(dataUrl);
-                                  // Clear previous generated images when new original is uploaded
-                                  setGeneratedImages([]);
-                                  // Show the generated panel to display the new original
-                                  setShowGenPanel(true);
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                            className="hidden"
-                            id="bg-upload-selected"
-                          />
-                          <label
-                            htmlFor="bg-upload-selected"
-                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] cursor-pointer transition"
-                          >
-                            Upload
-                          </label>
-                        </div>
-                        <div 
-                          className="w-full h-16 bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-500/40 transition-colors"
-                          onClick={() => document.getElementById('bg-upload-selected')?.click()}
-                        >
-                          {backgroundImage ? (
-                            <img src={backgroundImage} alt="Background" className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-[9px] text-gray-500">No background image (click to upload)</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {commentTab === "selected" && activeShot.comments.map(c => (
-                  <div key={c.id} className="mb-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center text-[9px] text-white font-bold shrink-0">{c.avatar}</div>
-                      <span className="text-white text-[11px] font-medium">{c.author}</span>
-                      <span className="text-gray-600 text-[9px] ml-auto">{c.timestamp}</span>
-                    </div>
-                    <p className="text-gray-300 text-[11px] ml-7 leading-relaxed">{c.text}</p>
-                  </div>
-                ))}
-                {commentTab === "all" && allComments.length === 0 && (
-                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                    <MessageSquare className="w-8 h-8 text-gray-700" />
-                    <p className="text-gray-600 text-xs">No comments yet</p>
-                    
-                    {/* Background Image Upload */}
-                    <div className="w-full max-w-xs">
-                      <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[10px] font-semibold text-gray-300">Background Image</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  const dataUrl = event.target?.result as string;
-                                  // Set as original image and background
-                                  setOriginalImage(dataUrl);
-                                  setBackgroundImage(dataUrl);
-                                  // Clear previous generated images when new original is uploaded
-                                  setGeneratedImages([]);
-                                  // Show the generated panel to display the new original
-                                  setShowGenPanel(true);
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            }}
-                            className="hidden"
-                            id="bg-upload-all"
-                          />
-                          <label
-                            htmlFor="bg-upload-all"
-                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] cursor-pointer transition"
-                          >
-                            Upload
-                          </label>
-                        </div>
-                        <div 
-                          className="w-full h-16 bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-500/40 transition-colors"
-                          onClick={() => document.getElementById('bg-upload-all')?.click()}
-                        >
-                          {backgroundImage ? (
-                            <img src={backgroundImage} alt="Background" className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-[9px] text-gray-500">No background image (click to upload)</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {commentTab === "all" && allComments.map(c => (
-                  <div key={c.id} className="mb-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <div className="w-5 h-5 rounded-full bg-violet-500 flex items-center justify-center text-[9px] text-white font-bold shrink-0">{c.avatar}</div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-white text-[11px] font-medium">{c.author}</span>
-                        <span className="text-gray-500 text-[9px] ml-1">Frame {c.shotNum}</span>
-                      </div>
-                      <span className="text-gray-600 text-[9px]">{c.timestamp}</span>
-                    </div>
-                    <p className="text-gray-300 text-[11px] ml-7 leading-relaxed">{c.text}</p>
-                  </div>
-                ))}
-              {commentTab === "testing" && (
-                <div className="space-y-3">
-                  {/* Background Image Upload */}
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-semibold text-gray-300">Background Image</span>
+                    {/* Upload Component */}
+                    <div className="space-y-3">
+                      {/* Hidden File Input */}
                       <input
                         type="file"
                         accept="image/*"
@@ -3430,120 +3380,141 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                           const file = e.target.files?.[0];
                           if (file) {
                             const reader = new FileReader();
-                            reader.onload = (event) => {
-                              const dataUrl = event.target?.result as string;
-                              // Set as original image and background
-                              setOriginalImage(dataUrl);
-                              setBackgroundImage(dataUrl);
-                              // Clear previous generated images when new original is uploaded
-                              setGeneratedImages([]);
-                              // Show the generated panel to display the new original
-                              setShowGenPanel(true);
+                            reader.onload = (e) => {
+                              const result = e.target?.result as string;
+                              setBackgroundImage(result);
                             };
                             reader.readAsDataURL(file);
                           }
                         }}
                         className="hidden"
-                        id="bg-upload-testing"
+                        id="background-upload-comments"
                       />
-                      <label
-                        htmlFor="bg-upload-testing"
-                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] cursor-pointer transition"
+                      
+                      {/* Upload Area */}
+                      <div 
+                        className="relative group cursor-pointer"
+                        onClick={() => document.getElementById('background-upload-comments')?.click()}
                       >
-                        Upload
-                      </label>
-                    </div>
-                    <div 
-                      className="w-full h-16 bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-500/40 transition-colors"
-                      onClick={() => document.getElementById('bg-upload-testing')?.click()}
-                    >
-                      {backgroundImage ? (
-                        <img src={backgroundImage} alt="Background" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-[9px] text-gray-500">No background image (click to upload)</span>
+                        <div className="border-2 border-dashed border-purple-500/30 hover:border-purple-500/60 rounded-lg p-6 transition-all duration-200 bg-purple-500/5 hover:bg-purple-500/10">
+                          <div className="flex flex-col items-center justify-center space-y-3">
+                            {/* Upload Icon */}
+                            <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
+                              <Upload className="w-6 h-6 text-purple-400" />
+                            </div>
+                            
+                            {/* Upload Text */}
+                            <div className="text-center">
+                              <p className="text-purple-300 text-sm font-medium">Click to upload or drag and drop</p>
+                              <p className="text-gray-500 text-xs mt-1">PNG, JPG, WebP up to 10MB</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Current Background Preview */}
+                      {backgroundImage && (
+                        <div className="space-y-4">
+                          {/* Preview Header */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                              <span className="text-[12px] text-gray-300 font-semibold">Background Image</span>
+                            </div>
+                            <button
+                              onClick={() => setBackgroundImage(null)}
+                              className="text-red-400 hover:text-red-300 transition text-xs"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          
+                          {/* Main Preview */}
+                          <div className="relative group">
+                            <img 
+                              src={backgroundImage} 
+                              alt="Background" 
+                              className="w-full h-48 object-cover rounded-xl border-2 border-purple-500/40 shadow-lg" 
+                            />
+                            
+                            {/* Overlay Actions */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <div className="absolute bottom-4 left-4 right-4">
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-white text-sm font-medium mb-1">Background Image</p>
+                                    <p className="text-white/80 text-xs">Click to change or manage</p>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        document.getElementById('background-upload-comments')?.click();
+                                      }}
+                                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1"
+                                    >
+                                      <Upload className="w-3 h-3" />
+                                      Change
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setBackgroundImage(null);
+                                      }}
+                                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1"
+                                    >
+                                      <X className="w-3 h-3" />
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Status Badge */}
+                            <div className="absolute top-3 right-3">
+                              <div className="bg-green-500/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-green-400/30">
+                                <span className="text-white text-[10px] font-medium">Active</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Image Info */}
+                          <div className="bg-[#1a1a24] rounded-xl p-3 border border-white/10">
+                            <div className="grid grid-cols-3 gap-3 text-xs">
+                              <div className="text-center">
+                                <p className="text-gray-500">Status</p>
+                                <p className="text-green-400 font-semibold">Applied</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-500">Type</p>
+                                <p className="text-gray-300 font-semibold">Background</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-gray-500">Size</p>
+                                <p className="text-gray-300 font-semibold">Full</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Instructions */}
+                      {!backgroundImage && (
+                        <div className="bg-[#1a1a24] rounded-lg p-3 border border-white/10">
+                          <h4 className="text-[10px] text-gray-300 font-semibold mb-2">How to use:</h4>
+                          <ul className="text-[10px] text-gray-500 space-y-1">
+                            <li>• Click the upload area or drag & drop an image</li>
+                            <li>• Supported formats: PNG, JPG, WebP</li>
+                            <li>• Image will be scaled to fit the canvas</li>
+                            <li>• Use "Remove" to clear the background</li>
+                          </ul>
+                        </div>
                       )}
                     </div>
                   </div>
-
-                  {/* Reference Images */}
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-semibold text-gray-300">Reference Images</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          const newRefImages: string[] = [];
-                          files.forEach(file => {
-                            const reader = new FileReader();
-                            reader.onload = (event) => {
-                              const dataUrl = event.target?.result as string;
-                              newRefImages.push(dataUrl);
-                              if (newRefImages.length === files.length) {
-                                setRefImages(prev => [...prev.slice(0, 3 - files.length), ...newRefImages].slice(0, 3));
-                              }
-                            };
-                            reader.readAsDataURL(file);
-                          });
-                        }}
-                        className="hidden"
-                        id="ref-upload"
-                      />
-                      <label
-                        htmlFor="ref-upload"
-                        className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-[9px] cursor-pointer transition"
-                      >
-                        Add Images
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1">
-                      {[0, 1, 2].map((i) => (
-                        <div key={i} className="aspect-square bg-[#1a1a24] border border-dashed border-white/20 rounded-lg flex items-center justify-center overflow-hidden">
-                          {refImages[i] ? (
-                            <img src={refImages[i]} alt={`Reference ${i + 1}`} className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-[8px] text-gray-500">Ref {i + 1}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Prompt Textbox */}
-                  <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3">
-                    <div className="mb-2">
-                      <span className="text-[10px] font-semibold text-gray-300">Prompt</span>
-                    </div>
-                    <textarea
-                      value={promptText}
-                      onChange={e => setPromptText(e.target.value)}
-                      placeholder="Enter your prompt here..."
-                      className="w-full h-16 bg-[#1a1a24] border border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white placeholder-gray-600 focus:outline-none resize-none"
-                    />
-                    <div className="flex justify-end mt-2">
-                      <button className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[9px] font-medium transition">
-                        Generate
-                      </button>
-                    </div>
-                  </div>
                 </div>
-              )}
               </div>
-              {commentTab !== "testing" && (
-                <div className="p-3 border-t border-white/6 shrink-0">
-                  <div className="flex items-center gap-2 bg-[#1c1c26] border border-white/10 rounded-xl px-3 py-2">
-                    <input value={commentText} onChange={e => setCommentText(e.target.value)}
-                      onKeyDown={e => e.key === "Enter" && handleAddComment()}
-                      placeholder="Leave a comment..."
-                      className="flex-1 bg-transparent text-white text-xs placeholder-gray-600 focus:outline-none" />
-                    <button onClick={handleAddComment} aria-label="Send comment" className="text-blue-400 hover:text-blue-300 transition">
-                      <Send className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
             </>
           )}
         </div>
