@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Image as ImageIcon, MessageSquare,
   Mic, List, MoreHorizontal, Check, X, Send,
@@ -7,7 +8,6 @@ import {
   Layers, Type, Paintbrush, Eraser, Eye, EyeOff, Trash2, Square,
   RotateCcw, RotateCw, Sparkles,
 } from "lucide-react";
-import { useState, useRef, useEffect, useCallback } from "react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import RectangleInpaintPanel from "./RectangleInpaintPanel";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
@@ -45,7 +45,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [inpaintError, setInpaintError] = useState<string | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [showGenPanel, setShowGenPanel] = useState(false);
-  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image">("openai-4o");
+  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("ideogram");
+  const [showBrushModelDropdown, setShowBrushModelDropdown] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
@@ -56,8 +57,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Image tab independent state
   const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
   const [imageInpaintPrompt, setImageInpaintPrompt] = useState("");
-  const [imageUseCase, setImageUseCase] = useState<string>("character-design");
-  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "nano-banana-edit" | "nano-banana-pro" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "gpt-image" | "grok" | "grok-text" | "qwen-z-image" | "qwen" | "qwen-text" | "seedream-5.0-lite" | "seedream-4.5" | "seedream-v4" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "flux-2-pro-image-to-image" | "flux-2-pro-text-to-image">("nano-banana-edit");
+  const [imageUseCase, setImageUseCase] = useState<string>("composition-objects");
+  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "nano-banana-2" | "nano-banana-edit" | "nano-banana-pro" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "gpt-image" | "grok" | "grok-text" | "qwen-z-image" | "qwen" | "qwen-text" | "seedream-5.0-lite" | "seedream-5.0-lite-text" | "seedream-5.0-lite-image" | "seedream-4.5" | "seedream-v4" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "flux-2-pro-image-to-image" | "flux-2-pro-text-to-image">("nano-banana-edit");
   const [imageRectangle, setImageRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [imageIsRectangleVisible, setImageIsRectangleVisible] = useState(true);
@@ -119,6 +120,15 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   };
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
+
+  // Computed canvas active tool - hide brush for ideogram, show for character-edit
+  const canvasActiveTool = useMemo(() => {
+    if (canvasTool === "inpaint") {
+      // Hide brush for ideogram, show only for character-edit
+      return inpaintModel === "character-edit" ? "inpaint" : "layers";
+    }
+    return canvasTool;
+  }, [canvasTool, inpaintModel]);
 
   const getCanvasCenter = () => {
     const el = canvasContainerRef.current;
@@ -455,8 +465,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       // Set the cropped image as the new background
       setBackgroundImage(croppedImage);
       
-      // Add cropped image to generated images panel
-      setGeneratedImages(prev => [...prev, croppedImage]);
+      // Add cropped image to generated images panel (newest first)
+      setGeneratedImages(prev => [croppedImage, ...prev]);
       setShowGenPanel(true);
 
     } catch (err) {
@@ -664,10 +674,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       label: "Character Design", 
       emoji: "👤", 
       refMode: "multi",  
-      bestModel: "seedream-4.5",             
-      bestModelLabel: "Seedream 4.5",    
+      bestModel: "seedream-5.0-lite-image",             
+      bestModelLabel: "Seedream 5 Lite",    
       models: [
-        { value: "seedream-4.5", label: "Seedream 4.5", sub: "Multi-reference expert" }, 
+        { value: "seedream-5.0-lite-image", label: "Seedream 5 Lite", sub: "Multi-reference expert" }, 
         { value: "gpt-image", label: "GPT Image 1.5", sub: "World knowledge" }, 
         { value: "nano-banana-edit", label: "Nano Banana Edit", sub: "High fidelity" }
       ] 
@@ -695,27 +705,18 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         { value: "gpt-image", label: "GPT Image 1.5", sub: "Budget" }
       ] 
     },
-    "style-enhancement": { 
-      label: "Style & Enhancement", 
-      emoji: "🎨", 
-      refMode: "single", 
-      bestModel: "flux-kontext-pro",          
-      bestModelLabel: "Flux Kontext",    
-      models: [
-        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, 
-        { value: "nano-banana-pro", label: "Nano Banana Pro", sub: "4K fidelity" }, 
-        { value: "gpt-image", label: "GPT Image 1.5", sub: "Style expert" }
-      ] 
-    },
+ 
     "composition-objects": { 
       label: "Composition & Objects", 
       emoji: "📐", 
       refMode: "multi", 
-      bestModel: "seedream-4.5",             
-      bestModelLabel: "Seedream 4.5",    
+      bestModel: "seedream-5.0-lite-image",             
+      bestModelLabel: "Seedream 5 Lite",    
       models: [
-        { value: "seedream-4.5", label: "Seedream 4.5", sub: "Spatial expert" }, 
+        { value: "seedream-5.0-lite-image", label: "Seedream 5 Lite", sub: "Spatial expert" }, 
+        { value: "nano-banana-2", label: "Nano Banana 2", sub: "Enhanced" },
         { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Layout" }, 
+        { value: "gpt-image", label: "GPT Image 1.5", sub: "Style expert 1:1" },
         { value: "qwen-z-image", label: "Qwen Image Edit", sub: "Precise" }
       ] 
     },
@@ -728,7 +729,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       models: [
         { value: "flux-2-flex-text-to-image", label: "Flux 2 Flex", sub: "Fast" }, 
         { value: "flux-2-pro-text-to-image", label: "Flux 2 Pro", sub: "High quality" }, 
-        { value: "seedream-5.0-lite", label: "Seedream 5 Lite", sub: "Detailed" }
+        { value: "nano-banana-2", label: "Nano Banana 2", sub: "Enhanced" },
+        { value: "seedream-5.0-lite-text", label: "Seedream 5 Lite", sub: "Detailed" }
       ] 
     },
   };
@@ -752,12 +754,20 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       // Reference images = all uploaded reference images (optional style/character refs)
       const refImages = imageReferenceImages.filter(Boolean);
 
+      // Check if this is a text-to-image model (shouldn't send base image)
+      const isTextToImageModel = imageInpaintModel.includes("text-to-image");
+      
       const proxyBody: Record<string, unknown> = {
         prompt: imageInpaintPrompt,
         model: imageInpaintModel,
-        image: baseImage,
         aspectRatio: activeShot?.aspectRatio ?? "16:9",
       };
+      
+      // Only send base image for image-to-image models
+      if (!isTextToImageModel && baseImage) {
+        proxyBody.image = baseImage;
+      }
+      
       if (refImages.length > 0) {
         proxyBody.referenceImages = refImages;
       }
@@ -1164,8 +1174,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       // Convert to base64
       const canvasDataUrl = captureCanvas.toDataURL('image/png', 1.0);
       
-      // Add the generated image to the panel
-      setGeneratedImages(prev => [...prev, canvasDataUrl]);
+      // Add the generated image to the panel (newest first)
+      setGeneratedImages(prev => [canvasDataUrl, ...prev]);
       setShowGenPanel(true);
 
       console.log("Generated image with text bubbles and assets");
@@ -1593,10 +1603,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       const result = await response.json();
 
-      // 5. Store result in the generated images panel (append to bottom)
+      // 5. Store result in the generated images panel (newest first)
       const resultImage = result.image ?? result.url ?? result.output ?? result.data;
       if (resultImage) {
-        setGeneratedImages(prev => [...prev, resultImage]); // Append to end
+        setGeneratedImages(prev => [resultImage, ...prev]); // Prepend to beginning
         setShowGenPanel(true);
         setCanvasState(prev => ({ ...prev, mask: [] }));
       } else {
@@ -1606,6 +1616,206 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       const msg = err instanceof Error ? err.message : "Unknown error";
       setInpaintError(msg);
       console.error("Inpaint error:", err);
+    } finally {
+      setIsInpainting(false);
+    }
+  };
+
+  // New Character Edit inpaint function - uses n8n-image-proxy pattern like rectangle inpaint
+  const runCharacterEditInpaint = async () => {
+    const mask = canvasState.mask;
+    if (mask.length === 0 || !inpaintPrompt.trim()) return;
+
+    setIsInpainting(true);
+    setInpaintError(null);
+
+    try {
+      // 1. Get the background image URL (same as rectangle inpaint)
+      const imageUrl = backgroundImage || activeShot?.imageUrl;
+      if (!imageUrl) throw new Error("No background image to inpaint");
+
+      // Store original image if not already stored
+      if (!originalImage) {
+        setOriginalImage(imageUrl);
+      }
+
+      // 2. Convert to base64 if needed (same as rectangle inpaint)
+      let imageBase64: string;
+      if (imageUrl.startsWith("data:")) {
+        imageBase64 = imageUrl;
+      } else {
+        let validUrl = imageUrl;
+        if (!imageUrl.startsWith("http") && !imageUrl.startsWith("/")) {
+          validUrl = `${window.location.origin}/${imageUrl.startsWith("/") ? imageUrl.slice(1) : imageUrl}`;
+        }
+        const res = await fetch(validUrl, { method: 'GET', mode: 'cors', cache: 'no-cache' });
+        if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+        const blob = await res.blob();
+        imageBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      // 3. Create Character Edit mask: composite image with colored overlay (like working sample)
+      const canvasEl = canvasContainerRef.current?.querySelector('canvas') as HTMLCanvasElement;
+      if (!canvasEl) throw new Error("Cannot find canvas element");
+      
+      // Get original image dimensions (not canvas dimensions)
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = imageBase64;
+      });
+      const w = img.width;
+      const h = img.height;
+
+      // Create canvas with same dimensions as main image (required by Character Edit)
+      const maskCanvas = document.createElement("canvas");
+      maskCanvas.width = w;
+      maskCanvas.height = h;
+      const ctx = maskCanvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("Cannot get canvas context");
+      
+      // Create pure black and white mask (required by Character Edit)
+      // Fill with black first
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, w, h);
+      
+      // Draw the blue mask overlay on top
+      ctx.drawImage(canvasEl, 0, 0, w, h);
+      
+      // Get image data to detect blue mask and convert to pure black/white
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+      
+      // Convert blue mask to pure white, everything else to pure black
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+        
+        // Detect blue mask (high blue, low red/green, with some alpha)
+        if (b > 150 && r < 150 && g < 150 && a > 50) {
+          // Set to pure white for masked areas
+          data[i] = 255;     // R = white
+          data[i + 1] = 255; // G = white
+          data[i + 2] = 255; // B = white
+          data[i + 3] = 255; // A = opaque
+        } else {
+          // Set to pure black for non-masked areas
+          data[i] = 0;       // R = black
+          data[i + 1] = 0;   // G = black
+          data[i + 2] = 0;   // B = black
+          data[i + 3] = 255; // A = opaque
+        }
+      }
+      
+      // Put the enhanced image data back
+      ctx.putImageData(imageData, 0, 0);
+      
+      // Convert all images to WebP format like working examples
+      const maskBase64 = maskCanvas.toDataURL("image/webp", 0.8);
+      console.log("[brushCharacterEdit] Mask base64 size:", maskBase64.length, "characters");
+
+      // Convert main image to WebP
+      const imageWebpBase64 = await new Promise<string>((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/webp", 0.9));
+        };
+        img.onerror = () => resolve(imageBase64); // fallback
+        img.src = imageBase64;
+      });
+
+      // Convert reference images to WebP
+      const refWebpImages = await Promise.all(
+        refImages.map((refImg) => 
+          new Promise<string>((resolve) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+              const canvas = document.createElement("canvas");
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext("2d")!;
+              ctx.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL("image/webp", 0.9));
+            };
+            img.onerror = () => resolve(refImg); // fallback
+            img.src = refImg;
+          })
+        )
+      );
+
+      // 4. Send to n8n-image-proxy with all WebP images
+      const requestBody = {
+        prompt: inpaintPrompt,
+        model: inpaintModel,
+        image: imageWebpBase64,
+        mask: maskBase64,
+        referenceImages: refWebpImages.length > 0 ? refWebpImages : undefined,
+      };
+
+      console.log("[brushCharacterEdit] Sending to n8n-image-proxy:", {
+        model: inpaintModel,
+        hasImage: !!imageBase64,
+        hasMask: !!maskBase64,
+        hasReferenceImages: refImages.length > 0,
+        promptLength: inpaintPrompt.length
+      });
+
+      const response = await fetch("/api/n8n-image-proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(300000),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || err.message || err.suggestion || "Character Edit inpaint failed");
+      }
+
+      const result = await response.json();
+      const generatedImageUrl = result.image ?? result.url ?? result.output ?? result.data;
+      if (!generatedImageUrl) throw new Error("No image returned from Character Edit");
+      console.log("[brushCharacterEdit] Got generated image from KIE");
+
+      // 5. Load the generated image and resolve to base64 if it's a URL (same as rectangle)
+      let generatedBase64 = generatedImageUrl;
+      if (generatedImageUrl.startsWith("http")) {
+        const imgRes = await fetch(generatedImageUrl);
+        if (!imgRes.ok) throw new Error(`Failed to fetch generated image: ${imgRes.status}`);
+        const imgBlob = await imgRes.blob();
+        generatedBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(imgBlob);
+        });
+      }
+
+      // 6. Store result (newest first like Image Generation)
+      setGeneratedImages(prev => [generatedBase64, ...prev]); // Prepend to beginning
+      setShowGenPanel(true);
+      // Don't clear mask for Character Edit - user might want to iterate
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setInpaintError(msg);
+      console.error("Character Edit inpaint error:", err);
     } finally {
       setIsInpainting(false);
     }
@@ -2174,12 +2384,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             <CanvasEditor
               panelId={panelId}
               imageUrl={backgroundImage || activeShot.imageUrl}
-              activeTool={canvasTool}
+              activeTool={canvasActiveTool}
               state={canvasState}
               onStateChange={setCanvasState}
-              brushSize={maskBrushSize}
-              isEraser={isEraser}
-              maskOpacity={maskOpacity}
+              // Only pass brush props when character-edit is selected
+              brushSize={inpaintModel === "character-edit" ? maskBrushSize : undefined}
+              isEraser={inpaintModel === "character-edit" ? isEraser : undefined}
+              maskOpacity={inpaintModel === "character-edit" ? maskOpacity : undefined}
+              hideMask={inpaintModel === "ideogram"} // Hide mask when ideogram is selected
               hiddenObjectIds={hiddenIds}
               onSelectionChange={setCanvasSelection}
               selection={canvasSelection}
@@ -2200,7 +2412,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 }));
               }}
             />
-          </div>
+                      </div>
 
           {/* Bottom: AI prompt bar */}
           <div className="border-t border-white/6 bg-[#111118] shrink-0">
@@ -2608,75 +2820,225 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           {/* ── Brush Inpaint ── */}
           {canvasTool === "inpaint" && (
             <div className="p-3 space-y-3">
-              <div><h3 className="text-white font-bold text-sm">Brush Inpaint</h3><p className="text-[10px] text-gray-500 mt-0.5">Paint areas to inpaint with AI</p></div>
+              <div>
+                <h3 className="text-white font-bold text-sm">Brush Inpaint</h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">Paint areas to inpaint with AI</p>
+              </div>
+
+              {/* Brush Controls */}
+              {inpaintModel === "character-edit" && (
+                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Brush Tool</label>
+                  
+                  {/* Brush/Eraser Toggle */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setIsEraser(false)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${
+                        !isEraser
+                          ? "bg-blue-500/20 border-blue-500/40 text-blue-200"
+                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                      }`}
+                    >
+                      <Paintbrush className="w-3 h-3" />
+                      Brush
+                    </button>
+                    <button
+                      onClick={() => setIsEraser(true)}
+                      className={`flex-1 px-3 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${
+                        isEraser
+                          ? "bg-red-500/20 border-red-500/40 text-red-200"
+                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                      }`}
+                    >
+                      <Eraser className="w-3 h-3" />
+                      Eraser
+                    </button>
+                  </div>
+
+                  {/* Brush Preview */}
+                  <div className="flex justify-center py-2">
+                    <div
+                      className="rounded-full border-2"
+                      style={{
+                        width: Math.min(maskBrushSize * 1.5, 64),
+                        height: Math.min(maskBrushSize * 1.5, 64),
+                        borderColor: isEraser ? "rgba(239,68,68,0.5)" : "rgba(59,130,246,0.5)",
+                        backgroundColor: isEraser ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Brush Size */}
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-[11px] text-gray-300 font-semibold">Size</span>
+                      <span className="text-[11px] text-blue-300 font-mono">{maskBrushSize}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={4}
+                      max={80}
+                      value={maskBrushSize}
+                      onChange={e => setMaskBrushSize(Number(e.target.value))}
+                      className="w-full accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Brush Opacity */}
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-[11px] text-gray-300 font-semibold">Opacity</span>
+                      <span className="text-[11px] text-gray-400 font-mono">{Math.round(maskOpacity * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.05}
+                      max={1}
+                      step={0.05}
+                      value={maskOpacity}
+                      onChange={e => setMaskOpacity(Number(e.target.value))}
+                      className="w-full accent-blue-500"
+                    />
+                  </div>
+
+                  {/* Clear Mask */}
+                  <button
+                    onClick={() => setCanvasState(s => ({ ...s, mask: [] }))}
+                    disabled={canvasState.mask.length === 0}
+                    className="w-full px-2 py-1.5 bg-white/5 hover:bg-red-500/10 disabled:opacity-30 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition"
+                  >
+                    Clear Mask
+                  </button>
+                </div>
+
+                              </div>
+              )}
+
               
+              {/* Generation Settings */}
               <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => setIsEraser(false)}
-                    className={`px-2 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${!isEraser?"bg-blue-500/20 border-blue-500/40 text-blue-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>
-                    <Paintbrush className="w-3.5 h-3.5" /> Brush
-                  </button>
-                  <button onClick={() => setIsEraser(true)}
-                    className={`px-2 py-2 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5 border ${isEraser?"bg-red-500/20 border-red-500/40 text-red-200":"bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"}`}>
-                    <Eraser className="w-3.5 h-3.5" /> Eraser
-                  </button>
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Inpaint Prompt</label>
+                  <textarea
+                    value={inpaintPrompt}
+                    onChange={e => setInpaintPrompt(e.target.value)}
+                    placeholder='e.g. "Remove logo" or "Add sweat drops"'
+                    rows={3}
+                    className="w-full px-2 py-1.5 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 resize-none"
+                  />
                 </div>
-                <div className="flex items-center justify-center py-1">
-                  <div className="rounded-full border-2" style={{ width: Math.min(maskBrushSize*1.5, 64), height: Math.min(maskBrushSize*1.5, 64), borderColor: isEraser?"rgba(239,68,68,0.5)":"rgba(59,130,246,0.5)", backgroundColor: isEraser?"rgba(239,68,68,0.15)":"rgba(59,130,246,0.15)" }} />
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Model</label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowBrushModelDropdown(!showBrushModelDropdown)}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-[#1a1a24] text-white rounded-lg text-sm font-semibold hover:bg-[#1f1f2a] transition-all duration-200 border border-white/10 hover:border-purple-500/30 group"
+                    >
+                      <span>{inpaintModel === "ideogram" ? "Ideogram" : "Character Edit"}</span>
+                      <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-purple-400 transition" />
+                    </button>
+                    {showBrushModelDropdown && (
+                      <div className="absolute top-full left-0 mt-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
+                        <div className="p-2">
+                          <button
+                            onClick={() => {
+                              setInpaintModel("ideogram");
+                              setShowBrushModelDropdown(false);
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-white/5 rounded-lg transition"
+                          >
+                            <div className="text-sm font-medium text-white">🎨 Ideogram</div>
+                            <div className="text-xs text-gray-400 mt-0.5">ideogram-v2 • Artistic inpainting</div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setInpaintModel("character-edit");
+                              setShowBrushModelDropdown(false);
+                            }}
+                            className="w-full px-3 py-2 text-left hover:bg-white/5 rounded-lg transition"
+                          >
+                            <div className="text-sm font-medium text-white">👥 Character Edit</div>
+                            <div className="text-xs text-gray-400 mt-0.5">character-remix • Character modifications</div>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <div className="flex justify-between mb-1"><span className="text-[11px] text-gray-300 font-semibold">Size</span><span className="text-[11px] text-blue-300 font-mono">{maskBrushSize}px</span></div>
-                  <input type="range" min={4} max={80} value={maskBrushSize} onChange={e => setMaskBrushSize(Number(e.target.value))} className="w-full accent-blue-500" />
+
+                {/* Reference Image - positioned between model dropdown and generate button */}
+                <div className="space-y-2">
+                  <label className="text-[11px] text-gray-300 font-semibold">Reference Image (Optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                          const result = e.target?.result as string;
+                          setRefImages([result]); // Only allow one image
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="hidden"
+                    id="brush-ref-image"
+                  />
+                  <label
+                    htmlFor="brush-ref-image"
+                    className="block w-full px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-[11px] font-semibold transition cursor-pointer text-center"
+                  >
+                    📎 Add Reference Image
+                  </label>
+                  
+                  {refImages.length > 0 && (
+                    <div className="relative group">
+                      <img src={refImages[0]} alt="Reference" className="w-full h-20 object-cover rounded-lg border border-blue-500/30" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <span className="text-white text-[8px] font-medium">Change</span>
+                      </div>
+                      <button
+                        className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/80 rounded-full text-white text-[8px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        onClick={() => setRefImages([])}
+                      >✕</button>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <div className="flex justify-between mb-1"><span className="text-[11px] text-gray-300 font-semibold">Opacity</span><span className="text-[11px] text-gray-400 font-mono">{Math.round(maskOpacity*100)}%</span></div>
-                  <input type="range" min={0.05} max={1} step={0.05} value={maskOpacity} onChange={e => setMaskOpacity(Number(e.target.value))} className="w-full accent-blue-500" />
-                </div>
-              </div>
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                <div className="flex gap-2">
-                  <button onClick={() => setCanvasState(s => undoMask(s))} disabled={canvasState.undoStack.length === 0}
-                    className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 text-gray-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1">
-                    <RotateCcw className="w-3 h-3" /> Undo
-                  </button>
-                  <button onClick={() => setCanvasState(s => redoMask(s))} disabled={canvasState.redoStack.length === 0}
-                    className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-white/10 disabled:opacity-30 text-gray-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1">
-                    <RotateCw className="w-3 h-3" /> Redo
-                  </button>
-                </div>
-                <button onClick={() => setCanvasState(s => ({ ...s, mask: [] }))} disabled={canvasState.mask.length === 0}
-                  className="w-full px-2 py-1.5 bg-white/5 hover:bg-red-500/10 disabled:opacity-30 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition">
-                  Clear Mask
-                </button>
-              </div>
-              <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                <label className="text-[11px] text-gray-300 font-semibold">Inpaint Prompt</label>
-                <textarea value={inpaintPrompt} onChange={e => setInpaintPrompt(e.target.value)}
-                  placeholder='e.g. "Remove logo" or "Add sweat drops"' rows={3}
-                  className="w-full px-2 py-1.5 bg-[#13131a] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 resize-none" />
-                <label className="text-[10px] text-gray-500 font-semibold">Model</label>
-                <select
-                  value={inpaintModel}
-                  onChange={e => setInpaintModel(e.target.value as typeof inpaintModel)}
-                  className="w-full px-2 py-1.5 bg-[#13131a] border border-white/10 rounded-lg text-[11px] text-white focus:outline-none focus:border-blue-500/50 cursor-pointer">
-                  <option value="nano-banana">Nano Banana (google/nano-banana-edit)</option>
-                  <option value="flux-kontext-pro">Flux Kontext Pro (flux-kontext-pro)</option>
-                  <option value="openai-4o">OpenAI 4o Image (gpt-image/1.5) ✨</option>
-                  <option value="grok">Grok Imagine (grok-imagine/image-to-image) ✨</option>
-                  <option value="qwen-z-image">Qwen Z Image (qwen-z-image)</option>
-                </select>
+
                 <button
-                  onClick={runInpaint}
+                  onClick={() => {
+                    if (inpaintModel === "character-edit" || inpaintModel === "character-remix") {
+                      runCharacterEditInpaint();
+                    } else {
+                      runInpaint();
+                    }
+                  }}
                   disabled={canvasState.mask.length === 0 || !inpaintPrompt.trim() || isInpainting}
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
+                >
                   {isInpainting ? (
-                    <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                  ) : "Generate"}
+                    <>
+                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      {inpaintModel === "character-edit" || inpaintModel === "character-remix" ? "Generate Character Edit" : "Generate Inpaint"}
+                    </>
+                  )}
                 </button>
+
                 {inpaintError && (
                   <p className="text-red-400 text-[10px] mt-1">{inpaintError}</p>
                 )}
               </div>
+
+              {/* Status */}
               <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${canvasState.mask.length > 0 ? "bg-blue-400 animate-pulse" : "bg-gray-600"}`} />
@@ -2876,49 +3238,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   </span>
                 </div>
 
-                {/* Generated images results */}
-                {imageGeneratedImages.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Generated</label>
-                      <button
-                        onClick={() => setImageGeneratedImages([])}
-                        className="text-[9px] text-gray-600 hover:text-red-400 transition-colors"
-                      >Clear all</button>
-                    </div>
-                    <div className="space-y-2">
-                      {imageGeneratedImages.map((imgUrl, idx) => (
-                        <div key={idx} className="relative group rounded-lg overflow-hidden border border-white/10">
-                          <img
-                            src={imgUrl}
-                            alt={`Generated ${idx + 1}`}
-                            className="w-full object-contain bg-[#0d0d14]"
-                          />
-                          {/* Overlay actions */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => setBackgroundImage(imgUrl)}
-                              className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-[9px] font-semibold transition"
-                              title="Set as scene background"
-                            >Set as BG</button>
-                            <a
-                              href={imgUrl}
-                              download={`generated-${idx + 1}.png`}
-                              className="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-[9px] font-semibold transition"
-                            >↓ Save</a>
-                            <button
-                              onClick={() => setImageGeneratedImages((prev) => prev.filter((_, i) => i !== idx))}
-                              className="px-2 py-1 bg-red-500/70 hover:bg-red-500 text-white rounded text-[9px] font-semibold transition"
-                            >✕</button>
-                          </div>
-                          {/* Index badge */}
-                          <span className="absolute top-1 left-1 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded-full">#{imageGeneratedImages.length - idx}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+                              </div>
             );
           })()}
 

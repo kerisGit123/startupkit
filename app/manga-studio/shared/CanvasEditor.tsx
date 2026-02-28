@@ -42,19 +42,16 @@ interface CanvasEditorProps {
   brushSize: number;
   isEraser: boolean;
   maskOpacity: number;
+  hideMask?: boolean;
   hiddenObjectIds?: Set<string>;
   onSelectionChange?: (sel: CanvasSelection) => void;
   selection?: CanvasSelection;
-  /** "16:9" | "9:16" | "1:1" — constrains canvas to this ratio */
   aspectRatio?: string;
-  /** Function to reset all transformations */
   resetAllTransformations?: () => void;
-  /** Rectangle support for Closer Look */
   rectangle?: { x: number; y: number; width: number; height: number } | null;
   onRectangleChange?: (rect: { x: number; y: number; width: number; height: number } | null) => void;
   rectangleVisible?: boolean;
   canvasTool?: CanvasActiveTool;
-  /** Whether aspect ratio animation is in progress */
   isAspectRatioAnimating?: boolean;
   /** Whether rectangle is in square mode (GPT-1.5) */
   isSquareMode?: boolean;
@@ -83,7 +80,7 @@ type RotDragInfo = {
 // ── CanvasEditor ───────────────────────────────────────────────────────────
 export function CanvasEditor({
   panelId, imageUrl, activeTool, state, onStateChange,
-  brushSize, isEraser, maskOpacity, hiddenObjectIds = new Set(),
+  brushSize, isEraser, maskOpacity, hideMask = false, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
   rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false,
 }: CanvasEditorProps) {
@@ -463,7 +460,7 @@ export function CanvasEditor({
               <span className="text-sm">No image — upload one to start</span>
             </div>
         }
-        {mask.length > 0 && <MaskCanvas mask={mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} />}
+        {mask.length > 0 && !hideMask && <MaskCanvas mask={mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} />}
         {canvasTool === "rectInpaint" && rectangle && rectangleVisible && (
           <RectangleCanvas 
             rectangle={rectangle} 
