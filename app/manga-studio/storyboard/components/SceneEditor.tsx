@@ -77,6 +77,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // KIE Modal state
   const [showKIEModal, setShowKIEModal] = useState(false);
 
+  // Aspect Ratio Info Dialog state
+  const [showAspectRatioInfo, setShowAspectRatioInfo] = useState(false);
+  
+  // Tag insertion popup state
+  const [showTagPopup, setShowTagPopup] = useState(false);
+
   // ── Canvas tool panel state ────────────────────────────────────────────────
   const [canvasTool, setCanvasTool] = useState<CanvasTool>("elements");
   const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
@@ -2051,8 +2057,97 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             {t.name}
           </span>
         ))}
-        <div className="flex-1" />
-        <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm transition">Download</button>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-xs">Aspect</span>
+          <select
+            value={activeShot.aspectRatio || "16:9"}
+            onChange={(e) => {
+              const newAspectRatio = e.target.value;
+              onShotsChange(shots.map(s => 
+                s.id === activeShotId 
+                  ? { ...s, aspectRatio: newAspectRatio }
+                  : s
+              ));
+            }}
+            className="bg-white/5 border border-white/10 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+          >
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
+            <option value="1:1">1:1</option>
+          </select>
+        </div>
+        <button
+          onClick={() => setShowAspectRatioInfo(true)}
+          className="px-2 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm transition flex items-center gap-1"
+          title="Aspect Ratio Information"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+        <button 
+          onClick={() => {
+            try {
+              const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+              if (!container) {
+                alert('Canvas not found');
+                return;
+              }
+              
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                alert('Canvas context not available');
+                return;
+              }
+              
+              const rect = container.getBoundingClientRect();
+              canvas.width = rect.width;
+              canvas.height = rect.height;
+              
+              // Fill with background color
+              ctx.fillStyle = '#13131a';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              
+              // Try to find and draw the image
+              const img = container.querySelector('img');
+              if (img && img.src) {
+                const tempImg = new Image();
+                tempImg.crossOrigin = 'anonymous';
+                tempImg.onload = () => {
+                  ctx.drawImage(tempImg, 0, 0, rect.width, rect.height);
+                  downloadCanvas(canvas);
+                };
+                tempImg.onerror = () => {
+                  // If image fails, just download the canvas as-is
+                  downloadCanvas(canvas);
+                };
+                tempImg.src = img.src;
+              } else {
+                // No image, just download the canvas
+                downloadCanvas(canvas);
+              }
+              
+              function downloadCanvas(c: HTMLCanvasElement) {
+                const link = document.createElement('a');
+                link.download = `frame-${String(activeIdx + 1).padStart(2, "0")}.png`;
+                link.href = c.toDataURL('image/png', 1.0);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }
+            } catch (error) {
+              console.error('Download failed:', error);
+              alert('Download failed. Please try again.');
+            }
+          }}
+          className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm transition flex items-center gap-1.5"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l4-4m-4 4h4" />
+          </svg>
+          Download
+        </button>
         <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition">Save</button>
       </div>
 
@@ -3635,6 +3730,285 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         refMode={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).refMode}
         models={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).models}
       />
+
+      {/* Frame Info Dialog */}
+      {showAspectRatioInfo && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1000]" onClick={() => setShowAspectRatioInfo(false)}>
+          <div 
+            className="bg-gradient-to-br from-[#1e1e2a] to-[#151520] border border-white/20 rounded-2xl shadow-2xl p-0 max-w-lg w-full mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-white/10 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-white font-semibold text-lg">Frame Details</h3>
+                    <p className="text-gray-400 text-xs">Edit frame information and properties</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAspectRatioInfo(false)}
+                  className="w-8 h-8 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition"
+                >
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Frame Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-[#0d0d12] to-[#111118] border-b border-white/5">
+              <div className="space-y-4">
+                {/* Tags (interactive) - Copy from working info panel */}
+                <div className="px-4 pb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Tag className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-gray-400 text-sm font-medium">Tags</span>
+                    <button onClick={() => setShowTagPicker(v => !v)} className="ml-auto text-gray-600 hover:text-gray-400 transition">
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {activeShot.tags.map(t => (
+                      <span key={t.id} className="px-2 py-1 rounded text-xs font-semibold text-white inline-flex items-center gap-1 group/tag" style={{ backgroundColor: t.color + "cc" }}>
+                        {t.name}
+                        <button onClick={() => handleRemoveTag(t.id)} className="opacity-0 group-hover/tag:opacity-100 transition"><X className="w-2.5 h-2.5" /></button>
+                      </span>
+                    ))}
+                    {activeShot.tags.length === 0 && <span className="text-gray-700 text-xs italic">No tags</span>}
+                  </div>
+                  {showTagPicker && (
+                    <div className="mt-2 bg-[#1c1c26] border border-white/10 rounded-lg p-2 space-y-2">
+                      <input value={newTagName} onChange={e => setNewTagName(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTag()}
+                        placeholder="Tag name" className="w-full bg-[#25252f] border border-white/8 rounded px-2 py-1 text-white text-[10px] focus:outline-none" autoFocus />
+                      <div className="flex flex-wrap gap-1">
+                        {TAG_COLORS.map(c => (
+                          <button key={c} onClick={() => setNewTagColor(c)} aria-label={`Color ${c}`}
+                            className={`w-4 h-4 rounded-sm transition ${newTagColor === c ? "ring-2 ring-white ring-offset-1 ring-offset-[#1c1c26]" : ""}`}
+                            style={{ backgroundColor: c }} />
+                        ))}
+                      </div>
+                      <button onClick={handleAddTag} disabled={!newTagName.trim()}
+                        className="w-full px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white rounded text-[10px] font-medium transition">
+                        Create
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Voice over */}
+                <div className="px-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Mic className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-gray-400 text-sm font-medium">Voice</span>
+                    <button onClick={() => startEdit("voice")} className="ml-auto text-gray-600 hover:text-gray-400 transition">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {editingField === "voice" ? (
+                    <div>
+                      <textarea value={fieldDraft} onChange={e => setFieldDraft(e.target.value)}
+                        className="w-full bg-[#1c1c26] border border-white/10 rounded-lg p-3 text-white text-sm resize-none focus:outline-none focus:border-violet-500/50 h-24" autoFocus />
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => saveField("voice")} className="text-green-400"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingField(null)} className="text-gray-500"><X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                      {activeShot.voiceOver || <span className="text-gray-700 italic">No voice over</span>}
+                    </p>
+                  )}
+                </div>
+
+                {/* Notes */}
+                <div className="px-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <List className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-gray-400 text-sm font-medium">Notes</span>
+                    <button onClick={() => startEdit("notes")} className="ml-auto text-gray-600 hover:text-gray-400 transition">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {editingField === "notes" ? (
+                    <div>
+                      <textarea value={fieldDraft} onChange={e => setFieldDraft(e.target.value)}
+                        className="w-full bg-[#1c1c26] border border-white/10 rounded-lg p-3 text-white text-sm resize-none focus:outline-none focus:border-violet-500/50 h-24" autoFocus />
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => saveField("notes")} className="text-green-400"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingField(null)} className="text-gray-500"><X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                      {activeShot.notes || <span className="text-gray-700 italic">No notes</span>}
+                    </p>
+                  )}
+                </div>
+
+                {/* Action */}
+                <div className="px-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Play className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-gray-400 text-sm font-medium">Action</span>
+                    <button onClick={() => startEdit("action")} className="ml-auto text-gray-600 hover:text-gray-400 transition">
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {editingField === "action" ? (
+                    <div>
+                      <textarea value={fieldDraft} onChange={e => setFieldDraft(e.target.value)}
+                        className="w-full bg-[#1c1c26] border border-white/10 rounded-lg p-3 text-white text-sm resize-none focus:outline-none focus:border-violet-500/50 h-24" autoFocus />
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => saveField("action")} className="text-green-400"><Check className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingField(null)} className="text-gray-500"><X className="w-4 h-4" /></button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                      {activeShot.action || <span className="text-gray-700 italic">No action</span>}
+                    </p>
+                  )}
+                </div>
+
+                {/* Save/Cancel buttons */}
+                <div className="flex gap-2 px-4">
+                  <button
+                    onClick={() => setShowAspectRatioInfo(false)}
+                    className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg text-sm font-semibold transition border border-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setShowAspectRatioInfo(false)}
+                    className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg text-sm font-semibold transition shadow-lg"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tag Popup */}
+      {showTagPopup && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[1001]" onClick={() => setShowTagPopup(false)}>
+          <div 
+            className="bg-gradient-to-br from-[#1e1e2a] to-[#151520] border border-white/20 rounded-2xl shadow-2xl p-0 max-w-sm w-full mx-4 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-white/10 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-white font-semibold text-base">Insert Tags</h3>
+                    <p className="text-gray-400 text-xs">Choose tags to add to this frame</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowTagPopup(false)}
+                  className="w-6 h-6 bg-white/10 hover:bg-white/20 rounded-lg flex items-center justify-center transition"
+                >
+                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Tag Options */}
+            <div className="px-6 py-4 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => {
+                    // Add tag logic here
+                    setShowTagPopup(false);
+                  }}
+                  className="px-3 py-2 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-xs font-medium hover:bg-blue-500/30 transition"
+                >
+                  Action
+                </button>
+                <button
+                  onClick={() => {
+                    // Add tag logic here
+                    setShowTagPopup(false);
+                  }}
+                  className="px-3 py-2 bg-green-500/20 border border-green-500/30 text-green-300 rounded-lg text-xs font-medium hover:bg-green-500/30 transition"
+                >
+                  Dialogue
+                </button>
+                <button
+                  onClick={() => {
+                    // Add tag logic here
+                    setShowTagPopup(false);
+                  }}
+                  className="px-3 py-2 bg-purple-500/20 border border-purple-500/30 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-500/30 transition"
+                >
+                  Scene
+                </button>
+                <button
+                  onClick={() => {
+                    // Add tag logic here
+                    setShowTagPopup(false);
+                  }}
+                  className="px-3 py-2 bg-orange-500/20 border border-orange-500/30 text-orange-300 rounded-lg text-xs font-medium hover:bg-orange-500/30 transition"
+                >
+                  Transition
+                </button>
+                <button
+                  onClick={() => {
+                    // Add tag logic here
+                    setShowTagPopup(false);
+                  }}
+                  className="px-3 py-2 bg-pink-500/20 border border-pink-500/30 text-pink-300 rounded-lg text-xs font-medium hover:bg-pink-500/30 transition"
+                >
+                  Emotion
+                </button>
+                <button
+                  onClick={() => {
+                    // Add tag logic here
+                    setShowTagPopup(false);
+                  }}
+                  className="px-3 py-2 bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 rounded-lg text-xs font-medium hover:bg-cyan-500/30 transition"
+                >
+                  Effect
+                </button>
+              </div>
+              
+              {/* Custom Tag Input */}
+              <div className="pt-2 border-t border-white/10">
+                <input
+                  type="text"
+                  placeholder="Custom tag name..."
+                  className="w-full bg-[#0d0d12] border border-white/10 text-gray-300 text-sm rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                      // Add custom tag logic here
+                      e.currentTarget.value = '';
+                      setShowTagPopup(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
