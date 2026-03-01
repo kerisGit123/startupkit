@@ -55,6 +55,7 @@ interface CanvasEditorProps {
   isAspectRatioAnimating?: boolean;
   /** Whether rectangle is in square mode (GPT-1.5) */
   isSquareMode?: boolean;
+  generateImageWithElements?: () => void;
 }
 
 // ── Drag state ─────────────────────────────────────────────────────────────
@@ -82,7 +83,7 @@ export function CanvasEditor({
   panelId, imageUrl, activeTool, state, onStateChange,
   brushSize, isEraser, maskOpacity, hideMask = false, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
-  rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false,
+  rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, generateImageWithElements,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -97,7 +98,7 @@ export function CanvasEditor({
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
   const [editingBubbleId, setEditingBubbleId] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas"; id?: string; submenu?: 'tailDirection' | 'layer'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas"; id?: string; submenu?: 'tailDirection' | 'layer' | 'bubbleType' | 'textProperties'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
   const [copiedObject, setCopiedObject] = useState<{ type: "bubble" | "text" | "asset"; data: any } | null>(null);
 
   // Use controlled selection if provided, else internal
@@ -770,7 +771,7 @@ export function CanvasEditor({
                   style={{
                     fontSize: font, lineHeight: 1.3, color: textColor,
                     overflowWrap: "anywhere", whiteSpace: "pre-wrap", textAlign: "center",
-                    fontFamily: "'Comic Sans MS','Bangers','Segoe UI',sans-serif",
+                    fontFamily: "'Noto Sans SC', 'Comic Sans MS', 'Bangers', 'Segoe UI', sans-serif",
                     fontWeight: ["sfx","shout"].includes(b.bubbleType)?900:400,
                     letterSpacing: b.bubbleType==="sfx"?"0.06em":b.bubbleType==="shout"?"0.02em":"0em",
                     fontStyle: b.bubbleType==="whisper"?"italic":"normal",
@@ -794,6 +795,7 @@ export function CanvasEditor({
                           </div>
           );
         })}
+
         {/* Context menu */}
         {ctxMenu && (() => {
           // Calculate smart positioning to prevent clipping
@@ -873,7 +875,7 @@ export function CanvasEditor({
                         fontSize: 16,
                         fontWeight: "normal",
                         fontStyle: "normal",
-                        fontFamily: "Arial",
+                        fontFamily: "Noto Sans SC",
                         color: "#000000",
                         backgroundColor: "transparent",
                         zIndex: 3
@@ -888,6 +890,89 @@ export function CanvasEditor({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <span className="text-[13px] font-medium">Text Element</span>
+                  </div>
+                </button>
+                
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
+                  onClick={() => {
+                    // Create a file input element
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = 'image/*';
+                    fileInput.style.display = 'none';
+                    
+                    fileInput.onchange = (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const imageUrl = event.target?.result as string;
+                          const assetId = makeId();
+                          const elementId = makeId();
+                          
+                          // Create new asset library item and element
+                          onStateChange({
+                            ...state,
+                            assetLibrary: [...state.assetLibrary, {
+                              id: assetId,
+                              url: imageUrl,
+                              name: file.name
+                            }],
+                            assetElements: [...state.assetElements, {
+                              id: elementId,
+                              panelId: panelId,
+                              assetId: assetId,
+                              x: ctxMenu.x - 75,
+                              y: ctxMenu.y - 75,
+                              w: 150,
+                              h: 150,
+                              rotation: 0,
+                              flipX: false,
+                              flipY: false,
+                              zIndex: 2
+                            }]
+                          });
+                          
+                          setSelection(null, null, elementId);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                      
+                      // Clean up
+                      document.body.removeChild(fileInput);
+                    };
+                    
+                    // Add to DOM and trigger click
+                    document.body.appendChild(fileInput);
+                    fileInput.click();
+                    
+                    setCtxMenu(null);
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <span className="text-[13px] font-medium">Upload Image</span>
+                  </div>
+                </button>
+                
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
+                  onClick={() => {
+                    // Use existing Element Combine Background functionality
+                    if (generateImageWithElements) {
+                      generateImageWithElements();
+                    }
+                    setCtxMenu(null);
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-[13px] font-medium">Element Combine Background</span>
                   </div>
                 </button>
                 
@@ -999,6 +1084,9 @@ export function CanvasEditor({
                 // Check if bubble has tail (only certain bubble types have tails)
                 const bubbleHasTail = currentBubble && !["shout", "sfx"].includes(currentBubble.bubbleType);
                 
+                // All bubbles should show context menu
+                const showBubbleMenu = currentBubble;
+                
                 return [
                 { label: "Duplicate",      shortcut: "Ctrl+D",     icon: "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z", action: (e) => { 
                   e?.stopPropagation();
@@ -1048,7 +1136,7 @@ export function CanvasEditor({
                       if (bubble) patchBubble(ctxMenu.id, { flipY: !bubble.flipY });
                     }
                   }
-                  setCtxMenu(null); 
+                  setCtxMenu(null);
                 } },
                 // Bubble-specific options
                 ...(bubbleHasTail ? [
@@ -1060,7 +1148,7 @@ export function CanvasEditor({
                       const menuItemHeight = 44;
                       const contextMenuItems = [
                         "Duplicate", "Reset Position", "Flip Horizontal", "Flip Vertical",
-                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Layer"
+                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Change Type", "Layer"
                       ];
                       
                       // Find the index of "Tail Direction" in the menu
@@ -1105,20 +1193,183 @@ export function CanvasEditor({
                       });
                     }
                   } },
-                  { label: currentBubble?.tailMode === "none" ? "Show Tail" : "Hide Tail", shortcut: "", icon: currentBubble?.tailMode === "none" ? "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" : "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21", action: (e) => {
-                    e?.stopPropagation();
-                    if (ctxMenu.id && currentBubble) {
-                      const newTailMode = currentBubble.tailMode === "none" ? "default" : "none";
-                      patchBubble(ctxMenu.id, { tailMode: newTailMode });
-                    }
-                    setCtxMenu(null);
-                  } },
+                  { label: currentBubble?.tailMode === "none" ? "Show Tail" : "Hide Tail", shortcut: "", icon: "M15 12a3 3 0 11-6 0 3 3 0 016 0z", action: (e) => {
+                      e?.stopPropagation();
+                      if (ctxMenu.id && currentBubble) {
+                        const newTailMode = currentBubble.tailMode === "none" ? "default" : "none";
+                        patchBubble(ctxMenu.id, { tailMode: newTailMode });
+                      }
+                      setCtxMenu(null);
+                    } },
                   { label: "Flip Colors",     shortcut: "",          icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", action: (e) => {
                     e?.stopPropagation();
                     if (ctxMenu.id && currentBubble) {
                       patchBubble(ctxMenu.id, { flippedColors: !currentBubble.flippedColors });
                     }
                     setCtxMenu(null);
+                  } },
+                  { label: "Change Type", shortcut: "", icon: "M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id && currentBubble) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const contextMenuItems = [
+                        "Duplicate", "Reset Position", "Flip Horizontal", "Flip Vertical",
+                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Change Type", "Text Properties", "Layer"
+                      ];
+                      
+                      // Find the index of "Change Type" in the menu
+                      const changeTypeIndex = contextMenuItems.indexOf("Change Type");
+                      
+                      // Calculate adjusted position (same as main context menu)
+                      const menuWidth = 200;
+                      const menuHeight = 300;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Set submenu context
+                      setCtxMenu({
+                        ...ctxMenu,
+                        submenu: 'bubbleType',
+                        parentX: adjustedX,
+                        parentY: adjustedY + (changeTypeIndex * menuItemHeight),
+                        menuItemIndex: changeTypeIndex,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
+                  } },
+                  { label: "Text Properties", shortcut: "", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2h2.828l-2.828-2.828z", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id && currentBubble) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const contextMenuItems = [
+                        "Duplicate", "Reset Position", "Flip Horizontal", "Flip Vertical",
+                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Change Type", "Text Properties", "Layer"
+                      ];
+                      
+                      // Find the index of "Text Properties" in the menu
+                      const textPropsIndex = contextMenuItems.indexOf("Text Properties");
+                      
+                      // Calculate adjusted position (same as main context menu)
+                      const menuWidth = 200;
+                      const menuHeight = 300;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Set submenu context
+                      setCtxMenu({
+                        ...ctxMenu,
+                        submenu: 'textProperties',
+                        parentX: adjustedX,
+                        parentY: adjustedY + (textPropsIndex * menuItemHeight),
+                        menuItemIndex: textPropsIndex,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
+                  } },
+                ] : [
+                  // Options for bubbles without tails (SFX, Shout)
+                  null, // Divider
+                  { label: "Flip Colors",     shortcut: "",          icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id && currentBubble) {
+                      patchBubble(ctxMenu.id, { flippedColors: !currentBubble.flippedColors });
+                    }
+                    setCtxMenu(null);
+                  } },
+                ]),
+                // Text-specific options
+                ...(ctxMenu.kind === "text" ? [
+                  { label: "Text Properties", shortcut: "", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2h2.828l-2.828-2.828z", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const contextMenuItems = [
+                        "Duplicate", "Reset Position", "Flip Horizontal", "Flip Vertical",
+                        "Text Properties", "Layer"
+                      ];
+                      
+                      // Find the index of "Text Properties" in the menu
+                      const textPropsIndex = contextMenuItems.indexOf("Text Properties");
+                      
+                      // Calculate adjusted position (same as main context menu)
+                      const menuWidth = 200;
+                      const menuHeight = 300;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Set submenu context
+                      setCtxMenu({
+                        ...ctxMenu,
+                        submenu: 'textProperties',
+                        parentX: adjustedX,
+                        parentY: adjustedY + (textPropsIndex * menuItemHeight),
+                        menuItemIndex: textPropsIndex,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
                   } },
                 ] : []),
                 null, // Divider
@@ -1129,7 +1380,7 @@ export function CanvasEditor({
                       const menuItemHeight = 44;
                       const contextMenuItems = [
                         "Duplicate", "Reset Position", "Flip Horizontal", "Flip Vertical",
-                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Layer"
+                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Change Type", "Layer"
                       ];
                       
                       // Find the index of "Layer" in the menu
@@ -1180,7 +1431,7 @@ export function CanvasEditor({
                   return <div key={`divider-${index}`} className="mx-3 my-1 h-px bg-white/10" />;
                 }
                 return (
-                  <button key={item.label}
+                  <button key={`${ctxMenu.kind}-${item.label}-${index}`}
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
                     onClick={(e) => item.action(e)}
                   >
@@ -1192,7 +1443,7 @@ export function CanvasEditor({
                     </div>
                     <div className="flex items-center gap-2">
                       {item.shortcut && <span className="text-[10px] text-gray-500 font-mono">{item.shortcut}</span>}
-                      {(item.label === "Tail Direction" || item.label === "Layer") && (
+                      {(item.label === "Tail Direction" || item.label === "Layer" || item.label === "Change Type") && (
                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
@@ -1205,8 +1456,265 @@ export function CanvasEditor({
           );
         })()}
         
+        {/* Text Properties Dialog */}
+        {ctxMenu && ctxMenu.submenu === 'textProperties' && (() => {
+          const currentBubble = ctxMenu.kind === "bubble" && ctxMenu.id 
+            ? bubbles.find(b => b.id === ctxMenu.id) 
+            : null;
+          const currentText = ctxMenu.kind === "text" && ctxMenu.id 
+            ? textElements.find(t => t.id === ctxMenu.id) 
+            : null;
+          
+          if (!currentBubble && !currentText) return null;
+          
+          const updBubble = (patch: Record<string, unknown>) => {
+            if (ctxMenu.id) {
+              onStateChange({ ...state, bubbles: state.bubbles.map(b => b.id === ctxMenu.id ? { ...b, ...patch } : b) });
+            }
+          };
+          
+          const updText = (patch: Record<string, unknown>) => {
+            if (ctxMenu.id) {
+              onStateChange({ ...state, textElements: state.textElements.map(t => t.id === ctxMenu.id ? { ...t, ...patch } : t) });
+            }
+          };
+          
+          return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1003]"
+                 onClick={() => setCtxMenu(null)}>
+              <div className="bg-[#1a1d23] border border-white/10 rounded-lg shadow-2xl p-6 w-[400px] max-w-[90vw] max-h-[80vh] overflow-y-auto"
+                   onClick={e => e.stopPropagation()}>
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-bold text-lg">Text Properties</h3>
+                      <p className="text-[12px] text-gray-500 mt-1">
+                        Edit {currentBubble ? "bubble" : "text"} properties
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setCtxMenu(null)}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Text Input */}
+                  <div>
+                    <span className="text-[12px] text-gray-300 block mb-2">Text</span>
+                    <textarea 
+                      value={currentBubble ? currentBubble.text : currentText?.text || ""} 
+                      onChange={e => {
+                        if (currentBubble) {
+                          updBubble({ text: e.target.value });
+                        } else if (currentText) {
+                          updText({ text: e.target.value });
+                        }
+                      }} 
+                      className="w-full bg-[#1a1a24] border border-white/10 rounded px-3 py-2 text-[12px] text-white resize-none focus:outline-none focus:border-emerald-500/50"
+                      style={{ fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"' }}
+                      rows={3} 
+                      placeholder="Enter text..."
+                    />
+                  </div>
+                  
+                  {/* Bubble-specific properties */}
+                  {currentBubble && (
+                    <>
+                      {/* Auto-fit Font */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-gray-300">Auto-fit font</span>
+                        <button 
+                          onClick={() => updBubble({ autoFitFont: !currentBubble.autoFitFont })} 
+                          className={`px-3 py-1.5 rounded text-[12px] font-semibold border transition ${
+                            currentBubble.autoFitFont 
+                              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-200" 
+                              : "bg-white/5 border-white/10 text-gray-300"
+                          }`}
+                        >
+                          {currentBubble.autoFitFont ? "On" : "Off"}
+                        </button>
+                      </div>
+                      
+                      {/* Font Size (only when auto-fit is off) */}
+                      {!currentBubble.autoFitFont && (
+                        <div>
+                          <div className="flex justify-between mb-2">
+                            <span className="text-[12px] text-gray-300">Font Size</span>
+                            <span className="text-[12px] text-emerald-300 font-mono">{currentBubble.fontSize}px</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min={10} 
+                            max={44} 
+                            value={currentBubble.fontSize} 
+                            onChange={e => updBubble({ fontSize: Number(e.target.value) })} 
+                            className="w-full accent-emerald-500" 
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Bubble Type */}
+                      <div>
+                        <span className="text-[12px] text-gray-300 block mb-2">Bubble Type</span>
+                        <div className="grid grid-cols-4 gap-2">
+                          {(["speech","thought","shout","whisper","rect","rectRound","sfx"] as const).map(type => (
+                            <button 
+                              key={type} 
+                              onClick={() => updBubble({ bubbleType: type })} 
+                              className={`py-2 rounded text-[10px] font-semibold border transition ${
+                                type===currentBubble.bubbleType
+                                  ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-200"
+                                  : "bg-[#1a1a24] border-white/10 text-gray-400 hover:bg-white/5"
+                              }`}
+                            >
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Tail Direction (only for non-SFX bubbles) */}
+                      {currentBubble.bubbleType !== "sfx" && (
+                        <div>
+                          <span className="text-[12px] text-gray-300 block mb-2">Tail Direction</span>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["bottom-left","bottom-right","left","right"] as const).map(dir => (
+                              <button 
+                                key={dir} 
+                                onClick={() => updBubble({ tailDir: dir })} 
+                                className={`py-2 rounded text-[10px] font-semibold border transition ${
+                                  currentBubble.tailDir===dir
+                                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-200"
+                                    : "bg-[#1a1a24] border-white/10 text-gray-400 hover:bg-white/5"
+                                }`}
+                              >
+                                {dir === "bottom-left" ? "Bottom Left" : dir === "bottom-right" ? "Bottom Right" : dir === "left" ? "Left" : "Right"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Flip Colors */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-gray-300">Flip Colors</span>
+                        <button 
+                          onClick={() => updBubble({ flippedColors: !currentBubble.flippedColors })} 
+                          className={`px-3 py-1.5 rounded text-[12px] font-semibold border transition ${
+                            currentBubble.flippedColors 
+                              ? "bg-blue-500/15 border-blue-500/30 text-blue-200" 
+                              : "bg-white/5 border-white/10 text-gray-300"
+                          }`}
+                        >
+                          {currentBubble.flippedColors ? "Flipped" : "Normal"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Text-specific properties */}
+                  {currentText && (
+                    <>
+                      {/* Font Size */}
+                      <div>
+                        <div className="flex justify-between mb-2">
+                          <span className="text-[12px] text-gray-300">Font Size</span>
+                          <span className="text-[12px] text-emerald-300 font-mono">{currentText.fontSize}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min={10} 
+                          max={44} 
+                          value={currentText.fontSize} 
+                          onChange={e => updText({ fontSize: Number(e.target.value) })} 
+                          className="w-full accent-emerald-500" 
+                        />
+                      </div>
+                      
+                      {/* Font Weight */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-gray-300">Font Weight</span>
+                        <button 
+                          onClick={() => updText({ fontWeight: currentText.fontWeight === "bold" ? "normal" : "bold" })} 
+                          className={`px-3 py-1.5 rounded text-[12px] font-semibold border transition ${
+                            currentText.fontWeight === "bold"
+                              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-200" 
+                              : "bg-white/5 border-white/10 text-gray-300"
+                          }`}
+                        >
+                          {currentText.fontWeight === "bold" ? "Bold" : "Normal"}
+                        </button>
+                      </div>
+                      
+                      {/* Font Style */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-gray-300">Font Style</span>
+                        <button 
+                          onClick={() => updText({ fontStyle: currentText.fontStyle === "italic" ? "normal" : "italic" })} 
+                          className={`px-3 py-1.5 rounded text-[12px] font-semibold border transition ${
+                            currentText.fontStyle === "italic"
+                              ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-200" 
+                              : "bg-white/5 border-white/10 text-gray-300"
+                          }`}
+                        >
+                          {currentText.fontStyle === "italic" ? "Italic" : "Normal"}
+                        </button>
+                      </div>
+                      
+                      {/* Text Color */}
+                      <div>
+                        <span className="text-[12px] text-gray-300 block mb-2">Text Color</span>
+                        <input 
+                          type="color" 
+                          value={currentText.color || "#000000"} 
+                          onChange={e => updText({ color: e.target.value })} 
+                          className="w-full h-10 bg-[#1a1a24] border border-white/10 rounded cursor-pointer"
+                        />
+                      </div>
+                      
+                      {/* Border Width */}
+                      <div>
+                        <div className="flex justify-between mb-2">
+                          <span className="text-[12px] text-gray-300">Border Width</span>
+                          <span className="text-[12px] text-emerald-300 font-mono">{currentText.borderWidth || 0}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min={0} 
+                          max={10} 
+                          value={currentText.borderWidth || 0} 
+                          onChange={e => updText({ borderWidth: Number(e.target.value) })} 
+                          className="w-full accent-emerald-500" 
+                        />
+                      </div>
+                      
+                      {/* Border Color (only when border width > 0) */}
+                      {(currentText.borderWidth || 0) > 0 && (
+                        <div>
+                          <span className="text-[12px] text-gray-300 block mb-2">Border Color</span>
+                          <input 
+                            type="color" 
+                            value={currentText.borderColor || "#000000"} 
+                            onChange={e => updText({ borderColor: e.target.value })} 
+                            className="w-full h-10 bg-[#1a1a24] border border-white/10 rounded cursor-pointer"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+        
         {/* Submenu rendering */}
-        {ctxMenu && ctxMenu.submenu && (() => {
+        {ctxMenu && ctxMenu.submenu && ctxMenu.submenu !== 'textProperties' && (() => {
           const submenuItems = ctxMenu.submenu === 'tailDirection' ? [
             { label: "← Tail Left", icon: "M15 19l-7-7 7-7", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "left" as any }); setCtxMenu(null); } },
             { label: "→ Tail Right", icon: "M9 5l7 7-7 7", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "right" as any }); setCtxMenu(null); } },
@@ -1217,6 +1725,15 @@ export function CanvasEditor({
             { label: "⇈ Bring to Front", icon: "M5 3h14M12 7l7 7-7 7M5 7l7 7-7 7", action: () => { if (ctxMenu.id) { bringToFront(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
             { label: "↓ Send Backward", icon: "M12 19l-7-7 7-7M19 19l-7-7 7-7", action: () => { if (ctxMenu.id) { sendBackward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
             { label: "⇊ Send to Back", icon: "M19 21H5M12 17l-7-7 7-7M19 17l-7-7 7-7", action: () => { if (ctxMenu.id) { sendToBack(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+          ] : ctxMenu.submenu === 'bubbleType' ? [
+            { label: "Speech", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "speech" as any }); setCtxMenu(null); } },
+            { label: "Speech (Rough)", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "speechRough" as any }); setCtxMenu(null); } },
+            { label: "Thought", icon: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "thought" as any }); setCtxMenu(null); } },
+            { label: "Shout", icon: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "shout" as any }); setCtxMenu(null); } },
+            { label: "Whisper", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "whisper" as any }); setCtxMenu(null); } },
+            { label: "Rectangle", icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "rect" as any }); setCtxMenu(null); } },
+            { label: "Rectangle (Round)", icon: "M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "rectRound" as any }); setCtxMenu(null); } },
+            { label: "SFX", icon: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "sfx" as any }); setCtxMenu(null); } },
           ] : [];
           
           return (

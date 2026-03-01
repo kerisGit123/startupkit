@@ -24,6 +24,7 @@ interface CanvasAreaProps {
   canvasState: CanvasEditorState;
   setCanvasState: (state: CanvasEditorState) => void;
   canvasContainerRef: React.RefObject<HTMLDivElement>;
+  generateImageWithElements?: () => void;
   
   // Brush Props
   maskBrushSize: number;
@@ -59,6 +60,7 @@ export function CanvasArea({
   canvasState,
   setCanvasState,
   canvasContainerRef,
+  generateImageWithElements,
   maskBrushSize,
   isEraser,
   maskOpacity,
@@ -135,6 +137,7 @@ export function CanvasArea({
           canvasTool={canvasTool}
           isAspectRatioAnimating={isAspectRatioAnimating}
           isSquareMode={isSquareMode}
+          generateImageWithElements={generateImageWithElements}
           resetAllTransformations={() => {
             // Reset all transformations for all objects
             setCanvasState((prev) => {

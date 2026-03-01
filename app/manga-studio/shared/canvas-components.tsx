@@ -239,7 +239,7 @@ export function BubbleSVG({ b, isSelected }: { b: Bubble; isSelected: boolean })
           overflowWrap: "anywhere",
           whiteSpace: "pre-wrap",
           textAlign: "center",
-          fontFamily: "'Comic Sans MS', 'Bangers', 'Segoe UI', sans-serif",
+          fontFamily: "'Noto Sans SC', 'Comic Sans MS', 'Bangers', 'Segoe UI', sans-serif",
           fontWeight: b.bubbleType === "sfx" || b.bubbleType === "shout" ? 900 : 400,
           letterSpacing: b.bubbleType === "sfx" ? "0.06em" : b.bubbleType === "shout" ? "0.02em" : "0em",
           fontStyle: b.bubbleType === "whisper" ? "italic" : "normal",
