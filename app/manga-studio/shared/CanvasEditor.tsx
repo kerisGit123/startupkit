@@ -97,7 +97,7 @@ export function CanvasEditor({
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
   const [editingBubbleId, setEditingBubbleId] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas"; id?: string } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas"; id?: string; submenu?: 'tailDirection' | 'layer'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
   const [copiedObject, setCopiedObject] = useState<{ type: "bubble" | "text" | "asset"; data: any } | null>(null);
 
   // Use controlled selection if provided, else internal
@@ -990,8 +990,18 @@ export function CanvasEditor({
               </>
             ) : (
               // Element context menu - editing options
-              ([
-                { label: "Duplicate",      shortcut: "Ctrl+D",     icon: "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z", action: () => { 
+              (() => {
+                // Get current bubble for conditional menu items
+                const currentBubble = ctxMenu.kind === "bubble" && ctxMenu.id 
+                  ? bubbles.find(b => b.id === ctxMenu.id) 
+                  : null;
+                
+                // Check if bubble has tail (only certain bubble types have tails)
+                const bubbleHasTail = currentBubble && !["shout", "sfx"].includes(currentBubble.bubbleType);
+                
+                return [
+                { label: "Duplicate",      shortcut: "Ctrl+D",     icon: "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z", action: (e) => { 
+                  e?.stopPropagation();
                   if (ctxMenu.id) {
                     if (ctxMenu.kind === "asset") duplicateAsset(ctxMenu.id);
                     else if (ctxMenu.kind === "text") duplicateText(ctxMenu.id);
@@ -999,7 +1009,8 @@ export function CanvasEditor({
                   }
                   setCtxMenu(null); 
                 } },
-                { label: "Reset Position", shortcut: "Ctrl+R",     icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15", action: () => { 
+                { label: "Reset Position", shortcut: "Ctrl+R",     icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15", action: (e) => { 
+                  e?.stopPropagation();
                   if (ctxMenu.id) {
                     if (ctxMenu.kind === "asset") patchAsset(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
                     else if (ctxMenu.kind === "text") patchText(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
@@ -1007,7 +1018,8 @@ export function CanvasEditor({
                   }
                   setCtxMenu(null); 
                 } },
-                { label: "Flip Horizontal", shortcut: "H",         icon: "M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4", action: () => { 
+                { label: "Flip Horizontal", shortcut: "H",         icon: "M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4", action: (e) => { 
+                  e?.stopPropagation();
                   if (ctxMenu.id) {
                     if (ctxMenu.kind === "asset") {
                       const asset = assetElements.find(a => a.id === ctxMenu.id);
@@ -1022,7 +1034,8 @@ export function CanvasEditor({
                   }
                   setCtxMenu(null); 
                 } },
-                { label: "Flip Vertical",   shortcut: "V",         icon: "M7 16V8m0 0l3 3m-3-3l-3 3m14 8V8m0 0l-3 3m3-3l3 3", action: () => { 
+                { label: "Flip Vertical",   shortcut: "V",         icon: "M7 16V8m0 0l3 3m-3-3l-3 3m14 8V8m0 0l-3 3m3-3l3 3", action: (e) => { 
+                  e?.stopPropagation();
                   if (ctxMenu.id) {
                     if (ctxMenu.kind === "asset") {
                       const asset = assetElements.find(a => a.id === ctxMenu.id);
@@ -1037,19 +1050,139 @@ export function CanvasEditor({
                   }
                   setCtxMenu(null); 
                 } },
+                // Bubble-specific options
+                ...(bubbleHasTail ? [
+                  null, // Divider
+                  { label: "Tail Direction", shortcut: "", icon: "M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const contextMenuItems = [
+                        "Duplicate", "Reset Position", "Flip Horizontal", "Flip Vertical",
+                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Layer"
+                      ];
+                      
+                      // Find the index of "Tail Direction" in the menu
+                      const tailDirectionIndex = contextMenuItems.indexOf("Tail Direction");
+                      
+                      // Calculate adjusted position (same as main context menu)
+                      const menuWidth = 200;
+                      const menuHeight = 300;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemTop = adjustedY + (tailDirectionIndex * menuItemHeight);
+                      
+                      setCtxMenu({ 
+                        ...ctxMenu, 
+                        submenu: 'tailDirection',
+                        parentX: adjustedX,
+                        parentY: menuItemTop,
+                        menuItemIndex: tailDirectionIndex,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
+                  } },
+                  { label: currentBubble?.tailMode === "none" ? "Show Tail" : "Hide Tail", shortcut: "", icon: currentBubble?.tailMode === "none" ? "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" : "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id && currentBubble) {
+                      const newTailMode = currentBubble.tailMode === "none" ? "default" : "none";
+                      patchBubble(ctxMenu.id, { tailMode: newTailMode });
+                    }
+                    setCtxMenu(null);
+                  } },
+                  { label: "Flip Colors",     shortcut: "",          icon: "M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id && currentBubble) {
+                      patchBubble(ctxMenu.id, { flippedColors: !currentBubble.flippedColors });
+                    }
+                    setCtxMenu(null);
+                  } },
+                ] : []),
                 null, // Divider
-                { label: "Bring Forward",  shortcut: "Ctrl+]",     icon: "M12 5l7 7-7 7M5 5l7 7-7 7",      action: () => { if (ctxMenu.id) { bringForward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
-                { label: "Bring to Front", shortcut: "Ctrl+Alt+]", icon: "M5 3h14M12 7l7 7-7 7M5 7l7 7-7 7", action: () => { if (ctxMenu.id) { bringToFront(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
-                { label: "Send Backward",  shortcut: "Ctrl+[",     icon: "M12 19l-7-7 7-7M19 19l-7-7 7-7", action: () => { if (ctxMenu.id) { sendBackward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
-                { label: "Send to Back",   shortcut: "Ctrl+Alt+[", icon: "M19 21H5M12 17l-7-7 7-7M19 17l-7-7 7-7", action: () => { if (ctxMenu.id) { sendToBack(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
-              ] as ({ label: string; shortcut: string; icon: string; action: () => void } | null)[]).map((item, index) => {
+                { label: "Layer", shortcut: "", icon: "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const contextMenuItems = [
+                        "Duplicate", "Reset Position", "Flip Horizontal", "Flip Vertical",
+                        "Tail Direction", "Hide/Show Tail", "Flip Colors", "Layer"
+                      ];
+                      
+                      // Find the index of "Layer" in the menu
+                      const layerIndex = contextMenuItems.indexOf("Layer");
+                      
+                      // Calculate adjusted position (same as main context menu)
+                      const menuWidth = 200;
+                      const menuHeight = 300;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemTop = adjustedY + (layerIndex * menuItemHeight);
+                      
+                      setCtxMenu({ 
+                        ...ctxMenu, 
+                        submenu: 'layer',
+                        parentX: adjustedX,
+                        parentY: menuItemTop,
+                        menuItemIndex: layerIndex,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
+                  } },
+              ];
+              })().map((item, index) => {
                 if (item === null) {
                   return <div key={`divider-${index}`} className="mx-3 my-1 h-px bg-white/10" />;
                 }
                 return (
                   <button key={item.label}
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
-                    onClick={item.action}
+                    onClick={(e) => item.action(e)}
                   >
                     <div className="flex items-center gap-2.5">
                       <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1057,10 +1190,84 @@ export function CanvasEditor({
                       </svg>
                       <span className="text-[13px] font-medium">{item.label}</span>
                     </div>
-                    <span className="text-[10px] text-gray-500 font-mono ml-4">{item.shortcut}</span>
+                    <div className="flex items-center gap-2">
+                      {item.shortcut && <span className="text-[10px] text-gray-500 font-mono">{item.shortcut}</span>}
+                      {(item.label === "Tail Direction" || item.label === "Layer") && (
+                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </div>
                   </button>
                 );
               }))}
+            </div>
+          );
+        })()}
+        
+        {/* Submenu rendering */}
+        {ctxMenu && ctxMenu.submenu && (() => {
+          const submenuItems = ctxMenu.submenu === 'tailDirection' ? [
+            { label: "← Tail Left", icon: "M15 19l-7-7 7-7", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "left" as any }); setCtxMenu(null); } },
+            { label: "→ Tail Right", icon: "M9 5l7 7-7 7", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "right" as any }); setCtxMenu(null); } },
+            { label: "↙ Tail Bottom Left", icon: "M7 16l-4-4 4-4", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "bottom-left" as any }); setCtxMenu(null); } },
+            { label: "↘ Tail Bottom Right", icon: "M17 8l4 4-4 4", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "bottom-right" as any }); setCtxMenu(null); } },
+          ] : ctxMenu.submenu === 'layer' ? [
+            { label: "↑ Bring Forward", icon: "M12 5l7 7-7 7M5 5l7 7-7 7", action: () => { if (ctxMenu.id) { bringForward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+            { label: "⇈ Bring to Front", icon: "M5 3h14M12 7l7 7-7 7M5 7l7 7-7 7", action: () => { if (ctxMenu.id) { bringToFront(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+            { label: "↓ Send Backward", icon: "M12 19l-7-7 7-7M19 19l-7-7 7-7", action: () => { if (ctxMenu.id) { sendBackward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+            { label: "⇊ Send to Back", icon: "M19 21H5M12 17l-7-7 7-7M19 17l-7-7 7-7", action: () => { if (ctxMenu.id) { sendToBack(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+          ] : [];
+          
+          return (
+            <div
+              className="absolute bg-[#1a1d23] border border-white/10 rounded-lg shadow-2xl py-2 z-[1002] min-w-[180px]"
+              style={{
+                // Smart horizontal positioning based on available space
+                left: `${(() => {
+                  const submenuWidth = 180;
+                  const parentX = ctxMenu.parentX || 0;
+                  const containerRect = containerRef.current?.getBoundingClientRect();
+                  
+                  if (!containerRect) return `${parentX + 200}px`;
+                  
+                  // Calculate available space
+                  const spaceRight = containerRect.width - (parentX + 200); // Space to the right of main menu
+                  const spaceLeft = parentX; // Space to the left of main menu
+                  
+                  // Position submenu based on available space
+                  if (spaceRight >= submenuWidth) {
+                    return `${parentX + 200}px`; // Open to right of main menu
+                  } else if (spaceLeft >= submenuWidth) {
+                    return `${parentX - submenuWidth}px`; // Open to left of main menu
+                  } else {
+                    // Not enough space on either side, prioritize right
+                    return `${parentX + 200}px`;
+                  }
+                })()}`,
+                // Position so submenu BOTTOM aligns with menu item BOTTOM
+                // Submenu top = menu item bottom - submenu height
+                top: `${(() => {
+                  const menuItemHeight = ctxMenu.menuItemHeight || 44;
+                  const submenuHeight = submenuItems.length * 44;
+                  return (ctxMenu.parentY || 0) + menuItemHeight - submenuHeight;
+                })()}px`,
+              }}
+              onMouseDown={e => e.stopPropagation()}
+            >
+              {submenuItems.map((item, index) => (
+                <button key={item.label}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
+                  onClick={item.action}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d={item.icon} />
+                    </svg>
+                    <span className="text-[13px] font-medium">{item.label}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           );
         })()}
