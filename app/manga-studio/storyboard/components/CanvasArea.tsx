@@ -38,6 +38,9 @@ interface CanvasAreaProps {
   setCanvasSelection: (selection: any) => void;
   canvasSelection: any;
   
+  // Tool Selection
+  onToolSelect?: (tool: CanvasActiveTool) => void;
+  
   // Rectangle Props
   rectangle: { x: number; y: number; width: number; height: number } | null;
   setRectangle: (rect: { x: number; y: number; width: number; height: number } | null) => void;
@@ -45,6 +48,22 @@ interface CanvasAreaProps {
   canvasTool: CanvasActiveTool;
   isAspectRatioAnimating: boolean;
   isSquareMode: boolean;
+  
+  // Crop Props
+  selectedAspectRatio?: string;
+  onCropExecute?: (aspectRatio: string) => void;
+  cropImageToRectangle?: (
+    base64Image: string,
+    rectangle: { x: number; y: number; width: number; height: number },
+    canvasDisplaySize?: { width: number; height: number }
+  ) => Promise<string>;
+  onShotsChange?: (shots: any[]) => void;
+  activeShotId?: string;
+  runCrop?: () => void;
+  onImageLoad?: (scale: number) => void;
+  
+  // Color Props
+  selectedColor?: string;
 }
 
 // ── CanvasArea Component ─────────────────────────────────────────────────────
@@ -69,12 +88,21 @@ export function CanvasArea({
   hiddenIds,
   setCanvasSelection,
   canvasSelection,
+  onToolSelect,
   rectangle,
   setRectangle,
   imageIsRectangleVisible,
   canvasTool,
   isAspectRatioAnimating,
   isSquareMode,
+  selectedAspectRatio,
+  onCropExecute,
+  cropImageToRectangle,
+  onShotsChange,
+  activeShotId,
+  runCrop,
+  onImageLoad,
+  selectedColor,
 }: CanvasAreaProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -110,11 +138,10 @@ export function CanvasArea({
         </button>
       )}
 
-      {/* Canvas Container */}
+      {/* Canvas Container — no data-canvas-editor here; the inner CanvasEditor div carries that attribute */}
       <div 
         ref={canvasContainerRef} 
-        className="flex-1 overflow-hidden bg-[#0d0d12]"
-        data-canvas-editor="true"
+        className="flex-1 overflow-hidden bg-[#0d0d12] relative"
       >
         <CanvasEditor
           panelId={panelId}
@@ -137,7 +164,11 @@ export function CanvasArea({
           canvasTool={canvasTool}
           isAspectRatioAnimating={isAspectRatioAnimating}
           isSquareMode={isSquareMode}
+          onToolSelect={onToolSelect}
           generateImageWithElements={generateImageWithElements}
+          onCropClick={runCrop}
+          onImageLoad={onImageLoad}
+          selectedColor={selectedColor}
           resetAllTransformations={() => {
             // Reset all transformations for all objects
             setCanvasState((prev) => {

@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { ElementPanel } from "./ElementPanel";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, ImageIcon, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Layers, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check,
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import RectangleInpaintPanel from "./RectangleInpaintPanel";
@@ -19,6 +18,7 @@ import {
 import { makeId, bubbleEllipse, cloudPath, tailPath, rectTailPath, rectOutlinePathWithGap, burstPoints, roughEllipsePath, estimateFontSize } from "../../shared/canvas-helpers";
 import type { BubbleType, TailDir, FontFamily } from "../../shared/canvas-types";
 import { AIGenerationModal } from "../../components/modals/AIGenerationModal";
+import { ImageAIPanel, type AIEditMode } from "./ImageAIPanel";
 
 type CanvasTool = CanvasActiveTool;
 
@@ -32,7 +32,6 @@ interface SceneEditorProps {
 export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: SceneEditorProps) {
   const [activeShotId, setActiveShotId] = useState(initialShotId);
   const [commentText, setCommentText] = useState("");
-  const [commentTab, setCommentTab] = useState<"upload" | "history">("upload");
   const [editingField, setEditingField] = useState<"voice" | "notes" | "action" | null>(null);
   const [fieldDraft, setFieldDraft] = useState("");
   const [zoom, setZoom] = useState(53);
@@ -51,7 +50,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [showBubbleStyleModal, setShowBubbleStyleModal] = useState(false);
   const [selectedBubbleStyle, setSelectedBubbleStyle] = useState<"realistic" | "cartoon" | "manga" | "custom">("manga");
-  
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const fitScaleRef = useRef(1); // actual CSS scale that corresponds to display 100%
+  const [originalCanvasSize, setOriginalCanvasSize] = useState({ width: 0, height: 0 });
   
   // Image tab independent state
   const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
@@ -84,11 +85,110 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Tag insertion popup state
   const [showTagPopup, setShowTagPopup] = useState(false);
 
+  // ImageAI Panel state
+  const [aiEditMode, setAiEditMode] = useState<AIEditMode>("describe");
+  const [aiModel, setAiModel] = useState("nano-banana-2");
+  const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string }[]>([]);
+
   // Information dialog state
   const [showInfoDialog, setShowInfoDialog] = useState(false);
 
+  // ── Zoom Functions ───────────────────────────────────────────────────
+  const handleZoomIn = () => {
+    const newZoom = Math.min(zoomLevel + 20, 200);
+    setZoomLevel(newZoom);
+    applyZoomToImage(newZoom);
+  };
+
+  const handleZoomOut = () => {
+    const newZoom = Math.max(zoomLevel - 20, 20);
+    setZoomLevel(newZoom);
+    applyZoomToImage(newZoom);
+  };
+
+  const handleFitToScreen = () => {
+    const canvasContainer = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+    const image = canvasContainer?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+    
+    if (canvasContainer && image) {
+      const containerWidth = canvasContainer.offsetWidth;
+      const containerHeight = canvasContainer.offsetHeight;
+      const imageWidth = image.naturalWidth;
+      const imageHeight = image.naturalHeight;
+      
+      const scaleX = containerWidth / imageWidth;
+      const scaleY = containerHeight / imageHeight;
+      const scale = Math.min(scaleX, scaleY); // Fit image to container (scale up or down)
+      
+      const scaledWidth = imageWidth * scale;
+      const scaledHeight = imageHeight * scale;
+      const offsetX = (containerWidth - scaledWidth) / 2;
+      const offsetY = (containerHeight - scaledHeight) / 2;
+      
+      image.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+      image.style.transformOrigin = 'top left';
+      image.style.transition = '';
+      image.style.position = 'absolute';
+      image.style.left = '0px';
+      image.style.top = '0px';
+      
+      // Store fit scale as the "100%" baseline for zoom in/out
+      fitScaleRef.current = scale;
+      setZoomLevel(100);
+    }
+  };
+
+  // Re-centers the active rectangle to the image center without needing stale state
+  const recenterRectangleIfActive = useCallback(() => {
+    const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+    if (!container) return;
+    const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+    if (!img) return;
+    const cRect = container.getBoundingClientRect();
+    const iRect = img.getBoundingClientRect();
+    setRectangle(prev => {
+      if (!prev) return prev;
+      const x = (iRect.left - cRect.left) + (iRect.width  - prev.width)  / 2;
+      const y = (iRect.top  - cRect.top)  + (iRect.height - prev.height) / 2;
+      return { x, y, width: prev.width, height: prev.height };
+    });
+  }, []);
+
+  const applyZoomToImage = (displayPercent: number) => {
+    const canvasContainer = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+    if (!canvasContainer) return;
+
+    const image = canvasContainer.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+    if (!image || !image.naturalWidth) return;
+
+    // displayPercent is relative to fit-to-screen scale:
+    // 100% = fitScaleRef.current, 200% = 2× fit scale, etc.
+    const newScale = fitScaleRef.current * (displayPercent / 100);
+    const containerWidth = canvasContainer.offsetWidth;
+    const containerHeight = canvasContainer.offsetHeight;
+
+    // Zoom toward the viewport center
+    const containerRect = canvasContainer.getBoundingClientRect();
+    const imgRect = image.getBoundingClientRect();
+    const currentTx = imgRect.left - containerRect.left;
+    const currentTy = imgRect.top  - containerRect.top;
+    const currentScale = imgRect.width / image.naturalWidth;
+
+    const vcX = containerWidth  / 2;
+    const vcY = containerHeight / 2;
+    const imgCenterX = (vcX - currentTx) / currentScale;
+    const imgCenterY = (vcY - currentTy) / currentScale;
+
+    const tx = vcX - imgCenterX * newScale;
+    const ty = vcY - imgCenterY * newScale;
+
+    image.style.transformOrigin = 'top left';
+    image.style.transition = '';
+    image.style.transform = `translate(${tx}px, ${ty}px) scale(${newScale})`;
+  };
+
   // ── Canvas tool panel state ────────────────────────────────────────────────
-  const [canvasTool, setCanvasTool] = useState<CanvasTool>("elements");
+  const [canvasTool, setCanvasTool] = useState<CanvasTool>("inpaint");
   const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -105,7 +205,29 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [maskOpacity, setMaskOpacity] = useState(0.45);
   const [isEraser, setIsEraser] = useState(false);
   const [inpaintPrompt, setInpaintPrompt] = useState("");
-  const [canvasSelection, setCanvasSelection] = useState<CanvasSelection>({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: null });
+  const [canvasSelection, setCanvasSelection] = useState<CanvasSelection>({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: null, selectedShapeId: null });
+  const [selectedColor, setSelectedColor] = useState("#FF0000");
+  // Function to add image as canvas element (for ImageAIPanel uploads)
+  const handleAddCanvasElement = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const url = event.target?.result as string;
+      const libId = makeId();
+      const elemId = makeId();
+      const aw = 160, ah = 160;
+      const { cx, cy } = getCanvasCenter();
+      
+      setCanvasState(prev => ({
+        ...prev,
+        assetLibrary: [...prev.assetLibrary, { id: libId, url, name: file.name }],
+        assetElements: [...prev.assetElements, { id: elemId, panelId, assetId: libId, x: cx - aw/2, y: cy - ah/2, w: aw, h: ah, zIndex: 2 }],
+      }));
+      
+      setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: elemId });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const assetInputRef = useRef<HTMLInputElement | null>(null);
 
   const panelId = activeShotId;
@@ -147,10 +269,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   // Computed canvas active tool - enable brush for all inpaint models
   const canvasActiveTool = useMemo(() => {
+    console.log("Computing canvasActiveTool - canvasTool:", canvasTool);
     if (canvasTool === "inpaint") {
       // Enable brush for all inpaint models
+      console.log("Returning inpaint for canvasActiveTool");
       return "inpaint";
     }
+    // Return the actual tool (text, elements, etc.)
+    console.log("Returning canvasTool as activeTool:", canvasTool);
     return canvasTool;
   }, [canvasTool]);
 
@@ -2216,6 +2342,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             canvasState={canvasState}
             setCanvasState={setCanvasState}
             canvasContainerRef={canvasContainerRef as React.RefObject<HTMLDivElement>}
+            generateImageWithElements={generateImageWithElements}
             maskBrushSize={maskBrushSize}
             isEraser={isEraser}
             maskOpacity={maskOpacity}
@@ -2224,14 +2351,204 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             hiddenIds={hiddenIds}
             setCanvasSelection={setCanvasSelection}
             canvasSelection={canvasSelection}
+            onToolSelect={(tool) => {
+              console.log("Tool selected from canvas:", tool);
+              setCanvasActiveTool(tool);
+            }}
             rectangle={rectangle}
             setRectangle={setRectangle}
             imageIsRectangleVisible={imageIsRectangleVisible}
             canvasTool={canvasTool}
             isAspectRatioAnimating={isAspectRatioAnimating}
             isSquareMode={isSquareMode}
-            generateImageWithElements={generateImageWithElements}
+            selectedAspectRatio="16:9" // TODO: Get from ImageAIPanel
+            cropImageToRectangle={cropImageToRectangle}
+            onShotsChange={onShotsChange}
+            activeShotId={activeShotId}
+            runCrop={runCrop}
+            onImageLoad={(scale) => {
+              fitScaleRef.current = scale;
+              setZoomLevel(100);
+              // Recenter any active rectangle to the newly-fitted image
+              requestAnimationFrame(recenterRectangleIfActive);
+            }}
+            selectedColor={selectedColor}
+            onCropExecute={async (aspectRatio) => {
+              console.log("CanvasArea: Aspect ratio selected:", aspectRatio);
+              
+              // Handle aspect ratio change - update rectangle shape (same as crop panel)
+              if (aspectRatio) {
+                const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                if (container) {
+                  const rect = container.getBoundingClientRect();
+                  const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1, "4:3": 4/3, "3:4": 3/4 };
+                  const ar = arMap[aspectRatio] ?? 1;
+                  
+                  const width = rect.width * 0.8;
+                  const height = width / ar;
+                  const x = (rect.width - width) / 2;
+                  const y = (rect.height - height) / 2;
+                  
+                  setRectangle({ x, y, width, height });
+                  setImageIsRectangleVisible(true); // Show rectangle when created
+                  console.log("✅ Created rectangle with aspect ratio:", aspectRatio, { x, y, width, height });
+                }
+              }
+            }}
           />
+
+          {/* ImageAI Panel container with gaps */}
+          <div className="absolute inset-0 pointer-events-none z-10 flex flex-col">
+            {/* Canvas area with spacing for bottom panel */}
+            <div className="flex-1 pb-[80px] px-[20px]">
+              {/* ImageAI Panel overlay on canvas */}
+              <div className="pointer-events-auto">
+                <ImageAIPanel
+                  mode={aiEditMode}
+                  onModeChange={setAiEditMode}
+                  onGenerate={() => {
+                    console.log("Generate with mode:", aiEditMode, "model:", aiModel);
+                    generateImageWithElements?.();
+                  }}
+                  credits={20}
+                  model={aiModel}
+                  onModelChange={setAiModel}
+                  referenceImages={aiRefImages}
+                  onAddReferenceImage={(file) => {
+                    const url = URL.createObjectURL(file);
+                    setAiRefImages(prev => [...prev, { id: `ref-${Date.now()}`, url }]);
+                  }}
+                  onRemoveReferenceImage={(id) => {
+                    setAiRefImages(prev => prev.filter(img => img.id !== id));
+                  }}
+                  onAddCanvasElement={handleAddCanvasElement}
+                  // Brush inpaint props
+                  isEraser={isEraser}
+                  setIsEraser={setIsEraser}
+                  maskBrushSize={maskBrushSize}
+                  setMaskBrushSize={setMaskBrushSize}
+                  maskOpacity={maskOpacity}
+                  setMaskOpacity={setMaskOpacity}
+                  canvasState={canvasState}
+                  setCanvasState={setCanvasState}
+                  selectedColor={selectedColor}
+                  setSelectedColor={setSelectedColor}
+                  onToolSelect={(tool) => {
+                    if (tool === "pen-brush" || tool === "brush" || tool === "eraser") {
+                      setCanvasTool("inpaint");
+                    } else if (tool === "crop") {
+                      setCanvasTool("crop");
+                      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                      if (container) {
+                        const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                        const cRect = container.getBoundingClientRect();
+                        const iRect = img?.getBoundingClientRect();
+                        const w = 300; const h = 200;
+                        const cx = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                        const cy = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                        setRectangle({ x: cx, y: cy, width: w, height: h });
+                        setImageIsRectangleVisible(true);
+                      }
+                    } else if (tool === "rectInpaint") {
+                      setCanvasTool("rectInpaint");
+                      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                      if (container) {
+                        const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                        const cRect = container.getBoundingClientRect();
+                        const iRect = img?.getBoundingClientRect();
+                        const w = 300; const h = 200;
+                        const cx = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                        const cy = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                        setRectangle({ x: cx, y: cy, width: w, height: h });
+                        setImageIsRectangleVisible(true);
+                      }
+                    } else if (tool === "move") {
+                      setCanvasTool("move");
+                    } else if (tool === "text") {
+                      // Handle text tool - set canvasTool to text
+                      console.log("Text tool selected - setting canvasTool to text");
+                      setCanvasTool("text");
+                    } else {
+                      // Default case - set canvasTool to the selected tool
+                      setCanvasTool(tool);
+                    }
+                  }}
+                  onCropRemove={() => {
+                    console.log("Removing crop rectangle from canvas");
+                    setCanvasTool("elements");
+                    // TODO: Clear crop rectangle from canvas
+                    // This should remove the crop rectangle overlay
+                  }}
+                  onCropExecute={async (aspectRatio) => {
+                    if (aspectRatio) {
+                      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                      if (container) {
+                        const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                        const cRect = container.getBoundingClientRect();
+                        const iRect = img?.getBoundingClientRect();
+                        const dimensionMap: Record<string, { width: number; height: number }> = {
+                          "16:9": { width: 320, height: 180 },
+                          "9:16": { width: 180, height: 320 },
+                          "1:1":  { width: 300, height: 300 },
+                          "4:3":  { width: 400, height: 300 },
+                          "3:4":  { width: 300, height: 400 },
+                        };
+                        const { width: w, height: h } = dimensionMap[aspectRatio] || dimensionMap["16:9"];
+                        const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                        const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                        setRectangle({ x, y, width: w, height: h });
+                        setImageIsRectangleVisible(true);
+                      }
+                    }
+                  }}
+                  onSetSquareMode={(isSquare) => {
+                    console.log("Setting square mode:", isSquare);
+                    setIsSquareMode(isSquare);
+                    // When switching to rectangle mode, set size to 300x200
+                    if (!isSquare) {
+                      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                      if (container) {
+                        const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                        const cRect = container.getBoundingClientRect();
+                        const iRect = img?.getBoundingClientRect();
+                        const w = 300; const h = 200;
+                        const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                        const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                        setRectangle({ x, y, width: w, height: h });
+                        setImageIsRectangleVisible(true);
+                      }
+                    }
+                  }}
+                  onResetRectangle={() => {
+                    const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                    if (container) {
+                      const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                      const cRect = container.getBoundingClientRect();
+                      const iRect = img?.getBoundingClientRect();
+                      const w = 200; const h = 200;
+                      const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                      const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                      setRectangle({ x, y, width: w, height: h });
+                      setImageIsRectangleVisible(true);
+                    }
+                  }}
+                  onSetOriginalImage={(imageUrl) => {
+                    console.log("Setting uploaded image as original image:", imageUrl);
+                    setBackgroundImage(imageUrl);
+                    setOriginalImage(imageUrl);
+                    setCanvasState(s => ({ ...s, mask: [] }));
+                    fitScaleRef.current = 1;
+                    setZoomLevel(100);
+                  }}
+                  backgroundImage={backgroundImage}
+                onZoomIn={handleZoomIn}
+                onZoomOut={handleZoomOut}
+                onFitToScreen={handleFitToScreen}
+                zoomLevel={zoomLevel}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
       {/* Generated Images Panel (shown after inpaint) */}
@@ -2309,12 +2626,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         {/* Right: vertical icon strip */}
         <div className="w-[52px] border-l border-white/6 bg-[#0a0a0f] flex flex-col items-center py-3 gap-0.5 shrink-0">
           {([
-            { id: "elements" as CanvasTool, Icon: Layers,       label: "Elements", color: "white"   },
+            // { id: "elements" as CanvasTool, Icon: Layers,       label: "Elements", color: "white"   }, // Disabled - ElementPanel temporarily disabled
             { id: "inpaint"  as CanvasTool, Icon: Paintbrush,    label: "Inpaint",  color: "blue"    },
             { id: "rectInpaint" as CanvasTool, Icon: Square,       label: "Rect",     color: "cyan"   },
             { id: "image"    as CanvasTool, Icon: ImageIcon,     label: "Image",    color: "purple"  },
-            { id: "crop"     as CanvasTool, Icon: ImageIcon,     label: "Crop",     color: "orange"  },
-            { id: "comments" as CanvasTool, Icon: Upload, label: "Upload", color: "purple" },
+        
           ] as { id: CanvasTool; Icon: React.ElementType; label: string; color: string }[]).map(({ id, Icon, label, color }) => (
             <button key={id} onClick={() => setCanvasTool(id)}
               className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
@@ -2336,28 +2652,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
         {/* Right: tool content panel */}
         <div className="w-60 border-l border-white/6 flex flex-col bg-[#111118] shrink-0 overflow-y-auto">
+          {/* ElementPanel removed - text properties now in context menu */}
 
-          {/* Elements Panel */}
-          {canvasTool === "elements" && (
-            <ElementPanel
-              panelBubbles={panelBubbles}
-              panelTexts={panelTexts}
-              panelAssets={panelAssets}
-              canvasSelection={canvasSelection}
-              setCanvasSelection={setCanvasSelection}
-              canvasState={canvasState}
-              setCanvasState={setCanvasState}
-              assetInputRef={assetInputRef}
-              handleAssetUpload={handleAssetUpload}
-              generateImageWithElements={generateImageWithElements}
-              backgroundImage={backgroundImage}
-              isInpainting={isInpainting}
-              inpaintError={inpaintError}
-            />
-          )}
-
-          
-          
           {/* ── Brush Inpaint ── */}
           {canvasTool === "inpaint" && (
             <BrushInpaintPanel
@@ -2414,7 +2710,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             />
           )}
 
-              
           {/* ── Image Generation ── */}
           {canvasTool === "image" && (() => {
             const uc = USE_CASES[imageUseCase] ?? USE_CASES["character-swap"];
@@ -2435,7 +2730,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   />
                 </div>
 
-                {/* Use Case dropdown — pic3 style */}
+                {/* Use Case dropdown */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Use Case</label>
                   <div className="relative">
@@ -2457,12 +2752,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg>
                     </div>
                   </div>
-                  {/* Badge with info */}
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${badge.color}`}>
                       {badge.label}
                     </span>
-                    {/* Info icon with modal */}
                     <button 
                       onClick={() => setShowInfoModal(true)}
                       className="flex items-center justify-center w-5 h-5 text-gray-400 hover:text-gray-300 transition-colors rounded-full hover:bg-white/10"
@@ -2476,7 +2769,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   </div>
                 </div>
 
-                {/* Model dropdown — pic3 style with sub-label */}
+                {/* Model dropdown */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Model</label>
                   <div className="relative">
@@ -2493,11 +2786,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg>
                     </div>
                   </div>
-                  {/* Selected model sub-label hint */}
                   <p className="text-[10px] text-gray-600">{uc.models.find(m => m.value === imageInpaintModel)?.sub ?? ""}</p>
                 </div>
 
-                {/* Reference Images — dynamic slots */}
+                {/* Reference Images */}
                 {refSlots > 0 && (
                   <div className="space-y-1.5">
                     <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">
@@ -2565,310 +2857,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   </div>
                 )}
 
-                {/* Status bar */}
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
                   <span className="text-[10px] text-purple-300">
                     {imageIsInpainting ? "Generating image..." : imageGeneratedImages.length > 0 ? `${imageGeneratedImages.length} image${imageGeneratedImages.length > 1 ? "s" : ""} generated` : "Ready to generate"}
                   </span>
                 </div>
-
-                              </div>
+              </div>
             );
           })()}
-
-          {/* ── Crop ── */}
-          {canvasTool === "crop" && (
-            <>
-              <div className=" p-3 space-y-3">
-                <div><h3 className="text-white font-bold text-sm">Crop Image</h3><p className="text-[10px] text-gray-500 mt-0.5">Crop the image to a specific area</p></div>
-                
-                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-2">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        // Create rectangle with aspect ratio for crop
-                        const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-                        if (container) {
-                          const rect = container.getBoundingClientRect();
-                          const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1 };
-                          const targetRatio = arMap[activeShot?.aspectRatio ?? "16:9"] ?? 16/9;
-                          
-                          // Calculate maximum dimensions that fit within canvas bounds
-                          // Start with 80% of canvas dimensions to ensure it fits
-                          let width = rect.width * 0.8;
-                          let height = rect.height * 0.8;
-                          
-                          // Adjust dimensions to fit aspect ratio
-                          if (targetRatio >= 1) {
-                            // Landscape or square - width is primary
-                            height = width / targetRatio;
-                            // If height exceeds canvas, recalculate based on height
-                            if (height > rect.height * 0.8) {
-                              height = rect.height * 0.8;
-                              width = height * targetRatio;
-                            }
-                          } else {
-                            // Portrait - height is primary
-                            width = height * targetRatio;
-                            // If width exceeds canvas, recalculate based on width
-                            if (width > rect.width * 0.8) {
-                              width = rect.width * 0.8;
-                              height = width / targetRatio;
-                            }
-                          }
-                          
-                          // Ensure rectangle fits within canvas bounds (with small padding)
-                          const padding = 10;
-                          width = Math.min(width, rect.width - padding * 2);
-                          height = Math.min(height, rect.height - padding * 2);
-                          
-                          // Recalculate to maintain aspect ratio after bounds constraint
-                          if (targetRatio >= 1) {
-                            height = width / targetRatio;
-                          } else {
-                            width = height * targetRatio;
-                          }
-                          
-                          // Center the rectangle
-                          const x = (rect.width - width) / 2;
-                          const y = (rect.height - height) / 2;
-                          
-                          const aspectRatioRect = { x, y, width, height };
-                          setRectangle(aspectRatioRect);
-                          setImageIsRectangleVisible(true); // Show rectangle when created
-                        }
-                      }}
-                      className="flex-1 px-2 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                      <Plus className="w-3 h-3" />
-                      Add Rectangle
-                    </button>
-                  </div>
-                  
-                  {/* Second row - Hide and Clear buttons */}
-                  <></>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setImageIsRectangleVisible(!imageIsRectangleVisible)}
-                      disabled={!rectangle}
-                      className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-blue-500/10 border border-white/10 text-gray-300 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5"
-                      title={rectangle ? (imageIsRectangleVisible ? "Hide rectangle" : "Show rectangle") : "Add a rectangle first"}
-                    >
-                      {imageIsRectangleVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                      {imageIsRectangleVisible ? "Hide" : "Show"}
-                    </button>
-                    <button
-                      onClick={() => setRectangle(null)}
-                      className="flex-1 px-2 py-1.5 bg-white/5 hover:bg-red-500/10 border border-white/10 text-gray-300 hover:text-red-300 rounded-lg text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-                      <X className="w-3 h-3" />
-                      Clear
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-4 gap-2">
-                    {["16:9", "9:16", "1:1", "4:3", "3:2", "2:3", "3:4"].map(aspect => (
-                      <button
-                        key={aspect}
-                        onClick={() => {
-                          const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-                          if (container) {
-                            const rect = container.getBoundingClientRect();
-                            const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1, "4:3": 4/3, "3:2": 3/2, "2:3": 2/3, "3:4": 3/4 };
-                            const ar = arMap[aspect] ?? 1;
-                            
-                            const width = rect.width * 0.8;
-                            const height = width / ar;
-                            const x = (rect.width - width) / 2;
-                            const y = (rect.height - height) / 2;
-                            
-                            setRectangle({ x, y, width, height });
-                          }
-                        }}
-                        className={`px-2 py-1 rounded text-[10px] font-medium transition ${
-                          activeShot.aspectRatio === aspect
-                            ? "bg-orange-500/20 text-orange-300"
-                            : "bg-white/5 text-gray-400 hover:bg-white/10"
-                        }`}
-                      >
-                        {aspect}
-                      </button>
-                    ))}
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${rectangle ? "bg-orange-400 animate-pulse" : "bg-gray-600"}`} />
-                    <span className={`text-[11px] font-medium ${rectangle ? "text-orange-300" : "text-gray-500"}`}>
-                      {rectangle ? `Crop area: ${Math.round(rectangle.width)}×${Math.round(rectangle.height)}` : "No crop area selected"}
-                    </span>
-                  </div>
-                  <button
-                    onClick={runCrop}
-                    disabled={!rectangle}
-                    className="w-full py-2 bg-orange-600 hover:bg-orange-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5" />
-                    Crop Image
-                  </button>
-             
-                </div>
-              </div>
-           
-            </>
-          )}
-
-          // ── Upload ──
-          {canvasTool === "comments" && (
-            <>
-              <div className="flex-1 overflow-y-auto p-3">
-                <div className="bg-[#0f1117] rounded-xl border border-white/10 p-3 space-y-3">
-                  <div className="space-y-2">
-                    <label className="text-[11px] text-gray-300 font-semibold">Background Image Upload</label>
-                    
-                    {/* Upload Component */}
-                    <div className="space-y-3">
-                      {/* Hidden File Input */}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (e) => {
-                              const result = e.target?.result as string;
-                              setBackgroundImage(result);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                        className="hidden"
-                        id="background-upload-comments"
-                      />
-                      
-                      {/* Upload Area */}
-                      <div 
-                        className="relative group cursor-pointer"
-                        onClick={() => document.getElementById('background-upload-comments')?.click()}
-                      >
-                        <div className="border-2 border-dashed border-purple-500/30 hover:border-purple-500/60 rounded-lg p-6 transition-all duration-200 bg-purple-500/5 hover:bg-purple-500/10">
-                          <div className="flex flex-col items-center justify-center space-y-3">
-                            {/* Upload Icon */}
-                            <div className="w-12 h-12 bg-purple-500/20 rounded-full flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
-                              <Upload className="w-6 h-6 text-purple-400" />
-                            </div>
-                            
-                            {/* Upload Text */}
-                            <div className="text-center">
-                              <p className="text-purple-300 text-sm font-medium">Click to upload or drag and drop</p>
-                              <p className="text-gray-500 text-xs mt-1">PNG, JPG, WebP up to 10MB</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Current Background Preview */}
-                      {backgroundImage && (
-                        <div className="space-y-4">
-                          {/* Preview Header */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                              <span className="text-[12px] text-gray-300 font-semibold">Background Image</span>
-                            </div>
-                            <button
-                              onClick={() => setBackgroundImage(null)}
-                              className="text-red-400 hover:text-red-300 transition text-xs"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          
-                          {/* Main Preview */}
-                          <div className="relative group">
-                            <img 
-                              src={backgroundImage} 
-                              alt="Background" 
-                              className="w-full h-48 object-cover rounded-xl border-2 border-purple-500/40 shadow-lg" 
-                            />
-                            
-                            {/* Overlay Actions */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <div className="absolute bottom-4 left-4 right-4">
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="text-white text-sm font-medium mb-1">Background Image</p>
-                                    <p className="text-white/80 text-xs">Click to change or manage</p>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        document.getElementById('background-upload-comments')?.click();
-                                      }}
-                                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1"
-                                    >
-                                      <Upload className="w-3 h-3" />
-                                      Change
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setBackgroundImage(null);
-                                      }}
-                                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1"
-                                    >
-                                      <X className="w-3 h-3" />
-                                      Remove
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Status Badge */}
-                            <div className="absolute top-3 right-3">
-                              <div className="bg-green-500/90 backdrop-blur-sm rounded-full px-3 py-1.5 border border-green-400/30">
-                                <span className="text-white text-[10px] font-medium">Active</span>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          {/* Image Info */}
-                          <div className="bg-[#1a1a24] rounded-xl p-3 border border-white/10">
-                            <div className="grid grid-cols-3 gap-3 text-xs">
-                              <div className="text-center">
-                                <p className="text-gray-500">Status</p>
-                                <p className="text-green-400 font-semibold">Applied</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-gray-500">Type</p>
-                                <p className="text-gray-300 font-semibold">Background</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-gray-500">Size</p>
-                                <p className="text-gray-300 font-semibold">Full</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Instructions */}
-                      {!backgroundImage && (
-                        <div className="bg-[#1a1a24] rounded-lg p-3 border border-white/10">
-                          <h4 className="text-[10px] text-gray-300 font-semibold mb-2">How to use:</h4>
-                          <ul className="text-[10px] text-gray-500 space-y-1">
-                            <li>• Click the upload area or drag & drop an image</li>
-                            <li>• Supported formats: PNG, JPG, WebP</li>
-                            <li>• Image will be scaled to fit the canvas</li>
-                            <li>• Use "Remove" to clear the background</li>
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
         </div>
       </div>
 

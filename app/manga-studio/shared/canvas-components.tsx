@@ -253,36 +253,72 @@ export function BubbleSVG({ b, isSelected }: { b: Bubble; isSelected: boolean })
 }
 
 // ── MaskCanvas ─────────────────────────────────────────────────────────────
+// Overlays the image directly by mirroring its CSS transform.
+// The canvas moves WITH the image when panned/zoomed — no clipping issues.
 export function MaskCanvas({
   mask, opacity, width, height,
 }: {
   mask: MaskDot[]; opacity: number; width: number; height: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [imageStyleKey, setImageStyleKey] = useState<string>('');
 
+  // Mirror the image's CSS transform onto the canvas element so they always overlap.
   useEffect(() => {
-    console.log('[MaskCanvas] Rendering mask:', { maskLength: mask.length, opacity, width, height });
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const container = canvas.closest('[data-canvas-editor="true"]');
+    const image = container?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+    if (!image) return;
+
+    const update = () => {
+      // Copy image transform directly to canvas
+      canvas.style.transform = image.style.transform || '';
+      canvas.style.transformOrigin = image.style.transformOrigin || 'top left';
+      setImageStyleKey(image.getAttribute('style') ?? '');
+    };
+    const observer = new MutationObserver(update);
+    observer.observe(image, { attributes: true, attributeFilter: ['style'] });
+    update();
+    return () => observer.disconnect();
+  }, []);
+
+  // Draw dots in image-pixel space. No ctx.setTransform needed — canvas is already
+  // positioned and scaled by CSS transform to match the image exactly.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, width, height);
+
+    const container = canvas.closest('[data-canvas-editor="true"]') as HTMLElement;
+    const image = container?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+
+    // Resize canvas to natural image dimensions so 1 canvas px = 1 image px
+    const natW = image?.naturalWidth  || width;
+    const natH = image?.naturalHeight || height;
+    if (canvas.width !== natW)  canvas.width  = natW;
+    if (canvas.height !== natH) canvas.height = natH;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (mask.length === 0) return;
+
     ctx.globalAlpha = opacity;
-    ctx.fillStyle = "rgba(59,130,246,0.7)";
+    ctx.fillStyle = 'rgba(59,130,246,0.7)';
     for (const dot of mask) {
       ctx.beginPath();
       ctx.arc(dot.x, dot.y, dot.r / 2, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [mask, opacity, width, height]);
+  }, [mask, opacity, width, height, imageStyleKey]);
 
   return (
     <canvas
       ref={canvasRef}
       width={width}
       height={height}
-      className="absolute inset-0 pointer-events-none"
-      style={{ zIndex: 10 }}
+      className="absolute pointer-events-none"
+      style={{ zIndex: 10, left: 0, top: 0, transformOrigin: 'top left' }}
     />
   );
 }

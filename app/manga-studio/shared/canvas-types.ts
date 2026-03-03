@@ -100,6 +100,27 @@ export type AssetElement = {
   zIndex?: number;
 };
 
+export type ShapeElement = {
+  id: string;
+  panelId: string;
+  type: "arrow" | "line" | "rectangle" | "circle";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  // For arrow: end coordinates
+  endX?: number;
+  endY?: number;
+  // Common properties
+  strokeWidth: number;
+  strokeColor: string;
+  fillColor?: string;
+  rotation?: number;
+  flipX?: boolean;
+  flipY?: boolean;
+  zIndex?: number;
+};
+
 export type DragMode =
   | { type: "move"; startX: number; startY: number; origX: number; origY: number }
   | { type: "resize"; handle: "se" | "sw" | "ne" | "nw" | "n" | "s" | "w" | "e"; startX: number; startY: number; orig: Bubble }

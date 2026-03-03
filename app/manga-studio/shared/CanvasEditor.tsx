@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import type { Bubble, TextElement, AssetElement, AssetLibraryItem, MaskDot, TailDir } from "./canvas-types";
+import type { Bubble, TextElement, AssetElement, AssetLibraryItem, ShapeElement, MaskDot, TailDir } from "./canvas-types";
 import {
   makeId, estimateFontSize, bubbleEllipse, roughEllipsePath,
   tailPath, rectTailPath, rectOutlinePathWithGap, cloudPath, burstPoints,
@@ -9,12 +9,13 @@ import {
 import { ResizeHandles, MaskCanvas, RectangleCanvas } from "./canvas-components";
 
 // ── Public types ───────────────────────────────────────────────────────────
-export type { Bubble, TextElement, AssetElement, AssetLibraryItem, MaskDot };
+export type { Bubble, TextElement, AssetElement, AssetLibraryItem, ShapeElement, MaskDot };
 
 export interface CanvasEditorState {
   bubbles: Bubble[];
   textElements: TextElement[];
   assetElements: AssetElement[];
+  shapeElements: ShapeElement[];
   assetLibrary: AssetLibraryItem[];
   mask: MaskDot[];
   undoStack: MaskDot[][];
@@ -22,15 +23,16 @@ export interface CanvasEditorState {
 }
 
 export function emptyCanvasState(): CanvasEditorState {
-  return { bubbles: [], textElements: [], assetElements: [], assetLibrary: [], mask: [], undoStack: [], redoStack: [] };
+  return { bubbles: [], textElements: [], assetElements: [], shapeElements: [], assetLibrary: [], mask: [], undoStack: [], redoStack: [] };
 }
 
-export type CanvasActiveTool = "layers" | "bubbles" | "text" | "elements" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments";
+export type CanvasActiveTool = "layers" | "bubbles" | "text" | "elements" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments" | "move" | "arrow" | "line" | "square" | "circle";
 
 export interface CanvasSelection {
   selectedBubbleId: string | null;
   selectedTextId: string | null;
   selectedAssetId: string | null;
+  selectedShapeId: string | null;
 }
 
 interface CanvasEditorProps {
@@ -55,19 +57,26 @@ interface CanvasEditorProps {
   isAspectRatioAnimating?: boolean;
   /** Whether rectangle is in square mode (GPT-1.5) */
   isSquareMode?: boolean;
+  onToolSelect?: (tool: CanvasActiveTool) => void;
   generateImageWithElements?: () => void;
+  /** Called when the image loads; receives the fit-to-container scale */
+  onImageLoad?: (scale: number) => void;
+  /** Called when the user clicks the crop button overlay */
+  onCropClick?: () => void;
+  selectedColor?: string;
 }
 
 // ── Drag state ─────────────────────────────────────────────────────────────
 type DragInfo = {
-  kind: "bubble" | "text" | "asset";
+  kind: "bubble" | "text" | "asset" | "canvas" | "shape";
   id: string;
-  type: "move" | "resize";
+  type: "move" | "resize" | "move-canvas";
   handle?: string;
   startX: number; startY: number;
   origX: number; origY: number;
   origW: number; origH: number;
   origRot: number;
+  origScale?: number;
 } | null;
 
 type RotDragInfo = {
@@ -83,7 +92,8 @@ export function CanvasEditor({
   panelId, imageUrl, activeTool, state, onStateChange,
   brushSize, isEraser, maskOpacity, hideMask = false, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
-  rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, generateImageWithElements,
+  rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, onToolSelect, generateImageWithElements,
+  onImageLoad, onCropClick, selectedColor = "#FF0000",
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -105,21 +115,145 @@ export function CanvasEditor({
   const selectedBubbleId = selection ? selection.selectedBubbleId : _selectedBubbleId;
   const selectedTextId   = selection ? selection.selectedTextId   : _selectedTextId;
   const selectedAssetId  = selection ? selection.selectedAssetId  : _selectedAssetId;
+  const selectedShapeId  = selection ? selection.selectedShapeId  : null;
 
-  const setSelection = useCallback((bubbleId: string | null, textId: string | null, assetId: string | null) => {
+  const setSelection = useCallback((bubbleId: string | null, textId: string | null, assetId: string | null, shapeId: string | null = null) => {
     _setSelectedBubbleId(bubbleId);
     _setSelectedTextId(textId);
     _setSelectedAssetId(assetId);
-    onSelectionChange?.({ selectedBubbleId: bubbleId, selectedTextId: textId, selectedAssetId: assetId });
+    onSelectionChange?.({ selectedBubbleId: bubbleId, selectedTextId: textId, selectedAssetId: assetId, selectedShapeId: shapeId });
   }, [onSelectionChange]);
 
 
-  const { bubbles, textElements, assetElements, assetLibrary, mask } = state;
+  const { bubbles, textElements, assetElements, shapeElements, assetLibrary, mask } = state;
 
   // Filter to current panel only
   const panelBubbles = bubbles.filter(b => b.panelId === panelId && !hiddenObjectIds.has(b.id));
   const panelTexts = textElements.filter(t => t.panelId === panelId && !hiddenObjectIds.has(t.id));
   const panelAssets = assetElements.filter(a => a.panelId === panelId && !hiddenObjectIds.has(a.id));
+  const panelShapes = shapeElements.filter(s => s.panelId === panelId && !hiddenObjectIds.has(s.id));
+  
+  // Auto-create text when text tool is activated
+  const createTextInCenter = useCallback(() => {
+    console.log("Creating text element...");
+    const container = containerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const textId = makeId();
+      
+      console.log("Creating text at center:", cx, cy);
+      
+      // Create new text element
+      const newTextElement = {
+        id: textId,
+        panelId: panelId,
+        x: cx - 50,
+        y: cy - 15,
+        w: 100,
+        h: 30,
+        text: "Double click to edit",
+        fontSize: 16,
+        fontWeight: "normal",
+        fontStyle: "normal",
+        fontFamily: "Noto Sans SC",
+        color: "#000000",
+        backgroundColor: "transparent",
+        zIndex: 3
+      };
+      
+      console.log("New text element:", newTextElement);
+      
+      // Use functional update to avoid dependency on state
+      onStateChange(prevState => ({
+        ...prevState,
+        textElements: [...prevState.textElements, newTextElement]
+      }));
+      setSelection(null, textId, null);
+      
+      console.log("Text creation completed!");
+    } else {
+      console.log("Container ref is null!");
+    }
+  }, [panelId, onStateChange, setSelection]);
+
+  // Auto-create shape when shape tool is activated
+  const createShapeInCenter = useCallback((shapeType: "arrow" | "line" | "rectangle" | "circle") => {
+    console.log(`Creating ${shapeType} element...`);
+    const container = containerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const shapeId = makeId();
+      
+      console.log(`Creating ${shapeType} at center:`, cx, cy);
+      
+      // Create new shape element
+      const newShapeElement: ShapeElement = {
+        id: shapeId,
+        panelId: panelId,
+        type: shapeType,
+        x: cx - 50,
+        y: cy - 50,
+        w: 100,
+        h: 100,
+        strokeColor: selectedColor,
+        strokeWidth: 2,
+        fillColor: "transparent",
+        rotation: 0,
+        flipX: false,
+        flipY: false,
+        zIndex: 2
+      };
+      
+      // For arrow, set end coordinates
+      if (shapeType === "arrow") {
+        newShapeElement.endX = cx + 50;
+        newShapeElement.endY = cy + 50;
+      }
+      
+      console.log("New shape element:", newShapeElement);
+      
+      // Use functional update to avoid dependency on state
+      onStateChange(prevState => ({
+        ...prevState,
+        shapeElements: [...prevState.shapeElements, newShapeElement]
+      }));
+      setSelection(null, null, null, shapeId);
+      
+      console.log(`${shapeType} creation completed!`);
+    } else {
+      console.log("Container ref is null!");
+    }
+  }, [panelId, onStateChange, setSelection, selectedColor]);
+
+  useEffect(() => {
+    console.log("Tool activated:", activeTool);
+    console.log("Canvas container ref:", containerRef.current);
+    if (activeTool === "text") {
+      createTextInCenter();
+    } else if (activeTool === "arrow") {
+      console.log("Calling createShapeInCenter with arrow");
+      createShapeInCenter("arrow");
+    } else if (activeTool === "line") {
+      console.log("Calling createShapeInCenter with line");
+      createShapeInCenter("line");
+    } else if (activeTool === "square") {
+      console.log("Calling createShapeInCenter with rectangle");
+      createShapeInCenter("rectangle");
+    } else if (activeTool === "circle") {
+      console.log("Calling createShapeInCenter with circle");
+      createShapeInCenter("circle");
+    }
+  }, [activeTool]);
+
+  // Debug: Log current shapes
+  useEffect(() => {
+    console.log("Current shapes count:", panelShapes.length);
+    console.log("Current shapes:", panelShapes.map(s => ({ id: s.id, type: s.type })));
+  }, [panelShapes]);
   
   
   const getPos = (e: React.MouseEvent | MouseEvent) => {
@@ -130,13 +264,36 @@ export function CanvasEditor({
 
   // ── Mask painting ──
   const addMaskDot = useCallback((e: React.MouseEvent | MouseEvent) => {
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
+
+    // Use getBoundingClientRect to get the actual rendered image position
+    // This correctly handles: CSS transforms, flexbox centering, any layout positioning
+    const image = containerRef.current?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+    if (!image || !image.naturalWidth) return;
+
+    const imgRect = image.getBoundingClientRect();
+    const scale = imgRect.width / image.naturalWidth; // actual rendered scale
+    const imgLeft = imgRect.left - containerRect.left; // image left in container coords
+    const imgTop = imgRect.top - containerRect.top;   // image top in container coords
+
+    // Mouse position relative to container
+    const mouseX = e.clientX - containerRect.left;
+    const mouseY = e.clientY - containerRect.top;
+
+    // Convert to image-pixel space (stable coordinate system)
+    const x = (mouseX - imgLeft) / scale;
+    const y = (mouseY - imgTop) / scale;
+
+    // Reject painting outside the image bounds — eraser still runs to clean up any stray dots
+    if (!isEraser && (x < 0 || x > image.naturalWidth || y < 0 || y > image.naturalHeight)) return;
+
+    // Store brush size in image space; rendering will scale it by zoom
+    const r = brushSize;
+
     const newMask = isEraser
-      ? mask.filter(d => Math.hypot(d.x - x, d.y - y) > brushSize / 2)
-      : [...mask, { x, y, r: brushSize }];
-    console.log('[CanvasEditor] Adding mask dot:', { x, y, r: brushSize, isEraser, maskLength: newMask.length });
+      ? mask.filter(d => Math.hypot(d.x - x, d.y - y) > r / 2)
+      : [...mask, { x, y, r }];
     onStateChange({ ...state, mask: newMask });
   }, [state, mask, isEraser, brushSize, onStateChange]);
 
@@ -156,6 +313,41 @@ export function CanvasEditor({
       addMaskDot(e);
       return;
     }
+    
+    if (activeTool === "move" && e.button === 0) {
+      // Start moving canvas image
+      e.preventDefault();
+      setIsMouseDown(true);
+      const { x, y } = getPos(e);
+      
+      // Get current image position from its actual rendered rect
+      const image = containerRef.current?.querySelector('img:not([class*="mask"])') as HTMLImageElement | null;
+      let currentX = 0, currentY = 0, currentScale = 1;
+      if (image && containerRef.current) {
+        const cRect = containerRef.current.getBoundingClientRect();
+        const iRect = image.getBoundingClientRect();
+        currentX = iRect.left - cRect.left;
+        currentY = iRect.top  - cRect.top;
+        currentScale = image.naturalWidth ? iRect.width / image.naturalWidth : 1;
+      }
+      
+      dragRef.current = {
+        kind: "canvas",
+        id: "canvas-main",
+        type: "move-canvas",
+        handle: "",
+        startX: x,
+        startY: y,
+        origX: currentX,
+        origY: currentY,
+        origW: 0,
+        origH: 0,
+        origRot: 0,
+        origScale: currentScale,
+      };
+      return;
+    }
+    
     const target = e.target as HTMLElement;
     if (target === containerRef.current || target.tagName === "CANVAS") {
       setSelection(null, null, null);
@@ -187,15 +379,51 @@ export function CanvasEditor({
         const nx = d.origX + dx, ny = d.origY + dy;
         if (d.kind === "bubble") onStateChange({ ...state, bubbles: bubbles.map(b => b.id === d.id ? { ...b, x: nx, y: ny } : b) });
         else if (d.kind === "text") onStateChange({ ...state, textElements: textElements.map(t => t.id === d.id ? { ...t, x: nx, y: ny } : t) });
+        else if (d.kind === "shape") onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: nx, y: ny } : s) });
         else onStateChange({ ...state, assetElements: assetElements.map(a => a.id === d.id ? { ...a, x: nx, y: ny } : a) });
+      } else if (d.type === "move-canvas") {
+        // Handle canvas image movement — use origScale captured at mousedown
+        const image = containerRef.current?.querySelector('img:not([class*="mask"])') as HTMLImageElement | null;
+        if (image) {
+          const newTransformX = d.origX + dx;
+          const newTransformY = d.origY + dy;
+          const scale = d.origScale ?? 1;
+          image.style.transformOrigin = 'top left';
+          image.style.transform = `translate(${newTransformX}px, ${newTransformY}px) scale(${scale})`;
+        }
       } else if (d.type === "resize") {
-        const nw = Math.max(20, d.origW + (d.handle.includes("e") ? dx : d.handle.includes("w") ? -dx : 0));
-        const nh = Math.max(20, d.origH + (d.handle.includes("s") ? dy : d.handle.includes("n") ? -dy : 0));
-        const nx = d.origX + (d.handle.includes("e") ? 0 : d.handle.includes("w") ? (d.origW - nw) : dx / 2);
-        const ny = d.origY + (d.handle.includes("s") ? 0 : d.handle.includes("n") ? (d.origH - nh) : dy / 2);
-        if (d.kind === "bubble") onStateChange({ ...state, bubbles: bubbles.map(b => b.id === d.id ? { ...b, x: nx, y: ny, w: nw, h: nh } : b) });
-        else if (d.kind === "text") onStateChange({ ...state, textElements: textElements.map(t => t.id === d.id ? { ...t, x: nx, y: ny, w: nw, h: nh } : t) });
-        else onStateChange({ ...state, assetElements: assetElements.map(a => a.id === d.id ? { ...a, x: nx, y: ny, w: nw, h: nh } : a) });
+        // Check if this is an endpoint resize for arrow/line
+        if (d.handle === "start" || d.handle === "end") {
+          // Endpoint resize for arrow/line - allow 360 degree movement
+          const shape = shapeElements.find(s => s.id === d.id);
+          if (shape && (shape.type === "arrow" || shape.type === "line")) {
+            if (d.handle === "end") {
+              // Dragging end point - start point stays fixed at (origX, origY)
+              // Use dx/dy directly to allow movement in any direction
+              const newW = Math.max(20, d.origW + dx);
+              const newH = Math.max(20, d.origH + dy);
+              onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, w: newW, h: newH } : s) });
+            } else {
+              // Dragging start point - end point stays fixed at (origX + origW, origY + origH)
+              // When start moves, both position and size change
+              const newX = d.origX + dx;
+              const newY = d.origY + dy;
+              const newW = Math.max(20, d.origW - dx);
+              const newH = Math.max(20, d.origH - dy);
+              onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: newX, y: newY, w: newW, h: newH } : s) });
+            }
+          }
+        } else {
+          // Regular corner resize for rectangle/circle
+          const nw = Math.max(20, d.origW + (d.handle.includes("e") ? dx : d.handle.includes("w") ? -dx : 0));
+          const nh = Math.max(20, d.origH + (d.handle.includes("s") ? dy : d.handle.includes("n") ? -dy : 0));
+          const nx = d.origX + (d.handle.includes("e") ? 0 : d.handle.includes("w") ? (d.origW - nw) : dx / 2);
+          const ny = d.origY + (d.handle.includes("s") ? 0 : d.handle.includes("n") ? (d.origH - nh) : dy / 2);
+          if (d.kind === "bubble") onStateChange({ ...state, bubbles: bubbles.map(b => b.id === d.id ? { ...b, x: nx, y: ny, w: nw, h: nh } : b) });
+          else if (d.kind === "text") onStateChange({ ...state, textElements: textElements.map(t => t.id === d.id ? { ...t, x: nx, y: ny, w: nw, h: nh } : t) });
+          else if (d.kind === "shape") onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: nx, y: ny, w: nw, h: nh } : s) });
+          else onStateChange({ ...state, assetElements: assetElements.map(a => a.id === d.id ? { ...a, x: nx, y: ny, w: nw, h: nh } : a) });
+        }
       }
     };
 
@@ -215,10 +443,13 @@ export function CanvasEditor({
 
   
   // ── Drag start helpers ──
-  const startDrag = (kind: "bubble" | "text" | "asset", id: string, e: React.MouseEvent, type: "move" | "resize" = "move", handle?: string) => {
+  const startDrag = (kind: "bubble" | "text" | "asset" | "shape", id: string, e: React.MouseEvent, type: "move" | "resize" = "move", handle?: string) => {
     e.stopPropagation();
     const { x, y } = getPos(e);
-    const obj = kind === "bubble" ? bubbles.find(b => b.id === id) : kind === "text" ? textElements.find(t => t.id === id) : assetElements.find(a => a.id === id);
+    const obj = kind === "bubble" ? bubbles.find(b => b.id === id) : 
+                  kind === "text" ? textElements.find(t => t.id === id) : 
+                  kind === "asset" ? assetElements.find(a => a.id === id) :
+                  shapeElements.find(s => s.id === id);
     if (!obj) return;
     const w = (obj as Bubble).w ?? 100, h = (obj as Bubble).h ?? 60;
     dragRef.current = { kind, id, type, handle, startX: x, startY: y, origX: obj.x, origY: obj.y, origW: w, origH: h, origRot: obj.rotation ?? 0 };
@@ -427,7 +658,7 @@ export function CanvasEditor({
     return () => { ro.disconnect(); cancelAnimationFrame(raf); };
   }, []);
 
-  const cursor = activeTool === "inpaint" ? (isEraser ? "cell" : "crosshair") : "default";
+  const cursor = activeTool === "inpaint" ? (isEraser ? "cell" : "crosshair") : activeTool === "move" ? "grab" : "default";
   const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1 };
   const ar = aspectRatio ? (arMap[aspectRatio] ?? null) : null;
 
@@ -453,11 +684,66 @@ export function CanvasEditor({
       <div ref={containerRef} className="relative bg-[#13131a]" data-canvas-editor="true"
         style={{ ...canvasStyle, cursor }}
         onMouseDown={handleMouseDown}
-        onClick={e => { if (e.target === containerRef.current) { setSelection(null, null, null); } setCtxMenu(null); }}
+        onClick={e => { 
+          if (e.target === containerRef.current) { 
+            setSelection(null, null, null);
+            
+            // Create text when text tool is active
+            if (activeTool === "text") {
+              const rect = containerRef.current?.getBoundingClientRect();
+              if (rect) {
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const textId = makeId();
+                
+                onStateChange({
+                  ...state,
+                  textElements: [...state.textElements, {
+                    id: textId,
+                    panelId: panelId,
+                    x: x - 50,
+                    y: y - 15,
+                    w: 100,
+                    h: 30,
+                    text: "Double click to edit",
+                    fontSize: 16,
+                    fontWeight: "normal",
+                    fontStyle: "normal",
+                    fontFamily: "Noto Sans SC",
+                    color: "#000000",
+                    backgroundColor: "transparent",
+                    zIndex: 3
+                  }]
+                });
+                setSelection(null, textId, null);
+              }
+            }
+          } 
+          setCtxMenu(null); 
+        }}
         onContextMenu={e => { if (e.target === containerRef.current) { e.preventDefault(); e.stopPropagation(); const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return; setCtxMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, kind: "canvas" }); } }}
       >
         {imageUrl
-          ? <img key={imageUrl} src={imageUrl} alt="" className="absolute inset-0 w-full h-full object-contain pointer-events-none" /> // eslint-disable-line @next/next/no-img-element
+          ? <img // eslint-disable-line @next/next/no-img-element
+              key={imageUrl}
+              src={imageUrl}
+              alt=""
+              className="absolute pointer-events-none"
+              style={{ left: 0, top: 0, transformOrigin: 'top left', maxWidth: 'none', maxHeight: 'none' }}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                const container = containerRef.current;
+                if (!container) return;
+                const cW = container.offsetWidth;
+                const cH = container.offsetHeight;
+                if (!cW || !cH || !img.naturalWidth || !img.naturalHeight) return;
+                const scale = Math.min(cW / img.naturalWidth, cH / img.naturalHeight);
+                const tx = (cW - img.naturalWidth * scale) / 2;
+                const ty = (cH - img.naturalHeight * scale) / 2;
+                img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+                onImageLoad?.(scale);
+              }}
+            />
           : <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-700 pointer-events-none select-none">
               <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
               <span className="text-sm">No image — upload one to start</span>
@@ -508,6 +794,16 @@ export function CanvasEditor({
               }
             }}
           />
+        )}
+        {canvasTool === "crop" && rectangle && onCropClick && (
+          <button
+            onMouseDown={e => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onCropClick(); }}
+            className="absolute px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-lg transition"
+            style={{ left: rectangle.x + 20, top: rectangle.y + 20, zIndex: 50 }}
+          >
+            ✂ Crop
+          </button>
         )}
 
         {/* Assets */}
@@ -594,6 +890,126 @@ export function CanvasEditor({
               {isSel && !isEditingText && (
                 <>
                   <ResizeHandles isSelected={isSel} accentColor="purple" rotation={t.rotation} onResizeStart={(h,e)=>startDrag("text",t.id,e,"resize",h)} onRotateStart={e=>startRotate("text",t.id,e)} />
+                </>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Shapes */}
+        {panelShapes.map((s) => {
+          const isSel = selectedShapeId === s.id;
+          const isLineOrArrow = s.type === "arrow" || s.type === "line";
+          
+          return (
+            <div key={s.id} className={`absolute ${dragRef.current?.id === s.id ? "transition-none" : "transition-all duration-200"} ${isSel ? "drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]" : ""}`} style={{ 
+              left: s.x, 
+              top: s.y, 
+              width: s.w, 
+              height: s.h, 
+              zIndex: s.zIndex??2,
+              pointerEvents: 'auto'
+            }}
+              onMouseDown={e => {
+                e.stopPropagation();
+                setSelection(null, null, null, s.id);
+                startDrag("shape", s.id, e);
+              }}
+              onClick={e => { e.stopPropagation(); }}
+              onContextMenu={e => { setSelection(null, null, null, s.id); openCtxMenu(e, "text", s.id); }}
+            >
+              <svg width={s.w} height={s.h} style={{ overflow: "visible" }}>
+                {s.type === "arrow" && (
+                  <>
+                    <line
+                      x1={0}
+                      y1={0}
+                      x2={s.w}
+                      y2={s.h}
+                      stroke={s.strokeColor}
+                      strokeWidth={s.strokeWidth}
+                      fill="none"
+                    />
+                    <polygon
+                      points={`${s.w},${s.h} ${s.w-8},${s.h-4} ${s.w-8},${s.h+4}`}
+                      fill={s.strokeColor}
+                    />
+                  </>
+                )}
+                {s.type === "line" && (
+                  <>
+                    <line
+                      x1={0}
+                      y1={0}
+                      x2={s.w}
+                      y2={s.h}
+                      stroke={s.strokeColor}
+                      strokeWidth={s.strokeWidth}
+                      fill="none"
+                    />
+                  </>
+                )}
+                {s.type === "rectangle" && (
+                  <rect
+                    x={0}
+                    y={0}
+                    width={s.w}
+                    height={s.h}
+                    stroke={s.strokeColor}
+                    strokeWidth={s.strokeWidth}
+                    fill={s.fillColor || "transparent"}
+                  />
+                )}
+                {s.type === "circle" && (
+                  <ellipse
+                    cx={s.w/2}
+                    cy={s.h/2}
+                    rx={s.w/2}
+                    ry={s.h/2}
+                    stroke={s.strokeColor}
+                    strokeWidth={s.strokeWidth}
+                    fill={s.fillColor || "transparent"}
+                  />
+                )}
+              </svg>
+              
+              {/* Selection UI - Custom for line/arrow vs rectangle/circle */}
+              {isSel && (
+                <>
+                  {isLineOrArrow ? (
+                    /* Endpoint handles for arrow and line */
+                    <>
+                      {/* Start point */}
+                      <div
+                        className="absolute w-4 h-4 -ml-2 -mt-2 bg-white border-2 border-blue-500 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
+                        style={{ left: 0, top: 0 }}
+                        onMouseDown={e => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          startDrag("shape", s.id, e, "resize", "start");
+                        }}
+                      />
+                      {/* End point */}
+                      <div
+                        className="absolute w-4 h-4 -mr-2 -mb-2 bg-white border-2 border-blue-500 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
+                        style={{ left: s.w, top: s.h }}
+                        onMouseDown={e => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          startDrag("shape", s.id, e, "resize", "end");
+                        }}
+                      />
+                    </>
+                  ) : (
+                    /* Corner resize handles for rectangle and circle */
+                    <ResizeHandles 
+                      isSelected={isSel} 
+                      accentColor="blue" 
+                      rotation={s.rotation} 
+                      onResizeStart={(h,e)=>startDrag("shape",s.id,e,"resize",h)} 
+                      onRotateStart={e=>startRotate("shape",s.id,e)} 
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -1525,6 +1941,22 @@ export function CanvasEditor({
                   {/* Bubble-specific properties */}
                   {currentBubble && (
                     <>
+                      {/* Font Size - Always Visible */}
+                      <div>
+                        <div className="flex justify-between mb-2">
+                          <span className="text-[12px] text-gray-300">Font Size</span>
+                          <span className="text-[12px] text-emerald-300 font-mono">{currentBubble.fontSize}px</span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min={10} 
+                          max={44} 
+                          value={currentBubble.fontSize} 
+                          onChange={e => updBubble({ fontSize: Number(e.target.value) })} 
+                          className="w-full accent-emerald-500" 
+                        />
+                      </div>
+                      
                       {/* Auto-fit Font */}
                       <div className="flex items-center justify-between">
                         <span className="text-[12px] text-gray-300">Auto-fit font</span>
@@ -1539,24 +1971,6 @@ export function CanvasEditor({
                           {currentBubble.autoFitFont ? "On" : "Off"}
                         </button>
                       </div>
-                      
-                      {/* Font Size (only when auto-fit is off) */}
-                      {!currentBubble.autoFitFont && (
-                        <div>
-                          <div className="flex justify-between mb-2">
-                            <span className="text-[12px] text-gray-300">Font Size</span>
-                            <span className="text-[12px] text-emerald-300 font-mono">{currentBubble.fontSize}px</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min={10} 
-                            max={44} 
-                            value={currentBubble.fontSize} 
-                            onChange={e => updBubble({ fontSize: Number(e.target.value) })} 
-                            className="w-full accent-emerald-500" 
-                          />
-                        </div>
-                      )}
                       
                       {/* Bubble Type */}
                       <div>
