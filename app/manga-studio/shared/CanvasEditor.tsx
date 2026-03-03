@@ -64,9 +64,10 @@ interface CanvasEditorProps {
   /** Called when the user clicks the crop button overlay */
   onCropClick?: () => void;
   selectedColor?: string;
+  onColorPickerClick?: () => void; // Add handler for color picker click
+  onDeleteSelected?: () => void; // Add handler for delete selected element
 }
 
-// ── Drag state ─────────────────────────────────────────────────────────────
 type DragInfo = {
   kind: "bubble" | "text" | "asset" | "canvas" | "shape";
   id: string;
@@ -80,7 +81,7 @@ type DragInfo = {
 } | null;
 
 type RotDragInfo = {
-  kind: "bubble" | "text" | "asset";
+  kind: "bubble" | "text" | "asset" | "shape";
   id: string;
   startAngle: number;
   centerX: number; centerY: number;
@@ -93,7 +94,7 @@ export function CanvasEditor({
   brushSize, isEraser, maskOpacity, hideMask = false, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
   rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, onToolSelect, generateImageWithElements,
-  onImageLoad, onCropClick, selectedColor = "#FF0000",
+  onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -108,7 +109,7 @@ export function CanvasEditor({
   const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
   const [editingBubbleId, setEditingBubbleId] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas"; id?: string; submenu?: 'tailDirection' | 'layer' | 'bubbleType' | 'textProperties'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas" | "shape"; id?: string; submenu?: 'tailDirection' | 'layer' | 'bubbleType' | 'textProperties' | 'shapeProperties' | 'colorPalette'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
   const [copiedObject, setCopiedObject] = useState<{ type: "bubble" | "text" | "asset"; data: any } | null>(null);
 
   // Use controlled selection if provided, else internal
@@ -132,6 +133,81 @@ export function CanvasEditor({
   const panelTexts = textElements.filter(t => t.panelId === panelId && !hiddenObjectIds.has(t.id));
   const panelAssets = assetElements.filter(a => a.panelId === panelId && !hiddenObjectIds.has(a.id));
   const panelShapes = shapeElements.filter(s => s.panelId === panelId && !hiddenObjectIds.has(s.id));
+  
+  // ── Color selection state ─────────────────────────────────────────────────────--
+  // Check if any element is selected
+  const hasSelectedElement = selectedBubbleId || selectedTextId || selectedAssetId || selectedShapeId;
+  
+  // State for color palette submenu
+  const [showColorPalette, setShowColorPalette] = useState(false);
+  const [colorPalettePosition, setColorPalettePosition] = useState({ x: 0, y: 0 });
+  
+  // Handle color change from toolbar color picker
+  const handleColorPickerClick = () => {
+    if (hasSelectedElement) {
+      // Always show color palette submenu when user clicks color picker with selected element
+      setShowColorPalette(true);
+      // Position the color palette near the color picker button
+      setColorPalettePosition({ x: 100, y: 200 });
+      
+      // Also call external handler if provided (for additional logic)
+      if (onColorPickerClick) {
+        onColorPickerClick();
+      }
+    }
+  };
+
+  // Handle delete selected element
+  const handleDeleteSelected = () => {
+    if (selectedBubbleId) {
+      onStateChange({ ...state, bubbles: bubbles.filter(b => b.id !== selectedBubbleId) });
+      setSelection(null, null, null);
+    } else if (selectedTextId) {
+      onStateChange({ ...state, textElements: textElements.filter(t => t.id !== selectedTextId) });
+      setSelection(null, null, null);
+    } else if (selectedAssetId) {
+      onStateChange({ ...state, assetElements: assetElements.filter(a => a.id !== selectedAssetId) });
+      setSelection(null, null, null);
+    } else if (selectedShapeId) {
+      onStateChange({ ...state, shapeElements: shapeElements.filter(s => s.id !== selectedShapeId) });
+      setSelection(null, null, null, null);
+    } else {
+      console.log("No element selected to delete");
+    }
+  };
+
+  // Listen for custom delete events from ImageAIPanel
+  useEffect(() => {
+    const handleDeleteEvent = () => {
+      handleDeleteSelected();
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('deleteSelectedElement', handleDeleteEvent);
+      return () => {
+        container.removeEventListener('deleteSelectedElement', handleDeleteEvent);
+      };
+    }
+  }, [handleDeleteSelected]);
+  
+  // Apply color to selected element (only called when user selects from submenu)
+  const applyColorToSelected = (color: string) => {
+    if (selectedBubbleId) {
+      const bubble = bubbles.find(b => b.id === selectedBubbleId);
+      if (bubble) patchBubble(selectedBubbleId, { flippedColors: bubble.flippedColors ? false : true }); // Toggle flipped colors
+    } else if (selectedTextId) {
+      const text = textElements.find(t => t.id === selectedTextId);
+      if (text) patchText(selectedTextId, { color: color });
+    } else if (selectedShapeId) {
+      const shape = shapeElements.find(s => s.id === selectedShapeId);
+      if (shape) patchShape(selectedShapeId, { strokeColor: color });
+    } else if (selectedAssetId) {
+      const asset = assetElements.find(a => a.id === selectedAssetId);
+      if (asset) patchAsset(selectedAssetId, { rotation: 0 }); // Assets don't have color, just reset as placeholder
+    }
+    setShowColorPalette(false);
+  };
   
   // Auto-create text when text tool is activated
   const createTextInCenter = useCallback(() => {
@@ -190,15 +266,23 @@ export function CanvasEditor({
       
       console.log(`Creating ${shapeType} at center:`, cx, cy);
       
+      // For arrow/line: x,y = head (start), endX,endY = tail (end)
+      // For rectangle/circle: x,y = top-left, w,h = dimensions
+      const isLineOrArrow = shapeType === "arrow" || shapeType === "line";
+      
       // Create new shape element
       const newShapeElement: ShapeElement = {
         id: shapeId,
         panelId: panelId,
         type: shapeType,
-        x: cx - 50,
-        y: cy - 50,
-        w: 100,
-        h: 100,
+        // For arrow/line: head at (cx, cy), tail at (cx + 100, cy) - pointing right, 100px long
+        x: isLineOrArrow ? cx : cx - 50,
+        y: isLineOrArrow ? cy : cy - 50,
+        w: isLineOrArrow ? 100 : 100,  // width for rectangle/circle
+        h: isLineOrArrow ? 100 : 100,  // height for rectangle/circle
+        // For arrow/line: endX,endY = tail position
+        endX: isLineOrArrow ? cx + 100 : undefined,
+        endY: isLineOrArrow ? cy : undefined,
         strokeColor: selectedColor,
         strokeWidth: 2,
         fillColor: "transparent",
@@ -207,12 +291,6 @@ export function CanvasEditor({
         flipY: false,
         zIndex: 2
       };
-      
-      // For arrow, set end coordinates
-      if (shapeType === "arrow") {
-        newShapeElement.endX = cx + 50;
-        newShapeElement.endY = cy + 50;
-      }
       
       console.log("New shape element:", newShapeElement);
       
@@ -366,6 +444,7 @@ export function CanvasEditor({
         const newRot = Math.round(rd.origRot + (angle - rd.startAngle));
         if (rd.kind === "bubble") onStateChange({ ...state, bubbles: bubbles.map(b => b.id === rd.id ? { ...b, rotation: newRot } : b) });
         else if (rd.kind === "text") onStateChange({ ...state, textElements: textElements.map(t => t.id === rd.id ? { ...t, rotation: newRot } : t) });
+        else if (rd.kind === "shape") onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === rd.id ? { ...s, rotation: newRot } : s) });
         else onStateChange({ ...state, assetElements: assetElements.map(a => a.id === rd.id ? { ...a, rotation: newRot } : a) });
         return;
       }
@@ -379,7 +458,18 @@ export function CanvasEditor({
         const nx = d.origX + dx, ny = d.origY + dy;
         if (d.kind === "bubble") onStateChange({ ...state, bubbles: bubbles.map(b => b.id === d.id ? { ...b, x: nx, y: ny } : b) });
         else if (d.kind === "text") onStateChange({ ...state, textElements: textElements.map(t => t.id === d.id ? { ...t, x: nx, y: ny } : t) });
-        else if (d.kind === "shape") onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: nx, y: ny } : s) });
+        else if (d.kind === "shape") {
+          const shape = shapeElements.find(s => s.id === d.id);
+          if (shape && (shape.type === "arrow" || shape.type === "line")) {
+            // For arrows/lines, move both head (x,y) and tail (endX,endY) together
+            const newTailX = d.origW + dx;
+            const newTailY = d.origH + dy;
+            onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: nx, y: ny, endX: newTailX, endY: newTailY } : s) });
+          } else {
+            // For rectangles/circles, normal move
+            onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: nx, y: ny } : s) });
+          }
+        }
         else onStateChange({ ...state, assetElements: assetElements.map(a => a.id === d.id ? { ...a, x: nx, y: ny } : a) });
       } else if (d.type === "move-canvas") {
         // Handle canvas image movement — use origScale captured at mousedown
@@ -394,23 +484,25 @@ export function CanvasEditor({
       } else if (d.type === "resize") {
         // Check if this is an endpoint resize for arrow/line
         if (d.handle === "start" || d.handle === "end") {
-          // Endpoint resize for arrow/line - allow 360 degree movement
+          // Endpoint resize for arrow/line - use endX,endY for tail
           const shape = shapeElements.find(s => s.id === d.id);
           if (shape && (shape.type === "arrow" || shape.type === "line")) {
             if (d.handle === "end") {
-              // Dragging end point - start point stays fixed at (origX, origY)
-              // Use dx/dy directly to allow movement in any direction
-              const newW = Math.max(20, d.origW + dx);
-              const newH = Math.max(20, d.origH + dy);
-              onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, w: newW, h: newH } : s) });
+              // Dragging end point (tail) - start point stays fixed at (x, y)
+              // Update endX,endY to new absolute coordinates
+              const newEndX = d.origW + dx;
+              const newEndY = d.origH + dy;
+              onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, endX: newEndX, endY: newEndY } : s) });
             } else {
-              // Dragging start point - end point stays fixed at (origX + origW, origY + origH)
-              // When start moves, both position and size change
-              const newX = d.origX + dx;
-              const newY = d.origY + dy;
-              const newW = Math.max(20, d.origW - dx);
-              const newH = Math.max(20, d.origH - dy);
-              onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: newX, y: newY, w: newW, h: newH } : s) });
+              // Dragging start point (head) - end point stays fixed at (endX,endY)
+              // Update x,y to new absolute coordinates
+              const newStartX = d.origX + dx;
+              const newStartY = d.origY + dy;
+              onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { 
+                ...s, 
+                x: newStartX, 
+                y: newStartY
+              } : s) });
             }
           }
         } else {
@@ -441,7 +533,59 @@ export function CanvasEditor({
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [isPainting, isMouseDown, activeTool, state, dragRef, rotDragRef]);
 
+  // Listen for custom color application events from ImageAIPanel
+  useEffect(() => {
+    const handleApplyColorToShape = (event: CustomEvent) => {
+      const color = event.detail;
+      applyColorToSelected(color);
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('applyColorToShape', handleApplyColorToShape as EventListener);
+      return () => {
+        container.removeEventListener('applyColorToShape', handleApplyColorToShape as EventListener);
+      };
+    }
+  }, [applyColorToSelected]);
+
   
+  // ── Line hit detection ──
+  const isPointNearLine = (px: number, py: number, x1: number, y1: number, x2: number, y2: number, threshold: number = 10) => {
+    // Calculate distance from point to line segment
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    let param = -1;
+    
+    if (lenSq !== 0) {
+      param = dot / lenSq;
+    }
+
+    let xx, yy;
+
+    if (param < 0) {
+      xx = x1;
+      yy = y1;
+    } else if (param > 1) {
+      xx = x2;
+      yy = y2;
+    } else {
+      xx = x1 + param * C;
+      yy = y1 + param * D;
+    }
+
+    const dx = px - xx;
+    const dy = py - yy;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    return distance <= threshold;
+  };
+
   // ── Drag start helpers ──
   const startDrag = (kind: "bubble" | "text" | "asset" | "shape", id: string, e: React.MouseEvent, type: "move" | "resize" = "move", handle?: string) => {
     e.stopPropagation();
@@ -451,18 +595,55 @@ export function CanvasEditor({
                   kind === "asset" ? assetElements.find(a => a.id === id) :
                   shapeElements.find(s => s.id === id);
     if (!obj) return;
-    const w = (obj as Bubble).w ?? 100, h = (obj as Bubble).h ?? 60;
+    
+    // For arrows/lines: x,y = head, endX,endY = tail
+    // For rectangles/circles: x,y = top-left, w,h = dimensions
+    const isArrowOrLine = (obj as any).type === "arrow" || (obj as any).type === "line";
+    const w = isArrowOrLine ? ((obj as any).endX ?? (obj as any).w) : ((obj as Bubble).w ?? 100);
+    const h = isArrowOrLine ? ((obj as any).endY ?? (obj as any).h) : ((obj as Bubble).h ?? 60);
+    
     dragRef.current = { kind, id, type, handle, startX: x, startY: y, origX: obj.x, origY: obj.y, origW: w, origH: h, origRot: obj.rotation ?? 0 };
   };
 
-  const startRotate = (kind: "bubble" | "text" | "asset", id: string, e: React.MouseEvent) => {
+  const startRotate = (kind: "bubble" | "text" | "asset" | "shape", id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const obj = kind === "bubble" ? bubbles.find(b => b.id === id) : kind === "text" ? textElements.find(t => t.id === id) : assetElements.find(a => a.id === id);
+    const obj = kind === "bubble" ? bubbles.find(b => b.id === id) : 
+                  kind === "text" ? textElements.find(t => t.id === id) : 
+                  kind === "asset" ? assetElements.find(a => a.id === id) :
+                  shapeElements.find(s => s.id === id);
     if (!obj) return;
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const w = (obj as Bubble).w ?? 100, h = (obj as Bubble).h ?? 60;
-    const cx = rect.left + obj.x + w / 2, cy = rect.top + obj.y + h / 2;
+    
+    // For shapes, calculate center differently based on type
+    let w, h, cx, cy;
+    if (kind === "shape") {
+      const shape = obj as ShapeElement;
+      if (shape.type === "arrow" || shape.type === "line") {
+        // For arrows/lines, use the midpoint between head and tail
+        const startX = shape.x;
+        const startY = shape.y;
+        const endX = shape.endX ?? shape.w;
+        const endY = shape.endY ?? shape.h;
+        cx = rect.left + (startX + endX) / 2;
+        cy = rect.top + (startY + endY) / 2;
+        w = Math.abs(endX - startX);
+        h = Math.abs(endY - startY);
+      } else {
+        // For rectangles/circles, use normal center calculation
+        w = shape.w ?? 100;
+        h = shape.h ?? 100;
+        cx = rect.left + shape.x + w / 2;
+        cy = rect.top + shape.y + h / 2;
+      }
+    } else {
+      // For bubbles, text, and assets
+      w = (obj as Bubble).w ?? 100;
+      h = (obj as Bubble).h ?? 60;
+      cx = rect.left + obj.x + w / 2;
+      cy = rect.top + obj.y + h / 2;
+    }
+    
     const startAngle = Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
     rotDragRef.current = { kind, id, startAngle, centerX: cx, centerY: cy, origRot: obj.rotation ?? 0 };
   };
@@ -472,40 +653,42 @@ export function CanvasEditor({
     ...bubbles.filter(b => b.panelId === panelId).map(b => ({ kind: "bubble" as const, id: b.id, z: b.zIndex ?? 4 })),
     ...textElements.filter(t => t.panelId === panelId).map(t => ({ kind: "text" as const, id: t.id, z: t.zIndex ?? 3 })),
     ...assetElements.filter(a => a.panelId === panelId).map(a => ({ kind: "asset" as const, id: a.id, z: a.zIndex ?? 2 })),
+    ...shapeElements.filter(s => s.panelId === panelId).map(s => ({ kind: "shape" as const, id: s.id, z: s.zIndex ?? 1 })),
   ].sort((a, b) => a.z - b.z);
 
-  const setZIndex = (kind: "bubble" | "text" | "asset", id: string, z: number) => {
+  const setZIndex = (kind: "bubble" | "text" | "asset" | "shape", id: string, z: number) => {
     if (kind === "bubble") onStateChange({ ...state, bubbles: bubbles.map(b => b.id === id ? { ...b, zIndex: z } : b) });
     else if (kind === "text") onStateChange({ ...state, textElements: textElements.map(t => t.id === id ? { ...t, zIndex: z } : t) });
-    else onStateChange({ ...state, assetElements: assetElements.map(a => a.id === id ? { ...a, zIndex: z } : a) });
+    else if (kind === "asset") onStateChange({ ...state, assetElements: assetElements.map(a => a.id === id ? { ...a, zIndex: z } : a) });
+    else if (kind === "shape") onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === id ? { ...s, zIndex: z } : s) });
   };
 
-  const bringForward = (kind: "bubble" | "text" | "asset", id: string) => {
+  const bringForward = (kind: "bubble" | "text" | "asset" | "shape", id: string) => {
     const items = getAllZOrdered();
     const idx = items.findIndex(i => i.id === id);
     if (idx < 0 || idx >= items.length - 1) return;
     const above = items[idx + 1];
     setZIndex(kind, id, above.z + 1);
   };
-  const bringToFront = (kind: "bubble" | "text" | "asset", id: string) => {
+  const bringToFront = (kind: "bubble" | "text" | "asset" | "shape", id: string) => {
     const items = getAllZOrdered();
     const maxZ = items.reduce((m, i) => Math.max(m, i.z), 0);
     setZIndex(kind, id, maxZ + 1);
   };
-  const sendBackward = (kind: "bubble" | "text" | "asset", id: string) => {
+  const sendBackward = (kind: "bubble" | "text" | "asset" | "shape", id: string) => {
     const items = getAllZOrdered();
     const idx = items.findIndex(i => i.id === id);
     if (idx <= 0) return;
     const below = items[idx - 1];
     setZIndex(kind, id, Math.max(0, below.z - 1));
   };
-  const sendToBack = (kind: "bubble" | "text" | "asset", id: string) => {
+  const sendToBack = (kind: "bubble" | "text" | "asset" | "shape", id: string) => {
     const items = getAllZOrdered();
     const minZ = items.reduce((m, i) => Math.min(m, i.z), Infinity);
     setZIndex(kind, id, Math.max(0, minZ - 1));
   };
 
-  const openCtxMenu = (e: React.MouseEvent, kind: "bubble" | "text" | "asset", id: string) => {
+  const openCtxMenu = (e: React.MouseEvent, kind: "bubble" | "text" | "asset" | "shape", id: string) => {
     e.preventDefault(); e.stopPropagation();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -516,6 +699,7 @@ export function CanvasEditor({
   const deleteBubble = (id: string) => { onStateChange({ ...state, bubbles: bubbles.filter(b => b.id !== id) }); setSelection(null, null, null); setEditingBubbleId(null); };
   const deleteText   = (id: string) => { onStateChange({ ...state, textElements: textElements.filter(t => t.id !== id) }); setSelection(null, null, null); setEditingTextId(null); };
   const deleteAsset  = (id: string) => { onStateChange({ ...state, assetElements: assetElements.filter(a => a.id !== id) }); setSelection(null, null, null); };
+  const deleteShape  = (id: string) => { onStateChange({ ...state, shapeElements: shapeElements.filter(s => s.id !== id) }); setSelection(null, null, null); };
 
   // Copy-paste functions
   const copyObject = useCallback(() => {
@@ -528,8 +712,11 @@ export function CanvasEditor({
     } else if (selectedAssetId) {
       const a = assetElements.find(x => x.id === selectedAssetId);
       if (a) setCopiedObject({ type: "asset", data: a });
+    } else if (selectedShapeId) {
+      const s = shapeElements.find(x => x.id === selectedShapeId);
+      if (s) setCopiedObject({ type: "shape", data: s });
     }
-  }, [selectedBubbleId, selectedTextId, selectedAssetId, bubbles, textElements, assetElements]);
+  }, [selectedBubbleId, selectedTextId, selectedAssetId, selectedShapeId, bubbles, textElements, assetElements, shapeElements]);
 
   const pasteObject = useCallback(() => {
     if (!copiedObject) return;
@@ -548,8 +735,12 @@ export function CanvasEditor({
       const na = { ...copiedObject.data, id: makeId(), x: cx - 80, y: cy - 80 };
       onStateChange({ ...state, assetElements: [...assetElements, na] });
       setSelection(null, null, na.id);
+    } else if (copiedObject.type === "shape") {
+      const ns = { ...copiedObject.data, id: makeId(), x: cx - 50, y: cy - 50 };
+      onStateChange({ ...state, shapeElements: [...shapeElements, ns] });
+      setSelection(null, null, null, ns.id);
     }
-  }, [copiedObject, state, bubbles, textElements, assetElements, containerSize]);
+  }, [copiedObject, state, bubbles, textElements, assetElements, shapeElements, containerSize]);
 
   
   const duplicateBubble = (id: string) => {
@@ -570,6 +761,12 @@ export function CanvasEditor({
     onStateChange({ ...state, assetElements: [...assetElements, na] });
     setSelection(null, null, na.id);
   };
+  const duplicateShape = (id: string) => {
+    const s = shapeElements.find(x => x.id === id); if (!s) return;
+    const ns = { ...s, id: makeId(), x: s.x + 20, y: s.y + 20 };
+    onStateChange({ ...state, shapeElements: [...shapeElements, ns] });
+    setSelection(null, null, null, ns.id);
+  };
 
   const patchBubble = (id: string, patch: Partial<Bubble>) =>
     onStateChange({ ...state, bubbles: bubbles.map(b => b.id === id ? { ...b, ...patch } : b) });
@@ -579,6 +776,9 @@ export function CanvasEditor({
 
   const patchAsset = (id: string, patch: Partial<AssetElement>) =>
     onStateChange({ ...state, assetElements: assetElements.map(a => a.id === id ? { ...a, ...patch } : a) });
+
+  const patchShape = (id: string, patch: Partial<ShapeElement>) =>
+    onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === id ? { ...s, ...patch } : s) });
 
   // Keyboard shortcuts (copy/paste/delete/navigation)
   useEffect(() => {
@@ -601,17 +801,19 @@ export function CanvasEditor({
         if (selectedBubbleId) deleteBubble(selectedBubbleId);
         else if (selectedTextId) deleteText(selectedTextId);
         else if (selectedAssetId) deleteAsset(selectedAssetId);
+        else if (selectedShapeId) deleteShape(selectedShapeId);
       }
       // Tab navigation
       else if (e.key === "Tab") {
         e.preventDefault();
-        const allObjects = [...panelBubbles, ...panelTexts, ...panelAssets];
+        const allObjects = [...panelBubbles, ...panelTexts, ...panelAssets, ...panelShapes];
         if (allObjects.length === 0) return;
         
         let currentIndex = -1;
         if (selectedBubbleId) currentIndex = allObjects.findIndex(obj => obj.id === selectedBubbleId);
         else if (selectedTextId) currentIndex = allObjects.findIndex(obj => obj.id === selectedTextId);
         else if (selectedAssetId) currentIndex = allObjects.findIndex(obj => obj.id === selectedAssetId);
+        else if (selectedShapeId) currentIndex = allObjects.findIndex(obj => obj.id === selectedShapeId);
         
         const nextIndex = e.shiftKey 
           ? (currentIndex - 1 + allObjects.length) % allObjects.length
@@ -622,14 +824,16 @@ export function CanvasEditor({
           setSelection(nextObj.id, null, null);
         } else if (panelTexts.find(t => t.id === nextObj.id)) {
           setSelection(null, nextObj.id, null);
-        } else {
+        } else if (panelAssets.find(a => a.id === nextObj.id)) {
           setSelection(null, null, nextObj.id);
+        } else if (panelShapes.find(s => s.id === nextObj.id)) {
+          setSelection(null, null, null, nextObj.id);
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedBubbleId, selectedTextId, selectedAssetId, copiedObject, panelBubbles, panelTexts, panelAssets]);
+  }, [selectedBubbleId, selectedTextId, selectedAssetId, selectedShapeId, copiedObject, panelBubbles, panelTexts, panelAssets, panelShapes]);
 
   // ── Resize observer for inner canvas ──
   useEffect(() => {
@@ -901,48 +1105,133 @@ export function CanvasEditor({
           const isSel = selectedShapeId === s.id;
           const isLineOrArrow = s.type === "arrow" || s.type === "line";
           
+          // Calculate proper bounding box for arrows/lines
+          let containerWidth = s.w;
+          let containerHeight = s.h;
+          let containerLeft = s.x;
+          let containerTop = s.y;
+          let svgOffsetX = 0;
+          let svgOffsetY = 0;
+          
+          if (isLineOrArrow) {
+            // For arrows/lines: head at (x,y), tail at (endX,endY)
+            const startX = s.x;
+            const startY = s.y;
+            const endX = s.endX ?? s.w;
+            const endY = s.endY ?? s.h;
+            
+            // Calculate bounding box that contains the entire line/arrow
+            const minX = Math.min(startX, endX);
+            const maxX = Math.max(startX, endX);
+            const minY = Math.min(startY, endY);
+            const maxY = Math.max(startY, endY);
+            
+            // Add padding for arrow head and stroke width
+            const padding = 20;
+            containerWidth = maxX - minX + padding * 2;
+            containerHeight = maxY - minY + padding * 2;
+            containerLeft = minX - padding;
+            containerTop = minY - padding;
+            
+            // Adjust SVG coordinates to fit in the container
+            svgOffsetX = padding - minX;
+            svgOffsetY = padding - minY;
+          }
+          
           return (
             <div key={s.id} className={`absolute ${dragRef.current?.id === s.id ? "transition-none" : "transition-all duration-200"} ${isSel ? "drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]" : ""}`} style={{ 
-              left: s.x, 
-              top: s.y, 
-              width: s.w, 
-              height: s.h, 
+              left: containerLeft, 
+              top: containerTop, 
+              width: containerWidth, 
+              height: containerHeight, 
               zIndex: s.zIndex??2,
-              pointerEvents: 'auto'
+              pointerEvents: 'auto',
+              paddingRight: isSel ? '50px' : '0px', // Add padding for rotation handle when selected
+              transform: `rotate(${s.rotation??0}deg) scaleX(${s.flipX?-1:1}) scaleY(${s.flipY?-1:1})`,
+              transformOrigin: "center",
+              cursor: isSel ? "move" : "pointer",
+              overflow: "visible",
+              mixBlendMode: (dragRef.current?.id === s.id ? 'source-over' : 'normal') as any,
+              isolation: 'isolate',
+              willChange: dragRef.current?.id === s.id ? 'transform' : 'auto'
             }}
               onMouseDown={e => {
                 e.stopPropagation();
+                
+                // For arrows/lines, only allow selection/dragging if click is near the actual line
+                if (isLineOrArrow) {
+                  const rect = containerRef.current?.getBoundingClientRect();
+                  if (rect) {
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+                    const isNearLine = isPointNearLine(
+                      mouseX, mouseY,
+                      s.x, s.y,
+                      s.endX ?? s.w, s.endY ?? s.h,
+                      10 // 10px threshold
+                    );
+                    
+                    if (!isNearLine) {
+                      return; // Don't select/drag if not near the line
+                    }
+                  }
+                }
+                
                 setSelection(null, null, null, s.id);
                 startDrag("shape", s.id, e);
               }}
               onClick={e => { e.stopPropagation(); }}
-              onContextMenu={e => { setSelection(null, null, null, s.id); openCtxMenu(e, "text", s.id); }}
+              onContextMenu={e => { 
+                e.stopPropagation();
+                
+                // For arrows/lines, only allow context menu if click is near the actual line
+                if (isLineOrArrow) {
+                  const rect = containerRef.current?.getBoundingClientRect();
+                  if (rect) {
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+                    const isNearLine = isPointNearLine(
+                      mouseX, mouseY,
+                      s.x, s.y,
+                      s.endX ?? s.w, s.endY ?? s.h,
+                      10 // 10px threshold
+                    );
+                    
+                    if (!isNearLine) {
+                      return; // Don't show context menu if not near the line
+                    }
+                  }
+                }
+                
+                setSelection(null, null, null, s.id); 
+                openCtxMenu(e, "shape", s.id); 
+              }}
             >
-              <svg width={s.w} height={s.h} style={{ overflow: "visible" }}>
+              <svg width={containerWidth} height={containerHeight} style={{ overflow: "visible" }}>
+                <defs>
+                  <marker id={`arrow-${s.id}`} viewBox="0 -5 10 10" refX="5" refY="0" markerWidth="4" markerHeight="4" orient="auto">
+                    <path d="M0,-5L10,0L0,5" fill={s.strokeColor} />
+                  </marker>
+                </defs>
                 {s.type === "arrow" && (
-                  <>
-                    <line
-                      x1={0}
-                      y1={0}
-                      x2={s.w}
-                      y2={s.h}
-                      stroke={s.strokeColor}
-                      strokeWidth={s.strokeWidth}
-                      fill="none"
-                    />
-                    <polygon
-                      points={`${s.w},${s.h} ${s.w-8},${s.h-4} ${s.w-8},${s.h+4}`}
-                      fill={s.strokeColor}
-                    />
-                  </>
+                  <line
+                    x1={s.x - containerLeft}
+                    y1={s.y - containerTop}
+                    x2={(s.endX ?? s.w) - containerLeft}
+                    y2={(s.endY ?? s.h) - containerTop}
+                    stroke={s.strokeColor}
+                    strokeWidth={s.strokeWidth}
+                    fill="none"
+                    markerEnd={`url(#arrow-${s.id})`}
+                  />
                 )}
                 {s.type === "line" && (
                   <>
                     <line
-                      x1={0}
-                      y1={0}
-                      x2={s.w}
-                      y2={s.h}
+                      x1={s.x - containerLeft}
+                      y1={s.y - containerTop}
+                      x2={(s.endX ?? s.w) - containerLeft}
+                      y2={(s.endY ?? s.h) - containerTop}
                       stroke={s.strokeColor}
                       strokeWidth={s.strokeWidth}
                       fill="none"
@@ -977,22 +1266,22 @@ export function CanvasEditor({
               {isSel && (
                 <>
                   {isLineOrArrow ? (
-                    /* Endpoint handles for arrow and line */
+                    /* Endpoint handles for arrow and line - positioned relative to container */
                     <>
-                      {/* Start point */}
+                      {/* Head point (x, y) - positioned relative to container */}
                       <div
-                        className="absolute w-4 h-4 -ml-2 -mt-2 bg-white border-2 border-blue-500 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
-                        style={{ left: 0, top: 0 }}
+                        className="absolute w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
+                        style={{ left: s.x - containerLeft - 8, top: s.y - containerTop - 8 }}
                         onMouseDown={e => {
                           e.stopPropagation();
                           e.preventDefault();
                           startDrag("shape", s.id, e, "resize", "start");
                         }}
                       />
-                      {/* End point */}
+                      {/* Tail point (endX, endY) - positioned relative to container */}
                       <div
-                        className="absolute w-4 h-4 -mr-2 -mb-2 bg-white border-2 border-blue-500 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
-                        style={{ left: s.w, top: s.h }}
+                        className="absolute w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-pointer hover:scale-125 transition-transform z-10"
+                        style={{ left: (s.endX ?? s.w) - containerLeft - 8, top: (s.endY ?? s.h) - containerTop - 8 }}
                         onMouseDown={e => {
                           e.stopPropagation();
                           e.preventDefault();
@@ -1510,6 +1799,7 @@ export function CanvasEditor({
                     if (ctxMenu.kind === "asset") duplicateAsset(ctxMenu.id);
                     else if (ctxMenu.kind === "text") duplicateText(ctxMenu.id);
                     else if (ctxMenu.kind === "bubble") duplicateBubble(ctxMenu.id);
+                    else if (ctxMenu.kind === "shape") duplicateShape(ctxMenu.id);
                   }
                   setCtxMenu(null); 
                 } },
@@ -1519,6 +1809,7 @@ export function CanvasEditor({
                     if (ctxMenu.kind === "asset") patchAsset(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
                     else if (ctxMenu.kind === "text") patchText(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
                     else if (ctxMenu.kind === "bubble") patchBubble(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
+                    else if (ctxMenu.kind === "shape") patchShape(ctxMenu.id, { rotation: 0, flipX: false, flipY: false });
                   }
                   setCtxMenu(null); 
                 } },
@@ -1534,6 +1825,9 @@ export function CanvasEditor({
                     } else if (ctxMenu.kind === "bubble") {
                       const bubble = bubbles.find(b => b.id === ctxMenu.id);
                       if (bubble) patchBubble(ctxMenu.id, { flipX: !bubble.flipX });
+                    } else if (ctxMenu.kind === "shape") {
+                      const shape = shapeElements.find(s => s.id === ctxMenu.id);
+                      if (shape) patchShape(ctxMenu.id, { flipX: !shape.flipX });
                     }
                   }
                   setCtxMenu(null); 
@@ -1550,6 +1844,9 @@ export function CanvasEditor({
                     } else if (ctxMenu.kind === "bubble") {
                       const bubble = bubbles.find(b => b.id === ctxMenu.id);
                       if (bubble) patchBubble(ctxMenu.id, { flipY: !bubble.flipY });
+                    } else if (ctxMenu.kind === "shape") {
+                      const shape = shapeElements.find(s => s.id === ctxMenu.id);
+                      if (shape) patchShape(ctxMenu.id, { flipY: !shape.flipY });
                     }
                   }
                   setCtxMenu(null);
@@ -1734,6 +2031,47 @@ export function CanvasEditor({
                     }
                     setCtxMenu(null);
                   } },
+                  { label: "Color", shortcut: "", icon: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const menuWidth = 200;
+                      const menuHeight = 300;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Set submenu context
+                      setCtxMenu({
+                        ...ctxMenu,
+                        submenu: 'colorPalette',
+                        parentX: adjustedX,
+                        parentY: adjustedY + (8 * menuItemHeight), // After the first 8 items
+                        menuItemIndex: 8,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
+                  } },
                 ]),
                 // Text-specific options
                 ...(ctxMenu.kind === "text" ? [
@@ -1783,6 +2121,94 @@ export function CanvasEditor({
                         parentX: adjustedX,
                         parentY: adjustedY + (textPropsIndex * menuItemHeight),
                         menuItemIndex: textPropsIndex,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
+                  } },
+                ] : []),
+                // Shape-specific options
+                ...(ctxMenu.kind === "shape" ? [
+                  { label: "Shape Properties", shortcut: "", icon: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2h2.828l-2.828-2.828z", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const menuWidth = 400;
+                      const menuHeight = 500;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Set submenu context
+                      setCtxMenu({
+                        ...ctxMenu,
+                        submenu: 'shapeProperties',
+                        parentX: adjustedX,
+                        parentY: adjustedY + (3 * menuItemHeight), // After the first 3 items
+                        menuItemIndex: 3,
+                        menuItemHeight: menuItemHeight
+                      });
+                    }
+                  } },
+                ] : []),
+                // Asset-specific options
+                ...(ctxMenu.kind === "asset" ? [
+                  { label: "Color", shortcut: "", icon: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z", action: (e) => {
+                    e?.stopPropagation();
+                    if (ctxMenu.id) {
+                      // Calculate menu item position using adjusted coordinates
+                      const menuItemHeight = 44;
+                      const menuWidth = 200;
+                      const menuHeight = 300;
+                      const containerRect = containerRef.current?.getBoundingClientRect();
+                      const outerRect = outerRef.current?.getBoundingClientRect();
+                      
+                      let adjustedX = ctxMenu.x;
+                      let adjustedY = ctxMenu.y;
+                      
+                      if (containerRect && outerRect) {
+                        const availableWidth = outerRect.width;
+                        const availableHeight = outerRect.height;
+                        const bottomPanelHeight = 180;
+                        const safeBottomHeight = availableHeight - bottomPanelHeight;
+                        
+                        if (ctxMenu.x + menuWidth > availableWidth) {
+                          adjustedX = ctxMenu.x - menuWidth - 10;
+                          if (adjustedX < 10) adjustedX = 10;
+                        }
+                        
+                        if (ctxMenu.y + menuHeight > safeBottomHeight) {
+                          adjustedY = ctxMenu.y - menuHeight - 10;
+                          if (adjustedY < 10) adjustedY = 10;
+                        }
+                      }
+                      
+                      // Set submenu context
+                      setCtxMenu({
+                        ...ctxMenu,
+                        submenu: 'colorPalette',
+                        parentX: adjustedX,
+                        parentY: adjustedY + (5 * menuItemHeight), // After the first 5 items
+                        menuItemIndex: 5,
                         menuItemHeight: menuItemHeight
                       });
                     }
@@ -2127,8 +2553,163 @@ export function CanvasEditor({
           );
         })()}
         
+        {/* Shape Properties Dialog */}
+        {ctxMenu && ctxMenu.submenu === 'shapeProperties' && (() => {
+          const currentShape = ctxMenu.kind === "shape" && ctxMenu.id 
+            ? shapeElements.find(s => s.id === ctxMenu.id) 
+            : null;
+          
+          if (!currentShape) return null;
+          
+          const updShape = (patch: Record<string, unknown>) => {
+            if (ctxMenu.id) {
+              onStateChange({ ...state, shapeElements: state.shapeElements.map(s => s.id === ctxMenu.id ? { ...s, ...patch } : s) });
+            }
+          };
+          
+          return (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1003]"
+                 onClick={() => setCtxMenu(null)}>
+              <div className="bg-[#1a1d23] border border-white/10 rounded-lg shadow-2xl p-6 w-[400px] max-w-[90vw] max-h-[80vh] overflow-y-auto"
+                   onClick={e => e.stopPropagation()}>
+                <div className="space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-white font-bold text-lg">Shape Properties</h3>
+                      <p className="text-[12px] text-gray-500 mt-1">
+                        Edit {currentShape.type} properties
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setCtxMenu(null)}
+                      className="text-gray-400 hover:text-white transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  {/* Stroke Color */}
+                  <div>
+                    <span className="text-[12px] text-gray-300 block mb-2">Stroke Color</span>
+                    <input 
+                      type="color" 
+                      value={currentShape.strokeColor || "#000000"} 
+                      onChange={e => updShape({ strokeColor: e.target.value })} 
+                      className="w-full h-10 bg-[#1a1a24] border border-white/10 rounded cursor-pointer"
+                    />
+                  </div>
+                  
+                  {/* Fill Color (for rectangle and circle) */}
+                  {(currentShape.type === "rectangle" || currentShape.type === "circle") && (
+                    <div>
+                      <span className="text-[12px] text-gray-300 block mb-2">Fill Color</span>
+                      <div className="flex items-center gap-2 mb-2">
+                        <input 
+                          type="color" 
+                          value={currentShape.fillColor || "#ffffff"} 
+                          onChange={e => updShape({ fillColor: e.target.value })} 
+                          className="flex-1 h-10 bg-[#1a1a24] border border-white/10 rounded cursor-pointer"
+                        />
+                        <button 
+                          onClick={() => updShape({ fillColor: "transparent" })} 
+                          className="px-3 py-2 bg-white/5 border border-white/10 rounded text-[12px] text-gray-300 hover:bg-white/10 transition"
+                        >
+                          None
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Stroke Width */}
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-[12px] text-gray-300">Stroke Width</span>
+                      <span className="text-[12px] text-emerald-300 font-mono">{currentShape.strokeWidth}px</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min={1} 
+                      max={20} 
+                      value={currentShape.strokeWidth} 
+                      onChange={e => updShape({ strokeWidth: Number(e.target.value) })} 
+                      className="w-full accent-emerald-500" 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+        
+        {/* Color Palette Submenu */}
+        {ctxMenu && ctxMenu.submenu === 'colorPalette' && (() => {
+          const currentElement = ctxMenu.id ? (() => {
+            if (ctxMenu.kind === "shape") return shapeElements.find(s => s.id === ctxMenu.id);
+            if (ctxMenu.kind === "text") return textElements.find(t => t.id === ctxMenu.id);
+            if (ctxMenu.kind === "bubble") return bubbles.find(b => b.id === ctxMenu.id);
+            if (ctxMenu.kind === "asset") return assetElements.find(a => a.id === ctxMenu.id);
+            return null;
+          })() : null;
+          
+          if (!currentElement) return null;
+          
+          const colors = [
+            "#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", 
+            "#FF00FF", "#00FFFF", "#FFA500", "#800080", "#FFC0CB", "#A52A2A",
+            "#808080", "#C0C0C0", "#FFD700", "#32CD32", "#87CEEB", "#FF69B4"
+          ];
+          
+          const applyColor = (color: string) => {
+            if (ctxMenu.id) {
+              if (ctxMenu.kind === "shape") {
+                const shape = currentElement as any;
+                patchShape(ctxMenu.id, { strokeColor: color });
+              } else if (ctxMenu.kind === "text") {
+                const text = currentElement as any;
+                patchText(ctxMenu.id, { color: color });
+              } else if (ctxMenu.kind === "bubble") {
+                const bubble = currentElement as any;
+                patchBubble(ctxMenu.id, { textColor: color });
+              } else if (ctxMenu.kind === "asset") {
+                const asset = currentElement as any;
+                patchAsset(ctxMenu.id, { tintColor: color });
+              }
+            }
+            setCtxMenu(null);
+          };
+          
+          return (
+            <div className="absolute z-[1002] bg-[#1a1a24] border border-white/15 rounded-xl shadow-2xl p-3 w-[200px]"
+                 style={{ left: ctxMenu.parentX, top: ctxMenu.parentY }}
+                 onMouseDown={e => e.stopPropagation()}>
+              <div className="grid grid-cols-6 gap-1">
+                {colors.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => applyColor(color)}
+                    className="w-7 h-7 rounded border border-white/20 hover:border-white/60 transition-colors"
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 pt-2 border-t border-white/10">
+                <input
+                  type="color"
+                  onChange={(e) => applyColor(e.target.value)}
+                  className="w-full h-8 bg-transparent border border-white/20 rounded cursor-pointer"
+                  title="Custom color"
+                />
+              </div>
+            </div>
+          );
+        })()}
+        
         {/* Submenu rendering */}
-        {ctxMenu && ctxMenu.submenu && ctxMenu.submenu !== 'textProperties' && (() => {
+        {ctxMenu && ctxMenu.submenu && ctxMenu.submenu !== 'textProperties' && ctxMenu.submenu !== 'shapeProperties' && ctxMenu.submenu !== 'colorPalette' && (() => {
           const submenuItems = ctxMenu.submenu === 'tailDirection' ? [
             { label: "← Tail Left", icon: "M15 19l-7-7 7-7", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "left" as any }); setCtxMenu(null); } },
             { label: "→ Tail Right", icon: "M9 5l7 7-7 7", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "right" as any }); setCtxMenu(null); } },
@@ -2199,6 +2780,50 @@ export function CanvasEditor({
                   </div>
                 </button>
               ))}
+            </div>
+          );
+        })()}
+        
+        {/* Color Palette Submenu for Toolbar Color Selection */}
+        {showColorPalette && (() => {
+          const colors = [
+            "#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", 
+            "#FF00FF", "#00FFFF", "#FFA500", "#800080", "#FFC0CB", "#A52A2A",
+            "#808080", "#C0C0C0", "#FFD700", "#32CD32", "#87CEEB", "#FF69B4"
+          ];
+          
+          return (
+            <div 
+              className="absolute z-[9999] bg-[#1a1a24] border border-white/15 rounded-xl shadow-2xl p-3 w-[200px]"
+              style={{ left: colorPalettePosition.x, top: colorPalettePosition.y }}
+              onMouseDown={e => e.stopPropagation()}
+            >
+              <div className="text-white text-xs font-medium mb-2">Select Color</div>
+              <div className="grid grid-cols-6 gap-1">
+                {colors.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => applyColorToSelected(color)}
+                    className="w-7 h-7 rounded border border-white/20 hover:border-white/60 transition-colors"
+                    style={{ backgroundColor: color }}
+                    title={color}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 pt-2 border-t border-white/10">
+                <input
+                  type="color"
+                  onChange={(e) => applyColorToSelected(e.target.value)}
+                  className="w-full h-8 bg-transparent border border-white/20 rounded cursor-pointer"
+                  title="Custom color"
+                />
+              </div>
+              <button
+                onClick={() => setShowColorPalette(false)}
+                className="mt-2 w-full py-1 bg-white/10 hover:bg-white/20 rounded text-xs text-white transition-colors"
+              >
+                Cancel
+              </button>
             </div>
           );
         })()}

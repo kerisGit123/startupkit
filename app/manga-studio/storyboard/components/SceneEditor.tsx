@@ -2433,6 +2433,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   setCanvasState={setCanvasState}
                   selectedColor={selectedColor}
                   setSelectedColor={setSelectedColor}
+                  onColorPickerClick={() => {
+                    // Directly trigger the CanvasEditor's color picker
+                    console.log("Color picker clicked from ImageAIPanel");
+                    // The color palette will be shown by CanvasEditor's handleColorPickerClick
+                  }}
                   onToolSelect={(tool) => {
                     if (tool === "pen-brush" || tool === "brush" || tool === "eraser") {
                       setCanvasTool("inpaint");

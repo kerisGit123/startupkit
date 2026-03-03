@@ -52,6 +52,8 @@ export interface ImageAIPanelProps {
   zoomLevel?: number;
   selectedColor?: string;
   setSelectedColor?: (color: string) => void;
+  onColorPickerClick?: () => void; // Add handler for color picker click
+  onDeleteSelected?: () => void; // Add handler for delete selected element
 }
 
 // ── Available Models ─────────────────────────────────────────────────
@@ -132,6 +134,8 @@ export function ImageAIPanel({
   zoomLevel,
   selectedColor,
   setSelectedColor,
+  onColorPickerClick,
+  onDeleteSelected,
 }: ImageAIPanelProps) {
   console.log("ImageAIPanel rendering with mode:", mode);
   const [activeTool, setActiveTool] = useState("elements");
@@ -451,7 +455,10 @@ export function ImageAIPanel({
               <ToolBtn active={activeTool === "circle"} onClick={() => pick("circle")} title="Circle">
                 <Circle className={ic} />
               </ToolBtn>
-              <ToolBtn active={false} onClick={() => pick("color-picker")} title="Color Picker">
+              <ToolBtn active={false} onClick={() => {
+                // Always use the original color picker behavior
+                pick("color-picker");
+              }} title="Color Picker">
                 <div 
                   className="w-6 h-6 rounded-md border-2 border-white/50 hover:border-white transition-all"
                   style={{ backgroundColor: selectedColor }}
@@ -459,7 +466,16 @@ export function ImageAIPanel({
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-white/[0.08] my-0.5" />
-              <ToolBtn active={false} onClick={() => pick("undo")} title="Undo">
+              <ToolBtn active={false} onClick={() => {
+                // Trigger delete selected element
+                const canvasContainer = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                if (canvasContainer) {
+                  const event = new CustomEvent('deleteSelectedElement');
+                  canvasContainer.dispatchEvent(event);
+                } else {
+                  console.log("Delete selected element - no canvas container found");
+                }
+              }} title="Delete Selected">
                 <Trash2 className={ic} />
               </ToolBtn>
             </>
@@ -556,7 +572,7 @@ export function ImageAIPanel({
 
         {/* Color Menu */}
         {showColorMenu && (
-          <div className="absolute left-[52px] top-[120px] translate-y-0 bg-[#0a0a0f]/95 backdrop-blur-lg rounded-xl border border-white/20 shadow-2xl p-4 z-30 w-48">
+          <div className="absolute left-[52px] top-[120px] translate-y-0 bg-[#0a0a0f]/95 backdrop-blur-lg rounded-xl border border-white/20 shadow-2xl p-4 z-[9999] w-48">
             <div className="grid grid-cols-3 gap-4">
               {[
                 { color: '#FF0000', name: 'Red' },
@@ -575,9 +591,16 @@ export function ImageAIPanel({
                     setSelectedColor(color);
                     setShowColorMenu(false);
                     console.log(`Selected color: ${name} (${color})`);
-                    // Update selected shape color if a shape is selected
+                    // Apply color to selected shape by triggering CanvasEditor's color picker
                     if (setSelectedColor) {
                       setSelectedColor(color);
+                      // Trigger the CanvasEditor's color application
+                      const canvasContainer = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                      if (canvasContainer) {
+                        // Create and dispatch a custom event to apply color
+                        const event = new CustomEvent('applyColorToShape', { detail: color });
+                        canvasContainer.dispatchEvent(event);
+                      }
                     }
                   }}
                   className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 border-2 transform hover:scale-110 ${

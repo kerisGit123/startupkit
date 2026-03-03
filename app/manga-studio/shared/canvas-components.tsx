@@ -104,11 +104,14 @@ export function ResizeHandles({
         />
       ))}
       {/* Rotation handle */}
-      <div className="absolute w-6 h-6 rounded-full border-2 border-white flex items-center justify-center"
-        style={{ top: "50%", right: -40, transform: "translateY(-50%)", backgroundColor: col, boxShadow: shadow, cursor: "grab", position: "absolute", zIndex: 50 } as React.CSSProperties}
-        onMouseDown={e => { e.stopPropagation(); onRotateStart(e); }}>
-        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      <div className="absolute w-8 h-8 rounded-full border-3 border-white flex items-center justify-center bg-blue-500"
+        style={{ top: "50%", right: -48, transform: "translateY(-50%)", backgroundColor: col, boxShadow: `0 0 0 3px ${col}44, 0 4px 12px rgba(0,0,0,0.4)`, cursor: "grab", position: "absolute", zIndex: 9999 } as React.CSSProperties}
+        onMouseDown={e => { 
+          e.stopPropagation(); 
+          onRotateStart(e); 
+        }}>
+        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
       </div>
       

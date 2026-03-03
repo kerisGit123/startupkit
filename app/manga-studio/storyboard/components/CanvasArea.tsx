@@ -64,6 +64,8 @@ interface CanvasAreaProps {
   
   // Color Props
   selectedColor?: string;
+  onColorPickerClick?: () => void;
+  onDeleteSelected?: () => void;
 }
 
 // ── CanvasArea Component ─────────────────────────────────────────────────────
@@ -103,6 +105,8 @@ export function CanvasArea({
   runCrop,
   onImageLoad,
   selectedColor,
+  onColorPickerClick,
+  onDeleteSelected,
 }: CanvasAreaProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -169,6 +173,8 @@ export function CanvasArea({
           onCropClick={runCrop}
           onImageLoad={onImageLoad}
           selectedColor={selectedColor}
+          onColorPickerClick={onColorPickerClick}
+          onDeleteSelected={onDeleteSelected}
           resetAllTransformations={() => {
             // Reset all transformations for all objects
             setCanvasState((prev) => {
