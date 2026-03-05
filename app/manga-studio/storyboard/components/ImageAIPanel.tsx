@@ -5,7 +5,7 @@ import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
   Upload, Download, Save, History, Trash2,
-  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer,
+  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -27,6 +27,8 @@ export interface ImageAIPanelProps {
   onAddReferenceImage?: (file: File) => void;
   onRemoveReferenceImage?: (id: string) => void;
   isGenerating?: boolean;
+  userPrompt?: string;
+  onUserPromptChange?: (prompt: string) => void;
   // Brush inpaint integration
   isEraser?: boolean;
   setIsEraser?: (value: boolean) => void;
@@ -54,6 +56,9 @@ export interface ImageAIPanelProps {
   setSelectedColor?: (color: string) => void;
   onColorPickerClick?: () => void; // Add handler for color picker click
   onDeleteSelected?: () => void; // Add handler for delete selected element
+  onAspectRatioChange?: (aspectRatio: string) => void; // Add handler for aspect ratio changes
+  selectedAspectRatio?: string; // Add selected aspect ratio prop
+  onRectangleMaskAspectRatioChange?: (aspectRatio: string) => void; // Add handler for rectangle mask aspect ratio changes
 }
 
 // ── Available Models ─────────────────────────────────────────────────
@@ -61,6 +66,12 @@ const MODELS = [
   { id: "nano-banana-2", label: "Nano Banana 2", icon: "G" },
   { id: "nano-banana-1", label: "Nano Banana 1", icon: "G" },
   { id: "stable-diffusion", label: "Stable Diffusion", icon: "S" },
+  { id: "gpt-image-1-5-text-to-image", label: "GPT Image 1.5 Text", icon: "🟦" },
+  { id: "nano-banana-edit", label: "Nano Banana Edit", icon: "🟩" },
+  { id: "flux-2/flex-image-to-image", label: "Flux 2 Flex", icon: "🟡" },
+  { id: "character-remix", label: "Character Remix", icon: "🟣" },
+  { id: "qwen-z-image", label: "Qwen Image Edit", icon: "🟠" },
+  { id: "ideogram/character-edit", label: "Character Edit", icon: "🔵" },
 ];
 
 // ── Content Type Tabs ────────────────────────────────────────────────
@@ -75,12 +86,14 @@ function ToolBtn({
   onClick,
   title,
   children,
+  className,
 }: {
   active?: boolean;
   danger?: boolean;
   onClick: () => void;
   title: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <button
@@ -91,7 +104,7 @@ function ToolBtn({
           : danger
           ? "text-red-500 hover:bg-red-50 hover:text-red-600"
           : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-      }`}
+      } ${className || ""}`}
       title={title}
     >
       {children}
@@ -111,6 +124,8 @@ export function ImageAIPanel({
   onAddReferenceImage,
   onRemoveReferenceImage,
   isGenerating,
+  userPrompt,
+  onUserPromptChange,
   // Brush inpaint integration
   isEraser,
   setIsEraser,
@@ -136,15 +151,22 @@ export function ImageAIPanel({
   setSelectedColor,
   onColorPickerClick,
   onDeleteSelected,
+  onAspectRatioChange,
+  selectedAspectRatio,
+  onRectangleMaskAspectRatioChange,
 }: ImageAIPanelProps) {
-  console.log("ImageAIPanel rendering with mode:", mode);
   const [activeTool, setActiveTool] = useState("elements");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [contentType, setContentType] = useState("image");
-  const [userPrompt, setUserPrompt] = useState("");
+
+  // Use passed props for prompt
+  const currentPrompt = userPrompt || "";
+  const handlePromptChange = (value: string) => {
+    onUserPromptChange?.(value);
+  };
+  
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
-  const [showCropMenu, setShowCropMenu] = useState(false);
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState("16:9");
+  const [showImageMaskMenu, setShowImageMaskMenu] = useState(false);
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
   const [showColorMenu, setShowColorMenu] = useState(false);
   // Use existing brush size from props instead of local state
@@ -152,16 +174,28 @@ export function ImageAIPanel({
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // Model options for area-edit mode (filtered by mask type)
-  const inpaintModelOptions = activeTool === "square-mask" ? [
-    { value: "gpt-image", label: "🟦 GPT Image 1.5", sub: "Square Mode" },
-    { value: "nano-banana-edit", label: "🟩 Nano Banana Edit", sub: "Square Mode" },
-  ] : activeTool === "rectangle-mask" ? [
-    { value: "flux-kontext-pro", label: "Flux Kontext Pro", sub: "Best for rectangle inpainting" },
-    { value: "grok", label: "Grok Imagine", sub: "Fast generation" },
-    { value: "qwen-z-image", label: "Qwen Z Image", sub: "High quality" },
-  ] : (activeTool === "brush" || activeTool === "eraser" || activeTool === "pen-brush") ? [
+  const inpaintModelOptions = activeTool === "text-to-image" ? [
+    { value: "gpt-image-1-5-text-to-image", label: "🟦 GPT Image 1.5 Text", sub: "Text Mode • 8 credits", credits: 8, maxReferenceImages: 0 },
+    { value: "nano-banana-edit", label: "🟩 Nano Banana Edit", sub: "Text Mode • 8 credits", credits: 8, maxReferenceImages: 0 },
+    { value: "flux-2/flex-image-to-image", label: "🟡 Flux 2 Flex", sub: "Text Mode • 40 credits", credits: 40, maxReferenceImages: 0 },
+    { value: "qwen/image-edit", label: "🟠 Qwen Image Edit", sub: "Text Mode • 10 credits", credits: 10, maxReferenceImages: 0 },
+  ] : activeTool === "image-to-image" ? [
+    { value: "flux-2/pro-image-to-image", label: "🔥 Flux 2 Pro", sub: "1:1 • 7 refs • 15 credits", credits: 15, maxReferenceImages: 7 },
+    { value: "flux-2/flex-image-to-image", label: "🟡 Flux 2 Flex", sub: "1:1 • 7 refs • 30 credits", credits: 30, maxReferenceImages: 7 },
+    { value: "nano-banana-2", label: "🟩 Nano Banana 2", sub: "1:1 • 13 refs • 40 credits", credits: 40, maxReferenceImages: 13 },
+    { value: "ideogram/character-remix", label: "🟣 Ideogram Remix", sub: "1:1 • 4 refs • 40 credits", credits: 40, maxReferenceImages: 4 },
+    { value: "gpt-image-1-5-image-to-image", label: "🟦 GPT Image 1.5", sub: "1:1 • 15 refs • 45 credits", credits: 45, maxReferenceImages: 15 },
+  ] : activeTool === "upscale" ? [
+    { value: "recraft/crisp-upscale", label: "🎨 Recraft Crisp", sub: "AI Upscale 1 credit", credits: 1, maxReferenceImages: 0 },
+    { value: "topaz/image-upscale", label: "💎 Topaz Upscale", sub: "AI Upscale 20 credits", credits: 20, maxReferenceImages: 0 },
+  ] : mode === "describe" ? [
+    // Describe mode specific models
+    { value: "nano-banana-2", label: "🟩 Nano Banana 2", sub: "13 refs • 40 credits", credits: 40, maxReferenceImages: 13 },
+    { value: "seedream-5-lite-image-to-image", label: "🌸 SeeDream 5 Lite", sub: "13 refs • 10 credits", credits: 10, maxReferenceImages: 13 },
+  ] : [
+    // Default: include character-edit for any other tools in area-edit mode
     { value: "ideogram/character-edit", label: "Character-edit", sub: "Faceshift" },
-  ] : [];
+  ];
 
   const selectedModel = MODELS.find((m) => m.id === model) || MODELS[0];
 
@@ -171,12 +205,16 @@ export function ImageAIPanel({
     return selected ? selected.label : "Model";
   };
 
+  // Get current selected model credits
+  const getSelectedModelCredits = () => {
+    const selected = inpaintModelOptions.find(m => m.value === model) || inpaintModelOptions[0];
+    return selected && (selected as any).credits ? (selected as any).credits : credits;
+  };
+
   // Handle keyboard events for crop removal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Delete' && activeTool === 'crop') {
-        console.log('Crop removed - Delete key pressed');
-        setShowCropMenu(false);
         setActiveTool('elements');
         onCropRemove?.(); // Call parent to remove crop rectangle from canvas
       }
@@ -188,7 +226,7 @@ export function ImageAIPanel({
 
   // Clean up images when switching to area-edit mode
   useEffect(() => {
-    if (mode === "area-edit" && referenceImages.length > 1) {
+    if (mode === "area-edit" && referenceImages && referenceImages.length > 1) {
       // Keep only the latest image, remove all others
       const latestImage = referenceImages[referenceImages.length - 1];
       const imagesToRemove = referenceImages.slice(0, -1);
@@ -211,7 +249,6 @@ export function ImageAIPanel({
         const imageUrl = event.target?.result as string;
         if (onSetOriginalImage) {
           onSetOriginalImage(imageUrl);
-          console.log("Left upload: Set as background image");
         }
       };
       reader.readAsDataURL(file);
@@ -232,7 +269,6 @@ export function ImageAIPanel({
       // Only update reference images, do NOT change the original/background image
       if (file && onAddReferenceImage) {
         onAddReferenceImage(file);
-        console.log("Right upload: Added to reference images only");
       }
       
       // DO NOT change the original/background image
@@ -264,7 +300,6 @@ export function ImageAIPanel({
         // Store zoom level
         (image as any).dataset.zoom = zoomPercent.toString();
         
-        console.log('Applied zoom:', zoomPercent + '%', 'to image');
       }
     }
   };
@@ -274,14 +309,12 @@ export function ImageAIPanel({
       // Deselect all tools — pointer/select mode
       setActiveTool("elements");
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
       setIsEraser?.(false);
       onToolSelect?.("elements");
     } else if (id === "move") {
       // Select move tool for dragging canvas
       setActiveTool("move");
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
       onToolSelect?.("move");
     } else if (id === "upload-override") {
       uploadInputRef.current?.click();
@@ -292,7 +325,7 @@ export function ImageAIPanel({
       setShowBrushSizeMenu(false);
       onToolSelect?.("brush");
     } else if (id === "pen-brush") {
-      // Select pen brush (directly activate like BrushInpaintPanel)
+      // Select pen brush (directly activate brush tool)
       setActiveTool(id);
       setIsEraser?.(false);
       setShowBrushSizeMenu(false);
@@ -307,72 +340,64 @@ export function ImageAIPanel({
       // Select text tool and create text in center
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
       onToolSelect?.("text");
       // Text icon stays selected - no automatic switch back
     } else if (id === "arrow") {
       // Select arrow tool
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
       setShowColorMenu(false);
       onToolSelect?.("arrow");
     } else if (id === "line") {
       // Select line tool
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
       setShowColorMenu(false);
       onToolSelect?.("line");
     } else if (id === "square") {
       // Select square tool
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
       setShowColorMenu(false);
       onToolSelect?.("square");
     } else if (id === "circle") {
       // Select circle tool
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
       setShowColorMenu(false);
       onToolSelect?.("circle");
     } else if (id === "color-picker") {
       // Toggle color picker menu
       setShowColorMenu(!showColorMenu);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
     } else if (id === "undo") {
       // Handle undo functionality
-      console.log("Undo action triggered");
       // TODO: Implement actual undo logic
     } else if (id === "crop") {
-      // Select crop tool and show aspect ratio menu
+      // Select crop tool - aspect ratio comes from top dropdown
       setActiveTool(id);
-      setShowCropMenu(!showCropMenu);
       setShowBrushSizeMenu(false);
       onToolSelect?.("crop");
-    } else if (id === "rectangle-mask") {
-      // Select rectangle mask tool
-      console.log("Selecting rectangle mask, setting activeTool to:", id);
-      setActiveTool("rectangle-mask");
+    } else if (id === "upscale") {
+      // Select upscale tool
+      setActiveTool(id);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
-      // Set square mode to false for rectangle mask
+      onToolSelect?.("upscale");
+    } else if (id === "image-to-image") {
+      // Select image to image tool
+      setActiveTool("image-to-image");
+      setShowBrushSizeMenu(false);
+      // Set square mode to false for image to image
       onSetSquareMode?.(false);
       onToolSelect?.("rectInpaint");
-    } else if (id === "square-mask") {
-      // Select square mask tool
-      console.log("Selecting square mask, setting activeTool to:", id);
-      setActiveTool("square-mask");
+    } else if (id === "text-to-image") {
+      // Select text to image tool
+      setActiveTool("text-to-image");
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
-      // Set square mode to true for square mask
+      // Set square mode to true for text to image
       onSetSquareMode?.(true);
       onToolSelect?.("rectInpaint");
       // Reset square size to 200x200
-      console.log("Resetting square mask size to 200x200");
       onResetRectangle?.();
     } else if (id === "download") {
       // Handle download functionality
@@ -383,37 +408,26 @@ export function ImageAIPanel({
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        console.log("Downloaded current image");
       } else {
-        console.log("No image available to download");
       }
     } else if (id === "save") {
       // Handle save functionality
-      console.log("Save action triggered");
       // TODO: Implement actual save logic
     } else if (id === "zoom-in") {
       // Handle zoom in functionality
-      console.log("Zoom in button clicked!");
       onZoomIn?.();
-      console.log("Zoom in triggered");
     } else if (id === "zoom-out") {
       // Handle zoom out functionality
-      console.log("Zoom out button clicked!");
       onZoomOut?.();
-      console.log("Zoom out triggered");
     } else if (id === "fit-screen") {
       // Handle fit to screen functionality
-      console.log("Fit to screen button clicked!");
       onFitToScreen?.();
-      console.log("Fit to screen triggered");
     } else if (id === "redo") {
       // Handle redo functionality
-      console.log("Redo action triggered");
       // TODO: Implement actual redo logic
     } else {
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      setShowCropMenu(false);
     }
   };
 
@@ -423,36 +437,33 @@ export function ImageAIPanel({
   const renderLeftToolbar = () => {
     if (mode === "describe") return null;
     
-    // Debug: Log current active tool
-    console.log("Current activeTool:", activeTool);
-
     return (
       <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
         <div className={`flex flex-col gap-1 rounded-lg p-1 shadow-lg border ${
-          mode === "describe" 
-            ? "bg-white border-gray-200" 
+          mode === "annotate" 
+            ? "bg-[#0a0a0f]/98 backdrop-blur-md border-white/10" 
             : "bg-[#0a0a0f]/98 backdrop-blur-md border-white/10"
         }`}>
           {mode === "annotate" ? (
             <>
-              <ToolBtn active={activeTool === "elements"} onClick={() => pick("elements")} title="Select (no tool)">
+              <ToolBtn active={activeTool === "elements"} onClick={() => { pick("elements"); setShowImageMaskMenu(false); }} title="Select (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-white/[0.08] my-0.5" />
-              <ToolBtn active={activeTool === "text"} onClick={() => pick("text")} title="Text">
+              <ToolBtn active={activeTool === "text"} onClick={() => { pick("text"); setShowImageMaskMenu(false); }} title="Text">
                 <Type className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "arrow"} onClick={() => pick("arrow")} title="Arrow">
+              <ToolBtn active={activeTool === "arrow"} onClick={() => { pick("arrow"); setShowImageMaskMenu(false); }} title="Arrow">
                 <ArrowUpRight className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "line"} onClick={() => pick("line")} title="Line">
+              <ToolBtn active={activeTool === "line"} onClick={() => { pick("line"); setShowImageMaskMenu(false); }} title="Line">
                 <Minus className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "square"} onClick={() => pick("square")} title="Square">
+              <ToolBtn active={activeTool === "square"} onClick={() => { pick("square"); setShowImageMaskMenu(false); }} title="Square">
                 <Square className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "circle"} onClick={() => pick("circle")} title="Circle">
+              <ToolBtn active={activeTool === "circle"} onClick={() => { pick("circle"); setShowImageMaskMenu(false); }} title="Circle">
                 <Circle className={ic} />
               </ToolBtn>
               <ToolBtn active={false} onClick={() => {
@@ -473,7 +484,6 @@ export function ImageAIPanel({
                   const event = new CustomEvent('deleteSelectedElement');
                   canvasContainer.dispatchEvent(event);
                 } else {
-                  console.log("Delete selected element - no canvas container found");
                 }
               }} title="Delete Selected">
                 <Trash2 className={ic} />
@@ -482,15 +492,15 @@ export function ImageAIPanel({
           ) : (
             /* Area Edit tools */
             <>
-              <ToolBtn active={activeTool === "elements"} onClick={() => pick("elements")} title="Select (no tool)">
+              <ToolBtn active={activeTool === "elements"} onClick={() => { pick("elements"); setShowImageMaskMenu(false); }} title="Select (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-white/8 my-0.5" />
-              <ToolBtn active={activeTool === "brush"} onClick={() => pick("brush")} title="Brush">
+              <ToolBtn active={activeTool === "brush"} onClick={() => { pick("brush"); setShowImageMaskMenu(false); }} title="Brush">
                 <Brush className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "eraser"} onClick={() => pick("eraser")} title="Eraser">
+              <ToolBtn active={activeTool === "eraser"} onClick={() => { pick("eraser"); setShowImageMaskMenu(false); }} title="Eraser">
                 <Eraser className={ic} />
               </ToolBtn>
               {/* Pen size - shows actual brush size, independent button */}
@@ -506,19 +516,30 @@ export function ImageAIPanel({
                 <div 
                   className="bg-cyan-400 rounded-full" 
                   style={{ 
-                    width: `${Math.min(maskBrushSize / 6, 8)}px`, 
-                    height: `${Math.min(maskBrushSize / 6, 8)}px` 
+                    width: `${Math.min((maskBrushSize ?? 20) / 6, 8)}px`, 
+                    height: `${Math.min((maskBrushSize ?? 20) / 6, 8)}px` 
                   }}
                 />
               </button>
-              <ToolBtn active={activeTool === "rectangle-mask"} onClick={() => pick("rectangle-mask")} title="Rectangle Mask">
-                <Maximize2 className={`${ic} ${activeTool === "rectangle-mask" ? "text-cyan-400" : ""}`} />
+              <ToolBtn 
+                active={activeTool === "image-to-image"} 
+                onClick={() => {
+                  pick("image-to-image");
+                  setShowBrushSizeMenu(false);
+                }} 
+                title="Image to Image"
+                className="image-to-image-button"
+              >
+                <Image className={`${ic} ${activeTool === "image-to-image" ? "text-cyan-400" : ""}`} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "square-mask"} onClick={() => pick("square-mask")} title="Square Mask">
-                <Square className={`${ic} ${activeTool === "square-mask" ? "text-purple-400" : ""}`} />
+              <ToolBtn active={activeTool === "text-to-image"} onClick={() => { pick("text-to-image"); setShowImageMaskMenu(false); }} title="Text to Image">
+                <Square className={`${ic} ${activeTool === "text-to-image" ? "text-purple-400" : ""}`} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "crop"} onClick={() => pick("crop")} title="Crop">
+              <ToolBtn active={activeTool === "crop"} onClick={() => { pick("crop"); setShowImageMaskMenu(false); }} title="Crop">
                 <Scissors className={ic} />
+              </ToolBtn>
+              <ToolBtn active={activeTool === "upscale"} onClick={() => { pick("upscale"); setShowImageMaskMenu(false); }} title="Upscale">
+                <ArrowUp className={`${ic} ${activeTool === "upscale" ? "text-yellow-400" : ""}`} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-white/8 my-0.5" />
@@ -526,7 +547,6 @@ export function ImageAIPanel({
               <button
                 onClick={() => {
                   setCanvasState?.(s => ({ ...s, mask: [] }));
-                  console.log("Mask cleared");
                 }}
                 disabled={!canvasState?.mask?.length}
                 className="w-9 h-9 rounded-md flex items-center justify-center transition-all text-gray-600 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30"
@@ -588,12 +608,11 @@ export function ImageAIPanel({
                 <button
                   key={color}
                   onClick={() => {
-                    setSelectedColor(color);
+                    setSelectedColor?.(color);
                     setShowColorMenu(false);
-                    console.log(`Selected color: ${name} (${color})`);
                     // Apply color to selected shape by triggering CanvasEditor's color picker
                     if (setSelectedColor) {
-                      setSelectedColor(color);
+                      setSelectedColor?.(color);
                       // Trigger the CanvasEditor's color application
                       const canvasContainer = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
                       if (canvasContainer) {
@@ -620,40 +639,6 @@ export function ImageAIPanel({
           </div>
         )}
 
-        {/* Crop Aspect Ratio Menu */}
-        {showCropMenu && (
-          <div className="absolute left-[52px] top-[180px] translate-y-0 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg border border-white/10 shadow-xl p-2 z-30">
-            <div className="flex flex-col gap-2">
-              <span className="text-[10px] text-gray-400 font-medium text-center">Aspect Ratio</span>
-              <div className="flex items-center gap-2">
-                {["16:9", "9:16", "1:1", "4:3", "3:4"].map((ratio) => (
-                  <button
-                    key={ratio}
-                    onClick={() => {
-                      setSelectedAspectRatio(ratio);
-                      setShowCropMenu(false);
-                      console.log(`Crop aspect ratio selected: ${ratio}`);
-                      
-                      // Update crop rectangle with new aspect ratio
-                      if (onCropExecute) {
-                        onCropExecute(ratio);
-                      }
-                    }}
-                    className={`w-12 h-8 rounded flex items-center justify-center transition-all text-[10px] font-bold ${
-                      selectedAspectRatio === ratio
-                        ? "bg-gradient-to-r from-cyan-600/30 to-green-600/30 text-cyan-300 shadow-2xl shadow-cyan-400/60 ring-2 ring-cyan-400/40 ring-offset-0"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                    title={`Aspect Ratio ${ratio}`}
-                  >
-                    {ratio}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
         
         <input
           ref={uploadInputRef}
@@ -671,8 +656,8 @@ export function ImageAIPanel({
     if (mode === "describe") return null;
 
     const grp =
-      mode === "describe" 
-        ? "flex flex-col gap-1 bg-white rounded-lg p-1 shadow-lg border border-gray-200"
+      mode === "annotate" 
+        ? "flex flex-col gap-1 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg p-1 shadow-lg border border-white/10"
         : "flex flex-col gap-1 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg p-1 shadow-lg border border-white/10";
 
     return (
@@ -734,7 +719,7 @@ export function ImageAIPanel({
       <div className="px-0 py-0">
         <div className="flex items-start gap-2.5 overflow-x-auto">
           {/* Reference image thumbnails */}
-          {referenceImages.map((img) => (
+          {(referenceImages ?? []).map((img) => (
             <div
               key={img.id}
               className="relative shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-white/20 group"
@@ -753,7 +738,7 @@ export function ImageAIPanel({
           ))}
 
           {/* Add Image button - only show if no images or in describe mode */}
-          {(mode === "describe" || referenceImages.length === 0) && (
+          {(mode === "describe" || (referenceImages ?? []).length === 0) && (
             <button
               onClick={() => fileInputRef.current?.click()}
               className="shrink-0 w-14 h-14 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 flex flex-col items-center justify-center gap-1 transition text-gray-400 hover:text-gray-200"
@@ -782,8 +767,8 @@ export function ImageAIPanel({
       <div className="px-[10px] pt-[10px] pb-0">
         <div className="flex items-start gap-2">
           <textarea
-            value={userPrompt || ""}
-            onChange={(e) => setUserPrompt(e.target.value)}
+            value={currentPrompt || ""}
+            onChange={(e) => handlePromptChange(e.target.value)}
             placeholder="Describe what you want to create..."
             className="flex-1 min-h-[40px] px-4 py-2 bg-transparent border border-white/[0.08] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-white/[0.15] transition-all text-sm overflow-hidden resize-none"
             style={{ 
@@ -841,7 +826,13 @@ export function ImageAIPanel({
               return (
                 <button
                   key={tab.id}
-                  onClick={() => onModeChange(tab.id)}
+                  onClick={() => {
+                    onModeChange(tab.id);
+                    // Auto-select elements (no tool) when switching to describe or area-edit
+                    if (tab.id === "describe" || tab.id === "area-edit") {
+                      pick("elements");
+                    }
+                  }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all text-[13px] font-medium ${
                     isActive
                       ? "bg-gradient-to-r from-cyan-600/30 to-green-600/30 text-cyan-300 shadow-2xl shadow-cyan-400/60 ring-4 ring-cyan-400/40 ring-offset-0"
@@ -859,45 +850,10 @@ export function ImageAIPanel({
           <div className="flex-1" />
 
           {/* Model Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowModelDropdown(!showModelDropdown)}
-              className="flex items-center gap-2 px-3 py-2 bg-white/10 hover:bg-white/15 rounded-lg transition text-white text-[12px]"
-            >
-              <span className="w-4 h-4 bg-white/20 rounded flex items-center justify-center text-[10px] font-bold">
-                {selectedModel.icon}
-              </span>
-              <span className="hidden sm:inline">{selectedModel.label}</span>
-              <ChevronDown className="w-3 h-3" />
-            </button>
+      
 
-            {showModelDropdown && (
-              <div className="absolute bottom-full mb-2 left-0 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg border border-white/10 shadow-xl min-w-[150px] z-50">
-                {MODELS.map((model) => (
-                  <button
-                    key={model.id}
-                    onClick={() => {
-                      onModelChange?.(model.id);
-                      setShowModelDropdown(false);
-                    }}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-[12px] transition ${
-                      model.id === selectedModel.id
-                        ? "bg-white/10 text-white"
-                        : "text-gray-400 hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <span className="w-4 h-4 bg-white/20 rounded flex items-center justify-center text-[10px] font-bold">
-                      {model.icon}
-                    </span>
-                    <span>{model.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Model Select Box (only in area-edit mode) */}
-          {mode === "area-edit" && inpaintModelOptions.length > 0 && (
+          {/* Model Select Box (in describe and area-edit modes) */}
+          {(mode === "area-edit" || mode === "describe") && inpaintModelOptions.length > 0 && (
             <div className="relative" style={{ width: "200px" }}>
               <button
                 onClick={() => setShowInpaintModelDropdown(!showInpaintModelDropdown)}
@@ -932,7 +888,11 @@ export function ImageAIPanel({
           <button
             onClick={onGenerate}
             disabled={isGenerating}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 rounded-lg transition text-white font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
+              mode === "annotate" 
+                ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
+                : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
+            }`}
           >
             {isGenerating ? (
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -940,7 +900,7 @@ export function ImageAIPanel({
               <Sparkles className="w-4 h-4" />
             )}
             <span className="hidden sm:inline">Generate</span>
-            <span className="text-white/70 text-xs">✦ {credits}</span>
+            <span className="text-white/70 text-xs">✦ {getSelectedModelCredits()}</span>
           </button>
         </div>
         </div>

@@ -66,6 +66,9 @@ interface CanvasAreaProps {
   selectedColor?: string;
   onColorPickerClick?: () => void;
   onDeleteSelected?: () => void;
+  
+  // AI Edit Mode
+  mode?: "describe" | "area-edit" | "annotate";
 }
 
 // ── CanvasArea Component ─────────────────────────────────────────────────────
@@ -107,6 +110,7 @@ export function CanvasArea({
   selectedColor,
   onColorPickerClick,
   onDeleteSelected,
+  mode,
 }: CanvasAreaProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -114,7 +118,7 @@ export function CanvasArea({
       <button
         onClick={goPrev}
         disabled={activeIdx === 0}
-        className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition disabled:opacity-20 backdrop-blur-sm"
+        className="absolute left-[70px] top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition disabled:opacity-20 backdrop-blur-sm"
         aria-label="Previous shot"
       >
         <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -123,7 +127,7 @@ export function CanvasArea({
       <button
         onClick={goNext}
         disabled={activeIdx === shots.length - 1}
-        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition disabled:opacity-20 backdrop-blur-sm"
+        className="absolute right-[70px] top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 bg-black/50 hover:bg-black/80 rounded-full flex items-center justify-center text-white transition disabled:opacity-20 backdrop-blur-sm"
         aria-label="Next shot"
       >
         <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -175,6 +179,7 @@ export function CanvasArea({
           selectedColor={selectedColor}
           onColorPickerClick={onColorPickerClick}
           onDeleteSelected={onDeleteSelected}
+          mode={mode}
           resetAllTransformations={() => {
             // Reset all transformations for all objects
             setCanvasState((prev) => {

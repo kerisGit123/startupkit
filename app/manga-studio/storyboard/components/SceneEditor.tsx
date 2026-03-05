@@ -6,8 +6,6 @@ import {
   Pencil, ZoomIn, ZoomOut, Play, Tag, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check,
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
-import RectangleInpaintPanel from "./RectangleInpaintPanel";
-import { BrushInpaintPanel } from "./BrushInpaint";
 import { CanvasArea } from "./CanvasArea";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
 import { TAG_COLORS } from "../constants";
@@ -43,6 +41,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [inpaintError, setInpaintError] = useState<string | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [showGenPanel, setShowGenPanel] = useState(false);
+  const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("character-edit");
   const [showBrushModelDropdown, setShowBrushModelDropdown] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
@@ -69,12 +68,22 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Rectangle state
   const [rectangle, setRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [isSquareMode, setIsSquareMode] = useState(false); // Track if Add Square mode is active
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState("1:1"); // Track selected aspect ratio - default to 1:1
+  const [rectangleMaskAspectRatio, setRectangleMaskAspectRatio] = useState("1:1"); // Track rectangle mask aspect ratio - independent from canvas
+  
+  // Debug: Log rectangleMaskAspectRatio changes
+  useEffect(() => {
+    // Rectangle mask aspect ratio changed
+  }, [rectangleMaskAspectRatio]);
+  
+  // Canvas tool panel state - moved here to fix initialization error
+  const [canvasTool, setCanvasTool] = useState<CanvasTool>("inpaint");
   
   // Minimal state for removed Closer Look functionality (to prevent build errors)
   const [isAspectRatioAnimating] = useState(false);
   const setIsAspectRatioAnimating = () => {}; // No-op function
-  const setCloserLookError = () => {}; // No-op function
-  const setIsCloserLookGenerating = () => {}; // No-op function
+  const setCloserLookError = (_?: string) => {}; // No-op function
+  const setIsCloserLookGenerating = (_?: boolean) => {}; // No-op function
   
   // KIE Modal state
   const [showKIEModal, setShowKIEModal] = useState(false);
@@ -140,6 +149,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   // Re-centers the active rectangle to the image center without needing stale state
   const recenterRectangleIfActive = useCallback(() => {
+    // Skip recentering if we're in square mask mode for debugging
+    if (isSquareMode) {
+      return;
+    }
+    
     const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
     if (!container) return;
     const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
@@ -152,6 +166,52 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       const y = (iRect.top  - cRect.top)  + (iRect.height - prev.height) / 2;
       return { x, y, width: prev.width, height: prev.height };
     });
+  }, [isSquareMode]);
+
+  // Aspect ratio change handler
+  const handleAspectRatioChange = useCallback((aspectRatio: string) => {
+    setSelectedAspectRatio(aspectRatio);
+    
+    // Only update crop rectangle when crop tool is active
+    if (canvasTool === "crop") {
+      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+      if (!container) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      const containerHeight = containerRect.height;
+      
+      // Parse aspect ratio (e.g., "16:9" -> 1.777...)
+      const [w, h] = aspectRatio.split(':').map(Number);
+      if (isNaN(w) || isNaN(h) || h === 0) return;
+      
+      const targetRatio = w / h;
+      
+      // Calculate rectangle dimensions that fit within container
+      let rectWidth, rectHeight;
+      
+      if (containerWidth / containerHeight > targetRatio) {
+        // Container is wider than target ratio, use full height
+        rectHeight = containerHeight * 0.8; // 80% of container height
+        rectWidth = rectHeight * targetRatio;
+      } else {
+        // Container is taller than target ratio, use full width
+        rectWidth = containerWidth * 0.8; // 80% of container width
+        rectHeight = rectWidth / targetRatio;
+      }
+      
+      // Center the rectangle
+      const x = (containerWidth - rectWidth) / 2;
+      const y = (containerHeight - rectHeight) / 2;
+      
+      // Update rectangle state
+      setRectangle({ x, y, width: rectWidth, height: rectHeight });
+      setImageIsRectangleVisible(true);
+    }
+  }, [selectedAspectRatio, canvasTool]);
+
+  const handleRectangleMaskAspectRatioChange = useCallback((aspectRatio: string) => {
+    setRectangleMaskAspectRatio(aspectRatio);
   }, []);
 
   const applyZoomToImage = (displayPercent: number) => {
@@ -188,7 +248,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   };
 
   // ── Canvas tool panel state ────────────────────────────────────────────────
-  const [canvasTool, setCanvasTool] = useState<CanvasTool>("inpaint");
   const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
@@ -223,7 +282,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         assetElements: [...prev.assetElements, { id: elemId, panelId, assetId: libId, x: cx - aw/2, y: cy - ah/2, w: aw, h: ah, zIndex: 2 }],
       }));
       
-      setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: elemId });
+      setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: elemId } as CanvasSelection);
     };
     reader.readAsDataURL(file);
   };
@@ -269,14 +328,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   // Computed canvas active tool - enable brush for all inpaint models
   const canvasActiveTool = useMemo(() => {
-    console.log("Computing canvasActiveTool - canvasTool:", canvasTool);
     if (canvasTool === "inpaint") {
       // Enable brush for all inpaint models
-      console.log("Returning inpaint for canvasActiveTool");
       return "inpaint";
     }
     // Return the actual tool (text, elements, etc.)
-    console.log("Returning canvasTool as activeTool:", canvasTool);
     return canvasTool;
   }, [canvasTool]);
 
@@ -294,7 +350,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     const b = { id: makeId(), panelId, x: cx - bw/2, y: cy - bh/2, w: bw, h: bh, text: newBubbleText.trim(), bubbleType: newBubbleType, tailMode: "auto" as const, tailDir: "bottom-left" as const, tailX: 50, tailY: 130, autoFitFont: true, fontSize: 15, zIndex: 4 };
     setCanvasState(prev => ({ ...prev, bubbles: [...prev.bubbles, b] }));
     setNewBubbleText("test...");
-    setCanvasSelection({ selectedBubbleId: b.id, selectedTextId: null, selectedAssetId: null });
+    setCanvasSelection({ selectedBubbleId: b.id, selectedTextId: null, selectedAssetId: null } as CanvasSelection);
   };
 
   const addText = () => {
@@ -304,7 +360,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     const t = { id: makeId(), panelId, x: cx - tw/2, y: cy - th/2, w: tw, h: th, text: newTextContent.trim(), fontSize: newTextSize, color: newTextColor, fontWeight: "normal", fontStyle: "normal", fontFamily: "Arial" as const, zIndex: 3 };
     setCanvasState(prev => ({ ...prev, textElements: [...prev.textElements, t] }));
     setNewTextContent("test...");
-    setCanvasSelection({ selectedBubbleId: null, selectedTextId: t.id, selectedAssetId: null });
+    setCanvasSelection({ selectedBubbleId: null, selectedTextId: t.id, selectedAssetId: null } as CanvasSelection);
   };
 
   const handleAssetUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -322,7 +378,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         assetLibrary: [...prev.assetLibrary, { id: libId, url, name: file.name }],
         assetElements: [...prev.assetElements, { id: elemId, panelId, assetId: libId, x: cx - aw/2, y: cy - ah/2, w: aw, h: ah, zIndex: 2 }],
       }));
-      setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: elemId });
+      setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: elemId } as CanvasSelection);
     };
     reader.readAsDataURL(file);
   };
@@ -332,14 +388,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     const allObjects = [...panelBubbles, ...panelTexts, ...panelAssets];
     const obj = allObjects.find(o => o.id === id);
     if (!obj) {
-      console.log("moveLayer: Object not found", id);
       return;
     }
     
     const sorted = allObjects.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     const idx = sorted.findIndex(o => o.id === id);
-    
-    console.log("moveLayer debug:", { id, direction, currentZ: obj.zIndex, sortedZ: sorted.map(o => ({ id: o.id, z: o.zIndex })), idx });
     
     let newZ: number;
     if (direction === "front") {
@@ -353,24 +406,18 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       const below = sorted[idx - 1];
       newZ = below.zIndex! - 1;
     } else {
-      console.log("moveLayer: Cannot move - at edge or invalid direction");
       return;
     }
     
-    console.log("moveLayer: Setting newZ", newZ);
-    
     // Update the object's zIndex
     if (panelBubbles.find(b => b.id === id)) {
-      console.log("moveLayer: Updating bubble", id, "to zIndex", newZ);
       setCanvasState(s => ({ ...s, bubbles: s.bubbles.map(b => b.id === id ? { ...b, zIndex: newZ } : b) }));
     } else if (panelTexts.find(t => t.id === id)) {
-      console.log("moveLayer: Updating text", id, "to zIndex", newZ);
       setCanvasState(s => ({ ...s, textElements: s.textElements.map(t => t.id === id ? { ...t, zIndex: newZ } : t) }));
     } else if (panelAssets.find(a => a.id === id)) {
-      console.log("moveLayer: Updating asset", id, "to zIndex", newZ);
       setCanvasState(s => ({ ...s, assetElements: s.assetElements.map(a => a.id === id ? { ...a, zIndex: newZ } : a) }));
     } else {
-      console.log("moveLayer: Object type not found", id);
+      return;
     }
   };
 
@@ -388,7 +435,98 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const activeIdx = shots.findIndex(s => s.id === activeShotId);
   const activeShot = shots[activeIdx];
 
-  // ── Client-side image cropping ───────────────────────────────────────────────
+  // Update crop rectangle when activeShot.aspectRatio changes and crop tool is active
+  useEffect(() => {
+    if (canvasTool === "crop" && activeShot?.aspectRatio) {
+      console.log("🔧 activeShot.aspectRatio changed to:", activeShot.aspectRatio, "updating crop rectangle");
+      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+      if (container) {
+        const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+        const cRect = container.getBoundingClientRect();
+        const iRect = img?.getBoundingClientRect();
+        
+        // Minimum resolution dimensions (multiply by 10 for minimum size)
+        const minDimensionMap: Record<string, { width: number; height: number }> = {
+          "1:1":  { width: 100, height: 100 },    // 1:1 = 100x100 minimum
+          "3:4":  { width: 30, height: 40 },      // 3:4 = 30x40 minimum  
+          "4:3":  { width: 40, height: 30 },      // 4:3 = 40x30 minimum
+          "16:9": { width: 160, height: 90 },     // 16:9 = 160x90 minimum
+          "9:16": { width: 90, height: 160 },     // 9:16 = 90x160 minimum
+        };
+        
+        // Display dimensions (larger for better visibility)
+        const displayDimensionMap: Record<string, { width: number; height: number }> = {
+          "1:1":  { width: 200, height: 200 },
+          "3:4":  { width: 300, height: 400 },
+          "4:3":  { width: 400, height: 300 },
+          "16:9": { width: 320, height: 180 },
+          "9:16": { width: 180, height: 320 },
+        };
+        
+        const { width: w, height: h } = displayDimensionMap[activeShot.aspectRatio] || displayDimensionMap["16:9"];
+        const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+        const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+        
+        setRectangle({ x, y, width: w, height: h });
+        setImageIsRectangleVisible(true);
+        console.log("✅ Crop rectangle updated with new aspect ratio:", activeShot.aspectRatio, { x, y, width: w, height: h });
+        console.log("🔧 Minimum resolution for this ratio:", minDimensionMap[activeShot.aspectRatio]);
+      }
+    }
+  }, [activeShot?.aspectRatio, canvasTool]);
+
+  // Update image mask when rectangleMaskAspectRatio changes and rectInpaint tool is active
+  useEffect(() => {
+    if (canvasTool === "rectInpaint" && rectangleMaskAspectRatio && rectangle) {
+      const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+      if (container) {
+        const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+        if (img) {
+          const containerRect = container.getBoundingClientRect();
+          const imgRect = img.getBoundingClientRect();
+          
+          // Calculate the actual rendered image dimensions and position
+          const renderedWidth = imgRect.width;
+          const renderedHeight = imgRect.height;
+          const offsetX = imgRect.left - containerRect.left;
+          const offsetY = imgRect.top - containerRect.top;
+          
+          // For cyan image mask: Always use 1:1 aspect ratio for simplicity
+          const targetRatio = 1; // Fixed 1:1 aspect ratio
+          const minSize = 100; // 100x100 minimum for 1:1
+          
+          // Calculate rectangle dimensions that fit within the rendered image
+          let rectWidth, rectHeight;
+          
+          if (renderedWidth / renderedHeight > targetRatio) {
+            // Rendered image is wider than target ratio, use full height
+            rectHeight = Math.min(renderedHeight, 400); // Max 400px height
+            rectWidth = rectHeight * targetRatio;
+          } else {
+            // Rendered image is taller than target ratio, use full width
+            rectWidth = Math.min(renderedWidth, 400); // Max 400px width
+            rectHeight = rectWidth / targetRatio;
+          }
+          
+          // Ensure minimum size
+          rectWidth = Math.max(rectWidth, minSize);
+          rectHeight = Math.max(rectHeight, minSize);
+          
+          // Center the rectangle within the rendered image area
+          const x = offsetX + (renderedWidth - rectWidth) / 2;
+          const y = offsetY + (renderedHeight - rectHeight) / 2;
+          
+          // Only update if the dimensions or position actually changed to prevent infinite loop
+          const currentRect = rectangle;
+          if (currentRect.width !== rectWidth || currentRect.height !== rectHeight || currentRect.x !== x || currentRect.y !== y) {
+            setRectangle({ x, y, width: rectWidth, height: rectHeight });
+            setImageIsRectangleVisible(true);
+          }
+        }
+      }
+    }
+  }, [rectangleMaskAspectRatio, canvasTool]);
+
   const cropImageToRectangle = async (
     base64Image: string,
     rectangle: { x: number; y: number; width: number; height: number },
@@ -546,7 +684,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
 
     setIsCloserLookGenerating(true);
-    setCloserLookError(null);
+    setCloserLookError(undefined);
 
     try {
       // Store original image if not already stored
@@ -632,7 +770,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
 
     setIsCloserLookGenerating(true);
-    setCloserLookError(null);
+    setCloserLookError(undefined);
 
     try {
       // Store original image if not already stored
@@ -700,7 +838,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       // Step 3: Combine generated image with original image
       console.log("Step 3: Combining generated image with original image...");
-      const combinedImage = await combineImages(originalImage, generatedImage, rectangle, canvasDisplaySize);
+      const combinedImage = await combineImages(originalImage ?? '', generatedImage, rectangle, canvasDisplaySize);
       console.log("Step 3: Images combined successfully");
 
       // Set the combined image as the new background
@@ -769,10 +907,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           canvas.height = height;
           
           // Draw original image
-          ctx.drawImage(img1, 0, 0, width, height);
+          if (ctx) ctx.drawImage(img1, 0, 0, width, height);
           
           // Draw generated image in the cropped area
-          if (rectangle) {
+          if (rectangle && ctx) {
             const scaleX = width / (canvasDisplaySize?.width || 800);
             const scaleY = height / (canvasDisplaySize?.height || 600);
             
@@ -782,7 +920,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             const drawHeight = rectangle.height * scaleY;
             
             ctx.drawImage(img2, drawX, drawY, drawWidth, drawHeight);
-          } else {
+          } else if (ctx) {
             // If no rectangle, overlay the generated image
             ctx.globalAlpha = 0.5; // Semi-transparent overlay
             ctx.drawImage(img2, 0, 0, width, height);
@@ -964,6 +1102,57 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     if (!imageUrl) {
       setInpaintError("No background image available");
       return;
+    }
+
+    // Handle area-edit mode with character-edit model (faceshift)
+    console.log("Checking conditions:", {
+      aiEditMode,
+      aiModel,
+      isCharacterEdit: aiModel === "ideogram/character-edit"
+    });
+    
+    if (aiEditMode === "area-edit") {
+      // Check if square mask is being used
+      const isSquareMaskActive = canvasTool === "rectInpaint" && isSquareMode;
+      
+      // For faceshift (character-edit), require character-edit model ONLY for brush/pen tools
+      const isBrushTool = (canvasTool as string) === "brush" || (canvasTool as string) === "pen-brush" || (canvasTool as string) === "eraser";
+      
+      if (isBrushTool && aiModel !== "ideogram/character-edit") {
+        console.log("Brush tool detected but not using character-edit model");
+        setInpaintError("Please select 'Character-edit' model for faceshift functionality in area-edit mode");
+        return;
+      }
+      
+      if (isSquareMaskActive) {
+        console.log("Area-edit mode with square mask detected, using square mask logic with model:", aiModel);
+        console.log("Area-edit mode - Rectangle state:", rectangle);
+        console.log("Area-edit mode - isSquareMode:", isSquareMode);
+        console.log("Area-edit mode - canvasTool:", canvasTool);
+        // Use square mask logic with the selected model
+        await runRectangleInpaint();
+        return;
+      }
+      
+      // Use the already defined isBrushTool from line 988
+      if (isBrushTool && aiModel === "ideogram/character-edit") {
+        console.log("Brush tool with character-edit model detected, using faceshift logic");
+        // Use aiRefImages (ImageAI Panel) instead of imageReferenceImages (left toolbox)
+        // Convert aiRefImages format to string array for runCharacterEditInpaint
+        const aiRefImageUrls = aiRefImages.map(img => img.url);
+        console.log("Reference Images from ImageAI Panel:", aiRefImageUrls);
+        console.log("Current inpaintPrompt:", inpaintPrompt);
+        console.log("Current imageInpaintPrompt:", imageInpaintPrompt);
+        
+        // Use imageInpaintPrompt (from ImageAI Panel) or default prompt
+        const promptToUse = imageInpaintPrompt.trim() || "edit the character face";
+        console.log("Using prompt for faceshift:", promptToUse);
+        
+        await runCharacterEditInpaint(aiRefImageUrls, promptToUse);
+      }
+      
+      // If we reach here, it's not a brush tool with character-edit model
+      // Let it fall through to rectangle mask logic
     }
 
     setIsInpainting(true);
@@ -1372,9 +1561,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     } catch (err) {
       console.error("Full error details:", err);
       console.error("Error type:", typeof err);
-      console.error("Error constructor:", err?.constructor?.name);
-      console.error("Error message:", err?.message);
-      console.error("Error stack:", err?.stack);
+      console.error("Error constructor:", err && typeof err === 'object' ? (err as any).constructor?.name : 'unknown');
+      console.error("Error message:", err && typeof err === 'object' ? (err as any).message : 'unknown');
+      console.error("Error stack:", err && typeof err === 'object' ? (err as any).stack : 'unknown');
       
       const msg = err instanceof Error ? err.message : 
                   err && typeof err === 'object' ? JSON.stringify(err) : 
@@ -1387,11 +1576,66 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   };
 
   // ── Rectangle Inpaint via n8n ───────────────────────────────────────────────
+  // Helper function to convert blob URL to base64
+  const convertBlobUrlToBase64 = async (blobUrl: string): Promise<string> => {
+    if (!blobUrl.startsWith("blob:")) {
+      return blobUrl; // Already not a blob URL
+    }
+    
+    try {
+      const response = await fetch(blobUrl);
+      const blob = await response.blob();
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error("[rectInpaint] Failed to convert blob URL to base64:", error);
+      throw error;
+    }
+  };
+
   const runRectangleInpaint = async () => {
-    if (!rectangle || !inpaintPrompt.trim()) return;
+    // Use ImageAI Panel data when in area-edit mode, otherwise use rectangle panel data
+    const promptToUse = aiEditMode === "area-edit" ? (promptText.trim() || "Generate image in square area") : inpaintPrompt;
+    
+    // Convert reference images from blob URLs to base64 for server-side upload
+    let refImagesToUse: string[] = [];
+    if (aiEditMode === "area-edit") {
+      console.log("[rectInpaint] Converting", aiRefImages.length, "reference images from blob URLs to base64...");
+      refImagesToUse = await Promise.all(
+        aiRefImages.map(async (img) => {
+          const base64 = await convertBlobUrlToBase64(img.url);
+          console.log("[rectInpaint] Converted reference image:", img.id, base64.substring(0, 50) + "...");
+          return base64;
+        })
+      );
+    } else {
+      refImagesToUse = imageReferenceImages;
+    }
+    
+    console.log("[runRectangleInpaint] Raw promptText:", promptText);
+    console.log("[runRectangleInpaint] Final promptToUse:", promptToUse);
+    
+    if (!rectangle || !promptToUse.trim()) {
+      console.log("[runRectangleInpaint] Missing data - Rectangle:", !!rectangle, "Prompt:", !!promptToUse.trim());
+      console.log("[runRectangleInpaint] Rectangle state:", rectangle);
+      return;
+    }
 
     setIsInpainting(true);
     setInpaintError(null);
+    
+    console.log("[runRectangleInpaint] Mode:", aiEditMode);
+    console.log("[runRectangleInpaint] Using prompt:", `"${promptToUse}"`);
+    console.log("[runRectangleInpaint] Prompt length:", promptToUse.length);
+    console.log("[runRectangleInpaint] Reference images:", refImagesToUse.length);
+    console.log("[runRectangleInpaint] Model:", aiModel);
 
     try {
       // 1. Get the original image
@@ -1425,34 +1669,59 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         ? { width: canvasRect.width, height: canvasRect.height }
         : undefined;
 
-      // 4. For square mode, send full image + rectangle coordinates to backend
-      // For normal mode, crop and send cropped image
+      // Determine if this is square mode or rectangle mode
+      const isSquareMaskActive = canvasTool === "rectInpaint" && isSquareMode;
+      const isRectangleMaskActive = canvasTool === "rectInpaint" && !isSquareMode;
+      
       console.log("[rectInpaint] Step 1: Preparing image data...");
       console.log("[rectInpaint] Square mode:", isSquareMode);
+      console.log("[rectInpaint] Rectangle mask active:", isRectangleMaskActive);
       
       let requestBody: any = {
-        prompt: inpaintPrompt,
-        model: inpaintModel,
+        prompt: promptToUse,
+        model: aiEditMode === "area-edit" ? aiModel : inpaintModel,
       };
+      
+      console.log("[rectInpaint] Using model:", aiEditMode === "area-edit" ? aiModel : inpaintModel);
+      console.log("[rectInpaint] Request prompt:", requestBody.prompt);
+      console.log("[rectInpaint] Request body keys:", Object.keys(requestBody));
 
-      if (isSquareMode) {
-        // Square mode: crop square on frontend, send to GPT-1.5, then composite back
+      if (isSquareMaskActive) {
+        // Square mode: crop square on frontend, send to model, then composite back
         console.log("[rectInpaint] Square mode: cropping square on frontend");
         
         // Step 1: Crop square region from full image
         const croppedImage = await cropImageToRectangle(imageBase64, rectangle, canvasDisplaySize);
-        console.log("[rectInpaint] Square cropped, sending to GPT-1.5");
+        console.log("[rectInpaint] Square cropped, sending to model");
         
-        // Step 2: Send cropped square to GPT-1.5
+        // Step 2: Send cropped square to model (NO reference images for square mode)
         requestBody.image = croppedImage;
         requestBody.isSquareMode = true;
         requestBody.rectangle = rectangle;
         requestBody.canvasDisplaySize = canvasDisplaySize;
         
-        // Add reference images for GPT-1.5
-        if (imageReferenceImages.length > 0) {
-          requestBody.referenceImages = imageReferenceImages;
-          console.log("[rectInpaint] Adding", imageReferenceImages.length, "reference images for square mode");
+        // IMPORTANT: Square mode does NOT use reference images
+        console.log("[rectInpaint] Square mode: NOT using reference images");
+      } else if (isRectangleMaskActive) {
+        // Rectangle mask mode: crop rectangle on frontend, send to model with reference images
+        console.log("[rectInpaint] Rectangle mask mode: cropping rectangle on frontend");
+        
+        // Step 1: Crop rectangle region from full image
+        const croppedImage = await cropImageToRectangle(imageBase64, rectangle, canvasDisplaySize);
+        console.log("[rectInpaint] Rectangle cropped, sending to model with reference images");
+        
+        // Step 2: Send cropped rectangle to model WITH reference images
+        requestBody.image = croppedImage;
+        requestBody.isRectangleMask = true;
+        requestBody.rectangle = rectangle;
+        requestBody.canvasDisplaySize = canvasDisplaySize;
+        
+        // Add reference images for rectangle mask mode
+        if (refImagesToUse.length > 0) {
+          requestBody.referenceImages = refImagesToUse;
+          console.log("[rectInpaint] Adding", refImagesToUse.length, "reference images for rectangle mask");
+        } else {
+          console.log("[rectInpaint] No reference images available for rectangle mask");
         }
       } else {
         // Normal mode: crop and send cropped image
@@ -1461,12 +1730,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         requestBody.image = croppedImage;
         
         // Add reference images for normal mode (model-specific)
-        if (imageReferenceImages.length > 0) {
+        if (refImagesToUse.length > 0) {
           // Only add reference images for models that support them
           const modelsWithReferenceSupport = ["gpt-image", "openai-4o", "nano-banana", "nano-banana-edit", "nano-banana-pro"];
           if (modelsWithReferenceSupport.includes(inpaintModel)) {
-            requestBody.referenceImages = imageReferenceImages;
-            console.log("[rectInpaint] Adding", imageReferenceImages.length, "reference images for", inpaintModel);
+            requestBody.referenceImages = refImagesToUse;
+            console.log("[rectInpaint] Adding", refImagesToUse.length, "reference images for", inpaintModel);
           } else {
             console.log("[rectInpaint] Skipping reference images for", inpaintModel, "(not supported)");
           }
@@ -1489,13 +1758,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           const maskData = maskCanvas.toDataURL();
           requestBody.mask = maskData;
         } else {
-          // Normal mode: create mask for cropped image
+          // Normal mode: create mask for original image
           const maskCanvas = document.createElement("canvas");
           const img = new Image();
           await new Promise<void>((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-            img.src = croppedImage;
+            img.onload = () => resolve();
+            img.onerror = (e) => reject(e);
+            img.src = imageBase64;
           });
           maskCanvas.width = img.width;
           maskCanvas.height = img.height;
@@ -1511,6 +1780,27 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       // 5. Send request to n8n-image-proxy
       console.log("[rectInpaint] Step 2: Sending to n8n-image-proxy...");
+      console.log("[rectInpaint] Complete request body:", {
+        prompt: `"${requestBody.prompt}"`, // Show prompt in quotes
+        promptLength: requestBody.prompt?.length || 0,
+        model: requestBody.model,
+        hasImage: !!requestBody.image,
+        hasReferenceImages: !!requestBody.referenceImages,
+        referenceImageCount: requestBody.referenceImages?.length || 0,
+        isSquareMode: !!requestBody.isSquareMode,
+        aiEditMode: aiEditMode,
+        rawPromptText: `"${promptText}"`, // Show raw prompt from ImageAI Panel textarea
+        finalPromptToUse: `"${promptToUse}"`, // Show final prompt in quotes
+        squareModeNoRefImages: isSquareMode ? "Square mode does NOT use reference images" : "Normal mode may use reference images"
+      });
+      
+      // Also log the exact JSON being sent
+      console.log("[rectInpaint] Request JSON (first 500 chars):", JSON.stringify(requestBody).substring(0, 500) + "...");
+      
+      // Log the prompt that will be sent to the model
+      console.log("[rectInpaint] PROMPT BEING SENT TO MODEL:", `"${requestBody.prompt}"`);
+      console.log("[rectInpaint] PROMPT LENGTH:", requestBody.prompt?.length || 0);
+      
       const response = await fetch("/api/n8n-image-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1519,14 +1809,48 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       });
 
       if (!response.ok) {
-        const err = await response.json();
+        const errorText = await response.text();
+        console.log("[rectInpaint] Error response (raw):", errorText);
+        
+        let err;
+        try {
+          err = JSON.parse(errorText);
+        } catch {
+          // If it's not JSON, create a simple error object
+          err = { error: errorText, message: errorText };
+        }
+        
         throw new Error(err.error || err.message || err.suggestion || "Rectangle inpaint failed");
       }
 
       const result = await response.json();
-      const generatedImageUrl = result.image ?? result.url ?? result.output ?? result.data;
-      if (!generatedImageUrl) throw new Error("No image returned from KIE");
-      console.log("[rectInpaint] Step 2 done: Got generated image from KIE");
+      console.log("[rectInpaint] Full KIE response:", JSON.stringify(result, null, 2));
+      
+      // Debug the image extraction
+      console.log("[rectInpaint] result.image:", result.image);
+      console.log("[rectInpaint] typeof result.image:", typeof result.image);
+      console.log("[rectInpaint] result.image truthy:", !!result.image);
+      
+      // Handle different response structures from Kie.ai API
+      const generatedImageUrl = result.image && result.image !== "" ? result.image : 
+                              result.url && result.url !== "" ? result.url :
+                              result.output && result.output !== "" ? result.output :
+                              result.data?.outputImageUrl && result.data?.outputImageUrl !== "" ? result.data?.outputImageUrl :
+                              result.data?.image_url && result.data?.image_url !== "" ? result.data?.image_url :
+                              result.data?.output?.image_url && result.data?.output?.image_url !== "" ? result.data?.output?.image_url :
+                              result.data && result.data !== "" ? result.data :
+                              null;
+      
+      console.log("[rectInpaint] Extracted image URL:", generatedImageUrl);
+      
+      if (!generatedImageUrl) {
+        console.error("[rectInpaint] No image found in response. Available keys:", Object.keys(result));
+        console.error("[rectInpaint] Response structure:", result);
+        console.error("[rectInpaint] result.image value:", result.image);
+        console.error("[rectInpaint] result.image type:", typeof result.image);
+        console.error("[rectInpaint] result.image truthy:", !!result.image);
+        throw new Error("No image returned from KIE");
+      }
 
       // 6. Load the generated image and resolve to base64 if it's a URL
       let generatedBase64 = generatedImageUrl;
@@ -1697,12 +2021,42 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         });
       }
 
-      // 8. Only show the final combined result (not intermediate cropped/generated images)
-      setGeneratedImages(prev => [...prev, finalImage]);
+      // 8. Show generated images for debugging and update background
+      console.log("[rectInpaint] Step 4: Updating background image...");
+      console.log("[rectInpaint] Final image type:", isSquareMode ? "combined" : "generated");
+      console.log("[rectInpaint] Final image length:", finalImage.length);
+      
+      // For debugging: Show both generated image and combined image
+      const imagesToAdd: string[] = [];
+      
+      if (isSquareMode) {
+        // Add the generated square image (before combining)
+        imagesToAdd.push(generatedBase64);
+        console.log("[rectInpaint] Debug: Added generated square image to container");
+        console.log("[rectInpaint] Debug: Generated square image size:", generatedBase64.length, "characters");
+        
+        // Log image dimensions for debugging
+        const genImg = new Image();
+        genImg.onload = () => {
+          console.log("[rectInpaint] Debug: Generated square dimensions:", genImg.naturalWidth, "x", genImg.naturalHeight);
+        };
+        genImg.src = generatedBase64;
+      }
+      
+      // Add the final combined image
+      imagesToAdd.push(finalImage);
+      console.log("[rectInpaint] Debug: Added final combined image to container");
+      console.log("[rectInpaint] Debug: Final combined image size:", finalImage.length, "characters");
+      
+      // Add all images to generated container (newest first)
+      setGeneratedImages(prev => [...imagesToAdd, ...prev]);
       setShowGenPanel(true);
+      
       // Update background to the final result
       setBackgroundImage(finalImage);
       console.log("[rectInpaint] ✅ Done - final image set as background");
+      console.log("[rectInpaint] Debug: Square mask position preserved for debugging");
+      console.log("[rectInpaint] Debug: Rectangle position after generation:", rectangle);
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -1783,15 +2137,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         }),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        // Handle both error formats: direct error field or nested error
-        const errorMessage = err.error || err.message || err.suggestion || "Inpaint failed";
-        throw new Error(errorMessage);
-      }
-
       const result = await response.json();
-
+      
       // 5. Store result in the generated images panel (newest first)
       const resultImage = result.image ?? result.url ?? result.output ?? result.data;
       if (resultImage) {
@@ -1890,9 +2237,22 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   };
 
   // New Character Edit inpaint function - uses direct KIE API
-  const runCharacterEditInpaint = async () => {
+  const runCharacterEditInpaint = async (referenceImages?: string[], promptOverride?: string) => {
+    console.log("[brushCharacterEdit] Starting runCharacterEditInpaint");
+    console.log("[brushCharacterEdit] Reference images:", referenceImages);
+    
     const mask = canvasState.mask;
-    if (mask.length === 0 || !inpaintPrompt.trim()) return;
+    const promptToUse = promptOverride || imageInpaintPrompt;
+    
+    if (mask.length === 0 || !promptToUse.trim()) {
+      console.log("[brushCharacterEdit] Missing mask or prompt");
+      console.log("[brushCharacterEdit] Mask length:", mask.length);
+      console.log("[brushCharacterEdit] promptToUse:", promptToUse);
+      return;
+    }
+    
+    console.log("[brushCharacterEdit] Mask points:", mask.length);
+    console.log("[brushCharacterEdit] Prompt:", promptToUse);
 
     setIsInpainting(true);
     setInpaintError(null);
@@ -2008,9 +2368,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         img.src = imageBase64;
       });
 
-      // Convert reference images to WebP
+      // Convert reference images to WebP (use provided referenceImages or fallback to refImages)
+      const refImagesToUse = referenceImages || refImages;
       const refWebpImages = await Promise.all(
-        refImages.map(img => convertToWebP(img, 0.8))
+        refImagesToUse.map(img => convertToWebP(img, 0.8))
       );
 
       // Upload images to get URLs
@@ -2028,7 +2389,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       // Use the proxy like other models do
       const proxyRequestBody = {
-        prompt: inpaintPrompt,
+        prompt: promptToUse,
         model: 'character-edit',  // Use frontend model name, proxy will map to ideogram/character-edit
         image: imageWebpBase64,
         mask: maskBase64,
@@ -2037,6 +2398,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       console.log("[brushCharacterEdit] Sending to n8n-image-proxy:", {
         model: 'character-edit',
+        prompt: promptToUse,
         hasImage: !!imageWebpBase64,
         hasMask: !!maskBase64,
         hasReferenceImages: refWebpImages.length > 0,
@@ -2150,7 +2512,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   const handleAddTag = () => {
     if (!newTagName.trim()) return;
-    const nt: TagItem = { id: `tg${Date.now()}`, name: newTagName, color: newTagColor };
+    const nt: TagType = { id: `tg${Date.now()}`, name: newTagName, color: newTagColor };
     onShotsChange(shots.map(s => s.id === activeShotId ? { ...s, tags: [...s.tags, nt] } : s));
     setNewTagName("");
     setShowTagPicker(false);
@@ -2352,8 +2714,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             setCanvasSelection={setCanvasSelection}
             canvasSelection={canvasSelection}
             onToolSelect={(tool) => {
-              console.log("Tool selected from canvas:", tool);
-              setCanvasActiveTool(tool);
+              setCanvasTool(tool);
             }}
             rectangle={rectangle}
             setRectangle={setRectangle}
@@ -2361,11 +2722,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             canvasTool={canvasTool}
             isAspectRatioAnimating={isAspectRatioAnimating}
             isSquareMode={isSquareMode}
-            selectedAspectRatio="16:9" // TODO: Get from ImageAIPanel
-            cropImageToRectangle={cropImageToRectangle}
-            onShotsChange={onShotsChange}
-            activeShotId={activeShotId}
-            runCrop={runCrop}
+            selectedAspectRatio={rectangleMaskAspectRatio}
+            onCropExecute={runCrop}
             onImageLoad={(scale) => {
               fitScaleRef.current = scale;
               setZoomLevel(100);
@@ -2373,42 +2731,67 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               requestAnimationFrame(recenterRectangleIfActive);
             }}
             selectedColor={selectedColor}
-            onCropExecute={async (aspectRatio) => {
-              console.log("CanvasArea: Aspect ratio selected:", aspectRatio);
-              
-              // Handle aspect ratio change - update rectangle shape (same as crop panel)
-              if (aspectRatio) {
-                const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-                if (container) {
-                  const rect = container.getBoundingClientRect();
-                  const arMap: Record<string, number> = { "16:9": 16/9, "9:16": 9/16, "1:1": 1, "4:3": 4/3, "3:4": 3/4 };
-                  const ar = arMap[aspectRatio] ?? 1;
-                  
-                  const width = rect.width * 0.8;
-                  const height = width / ar;
-                  const x = (rect.width - width) / 2;
-                  const y = (rect.height - height) / 2;
-                  
-                  setRectangle({ x, y, width, height });
-                  setImageIsRectangleVisible(true); // Show rectangle when created
-                  console.log("✅ Created rectangle with aspect ratio:", aspectRatio, { x, y, width, height });
-                }
-              }
-            }}
+            mode={aiEditMode}
           />
 
           {/* ImageAI Panel container with gaps */}
           <div className="absolute inset-0 pointer-events-none z-10 flex flex-col">
             {/* Canvas area with spacing for bottom panel */}
-            <div className="flex-1 pb-[80px] px-[20px]">
+            <div className="flex-1 pt-[50px] pb-[20px] px-[20px] relative">
+              {/* ImageAI Panel Toggle Button - Top Left */}
+              <button
+                onClick={() => setShowImageAIPanel(!showImageAIPanel)}
+                className={`absolute top-4 left-4 z-[9999] w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all pointer-events-auto ${
+                  showImageAIPanel 
+                    ? 'bg-cyan-500/15 text-cyan-300' 
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                }`}
+                style={{ pointerEvents: 'auto' }}
+              >
+                {showImageAIPanel ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                <span className="text-[8px] font-medium leading-none">{showImageAIPanel ? 'Hide' : 'Show'}</span>
+              </button>
+              
               {/* ImageAI Panel overlay on canvas */}
-              <div className="pointer-events-auto">
-                <ImageAIPanel
+              {showImageAIPanel && (
+                <div className="pointer-events-auto">
+                  <ImageAIPanel
                   mode={aiEditMode}
                   onModeChange={setAiEditMode}
-                  onGenerate={() => {
+                  onGenerate={async () => {
+                    console.log("=== NEW ONGENERATE FUNCTION CALLED ===");
                     console.log("Generate with mode:", aiEditMode, "model:", aiModel);
-                    generateImageWithElements?.();
+                    console.log("Available aiRefImages (ImageAI Panel):", aiRefImages);
+                    console.log("aiRefImages details:", aiRefImages.map(img => ({ id: img.id, urlLength: img.url.length, preview: img.url.substring(0, 50) + "..." })));
+                    console.log("Canvas mask length:", canvasState.mask.length);
+                    console.log("Inpaint prompt:", promptText);
+                    console.log("Background image:", backgroundImage || activeShot?.imageUrl ? "Available" : "None");
+                    
+                    // Route to correct generation function based on mode and tool
+                    if (aiEditMode === "area-edit") {
+                      // Check if we have rectangle mask or square mask
+                      const isSquareMaskActive = canvasTool === "rectInpaint" && isSquareMode;
+                      const isRectangleMaskActive = canvasTool === "rectInpaint" && !isSquareMode;
+                      
+                      console.log("=== MASK DETECTION ===");
+                      console.log("canvasTool:", canvasTool);
+                      console.log("isSquareMode:", isSquareMode);
+                      console.log("isSquareMaskActive:", isSquareMaskActive);
+                      console.log("isRectangleMaskActive:", isRectangleMaskActive);
+                      
+                      if (isSquareMaskActive || isRectangleMaskActive) {
+                        console.log("=== Using rectangle mask logic for area-edit mode ===");
+                        await runRectangleInpaint();
+                      } else {
+                        console.log("=== Using faceshift logic for area-edit mode ===");
+                        // This will be handled by the area-edit logic below
+                        generateImageWithElements?.();
+                      }
+                    } else {
+                      console.log("=== Using original function for non-area-edit mode ===");
+                      // Other modes use the original function
+                      generateImageWithElements?.();
+                    }
                   }}
                   credits={20}
                   model={aiModel}
@@ -2421,6 +2804,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   onRemoveReferenceImage={(id) => {
                     setAiRefImages(prev => prev.filter(img => img.id !== id));
                   }}
+                  userPrompt={promptText}
+                  onUserPromptChange={setPromptText}
                   onAddCanvasElement={handleAddCanvasElement}
                   // Brush inpaint props
                   isEraser={isEraser}
@@ -2438,6 +2823,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     console.log("Color picker clicked from ImageAIPanel");
                     // The color palette will be shown by CanvasEditor's handleColorPickerClick
                   }}
+                  onAspectRatioChange={handleAspectRatioChange}
+                  selectedAspectRatio={selectedAspectRatio}
+                  onRectangleMaskAspectRatioChange={handleRectangleMaskAspectRatioChange}
                   onToolSelect={(tool) => {
                     if (tool === "pen-brush" || tool === "brush" || tool === "eraser") {
                       setCanvasTool("inpaint");
@@ -2448,24 +2836,56 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                         const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
                         const cRect = container.getBoundingClientRect();
                         const iRect = img?.getBoundingClientRect();
-                        const w = 300; const h = 200;
+                        
+                        // Use the activeShot.aspectRatio from top navigation menu
+                        const currentAspectRatio = activeShot?.aspectRatio || "16:9";
+                        console.log("🔧 Crop tool using activeShot.aspectRatio:", currentAspectRatio);
+                        console.log("🔧 activeShot:", activeShot);
+                        
+                        // Minimum resolution dimensions (multiply by 10 for minimum size)
+                        const minDimensionMap: Record<string, { width: number; height: number }> = {
+                          "1:1":  { width: 100, height: 100 },      // 1:1 = 10x10 minimum
+                          "3:4":  { width: 30, height: 40 },      // 3:4 = 30x40 minimum  
+                          "4:3":  { width: 40, height: 30 },      // 4:3 = 40x30 minimum
+                          "16:9": { width: 160, height: 90 },     // 16:9 = 160x90 minimum
+                          "9:16": { width: 90, height: 160 },     // 9:16 = 90x160 minimum
+                        };
+                        
+                        // Display dimensions (larger for better visibility)
+                        const displayDimensionMap: Record<string, { width: number; height: number }> = {
+                          "1:1":  { width: 200, height: 200 },
+                          "3:4":  { width: 300, height: 400 },
+                          "4:3":  { width: 400, height: 300 },
+                          "16:9": { width: 320, height: 180 },
+                          "9:16": { width: 180, height: 320 },
+                        };
+                        
+                        const { width: w, height: h } = displayDimensionMap[currentAspectRatio] || displayDimensionMap["16:9"];
                         const cx = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
                         const cy = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
                         setRectangle({ x: cx, y: cy, width: w, height: h });
                         setImageIsRectangleVisible(true);
+                        console.log("✅ Crop rectangle created with aspect ratio:", currentAspectRatio, { x: cx, y: cy, width: w, height: h });
+                        console.log("🔧 Minimum resolution for this ratio:", minDimensionMap[currentAspectRatio]);
                       }
                     } else if (tool === "rectInpaint") {
+                      console.log("🔧 Before setting rectInpaint - current selectedAspectRatio:", selectedAspectRatio);
                       setCanvasTool("rectInpaint");
+                      // Create rectangle with 1:1 aspect ratio (200x200) when selecting rectangle mask tool
                       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
                       if (container) {
                         const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
                         const cRect = container.getBoundingClientRect();
                         const iRect = img?.getBoundingClientRect();
-                        const w = 300; const h = 200;
+                        const w = 200; const h = 200; // 1:1 aspect ratio
                         const cx = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
                         const cy = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
                         setRectangle({ x: cx, y: cy, width: w, height: h });
                         setImageIsRectangleVisible(true);
+                        setRectangleMaskAspectRatio("1:1"); // Set rectangle mask aspect ratio to 1:1
+                        console.log("✅ Created 1:1 rectangle (200x200) for rectInpaint tool:", { x: cx, y: cy, width: w, height: h });
+                        console.log("🔧 Set rectangleMaskAspectRatio to 1:1");
+                        console.log("🔧 After setting - rectangleMaskAspectRatio should be 1:1");
                       }
                     } else if (tool === "move") {
                       setCanvasTool("move");
@@ -2475,7 +2895,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       setCanvasTool("text");
                     } else {
                       // Default case - set canvasTool to the selected tool
-                      setCanvasTool(tool);
+                      setCanvasTool(tool as any);
                     }
                   }}
                   onCropRemove={() => {
@@ -2485,6 +2905,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     // This should remove the crop rectangle overlay
                   }}
                   onCropExecute={async (aspectRatio) => {
+                    console.log("🔧 ImageAIPanel onCropExecute called with aspectRatio:", aspectRatio);
                     if (aspectRatio) {
                       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
                       if (container) {
@@ -2492,17 +2913,28 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                         const cRect = container.getBoundingClientRect();
                         const iRect = img?.getBoundingClientRect();
                         const dimensionMap: Record<string, { width: number; height: number }> = {
+                          "1:1":  { width: 200, height: 200 },
+                          "3:4":  { width: 300, height: 400 },
+                          "4:3":  { width: 400, height: 300 },
                           "16:9": { width: 320, height: 180 },
                           "9:16": { width: 180, height: 320 },
-                          "1:1":  { width: 300, height: 300 },
-                          "4:3":  { width: 400, height: 300 },
-                          "3:4":  { width: 300, height: 400 },
                         };
-                        const { width: w, height: h } = dimensionMap[aspectRatio] || dimensionMap["16:9"];
+                        console.log("🔧 ImageAIPanel onCropExecute dimensionMap:", dimensionMap);
+                        console.log("🔧 ImageAIPanel onCropExecute looking for aspectRatio:", aspectRatio);
+                        const selectedDimensions = dimensionMap[aspectRatio];
+                        console.log("🔧 ImageAIPanel onCropExecute selectedDimensions:", selectedDimensions);
+                        const fallbackDimensions = dimensionMap["16:9"];
+                        console.log("🔧 ImageAIPanel onCropExecute fallbackDimensions:", fallbackDimensions);
+                        const { width: w, height: h } = selectedDimensions || fallbackDimensions;
+                        console.log("🔧 ImageAIPanel onCropExecute final dimensions:", { w, h, aspectRatio });
                         const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
                         const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
                         setRectangle({ x, y, width: w, height: h });
                         setImageIsRectangleVisible(true);
+                        
+                        // IMPORTANT: Update rectangleMaskAspectRatio for rectangle mask resizing
+                        setRectangleMaskAspectRatio(aspectRatio);
+                        console.log("✅ Rectangle mask aspect ratio set to:", aspectRatio, "for resizing");
                       }
                     }
                   }}
@@ -2551,7 +2983,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 onFitToScreen={handleFitToScreen}
                 zoomLevel={zoomLevel}
                 />
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2659,61 +3092,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         <div className="w-60 border-l border-white/6 flex flex-col bg-[#111118] shrink-0 overflow-y-auto">
           {/* ElementPanel removed - text properties now in context menu */}
 
-          {/* ── Brush Inpaint ── */}
-          {canvasTool === "inpaint" && (
-            <BrushInpaintPanel
-              // Header
-              title="Brush Inpaint"
-              description="Paint areas to edit with AI"
-              // Brush Settings
-              isEraser={isEraser}
-              setIsEraser={setIsEraser}
-              maskBrushSize={maskBrushSize}
-              setMaskBrushSize={setMaskBrushSize}
-              maskOpacity={maskOpacity}
-              setMaskOpacity={setMaskOpacity}
-              // Canvas State
-              canvasState={canvasState}
-              setCanvasState={setCanvasState}
-              // Generation
-              inpaintPrompt={inpaintPrompt}
-              setInpaintPrompt={setInpaintPrompt}
-              inpaintModel={inpaintModel}
-              setInpaintModel={setInpaintModel}
-              refImages={refImages}
-              setRefImages={setRefImages}
-              isInpainting={isInpainting}
-              inpaintError={inpaintError}
-              onGenerate={runCharacterEditInpaint}
-              generatedImages={generatedImages}
-              showGenPanel={showGenPanel}
-              setShowGenPanel={setShowGenPanel}
-            />
-          )}
 
-          {/* ── Rectangle Inpaint ── */}
-          {canvasTool === "rectInpaint" && (
-            <RectangleInpaintPanel
-              rectangle={rectangle}
-              setRectangle={setRectangle}
-              isSquareMode={isSquareMode}
-              setIsSquareMode={setIsSquareMode}
-              imageIsRectangleVisible={imageIsRectangleVisible}
-              setImageIsRectangleVisible={setImageIsRectangleVisible}
-              inpaintPrompt={inpaintPrompt}
-              setInpaintPrompt={setInpaintPrompt}
-              inpaintModel={inpaintModel}
-              setInpaintModel={(v) => setInpaintModel(v as typeof inpaintModel)}
-              imageReferenceImages={imageReferenceImages}
-              setImageReferenceImages={setImageReferenceImages}
-              isInpainting={isInpainting}
-              inpaintError={inpaintError}
-              showGenPanel={showGenPanel}
-              setShowGenPanel={setShowGenPanel}
-              generatedImages={generatedImages}
-              onRunInpaint={runRectangleInpaint}
-            />
-          )}
 
           {/* ── Image Generation ── */}
           {canvasTool === "image" && (() => {

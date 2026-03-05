@@ -66,6 +66,8 @@ interface CanvasEditorProps {
   selectedColor?: string;
   onColorPickerClick?: () => void; // Add handler for color picker click
   onDeleteSelected?: () => void; // Add handler for delete selected element
+  onAspectRatioChange?: (aspectRatio: string) => void; // Add handler for aspect ratio changes
+  mode?: "describe" | "area-edit" | "annotate"; // AI Edit mode
 }
 
 type DragInfo = {
@@ -84,9 +86,10 @@ type RotDragInfo = {
   kind: "bubble" | "text" | "asset" | "shape";
   id: string;
   startAngle: number;
-  centerX: number; centerY: number;
+  centerX: number;
+  centerY: number;
   origRot: number;
-} | null;
+};
 
 // ── CanvasEditor ───────────────────────────────────────────────────────────
 export function CanvasEditor({
@@ -94,13 +97,14 @@ export function CanvasEditor({
   brushSize, isEraser, maskOpacity, hideMask = false, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
   rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, onToolSelect, generateImageWithElements,
-  onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected,
+  onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected, onAspectRatioChange, mode,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragInfo>(null);
   const rotDragRef = useRef<RotDragInfo>(null);
   const [outerSize, setOuterSize] = useState({ w: 0, h: 0 });
+  // ...
   const [isPainting, setIsPainting] = useState(false);
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [_selectedBubbleId, _setSelectedBubbleId] = useState<string | null>(null);
@@ -222,19 +226,22 @@ export function CanvasEditor({
       console.log("Creating text at center:", cx, cy);
       
       // Create new text element
+      const baseWidth = 200; // Always 200px width
+      const baseHeight = 30;
+      
       const newTextElement = {
         id: textId,
         panelId: panelId,
-        x: cx - 50,
-        y: cy - 15,
-        w: 100,
-        h: 30,
+        x: cx - baseWidth / 2,
+        y: cy - baseHeight / 2,
+        w: baseWidth,
+        h: baseHeight,
         text: "Double click to edit",
         fontSize: 16,
         fontWeight: "normal",
         fontStyle: "normal",
         fontFamily: "Noto Sans SC",
-        color: "#000000",
+        color: selectedColor || "#000000",
         backgroundColor: "transparent",
         zIndex: 3
       };
@@ -248,11 +255,14 @@ export function CanvasEditor({
       }));
       setSelection(null, textId, null);
       
+      // Auto-select elements tool after text creation
+      onToolSelect?.("elements");
+      
       console.log("Text creation completed!");
     } else {
       console.log("Container ref is null!");
     }
-  }, [panelId, onStateChange, setSelection]);
+  }, [panelId, onStateChange, setSelection, mode, onToolSelect]);
 
   // Auto-create shape when shape tool is activated
   const createShapeInCenter = useCallback((shapeType: "arrow" | "line" | "rectangle" | "circle") => {
@@ -301,11 +311,14 @@ export function CanvasEditor({
       }));
       setSelection(null, null, null, shapeId);
       
+      // Auto-select elements tool after shape creation
+      onToolSelect?.("elements");
+      
       console.log(`${shapeType} creation completed!`);
     } else {
       console.log("Container ref is null!");
     }
-  }, [panelId, onStateChange, setSelection, selectedColor]);
+  }, [panelId, onStateChange, setSelection, selectedColor, onToolSelect]);
 
   useEffect(() => {
     console.log("Tool activated:", activeTool);
@@ -319,19 +332,15 @@ export function CanvasEditor({
       console.log("Calling createShapeInCenter with line");
       createShapeInCenter("line");
     } else if (activeTool === "square") {
-      console.log("Calling createShapeInCenter with rectangle");
       createShapeInCenter("rectangle");
     } else if (activeTool === "circle") {
-      console.log("Calling createShapeInCenter with circle");
       createShapeInCenter("circle");
     }
   }, [activeTool]);
 
-  // Debug: Log current shapes
   useEffect(() => {
-    console.log("Current shapes count:", panelShapes.length);
-    console.log("Current shapes:", panelShapes.map(s => ({ id: s.id, type: s.type })));
-  }, [panelShapes]);
+    const totalShapes = bubbles.length + textElements.length + assetElements.length + shapeElements.length;
+  }, [bubbles, textElements, assetElements, shapeElements]);
   
   
   const getPos = (e: React.MouseEvent | MouseEvent) => {
@@ -383,7 +392,6 @@ export function CanvasEditor({
   const handleMouseDown = (e: React.MouseEvent) => {
     if (activeTool === "inpaint" && e.button === 0) {
       // Paint with left mouse button (button === 0) - only for brush inpaint
-      console.log('[CanvasEditor] Brush painting started - activeTool:', activeTool);
       e.preventDefault();
       commitMaskSnapshot();
       setIsMouseDown(true);
@@ -868,11 +876,13 @@ export function CanvasEditor({
 
   // Compute exact pixel box that fits inside outer container preserving aspect ratio
   // Leave 50px padding on all sides so the canvas never touches the edges
+  // Add extra 128px bottom padding to avoid being hidden by bottom panel
   const PAD = 50;
+  const BOTTOM_EXTRA = 128;
   let canvasStyle: React.CSSProperties = { width: "100%", height: "100%" };
   if (ar && outerSize.w > 0 && outerSize.h > 0) {
     const maxW = outerSize.w - PAD * 2;
-    const maxH = outerSize.h - PAD * 2;
+    const maxH = outerSize.h - PAD * 2 - BOTTOM_EXTRA;
     // "contain" logic: fit by width first, fall back to height if overflows
     let w = maxW;
     let h = w / ar;
@@ -880,7 +890,7 @@ export function CanvasEditor({
       h = maxH;
       w = h * ar;
     }
-    canvasStyle = { width: `${w}px`, height: `${h}px` };
+    canvasStyle = { width: `${w * 1.1}px`, height: `${h * 1.1}px` };
   }
 
   return (
@@ -905,9 +915,9 @@ export function CanvasEditor({
                   textElements: [...state.textElements, {
                     id: textId,
                     panelId: panelId,
-                    x: x - 50,
+                    x: x - 100,
                     y: y - 15,
-                    w: 100,
+                    w: 200,
                     h: 30,
                     text: "Double click to edit",
                     fontSize: 16,
@@ -920,6 +930,9 @@ export function CanvasEditor({
                   }]
                 });
                 setSelection(null, textId, null);
+                
+                // Auto-select elements tool after text creation
+                onToolSelect?.("elements");
               }
             }
           } 
@@ -955,27 +968,29 @@ export function CanvasEditor({
         }
         {mask.length > 0 && !hideMask && <MaskCanvas mask={mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} />}
         {canvasTool === "rectInpaint" && rectangle && rectangleVisible && (
-          <RectangleCanvas 
-            rectangle={rectangle} 
-            width={containerSize.w} 
-            height={containerSize.h}
-            color={isSquareMode ? "purple" : "cyan"}
-            aspectRatio={aspectRatio}
-            selected={false}
-            isSquareMode={isSquareMode}
-            onResize={(handle, x, y, w, h) => {
-              // Handle rectangle resize
-              if (onRectangleChange) {
-                onRectangleChange({ x, y, width: w, height: h });
-              }
-            }}
-            onDrag={(x, y, w, h) => {
-              // Handle rectangle drag
-              if (onRectangleChange) {
-                onRectangleChange({ x, y, width: w, height: h });
-              }
-            }}
-          />
+          <>
+            <RectangleCanvas 
+              rectangle={rectangle} 
+              width={containerSize.w} 
+              height={containerSize.h}
+              color={isSquareMode ? "purple" : "cyan"}
+              aspectRatio={aspectRatio || "1:1"}
+              selected={false}
+              isSquareMode={isSquareMode}
+              onResize={(handle, x, y, w, h) => {
+                // Handle rectangle resize
+                if (onRectangleChange) {
+                  onRectangleChange({ x, y, width: w, height: h });
+                }
+              }}
+              onDrag={(x, y, w, h) => {
+                // Handle rectangle drag
+                if (onRectangleChange) {
+                  onRectangleChange({ x, y, width: w, height: h });
+                }
+              }}
+            />
+          </>
         )}
         {canvasTool === "crop" && rectangle && rectangleVisible && (
           <RectangleCanvas 
@@ -983,7 +998,7 @@ export function CanvasEditor({
             width={containerSize.w} 
             height={containerSize.h}
             color="orange"
-            aspectRatio={aspectRatio}
+            aspectRatio={aspectRatio || "1:1"}
             selected={false}
             onResize={(handle, x, y, w, h) => {
               // Handle rectangle resize
@@ -1572,9 +1587,9 @@ export function CanvasEditor({
                       textElements: [...state.textElements, {
                         id: textId,
                         panelId: panelId,
-                        x: ctxMenu.x - 50,
+                        x: ctxMenu.x - 100,
                         y: ctxMenu.y - 15,
-                        w: 100,
+                        w: 200,
                         h: 30,
                         text: "New Text",
                         fontSize: 16,
@@ -1587,6 +1602,10 @@ export function CanvasEditor({
                       }]
                     });
                     setSelection(null, textId, null);
+                    
+                    // Auto-select elements tool after text creation
+                    onToolSelect?.("elements");
+                    
                     setCtxMenu(null);
                   }}
                 >

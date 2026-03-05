@@ -89,7 +89,7 @@ const MODEL_CONFIGS: Record<string, KieModelConfig> = {
   
   'nano-banana-edit': {
     frontendModel: 'nano-banana-edit',
-    kieApiModel: 'nano-banana/image-to-image',
+    kieApiModel: 'google/nano-banana-edit',
     displayName: 'Nano Banana Edit',
     family: 'nano-banana',
     capabilities: ['image-to-image', 'single-reference'],
@@ -99,7 +99,7 @@ const MODEL_CONFIGS: Record<string, KieModelConfig> = {
     supportsTextOnly: false,
     requestTemplate: {
       required: ['prompt'],
-      optional: ['image_urls', 'aspect_ratio'],
+      optional: ['image_urls', 'aspect_ratio', 'callBackUrl', 'output_format'],
       excluded: []
     }
   },
@@ -331,6 +331,40 @@ const MODEL_CONFIGS: Record<string, KieModelConfig> = {
     }
   },
   
+  'flux-2-pro-image-to-image': {
+    frontendModel: 'flux-2-pro-image-to-image',
+    kieApiModel: 'flux-2/pro-image-to-image',
+    displayName: 'Flux 2 Pro Image-to-Image',
+    family: 'flux',
+    capabilities: ['image-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
+  'gpt-image-1-5-text-to-image': {
+    frontendModel: 'gpt-image-1-5-text-to-image',
+    kieApiModel: 'gpt-image/1.5-text-to-image',
+    displayName: 'GPT Image 1.5 Text-to-Image',
+    family: 'gpt-image',
+    capabilities: ['text-to-image', 'single-reference'],
+    refMode: 'single',
+    supportsImages: true,
+    supportsMultipleReferences: false,
+    supportsTextOnly: false,
+    requestTemplate: {
+      required: ['prompt'],
+      optional: ['image_urls', 'aspect_ratio'],
+      excluded: []
+    }
+  },
+  
   'grok': {
     frontendModel: 'grok',
     kieApiModel: 'grok-imagine/image-to-image',
@@ -511,6 +545,12 @@ async function buildRequestFromConfig(config: KieModelConfig, params: {
   // Add optional fields if available
   for (const field of config.requestTemplate.optional) {
     switch (field) {
+      case 'callBackUrl':
+        request.callBackUrl = 'https://your-domain.com/api/callback';
+        break;
+      case 'output_format':
+        request.output_format = 'png';
+        break;
       case 'aspect_ratio':
         if (params.aspectRatio && !request.aspect_ratio) {
           request.aspect_ratio = params.aspectRatio;
@@ -574,8 +614,10 @@ async function buildRequestFromConfig(config: KieModelConfig, params: {
 const MODEL_MAP: Record<string, string> = Object.fromEntries(
   Object.entries(MODEL_CONFIGS).map(([key, config]) => [key, config.kieApiModel])
 );
+console.log('[img-proxy] MODEL_MAP regenerated at:', new Date().toISOString());
 console.log('[img-proxy] MODEL_MAP generated:', MODEL_MAP);
 console.log('[img-proxy] Available models:', Object.keys(MODEL_MAP));
+console.log('[img-proxy] nano-banana-edit mapping:', MODEL_MAP['nano-banana-edit']); // Debug specific model
 export const preferredRegion = 'auto';
 
 const KIE_API_KEY      = process.env.KIE_AI_API_KEY;
@@ -617,8 +659,17 @@ async function sleep(ms: number) {
 
 // Upload base64 to freeimage.host → public URL
 async function uploadToTemp(base64DataUrl: string): Promise<string> {
-  if (!base64DataUrl.startsWith("data:")) return base64DataUrl; // already a URL
+  if (!base64DataUrl.startsWith("data:")) {
+    console.log("[img-proxy] Input is not base64 data, returning as-is:", base64DataUrl.substring(0, 50));
+    return base64DataUrl; // already a URL or not base64
+  }
+  
   const base64 = base64DataUrl.split(",")[1];
+  return await uploadBase64ToFreeImage(base64);
+}
+
+// Separate function for uploading base64 to freeimage.host
+async function uploadBase64ToFreeImage(base64: string): Promise<string> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const formData = new FormData();
@@ -966,6 +1017,8 @@ async function callGpt4o(
     isEnhance: false,
   };
   console.log("[img-proxy] GPT-4o request, images:", allUrls.length);
+  console.log("[img-proxy] GPT-4o PROMPT:", `"${prompt}"`);
+  console.log("[img-proxy] GPT-4o REQUEST BODY:", JSON.stringify(requestBody, null, 2));
 
   const res = await fetch(KIE_GPT4O_URL, {
     method: "POST",
@@ -998,7 +1051,8 @@ export async function POST(req: NextRequest) {
       hasImage: !!image,
       hasReferenceImages: !!referenceImages,
       referenceImagesCount: referenceImages?.length || 0,
-      promptLength: prompt?.length || 0
+      promptLength: prompt?.length || 0,
+      prompt: prompt ? `"${prompt}"` : "null" // Show actual prompt content
     });
 
     if (!prompt?.trim()) {
@@ -1008,6 +1062,8 @@ export async function POST(req: NextRequest) {
     // Resolve frontend model key → KIE model ID
     let kieModel = MODEL_MAP[frontendModel] ?? frontendModel;
     console.log(`[img-proxy] model: ${frontendModel} → ${kieModel}`);
+    console.log(`[img-proxy] Available models:`, Object.keys(MODEL_MAP));
+    console.log(`[img-proxy] MODEL_MAP contents:`, MODEL_MAP);
     
     // Debug: Check if character-edit exists in MODEL_MAP
     if (frontendModel === 'character-edit') {
@@ -1032,7 +1088,9 @@ export async function POST(req: NextRequest) {
     let refUrls: string[] = [];
     if (Array.isArray(referenceImages) && referenceImages.length > 0) {
       console.log(`[img-proxy] Uploading ${referenceImages.length} reference images...`);
+      console.log("[img-proxy] Reference images before upload:", referenceImages.map((img, i) => `ref${i}: ${img.substring(0, 50)}...`));
       refUrls = await Promise.all(referenceImages.map((img: string) => uploadToTemp(img)));
+      console.log("[img-proxy] Reference images after upload:", refUrls.map((url, i) => `ref${i}: ${url}`));
     }
 
     // Route to the correct KIE endpoint based on model
@@ -1040,11 +1098,15 @@ export async function POST(req: NextRequest) {
 
     if (kieModel === "flux-kontext-pro") {
       resultUrl = await callFluxKontextPro(prompt, imageUrl, refUrls, aspectRatio);
-    } else if (kieModel === "gpt-image" || kieModel === "gpt-image/1.5-image-to-image" || frontendModel === "gpt-image-1-1") {
-      // Handle rectangle inpaint requests
+    } else if (kieModel === "gpt-image" || kieModel === "gpt-image/1.5-image-to-image" || frontendModel === "gpt-image-1-1" || 
+               kieModel === "qwen/image-edit") {
+      console.log("[img-proxy] Routing to GPT-4o for rectangle mask models");
+      console.log("[img-proxy] kieModel:", kieModel);
+      console.log("[img-proxy] frontendModel:", frontendModel);
+      // Handle rectangle inpaint requests for all rectangle mask models
       if (body.image && body.prompt && body.model) {
-        const { image, prompt, model, mask, isSquareMode, rectangle, canvasDisplaySize } = body;
-        console.log("[img-proxy] Rectangle inpaint request, model:", model, "mask:", !!mask, "squareMode:", isSquareMode);
+        const { image, prompt, model, mask, isSquareMode, isRectangleMask, rectangle, canvasDisplaySize } = body;
+        console.log("[img-proxy] Rectangle inpaint request, model:", model, "mask:", !!mask, "squareMode:", isSquareMode, "rectangleMask:", isRectangleMask);
         
         try {
           let result: string;
@@ -1061,8 +1123,28 @@ export async function POST(req: NextRequest) {
             // For square mode, upload the cropped image and use URL like regular generation
             const squareImageUrl = await uploadToTemp(image);
             console.log("[img-proxy] Square mode: uploaded cropped square:", squareImageUrl);
-            result = await callGpt4o(prompt, squareImageUrl, refUrls, "1:1");
+            result = await callGpt4o(prompt, squareImageUrl, [], "1:1"); // No reference images for square mode
             console.log("[img-proxy] GPT-1.5 generated square");
+          } else if (isRectangleMask) {
+            // Rectangle mask mode: crop rectangle and send to model with reference images
+            console.log("[img-proxy] Rectangle mask mode: processing cropped rectangle with reference images");
+            
+            if (!rectangle) {
+              throw new Error("Rectangle coordinates required for rectangle mask mode");
+            }
+            
+            // For rectangle mask mode, upload the cropped image and use URL like regular generation
+            const rectangleImageUrl = await uploadToTemp(image);
+            console.log("[img-proxy] Rectangle mask mode: uploaded cropped rectangle:", rectangleImageUrl);
+            
+            // Route character-remix to GPT-4o for rectangle mask to avoid KIE API issues
+            if (kieModel === "ideogram/character-remix") {
+              console.log("[img-proxy] Routing character-remix to GPT-4o for rectangle mask");
+              result = await callGpt4o(prompt, rectangleImageUrl, refUrls, "16:9");
+            } else {
+              result = await callGpt4o(prompt, rectangleImageUrl, refUrls, "16:9");
+            }
+            console.log("[img-proxy] Model generated rectangle with reference images");
           } else {
             // Normal mode: send directly to model
             const forcedAspectRatio = frontendModel === "gpt-image-1-1" ? "1:1" : aspectRatio;
@@ -1079,6 +1161,298 @@ export async function POST(req: NextRequest) {
         const forcedAspectRatio = frontendModel === "gpt-image-1-1" ? "1:1" : aspectRatio;
         resultUrl = await callGpt4o(prompt, imageUrl, refUrls, forcedAspectRatio);
       }
+    } else if (kieModel === "ideogram/character-remix") {
+      // Ideogram Character Remix uses image_url and reference_image_urls structure
+      console.log("[img-proxy] Ideogram Character Remix model detected");
+      console.log("[img-proxy] Ideogram Remix imageUrl:", imageUrl?.substring(0, 60) + "...");
+      console.log("[img-proxy] Ideogram Remix refUrls:", refUrls);
+      
+      const requestBody = {
+        model: "ideogram/character-remix",
+        input: {
+          prompt,
+          image_url: imageUrl,
+          reference_image_urls: refUrls,
+          rendering_speed: "BALANCED",
+          style: "AUTO",
+          expand_prompt: true,
+          image_size: "square_hd",
+          num_images: "1",
+          strength: 0.8
+        }
+      };
+      
+      console.log("[img-proxy] Ideogram Remix request body:", JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      const result = await response.json();
+      console.log("[img-proxy] Ideogram Remix response:", result);
+      
+      // Check if we got a task ID that needs polling
+      if (result.data?.taskId || result.data?.recordId) {
+        const taskId = result.data?.taskId ?? result.data?.recordId;
+        console.log("[img-proxy] Ideogram Remix got task ID:", taskId, "polling...");
+        
+        try {
+          resultUrl = await pollMarket(taskId);
+          console.log("[img-proxy] Ideogram Remix polling successful, URL:", resultUrl);
+        } catch (pollError) {
+          console.error("[img-proxy] Ideogram Remix polling failed:", pollError);
+          throw new Error(`Ideogram Remix polling failed: ${pollError instanceof Error ? pollError.message : 'Unknown error'}`);
+        }
+      } else {
+        // Direct URL response (unlikely but handle it)
+        console.log("[img-proxy] Ideogram Remix checking for direct URL response...");
+        resultUrl = result.data?.outputImageUrl || result.data?.image_url || '';
+        console.log("[img-proxy] Ideogram Remix direct URL:", resultUrl);
+      }
+      
+      if (!resultUrl) {
+        console.error("[img-proxy] Ideogram Remix: No result URL obtained");
+        console.error("[img-proxy] Full response:", JSON.stringify(result, null, 2));
+        throw new Error("Ideogram Remix: No result URL obtained from API");
+      }
+      
+      console.log("[img-proxy] Ideogram Remix final result URL:", resultUrl);
+    } else if (kieModel === "recraft/crisp-upscale") {
+      // Recraft Crisp Upscale uses simple image input structure
+      console.log("[img-proxy] Recraft Crisp Upscale model detected");
+      console.log("[img-proxy] Recraft Crisp imageUrl:", imageUrl?.substring(0, 60) + "...");
+      
+      const requestBody = {
+        model: "recraft/crisp-upscale",
+        input: {
+          image: imageUrl
+        }
+      };
+      
+      console.log("[img-proxy] Recraft Crisp request body:", JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      const result = await response.json();
+      console.log("[img-proxy] Recraft Crisp response:", result);
+      
+      // Check if we got a task ID that needs polling
+      if (result.data?.taskId || result.data?.recordId) {
+        const taskId = result.data?.taskId ?? result.data?.recordId;
+        console.log("[img-proxy] Recraft Crisp got task ID:", taskId, "polling...");
+        
+        try {
+          resultUrl = await pollMarket(taskId);
+          console.log("[img-proxy] Recraft Crisp polling successful, URL:", resultUrl);
+        } catch (pollError) {
+          console.error("[img-proxy] Recraft Crisp polling failed:", pollError);
+          throw new Error(`Recraft Crisp polling failed: ${pollError instanceof Error ? pollError.message : 'Unknown error'}`);
+        }
+      } else {
+        // Direct URL response (unlikely but handle it)
+        console.log("[img-proxy] Recraft Crisp checking for direct URL response...");
+        resultUrl = result.data?.outputImageUrl || result.data?.image_url || '';
+        console.log("[img-proxy] Recraft Crisp direct URL:", resultUrl);
+      }
+      
+      if (!resultUrl) {
+        console.error("[img-proxy] Recraft Crisp: No result URL obtained");
+        console.error("[img-proxy] Full response:", JSON.stringify(result, null, 2));
+        throw new Error("Recraft Crisp: No result URL obtained from API");
+      }
+      
+      console.log("[img-proxy] Recraft Crisp final result URL:", resultUrl);
+    } else if (kieModel === "flux-2/pro-image-to-image") {
+      // Flux 2 Pro uses input_urls array format
+      console.log("[img-proxy] Flux 2 Pro model detected");
+      console.log("[img-proxy] Flux 2 Pro imageUrl:", imageUrl?.substring(0, 60) + "...");
+      console.log("[img-proxy] Flux 2 Pro refUrls:", refUrls);
+      
+      // Combine background image and reference images into input_urls array
+      const inputUrls = [imageUrl, ...refUrls];
+      
+      const requestBody = {
+        model: "flux-2/pro-image-to-image",
+        input: {
+          input_urls: inputUrls,
+          prompt,
+          aspect_ratio: "1:1",
+          resolution: "1K"
+        }
+      };
+      
+      console.log("[img-proxy] Flux 2 Pro request body:", JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      const result = await response.json();
+      console.log("[img-proxy] Flux 2 Pro response:", result);
+      
+      // Check if we got a task ID that needs polling
+      if (result.data?.taskId || result.data?.recordId) {
+        const taskId = result.data?.taskId ?? result.data?.recordId;
+        console.log("[img-proxy] Flux 2 Pro got task ID:", taskId, "polling...");
+        
+        try {
+          resultUrl = await pollMarket(taskId);
+          console.log("[img-proxy] Flux 2 Pro polling successful, URL:", resultUrl);
+        } catch (pollError) {
+          console.error("[img-proxy] Flux 2 Pro polling failed:", pollError);
+          throw new Error(`Flux 2 Pro polling failed: ${pollError instanceof Error ? pollError.message : 'Unknown error'}`);
+        }
+      } else {
+        // Direct URL response (unlikely but handle it)
+        console.log("[img-proxy] Flux 2 Pro checking for direct URL response...");
+        resultUrl = result.data?.outputImageUrl || result.data?.image_url || '';
+        console.log("[img-proxy] Flux 2 Pro direct URL:", resultUrl);
+      }
+      
+      if (!resultUrl) {
+        console.error("[img-proxy] Flux 2 Pro: No result URL obtained");
+        console.error("[img-proxy] Full response:", JSON.stringify(result, null, 2));
+        throw new Error("Flux 2 Pro: No result URL obtained from API");
+      }
+      
+      console.log("[img-proxy] Flux 2 Pro final result URL:", resultUrl);
+    } else if (kieModel === "flux-2/flex-image-to-image") {
+      // Flux 2 Flex uses input_urls array format
+      console.log("[img-proxy] Flux 2 Flex model detected");
+      console.log("[img-proxy] Flux 2 Flex imageUrl:", imageUrl?.substring(0, 60) + "...");
+      console.log("[img-proxy] Flux 2 Flex refUrls:", refUrls);
+      
+      // Combine background image and reference images into input_urls array
+      const inputUrls = [imageUrl, ...refUrls];
+      
+      const requestBody = {
+        model: "flux-2/flex-image-to-image",
+        input: {
+          input_urls: inputUrls,
+          prompt,
+          aspect_ratio: "1:1",
+          resolution: "1K"
+        }
+      };
+      
+      console.log("[img-proxy] Flux 2 Flex request body:", JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      const result = await response.json();
+      console.log("[img-proxy] Flux 2 Flex response:", result);
+      
+      // Check if we got a task ID that needs polling
+      if (result.data?.taskId || result.data?.recordId) {
+        const taskId = result.data?.taskId ?? result.data?.recordId;
+        console.log("[img-proxy] Flux 2 Flex got task ID:", taskId, "polling...");
+        
+        try {
+          resultUrl = await pollMarket(taskId);
+          console.log("[img-proxy] Flux 2 Flex polling successful, URL:", resultUrl);
+        } catch (pollError) {
+          console.error("[img-proxy] Flux 2 Flex polling failed:", pollError);
+          throw new Error(`Flux 2 Flex polling failed: ${pollError instanceof Error ? pollError.message : 'Unknown error'}`);
+        }
+      } else {
+        // Direct URL response (unlikely but handle it)
+        console.log("[img-proxy] Flux 2 Flex checking for direct URL response...");
+        resultUrl = result.data?.outputImageUrl || result.data?.image_url || '';
+        console.log("[img-proxy] Flux 2 Flex direct URL:", resultUrl);
+      }
+      
+      if (!resultUrl) {
+        console.error("[img-proxy] Flux 2 Flex: No result URL obtained");
+        console.error("[img-proxy] Full response:", JSON.stringify(result, null, 2));
+        throw new Error("Flux 2 Flex: No result URL obtained from API");
+      }
+      
+      console.log("[img-proxy] Flux 2 Flex final result URL:", resultUrl);
+    } else if (kieModel === "nano-banana-2") {
+      // Nano Banana 2 uses special image_input array format
+      console.log("[img-proxy] Nano Banana 2 model detected");
+      console.log("[img-proxy] Nano Banana 2 imageUrl:", imageUrl?.substring(0, 60) + "...");
+      console.log("[img-proxy] Nano Banana 2 refUrls:", refUrls);
+      
+      // Combine background image and reference images into image_input array
+      const imageInput = [imageUrl, ...refUrls];
+      
+      const requestBody = {
+        model: "nano-banana-2",
+        input: {
+          prompt,
+          image_input: imageInput,
+          aspect_ratio: "1:1",
+          google_search: false,
+          resolution: "1K",
+          output_format: "jpg"
+        }
+      };
+      
+      console.log("[img-proxy] Nano Banana 2 request body:", JSON.stringify(requestBody, null, 2));
+      
+      const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+      
+      const result = await response.json();
+      console.log("[img-proxy] Nano Banana 2 response:", result);
+      
+      // Check if we got a task ID that needs polling
+      if (result.data?.taskId || result.data?.recordId) {
+        const taskId = result.data?.taskId ?? result.data?.recordId;
+        console.log("[img-proxy] Nano Banana 2 got task ID:", taskId, "polling...");
+        
+        try {
+          resultUrl = await pollMarket(taskId);
+          console.log("[img-proxy] Nano Banana 2 polling successful, URL:", resultUrl);
+        } catch (pollError) {
+          console.error("[img-proxy] Nano Banana 2 polling failed:", pollError);
+          throw new Error(`Nano Banana 2 polling failed: ${pollError instanceof Error ? pollError.message : 'Unknown error'}`);
+        }
+      } else {
+        // Direct URL response (unlikely but handle it)
+        console.log("[img-proxy] Nano Banana 2 checking for direct URL response...");
+        resultUrl = result.data?.outputImageUrl || result.data?.image_url || '';
+        console.log("[img-proxy] Nano Banana 2 direct URL:", resultUrl);
+      }
+      
+      if (!resultUrl) {
+        console.error("[img-proxy] Nano Banana 2: No result URL obtained");
+        console.error("[img-proxy] Full response:", JSON.stringify(result, null, 2));
+        throw new Error("Nano Banana 2: No result URL obtained from API");
+      }
+      
+      console.log("[img-proxy] Nano Banana 2 final result URL:", resultUrl);
     } else if (kieModel === "ideogram/character-edit" || kieModel === "ideogram/character-remix") {
       // Character Edit models use Market API with special handling for mask
       console.log("[img-proxy] Character Edit model detected:", kieModel);
@@ -1095,18 +1469,28 @@ export async function POST(req: NextRequest) {
         console.log("[img-proxy] Character Edit: Mask uploaded:", maskUrl?.substring(0, 60) + "...");
       }
       
-      // Character Edit uses exact structure from cURL example
+      // Character Edit/Remix uses exact structure from cURL example
+      // For character-remix, only include required and supported optional fields
       const requestBody = {
         model: kieModel,
         input: {
           prompt: prompt,
           image_url: imageUrl,
-          mask_url: maskUrl,
           reference_image_urls: refUrls,
-          rendering_speed: "BALANCED",
-          style: "AUTO",
-          expand_prompt: true,
-          num_images: "1"
+          // Only include fields that are supported by the specific model
+          ...(kieModel === "ideogram/character-edit" && {
+            rendering_speed: "BALANCED",
+            style: "AUTO",
+            expand_prompt: true,
+            num_images: "1"
+          }),
+          ...(kieModel === "ideogram/character-remix" && {
+            // Character Remix - remove mask_url since we're doing rectangle mask, not brush inpaint
+            rendering_speed: "BALANCED",
+            style: "AUTO",
+            expand_prompt: true,
+            num_images: "1"
+          })
         }
       };
       
@@ -1141,6 +1525,7 @@ export async function POST(req: NextRequest) {
       resultUrl = await pollMarket(data?.data?.taskId ?? data?.data?.recordId);
     } else {
       // All other models use the generic Market API
+      console.log(`[img-proxy] MODEL_MAP lookup for ${frontendModel}:`, MODEL_MAP[frontendModel]);
       resultUrl = await callMarketModel(kieModel, frontendModel, prompt, imageUrl, refUrls, aspectRatio);
     }
 

@@ -1020,7 +1020,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
     
-    const { image, mask, prompt, model = "flux-kontext-pro" } = body;
+    const { image, mask, prompt, model = "flux-kontext-pro", referenceImages } = body;
     
     // Respect user's model selection
     const effectiveModel = model;
@@ -1115,6 +1115,18 @@ export async function POST(req: NextRequest) {
           console.log('[inpaint] Calling runSeedreamV4...');
           resultUrl = await runSeedreamV4(image, prompt);            
           break;
+        case "flux-2/pro-image-to-image":            
+          console.log('[inpaint] Calling runFlux2ProImageToImage...');
+          resultUrl = await runFlux2ProImageToImage(image, prompt, referenceImages);            
+          break;
+        case "nano-banana-2":            
+          console.log('[inpaint] Calling runNanoBanana2...');
+          resultUrl = await runNanoBanana2(image, prompt, referenceImages);            
+          break;
+        case "ideogram/character-remix":            
+          console.log('[inpaint] Calling runIdeogramCharacterRemix...');
+          resultUrl = await runIdeogramCharacterRemix(image, prompt, referenceImages);            
+          break;
         default: 
           console.log('[inpaint] Unknown model:', effectiveModel);
           return NextResponse.json({ error: `Unknown model: ${effectiveModel}` }, { status: 400 });
@@ -1162,4 +1174,108 @@ export async function POST(req: NextRequest) {
     console.error("[inpaint] Returning error response:", errorResponse);
     return NextResponse.json(errorResponse, { status: 500 });
   }
+}
+
+// New model functions with correct JSON structure for remix models
+async function runFlux2ProImageToImage(image: string, prompt: string, referenceImages?: string[]): Promise<string> {
+  const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
+  const refImageUrls = referenceImages ? await Promise.all(referenceImages.map(ref => 
+    ref.startsWith('data:') ? uploadImageToTemp(ref) : ref
+  )) : [];
+  
+  const requestBody = {
+    model: "flux-2/pro-image-to-image",
+    input: {
+      prompt,
+      image_url: imageUrl,
+      reference_image_urls: refImageUrls,
+      rendering_speed: "BALANCED",
+      style: "AUTO",
+      expand_prompt: true,
+      image_size: "square_hd",
+      num_images: "1",
+      strength: 0.8
+    }
+  };
+  
+  const res = await fetch(KIE_CREATE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${KIE_API_KEY}`
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  const result = await res.json();
+  return result.data?.outputImageUrl || result.data?.image_url || '';
+}
+
+async function runNanoBanana2(image: string, prompt: string, referenceImages?: string[]): Promise<string> {
+  const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
+  const refImageUrls = referenceImages ? await Promise.all(referenceImages.map(ref => 
+    ref.startsWith('data:') ? uploadImageToTemp(ref) : ref
+  )) : [];
+  
+  // Combine background image and reference images into image_input array
+  const imageInput = [imageUrl, ...refImageUrls];
+  
+  const requestBody = {
+    model: "nano-banana-2",
+    callBackUrl: "https://your-domain.com/api/callback",
+    input: {
+      prompt,
+      image_input: imageInput,
+      aspect_ratio: "auto",
+      google_search: false,
+      resolution: "1K",
+      output_format: "jpg"
+    }
+  };
+  
+  const res = await fetch(KIE_CREATE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${KIE_API_KEY}`
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  const result = await res.json();
+  return result.data?.outputImageUrl || result.data?.image_url || '';
+}
+
+async function runIdeogramCharacterRemix(image: string, prompt: string, referenceImages?: string[]): Promise<string> {
+  const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
+  const refImageUrls = referenceImages ? await Promise.all(referenceImages.map(ref => 
+    ref.startsWith('data:') ? uploadImageToTemp(ref) : ref
+  )) : [];
+  
+  const requestBody = {
+    model: "ideogram/character-remix",
+    input: {
+      prompt,
+      image_url: imageUrl,
+      reference_image_urls: refImageUrls,
+      rendering_speed: "BALANCED",
+      style: "AUTO",
+      expand_prompt: true,
+      image_size: "square_hd",
+      num_images: "1",
+      strength: 0.8
+    }
+  };
+  
+  const res = await fetch(KIE_CREATE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${KIE_API_KEY}`
+    },
+    body: JSON.stringify(requestBody)
+  });
+  
+  const result = await res.json();
+  return result.data?.outputImageUrl || result.data?.image_url || '';
 }

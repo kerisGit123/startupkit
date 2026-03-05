@@ -326,12 +326,12 @@ export function MaskCanvas({
   );
 }
 
-// ── RectangleCanvas ─────────────────────────────────────────────────────────
 export function RectangleCanvas({
   rectangle, width, height, selected, onResize, onDrag, color = "blue", aspectRatio, isAspectRatioAnimating = false, isSquareMode = false,
 }: {
   rectangle: { x: number; y: number; width: number; height: number } | null;
-  width: number; height: number;
+  width: number;
+  height: number;
   selected?: boolean;
   onResize?: (handle: string, newX: number, newY: number, newWidth: number, newHeight: number) => void;
   onDrag?: (newX: number, newY: number, newWidth: number, newHeight: number) => void;
@@ -383,37 +383,62 @@ export function RectangleCanvas({
       
       // Rectangle Inpaint: 
       // - Purple square mode: show only 4 corner dots for scale-only resizing
-      // - Cyan/Blue normal mode: show all 8 dots for full resizing control (corners + edges)
+      // - Cyan rectangle mask: ALWAYS show only 4 corner dots (no edge resizing)
+      // - Blue normal mode: show all 8 dots for full resizing control (corners + edges)
       // Orange crop (Crop): show 4 corner dots when aspect ratio is set, 8 dots when free scaling
-      const dots = isSquareMode ? [
-        { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
-        { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
-        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
-        { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
-      ] : (color === "blue" || color === "cyan") ? [
-        { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
-        { x: rectangle.x + rectangle.width / 2, y: rectangle.y, type: "n" }, // top-center
-        { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
-        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height / 2, type: "e" }, // right-center
-        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
-        { x: rectangle.x + rectangle.width / 2, y: rectangle.y + rectangle.height, type: "s" }, // bottom-center
-        { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
-        { x: rectangle.x, y: rectangle.y + rectangle.height / 2, type: "w" }, // left-center
-      ] : aspectRatio ? [
-        { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
-        { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
-        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
-        { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
-      ] : [
-        { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
-        { x: rectangle.x + rectangle.width / 2, y: rectangle.y, type: "n" }, // top-center
-        { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
-        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height / 2, type: "e" }, // right-center
-        { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
-        { x: rectangle.x + rectangle.width / 2, y: rectangle.y + rectangle.height, type: "s" }, // bottom-center
-        { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
-        { x: rectangle.x, y: rectangle.y + rectangle.height / 2, type: "w" }, // left-center
-      ];
+      
+      // For cyan rectangle mask (color === "cyan"), ALWAYS show only 4 corner dots
+      let dots: { x: number; y: number; type: string }[];
+      
+      if (color === "cyan") {
+        // Cyan rectangle mask: ALWAYS show only 4 corner dots (no edge resizing)
+        dots = [
+          { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
+          { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
+          { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
+          { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
+        ];
+      } else if (isSquareMode) {
+        // Purple square mode: show only 4 corner dots
+        dots = [
+          { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
+          { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
+          { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
+          { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
+        ];
+      } else if (color === "blue") {
+        // Blue normal mode: show all 8 dots
+        dots = [
+          { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
+          { x: rectangle.x + rectangle.width / 2, y: rectangle.y, type: "n" }, // top-center
+          { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
+          { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height / 2, type: "e" }, // right-center
+          { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
+          { x: rectangle.x + rectangle.width / 2, y: rectangle.y + rectangle.height, type: "s" }, // bottom-center
+          { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
+          { x: rectangle.x, y: rectangle.y + rectangle.height / 2, type: "w" }, // left-center
+        ];
+      } else if (aspectRatio) {
+        // Orange crop with aspect ratio: show 4 corner dots
+        dots = [
+          { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
+          { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
+          { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
+          { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
+        ];
+      } else {
+        // Default: show all 8 dots
+        dots = [
+          { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
+          { x: rectangle.x + rectangle.width / 2, y: rectangle.y, type: "n" }, // top-center
+          { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
+          { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height / 2, type: "e" }, // right-center
+          { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
+          { x: rectangle.x + rectangle.width / 2, y: rectangle.y + rectangle.height, type: "s" }, // bottom-center
+          { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
+          { x: rectangle.x, y: rectangle.y + rectangle.height / 2, type: "w" }, // left-center
+        ];
+      }
       
       dots.forEach((dot) => {
         // Check if mouse is hovering over this dot
@@ -451,8 +476,8 @@ export function RectangleCanvas({
       });
     }
     
-    // Draw edge handles for rectangle mode (cyan) even when not selected
-    if (!selected && (color === "cyan" || color === "blue")) {
+    // Draw edge handles for rectangle mode (blue only, NOT for cyan rectangle mask)
+    if (!selected && color === "blue") {
       const handleSize = 8;
       ctx.fillStyle = "rgba(6,182,212,0.8)";
       ctx.strokeStyle = "rgba(255,255,255,0.8)";
@@ -532,68 +557,124 @@ export function RectangleCanvas({
           if (isSquareMode) {
             // Square mode always enforces 1:1 aspect ratio
             targetRatio = 1;
+          } else if (color === "cyan") {
+            // Cyan rectangle mask: ALWAYS use 1:1 aspect ratio for simplicity
+            targetRatio = 1;
           } else if (aspectRatio) {
             const [w, h] = aspectRatio.split(':').map(Number);
             if (!isNaN(w) && !isNaN(h) && h > 0) {
               targetRatio = w / h;
             }
+          } else {
+            // No aspect ratio provided
           }
 
-          // Calculate new dimensions based on which handle is being dragged
+          // Calculate minimum size based on aspect ratio - use specific minimum resolutions for crop tool
+          let minWidth = 20;
+          let minHeight = 20;
+          
+          if (color === "cyan") {
+            // Cyan rectangle mask: Always use 1:1 minimum (100x100)
+            minWidth = 100;
+            minHeight = 100;
+          } else if (targetRatio && color === "orange") {
+            // Crop tool (orange) - use specific minimum resolutions
+            const minDimensionMap: Record<number, { width: number; height: number }> = {
+              1: { width: 100, height: 100 },    // 1:1 = 100x100 minimum
+              0.75: { width: 30, height: 40 },    // 3:4 = 30x40 minimum  
+              1.333: { width: 40, height: 30 },    // 4:3 = 40x30 minimum
+              1.778: { width: 160, height: 90 },  // 16:9 = 160x90 minimum
+              0.5625: { width: 90, height: 160 },  // 9:16 = 90x160 minimum
+            };
+            
+            // Find the closest aspect ratio match
+            const aspectRatios = Object.keys(minDimensionMap).map(Number);
+            const closestRatio = aspectRatios.reduce((prev, curr) => 
+              Math.abs(curr - targetRatio) < Math.abs(prev - targetRatio) ? curr : prev
+            );
+            
+            const minDimensions = minDimensionMap[closestRatio];
+            minWidth = minDimensions.width;
+            minHeight = minDimensions.height;
+          }
+          
+          // For cyan rectangle mask, prevent edge resizing (only allow corner resizing)
+          if (color === "cyan" && ["n", "s", "e", "w"].includes(resizeStart.handle)) {
+            // Edge resizing is disabled for cyan rectangle mask
+            return;
+          }
+          
+          // Apply minimum size constraint
           switch (resizeStart.handle) {
             case "nw":
               newX = resizeStart.rectX + deltaX;
               newY = resizeStart.rectY + deltaY;
-              newWidth = Math.max(20, resizeStart.width - deltaX);
-              newHeight = Math.max(20, resizeStart.height - deltaY);
+              newWidth = Math.max(minWidth, resizeStart.width - deltaX);
+              newHeight = Math.max(minHeight, resizeStart.height - deltaY);
               break;
             case "ne":
               newY = resizeStart.rectY + deltaY;
-              newWidth = Math.max(20, resizeStart.width + deltaX);
-              newHeight = Math.max(20, resizeStart.height - deltaY);
+              newWidth = Math.max(minWidth, resizeStart.width + deltaX);
+              newHeight = Math.max(minHeight, resizeStart.height - deltaY);
               break;
             case "sw":
               newX = resizeStart.rectX + deltaX;
-              newWidth = Math.max(20, resizeStart.width - deltaX);
-              newHeight = Math.max(20, resizeStart.height + deltaY);
+              newWidth = Math.max(minWidth, resizeStart.width - deltaX);
+              newHeight = Math.max(minHeight, resizeStart.height + deltaY);
               break;
             case "se":
-              newWidth = Math.max(20, resizeStart.width + deltaX);
-              newHeight = Math.max(20, resizeStart.height + deltaY);
+              newWidth = Math.max(minWidth, resizeStart.width + deltaX);
+              newHeight = Math.max(minHeight, resizeStart.height + deltaY);
               break;
             case "n":
               newY = resizeStart.rectY + deltaY;
-              newHeight = Math.max(20, resizeStart.height - deltaY);
+              newHeight = Math.max(minHeight, resizeStart.height - deltaY);
               break;
             case "s":
-              newHeight = Math.max(20, resizeStart.height + deltaY);
+              newHeight = Math.max(minHeight, resizeStart.height + deltaY);
               break;
             case "e":
-              newWidth = Math.max(20, resizeStart.width + deltaX);
+              newWidth = Math.max(minWidth, resizeStart.width + deltaX);
               break;
             case "w":
               newX = resizeStart.rectX + deltaX;
-              newWidth = Math.max(20, resizeStart.width - deltaX);
+              newWidth = Math.max(minWidth, resizeStart.width - deltaX);
               break;
           }
 
-          // Apply aspect ratio constraint if provided (only for corner handles)
-          if (targetRatio && ["nw", "ne", "sw", "se"].includes(resizeStart.handle)) {
+          // Apply aspect ratio constraint if provided (always for cyan rectangle mask)
+          if (targetRatio && (color === "cyan" || ["nw", "ne", "sw", "se"].includes(resizeStart.handle))) {
+            
             // Calculate both possible constrained dimensions
             const widthConstrainedHeight = newWidth / targetRatio;
             const heightConstrainedWidth = newHeight * targetRatio;
             
-            // Choose the constraint that results in smaller area (maintains original rectangle bounds)
+            // Apply aspect ratio constraint - for cyan rectangle mask, always enforce strictly
             let constrainedWidth: number, constrainedHeight: number;
             
-            if (Math.abs(widthConstrainedHeight - newHeight) < Math.abs(heightConstrainedWidth - newWidth)) {
-              // Width constraint is closer to original
-              constrainedWidth = newWidth;
-              constrainedHeight = widthConstrainedHeight;
+            if (color === "cyan") {
+              // Cyan rectangle mask: ALWAYS enforce aspect ratio strictly
+              // Use the larger dimension to maintain aspect ratio properly
+              if (newWidth / newHeight > targetRatio) {
+                // Width is too large, constrain by height
+                constrainedHeight = newHeight;
+                constrainedWidth = newHeight * targetRatio;
+              } else {
+                // Height is too large, constrain by width
+                constrainedWidth = newWidth;
+                constrainedHeight = newWidth / targetRatio;
+              }
             } else {
-              // Height constraint is closer to original
-              constrainedWidth = heightConstrainedWidth;
-              constrainedHeight = newHeight;
+              // Other modes: choose constraint that results in smaller area (maintains original rectangle bounds)
+              if (Math.abs(widthConstrainedHeight - newHeight) < Math.abs(heightConstrainedWidth - newWidth)) {
+                // Width constraint is closer to original
+                constrainedWidth = newWidth;
+                constrainedHeight = widthConstrainedHeight;
+              } else {
+                // Height constraint is closer to original
+                constrainedWidth = heightConstrainedWidth;
+                constrainedHeight = newHeight;
+              }
             }
             
             // Adjust position based on which corner is being dragged
@@ -621,12 +702,38 @@ export function RectangleCanvas({
             }
           }
           
-          // Apply 0px boundary constraints - rectangle can touch edges but not exceed them
+          // Apply boundary constraints - use actual canvas bounds
           const PADDING = 0;
           newX = Math.max(PADDING, Math.min(newX, width - newWidth));
           newY = Math.max(PADDING, Math.min(newY, height - newHeight));
-          newWidth = Math.min(newWidth, width);
-          newHeight = Math.min(newHeight, height);
+          
+          // For cyan rectangle mask, ensure aspect ratio is maintained even with boundary constraints
+          if (color === "cyan" && targetRatio) {
+            // Check if boundary constraints broke the aspect ratio
+            const boundaryConstrainedWidth = Math.min(newWidth, width);
+            const boundaryConstrainedHeight = Math.min(newHeight, height);
+            
+            // If boundary constraints would break aspect ratio, prioritize aspect ratio
+            const boundaryRatio = boundaryConstrainedWidth / boundaryConstrainedHeight;
+            if (Math.abs(boundaryRatio - targetRatio) > 0.01) {
+              // Boundary constraints broke aspect ratio, recalculate to maintain it
+              if (boundaryConstrainedWidth / boundaryConstrainedHeight > targetRatio) {
+                // Width is too large, constrain by height
+                newHeight = boundaryConstrainedHeight;
+                newWidth = boundaryConstrainedHeight * targetRatio;
+              } else {
+                // Height is too large, constrain by width
+                newWidth = boundaryConstrainedWidth;
+                newHeight = boundaryConstrainedWidth / targetRatio;
+              }
+            } else {
+              newWidth = boundaryConstrainedWidth;
+              newHeight = boundaryConstrainedHeight;
+            }
+          } else {
+            newWidth = Math.min(newWidth, width);
+            newHeight = Math.min(newHeight, height);
+          }
           
           onResize(resizeStart.handle, newX, newY, newWidth, newHeight);
           return;
@@ -648,7 +755,8 @@ export function RectangleCanvas({
           let newX = dragStart.rectX + deltaX;
           let newY = dragStart.rectY + deltaY;
           
-          // Apply 0px boundary constraints - rectangle can touch edges but not exceed them
+          
+          // Apply boundary constraints - use actual canvas bounds
           const PADDING = 0;
           newX = Math.max(PADDING, Math.min(newX, width - dragStart.width));
           newY = Math.max(PADDING, Math.min(newY, height - dragStart.height));
@@ -680,7 +788,7 @@ export function RectangleCanvas({
         }
       };
     }
-  }, [isDragging, isResizing, dragStart, resizeStart, onDrag, onResize]);
+  }, [isDragging, isResizing, dragStart, resizeStart, onDrag, onResize, aspectRatio, color, isSquareMode]);
 
   return (
     <canvas
@@ -706,8 +814,13 @@ export function RectangleCanvas({
         if (!selected) {
           const dotSize = 12; // Match the new dot size
           
-          // Use same dot logic as drawing - blue/cyan inpaint always 8 dots, orange crop 4 dots when aspect ratio is set
-          const dots = (color === "blue" || color === "cyan") ? [
+          // Use same dot logic as drawing - cyan and square mode use only 4 corner dots, blue uses 8, orange uses 4 with aspect ratio
+          const dots = (color === "cyan" || isSquareMode) ? [
+            { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
+            { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
+            { x: rectangle.x + rectangle.width, y: rectangle.y + rectangle.height, type: "se" }, // bottom-right
+            { x: rectangle.x, y: rectangle.y + rectangle.height, type: "sw" }, // bottom-left
+          ] : color === "blue" ? [
             { x: rectangle.x, y: rectangle.y, type: "nw" }, // top-left
             { x: rectangle.x + rectangle.width / 2, y: rectangle.y, type: "n" }, // top-center
             { x: rectangle.x + rectangle.width, y: rectangle.y, type: "ne" }, // top-right
@@ -735,7 +848,6 @@ export function RectangleCanvas({
           for (const dot of dots) {
             if (Math.abs(x - dot.x) <= dotSize/2 && Math.abs(y - dot.y) <= dotSize/2) {
               // Clicked on dot - start resizing
-              console.log('Starting resize with handle:', dot.type); // Debug log
               setIsResizing(true);
               setResizeStart({ mouseX: x, mouseY: y, rectX: rectangle.x, rectY: rectangle.y, width: rectangle.width, height: rectangle.height, handle: dot.type });
               return;
