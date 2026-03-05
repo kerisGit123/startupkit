@@ -319,23 +319,29 @@ export function ImageAIPanel({
     } else if (id === "upload-override") {
       uploadInputRef.current?.click();
     } else if (id === "brush") {
-      // Select brush tool (paint brush)
+      // Select brush tool (paint brush) - set character-edit model for face editing
       setActiveTool(id);
       setIsEraser?.(false);
       setShowBrushSizeMenu(false);
       onToolSelect?.("brush");
+      // Auto-set character-edit model for brush tools
+      onModelChange?.("character-edit");
     } else if (id === "pen-brush") {
-      // Select pen brush (directly activate brush tool)
+      // Select pen brush (directly activate brush tool) - set character-edit model for face editing
       setActiveTool(id);
       setIsEraser?.(false);
       setShowBrushSizeMenu(false);
       onToolSelect?.("pen-brush");
+      // Auto-set character-edit model for brush tools
+      onModelChange?.("character-edit");
     } else if (id === "eraser") {
-      // Select eraser tool
+      // Select eraser tool - set character-edit model for face editing
       setActiveTool(id);
       setIsEraser?.(true);
       setShowBrushSizeMenu(false);
       onToolSelect?.("eraser");
+      // Auto-set character-edit model for brush tools
+      onModelChange?.("character-edit");
     } else if (id === "text") {
       // Select text tool and create text in center
       setActiveTool(id);

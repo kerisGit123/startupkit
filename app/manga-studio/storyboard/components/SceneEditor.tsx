@@ -2,8 +2,8 @@
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
-  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, ImageIcon, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock,
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import { CanvasArea } from "./CanvasArea";
@@ -257,6 +257,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [newTextContent, setNewTextContent] = useState("test...");
   const [newTextSize, setNewTextSize] = useState(16);
   const [newTextColor, setNewTextColor] = useState("#000000");
+  
+  // Sliding panels state
+  const [generatedImagesPanelOpen, setGeneratedImagesPanelOpen] = useState(false);
+  const [timelinePanelOpen, setTimelinePanelOpen] = useState(false);
   
   // Collapsible property cards state
   const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
@@ -1115,8 +1119,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       // Check if square mask is being used
       const isSquareMaskActive = canvasTool === "rectInpaint" && isSquareMode;
       
-      // For faceshift (character-edit), require character-edit model ONLY for brush/pen tools
-      const isBrushTool = (canvasTool as string) === "brush" || (canvasTool as string) === "pen-brush" || (canvasTool as string) === "eraser";
+      // For faceshift (character-edit), require character-edit model for brush tools when in inpaint mode
+      const isBrushTool = canvasTool === "inpaint" && (aiEditMode === "area-edit");
       
       if (isBrushTool && aiModel !== "ideogram/character-edit") {
         console.log("Brush tool detected but not using character-edit model");
@@ -1134,7 +1138,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         return;
       }
       
-      // Use the already defined isBrushTool from line 988
+      // Use the updated isBrushTool definition
       if (isBrushTool && aiModel === "ideogram/character-edit") {
         console.log("Brush tool with character-edit model detected, using faceshift logic");
         // Use aiRefImages (ImageAI Panel) instead of imageReferenceImages (left toolbox)
@@ -2643,55 +2647,44 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition">Save</button>
       </div>
 
-      {/* ── Timeline filmstrip (pic2 style) ── */}
-      <div className="flex items-center gap-0 border-b border-white/6 bg-[#0e0e15] shrink-0">
-        <div className="flex items-center gap-1 px-3 py-2 border-r border-white/6 shrink-0">
-          <List className="w-4 h-4 text-pink-400" />
-          <span className="text-pink-400 text-xs font-bold uppercase tracking-wide">Timeline</span>
-        </div>
-        <div className="flex-1 flex items-center gap-2 px-3 py-2 overflow-x-auto">
-          {shots.map((shot, idx) => {
-            const isActive = shot.id === activeShotId;
-            const label = shot.description ? shot.description.slice(0, 14) + (shot.description.length > 14 ? "..." : "") : `Frame ${idx + 1}`;
-            return (
-              <button
-                key={shot.id}
-                onClick={() => goTo(shot.id)}
-                className={`relative shrink-0 rounded-lg overflow-hidden border-2 transition flex flex-col ${
-                  isActive ? "border-violet-500 bg-[#1e1e2a]" : "border-transparent bg-[#1a1a24] hover:border-white/20"
-                }`}
-                style={{ width: 100 }}
-              >
-                <div className="aspect-video bg-[#1e1e2a] flex items-center justify-center relative">
-                  {shot.imageUrl
-                    ? <img src={shot.imageUrl} alt="" className="w-full h-full object-cover" />
-                    : <span className="text-gray-700 text-[10px]">Empty</span>
-                  }
-                  {shot.tags.length > 0 && (
-                    <div className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ backgroundColor: shot.tags[0].color }} />
-                  )}
-                </div>
-                <div className="px-1.5 py-1 text-center">
-                  <span className={`text-[10px] truncate block ${isActive ? "text-white" : "text-gray-500"}`}>
-                    {label}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-          {/* + Add button */}
-          <button className="shrink-0 w-[100px] rounded-lg border-2 border-dashed border-white/10 bg-transparent flex flex-col items-center justify-center gap-1 py-4 hover:border-pink-500/40 hover:bg-white/2 transition">
-            <Plus className="w-4 h-4 text-pink-400" />
-            <span className="text-pink-400 text-[10px] font-medium">Add</span>
-          </button>
-        </div>
-        <div className="px-3 text-gray-600 text-xs shrink-0">{activeIdx + 1}/{shots.length}</div>
-      </div>
-
       {/* ── Main area ── */}
       <div className="flex-1 flex overflow-hidden">
         {/* Center: large image */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Top Right Controls */}
+          <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+            {/* Generated Images Button */}
+            <button
+              onClick={() => {
+                setGeneratedImagesPanelOpen(!generatedImagesPanelOpen);
+                setTimelinePanelOpen(false); // Close timeline when opening generated images
+              }}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
+                generatedImagesPanelOpen ? 'bg-blue-600/80' : 'bg-black/50 hover:bg-black/80'
+              }`}
+              title="View Generated Images"
+              aria-label="View Generated Images"
+            >
+              <Image className="w-4 h-4" />
+              <span>Generated</span>
+            </button>
+            
+            {/* Timeline Button */}
+            <button
+              onClick={() => {
+                setTimelinePanelOpen(!timelinePanelOpen);
+                setGeneratedImagesPanelOpen(false); // Close generated images when opening timeline
+              }}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
+                timelinePanelOpen ? 'bg-blue-600/80' : 'bg-black/50 hover:bg-black/80'
+              }`}
+              title="View Timeline"
+              aria-label="View Timeline"
+            >
+              <Clock className="w-4 h-4" />
+              <span>Timeline</span>
+            </button>
+          </div>
           <CanvasArea
             activeIdx={activeIdx}
             shots={shots}
@@ -2734,6 +2727,173 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             mode={aiEditMode}
           />
 
+          {/* Sliding Panels */}
+          {/* Overlay backdrop */}
+          {(generatedImagesPanelOpen || timelinePanelOpen) && (
+            <div 
+              className="absolute inset-0 bg-black/50 z-15"
+              onClick={() => {
+                setGeneratedImagesPanelOpen(false);
+                setTimelinePanelOpen(false);
+              }}
+            />
+          )}
+          
+          {/* Generated Images Panel */}
+          <div className={`absolute top-0 right-0 h-full w-80 bg-[#111118] border-l border-white/6 transform transition-transform duration-300 ease-in-out z-30 ${
+            generatedImagesPanelOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}>
+            <div className="p-4 border-b border-white/6 flex items-center justify-between">
+              <h3 className="text-white font-medium">Generated Images</h3>
+              <button
+                onClick={() => setGeneratedImagesPanelOpen(false)}
+                className="text-gray-400 hover:text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto h-full">
+              {/* Original Image Section */}
+              {(backgroundImage || originalImage || activeShot?.imageUrl) && (
+                <div className="mb-6">
+                  <h4 className="text-white text-sm font-medium mb-3">Original</h4>
+                  <div className="relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-700 hover:border-gray-600 transition">
+                    <img
+                      src={originalImage || backgroundImage || activeShot?.imageUrl}
+                      alt="Original"
+                      className="w-full h-32 object-cover"
+                      onClick={() => {
+                        const imgUrl = originalImage || backgroundImage || activeShot?.imageUrl;
+                        if (imgUrl) setBackgroundImage(imgUrl);
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                      <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Generated Images Section */}
+              {generatedImages.length > 0 && (
+                <div>
+                  <h4 className="text-white text-sm font-medium mb-3">
+                    Generated ({generatedImages.length})
+                  </h4>
+                  <div className="space-y-3">
+                    {generatedImages.map((imgUrl, i) => (
+                      <div key={i} className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition ${
+                        backgroundImage === imgUrl
+                          ? "border-blue-500/50"
+                          : "border-gray-700 hover:border-gray-600"
+                      }`}>
+                        <img
+                          src={imgUrl}
+                          alt={`Generated ${i + 1}`}
+                          className="w-full h-32 object-cover"
+                          onClick={() => setBackgroundImage(imgUrl)}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
+                          <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition" />
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setGeneratedImages(prev => prev.filter((_, index) => index !== i));
+                          }}
+                          className="absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-lg z-10"
+                          title="Delete image"
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                        {backgroundImage === imgUrl && (
+                          <div className="absolute top-1 left-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <Check className="w-3 h-3 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Empty State */}
+              {generatedImages.length === 0 && (!backgroundImage && !originalImage && !activeShot?.imageUrl) && (
+                <div className="text-gray-400 text-sm text-center py-8">
+                  <Image className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No images yet</p>
+                  <p className="text-xs mt-1">Generate images to see them here</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Timeline Panel */}
+          <div className={`absolute top-0 right-0 h-full w-80 bg-[#111118] border-l border-white/6 transform transition-transform duration-300 ease-in-out z-30 ${
+            timelinePanelOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}>
+            <div className="p-4 border-b border-white/6 flex items-center justify-between">
+              <h3 className="text-white font-medium">Timeline</h3>
+              <button
+                onClick={() => setTimelinePanelOpen(false)}
+                className="text-gray-400 hover:text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto h-full">
+              {/* Timeline Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <List className="w-4 h-4 text-pink-400" />
+                  <span className="text-pink-400 text-xs font-bold uppercase tracking-wide">Timeline</span>
+                </div>
+                <div className="text-gray-600 text-xs">{activeIdx + 1}/{shots.length}</div>
+              </div>
+              
+              {/* Shots Grid */}
+              <div className="space-y-3">
+                {shots.map((shot, idx) => {
+                  const isActive = shot.id === activeShotId;
+                  const label = shot.description ? shot.description.slice(0, 20) + (shot.description.length > 20 ? "..." : "") : `Frame ${idx + 1}`;
+                  return (
+                    <div
+                      key={shot.id}
+                      onClick={() => goTo(shot.id)}
+                      className={`relative rounded-lg overflow-hidden border-2 transition cursor-pointer ${
+                        isActive ? "border-violet-500 bg-[#1e1e2a]" : "border-transparent bg-[#1a1a24] hover:border-white/20"
+                      }`}
+                    >
+                      <div className="aspect-video bg-[#1e1e2a] flex items-center justify-center relative">
+                        {shot.imageUrl
+                          ? <img src={shot.imageUrl} alt="" className="w-full h-full object-cover" />
+                          : <span className="text-gray-700 text-[10px]">Empty</span>
+                        }
+                        {shot.tags.length > 0 && (
+                          <div className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ backgroundColor: shot.tags[0].color }} />
+                        )}
+                        {isActive && (
+                          <div className="absolute top-1 left-1 w-2 h-2 bg-violet-500 rounded-full" />
+                        )}
+                      </div>
+                      <div className="px-2 py-1.5">
+                        <span className={`text-[10px] truncate block ${isActive ? "text-white" : "text-gray-500"}`}>
+                          {label}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              {/* Add Shot Button */}
+              <button className="w-full mt-4 rounded-lg border-2 border-dashed border-white/10 bg-transparent flex flex-col items-center justify-center gap-1 py-3 hover:border-pink-500/40 hover:bg-white/2 transition">
+                <Plus className="w-4 h-4 text-pink-400" />
+                <span className="text-pink-400 text-[10px] font-medium">Add Shot</span>
+              </button>
+            </div>
+          </div>
+
           {/* ImageAI Panel container with gaps */}
           <div className="absolute inset-0 pointer-events-none z-10 flex flex-col">
             {/* Canvas area with spacing for bottom panel */}
@@ -2751,6 +2911,24 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 {showImageAIPanel ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 <span className="text-[8px] font-medium leading-none">{showImageAIPanel ? 'Hide' : 'Show'}</span>
               </button>
+              
+              {/* Brush Mask Toggle Button - Below ImageAI Panel Toggle */}
+              {aiEditMode === "area-edit" && (
+                <button
+                  onClick={() => setHideBrushMask(!hideBrushMask)}
+                  className={`absolute top-20 left-4 z-[9999] w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all pointer-events-auto ${
+                    hideBrushMask 
+                      ? 'bg-red-500/15 text-red-300' 
+                      : 'bg-green-500/15 text-green-300'
+                  }`}
+                  style={{ pointerEvents: 'auto' }}
+                  title={hideBrushMask ? "Show brush mask" : "Hide brush mask"}
+                  aria-label={hideBrushMask ? "Show brush mask" : "Hide brush mask"}
+                >
+                  <Paintbrush className="w-4 h-4" />
+                  <span className="text-[8px] font-medium leading-none">{hideBrushMask ? 'Show' : 'Hide'}</span>
+                </button>
+              )}
               
               {/* ImageAI Panel overlay on canvas */}
               {showImageAIPanel && (
@@ -3061,195 +3239,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
           </div>
         )}
 
-        {/* Right: vertical icon strip */}
-        <div className="w-[52px] border-l border-white/6 bg-[#0a0a0f] flex flex-col items-center py-3 gap-0.5 shrink-0">
-          {([
-            // { id: "elements" as CanvasTool, Icon: Layers,       label: "Elements", color: "white"   }, // Disabled - ElementPanel temporarily disabled
-            { id: "inpaint"  as CanvasTool, Icon: Paintbrush,    label: "Inpaint",  color: "blue"    },
-            { id: "rectInpaint" as CanvasTool, Icon: Square,       label: "Rect",     color: "cyan"   },
-            { id: "image"    as CanvasTool, Icon: ImageIcon,     label: "Image",    color: "purple"  },
-        
-          ] as { id: CanvasTool; Icon: React.ElementType; label: string; color: string }[]).map(({ id, Icon, label, color }) => (
-            <button key={id} onClick={() => setCanvasTool(id)}
-              className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
-                canvasTool === id
-                  ? color === "emerald" ? "bg-emerald-500/15 text-emerald-300"
-                  : color === "purple"  ? "bg-purple-500/15 text-purple-300"
-                  : color === "orange"  ? "bg-orange-500/15 text-orange-300"
-                  : color === "blue"    ? "bg-blue-500/15 text-blue-300"
-                  : color === "cyan"    ? "bg-cyan-500/15 text-cyan-300"
-                  : color === "gray"    ? "bg-white/10 text-gray-300"
-                  : "bg-white/10 text-white"
-                  : "text-gray-500 hover:text-gray-300 hover:bg-white/5"
-              }`}>
-              <Icon className="w-4 h-4" />
-              <span className="text-[8px] font-medium leading-none">{label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Right: tool content panel */}
-        <div className="w-60 border-l border-white/6 flex flex-col bg-[#111118] shrink-0 overflow-y-auto">
-          {/* ElementPanel removed - text properties now in context menu */}
-
-
-
-          {/* ── Image Generation ── */}
-          {canvasTool === "image" && (() => {
-            const uc = USE_CASES[imageUseCase] ?? USE_CASES["character-swap"];
-            const badge = refModeBadge[uc.refMode];
-            const refSlots = uc.refMode === "multi" ? 3 : uc.refMode === "single" ? 1 : 0;
-            return (
-              <div className="p-3 space-y-3">
-                <div><h3 className="text-white font-bold text-sm">Image Generation</h3><p className="text-[10px] text-gray-500 mt-0.5">Generate images with AI models</p></div>
-
-                {/* Prompt */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Prompt</label>
-                  <textarea
-                    value={imageInpaintPrompt}
-                    onChange={(e) => setImageInpaintPrompt(e.target.value)}
-                    placeholder="Describe the image you want to generate..."
-                    className="w-full px-2.5 py-2 bg-[#1a1d29] border border-white/10 rounded-lg text-[11px] text-white placeholder-gray-600 resize-none h-16 focus:outline-none focus:border-purple-500/50"
-                  />
-                </div>
-
-                {/* Use Case dropdown */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Use Case</label>
-                  <div className="relative">
-                    <select
-                      value={imageUseCase}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setImageUseCase(next);
-                        const nextUc = USE_CASES[next];
-                        if (nextUc) setImageInpaintModel(nextUc.bestModel);
-                      }}
-                      className="w-full px-3 py-2.5 bg-[#13131a] border border-white/10 rounded-xl text-[11px] text-white appearance-none cursor-pointer focus:outline-none focus:border-purple-500/50 hover:border-white/20 transition-colors"
-                    >
-                      {Object.entries(USE_CASES).map(([key, info]) => (
-                        <option key={key} value={key}>{info.emoji} {info.label}</option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">
-                      <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${badge.color}`}>
-                      {badge.label}
-                    </span>
-                    <button 
-                      onClick={() => setShowInfoModal(true)}
-                      className="flex items-center justify-center w-5 h-5 text-gray-400 hover:text-gray-300 transition-colors rounded-full hover:bg-white/10"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M12 16v-4"/>
-                        <path d="M12 8h.01"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Model dropdown */}
-                <div className="space-y-1.5">
-                  <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">Model</label>
-                  <div className="relative">
-                    <select
-                      value={imageInpaintModel}
-                      onChange={(e) => setImageInpaintModel(e.target.value as typeof imageInpaintModel)}
-                      className="w-full px-3 py-2.5 bg-[#13131a] border border-white/10 rounded-xl text-[11px] text-white appearance-none cursor-pointer focus:outline-none focus:border-purple-500/50 hover:border-white/20 transition-colors"
-                    >
-                      {uc.models.map((m) => (
-                        <option key={m.value} value={m.value}>{m.label} — {m.sub}</option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400">
-                      <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg>
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-gray-600">{uc.models.find(m => m.value === imageInpaintModel)?.sub ?? ""}</p>
-                </div>
-
-                {/* Reference Images */}
-                {refSlots > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide">
-                      Reference Images <span className="text-gray-600 normal-case font-normal">({refSlots} max)</span>
-                    </label>
-                    <div className={`grid gap-1.5 ${refSlots === 1 ? "grid-cols-1" : "grid-cols-3"}`}>
-                      {Array.from({ length: refSlots }).map((_, i) => (
-                        <div
-                          key={i}
-                          className="aspect-square bg-[#13131a] border border-dashed border-white/15 rounded-lg flex items-center justify-center overflow-hidden cursor-pointer hover:border-purple-500/40 transition-colors relative group"
-                          onClick={() => {
-                            const input = document.createElement("input");
-                            input.type = "file";
-                            input.accept = "image/*";
-                            input.onchange = (ev) => {
-                              const file = (ev.target as HTMLInputElement).files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (event) => {
-                                  const dataUrl = event.target?.result as string;
-                                  const updated = [...imageReferenceImages];
-                                  updated[i] = dataUrl;
-                                  setImageReferenceImages(updated);
-                                };
-                                reader.readAsDataURL(file);
-                              }
-                            };
-                            input.click();
-                          }}
-                        >
-                          {imageReferenceImages[i] ? (
-                            <>
-                              <img src={imageReferenceImages[i]} alt={`Ref ${i + 1}`} className="w-full h-full object-cover" />
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <span className="text-white text-[8px] font-medium">Change</span>
-                              </div>
-                              <button
-                                className="absolute top-0.5 right-0.5 w-4 h-4 bg-red-500/80 rounded-full text-white text-[8px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                                onClick={(ev) => { ev.stopPropagation(); const u = [...imageReferenceImages]; u[i] = ""; setImageReferenceImages(u); }}
-                              >✕</button>
-                            </>
-                          ) : (
-                            <span className="text-[9px] text-gray-600">+ Ref {i + 1}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Generate button */}
-                <button
-                  onClick={generateImageTab}
-                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-30 text-white rounded-lg text-[11px] font-bold transition flex items-center justify-center gap-1.5"
-                  disabled={!imageInpaintPrompt.trim() || imageIsInpainting}
-                >
-                  {imageIsInpainting
-                    ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</>
-                    : "✨ Generate Image"}
-                </button>
-
-                {imageInpaintError && (
-                  <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2">
-                    <p className="text-[10px] text-red-300">{imageInpaintError}</p>
-                  </div>
-                )}
-
-                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2">
-                  <span className="text-[10px] text-purple-300">
-                    {imageIsInpainting ? "Generating image..." : imageGeneratedImages.length > 0 ? `${imageGeneratedImages.length} image${imageGeneratedImages.length > 1 ? "s" : ""} generated` : "Ready to generate"}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
       </div>
 
       {/* KIE Modal */}

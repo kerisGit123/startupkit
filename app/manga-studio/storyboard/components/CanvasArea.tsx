@@ -133,19 +133,6 @@ export function CanvasArea({
         <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
       </button>
 
-      {/* Brush Mask Toggle - Mobile Friendly */}
-      {canvasActiveTool === "inpaint" && (
-        <button
-          onClick={() => setHideBrushMask(!hideBrushMask)}
-          className="absolute top-2 sm:top-3 right-2 sm:right-3 z-10 px-2 py-1 sm:px-3 sm:py-1.5 bg-black/50 hover:bg-black/80 rounded-lg flex items-center gap-1.5 sm:gap-2 text-white text-xs sm:text-sm transition backdrop-blur-sm"
-          title={hideBrushMask ? "Show brush mask" : "Hide brush mask"}
-          aria-label={hideBrushMask ? "Show brush mask" : "Hide brush mask"}
-        >
-          <Paintbrush className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline">{hideBrushMask ? "Show" : "Hide"}</span>
-        </button>
-      )}
-
       {/* Canvas Container — no data-canvas-editor here; the inner CanvasEditor div carries that attribute */}
       <div 
         ref={canvasContainerRef} 

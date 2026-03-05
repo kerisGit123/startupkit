@@ -1471,35 +1471,48 @@ export async function POST(req: NextRequest) {
       
       // Character Edit/Remix uses exact structure from cURL example
       // For character-remix, only include required and supported optional fields
-      const requestBody = {
-        model: kieModel,
-        input: {
-          prompt: prompt,
-          image_url: imageUrl,
-          reference_image_urls: refUrls,
-          // Only include fields that are supported by the specific model
-          ...(kieModel === "ideogram/character-edit" && {
-            rendering_speed: "BALANCED",
-            style: "AUTO",
-            expand_prompt: true,
-            num_images: "1"
-          }),
-          ...(kieModel === "ideogram/character-remix" && {
-            // Character Remix - remove mask_url since we're doing rectangle mask, not brush inpaint
-            rendering_speed: "BALANCED",
-            style: "AUTO",
-            expand_prompt: true,
-            num_images: "1"
-          })
-        }
+      console.log("[img-proxy] Debug: maskUrl value:", maskUrl);
+      console.log("[img-proxy] Debug: kieModel:", kieModel);
+      console.log("[img-proxy] Debug: should include mask_url:", kieModel === "ideogram/character-edit" && maskUrl);
+      
+      const baseInput: any = {
+        prompt: prompt,
+        image_url: imageUrl,
+        reference_image_urls: refUrls,
+        rendering_speed: "BALANCED",
+        style: "AUTO",
+        expand_prompt: true,
+        num_images: "1"
       };
       
-      console.log("[img-proxy] Character Edit: Using flat JSON structure");
+      // Add mask_url for character-edit if mask exists
+      if (kieModel === "ideogram/character-edit") {
+        if (maskUrl) {
+          (baseInput as any).mask_url = maskUrl;
+          console.log("[img-proxy] Added mask_url to request:", maskUrl?.substring(0, 60) + "...");
+        } else {
+          console.log("[img-proxy] WARNING: maskUrl is null/undefined for character-edit");
+        }
+      }
+      
+      const requestBody = {
+        model: kieModel,
+        input: baseInput
+      };
+      
+      console.log("[img-proxy] Character Edit: MASK URL FIX - VERSION 3.0 - maskUrl:", maskUrl ? "EXISTS" : "MISSING");
       
       // Debug: Log all fields to identify what's missing
       console.log("[img-proxy] Character Edit request body:", JSON.stringify(requestBody, null, 2));
       console.log("[img-proxy] Character Edit fields:", Object.keys(requestBody));
       console.log("[img-proxy] Character Edit has mask:", !!maskUrl);
+      
+      // Final check - if maskUrl exists and model is character-edit, force add it
+      if (kieModel === "ideogram/character-edit" && maskUrl && !(requestBody.input as any).mask_url) {
+        console.log("[img-proxy] FORCE: Adding missing mask_url");
+        (requestBody.input as any).mask_url = maskUrl;
+        console.log("[img-proxy] FORCE: Updated request body:", JSON.stringify(requestBody, null, 2));
+      }
       
       const response = await fetch(KIE_CREATE_URL, {
         method: "POST",
