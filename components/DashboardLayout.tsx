@@ -61,10 +61,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const mainNav = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Manga Studio", href: "/manga-studio", icon: BookOpen },
-    { name: "Episode Builder", href: "/manga-studio/script-breaker", icon: Sparkles },
-    { name: "Episodes", href: "/manga-studio/episodes", icon: FileText },
-    { name: "Playground", href: "/manga-studio/playground", icon: BarChart3 },
+    { name: "Storyboard Studio", href: "/storyboard-studio", icon: BookOpen },
+    { name: "Episode Builder", href: "/storyboard-studio/script-breaker", icon: Sparkles },
+    { name: "Episodes", href: "/storyboard-studio/episodes", icon: FileText },
+    { name: "Playground", href: "/storyboard-studio/playground", icon: BarChart3 },
     { name: "Usage", href: "/dashboard/usage", icon: BarChart3 },
     { name: "Billing", href: "/dashboard/billing", icon: Wallet },
     { name: "Invoices", href: "/dashboard/invoices", icon: FileText },

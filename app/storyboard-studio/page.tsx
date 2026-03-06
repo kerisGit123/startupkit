@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Sparkles, Settings, BookOpen, Plus, ChevronDown, Repeat, Trash2, Image as ImageIcon, Grid3x3, LayoutGrid, SlidersHorizontal, Download, FileText, RefreshCw, Archive, Timer, Save, GripHorizontal, Keyboard, ChevronLeft, ChevronRight, X as XIcon, Pencil, Layers, Maximize2 } from "lucide-react";
-import { useMangaStudioUI } from "./MangaStudioUIContext";
+import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { AIGenerationModal } from "./components/modals/AIGenerationModal";
 import { NewSceneModal } from "./components/modals/NewPageModal";
@@ -11,8 +11,8 @@ import { AssetGeneratorModal } from "./components/modals/AssetGeneratorModal";
 import { NewEpisodeModal } from "./components/modals/NewEpisodeModal";
 import { SceneGenerationModal } from "./components/modals/PageGenerationModal";
 
-export default function MangaStudioPage() {
-  const { openNewEpisode, openStoryManager } = useMangaStudioUI();
+export default function StoryboardStudioPage() {
+  const { openNewEpisode, openStoryManager } = useStoryboardStudioUI();
   const [showSettings, setShowSettings] = useState(false);
   const [showAIGeneration, setShowAIGeneration] = useState(false);
   const [showPageGeneration, setShowPageGeneration] = useState(false);
@@ -273,7 +273,7 @@ export default function MangaStudioPage() {
               AI Generate
             </button>
             
-            <Link href="/manga-studio/script-breaker"
+            <Link href="/storyboard-studio/script-breaker"
               className="px-5 py-2 bg-gradient-to-r from-orange-500 to-red-500 hover:opacity-90 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 shadow-lg shadow-orange-500/20"
             >
               <BookOpen className="w-4 h-4" />

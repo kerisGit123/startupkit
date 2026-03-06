@@ -1171,11 +1171,11 @@ export default function MangaStudioPlaygroundPage() {
   }, [showEpisodeDropdown, showPageDropdown]);
 
   return (
-    <div className="flex flex-col h-full" data-testid="manga-studio">
+    <div className="flex flex-col h-full" data-testid="storyboard-studio">
       <div className="px-4 py-3 border-b border-white/10 bg-[#0f1117] flex items-center justify-between">
         {/* Left: Back + Episode/Page breadcrumb */}
         <div className="flex items-center gap-3">
-          <Link href="/manga-studio" className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition">
+          <Link href="/storyboard-studio" className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition">
             <ArrowLeft className="w-4 h-4" />
           </Link>
           <div className="w-px h-5 bg-white/10" />
@@ -4062,17 +4062,17 @@ export default function MangaStudioPlaygroundPage() {
                             <>
                               {/* Manga templates — asymmetric traditional layouts */}
                               {[
-                                { id: "m2", label: "2-Panel", src: "/manga-studio/images/panel template/manga-2panel.svg",
+                                { id: "m2", label: "2-Panel", src: "/storyboard-studio/images/panel template/manga-2panel.svg",
                                   cells: [{x:0,y:0,w:2,h:1},{x:0,y:1,w:2,h:1}] },
-                                { id: "m3a", label: "3-Panel A", src: "/manga-studio/images/panel template/manga-3panel-a.svg",
+                                { id: "m3a", label: "3-Panel A", src: "/storyboard-studio/images/panel template/manga-3panel-a.svg",
                                   cells: [{x:0,y:0,w:1,h:2},{x:1,y:0,w:1,h:1},{x:1,y:1,w:1,h:1}] },
-                                { id: "m3b", label: "3-Panel B", src: "/manga-studio/images/panel template/manga-3panel-b.svg",
+                                { id: "m3b", label: "3-Panel B", src: "/storyboard-studio/images/panel template/manga-3panel-b.svg",
                                   cells: [{x:0,y:0,w:2,h:1},{x:0,y:1,w:1,h:1},{x:1,y:1,w:1,h:1}] },
-                                { id: "m4", label: "4-Panel", src: "/manga-studio/images/panel template/manga-4panel.svg",
+                                { id: "m4", label: "4-Panel", src: "/storyboard-studio/images/panel template/manga-4panel.svg",
                                   cells: [{x:0,y:0,w:1,h:1},{x:1,y:0,w:1,h:1},{x:0,y:1,w:1,h:1},{x:1,y:1,w:1,h:1}] },
-                                { id: "m4d", label: "4-Dynamic", src: "/manga-studio/images/panel template/manga-4panel-dynamic.svg",
+                                { id: "m4d", label: "4-Dynamic", src: "/storyboard-studio/images/panel template/manga-4panel-dynamic.svg",
                                   cells: [{x:0,y:0,w:2,h:1},{x:0,y:1,w:1,h:1},{x:1,y:1,w:1,h:2},{x:0,y:2,w:1,h:1}] },
-                                { id: "m5", label: "5-Panel", src: "/manga-studio/images/panel template/manga-5panel.svg",
+                                { id: "m5", label: "5-Panel", src: "/storyboard-studio/images/panel template/manga-5panel.svg",
                                   cells: [{x:0,y:0,w:1,h:2},{x:1,y:0,w:1,h:1},{x:1,y:1,w:1,h:1},{x:0,y:2,w:1,h:1},{x:1,y:2,w:1,h:1}] },
                               ].map(tpl => (
                                 <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setShotLayout("dynamic"); setShotCount(tpl.cells.length); }}
@@ -4087,10 +4087,10 @@ export default function MangaStudioPlaygroundPage() {
                             <>
                               {/* Storyboard templates — uniform grids for 6-12 scenes */}
                               {[
-                                { id: "sb6", label: "6-Grid", src: "/manga-studio/images/storyboard/storyboard-6.svg", count: 6, r: 3, c: 2 },
-                                { id: "sb8", label: "8-Grid", src: "/manga-studio/images/storyboard/storyboard-8.svg", count: 8, r: 4, c: 2 },
-                                { id: "sb9", label: "9-Grid", src: "/manga-studio/images/storyboard/storyboard-9.svg", count: 9, r: 3, c: 3 },
-                                { id: "sb12", label: "12-Grid", src: "/manga-studio/images/storyboard/storyboard-12.svg", count: 12, r: 3, c: 4 },
+                                { id: "sb6", label: "6-Grid", src: "/storyboard-studio/images/storyboard/storyboard-6.svg", count: 6, r: 3, c: 2 },
+                                { id: "sb8", label: "8-Grid", src: "/storyboard-studio/images/storyboard/storyboard-8.svg", count: 8, r: 4, c: 2 },
+                                { id: "sb9", label: "9-Grid", src: "/storyboard-studio/images/storyboard/storyboard-9.svg", count: 9, r: 3, c: 3 },
+                                { id: "sb12", label: "12-Grid", src: "/storyboard-studio/images/storyboard/storyboard-12.svg", count: 12, r: 3, c: 4 },
                               ].map(tpl => (
                                 <button key={tpl.id} onClick={() => { setSelectedTemplateId(tpl.id); setShotLayout("grid"); setShotCount(tpl.count); }}
                                   className={`p-1 rounded-lg border transition ${selectedTemplateId === tpl.id ? "bg-blue-500/15 border-blue-500/40" : "bg-[#1a1a24] border-white/10 hover:border-blue-500/30"}`}>

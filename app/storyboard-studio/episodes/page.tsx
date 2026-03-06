@@ -7,7 +7,7 @@ import {
   FileText, Sparkles, Check, X, RefreshCw, Eye, Trash2,
   GripVertical, Archive, Circle, Clock, Pencil, CheckCircle2, ExternalLink,
 } from "lucide-react";
-import { useMangaStudioUI } from "../MangaStudioUIContext";
+import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
 import { SettingsModal } from "../components/modals/SettingsModal";
 import { ManageArcTagsModal } from "../components/modals/ManageArcTagsModal";
 import { ManageSectionsModal } from "../components/modals/ManageSectionsModal";
@@ -60,7 +60,7 @@ const shotStatusConfig: Record<ShotStatus, { label: string; color: string; bg: s
 };
 
 export default function ProjectsPage() {
-  const { openNewEpisode } = useMangaStudioUI();
+  const { openNewEpisode } = useStoryboardStudioUI();
   const [showSettings, setShowSettings] = useState(false);
   const [showArcTags, setShowArcTags] = useState(false);
   const [showSections, setShowSections] = useState(false);
@@ -140,7 +140,7 @@ export default function ProjectsPage() {
   const totalPages = episodes.reduce((sum, ep) => sum + ep.scenes, 0);
 
   const editPage = (episodeId: number, page: number) => {
-    router.push(`/manga-studio?episode=${episodeId}&page=${page}`);
+    router.push(`/storyboard-studio?episode=${episodeId}&page=${page}`);
   };
 
   const filtered = episodes.filter(ep => {

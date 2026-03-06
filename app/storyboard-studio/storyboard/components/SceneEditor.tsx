@@ -17,6 +17,8 @@ import { makeId, bubbleEllipse, cloudPath, tailPath, rectTailPath, rectOutlinePa
 import type { BubbleType, TailDir, FontFamily } from "../../shared/canvas-types";
 import { AIGenerationModal } from "../../components/modals/AIGenerationModal";
 import { ImageAIPanel, type AIEditMode } from "./ImageAIPanel";
+import { VideoAIPanel, type VideoEditMode } from "./VideoAIPanel";
+import { Video, Image as ImageIcon } from "lucide-react";
 
 type CanvasTool = CanvasActiveTool;
 
@@ -42,6 +44,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
+  const [activeAIPanel, setActiveAIPanel] = useState<'image' | 'video'>('image');
   const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("character-edit");
   const [showBrushModelDropdown, setShowBrushModelDropdown] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
@@ -2684,6 +2687,28 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               <Clock className="w-4 h-4" />
               <span>Timeline</span>
             </button>
+            
+            {/* AI Panel Switcher Button */}
+            <button
+              onClick={() => setActiveAIPanel(activeAIPanel === 'image' ? 'video' : 'image')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
+                activeAIPanel === 'video' ? 'bg-purple-600/80' : 'bg-black/50 hover:bg-black/80'
+              }`}
+              title={`Switch to ${activeAIPanel === 'image' ? 'Video' : 'Image'} AI`}
+              aria-label={`Switch to ${activeAIPanel === 'image' ? 'Video' : 'Image'} AI`}
+            >
+              {activeAIPanel === 'image' ? (
+                <>
+                  <Video className="w-4 h-4 text-purple-400" />
+                  <span>Video AI</span>
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="w-4 h-4 text-cyan-400" />
+                  <span>Image AI</span>
+                </>
+              )}
+            </button>
           </div>
           <CanvasArea
             activeIdx={activeIdx}
@@ -2913,13 +2938,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               </button>
               
               {/* Brush Mask Toggle Button - Below ImageAI Panel Toggle */}
-              {aiEditMode === "area-edit" && (
+              {canvasTool === "inpaint" && (
                 <button
                   onClick={() => setHideBrushMask(!hideBrushMask)}
-                  className={`absolute top-20 left-4 z-[9999] w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all pointer-events-auto ${
+                  className={`absolute top-16 left-4 z-[9999] w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all pointer-events-auto ${
                     hideBrushMask 
-                      ? 'bg-red-500/15 text-red-300' 
-                      : 'bg-green-500/15 text-green-300'
+                      ? 'bg-purple-500/15 text-purple-300' 
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                   }`}
                   style={{ pointerEvents: 'auto' }}
                   title={hideBrushMask ? "Show brush mask" : "Hide brush mask"}
@@ -2930,10 +2955,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 </button>
               )}
               
-              {/* ImageAI Panel overlay on canvas */}
+              {/* AI Panel overlay on canvas */}
               {showImageAIPanel && (
                 <div className="pointer-events-auto">
-                  <ImageAIPanel
+                  {activeAIPanel === 'image' ? (
+                    <ImageAIPanel
                   mode={aiEditMode}
                   onModeChange={setAiEditMode}
                   onGenerate={async () => {
@@ -3161,6 +3187,26 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 onFitToScreen={handleFitToScreen}
                 zoomLevel={zoomLevel}
                 />
+                  ) : (
+                    <VideoAIPanel
+                      mode="describe"
+                      onModeChange={() => {}}
+                      onGenerate={async () => {
+                        console.log("=== VIDEO AI GENERATE CALLED ===");
+                        console.log("Video generation with prompt:", promptText);
+                        // TODO: Implement video generation logic
+                      }}
+                      userPrompt={promptText}
+                      onUserPromptChange={setPromptText}
+                      duration={5}
+                      onDurationChange={(duration) => console.log("Duration changed:", duration)}
+                      resolution="1080p"
+                      onResolutionChange={(resolution) => console.log("Resolution changed:", resolution)}
+                      style="cinematic"
+                      onStyleChange={(style) => console.log("Style changed:", style)}
+                      isGenerating={false}
+                    />
+                  )}
                 </div>
               )}
             </div>

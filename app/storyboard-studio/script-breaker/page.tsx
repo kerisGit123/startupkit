@@ -241,7 +241,7 @@ export default function ScriptBreakerPage() {
       <div className="px-4 py-3 border-b border-white/10 bg-[#0f1117]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/manga-studio" className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition">
+            <Link href="/storyboard-studio" className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition">
               <ArrowLeftIcon className="w-4 h-4" />
             </Link>
             <div className="w-px h-5 bg-white/10" />
@@ -781,7 +781,7 @@ export default function ScriptBreakerPage() {
                                     <div className="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded text-[10px] font-bold">Page {page.sceneNumber}</div>
                                     <span className="text-[10px] text-gray-500">{page.shots.length} shots</span>
                                   </div>
-                                  <Link href={`/manga-studio?ep=${episode.id}&page=${page.sceneNumber}`} onClick={(e) => e.stopPropagation()} className="text-[9px] px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded hover:bg-emerald-500/20 transition font-semibold">Open in Editor</Link>
+                                  <Link href={`/storyboard-studio?ep=${episode.id}&page=${page.sceneNumber}`} onClick={(e) => e.stopPropagation()} className="text-[9px] px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded hover:bg-emerald-500/20 transition font-semibold">Open in Editor</Link>
                                 </button>
                                 {/* Panels inside page */}
                                 {page.expanded && (
@@ -829,7 +829,7 @@ export default function ScriptBreakerPage() {
                   </div>
 
                   <div className="flex items-center justify-center pt-2 pb-6">
-                    <Link href="/manga-studio" className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+                    <Link href="/storyboard-studio" className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition flex items-center gap-2 shadow-lg shadow-emerald-500/20">
                       <Layers className="w-4 h-4" />Send All to Panel Manager
                     </Link>
                   </div>

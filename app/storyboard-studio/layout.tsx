@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { MangaStudioSidebar } from "./components/MangaStudioSidebar";
-import { MangaStudioUIProvider } from "./MangaStudioUIContext";
+import { StoryboardStudioSidebar } from "./components/StoryboardStudioSidebar";
+import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
 import { NewEpisodeModal } from "./components/modals/NewEpisodeModal";
 import { StoryManagerModal } from "./components/modals/StoryManagerModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import { NewComicModal } from "./components/modals/NewComicModal";
 
-export default function MangaStudioLayout({
+export default function StoryboardStudioLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const hideStudioSidebar = pathname?.startsWith("/manga-studio/storyboard");
+  const hideStudioSidebar = pathname?.startsWith("/storyboard-studio/storyboard");
 
   const [showNewEpisode, setShowNewEpisode] = useState(false);
   const [showStoryManager, setShowStoryManager] = useState(false);
@@ -24,14 +24,14 @@ export default function MangaStudioLayout({
 
   return (
     <div className="flex h-screen bg-[#0f0f14] overflow-hidden">
-      <MangaStudioUIProvider
+      <StoryboardStudioUIProvider
         value={{
           openNewEpisode: () => setShowNewEpisode(true),
           openStoryManager: () => setShowStoryManager(true),
         }}
       >
         {!hideStudioSidebar && (
-          <MangaStudioSidebar
+          <StoryboardStudioSidebar
             onManageComics={() => setShowStoryManager(true)}
             onSettings={() => setShowSettings(true)}
             onNewComic={() => setShowNewComic(true)}
@@ -44,7 +44,7 @@ export default function MangaStudioLayout({
         <StoryManagerModal isOpen={showStoryManager} onClose={() => setShowStoryManager(false)} />
         <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
         <NewComicModal isOpen={showNewComic} onClose={() => setShowNewComic(false)} />
-      </MangaStudioUIProvider>
+      </StoryboardStudioUIProvider>
     </div>
   );
 }

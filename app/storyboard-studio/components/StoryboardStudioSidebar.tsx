@@ -14,7 +14,7 @@ import {
   Clapperboard,
 } from "lucide-react";
 
-export function MangaStudioSidebar({
+export function StoryboardStudioSidebar({
   onManageComics,
   onSettings,
   onNewComic,
@@ -30,49 +30,49 @@ export function MangaStudioSidebar({
       id: "storyboard",
       label: "Storyboard",
       icon: Clapperboard,
-      href: "/manga-studio/storyboard",
+      href: "/storyboard-studio/storyboard",
       description: "AI storyboard generation",
     },
     {
       id: "editor",
-      label: "Manga Editor",
+      label: "Storyboard Editor",
       icon: Layers,
-      href: "/manga-studio",
+      href: "/storyboard-studio",
       description: "Build scenes & shots",
     },
     {
       id: "playground",
       label: "Editor Playground",
       icon: SlidersHorizontal,
-      href: "/manga-studio/playground",
+      href: "/storyboard-studio/playground",
       description: "Test mask & bubbles",
     },
     {
       id: "script-breaker",
       label: "Storyboard Builder",
       icon: FileText,
-      href: "/manga-studio/script-breaker",
+      href: "/storyboard-studio/script-breaker",
       description: "Script → Characters → Shots",
     },
     {
       id: "episodes",
       label: "Shot Manager",
       icon: Film,
-      href: "/manga-studio/episodes",
+      href: "/storyboard-studio/episodes",
       description: "Manage shots & status",
     },
     {
       id: "universe",
       label: "Universe Manager",
       icon: Globe,
-      href: "/manga-studio/universe",
+      href: "/storyboard-studio/universe",
       description: "Characters, Locations, Rules",
     },
     {
       id: "asset-generator",
       label: "Asset Generator",
       icon: Sparkles,
-      href: "/manga-studio/asset-generator",
+      href: "/storyboard-studio/asset-generator",
       description: "AI-powered asset creation",
     },
   ];
@@ -86,7 +86,7 @@ export function MangaStudioSidebar({
             <BookOpen className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-white font-bold text-lg">Manga Studio</h1>
+            <h1 className="text-white font-bold text-lg">Storyboard Studio</h1>
             <p className="text-xs text-gray-400">Ultimate Edition</p>
           </div>
         </div>

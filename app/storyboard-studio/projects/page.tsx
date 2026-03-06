@@ -161,7 +161,7 @@ export default function ProjectsPage() {
             {filteredProjects.map(project => (
               <Link
                 key={project.id}
-                href={`/manga-studio/projects/${project.id}`}
+                href={`/storyboard-studio/projects/${project.id}`}
                 className="group"
               >
                 <div className="bg-[#1a1a24] border border-white/10 rounded-xl overflow-hidden hover:border-purple-500/30 transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/10">
