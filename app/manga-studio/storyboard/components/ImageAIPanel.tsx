@@ -177,13 +177,13 @@ export function ImageAIPanel({
   const inpaintModelOptions = activeTool === "text-to-image" ? [
     { value: "gpt-image-1-5-text-to-image", label: "🟦 GPT Image 1.5 Text", sub: "Text Mode • 8 credits", credits: 8, maxReferenceImages: 0 },
     { value: "nano-banana-edit", label: "🟩 Nano Banana Edit", sub: "Text Mode • 8 credits", credits: 8, maxReferenceImages: 0 },
-    { value: "flux-2/flex-image-to-image", label: "🟡 Flux 2 Flex", sub: "Text Mode • 40 credits", credits: 40, maxReferenceImages: 0 },
+    
     { value: "qwen/image-edit", label: "🟠 Qwen Image Edit", sub: "Text Mode • 10 credits", credits: 10, maxReferenceImages: 0 },
   ] : activeTool === "image-to-image" ? [
     { value: "flux-2/pro-image-to-image", label: "🔥 Flux 2 Pro", sub: "1:1 • 7 refs • 15 credits", credits: 15, maxReferenceImages: 7 },
     { value: "flux-2/flex-image-to-image", label: "🟡 Flux 2 Flex", sub: "1:1 • 7 refs • 30 credits", credits: 30, maxReferenceImages: 7 },
-    { value: "nano-banana-2", label: "🟩 Nano Banana 2", sub: "1:1 • 13 refs • 40 credits", credits: 40, maxReferenceImages: 13 },
-    { value: "ideogram/character-remix", label: "🟣 Ideogram Remix", sub: "1:1 • 4 refs • 40 credits", credits: 40, maxReferenceImages: 4 },
+    
+   
     { value: "gpt-image-1-5-image-to-image", label: "🟦 GPT Image 1.5", sub: "1:1 • 15 refs • 45 credits", credits: 45, maxReferenceImages: 15 },
   ] : activeTool === "upscale" ? [
     { value: "recraft/crisp-upscale", label: "🎨 Recraft Crisp", sub: "AI Upscale 1 credit", credits: 1, maxReferenceImages: 0 },
