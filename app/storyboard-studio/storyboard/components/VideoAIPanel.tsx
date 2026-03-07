@@ -284,8 +284,6 @@ export function VideoAIPanel({
       icon: React.ComponentType<{ className?: string }>;
     }[] = [
       { id: "describe", label: "Describe", icon: MessageSquareText },
-      { id: "style-transfer", label: "Style", icon: Wand2 },
-      { id: "motion", label: "Motion", icon: Film },
     ];
 
     return (
