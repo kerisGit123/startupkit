@@ -173,7 +173,7 @@ export function VideoAIPanel({
   isMuted = false,
   onMuteToggle,
 }: VideoAIPanelProps) {
-  const [activeTool, setActiveTool] = useState("elements");
+  const [activeTool, setActiveTool] = useState("canvas-objects");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showDurationDropdown, setShowDurationDropdown] = useState(false);
   const [showResolutionDropdown, setShowResolutionDropdown] = useState(false);
@@ -228,18 +228,13 @@ export function VideoAIPanel({
 
         {/* Group 2: Volume Controls */}
         <div className={grp}>
-          <ToolBtn active={false} onClick={() => onMuteToggle?.()} title={isMuted ? "Unmute" : "Mute"}>
-            {isMuted ? <VolumeX className={ic} /> : <Volume2 className={ic} />}
-          </ToolBtn>
+         
         </div>
 
         {/* Group 3: Video Tools */}
         <div className={grp}>
-          <ToolBtn active={false} onClick={() => {}} title="Trim Video">
-            <Scissors className={ic} />
-          </ToolBtn>
-          <ToolBtn active={false} onClick={() => {}} title="Duplicate">
-            <Copy className={ic} />
+      <ToolBtn active={false} onClick={() => onMuteToggle?.()} title={isMuted ? "Unmute" : "Mute"}>
+            {isMuted ? <VolumeX className={ic} /> : <Volume2 className={ic} />}
           </ToolBtn>
           <ToolBtn active={false} onClick={() => {}} title="Export">
             <Download className={ic} />
@@ -257,21 +252,10 @@ export function VideoAIPanel({
     return (
       <div className="absolute right-4 top-4 flex flex-col gap-6">
         {/* Group 1: View Controls */}
-        <div className={grp}>
-          <ToolBtn active={false} onClick={() => {}} title="Preview">
-            <Eye className={ic} />
-          </ToolBtn>
-          <ToolBtn active={false} onClick={() => {}} title="Fullscreen">
-            <Monitor className={ic} />
-          </ToolBtn>
-        </div>
+       
 
         {/* Group 2: Settings */}
-        <div className={grp}>
-          <ToolBtn active={false} onClick={() => {}} title="Video Settings">
-            <Settings className={ic} />
-          </ToolBtn>
-        </div>
+      
       </div>
     );
   };
@@ -573,12 +557,7 @@ export function VideoAIPanel({
               target.style.height = `${target.scrollHeight}px`;
             }}
           />
-          <button
-            className="shrink-0 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 flex items-center justify-center transition text-gray-400 hover:text-gray-200 mt-1"
-            title="Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
+       
         </div>
       </div>
     );

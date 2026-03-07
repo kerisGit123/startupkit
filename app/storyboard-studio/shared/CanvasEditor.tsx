@@ -26,7 +26,7 @@ export function emptyCanvasState(): CanvasEditorState {
   return { bubbles: [], textElements: [], assetElements: [], shapeElements: [], assetLibrary: [], mask: [], undoStack: [], redoStack: [] };
 }
 
-export type CanvasActiveTool = "layers" | "bubbles" | "text" | "elements" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments" | "move" | "arrow" | "line" | "square" | "circle";
+export type CanvasActiveTool = "layers" | "bubbles" | "text" | "canvas-objects" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments" | "move" | "arrow" | "line" | "square" | "circle";
 
 export interface CanvasSelection {
   selectedBubbleId: string | null;
@@ -68,6 +68,7 @@ interface CanvasEditorProps {
   onDeleteSelected?: () => void; // Add handler for delete selected element
   onAspectRatioChange?: (aspectRatio: string) => void; // Add handler for aspect ratio changes
   mode?: "describe" | "area-edit" | "annotate"; // AI Edit mode
+  onSetOriginalImage?: (imageUrl: string) => void; // Add handler for setting original image
 }
 
 type DragInfo = {
@@ -97,10 +98,15 @@ export function CanvasEditor({
   brushSize, isEraser, maskOpacity, hideMask = false, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
   rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, onToolSelect, generateImageWithElements,
-  onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected, onAspectRatioChange, mode,
+  onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected, onAspectRatioChange, mode, onSetOriginalImage,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
+  
+  // Debug: Track imageUrl changes
+  useEffect(() => {
+    console.log("DEBUG: CanvasEditor imageUrl changed to:", imageUrl);
+  }, [imageUrl]);
   const dragRef = useRef<DragInfo>(null);
   const rotDragRef = useRef<RotDragInfo>(null);
   const [outerSize, setOuterSize] = useState({ w: 0, h: 0 });
@@ -255,8 +261,8 @@ export function CanvasEditor({
       }));
       setSelection(null, textId, null);
       
-      // Auto-select elements tool after text creation
-      onToolSelect?.("elements");
+      // Auto-select canvas-objects tool after text creation
+      onToolSelect?.("canvas-objects");
       
       console.log("Text creation completed!");
     } else {
@@ -311,25 +317,18 @@ export function CanvasEditor({
       }));
       setSelection(null, null, null, shapeId);
       
-      // Auto-select elements tool after shape creation
-      onToolSelect?.("elements");
+      // Auto-select canvas-objects tool after shape creation
+      onToolSelect?.("canvas-objects");
       
-      console.log(`${shapeType} creation completed!`);
-    } else {
-      console.log("Container ref is null!");
     }
   }, [panelId, onStateChange, setSelection, selectedColor, onToolSelect]);
 
   useEffect(() => {
-    console.log("Tool activated:", activeTool);
-    console.log("Canvas container ref:", containerRef.current);
     if (activeTool === "text") {
       createTextInCenter();
     } else if (activeTool === "arrow") {
-      console.log("Calling createShapeInCenter with arrow");
       createShapeInCenter("arrow");
     } else if (activeTool === "line") {
-      console.log("Calling createShapeInCenter with line");
       createShapeInCenter("line");
     } else if (activeTool === "square") {
       createShapeInCenter("rectangle");
@@ -804,7 +803,7 @@ export function CanvasEditor({
         pasteObject();
       }
       // Delete
-      else if (e.key === "Delete" || e.key === "Backspace") {
+      else if (e.key === "Delete") {
         e.preventDefault();
         if (selectedBubbleId) deleteBubble(selectedBubbleId);
         else if (selectedTextId) deleteText(selectedTextId);
@@ -931,8 +930,8 @@ export function CanvasEditor({
                 });
                 setSelection(null, textId, null);
                 
-                // Auto-select elements tool after text creation
-                onToolSelect?.("elements");
+                // Auto-select canvas-objects tool after text creation
+                onToolSelect?.("canvas-objects");
               }
             }
           } 
@@ -959,6 +958,10 @@ export function CanvasEditor({
                 const ty = (cH - img.naturalHeight * scale) / 2;
                 img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
                 onImageLoad?.(scale);
+                // Notify parent that image loaded (parent decides whether to set as original)
+                if (imageUrl) {
+                  onSetOriginalImage?.(imageUrl);
+                }
               }}
             />
           : <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-700 pointer-events-none select-none">
@@ -1014,16 +1017,50 @@ export function CanvasEditor({
             }}
           />
         )}
-        {canvasTool === "crop" && rectangle && onCropClick && (
-          <button
-            onMouseDown={e => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onCropClick(); }}
-            className="absolute px-2.5 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-lg transition"
-            style={{ left: rectangle.x + 20, top: rectangle.y + 20, zIndex: 50 }}
-          >
-            ✂ Crop
-          </button>
-        )}
+        {canvasTool === "crop" && rectangle && onCropClick && (() => {
+          // Calculate safe position for crop button within canvas bounds
+          const buttonWidth = 80;
+          const buttonHeight = 30;
+          const padding = 10;
+          
+          // Position button inside rectangle at top-right corner with 10px padding
+          let buttonLeft = rectangle.x + rectangle.width - 70; // 60px button width + 10px padding
+          let buttonTop = rectangle.y + 10; // 10px padding from top
+          
+          // Get container bounds
+          const containerWidth = outerRef.current?.clientWidth || 800;
+          const containerHeight = outerRef.current?.clientHeight || 600;
+          
+          // Adjust if button would go outside right edge
+          if (buttonLeft + buttonWidth > containerWidth - padding) {
+            buttonLeft = containerWidth - buttonWidth - padding;
+          }
+          
+          // Adjust if button would go outside bottom edge
+          if (buttonTop + buttonHeight > containerHeight - padding) {
+            buttonTop = containerHeight - buttonHeight - padding;
+          }
+          
+          // Ensure button doesn't go outside left/top edges
+          buttonLeft = Math.max(padding, buttonLeft);
+          buttonTop = Math.max(padding, buttonTop);
+          
+          return (
+            <button
+              onMouseDown={e => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onCropClick(); }}
+              className="absolute px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-bold shadow-xl transition-all hover:scale-105 border-2 border-orange-400"
+              style={{ 
+                left: `${buttonLeft}px`, 
+                top: `${buttonTop}px`, 
+                zIndex: 9999,
+                minWidth: '60px'
+              }}
+            >
+              Crop
+            </button>
+          );
+        })()}
 
         {/* Assets */}
         {panelAssets.map(a => {
@@ -1603,8 +1640,8 @@ export function CanvasEditor({
                     });
                     setSelection(null, textId, null);
                     
-                    // Auto-select elements tool after text creation
-                    onToolSelect?.("elements");
+                    // Auto-select canvas-objects tool after text creation
+                    onToolSelect?.("canvas-objects");
                     
                     setCtxMenu(null);
                   }}
@@ -1687,7 +1724,29 @@ export function CanvasEditor({
                   onClick={() => {
                     // Use existing Element Combine Background functionality
                     if (generateImageWithElements) {
-                      generateImageWithElements();
+                      try {
+                        const combinedImage = generateImageWithElements();
+                        
+                        // Check if it returned a Promise (async) or a direct value
+                        if (combinedImage instanceof Promise) {
+                          combinedImage.then((imageDataUrl) => {
+                            if (imageDataUrl) {
+                              // Add the combined image to generated images panel
+                              const event = new CustomEvent('addCombinedImage', { detail: imageDataUrl });
+                              window.dispatchEvent(event);
+                            }
+                          }).catch((error) => {
+                            console.error("generateImageWithElements promise failed:", error);
+                          });
+                        } else if (combinedImage) {
+                          // Add the combined image to generated images panel
+                          const event = new CustomEvent('addCombinedImage', { detail: combinedImage });
+                          window.dispatchEvent(event);
+                        }
+                        
+                      } catch (error) {
+                        console.error("generateImageWithElements failed:", error);
+                      }
                     }
                     setCtxMenu(null);
                   }}
@@ -1696,7 +1755,7 @@ export function CanvasEditor({
                     <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
-                    <span className="text-[13px] font-medium">Element Combine Background</span>
+                    <span className="text-[13px] font-medium">Combine Background</span>
                   </div>
                 </button>
                 
@@ -1740,14 +1799,10 @@ export function CanvasEditor({
                     </svg>
                     <span className="text-[13px] font-medium">Bubble Text</span>
                   </div>
-                  <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
                 </button>
                 
                 {/* Bubble sub-menu */}
                 <div className="pl-8 pr-4 py-2">
-                  <div className="text-[11px] text-gray-500 font-medium mb-2">Bubble Types:</div>
                   {[
                     { type: "speech", label: "Speech" },
                     { type: "speechRough", label: "Speech (Rough)" },

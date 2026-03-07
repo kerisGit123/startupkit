@@ -69,6 +69,14 @@ interface CanvasAreaProps {
   
   // AI Edit Mode
   mode?: "describe" | "area-edit" | "annotate";
+  
+  // Video AI Props
+  activeAIPanel?: 'image' | 'video';
+  videoState?: any;
+  onVideoClick?: (videoUrl: string) => void;
+  
+  // Original Image Props
+  onSetOriginalImage?: (imageUrl: string) => void;
 }
 
 // ── CanvasArea Component ─────────────────────────────────────────────────────
@@ -92,6 +100,9 @@ export function CanvasArea({
   setHideBrushMask,
   hiddenIds,
   setCanvasSelection,
+  activeAIPanel,
+  videoState,
+  onVideoClick,
   canvasSelection,
   onToolSelect,
   rectangle,
@@ -111,6 +122,7 @@ export function CanvasArea({
   onColorPickerClick,
   onDeleteSelected,
   mode,
+  onSetOriginalImage,
 }: CanvasAreaProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden relative">
@@ -138,7 +150,55 @@ export function CanvasArea({
         ref={canvasContainerRef} 
         className="flex-1 overflow-hidden bg-[#0d0d12] relative"
       >
-        <CanvasEditor
+        {/* Video AI Canvas - LTX Studio Inspired */}
+        {activeAIPanel === 'video' && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            {videoState?.status === 'empty' && (
+              <div className="flex flex-col items-center justify-center text-gray-600">
+                <div className="w-16 h-16 mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <p className="text-sm">Generate video to preview</p>
+              </div>
+            )}
+            
+            {videoState?.status === 'processing' && (
+              <div className="flex flex-col items-center justify-center text-gray-400">
+                <div className="w-12 h-12 mb-4 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin"></div>
+                <p className="text-sm mb-2">Generating video...</p>
+                <div className="w-48 h-2 bg-gray-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 transition-all duration-300"
+                    style={{ width: `${videoState?.processingProgress || 0}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {videoState?.status === 'ready' && videoState?.content && (
+              <div className="w-full h-full flex items-center justify-center">
+                <video
+                  src={videoState.content.videoUrl}
+                  poster={videoState.content.thumbnailUrl}
+                  controls
+                  loop
+                  autoPlay
+                  muted
+                  className="w-full h-full object-contain cursor-pointer"
+                  onClick={onVideoClick}
+                  style={{ maxHeight: '100%', maxWidth: '100%' }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Image AI Canvas - Default CanvasEditor */}
+        {activeAIPanel === 'image' && (
+          <CanvasEditor
           panelId={panelId}
           imageUrl={backgroundImage || activeShot?.imageUrl}
           activeTool={canvasActiveTool}
@@ -167,6 +227,7 @@ export function CanvasArea({
           onColorPickerClick={onColorPickerClick}
           onDeleteSelected={onDeleteSelected}
           mode={mode}
+          onSetOriginalImage={onSetOriginalImage}
           resetAllTransformations={() => {
             // Reset all transformations for all objects
             setCanvasState((prev) => {
@@ -178,6 +239,7 @@ export function CanvasArea({
             });
           }}
         />
+        )}
       </div>
     </div>
   );

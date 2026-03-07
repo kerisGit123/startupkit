@@ -38,13 +38,36 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [refImages, setRefImages] = useState<string[]>([]);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const originalImageRef = useRef<string | null>(null);
   const [promptText, setPromptText] = useState("");
   const [isInpainting, setIsInpainting] = useState(false);
   const [inpaintError, setInpaintError] = useState<string | null>(null);
+  
+  // Sliding panels state
+  const [generatedImagesPanelOpen, setGeneratedImagesPanelOpen] = useState(false);
+  
+  // Debug: Track backgroundImage changes
+  
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [selectedGeneratedImageIndex, setSelectedGeneratedImageIndex] = useState<number>(-1);
+  
+  // Debug: Track generated images changes
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
+  const generatedImageRef = useRef<HTMLImageElement>(null);
   const [activeAIPanel, setActiveAIPanel] = useState<'image' | 'video'>('image');
+  
+  // Video AI state management
+  const [videoState, setVideoState] = useState({
+    status: 'empty' as 'empty' | 'processing' | 'ready',
+    content: null as {
+      videoUrl?: string;
+      thumbnailUrl?: string;
+      duration?: number;
+      aspectRatio?: string;
+    } | null,
+    processingProgress: 0
+  });
   const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("character-edit");
   const [showBrushModelDropdown, setShowBrushModelDropdown] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
@@ -261,10 +284,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   const [newTextSize, setNewTextSize] = useState(16);
   const [newTextColor, setNewTextColor] = useState("#000000");
   
-  // Sliding panels state
-  const [generatedImagesPanelOpen, setGeneratedImagesPanelOpen] = useState(false);
-  const [timelinePanelOpen, setTimelinePanelOpen] = useState(false);
-  
   // Collapsible property cards state
   const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
   const [maskBrushSize, setMaskBrushSize] = useState(20);
@@ -339,7 +358,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       // Enable brush for all inpaint models
       return "inpaint";
     }
-    // Return the actual tool (text, elements, etc.)
+    // Return the actual tool (text, canvas-objects, etc.)
     return canvasTool;
   }, [canvasTool]);
 
@@ -476,8 +495,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         
         setRectangle({ x, y, width: w, height: h });
         setImageIsRectangleVisible(true);
-        console.log("✅ Crop rectangle updated with new aspect ratio:", activeShot.aspectRatio, { x, y, width: w, height: h });
-        console.log("🔧 Minimum resolution for this ratio:", minDimensionMap[activeShot.aspectRatio]);
       }
     }
   }, [activeShot?.aspectRatio, canvasTool]);
@@ -544,7 +561,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         console.log("Starting cropImageToRectangle with:", rectangle);
         console.log("Canvas display size provided:", canvasDisplaySize);
         
-        const img = new Image();
+        const img = document.createElement('img');
         img.onload = () => {
           try {
             console.log("Image loaded successfully. Dimensions:", img.width, "x", img.height);
@@ -843,16 +860,79 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       const generatedImage = await runInpaintAPI(croppedImage, "", "Enhance the cropped area with AI", "nano-banana");
       console.log("Step 2: Generated image received:", generatedImage);
 
-      // Step 3: Combine generated image with original image
-      console.log("Step 3: Combining generated image with original image...");
-      const combinedImage = await combineImages(originalImage ?? '', generatedImage, rectangle, canvasDisplaySize);
+      // Step 3: Combine generated image with original image including canvas elements
+      console.log("Step 3: Combining generated image with original image and canvas elements...");
+      
+      // First, capture the current canvas with all elements
+      let canvasWithElements = originalImage || '';
+      if (generateImageWithElements) {
+        try {
+          console.log("DEBUG: Capturing canvas with elements...");
+          console.log("DEBUG: Current canvas state:", canvasState);
+          console.log("DEBUG: Canvas elements count:", canvasState.elements?.length || 0);
+          
+          // Generate image with current canvas elements
+          const elementsImage = await new Promise<string>((resolve, reject) => {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            if (tempCtx) {
+              // Set canvas size
+              const width = canvasDisplaySize?.width || 800;
+              const height = canvasDisplaySize?.height || 600;
+              tempCanvas.width = width;
+              tempCanvas.height = height;
+              
+              // Draw original image as background
+              const img = new Image();
+              img.onload = () => {
+                tempCtx.drawImage(img, 0, 0, width, height);
+                
+                // Call generateImageWithElements to draw shapes/text on top
+                const mockCanvas = {
+                  width, height,
+                  getContext: () => tempCtx,
+                  toDataURL: () => tempCanvas.toDataURL('image/png')
+                } as any;
+                
+                console.log("DEBUG: Calling generateImageWithElements...");
+                // This will draw all the canvas elements (shapes, text, etc.)
+                generateImageWithElements().then(() => {
+                  const elementsImage = tempCanvas.toDataURL('image/png');
+                  console.log("DEBUG: Canvas with elements captured successfully");
+                  console.log("DEBUG: Elements image length:", elementsImage.length);
+                  resolve(elementsImage);
+                }).catch((err) => {
+                  console.log("DEBUG: generateImageWithElements failed:", err);
+                  reject(err);
+                });
+              };
+              img.onerror = () => reject(new Error('Failed to load original image'));
+              img.src = originalImage || backgroundImage || activeShot?.imageUrl || '';
+            } else {
+              reject(new Error('Failed to get canvas context'));
+            }
+          });
+          
+          canvasWithElements = elementsImage;
+        } catch (err) {
+          console.log("Failed to generate canvas with elements, using original image:", err);
+          canvasWithElements = originalImage || backgroundImage || activeShot?.imageUrl || '';
+        }
+      }
+      
+      const combinedImage = await combineImages(canvasWithElements, generatedImage, rectangle, canvasDisplaySize);
       console.log("Step 3: Images combined successfully");
+      console.log("DEBUG: Combined image URL length:", combinedImage.length);
+      console.log("DEBUG: Combined image URL starts with:", combinedImage.substring(0, 50));
 
       // Set the combined image as the new background
+      console.log("DEBUG: About to set backgroundImage to combinedImage");
       setBackgroundImage(combinedImage);
+      console.log("DEBUG: setBackgroundImage called with combinedImage");
       
-      // Add combined image to generated images panel
-      setGeneratedImages(prev => [...prev, croppedImage, generatedImage, combinedImage]);
+      // Add ONLY the combined image to generated images panel (slider)
+      setGeneratedImages(prev => [combinedImage, ...prev]);
       setShowGenPanel(true);
 
       // Clear the crop rectangle after successful generation
@@ -898,8 +978,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Helper function to combine two images with a mask
   const combineImages = async (originalImage: string, generatedImage: string, rectangle: any, canvasDisplaySize?: { width: number; height: number }): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const img1 = new Image();
-      const img2 = new Image();
+      const img1 = document.createElement('img');
+      const img2 = document.createElement('img');
       
       img1.onload = () => {
         img2.onload = () => {
@@ -1103,12 +1183,63 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
   };
 
+  // ── Video State Management Functions ───────────────────────────────────────────────────────
+  const handleVideoGenerateStart = () => {
+    setVideoState({
+      status: 'processing',
+      content: null,
+      processingProgress: 0
+    });
+  };
+
+  const handleVideoComplete = (videoData: {
+    videoUrl: string;
+    thumbnailUrl?: string;
+    duration?: number;
+    aspectRatio?: string;
+  }) => {
+    setVideoState({
+      status: 'ready',
+      content: videoData,
+      processingProgress: 100
+    });
+  };
+
+  const handleVideoError = (error: string) => {
+    setVideoState({
+      status: 'empty',
+      content: null,
+      processingProgress: 0
+    });
+    setInpaintError(error);
+  };
+
+  const handleVideoClick = () => {
+    if (videoState.status === 'ready' && videoState.content?.videoUrl) {
+      // Open video in modal or expand view
+      console.log('Video clicked:', videoState.content.videoUrl);
+    }
+  };
+
+  // Reset video state when switching between Image and Video AI
+  const handleAIPanelSwitch = (panel: 'image' | 'video') => {
+    setActiveAIPanel(panel);
+    if (panel === 'image') {
+      // Reset video state when switching to image
+      setVideoState({
+        status: 'empty',
+        content: null,
+        processingProgress: 0
+      });
+    }
+  };
+
   // ── Generate Image with Bubbles and Text ───────────────────────────────────────────────────────
-  const generateImageWithElements = async () => {
+  const generateImageWithElements = async (): Promise<string | null> => {
     const imageUrl = backgroundImage || activeShot?.imageUrl;
     if (!imageUrl) {
       setInpaintError("No background image available");
-      return;
+      return null;
     }
 
     // Handle area-edit mode with character-edit model (faceshift)
@@ -1162,24 +1293,35 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       // Let it fall through to rectangle mask logic
     }
 
+    console.log("DEBUG: Proceeding to normal rendering logic (aiEditMode:", aiEditMode, ")");
     setIsInpainting(true);
     setInpaintError(null);
 
     try {
       // Get the container element
+      console.log("DEBUG: Looking for canvas container...");
       const containerEl = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]') as HTMLElement;
       if (!containerEl) {
+        console.error("DEBUG: Canvas container not found");
         throw new Error("Canvas container not found");
       }
+      console.log("DEBUG: Canvas container found:", containerEl);
 
       // Use clientWidth/clientHeight to match CanvasEditor's ResizeObserver
       // (which uses entries[0].contentRect — same as clientWidth/Height for
       // elements without padding/border). getBoundingClientRect can differ.
       const cssW = containerEl.clientWidth;
       const cssH = containerEl.clientHeight;
+      console.log("DEBUG: Canvas dimensions:", cssW, "x", cssH);
 
       // Convert image to data URL first to avoid CORS issues
       let safeImageUrl = imageUrl;
+      console.log("DEBUG: Original imageUrl:", imageUrl);
+      
+      if (!imageUrl) {
+        console.error("DEBUG: No imageUrl available, function cannot proceed");
+        throw new Error("No background image available");
+      }
       
       if (imageUrl.startsWith('http')) {
         try {
@@ -1199,10 +1341,15 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       }
 
       // Load background image to get its natural dimensions
-      const img = new Image();
+        const img = document.createElement('img');
       await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
+        img.onload = () => {
+          resolve(undefined);
+        };
+        img.onerror = (error) => {
+          console.error("DEBUG: Failed to load background image:", error);
+          reject(error);
+        };
         img.src = safeImageUrl;
       });
 
@@ -1345,7 +1492,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         const bubbleUrl = URL.createObjectURL(bubbleBlob);
 
         await new Promise<void>((resolve) => {
-          const bImg = new Image();
+          const bImg = document.createElement('img');
           bImg.onload = () => {
             captureCtx.save();
             captureCtx.translate(b.x + b.w / 2, b.y + b.h / 2);
@@ -1441,7 +1588,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         }
 
         await new Promise<void>((resolve) => {
-          const aImg = new Image();
+          const aImg = document.createElement('img');
           
           // Set crossOrigin to handle CORS issues
           aImg.crossOrigin = 'anonymous';
@@ -1556,14 +1703,180 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         captureCtx.restore();
       });
 
+      // Draw shape elements (arrow, line, square, circle) — raw CSS pixel coords
+      const shapeElements = canvasState.shapeElements
+        .filter(s => s.panelId === activeShotId)
+        .sort((a, b) => (a.zIndex ?? 1) - (b.zIndex ?? 1));
+
+      for (const shape of shapeElements) {
+        captureCtx.save();
+        
+        const isLineOrArrow = shape.type === "arrow" || shape.type === "line";
+        let containerWidth = shape.w;
+        let containerHeight = shape.h;
+        let containerLeft = shape.x;
+        let containerTop = shape.y;
+        let svgOffsetX = 0;
+        let svgOffsetY = 0;
+        
+        if (isLineOrArrow) {
+          // For arrows/lines: head at (x,y), tail at (endX,endY)
+          const startX = shape.x;
+          const startY = shape.y;
+          const endX = shape.endX ?? shape.w;
+          const endY = shape.endY ?? shape.h;
+          
+          
+          // Calculate bounding box that contains the entire line/arrow
+          const minX = Math.min(startX, endX);
+          const maxX = Math.max(startX, endX);
+          const minY = Math.min(startY, endY);
+          const maxY = Math.max(startY, endY);
+          
+          // Add padding for arrow head and stroke width
+          const padding = 20;
+          containerWidth = maxX - minX + padding * 2;
+          containerHeight = maxY - minY + padding * 2;
+          containerLeft = minX - padding;
+          containerTop = minY - padding;
+          
+          // Adjust SVG coordinates to fit in the container
+          svgOffsetX = padding - minX;
+          svgOffsetY = padding - minY;
+          
+        }
+        
+        // Create an SVG for the shape
+        const svgWidth = containerWidth;
+        const svgHeight = containerHeight;
+        
+        let shapeSvg = '';
+        
+        if (shape.type === "arrow") {
+          shapeSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" style="overflow: visible">
+              <defs>
+                <marker id="arrow-${shape.id}" viewBox="0 -5 10 10" refX="5" refY="0" markerWidth="4" markerHeight="4" orient="auto">
+                  <path d="M0,-5L10,0L0,5" fill="${shape.strokeColor}" />
+                </marker>
+              </defs>
+              <line
+                x1="${shape.x - containerLeft + svgOffsetX}"
+                y1="${shape.y - containerTop + svgOffsetY}"
+                x2="${(shape.endX ?? shape.w) - containerLeft + svgOffsetX}"
+                y2="${(shape.endY ?? shape.h) - containerTop + svgOffsetY}"
+                stroke="${shape.strokeColor}"
+                strokeWidth="${shape.strokeWidth}"
+                fill="none"
+                markerEnd="url(#arrow-${shape.id})"
+              />
+            </svg>
+          `;
+        } else if (shape.type === "line") {
+          shapeSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}" style="overflow: visible">
+              <line
+                x1="${shape.x - containerLeft + svgOffsetX}"
+                y1="${shape.y - containerTop + svgOffsetY}"
+                x2="${(shape.endX ?? shape.w) - containerLeft + svgOffsetX}"
+                y2="${(shape.endY ?? shape.h) - containerTop + svgOffsetY}"
+                stroke="${shape.strokeColor}"
+                height="${shape.h}"
+                stroke="${shape.strokeColor}"
+                strokeWidth="${shape.strokeWidth}"
+                fill="${shape.fillColor || "transparent"}"
+              />
+            </svg>
+          `;
+        } else if (shape.type === "circle") {
+          shapeSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="${svgWidth}" height="${svgHeight}">
+              <circle
+                cx="${svgOffsetX + (shape.w / 2)}"
+                cy="${svgOffsetY + (shape.h / 2)}"
+                r="${Math.min(shape.w, shape.h) / 2}"
+                stroke="${shape.strokeColor}"
+                strokeWidth="${shape.strokeWidth}"
+                fill="${shape.fillColor || "transparent"}"
+              />
+            </svg>
+          `;
+        }
+        
+        // For lines and arrows, use direct canvas drawing to guarantee visibility
+        if (isLineOrArrow) {
+            captureCtx.strokeStyle = shape.strokeColor;
+          captureCtx.lineWidth = shape.strokeWidth;
+          captureCtx.fillStyle = shape.fillColor || 'transparent';
+          
+          if (shape.type === "line") {
+            const startX = shape.x;
+            const startY = shape.y;
+            const endX = shape.endX ?? shape.w;
+            const endY = shape.endY ?? shape.h;
+            
+            captureCtx.beginPath();
+            captureCtx.moveTo(startX, startY);
+            captureCtx.lineTo(endX, endY);
+            captureCtx.stroke();
+          } else if (shape.type === "arrow") {
+            const startX = shape.x;
+            const startY = shape.y;
+            const endX = shape.endX ?? shape.w;
+            const endY = shape.endY ?? shape.h;
+            
+            // Draw line
+            captureCtx.beginPath();
+            captureCtx.moveTo(startX, startY);
+            captureCtx.lineTo(endX, endY);
+            captureCtx.stroke();
+            
+            // Draw arrowhead
+            const headlen = 15;
+            const angle = Math.atan2(endY - startY, endX - startX);
+            captureCtx.beginPath();
+            captureCtx.moveTo(endX, endY);
+            captureCtx.lineTo(endX - headlen * Math.cos(angle - Math.PI / 6), endY - headlen * Math.sin(angle - Math.PI / 6));
+            captureCtx.moveTo(endX, endY);
+            captureCtx.lineTo(endX - headlen * Math.cos(angle + Math.PI / 6), endY - headlen * Math.sin(angle + Math.PI / 6));
+            captureCtx.stroke();
+          }
+        } else {
+          // Use SVG for rectangles and circles
+          
+          // Create an image from the SVG
+          const svgBlob = new Blob([shapeSvg], { type: 'image/svg+xml;charset=utf-8' });
+          const svgUrl = URL.createObjectURL(svgBlob);
+          
+          const shapeImg = document.createElement('img');
+          
+          await new Promise<void>((resolve) => {
+            shapeImg.onload = () => {
+              
+              // Draw the SVG image onto the capture canvas
+              captureCtx.drawImage(shapeImg, containerLeft, containerTop, containerWidth, containerHeight);
+              
+              // Clean up
+              URL.revokeObjectURL(svgUrl);
+              resolve();
+            };
+            shapeImg.onerror = () => { 
+              console.log("DEBUG: SVG failed to load for shape:", shape.type);
+              URL.revokeObjectURL(svgUrl);
+              resolve();
+            };
+            shapeImg.src = svgUrl;
+          });
+        }
+        
+        captureCtx.restore();
+      }
+
       // Convert to base64
       const canvasDataUrl = captureCanvas.toDataURL('image/png', 1.0);
       
-      // Add the generated image to the panel (newest first)
-      setGeneratedImages(prev => [canvasDataUrl, ...prev]);
-      setShowGenPanel(true);
-
-      console.log("Generated image with text bubbles and assets");
+      // Return the combined image instead of adding to panel
+      return canvasDataUrl;
 
     } catch (err) {
       console.error("Full error details:", err);
@@ -1767,7 +2080,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         } else {
           // Normal mode: create mask for original image
           const maskCanvas = document.createElement("canvas");
-          const img = new Image();
+          const img = document.createElement('img');
           await new Promise<void>((resolve, reject) => {
             img.onload = () => resolve();
             img.onerror = (e) => reject(e);
@@ -1885,10 +2198,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       if (isSquareMode) {
         console.log("[rectInpaint] Square mode: compositing generated square back into original");
         finalImage = await new Promise<string>((resolve, reject) => {
-          const origImg = new Image();
+          const origImg = document.createElement('img');
           origImg.crossOrigin = "anonymous";
           origImg.onload = () => {
-            const genImg = new Image();
+            const genImg = document.createElement('img');
             genImg.crossOrigin = "anonymous";
             genImg.onload = () => {
               // Canvas at original image natural dimensions
@@ -1984,10 +2297,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         // Rectangle mode: composite the generated image back into the original
         console.log("[rectInpaint] Rectangle mode: compositing generated image back into original");
         finalImage = await new Promise<string>((resolve, reject) => {
-          const origImg = new Image();
+          const origImg = document.createElement('img');
           origImg.crossOrigin = "anonymous";
           origImg.onload = () => {
-            const genImg = new Image();
+            const genImg = document.createElement('img');
             genImg.crossOrigin = "anonymous";
             genImg.onload = () => {
               // Canvas at original image natural dimensions
@@ -2043,7 +2356,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         console.log("[rectInpaint] Debug: Generated square image size:", generatedBase64.length, "characters");
         
         // Log image dimensions for debugging
-        const genImg = new Image();
+        const genImg = document.createElement('img');
         genImg.onload = () => {
           console.log("[rectInpaint] Debug: Generated square dimensions:", genImg.naturalWidth, "x", genImg.naturalHeight);
         };
@@ -2055,8 +2368,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       console.log("[rectInpaint] Debug: Added final combined image to container");
       console.log("[rectInpaint] Debug: Final combined image size:", finalImage.length, "characters");
       
-      // Add all images to generated container (newest first)
-      setGeneratedImages(prev => [...imagesToAdd, ...prev]);
+      // Add ONLY the final combined image to generated images panel (slider)
+      setGeneratedImages(prev => [finalImage, ...prev]);
       setShowGenPanel(true);
       
       // Update background to the final result
@@ -2167,7 +2480,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   // Helper functions for image processing
   const convertToWebP = async (imageUrl: string, quality: number = 0.8): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
+      const img = document.createElement('img');
       img.crossOrigin = "anonymous";
       img.onload = () => {
         const canvas = document.createElement("canvas");
@@ -2188,7 +2501,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   const convertMaskToWebP = async (mask: Array<{ x: number; y: number; r?: number }>, imageUrl: string, quality: number = 0.8): Promise<string> => {
     // Load the original image to get dimensions
-    const img = new Image();
+    const img = document.createElement('img');
     img.crossOrigin = "anonymous";
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
@@ -2299,7 +2612,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
       if (!canvasEl) throw new Error("Cannot find canvas element");
       
       // Get original image dimensions (not canvas dimensions)
-      const img = new Image();
+      const img = document.createElement('img');
       img.crossOrigin = "anonymous";
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
@@ -2360,7 +2673,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       // Convert main image to WebP
       const imageWebpBase64 = await new Promise<string>((resolve) => {
-        const img = new Image();
+        const img = document.createElement('img');
         img.crossOrigin = "anonymous";
         img.onload = () => {
           const canvas = document.createElement("canvas");
@@ -2477,7 +2790,22 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
   };
 
-  // Navigation functions
+  // Add event listener for combined images from CanvasEditor
+  useEffect(() => {
+    const handleCombinedImage = (event: CustomEvent) => {
+      const combinedImage = event.detail;
+      setGeneratedImages(prev => {
+        const newImages = [combinedImage, ...prev];
+        // Auto-select the newly generated combined image (index 0)
+        setSelectedGeneratedImageIndex(0);
+        return newImages;
+      });
+      setShowGenPanel(true);
+    };
+    window.addEventListener('addCombinedImage', handleCombinedImage as EventListener);
+    return () => window.removeEventListener('addCombinedImage', handleCombinedImage as EventListener);
+  }, []);
+
   const goTo = (shotId: string) => {
     setActiveShotId(shotId);
   };
@@ -2611,7 +2939,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               // Try to find and draw the image
               const img = container.querySelector('img');
               if (img && img.src) {
-                const tempImg = new Image();
+                const tempImg = document.createElement('img');
                 tempImg.crossOrigin = 'anonymous';
                 tempImg.onload = () => {
                   ctx.drawImage(tempImg, 0, 0, rect.width, rect.height);
@@ -2660,7 +2988,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             <button
               onClick={() => {
                 setGeneratedImagesPanelOpen(!generatedImagesPanelOpen);
-                setTimelinePanelOpen(false); // Close timeline when opening generated images
               }}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
                 generatedImagesPanelOpen ? 'bg-blue-600/80' : 'bg-black/50 hover:bg-black/80'
@@ -2670,22 +2997,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             >
               <Image className="w-4 h-4" />
               <span>Generated</span>
-            </button>
-            
-            {/* Timeline Button */}
-            <button
-              onClick={() => {
-                setTimelinePanelOpen(!timelinePanelOpen);
-                setGeneratedImagesPanelOpen(false); // Close generated images when opening timeline
-              }}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
-                timelinePanelOpen ? 'bg-blue-600/80' : 'bg-black/50 hover:bg-black/80'
-              }`}
-              title="View Timeline"
-              aria-label="View Timeline"
-            >
-              <Clock className="w-4 h-4" />
-              <span>Timeline</span>
             </button>
             
             {/* AI Panel Switcher Button */}
@@ -2710,6 +3021,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               )}
             </button>
           </div>
+          {/* Debug: Log what's being passed to CanvasArea */}
+       
           <CanvasArea
             activeIdx={activeIdx}
             shots={shots}
@@ -2742,6 +3055,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             isSquareMode={isSquareMode}
             selectedAspectRatio={rectangleMaskAspectRatio}
             onCropExecute={runCrop}
+            runCrop={runCrop}
             onImageLoad={(scale) => {
               fitScaleRef.current = scale;
               setZoomLevel(100);
@@ -2750,23 +3064,41 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             }}
             selectedColor={selectedColor}
             mode={aiEditMode}
+            // Video AI Props
+            activeAIPanel={activeAIPanel}
+            videoState={videoState}
+            onVideoClick={handleVideoClick}
+            // Original Image Props
+            onSetOriginalImage={(imageUrl) => {
+              console.log("[DEBUG] onSetOriginalImage called with:", imageUrl);
+              console.log("[DEBUG] originalImageRef.current:", originalImageRef.current);
+              setBackgroundImage(imageUrl);
+              // Only set originalImage if not already set (using ref for accurate tracking)
+              if (!originalImageRef.current && imageUrl) {
+                console.log("[DEBUG] Setting originalImage for first time:", imageUrl);
+                originalImageRef.current = imageUrl;
+                setOriginalImage(imageUrl);
+              }
+              setCanvasState(s => ({ ...s, mask: [] }));
+              fitScaleRef.current = 1;
+              setZoomLevel(100);
+            }}
           />
 
           {/* Sliding Panels */}
           {/* Overlay backdrop */}
-          {(generatedImagesPanelOpen || timelinePanelOpen) && (
+          {generatedImagesPanelOpen && (
             <div 
               className="absolute inset-0 bg-black/50 z-15"
               onClick={() => {
                 setGeneratedImagesPanelOpen(false);
-                setTimelinePanelOpen(false);
               }}
             />
           )}
           
           {/* Generated Images Panel */}
-          <div className={`absolute top-0 right-0 h-full w-80 bg-[#111118] border-l border-white/6 transform transition-transform duration-300 ease-in-out z-30 ${
-            generatedImagesPanelOpen ? 'translate-x-0' : 'translate-x-full'
+          <div className={`absolute top-0 left-0 h-full w-80 bg-[#111118] border-r border-white/6 transform transition-transform duration-300 ease-in-out z-30 ${
+            generatedImagesPanelOpen ? 'translate-x-0' : '-translate-x-full'
           }`}>
             <div className="p-4 border-b border-white/6 flex items-center justify-between">
               <h3 className="text-white font-medium">Generated Images</h3>
@@ -2779,18 +3111,32 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             </div>
             <div className="p-4 overflow-y-auto h-full">
               {/* Original Image Section */}
-              {(backgroundImage || originalImage || activeShot?.imageUrl) && (
+              {(originalImage || backgroundImage || activeShot?.imageUrl) && (
                 <div className="mb-6">
                   <h4 className="text-white text-sm font-medium mb-3">Original</h4>
-                  <div className="relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-700 hover:border-gray-600 transition">
+                  <div className="relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-700 hover:border-gray-600 transition"
+                     onClick={(e) => {
+                       e.preventDefault();
+                       e.stopPropagation();
+                       console.log("DEBUG: Original image clicked");
+                       console.log("DEBUG: originalImage:", originalImage);
+                       console.log("DEBUG: backgroundImage:", backgroundImage);
+                       console.log("DEBUG: activeShot?.imageUrl:", activeShot?.imageUrl);
+                       
+                       // Always select the original image when clicking Original section
+                       const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
+                       if (imageToSet) {
+                         console.log("DEBUG: Setting background to:", imageToSet);
+                         setBackgroundImage(imageToSet);
+                         // Don't clear generated images - keep them in the panel
+                       } else {
+                         console.log("DEBUG: No images available to set as background");
+                       }
+                     }}>
                     <img
                       src={originalImage || backgroundImage || activeShot?.imageUrl}
                       alt="Original"
-                      className="w-full h-32 object-cover"
-                      onClick={() => {
-                        const imgUrl = originalImage || backgroundImage || activeShot?.imageUrl;
-                        if (imgUrl) setBackgroundImage(imgUrl);
-                      }}
+                      className="w-full h-32 object-cover pointer-events-none"
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
                       <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition" />
@@ -2810,32 +3156,48 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       <div key={i} className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition ${
                         backgroundImage === imgUrl
                           ? "border-blue-500/50"
+                          : selectedGeneratedImageIndex === i
+                          ? "border-emerald-500/50"
                           : "border-gray-700 hover:border-gray-600"
                       }`}>
+                        {/* Selection indicator */}
+                        {selectedGeneratedImageIndex === i && (
+                          <div className="absolute top-2 left-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center z-20">
+                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
                         <img
+                          ref={i === 0 ? generatedImageRef : undefined}
                           src={imgUrl}
                           alt={`Generated ${i + 1}`}
-                          className="w-full h-32 object-cover"
-                          onClick={() => setBackgroundImage(imgUrl)}
+                          className="w-full h-32 object-cover cursor-pointer"
+                          onClick={() => {
+                            setSelectedGeneratedImageIndex(i);
+                            setBackgroundImage(imgUrl);
+                          }}
+                          tabIndex={i === 0 ? 0 : -1}
                         />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-                          <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition" />
-                        </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setGeneratedImages(prev => prev.filter((_, index) => index !== i));
+                            setGeneratedImages(prev => {
+                              const newImages = prev.filter((_, index) => index !== i);
+                              // Adjust selected index if necessary
+                              if (selectedGeneratedImageIndex === i) {
+                                setSelectedGeneratedImageIndex(-1);
+                              } else if (selectedGeneratedImageIndex > i) {
+                                setSelectedGeneratedImageIndex(selectedGeneratedImageIndex - 1);
+                              }
+                              return newImages;
+                            });
                           }}
                           className="absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-lg z-10"
                           title="Delete image"
                         >
                           <X className="w-3 h-3 text-white" />
                         </button>
-                        {backgroundImage === imgUrl && (
-                          <div className="absolute top-1 left-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                            <Check className="w-3 h-3 text-white" />
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -2850,72 +3212,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   <p className="text-xs mt-1">Generate images to see them here</p>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Timeline Panel */}
-          <div className={`absolute top-0 right-0 h-full w-80 bg-[#111118] border-l border-white/6 transform transition-transform duration-300 ease-in-out z-30 ${
-            timelinePanelOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}>
-            <div className="p-4 border-b border-white/6 flex items-center justify-between">
-              <h3 className="text-white font-medium">Timeline</h3>
-              <button
-                onClick={() => setTimelinePanelOpen(false)}
-                className="text-gray-400 hover:text-white transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto h-full">
-              {/* Timeline Header */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <List className="w-4 h-4 text-pink-400" />
-                  <span className="text-pink-400 text-xs font-bold uppercase tracking-wide">Timeline</span>
-                </div>
-                <div className="text-gray-600 text-xs">{activeIdx + 1}/{shots.length}</div>
-              </div>
-              
-              {/* Shots Grid */}
-              <div className="space-y-3">
-                {shots.map((shot, idx) => {
-                  const isActive = shot.id === activeShotId;
-                  const label = shot.description ? shot.description.slice(0, 20) + (shot.description.length > 20 ? "..." : "") : `Frame ${idx + 1}`;
-                  return (
-                    <div
-                      key={shot.id}
-                      onClick={() => goTo(shot.id)}
-                      className={`relative rounded-lg overflow-hidden border-2 transition cursor-pointer ${
-                        isActive ? "border-violet-500 bg-[#1e1e2a]" : "border-transparent bg-[#1a1a24] hover:border-white/20"
-                      }`}
-                    >
-                      <div className="aspect-video bg-[#1e1e2a] flex items-center justify-center relative">
-                        {shot.imageUrl
-                          ? <img src={shot.imageUrl} alt="" className="w-full h-full object-cover" />
-                          : <span className="text-gray-700 text-[10px]">Empty</span>
-                        }
-                        {shot.tags.length > 0 && (
-                          <div className="absolute top-1 right-1 w-2 h-2 rounded-full" style={{ backgroundColor: shot.tags[0].color }} />
-                        )}
-                        {isActive && (
-                          <div className="absolute top-1 left-1 w-2 h-2 bg-violet-500 rounded-full" />
-                        )}
-                      </div>
-                      <div className="px-2 py-1.5">
-                        <span className={`text-[10px] truncate block ${isActive ? "text-white" : "text-gray-500"}`}>
-                          {label}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {/* Add Shot Button */}
-              <button className="w-full mt-4 rounded-lg border-2 border-dashed border-white/10 bg-transparent flex flex-col items-center justify-center gap-1 py-3 hover:border-pink-500/40 hover:bg-white/2 transition">
-                <Plus className="w-4 h-4 text-pink-400" />
-                <span className="text-pink-400 text-[10px] font-medium">Add Shot</span>
-              </button>
             </div>
           </div>
 
@@ -3043,8 +3339,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                         
                         // Use the activeShot.aspectRatio from top navigation menu
                         const currentAspectRatio = activeShot?.aspectRatio || "16:9";
-                        console.log("🔧 Crop tool using activeShot.aspectRatio:", currentAspectRatio);
-                        console.log("🔧 activeShot:", activeShot);
                         
                         // Minimum resolution dimensions (multiply by 10 for minimum size)
                         const minDimensionMap: Record<string, { width: number; height: number }> = {
@@ -3069,11 +3363,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                         const cy = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
                         setRectangle({ x: cx, y: cy, width: w, height: h });
                         setImageIsRectangleVisible(true);
-                        console.log("✅ Crop rectangle created with aspect ratio:", currentAspectRatio, { x: cx, y: cy, width: w, height: h });
-                        console.log("🔧 Minimum resolution for this ratio:", minDimensionMap[currentAspectRatio]);
                       }
                     } else if (tool === "rectInpaint") {
-                      console.log("🔧 Before setting rectInpaint - current selectedAspectRatio:", selectedAspectRatio);
                       setCanvasTool("rectInpaint");
                       // Create rectangle with 1:1 aspect ratio (200x200) when selecting rectangle mask tool
                       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
@@ -3087,15 +3378,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                         setRectangle({ x: cx, y: cy, width: w, height: h });
                         setImageIsRectangleVisible(true);
                         setRectangleMaskAspectRatio("1:1"); // Set rectangle mask aspect ratio to 1:1
-                        console.log("✅ Created 1:1 rectangle (200x200) for rectInpaint tool:", { x: cx, y: cy, width: w, height: h });
-                        console.log("🔧 Set rectangleMaskAspectRatio to 1:1");
-                        console.log("🔧 After setting - rectangleMaskAspectRatio should be 1:1");
                       }
                     } else if (tool === "move") {
                       setCanvasTool("move");
                     } else if (tool === "text") {
                       // Handle text tool - set canvasTool to text
-                      console.log("Text tool selected - setting canvasTool to text");
                       setCanvasTool("text");
                     } else {
                       // Default case - set canvasTool to the selected tool
@@ -3103,13 +3390,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     }
                   }}
                   onCropRemove={() => {
-                    console.log("Removing crop rectangle from canvas");
                     setCanvasTool("elements");
                     // TODO: Clear crop rectangle from canvas
                     // This should remove the crop rectangle overlay
                   }}
                   onCropExecute={async (aspectRatio) => {
-                    console.log("🔧 ImageAIPanel onCropExecute called with aspectRatio:", aspectRatio);
                     if (aspectRatio) {
                       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
                       if (container) {
@@ -3214,76 +3499,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
         </div>
 
       {/* Generated Images Panel (shown after inpaint) */}
-      {showGenPanel && (
-        <div className="w-[130px] border-l border-white/6 bg-[#0d0d14] flex flex-col shrink-0">
-          <div className="flex items-center justify-between px-2 py-2 border-b border-white/6">
-            <span className="text-[10px] text-gray-400 font-semibold">Generated</span>
-            <button onClick={() => setShowGenPanel(false)} className="text-gray-600 hover:text-gray-300 transition">
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-            <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
-              {/* Original image always at top */}
-              {(originalImage || activeShot?.imageUrl) && (
-                <div className="space-y-0.5">
-                  <span className="text-[9px] text-gray-600 px-0.5">Original</span>
-                  <div className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition ${
-                    backgroundImage === (originalImage || activeShot?.imageUrl)
-                      ? "border-blue-500/50"
-                      : "border-white/20 hover:border-blue-500/60"
-                  }`}
-                    onClick={() => setBackgroundImage(originalImage || activeShot?.imageUrl || null)}
-                    title="Click to show original image">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={originalImage || activeShot?.imageUrl} alt="Original" className="w-full object-contain bg-[#0d0d14]" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                      <span className="text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition bg-black/60 px-1.5 py-0.5 rounded">Original</span>
-                    </div>
-                    {backgroundImage === (originalImage || activeShot?.imageUrl) && (
-                      <div className="absolute top-1 right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                        <Check className="w-2.5 h-2.5 text-white" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              {/* Generated results */}
-              {generatedImages.length > 0 && (
-                <span className="text-[9px] text-gray-600 px-0.5">Generated</span>
-              )}
-              {generatedImages.map((imgUrl, i) => (
-                <div key={i} className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition ${
-                  backgroundImage === imgUrl
-                    ? "border-blue-500/50"
-                    : "border-transparent hover:border-blue-500/60"
-                }`}
-                  onClick={() => setBackgroundImage(imgUrl)}
-                  title="Click to apply">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imgUrl} alt={`Generated ${i + 1}`} className="w-full object-contain bg-[#0d0d14]" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
-                    <span className="text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition bg-black/60 px-1.5 py-0.5 rounded">Apply</span>
-                  </div>
-                  {/* Delete button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent triggering the image click
-                      setGeneratedImages(prev => prev.filter((_, index) => index !== i));
-                    }}
-                    className="absolute top-1 left-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-lg z-10"
-                    title="Delete image">
-                    <X className="w-3 h-3 text-white" />
-                  </button>
-                  {backgroundImage === imgUrl && (
-                    <div className="absolute top-1 right-1 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5 text-white" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+  
 
       </div>
 
