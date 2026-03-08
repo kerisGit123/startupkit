@@ -155,7 +155,7 @@ export function ImageAIPanel({
   selectedAspectRatio,
   onRectangleMaskAspectRatioChange,
 }: ImageAIPanelProps) {
-  const [activeTool, setActiveTool] = useState("elements");
+  const [activeTool, setActiveTool] = useState("canvas-object");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [contentType, setContentType] = useState("image");
 
@@ -215,7 +215,7 @@ export function ImageAIPanel({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Delete' && activeTool === 'crop') {
-        setActiveTool('elements');
+        setActiveTool('canvas-object');
         onCropRemove?.(); // Call parent to remove crop rectangle from canvas
       }
     };
@@ -305,12 +305,12 @@ export function ImageAIPanel({
   };
 
   const pick = (id: string) => {
-    if (id === "elements") {
+    if (id === "canvas-object") {
       // Deselect all tools — pointer/select mode
-      setActiveTool("elements");
+      setActiveTool("canvas-object");
       setShowBrushSizeMenu(false);
       setIsEraser?.(false);
-      onToolSelect?.("elements");
+      onToolSelect?.("canvas-object");
     } else if (id === "move") {
       // Select move tool for dragging canvas
       setActiveTool("move");
@@ -452,7 +452,7 @@ export function ImageAIPanel({
         }`}>
           {mode === "annotate" ? (
             <>
-              <ToolBtn active={activeTool === "elements"} onClick={() => { pick("elements"); setShowImageMaskMenu(false); }} title="Select (no tool)">
+              <ToolBtn active={activeTool === "canvas-object"} onClick={() => { pick("canvas-object"); setShowImageMaskMenu(false); }} title="Canvas Object (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
@@ -498,7 +498,7 @@ export function ImageAIPanel({
           ) : (
             /* Area Edit tools */
             <>
-              <ToolBtn active={activeTool === "elements"} onClick={() => { pick("elements"); setShowImageMaskMenu(false); }} title="Select (no tool)">
+              <ToolBtn active={activeTool === "canvas-object"} onClick={() => { pick("canvas-object"); setShowImageMaskMenu(false); }} title="Canvas Object (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
@@ -834,9 +834,9 @@ export function ImageAIPanel({
                   key={tab.id}
                   onClick={() => {
                     onModeChange(tab.id);
-                    // Auto-select elements (no tool) when switching to describe or area-edit
+                    // Auto-select canvas-object (no tool) when switching to describe or area-edit
                     if (tab.id === "describe" || tab.id === "area-edit") {
-                      pick("elements");
+                      pick("canvas-object");
                     }
                   }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all text-[13px] font-medium ${

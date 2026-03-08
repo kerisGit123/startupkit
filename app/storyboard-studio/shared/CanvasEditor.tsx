@@ -105,7 +105,7 @@ export function CanvasEditor({
   
   // Debug: Track imageUrl changes
   useEffect(() => {
-    console.log("DEBUG: CanvasEditor imageUrl changed to:", imageUrl);
+    console.log("DEBUG: CanvasEditor imageUrl changed to: ",imageUrl?.substring(0,50));
   }, [imageUrl]);
   const dragRef = useRef<DragInfo>(null);
   const rotDragRef = useRef<RotDragInfo>(null);

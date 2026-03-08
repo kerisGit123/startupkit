@@ -8,7 +8,6 @@ import {
   Globe,
   Layers,
   Sparkles,
-  SlidersHorizontal,
   FileText,
   Plus,
   Clapperboard,
@@ -39,13 +38,6 @@ export function StoryboardStudioSidebar({
       icon: Layers,
       href: "/storyboard-studio",
       description: "Build scenes & shots",
-    },
-    {
-      id: "playground",
-      label: "Editor Playground",
-      icon: SlidersHorizontal,
-      href: "/storyboard-studio/playground",
-      description: "Test mask & bubbles",
     },
     {
       id: "script-breaker",

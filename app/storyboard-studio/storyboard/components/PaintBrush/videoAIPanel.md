@@ -1,840 +1,322 @@
-# Video AI Panel - Restructured Design
+# Video AI Panel — Planning
 
-## 🎯 **Analysis of Current Structure**
-
-Based on your existing VideoAIPanel and inspiration from LTX Studio and JianYing, here's the restructured design focusing on simplicity and effectiveness.
-
----
-
-## 🏗️ **Optimized Model Strategy**
-
-### **Primary Models (2 Main Options)**
-
-#### **1. Veo-3-1** - Google DeepMind Premium Video Generation
-- **Best for**: High-quality text-to-video, image-to-video, reference-to-video
-- **Original Cost Pricing**: 
-  - **Fast Mode**: 60 credits/video ($0.30) - Quick generation
-  - **Quality Mode**: 250 credits/video ($1.25) - Premium quality
-- **Customer Price (with 30% profit)**: 
-  - **Fast Mode**: 80 credits/video ($0.39)
-  - **Quality Mode**: 325 credits/video ($1.63)
-- **Duration Limits**: 
-  - **Fast Mode**: 8 seconds maximum
-  - **Quality Mode**: 8 seconds maximum
-- **Reliability**: ⭐⭐⭐⭐⭐ (Google's latest model)
-- **Features**: 
-  - Text-to-video, image-to-video, reference-to-video
-  - Multi-image reference control
-  - Synchronized audio output
-  - Native 1080p resolution
-  - Realistic motion generation
-  - Superior motion consistency and quality
-  - **Fixed pricing** (not per-second)
-
-#### **2. Kling 3.0 Video** - Kling AI Video Generation
-- **Best for**: Multi-shot storytelling with cinematic control
-- **Original Cost Pricing**: 
-  - **Standard**: 20 credits/s ($0.10) - no audio
-  - **Standard**: 30 credits/s ($0.15) - with audio
-  - **Pro**: 27 credits/s ($0.135) - no audio
-  - **Pro**: 40 credits/s ($0.20) - with audio
-- **Customer Price (with 30% profit)**: 
-  - **Standard**: 25-40 credits/s ($0.13-0.20)
-  - **Pro**: 35-50 credits/s ($0.18-0.26)
-- **Reliability**: ⭐⭐⭐⭐ (Established model)
-- **Features**: 
-  - Text-to-video and image-to-video generation
-  - **Multi-shot storytelling support** (multiple scenes in one video)
-  - Native audio production
-  - Cinematic control options
-  - **Max Duration**: 15 seconds per generation
-  - Start frame and end frame support
-  - Audio integration options
-  - Standard and Pro quality tiers
-  - **Scene transitions** and **camera movement** control
-
-### **Why These 2 Models?**
-1. **Veo-3-1** offers premium quality with fixed pricing
-2. **Kling 3.0** provides flexible per-second pricing for cost control
-3. **Clear use cases** for each model reduce user confusion
-4. **Multiple price points** for different budgets and needs
-5. **Simplified complexity** for better user experience
+> **Schema**: See `corePlaning.md` → `storyboardItems.videoGeneration`, `creditUsage`
+> **Owns**: Veo-3-1 / Kling 3.0 API integration, video modes, pricing, callback handler, video panel UI
+> **Phase**: 4 (Video AI)
 
 ---
 
-## 🎨 **UI Layout Structure (LTX Studio Inspired)**
+## Scope
 
-### **Top Section: Mode Selection**
-```
-┌─────────────────────────────────────────────────────────────┐
-│  [Image to Video]  [Lip Sync]  [Text to Video]             │
-└─────────────────────────────────────────────────────────────┘
-```
+This file covers:
 
-### **Middle Section: Input Area**
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Start Frame (Required)    End Frame (Optional)           │
-│  ┌─────────┐                ┌─────────┐                   │
-│  │ [Upload]│                │ [Upload] │                   │
-│  └─────────┘                └─────────┘                   │
-│                                                             │
-│  Audio File (for Lip Sync)                                 │
-│  ┌─────────┐                                               │
-│  │ [Upload] │                                               │
-│  └─────────┘                                               │
-│                                                             │
-│  Prompt Input                                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │ Describe your video...                              │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
+1. Model strategy (Veo-3-1 + Kling 3.0) with pricing
+2. Kie AI video API calls (single shot + multi-shot)
+3. Callback handler for async video completion
+4. Video generation modes (image-to-video, text-to-video, lip-sync, multi-shot)
+5. VideoAIPanel UI component
+6. Credit logging per generation (→ `creditUsage` table)
 
-### **Bottom Section: Settings & Generate**
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Duration │ Quality │ Resolution │ Aspect Ratio │ Audio │ Model │ [Generate] │
-└─────────────────────────────────────────────────────────────┘
-```
+This file does NOT cover project/script management (→ `storyboardplanning.md`), image generation (→ `imageAIPanel.md`), or file storage (→ `filePlaning.md`).
 
 ---
 
-## 📋 **Component Organization**
+## Model Strategy (2 Options)
 
-### **1. Mode Selection Component**
-```typescript
-const VIDEO_MODES = [
-  { 
-    id: "image-to-video", 
-    label: "Image to Video", 
-    icon: "🎬",
-    description: "Convert images to video",
-    model: "veo-3-1"
-  },
-  { 
-    id: "text-to-video", 
-    label: "Text to Video", 
-    icon: "✨",
-    description: "Text to video generation",
-    model: "veo-3-1"
-  },
-  { 
-    id: "image-to-video-kling", 
-    label: "Image to Video (Kling)", 
-    icon: "🎥",
-    description: "Kling 3.0 video generation",
-    model: "kling-3.0/video"
-  },
-  { 
-    id: "text-to-video-kling", 
-    label: "Text to Video (Kling)", 
-    icon: "📝",
-    description: "Kling 3.0 text to video",
-    model: "kling-3.0/video"
-  },
-  { 
-    id: "multi-shot-kling", 
-    label: "Multi-Shot (Kling)", 
-    icon: "🎬",
-    description: "Kling 3.0 multi-shot storytelling",
-    model: "kling-3.0/video"
-  }
-];
-```
+### Veo-3-1 (Google DeepMind) — Premium, Fixed Price
 
-### **2. Input Components**
+- **Use case**: High-quality single clips, TikTok/YouTube hero shots
+- **Cost**: Fast 60 credits ($0.30) / Quality 250 credits ($1.25)
+- **Customer price (30% margin)**: Fast 80 credits ($0.39) / Quality 325 credits ($1.63)
+- **Max duration**: 8 seconds
+- **Features**: text-to-video, image-to-video, reference-to-video, synchronized audio, 1080p
 
-#### **Start Frame Upload (Required)**
-- Always visible for all modes
-- Large upload area with preview
-- Drag & drop support
-- Image validation
+### Kling 3.0 — Flexible, Per-Second
 
-#### **End Frame Upload (Optional)**
-- Only shown for image-to-video
-- Smaller upload area
-- Clear "optional" labeling
-- Same validation as start frame
+- **Use case**: Multi-shot storytelling, longer clips, budget control
+- **Cost (per second)**: Standard 20–30 credits / Pro 27–40 credits (with/without audio)
+- **Customer price (30% margin)**: Standard 25–40 / Pro 35–50 credits/s
+- **Max duration**: 15 seconds
+- **Features**: multi-shot, start/end frame, camera movement, scene transitions, elements
 
-#### **Audio Upload (Lip Sync Mode)**
-- Only shown in lip sync mode
-- Audio file validation
-- Waveform preview
-- Duration display
+### Why 2 models
 
-#### **Prompt Input**
-- Expandable textarea
-- Character limit
-- Smart suggestions
-- Multi-language support
-
-### **3. Settings Controls**
-
-#### **Duration Selector**
-```typescript
-const DURATION_OPTIONS = [
-  { value: 5, label: "5s", credits: 100 },
-  { value: 10, label: "10s", credits: 200 },
-  { value: 15, label: "15s", credits: 300 }
-];
-```
-
-#### **Resolution Selector**
-```typescript
-const RESOLUTION_OPTIONS = [
-  { value: "720p", label: "HD 720p", multiplier: 1 },
-  { value: "1080p", label: "Full HD 1080p", multiplier: 1.5 },
-  { value: "4k", label: "4K Ultra", multiplier: 2 }
-];
-```
-
-#### **Aspect Ratio Selector**
-```typescript
-const ASPECT_RATIO_OPTIONS = [
-  { value: "16:9", label: "Landscape", icon: "▭" },
-  { value: "9:16", label: "Portrait", icon: "▯" },
-  { value: "1:1", label: "Square", icon: "◻" }
-];
-```
-
-#### **Quality Mode Selector (Veo-3-1 only)**
-```typescript
-const QUALITY_OPTIONS = [
-  { value: "fast", label: "Fast", credits: 60, description: "Quick generation" },
-  { value: "quality", label: "Quality", credits: 250, description: "Premium quality" }
-];
-```
-
-#### **Audio Toggle**
-- Simple on/off switch
-- Shows credit impact
-- Updates pricing in real-time
-
-#### **Model Display**
-- Auto-selected based on mode
-- Shows current model info
-- Manual override option for advanced users
+- Veo for quality-first (fixed cost, predictable billing)
+- Kling for flexibility (per-second, multi-shot storytelling)
+- Simple choice for users: "Premium" vs "Flexible"
 
 ---
 
-## 💰 **Pricing Integration**
+## API Implementation
 
-```typescript
-const calculateCredits = (duration, resolution, hasAudio, model, qualityMode = "fast", klingTier = "standard") => {
-  let baseCredits = 0;
-  
-  // Your profit margin factor (1.3 = 30% profit)
-  const PROFIT_FACTOR = 1.3;
-  
-  // Veo-3-1 pricing (fixed per video, not per second)
-  if (model === "veo-3-1") {
-    baseCredits = qualityMode === "quality" ? 250 : 60; // Your cost: $1.25 or $0.30 per video
-    // Both Fast and Quality modes have 8-second duration limit
-    duration = Math.min(duration, 8);
-  } else if (model === "kling-3.0/video") {
-    // Kling 3.0 pricing (per second) - UPDATED with correct original pricing
-    if (klingTier === "standard") {
-      baseCredits = duration * (hasAudio ? 30 : 20); // Your cost: $0.15 or $0.10 per second
-    } else if (klingTier === "pro") {
-      baseCredits = duration * (hasAudio ? 40 : 27); // Your cost: $0.20 or $0.135 per second
-    }
-    // Max 15 seconds for Kling 3.0
-    duration = Math.min(duration, 15);
-  }
-  
-  // Apply profit margin
-  let finalCredits = baseCredits * PROFIT_FACTOR;
-  
-  // Apply multiplier first, THEN round to nearest 5
-  let resolutionMultiplier = 1;
-  if (model === "veo-3-1" && resolution === "4k") {
-    resolutionMultiplier = 2; // 4K costs 2x credits for Veo-3-1
-  }
-  finalCredits = baseCredits * PROFIT_FACTOR * resolutionMultiplier;
-  
-  // Round to nearest 0 or 5 (e.g., 14 → 15, 17 → 20, 12 → 10)
-  finalCredits = Math.round(finalCredits / 5) * 5;
-  
-  return finalCredits;
-};
+### Environment
+
+```
+KIE_AI_API_KEY=your_key
+KIE_AI_CALLBACK_URL=https://your-domain.com/api/callback/video
 ```
 
-### **Real-time Price Display**
-- Shows credits needed
-- Shows USD equivalent
-## 🔧 **API Implementation Guide**
+### Kling 3.0 — Single Shot
 
-### **Kling 3.0 API Call Example:**
 ```typescript
-const generateKlingVideo = async (params) => {
+// lib/videoAI.ts
+export async function generateKlingVideo(params: {
+  tier: 'std' | 'pro';
+  startFrame?: string;
+  endFrame?: string;
+  audioEnabled: boolean;
+  duration: number;
+  aspectRatio: string;
+  prompt: string;
+  elements?: Array<{ name: string; description: string; element_input_urls: string[] }>;
+}) {
   const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`
+      'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`,
     },
     body: JSON.stringify({
       model: 'kling-3.0/video',
-      callBackUrl: params.callBackUrl || 'https://your-domain.com/api/callback',
+      callBackUrl: process.env.KIE_AI_CALLBACK_URL,
       input: {
-        mode: params.klingTier === "pro" ? "pro" : "std",
+        mode: params.tier,
         image_urls: [params.startFrame, params.endFrame].filter(Boolean),
         sound: params.audioEnabled,
-        duration: params.duration.toString(),
-        aspect_ratio: params.aspectRatio,
-        multi_shots: params.mode === "multi-shot-kling",
-        prompt: params.prompt,
-        kling_elements: params.elements || []
-      }
-    })
-  });
-  return response.json();
-};
-```
-
-### **Kling 3.0 Multi-Shot API Example:**
-```typescript
-const generateKlingMultiShot = async (params) => {
-  const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'kling-3.0/video',
-      callBackUrl: params.callBackUrl || 'https://your-domain.com/api/callback',
-      input: {
-        mode: params.klingTier === "pro" ? "pro" : "std",
-        image_urls: params.sceneImages || [],
-        sound: params.audioEnabled,
-        duration: params.duration.toString(),
-        aspect_ratio: params.aspectRatio,
-        multi_shots: true, // Enable multi-shot mode
-        multi_prompt: params.multiPrompts || [], // Array of prompts for each scene
-        kling_elements: params.elements || []
-      }
-    })
-  });
-  return response.json();
-};
-```
-
-### **Kling Elements Structure:**
-```typescript
-// Example element definitions
-const klingElements = [
-  {
-    name: "element_dog",
-    description: "A friendly golden retriever",
-    element_input_urls: [
-      "https://example.com/dog1.jpg",
-      "https://example.com/dog2.jpg",
-      "https://example.com/dog3.jpg"
-    ]
-  },
-  {
-    name: "element_scene",
-    description: "Mountain landscape background",
-    element_input_urls: [
-      "https://example.com/mountain1.jpg",
-      "https://example.com/mountain2.jpg"
-    ]
-  },
-  {
-    name: "element_character_video",
-    description: "Walking character animation",
-    element_input_video_urls: [
-      "https://example.com/character_walk.mp4"
-    ]
-  }
-];
-
-// Usage in prompt
-const prompt = "In a bright rehearsal room, sunlight streams through the window @element_dog runs across the floor while @element_scene provides the background";
-```
-
-### **Veo-3.1 API Call Example:**
-```typescript
-const generateVeoVideo = async (params) => {
-  const API_KEY = process.env.KIE_AI_API_KEY;
-
-  const response = await fetch('https://api.kie.ai/api/v1/veo/generate', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      prompt: params.prompt,
-      imageUrls: [params.startFrame, params.endFrame].filter(Boolean),
-      model: params.qualityMode === "quality" ? "veo3_quality" : "veo3_fast",
-      watermark: params.watermark || "MyBrand",
-      callBackUrl: params.callBackUrl || 'https://your-domain.com/api/callback',
-      aspect_ratio: params.aspectRatio,
-      seeds: params.seed || 12345,
-      enableFallback: params.enableFallback || false,
-      enableTranslation: params.enableTranslation !== false,
-      generationType: params.startFrame ? "REFERENCE_2_VIDEO" : "TEXT_TO_VIDEO"
-    })
-  });
-
-  const result = await response.json();
-  console.log('Veo-3.1 task created:', result);
-  return result;
-};
-```
-
-### **Veo-3.1 API Parameters:**
-```typescript
-// Complete Veo-3.1 API structure
-{
-  prompt: "A dog playing in a park",                    // Required: Text description
-  imageUrls: [                                         // Optional: Reference images
-    "http://example.com/image1.jpg",
-    "http://example.com/image2.jpg"
-  ],
-  model: "veo3_fast" | "veo3_quality",                // Required: Model selection
-  watermark: "MyBrand",                               // Optional: Watermark text
-  callBackUrl: "http://your-callback-url.com/complete", // Optional: Webhook URL
-  aspect_ratio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4", // Optional: Video aspect ratio
-  seeds: 12345,                                        // Optional: Random seed for reproducibility
-  enableFallback: false,                               // Optional: Use fallback model if needed
-  enableTranslation: true,                            // Optional: Auto-translate prompt
-  generationType: "TEXT_TO_VIDEO" | "IMAGE_TO_VIDEO" | "REFERENCE_2_VIDEO" // Required: Generation type
-}
-```
-
-### **Key API Differences:**
-
-| Feature | Kling 3.0 | Veo-3.1 |
-|---------|-----------|-----------|
-| **Duration** | Per-second (max 15s) | Fixed (max 8s) |
-| **Pricing** | Credits per second | Fixed per video |
-| **Audio** | Native audio included | Synchronized audio |
-| **Start/End Frames** | imageUrls array | imageUrls array |
-| **Aspect Ratio** | Optional (auto from images) | Required parameter |
-| **Quality Control** | generation_mode | model parameter |
-
----
-
-## 🎯 **Component Structure**
-
-### **Main VideoAIPanel Component**
-```typescript
-export function VideoAIPanel() {
-  const [mode, setMode] = useState("image-to-video");
-  const [startFrame, setStartFrame] = useState(null);
-  const [endFrame, setEndFrame] = useState(null);
-  const [audioFile, setAudioFile] = useState(null);
-  const [prompt, setPrompt] = useState("");
-  const [duration, setDuration] = useState(5);
-  const [resolution, setResolution] = useState("1080p");
-  const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [qualityMode, setQualityMode] = useState("fast"); // Fast or Quality mode
-  
-  const currentModel = VIDEO_MODES.find(m => m.id === mode)?.model;
-  const requiredCredits = calculateCredits(duration, resolution, audioEnabled, currentModel, qualityMode);
-  
-  return (
-    <div className="video-ai-panel">
-      <ModeSelector mode={mode} onModeChange={setMode} />
-      <InputArea 
-        mode={mode}
-        startFrame={startFrame}
-        endFrame={endFrame}
-        audioFile={audioFile}
-        prompt={prompt}
-        onStartFrameChange={setStartFrame}
-        onEndFrameChange={setEndFrame}
-        onAudioFileChange={setAudioFile}
-        onPromptChange={setPrompt}
-      />
-      <SettingsBar
-        duration={duration}
-        resolution={resolution}
-        aspectRatio={aspectRatio}
-        audioEnabled={audioEnabled}
-        qualityMode={qualityMode}
-        onDurationChange={setDuration}
-        onResolutionChange={setResolution}
-        onAspectRatioChange={setAspectRatio}
-        onAudioToggle={setAudioEnabled}
-        onQualityChange={setQualityMode}
-        mode={mode}
-      />
-      <GenerateButton 
-        credits={requiredCredits}
-        disabled={!startFrame || !prompt}
-        onGenerate={() => handleGenerate()}
-      />
-    </div>
-  );
-}
-```
-
-### **InputArea Component**
-```typescript
-function InputArea({ mode, startFrame, endFrame, audioFile, prompt, ...handlers }) {
-  return (
-    <div className="input-area">
-      <div className="frame-uploads">
-        <FrameUpload 
-          label="Start Frame"
-          required={true}
-          value={startFrame}
-          onChange={handlers.onStartFrameChange}
-        />
-        {mode === "image-to-video" && (
-          <FrameUpload 
-            label="End Frame"
-            required={false}
-            value={endFrame}
-            onChange={handlers.onEndFrameChange}
-          />
-        )}
-      </div>
-      
-      {mode === "lip-sync" && (
-        <AudioUpload 
-          value={audioFile}
-          onChange={handlers.onAudioFileChange}
-        />
-      )}
-      
-      <PromptInput 
-        value={prompt}
-        onChange={handlers.onPromptChange}
-        placeholder={getPromptPlaceholder(mode)}
-      />
-    </div>
-  );
-}
-```
-
----
-
-## 🎨 **Styling Guidelines (LTX Studio Inspired)**
-
-### **Color Scheme**
-- **Primary**: Purple gradient (#6B46C1 to #EC4899)
-- **Background**: Dark with glassmorphism
-- **Text**: White/Gray variants
-- **Borders**: Subtle white/10% with blur
-
-### **Component Style**
-- **Rounded corners**: 12px-16px
-- **Spacing**: 16px-24px gaps
-- **Typography**: Clean, minimal
-- **Animations**: Smooth transitions
-- **Hover states**: Subtle glow effects
-
-### **Layout Principles**
-- **Left-to-right flow**: Natural reading order
-- **Visual hierarchy**: Clear importance levels
-- **Responsive design**: Mobile-friendly
-- **Accessibility**: High contrast, clear labels
-
----
-
-## 🔄 **User Flow**
-
-### **Image to Video Mode**
-1. Upload start frame (required)
-2. Optionally upload end frame
-3. Enter prompt
-4. Adjust settings
-5. Generate
-
-### **Lip Sync Mode**
-1. Upload character image
-2. Upload audio file
-3. Adjust settings
-4. Generate
-
-### **Text to Video Mode**
-1. Enter detailed prompt
-2. Adjust settings
-3. Generate
-
----
-
-## 🚀 **Implementation Benefits**
-
-### **Simplified User Experience**
-- Only 2 models to choose from
-- Clear mode-based workflows
-- Intuitive input organization
-- Real-time pricing feedback
-
-### **Technical Advantages**
-- Reduced API complexity
-- Easier maintenance
-- Better performance
-- Cleaner codebase
-
-### **Business Benefits**
-- Clearer pricing structure
-- Higher conversion rates
-- Better user retention
-- Reduced support requests
-
----
-
-## 📊 **Success Metrics**
-
-### **User Experience**
-- Reduced time to generate (target: <2 minutes)
-- Higher completion rates (target: >85%)
-- Better user satisfaction (target: >4.5/5)
-
-### **Business Metrics**
-- Increased credit usage
-- Lower support tickets
-- Higher user retention
-- Better conversion rates
-
----
-
-## **Kie AI API Implementation Guide**
-
-### **API Access Setup**
-
-1. **Get API Key:**
-   - Sign up at [Kie AI](https://kie.ai)
-   - Navigate to API settings
-   - Generate your API key
-   - Store securely in environment variables
-
-2. **Environment Configuration:**
-```typescript
-// .env.local
-KIE_AI_API_KEY=your_api_key_here
-KIE_AI_CALLBACK_URL=https://your-domain.com/api/callback
-```
-
-### **Complete API Implementation**
-
-#### **1. Basic Kling 3.0 Video Generation**
-```typescript
-const generateKlingVideo = async (params) => {
-  const API_KEY = process.env.KIE_AI_API_KEY;
-  const CALLBACK_URL = process.env.KIE_AI_CALLBACK_URL;
-
-  const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'kling-3.0/video',
-      callBackUrl: CALLBACK_URL,
-      input: {
-        mode: params.klingTier === "pro" ? "pro" : "std",
-        image_urls: [params.startFrame, params.endFrame].filter(Boolean),
-        sound: params.audioEnabled,
-        duration: params.duration.toString(),
+        duration: params.duration.toString(), // MUST be string
         aspect_ratio: params.aspectRatio,
         multi_shots: false,
         prompt: params.prompt,
-        kling_elements: params.elements || []
-      }
-    })
+        kling_elements: params.elements || [],
+      },
+    }),
   });
-
-  const result = await response.json();
-  console.log('Kling 3.0 task created:', result);
-  return result;
-};
+  return await response.json();
+}
 ```
 
-#### **2. Multi-Shot Video Generation**
-```typescript
-const generateKlingMultiShot = async (params) => {
-  const API_KEY = process.env.KIE_AI_API_KEY;
-  const CALLBACK_URL = process.env.KIE_AI_CALLBACK_URL;
+### Kling 3.0 — Multi-Shot
 
+```typescript
+export async function generateKlingMultiShot(params: {
+  tier: 'std' | 'pro';
+  sceneImages?: string[];
+  audioEnabled: boolean;
+  duration: number;
+  aspectRatio: string;
+  multiPrompts: string[];
+  elements?: Array<{ name: string; description: string; element_input_urls: string[] }>;
+}) {
   const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_KEY}`
+      'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`,
     },
     body: JSON.stringify({
       model: 'kling-3.0/video',
-      callBackUrl: CALLBACK_URL,
+      callBackUrl: process.env.KIE_AI_CALLBACK_URL,
       input: {
-        mode: params.klingTier === "pro" ? "pro" : "std",
+        mode: params.tier,
         image_urls: params.sceneImages || [],
         sound: params.audioEnabled,
         duration: params.duration.toString(),
         aspect_ratio: params.aspectRatio,
         multi_shots: true,
-        multi_prompt: params.multiPrompts || [
-          "Scene 1: @element_character enters the room",
-          "Scene 2: @element_character looks out the window",
-          "Scene 3: @element_character sits down at the table"
-        ],
-        kling_elements: params.elements || []
-      }
-    })
+        multi_prompt: params.multiPrompts,
+        kling_elements: params.elements || [],
+      },
+    }),
   });
-
-  const result = await response.json();
-  console.log('Kling 3.0 multi-shot task created:', result);
-  return result;
-};
+  return await response.json();
+}
 ```
 
-#### **3. Callback Handler**
+### Check Job Status
+
 ```typescript
-// /api/callback/route.ts
+export async function checkVideoJobStatus(taskId: string) {
+  const response = await fetch(`https://api.kie.ai/api/v1/jobs/${taskId}`, {
+    headers: { 'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}` },
+  });
+  return await response.json();
+  // { code, data: { taskId, status, result: { video_url, thumbnail_url } } }
+}
+```
+
+---
+
+## Callback Handler
+
+```typescript
+// app/api/callback/video/route.ts
 export async function POST(request: Request) {
   const data = await request.json();
-  
-  console.log('Kling AI callback:', data);
-  
-  // Handle completion
-  if (data.status === 'completed') {
-    // Save video URL to database
-    // Notify user via WebSocket/email
-    // Update UI state
+
+  if (data.status === 'completed' && data.result?.video_url) {
+    // 1. Upload to R2 (→ filePlaning.md)
+    const r2Url = await uploadToR2(data.result.video_url, data.taskId);
+
+    // 2. Update storyboardItem.videoUrl + videoGeneration.status
+    await convex.mutation(api.storyboardItems.updateVideo, {
+      taskId: data.taskId,
+      videoUrl: r2Url,
+      status: 'completed',
+    });
   }
-  
+
+  if (data.status === 'failed') {
+    await convex.mutation(api.storyboardItems.updateVideoStatus, {
+      taskId: data.taskId,
+      status: 'failed',
+    });
+  }
+
   return Response.json({ received: true });
 }
 ```
 
-#### **4. Check Job Status**
-```typescript
-const checkJobStatus = async (taskId: string) => {
-  const API_KEY = process.env.KIE_AI_API_KEY;
-  
-  const response = await fetch(`https://api.kie.ai/api/v1/jobs/${taskId}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${API_KEY}`
-    }
-  });
-  
-  const result = await response.json();
-  return result;
-};
-```
+---
 
-### **Usage Examples**
+## Convex Action
 
-#### **Single Shot with Elements:**
 ```typescript
-const result = await generateKlingVideo({
-  klingTier: "pro",
-  startFrame: "https://example.com/room.jpg",
-  audioEnabled: true,
-  duration: 8,
-  aspectRatio: "16:9",
-  prompt: "In a bright rehearsal room, sunlight streams through the window @element_dog runs across the floor",
-  elements: [
-    {
-      name: "element_dog",
-      description: "A friendly golden retriever",
-      element_input_urls: [
-        "https://example.com/dog1.jpg",
-        "https://example.com/dog2.jpg"
-      ]
-    }
-  ]
+// convex/videoGeneration.ts
+export const generateVideoForItem = action({
+  args: {
+    itemId: v.id('storyboardItems'),
+    model: v.string(),    // "veo-3-1" | "kling-3.0"
+    mode: v.string(),     // "image-to-video" | "text-to-video" | "lip-sync"
+    quality: v.string(),  // "fast" | "quality" | "std" | "pro"
+    duration: v.number(),
+  },
+  handler: async (ctx, { itemId, model, mode, quality, duration }) => {
+    const item = await ctx.runQuery(internal.storyboardItems.get, { id: itemId });
+    const project = await ctx.runQuery(internal.projects.get, { id: item.projectId });
+
+    // Calculate credits
+    const creditsUsed = model === 'veo-3-1'
+      ? (quality === 'fast' ? 80 : 325)
+      : duration * (quality === 'pro' ? 50 : 30);
+
+    // Call Kie AI
+    const result = await generateKlingVideo({
+      tier: quality as 'std' | 'pro',
+      startFrame: item.imageUrl,
+      audioEnabled: true,
+      duration,
+      aspectRatio: project.settings.frameRatio,
+      prompt: item.description || item.title,
+    });
+
+    // Update item
+    await ctx.runMutation(internal.storyboardItems.patch, {
+      id: itemId,
+      videoGeneration: {
+        model,
+        mode,
+        quality,
+        duration,
+        creditsUsed,
+        status: 'generating',
+        taskId: result.data?.taskId,
+      },
+    });
+
+    // Log credits
+    await ctx.runMutation(internal.creditUsage.log, {
+      orgId: project.orgId,
+      userId: item.generatedBy,
+      projectId: project._id,
+      itemId,
+      action: 'video_generation',
+      model,
+      creditsUsed,
+    });
+
+    return result.data?.taskId;
+  },
 });
 ```
-
-#### **Multi-Shot Storytelling:**
-```typescript
-const result = await generateKlingMultiShot({
-  klingTier: "pro",
-  audioEnabled: true,
-  duration: 15,
-  aspectRatio: "16:9",
-  multiPrompts: [
-    "Scene 1: @element_hero stands at the mountain peak @element_landscape",
-    "Scene 2: @element_hero begins the descent through the forest",
-    "Scene 3: @element_hero reaches the cabin at sunset"
-  ],
-  elements: [
-    {
-      name: "element_hero",
-      description: "Main character",
-      element_input_urls: [
-        "https://example.com/hero1.jpg",
-        "https://example.com/hero2.jpg",
-        "https://example.com/hero3.jpg"
-      ]
-    },
-    {
-      name: "element_landscape",
-      description: "Mountain landscape",
-      element_input_urls: [
-        "https://example.com/mountain1.jpg",
-        "https://example.com/mountain2.jpg"
-      ]
-    }
-  ]
-});
-```
-
-### **Response Format**
-```typescript
-// Task creation response
-{
-  "code": 200,
-  "msg": "success", 
-  "data": {
-    "taskId": "kling_task_abcdef123456"
-  }
-}
-
-// Status check response
-{
-  "code": 200,
-  "data": {
-    "taskId": "kling_task_abcdef123456",
-    "status": "completed", // pending, processing, completed, failed
-    "result": {
-      "video_url": "https://cdn.kie.ai/videos/abc123.mp4",
-      "thumbnail_url": "https://cdn.kie.ai/thumbnails/abc123.jpg"
-    }
-  }
-}
-```
-
-### **Important Notes**
-
-1. **Duration Format:** Must be string (`"5"`, not `5`)
-2. **Image Requirements:** Min 300x300px, max 10MB each
-3. **Video Elements:** Max 50MB, MP4/MOV format
-4. **Element Limits:** 2-4 images per element, 1 video per element
-5. **Callback URL:** Must be publicly accessible
-6. **Job Polling:** Check status every 30 seconds if not using callbacks
-
-### **Interface Insights (Based on Kie AI Dashboard)**
-
-#### **Multi-Shot Mode Features:**
-- **Timeline Editor**: Visual scene sequencing
-- **Multiple Prompt Inputs**: Separate prompts for each scene
-- **Scene Transitions**: Automatic transitions between scenes
-- **Element Persistence**: Elements maintain consistency across scenes
-
-#### **Element Creation Features:**
-- **Video Elements**: Upload 1 video file (MP4/MOV, max 50MB)
-- **Image Elements**: Upload 2-4 reference images (300x300px min, 10MB max each)
-- **Element Naming**: Use @element_name syntax in prompts
-- **Element Descriptions**: Help AI understand element context
-
-#### **Single vs Multi-Shot:**
-- **Single Mode**: `multi_shots: false` + `prompt: "single description"`
-- **Multi-Shot Mode**: `multi_shots: true` + `multi_prompt: ["scene1", "scene2", "scene3"]`
 
 ---
 
-This restructured design follows LTX Studio's clean, focused approach while maintaining the powerful features your users need. The simplified model selection and intuitive layout will significantly improve the user experience.
+## UI Component
+
+```typescript
+// components/VideoAIPanel.tsx
+interface VideoAIPanelProps {
+  projectId: string;
+  itemId: string;
+  onClose: () => void;
+}
+
+export function VideoAIPanel({ projectId, itemId, onClose }: VideoAIPanelProps) {
+  const [model, setModel] = useState<'veo-3-1' | 'kling-3.0'>('kling-3.0');
+  const [mode, setMode] = useState<'image-to-video' | 'text-to-video' | 'lip-sync'>('image-to-video');
+  const [quality, setQuality] = useState('std');
+  const [duration, setDuration] = useState(5);
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    await generateVideoForItem({ itemId, model, mode, quality, duration });
+    setGenerating(false);
+    onClose();
+  };
+
+  return (
+    <div className="p-4 border rounded-xl bg-white space-y-4">
+      <h3 className="text-lg font-semibold">Generate Video</h3>
+
+      {/* Model */}
+      <div className="flex gap-2">
+        <button onClick={() => setModel('kling-3.0')}
+          className={`px-3 py-1.5 rounded-lg text-sm ${model === 'kling-3.0' ? 'bg-emerald-600 text-white' : 'bg-gray-100'}`}>
+          Kling 3.0 (Flexible)
+        </button>
+        <button onClick={() => setModel('veo-3-1')}
+          className={`px-3 py-1.5 rounded-lg text-sm ${model === 'veo-3-1' ? 'bg-emerald-600 text-white' : 'bg-gray-100'}`}>
+          Veo-3-1 (Premium)
+        </button>
+      </div>
+
+      {/* Mode */}
+      <div className="flex gap-2">
+        {['image-to-video', 'text-to-video', 'lip-sync'].map(m => (
+          <button key={m} onClick={() => setMode(m as any)}
+            className={`px-3 py-1.5 rounded-lg text-sm ${mode === m ? 'bg-emerald-600 text-white' : 'bg-gray-100'}`}>
+            {m.replace(/-/g, ' ')}
+          </button>
+        ))}
+      </div>
+
+      {/* Duration */}
+      <div>
+        <label className="text-sm text-gray-500">Duration: {duration}s</label>
+        <input type="range" min={3} max={model === 'kling-3.0' ? 15 : 8}
+          value={duration} onChange={e => setDuration(Number(e.target.value))}
+          className="w-full" />
+      </div>
+
+      {/* Generate */}
+      <button onClick={handleGenerate} disabled={generating}
+        className="w-full bg-emerald-600 text-white py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+        {generating ? 'Generating...' : 'Generate Video'}
+      </button>
+    </div>
+  );
+}
+```
+
+---
+
+## API Notes
+
+- **Duration format**: must be string (`"5"`, not `5`)
+- **Image requirements**: min 300x300px, max 10MB each
+- **Element limits**: 2–4 images per element, 1 video per element (max 50MB)
+- **Callback URL**: must be publicly accessible
+- **Polling fallback**: check status every 30s if not using callbacks
+- **Element syntax**: use `@element_name` in prompts
+- **Multi-shot**: `multi_shots: true` + `multi_prompt: ["scene1", "scene2"]`

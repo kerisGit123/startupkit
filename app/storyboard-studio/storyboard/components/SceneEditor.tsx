@@ -1316,7 +1316,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
       // Convert image to data URL first to avoid CORS issues
       let safeImageUrl = imageUrl;
-      console.log("DEBUG: Original imageUrl:", imageUrl);
+      console.log("DEBUG: Original imageUrl: ( found )");
       
       if (!imageUrl) {
         console.error("DEBUG: No imageUrl available, function cannot proceed");
@@ -3070,8 +3070,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             onVideoClick={handleVideoClick}
             // Original Image Props
             onSetOriginalImage={(imageUrl) => {
-              console.log("[DEBUG] onSetOriginalImage called with:", imageUrl);
-              console.log("[DEBUG] originalImageRef.current:", originalImageRef.current);
+              console.log("[DEBUG] onSetOriginalImage called with:", imageUrl?.substring(0,50));
+              
               setBackgroundImage(imageUrl);
               // Only set originalImage if not already set (using ref for accurate tracking)
               if (!originalImageRef.current && imageUrl) {
@@ -3119,14 +3119,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                        e.preventDefault();
                        e.stopPropagation();
                        console.log("DEBUG: Original image clicked");
-                       console.log("DEBUG: originalImage:", originalImage);
-                       console.log("DEBUG: backgroundImage:", backgroundImage);
+                       console.log("DEBUG: backgroundImage:", backgroundImage?.substring(0,50));
                        console.log("DEBUG: activeShot?.imageUrl:", activeShot?.imageUrl);
                        
                        // Always select the original image when clicking Original section
                        const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
                        if (imageToSet) {
-                         console.log("DEBUG: Setting background to:", imageToSet);
+                         console.log("DEBUG: Setting background to:", imageToSet.substring(0,50));
                          setBackgroundImage(imageToSet);
                          // Don't clear generated images - keep them in the panel
                        } else {
@@ -3390,7 +3389,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                     }
                   }}
                   onCropRemove={() => {
-                    setCanvasTool("elements");
+                    setCanvasTool("canvas-object");
                     // TODO: Clear crop rectangle from canvas
                     // This should remove the crop rectangle overlay
                   }}

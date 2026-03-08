@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Film, FolderOpen, Users, Star, Clock, Tag, Check, Globe,
-  ChevronDown, ChevronUp, Layers, Sliders, BookText, Crosshair, Sparkles,
+  ChevronDown, ChevronUp, Sparkles,
 } from "lucide-react";
 import type { Project } from "../types";
 
@@ -33,10 +33,7 @@ const UNIVERSE_NAV_ITEMS = [
 ];
 
 const EXTERNAL_LINK_ITEMS = [
-  { key: "manga-editor",       icon: Layers,    label: "Manga Editor",       href: "/manga-studio" },
-  { key: "editor-playground",  icon: Sliders,   label: "Editor Playground",  href: "/manga-studio/playground" },
-  { key: "storyboard-builder", icon: BookText,  label: "Storyboard Builder", href: "/manga-studio/script-breaker" },
-  { key: "shot-manager",       icon: Crosshair, label: "Shot Manager",       href: "/manga-studio/episodes" },
+  // Removed manga editor references
 ];
 
 export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: SidebarNavProps) {
@@ -190,16 +187,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
 
         {UNIVERSE_NAV_ITEMS.map(item => navBtn(item.key, item.icon, item.label))}
 
-        {EXTERNAL_LINK_ITEMS.map(item => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.key} href={item.href}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors whitespace-nowrap">
-              <Icon className="w-4 h-4 shrink-0" />
-              {item.label}
-            </Link>
-          );
-        })}
+        {/* External links section removed - no manga editor links */}
       </nav>
     </aside>
   );
