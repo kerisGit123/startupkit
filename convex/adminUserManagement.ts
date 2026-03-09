@@ -214,7 +214,7 @@ export const bulkUpdateUserLabels = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const results = [];
+    const results: { userId: (typeof args.userIds)[number]; success: boolean; error?: string }[] = [];
 
     for (const userId of args.userIds) {
       try {

@@ -158,7 +158,7 @@ export const recordTransaction = mutation({
     
     // Check for duplicates in the last 60 seconds
     const windowMs = 60_000;
-    const recent = [];
+    const recent: (typeof args & { _id: string; _creationTime: number; createdAt?: number })[] = [];
     const cursor = ctx.db
       .query("subscription_transactions")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))

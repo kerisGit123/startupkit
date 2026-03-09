@@ -240,7 +240,7 @@ export const generateDefaultTemplates = mutation({
       },
     ];
 
-    const createdIds = [];
+    const createdIds: ReturnType<typeof crypto.randomUUID>[] = [];
     for (const template of defaultTemplates) {
       // Check if template already exists
       const existing = await ctx.db

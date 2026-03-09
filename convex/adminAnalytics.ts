@@ -47,7 +47,7 @@ export const getAnalytics = query({
       }, 0);
 
     // Monthly data for charts (last 6 months)
-    const monthlyData = [];
+    const monthlyData: { month: string; revenue: number; users: number; purchases: number }[] = [];
     for (let i = 5; i >= 0; i--) {
       const date = new Date();
       date.setMonth(date.getMonth() - i);
@@ -86,8 +86,8 @@ export const getAnalytics = query({
     }
 
     // Purchase and subscription monthly data
-    const purchaseMonthlyData = [];
-    const subscriptionMonthlyData = [];
+    const purchaseMonthlyData: { month: string; count: number; amount: number }[] = [];
+    const subscriptionMonthlyData: { month: string; count: number; amount: number }[] = [];
     
     for (let i = 5; i >= 0; i--) {
       const date = new Date();

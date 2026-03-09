@@ -69,7 +69,7 @@ export default function DashboardPage() {
       name: "Total Scans",
       value: "0",
       change: "+0%",
-      changeType: "neutral" as const,
+      changeType: "neutral" as "positive" | "negative" | "neutral",
       subtitle: "Compared to last month",
       icon: Zap,
     },

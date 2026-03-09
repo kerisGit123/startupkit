@@ -78,7 +78,7 @@ export const calculateAvailableSlots = query({
     }
 
     // Generate time slots
-    const slots = [];
+    const slots: { startTime: string; endTime: string; available: boolean }[] = [];
     const [startHour, startMin] = workingStartTime.split(':').map(Number);
     const [endHour, endMin] = workingEndTime.split(':').map(Number);
     
@@ -231,7 +231,7 @@ export const getAppointmentsByClient = query({
       .collect();
     
     const appointments = allAppointments
-      .filter((apt) => apt.contactId === clientId || (apt as any).clientId === clientId)
+      .filter((apt) => (apt.contactId as string) === (clientId as string) || (apt as any).clientId === clientId)
       .slice(0, limit);
 
     return appointments;

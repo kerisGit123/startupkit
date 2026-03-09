@@ -40,8 +40,21 @@ export const createCampaign = mutation({
   },
   handler: async (ctx, args) => {
     const campaignId = await ctx.db.insert("email_campaigns", {
-      ...args,
-      isActive: true, // New campaigns are active by default
+      name: args.name,
+      subject: args.subject,
+      htmlBody: args.htmlBody,
+      plainTextBody: args.plainTextBody,
+      targetAudience: args.targetAudience,
+      scheduledAt: args.scheduledFor,
+      recipientType: "all_users",
+      isActive: true,
+      status: "draft",
+      totalRecipients: 0,
+      sentCount: 0,
+      deliveredCount: 0,
+      openedCount: 0,
+      clickedCount: 0,
+      failedCount: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       createdBy: "admin",
@@ -179,9 +192,12 @@ export const createRecipient = mutation({
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("campaign_recipients", {
-      ...args,
+      campaignId: args.campaignId,
+      userId: String(args.userId),
+      userEmail: args.email,
       status: "sent",
       sentAt: Date.now(),
+      createdAt: Date.now(),
     });
   },
 });
@@ -221,7 +237,11 @@ export const trackEvent = mutation({
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("email_events", {
-      ...args,
+      campaignId: args.campaignId,
+      userId: "",
+      userEmail: args.email,
+      eventType: args.eventType,
+      linkUrl: args.linkUrl,
       timestamp: Date.now(),
     });
   },
@@ -234,7 +254,7 @@ export const getCampaignAnalytics = query({
     const campaign = await ctx.db.get(args.campaignId);
     const events = await ctx.db
       .query("email_events")
-      .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId))
+      .withIndex("by_campaignId", (q) => q.eq("campaignId", args.campaignId))
       .collect();
 
     const opened = events.filter(e => e.eventType === "opened").length;

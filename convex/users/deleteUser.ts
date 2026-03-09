@@ -76,7 +76,7 @@ export const deleteUserFromConvex = mutation({
     if (clerkUserId) {
       const notifications = await ctx.db
         .query("admin_notifications")
-        .filter((q) => q.eq(q.field("userId"), clerkUserId))
+        .filter((q) => q.eq(q.field("relatedId"), clerkUserId))
         .collect();
       for (const notification of notifications) {
         await ctx.db.delete(notification._id);

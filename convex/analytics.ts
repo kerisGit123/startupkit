@@ -124,7 +124,7 @@ function generateDailyTrends(
   endTime: number
 ) {
   const days = Math.ceil((endTime - startTime) / (24 * 60 * 60 * 1000));
-  const trends = [];
+  const trends: { date: string; conversations: number; resolved: number; escalated: number }[] = [];
 
   for (let i = 0; i < days; i++) {
     const dayStart = startTime + i * 24 * 60 * 60 * 1000;

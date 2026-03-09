@@ -239,7 +239,7 @@ A: Yes! Just let me know your email address and I can help you cancel or resched
     // Backend Knowledge Base (Authenticated Users)
     const backendArticles = [
       {
-        type: "backend" as const,
+        type: "user_panel" as const,
         title: "Admin Dashboard Guide",
         content: `# Admin Dashboard Guide
 
@@ -320,7 +320,7 @@ Access reports for:
         status: "published" as const,
       },
       {
-        type: "backend" as const,
+        type: "user_panel" as const,
         title: "Troubleshooting Common Issues",
         content: `# Troubleshooting Common Issues
 

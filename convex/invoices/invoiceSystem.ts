@@ -172,7 +172,7 @@ export const updateInvoiceConfig = mutation({
     const updates: {
       updatedAt: number;
       invoicePrefix?: string;
-      invoiceNoType?: "year_running" | "year_month_running" | "year_month_en_running";
+      invoiceNoType?: string;
       invoiceLeadingZeros?: number;
     } = {
       updatedAt: Date.now(),

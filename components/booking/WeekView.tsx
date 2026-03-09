@@ -75,7 +75,7 @@ export function WeekView({ onTimeSlotClick, onAppointmentClick }: WeekViewProps)
   const startHour = parseInt(weekViewStartTime.split(":")[0]);
   const endHour = parseInt(weekViewEndTime.split(":")[0]);
   
-  const timeSlots = [];
+  const timeSlots: string[] = [];
   for (let hour = startHour; hour <= endHour; hour++) {
     timeSlots.push(`${String(hour).padStart(2, '0')}:00`);
   }

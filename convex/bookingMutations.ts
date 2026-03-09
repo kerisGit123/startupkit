@@ -7,10 +7,10 @@ import { v } from "convex/values";
 
 export const createAppointment = mutation({
   args: {
-    clientId: v.id("clients"),
-    clientName: v.string(),
-    clientEmail: v.string(),
-    clientPhone: v.optional(v.string()),
+    contactId: v.id("contacts"),
+    contactName: v.string(),
+    contactEmail: v.string(),
+    contactPhone: v.optional(v.string()),
     eventTypeId: v.optional(v.id("event_types")),
     date: v.string(),
     startTime: v.string(),

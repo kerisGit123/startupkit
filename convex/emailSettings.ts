@@ -61,7 +61,6 @@ export const updateSettings = mutation({
         emailFromAddress: args.senderEmail ?? "",
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        createdBy: "system",
         updatedBy: "system",
       });
     } else {

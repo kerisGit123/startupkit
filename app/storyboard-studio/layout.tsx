@@ -2,12 +2,9 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { StoryboardStudioSidebar } from "./components/StoryboardStudioSidebar";
+import { SidebarNav } from "./components/SidebarNav";
 import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
-import { NewEpisodeModal } from "./components/modals/NewEpisodeModal";
-import { StoryManagerModal } from "./components/modals/StoryManagerModal";
 import { SettingsModal } from "./components/modals/SettingsModal";
-import { NewComicModal } from "./components/modals/NewComicModal";
 
 export default function StoryboardStudioLayout({
   children,
@@ -15,35 +12,31 @@ export default function StoryboardStudioLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const hideStudioSidebar = pathname?.startsWith("/storyboard-studio/storyboard");
+  const hideStudioSidebar = pathname?.startsWith("/storyboard-studio/projects") ||
+    pathname?.startsWith("/storyboard-studio/workspace");
 
-  const [showNewEpisode, setShowNewEpisode] = useState(false);
-  const [showStoryManager, setShowStoryManager] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showNewComic, setShowNewComic] = useState(false);
 
   return (
     <div className="flex h-screen bg-[#0f0f14] overflow-hidden">
       <StoryboardStudioUIProvider
         value={{
-          openNewEpisode: () => setShowNewEpisode(true),
-          openStoryManager: () => setShowStoryManager(true),
+          openNewEpisode: () => {},
+          openStoryManager: () => {},
         }}
       >
         {!hideStudioSidebar && (
-          <StoryboardStudioSidebar
-            onManageComics={() => setShowStoryManager(true)}
-            onSettings={() => setShowSettings(true)}
-            onNewComic={() => setShowNewComic(true)}
+          <SidebarNav
+            open={true}
+            activeNav="projects"
+            onNavChange={() => {}}
+            projects={[]}
           />
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
 
-        <NewEpisodeModal isOpen={showNewEpisode} onClose={() => setShowNewEpisode(false)} />
-        <StoryManagerModal isOpen={showStoryManager} onClose={() => setShowStoryManager(false)} />
         <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
-        <NewComicModal isOpen={showNewComic} onClose={() => setShowNewComic(false)} />
       </StoryboardStudioUIProvider>
     </div>
   );

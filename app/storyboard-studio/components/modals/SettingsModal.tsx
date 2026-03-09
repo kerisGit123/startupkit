@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { X, Bot, CheckCircle, Zap, Settings, Palette } from "lucide-react";
-import { DrawingStylePicker } from "../DrawingStylePicker";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -10,8 +9,6 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const [selectedDrawingStyle, setSelectedDrawingStyle] = useState("normal-anime");
-  const [customStyle, setCustomStyle] = useState("");
   const [activeSettingsTab, setActiveSettingsTab] = useState<"general" | "style" | "generation">("general");
 
   if (!isOpen) return null;
@@ -58,12 +55,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {/* Drawing Style Tab */}
           {activeSettingsTab === "style" && (
             <div className="bg-[#25252f] rounded-xl p-5 border border-white/10">
-              <DrawingStylePicker
-                selectedStyle={selectedDrawingStyle}
-                onSelectStyle={setSelectedDrawingStyle}
-                customStyle={customStyle}
-                onCustomStyleChange={setCustomStyle}
-              />
+              <div className="text-center py-8">
+                <Palette className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm">Drawing style picker coming soon</p>
+              </div>
             </div>
           )}
 

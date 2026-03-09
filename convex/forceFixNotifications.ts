@@ -36,7 +36,7 @@ export const forceMarkAllAsRead = mutation({
     const readIds = new Set(readNotifications.map(n => n.notificationId));
     
     let markedCount = 0;
-    const markedItems = [];
+    const markedItems: { type: string; id: string; [key: string]: unknown }[] = [];
     
     // Force mark ALL subscriptions as read
     for (const sub of allSubscriptions) {

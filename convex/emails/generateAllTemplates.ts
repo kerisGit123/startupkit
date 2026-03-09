@@ -14,7 +14,7 @@ export const generateAllSystemTemplates = mutation({
       "admin_notification",
     ];
     
-    const results = [];
+    const results: { templateType: string; success: boolean; error?: string }[] = [];
     
     for (const templateType of templateTypes) {
       try {

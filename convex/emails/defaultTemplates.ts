@@ -6,7 +6,7 @@ export const generateAllDefaultTemplates = mutation({
   args: {},
   handler: async (ctx) => {
     const templates = getDefaultTemplatesData();
-    const results = [];
+    const results: { name: string; action: string; success: boolean; error?: string }[] = [];
     
     for (const template of templates) {
       try {

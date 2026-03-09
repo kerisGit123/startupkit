@@ -99,13 +99,18 @@ export default defineSchema({
     ),
     recipientUserIds: v.optional(v.array(v.string())),
     userLabel: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+    plainTextBody: v.optional(v.string()),
     status: v.union(
       v.literal("draft"),
       v.literal("scheduled"),
       v.literal("sending"),
       v.literal("sent"),
+      v.literal("cancelled"),
       v.literal("failed")
     ),
+    htmlBody: v.optional(v.string()),
+    targetAudience: v.optional(v.string()),
     scheduledAt: v.optional(v.number()),
     sentAt: v.optional(v.number()),
     totalRecipients: v.number(),
@@ -122,6 +127,17 @@ export default defineSchema({
     .index("by_createdAt", ["createdAt"])
     .index("by_scheduledAt", ["scheduledAt"]),
 
+  campaign_recipients: defineTable({
+    campaignId: v.id("email_campaigns"),
+    userId: v.string(),
+    userEmail: v.string(),
+    status: v.optional(v.string()),
+    sentAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_campaignId", ["campaignId"])
+    .index("by_userId", ["userId"]),
+
   // ============================================
   // EMAIL: Events & Analytics
   // ============================================
@@ -135,8 +151,10 @@ export default defineSchema({
       v.literal("opened"),
       v.literal("clicked"),
       v.literal("bounced"),
-      v.literal("complained")
+      v.literal("complained"),
+      v.literal("unsubscribed")
     ),
+    linkUrl: v.optional(v.string()),
     timestamp: v.number(),
   })
     .index("by_campaignId", ["campaignId"])
@@ -795,9 +813,16 @@ export default defineSchema({
   // ============================================
   // INVOICE SYSTEM
   // ============================================
-  // Note: Invoice configuration moved to platform_config table with category "invoice_config"
-  // PO configuration moved to platform_config table with category "PO_config"
-  // Invoice & PO shared config moved to platform_config table with category "invoicePO"
+  invoice_config: defineTable({
+    invoicePrefix: v.string(),
+    invoiceNoType: v.string(),
+    invoiceLeadingZeros: v.number(),
+    invoiceRunningNo: v.number(),
+    invoiceCurrentNo: v.string(),
+    lastResetDate: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
 
   invoices: defineTable({
     invoiceNo: v.string(),
@@ -1649,4 +1674,167 @@ export default defineSchema({
     .index("by_sentAt", ["sentAt"])
     .index("by_starred", ["starred"])
     .index("by_workflow_status", ["workflowStatus"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Projects
+  // ============================================
+  storyboard_projects: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    orgId: v.string(),
+    ownerId: v.string(),
+    teamMemberIds: v.array(v.string()),
+    status: v.string(), // draft | active | completed | archived
+    tags: v.array(v.string()),
+    script: v.string(),
+    scenes: v.array(v.object({
+      id: v.string(),
+      title: v.string(),
+      content: v.string(),
+      characters: v.array(v.string()),
+      locations: v.array(v.string()),
+      technical: v.optional(v.object({
+        camera: v.array(v.string()),
+        lighting: v.array(v.string()),
+        perspective: v.array(v.string()),
+        action: v.array(v.string()),
+      })),
+    })),
+    settings: v.object({
+      frameRatio: v.string(),  // "9:16" | "16:9" | "1:1"
+      style: v.string(),       // "realistic" | "cartoon" | "anime" | "cinematic"
+      layout: v.string(),      // "grid" | "timeline" | "comic"
+    }),
+    metadata: v.object({
+      sceneCount: v.number(),
+      estimatedDuration: v.number(),
+      aiModel: v.string(),
+    }),
+    isAIGenerated: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_owner", ["orgId", "ownerId"])
+    .index("by_status", ["orgId", "status"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Storyboard Items (frames)
+  // ============================================
+  storyboard_items: defineTable({
+    projectId: v.id("storyboard_projects"),
+    sceneId: v.string(),
+    order: v.number(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    duration: v.number(),
+    imageUrl: v.optional(v.string()),
+    imagePrompt: v.optional(v.string()),
+    videoUrl: v.optional(v.string()),
+    audioUrl: v.optional(v.string()),
+    tags: v.optional(v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      color: v.string(),
+    }))),
+    imageGeneration: v.optional(v.object({
+      model: v.string(),
+      creditsUsed: v.number(),
+      status: v.string(), // pending | generating | completed | failed
+      taskId: v.optional(v.string()),
+    })),
+    videoGeneration: v.optional(v.object({
+      model: v.string(),
+      mode: v.string(),
+      quality: v.string(),
+      duration: v.number(),
+      creditsUsed: v.number(),
+      status: v.string(),
+      taskId: v.optional(v.string()),
+    })),
+    elements: v.array(v.object({
+      id: v.string(),
+      type: v.string(),
+      content: v.string(),
+      position: v.object({ x: v.number(), y: v.number() }),
+      size: v.object({ width: v.number(), height: v.number() }),
+    })),
+    annotations: v.array(v.object({
+      id: v.string(),
+      content: v.string(),
+      position: v.object({ x: v.number(), y: v.number() }),
+      author: v.string(),
+      createdAt: v.number(),
+    })),
+    generatedBy: v.string(),
+    isAIGenerated: v.boolean(),
+    generationStatus: v.string(), // none | pending | generating | completed | failed
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_order", ["projectId", "order"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Files (R2 storage records)
+  // ============================================
+  storyboard_files: defineTable({
+    orgId: v.optional(v.string()),
+    userId: v.optional(v.string()),
+    projectId: v.optional(v.id("storyboard_projects")),
+    r2Key: v.string(),
+    filename: v.string(),
+    fileType: v.string(),   // image | video | audio
+    mimeType: v.string(),
+    size: v.number(),
+    category: v.string(),   // uploads | generated | elements | storyboard | videos
+    tags: v.array(v.string()),
+    uploadedBy: v.string(),
+    uploadedAt: v.number(),
+    status: v.string(),     // uploading | ready | error
+    createdAt: v.number(),
+    isFavorite: v.optional(v.boolean()), // For favoriting files (optional for existing data)
+  })
+    .index("by_org", ["orgId"])
+    .index("by_user", ["userId"])
+    .index("by_project", ["projectId"])
+    .index("by_category", ["projectId", "category"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Elements (LTX-style reusable assets)
+  // ============================================
+  storyboard_elements: defineTable({
+    projectId: v.id("storyboard_projects"),
+    name: v.string(),
+    type: v.string(), // character | object | logo | font | style
+    description: v.optional(v.string()),
+    thumbnailUrl: v.string(),
+    referenceUrls: v.array(v.string()),
+    tags: v.array(v.string()),
+    createdBy: v.string(),
+    usageCount: v.number(),
+    status: v.string(), // draft | ready | archived
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_type", ["projectId", "type"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Credit Usage (per-member tracking)
+  // ============================================
+  storyboard_credit_usage: defineTable({
+    orgId: v.string(),
+    userId: v.string(),
+    projectId: v.id("storyboard_projects"),
+    itemId: v.optional(v.id("storyboard_items")),
+    action: v.string(), // script_generation | image_generation | video_generation
+    model: v.string(),  // gpt-5.2 | kie-pro-v2 | veo-3-1 | kling-3.0
+    creditsUsed: v.number(),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_org", ["orgId"])
+    .index("by_user", ["orgId", "userId"])
+    .index("by_project", ["projectId"]),
 });

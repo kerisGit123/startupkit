@@ -28,7 +28,7 @@ export function VideoPlayer({
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   
-  const videoRef = useRef<HTMLImageElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const currentItem = items[currentItemIndex];
@@ -155,7 +155,6 @@ export function VideoPlayer({
       <div className="relative aspect-video bg-gradient-to-br from-purple-500/20 to-pink-500/20">
         {currentItem?.visual.imageUrl ? (
           <img
-            ref={videoRef}
             src={currentItem.visual.imageUrl}
             alt={`Shot ${currentItem.id}`}
             className="w-full h-full object-cover"

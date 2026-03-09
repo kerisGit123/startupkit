@@ -235,7 +235,7 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
     }
 
     const userMessage = {
-      role: "user",
+      role: "user" as const,
       content: input,
       timestamp: Date.now(),
     };

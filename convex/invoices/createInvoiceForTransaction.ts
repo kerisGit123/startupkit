@@ -45,7 +45,7 @@ export const createInvoiceForTransaction = internalMutation({
       : "payment";
     
     // 5. Build invoice items
-    const items = [];
+    const items: { description: string; quantity: number; unitPrice: number; total: number }[] = [];
     if (transaction.type === "payment" && transaction.tokens) {
       items.push({
         description: `${transaction.tokens} Credits Purchase`,

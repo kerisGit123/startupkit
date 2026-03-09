@@ -36,7 +36,7 @@ export const identifyUnreadNotifications = query({
     const readIds = new Set(readNotifications.map(n => n.notificationId));
     
     // Find unread items
-    const unreadItems = [];
+    const unreadItems: { type: string; id: string; createdAt: number; createdAtDate: string; [key: string]: unknown }[] = [];
     
     for (const sub of recentSubscriptions) {
       const subId = sub._id.toString();
