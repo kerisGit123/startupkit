@@ -12,8 +12,9 @@ export const create = mutation({
       style: v.string(),
       layout: v.string(),
     }),
+    isFavorite: v.optional(v.boolean()),
   },
-  handler: async (ctx, { name, description, orgId, ownerId, settings }) => {
+  handler: async (ctx, { name, description, orgId, ownerId, settings, isFavorite }) => {
     return await ctx.db.insert("storyboard_projects", {
       name,
       description,
@@ -21,6 +22,7 @@ export const create = mutation({
       ownerId,
       teamMemberIds: [],
       status: "draft",
+      isFavorite: isFavorite ?? false,
       tags: [],
       script: "",
       scenes: [],
@@ -62,6 +64,7 @@ export const update = mutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     status: v.optional(v.string()),
+    isFavorite: v.optional(v.boolean()),
     tags: v.optional(v.array(v.string())),
     script: v.optional(v.string()),
     scenes: v.optional(v.array(v.object({
@@ -86,6 +89,66 @@ export const update = mutation({
   },
   handler: async (ctx, { id, ...fields }) => {
     await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });
+  },
+});
+
+export const duplicate = mutation({
+  args: { id: v.id("storyboard_projects") },
+  handler: async (ctx, { id }) => {
+    const project = await ctx.db.get(id);
+    if (!project) {
+      throw new Error("Storyboard project not found");
+    }
+
+    const duplicatedProjectId = await ctx.db.insert("storyboard_projects", {
+      name: `${project.name} (copy)`,
+      description: project.description,
+      orgId: project.orgId,
+      ownerId: project.ownerId,
+      teamMemberIds: project.teamMemberIds,
+      status: project.status,
+      isFavorite: false,
+      tags: project.tags,
+      script: project.script,
+      scenes: project.scenes,
+      settings: project.settings,
+      metadata: project.metadata,
+      isAIGenerated: project.isAIGenerated,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const storyboardItems = await ctx.db
+      .query("storyboard_items")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+
+    for (const item of storyboardItems) {
+      await ctx.db.insert("storyboard_items", {
+        projectId: duplicatedProjectId,
+        sceneId: item.sceneId,
+        order: item.order,
+        title: item.title,
+        description: item.description,
+        duration: item.duration,
+        imageUrl: item.imageUrl,
+        imagePrompt: item.imagePrompt,
+        videoUrl: item.videoUrl,
+        audioUrl: item.audioUrl,
+        tags: item.tags,
+        imageGeneration: item.imageGeneration,
+        videoGeneration: item.videoGeneration,
+        elements: item.elements,
+        annotations: item.annotations,
+        generatedBy: item.generatedBy,
+        isAIGenerated: item.isAIGenerated,
+        generationStatus: item.generationStatus,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+
+    return duplicatedProjectId;
   },
 });
 

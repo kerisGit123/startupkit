@@ -1685,6 +1685,7 @@ export default defineSchema({
     ownerId: v.string(),
     teamMemberIds: v.array(v.string()),
     status: v.string(), // draft | active | completed | archived
+    isFavorite: v.optional(v.boolean()),
     tags: v.array(v.string()),
     script: v.string(),
     scenes: v.array(v.object({

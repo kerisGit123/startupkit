@@ -38,6 +38,7 @@ interface ProjectsDashboardProps {
   onOpenProject: (project: Project, step: Step) => void;
   onCreateConvexProject?: (name: string, frameRatio: string, style: string) => Promise<void>;
   onDeleteProject?: (id: string) => Promise<void>;
+  onDuplicateProject?: (id: string) => Promise<void>;
   onOpenFileBrowser?: () => void;
   onOpenGlobalFileBrowser?: () => void;
   activeFilter?: string | null;
@@ -58,7 +59,7 @@ const STATUS_STYLE: Record<Project["status"], string> = {
 };
 
 export function ProjectsDashboard({
-  sidebarOpen, onToggleSidebar, projects, onProjectsChange, onOpenProject, onCreateConvexProject, onDeleteProject, onOpenFileBrowser, onOpenGlobalFileBrowser, activeFilter,
+  sidebarOpen, onToggleSidebar, projects, onProjectsChange, onOpenProject, onCreateConvexProject, onDeleteProject, onDuplicateProject, onOpenFileBrowser, onOpenGlobalFileBrowser, activeFilter,
 }: ProjectsDashboardProps) {
   const [showNewDropdown, setShowNewDropdown] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -69,6 +70,7 @@ export function ProjectsDashboard({
   const [isCreating, setIsCreating] = useState(false);
   const [dashView, setDashView] = useState<"card" | "table">("card");
   const [contextMenuId, setContextMenuId] = useState<string | null>(null);
+  const [statusMenuId, setStatusMenuId] = useState<string | null>(null);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
@@ -121,6 +123,7 @@ export function ProjectsDashboard({
 
   const handleStatusChange = (id: string, status: Project["status"]) => {
     onProjectsChange(projects.map(p => p.id === id ? { ...p, status } : p));
+    setStatusMenuId(null);
     setContextMenuId(null);
     setMenuPosition(null);
   };
@@ -129,6 +132,7 @@ export function ProjectsDashboard({
     onProjectsChange(projects.map(p =>
       p.id === id ? { ...p, favourite: !p.favourite } : p
     ));
+    setStatusMenuId(null);
     setContextMenuId(null);
     setMenuPosition(null);
   };
@@ -140,11 +144,20 @@ export function ProjectsDashboard({
     ));
     setEditingProjectId(null);
     setEditName("");
+    setStatusMenuId(null);
     setContextMenuId(null);
     setMenuPosition(null);
   };
 
-  const handleDuplicate = (id: string) => {
+  const handleDuplicate = async (id: string) => {
+    if (onDuplicateProject) {
+      await onDuplicateProject(id);
+      setStatusMenuId(null);
+      setContextMenuId(null);
+      setMenuPosition(null);
+      return;
+    }
+
     const project = projects.find(p => p.id === id);
     if (!project) return;
     const duplicate: Project = {
@@ -153,6 +166,7 @@ export function ProjectsDashboard({
       name: `${project.name} (copy)`,
     };
     onProjectsChange([...projects, duplicate]);
+    setStatusMenuId(null);
     setContextMenuId(null);
     setMenuPosition(null);
   };
@@ -301,12 +315,20 @@ export function ProjectsDashboard({
                     {/* Top overlay with version */}
                     <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 via-black/30 to-transparent p-3">
                       <div className="flex items-center justify-between">
-                        <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
-                          <span className="text-xs text-white font-medium">v{p.version}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
+                            <span className="text-xs text-white font-medium">v{p.version}</span>
+                          </div>
+                          {p.favourite && (
+                            <div className="bg-black/40 backdrop-blur-md rounded-full p-1.5 border border-white/10">
+                              <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                            </div>
+                          )}
                         </div>
                         <button className="opacity-0 group-hover:opacity-100 bg-black/40 backdrop-blur-md rounded-full p-1.5 border border-white/10 hover:bg-black/60 transition"
                           onClick={e => { 
                             e.stopPropagation(); 
+                            setStatusMenuId(null);
                             if (contextMenuId === p.id) {
                               setContextMenuId(null);
                               setMenuPosition(null);
@@ -405,21 +427,24 @@ export function ProjectsDashboard({
                         <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Share2 className="w-3.5 h-3.5" /> Share</button>
                         <button onClick={() => { setEditingProjectId(p.id); setEditName(p.name); setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Pencil className="w-3.5 h-3.5" /> Rename</button>
                         <div className="relative group/status">
-                          <button className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition justify-between">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setStatusMenuId((current) => current === p.id ? null : p.id);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition justify-between"
+                          >
                             <span className="flex items-center gap-2.5"><Hash className="w-3.5 h-3.5" /> Status</span>
                             <ChevronDown className="w-3 h-3 text-gray-600" />
                           </button>
-                          <div className="hidden group-hover/status:block absolute left-full top-0 ml-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl w-36 py-1">
+                          <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-full top-0 ml-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl w-36 py-1`}>
                             {(["On Hold", "In Progress", "Completed", "Draft"] as const).map(s => (
-                              <button key={s} onClick={() => handleStatusChange(p.id, s)} className="w-full px-4 py-2 hover:bg-white/5 text-gray-300 text-xs text-left transition">{s}</button>
+                              <button key={s} onClick={(e) => { e.stopPropagation(); handleStatusChange(p.id, s); }} className="w-full px-4 py-2 hover:bg-white/5 text-gray-300 text-xs text-left transition">{s}</button>
                             ))}
                           </div>
                         </div>
                         <button onClick={() => { setContextMenuId(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Eye className="w-3.5 h-3.5" /> Visibility</button>
-                        <button onClick={() => { setContextMenuId(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Folder className="w-3.5 h-3.5" /> Move to</button>
                         <button onClick={() => handleDuplicate(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Copy className="w-3.5 h-3.5" /> Duplicate storyboard</button>
-                        <button onClick={() => { setContextMenuId(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><LayoutGrid className="w-3.5 h-3.5" /> Set default view to grid</button>
-                        <button onClick={() => { setContextMenuId(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><List className="w-3.5 h-3.5" /> Set default view to table</button>
                         <div className="border-t border-white/6 my-1" />
                         <button onClick={() => handleDeleteProject(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-red-500/10 text-red-400 text-xs transition"><Trash2 className="w-3.5 h-3.5" /> Delete storyboard</button>
                       </div>
@@ -511,16 +536,22 @@ export function ProjectsDashboard({
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="relative group/status">
-                          <button onClick={e => e.stopPropagation()} className={`px-2 py-0.5 rounded text-[10px] font-semibold ${STATUS_STYLE[p.status]} hover:opacity-80 transition`}>
-                            {p.status}
-                          </button>
-                          <div className="hidden group-hover/status:block absolute left-0 top-full mt-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl z-50 w-32 py-1">
-                            {(["On Hold", "In Progress", "Completed", "Draft"] as const).map(s => (
-                              <button key={s} onClick={e => { e.stopPropagation(); handleStatusChange(p.id, s); }} className="w-full px-3 py-1.5 hover:bg-white/5 text-gray-300 text-xs text-left transition">{s}</button>
-                            ))}
-                          </div>
-                        </div>
+                        <div className="relative">
+                         <button
+                           onClick={e => {
+                             e.stopPropagation();
+                             setStatusMenuId((current) => current === p.id ? null : p.id);
+                           }}
+                           className={`px-2 py-0.5 rounded text-[10px] font-semibold ${STATUS_STYLE[p.status]} hover:opacity-80 transition`}
+                         >
+                           {p.status}
+                         </button>
+                         <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-0 top-full mt-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl z-50 w-32 py-1`}>
+                           {(["On Hold", "In Progress", "Completed", "Draft"] as const).map(s => (
+                             <button key={s} onClick={e => { e.stopPropagation(); handleStatusChange(p.id, s); }} className="w-full px-3 py-1.5 hover:bg-white/5 text-gray-300 text-xs text-left transition">{s}</button>
+                           ))}
+                         </div>
+                       </div>
                       </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{p.dueDate || "—"}</td>
                       <td className="px-4 py-3">
@@ -529,6 +560,7 @@ export function ProjectsDashboard({
                           <button onClick={e => e.stopPropagation()} className="p-1 text-gray-500 hover:text-white transition"><Share2 className="w-3.5 h-3.5" /></button>
                           <button onClick={e => { 
                               e.stopPropagation(); 
+                              setStatusMenuId(null);
                               if (contextMenuId === p.id) {
                                 setContextMenuId(null);
                                 setMenuPosition(null);
@@ -552,8 +584,6 @@ export function ProjectsDashboard({
                                   <button onClick={() => { setEditingProjectId(p.id); setEditName(p.name); setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Pencil className="w-3.5 h-3.5" /> Rename</button>
                                   <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Eye className="w-3.5 h-3.5" /> Visibility</button>
                                   <button onClick={() => handleDuplicate(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Copy className="w-3.5 h-3.5" /> Duplicate storyboard</button>
-                                  <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><LayoutGrid className="w-3.5 h-3.5" /> Set default view to grid</button>
-                                  <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><List className="w-3.5 h-3.5" /> Set default view to table</button>
                                   <div className="border-t border-white/6 my-1" />
                                   <button onClick={() => handleDeleteProject(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-red-500/10 text-red-400 text-xs transition"><Trash2 className="w-3.5 h-3.5" /> Delete storyboard</button>
                                 </div>

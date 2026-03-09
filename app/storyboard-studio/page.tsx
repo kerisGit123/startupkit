@@ -31,6 +31,7 @@ export default function StoryboardPage() {
   const createConvexProject = useMutation(api.storyboard.projects.create);
   const removeConvexProject = useMutation(api.storyboard.projects.remove);
   const updateConvexProject = useMutation(api.storyboard.projects.update);
+  const duplicateConvexProject = useMutation(api.storyboard.projects.duplicate);
   
   // Client-side mutation for file logging (like FrameCard)
   const logFile = useMutation(api.storyboard.storyboardFiles.logUpload);
@@ -250,6 +251,14 @@ export default function StoryboardPage() {
     }
   };
 
+  const handleDuplicateConvexProject = async (id: string) => {
+    try {
+      await duplicateConvexProject({ id: id as Parameters<typeof duplicateConvexProject>[0]["id"] });
+    } catch (err) {
+      console.error("[duplicate project]", err);
+    }
+  };
+
   const handleProjectsChange = async (nextProjects: Project[]) => {
     setProjects(nextProjects);
 
@@ -267,6 +276,7 @@ export default function StoryboardPage() {
             id: project.id as Parameters<typeof updateConvexProject>[0]["id"],
             name: project.name,
             status: project.status,
+            isFavorite: project.favourite,
             tags: project.tags,
           });
         } catch (err) {
@@ -334,11 +344,13 @@ export default function StoryboardPage() {
               dueDate: "",
               assignee: "You",
               tags: p.tags,
+              favourite: p.isFavorite ?? false,
             })) ?? projects}
             onProjectsChange={handleProjectsChange}
             onOpenProject={handleOpenProject}
             onCreateConvexProject={handleCreateConvexProject}
             onDeleteProject={handleDeleteConvexProject}
+            onDuplicateProject={handleDuplicateConvexProject}
             onOpenFileBrowser={() => {
               // Trigger simple file input click
               const fileInput = document.getElementById('files-upload-input') as HTMLInputElement;
