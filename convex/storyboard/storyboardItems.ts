@@ -94,6 +94,19 @@ export const remove = mutation({
   },
 });
 
+export const updateFavorite = mutation({
+  args: {
+    id: v.id("storyboard_items"),
+    isFavorite: v.boolean(),
+  },
+  handler: async (ctx, { id, isFavorite }) => {
+    await ctx.db.patch(id, { 
+      isFavorite, 
+      updatedAt: Date.now() 
+    });
+  },
+});
+
 export const updateByTaskId = mutation({
   args: {
     taskId: v.string(),
@@ -166,5 +179,44 @@ export const createBatch = mutation({
       ids.push(id);
     }
     return ids;
+  },
+});
+
+// NEW: Frame status and notes mutations (safe implementation)
+export const updateFrameStatus = mutation({
+  args: {
+    id: v.id("storyboard_items"),
+    frameStatus: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, frameStatus }) => {
+    // Validate status if provided
+    if (frameStatus) {
+      const validStatuses = ['draft', 'in-progress', 'completed'];
+      if (!validStatuses.includes(frameStatus)) {
+        throw new Error(`Invalid frameStatus: ${frameStatus}`);
+      }
+    }
+    
+    await ctx.db.patch(id, {
+      frameStatus,
+      updatedAt: Date.now(),
+    });
+    
+    return id;
+  },
+});
+
+export const updateFrameNotes = mutation({
+  args: {
+    id: v.id("storyboard_items"),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, notes }) => {
+    await ctx.db.patch(id, {
+      notes,
+      updatedAt: Date.now(),
+    });
+    
+    return id;
   },
 });

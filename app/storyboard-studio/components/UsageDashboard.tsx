@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useOrganization, useUser } from "@clerk/nextjs";
+import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { BarChart2, Zap, Image as ImageIcon, Video, FileText, Users } from "lucide-react";
 
@@ -22,8 +22,24 @@ export function UsageDashboard() {
 
   if (!summary) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d12]">
+        <div className="flex items-center justify-end px-6 py-4 border-b border-white/6 shrink-0">
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-8 h-8",
+                userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
+                userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                userButtonPopoverActionButtonText: "text-sm",
+                userButtonPopoverFooter: "border-t border-white/10",
+              },
+            }}
+            afterSignOutUrl="/"
+          />
+        </div>
+        <div className="flex items-center justify-center h-64">
+          <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+        </div>
       </div>
     );
   }
@@ -40,15 +56,31 @@ export function UsageDashboard() {
   const maxUser   = topUsers[0]?.[1] ?? 1;
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl">
-      {/* Header */}
-      <div>
-        <h1 className="text-lg font-bold text-white flex items-center gap-2">
-          <BarChart2 className="w-5 h-5 text-purple-400" />
-          Credit Usage
-        </h1>
-        <p className="text-sm text-gray-500 mt-0.5">Org-wide AI usage across all projects</p>
+    <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d12]">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/6 shrink-0">
+        <div>
+          <h1 className="text-lg font-bold text-white flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-purple-400" />
+            Credit Usage
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Org-wide AI usage across all projects</p>
+        </div>
+        <UserButton
+          appearance={{
+            elements: {
+              avatarBox: "w-8 h-8",
+              userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
+              userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+              userButtonPopoverActionButtonText: "text-sm",
+              userButtonPopoverFooter: "border-t border-white/10",
+            },
+          }}
+          afterSignOutUrl="/"
+        />
       </div>
+
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="space-y-6 max-w-3xl">
 
       {/* Stat cards */}
       <div className="grid grid-cols-3 gap-4">
@@ -146,6 +178,8 @@ export function UsageDashboard() {
             })}
           </div>
         )}
+      </div>
+        </div>
       </div>
     </div>
   );

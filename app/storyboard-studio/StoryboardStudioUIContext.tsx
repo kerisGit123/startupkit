@@ -1,8 +1,14 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { Project } from "./types";
 
 type StoryboardStudioUIContextValue = {
+  activeNav: string;
+  setActiveNav: (key: string) => void;
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  sidebarProjects: Project[];
   openNewEpisode: () => void;
   openStoryManager: () => void;
 };

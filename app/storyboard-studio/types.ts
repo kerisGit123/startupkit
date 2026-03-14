@@ -1,4 +1,4 @@
-export type Step = "dashboard" | "script" | "breakdown" | "style" | "cast" | "storyboard" | "scene-editor" | "universe" | "asset-generator" | "members" | "usage";
+export type Step = "dashboard" | "script" | "breakdown" | "style" | "cast" | "storyboard" | "scene-editor" | "element-generator" | "image-maker" | "members" | "usage";
 
 export interface Project {
   id: string;
@@ -12,6 +12,11 @@ export interface Project {
   assignee?: string;
   tags: string[];
   favourite?: boolean;
+  settings?: {
+    frameRatio: string;
+    style: string;
+    layout: string;
+  };
 }
 
 export type Orientation = "16:9" | "9:16" | "1:1";

@@ -71,7 +71,7 @@ interface CanvasAreaProps {
   mode?: "describe" | "area-edit" | "annotate";
   
   // Video AI Props
-  activeAIPanel?: 'image' | 'video';
+  activeAIPanel?: 'image' | 'video' | 'element';
   videoState?: any;
   onVideoClick?: (videoUrl: string) => void;
   
@@ -196,8 +196,8 @@ export function CanvasArea({
           </div>
         )}
         
-        {/* Image AI Canvas - Default CanvasEditor */}
-        {activeAIPanel === 'image' && (
+        {/* Element AI Canvas - Same as Image AI */}
+        {activeAIPanel === 'element' && (
           <CanvasEditor
           panelId={panelId}
           imageUrl={backgroundImage || activeShot?.imageUrl}
@@ -216,6 +216,49 @@ export function CanvasArea({
           rectangle={rectangle}
           onRectangleChange={setRectangle}
           rectangleVisible={imageIsRectangleVisible}
+          canvasTool={canvasTool}
+          isAspectRatioAnimating={isAspectRatioAnimating}
+          isSquareMode={isSquareMode}
+          onToolSelect={onToolSelect}
+          generateImageWithElements={generateImageWithElements}
+          onCropClick={runCrop}
+          onImageLoad={onImageLoad}
+          selectedColor={selectedColor}
+          onColorPickerClick={onColorPickerClick}
+          onDeleteSelected={onDeleteSelected}
+          mode={mode}
+          onSetOriginalImage={onSetOriginalImage}
+          resetAllTransformations={() => {
+            setCanvasState({
+              ...canvasState,
+              bubbles: canvasState.bubbles.map(b => ({ ...b, rotation: 0, flipX: false, flipY: false })),
+              textElements: canvasState.textElements.map(t => ({ ...t, rotation: 0, flipX: false, flipY: false })),
+              assetElements: canvasState.assetElements.map(a => ({ ...a, rotation: 0, flipX: false, flipY: false })),
+            });
+          }}
+        />
+        )}
+        
+        {/* Image AI Canvas - Default CanvasEditor */}
+        {activeAIPanel === 'image' && (
+          <CanvasEditor
+          panelId={panelId}
+          imageUrl={backgroundImage || activeShot?.imageUrl}
+          activeTool={canvasActiveTool}
+          state={canvasState}
+          onStateChange={setCanvasState}
+          // Pass brush props for all inpaint models
+          brushSize={maskBrushSize}
+          isEraser={isEraser}
+          maskOpacity={maskOpacity}
+          hideBrushMask={hideBrushMask}
+          setHideBrushMask={setHideBrushMask}
+          hiddenIds={hiddenIds}
+          onSelectionChange={setCanvasSelection}
+          canvasSelection={canvasSelection}
+          rectangle={rectangle}
+          setRectangle={setRectangle}
+          imageIsRectangleVisible={imageIsRectangleVisible}
           canvasTool={canvasTool}
           isAspectRatioAnimating={isAspectRatioAnimating}
           isSquareMode={isSquareMode}

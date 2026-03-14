@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { UserButton } from "@clerk/nextjs";
 import { UserPlus, Search, Hash, Pencil, Plus, MoreHorizontal } from "lucide-react";
 import { TAG_COLORS } from "../constants";
 
@@ -50,10 +51,10 @@ export function MembersPage() {
     <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d12]">
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-white/6 shrink-0">
-        <button className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-semibold transition">
-          <UserPlus className="w-4 h-4" /> Invite members
-        </button>
         <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-semibold transition">
+            <UserPlus className="w-4 h-4" /> Invite members
+          </button>
           <div className="flex items-center gap-2 bg-[#1c1c26] border border-white/10 rounded-lg px-3 py-1.5">
             <Search className="w-3.5 h-3.5 text-gray-500" />
             <input
@@ -63,6 +64,18 @@ export function MembersPage() {
               className="bg-transparent text-white text-xs placeholder-gray-600 focus:outline-none w-32"
             />
           </div>
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-8 h-8",
+                userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
+                userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                userButtonPopoverActionButtonText: "text-sm",
+                userButtonPopoverFooter: "border-t border-white/10",
+              },
+            }}
+            afterSignOutUrl="/"
+          />
         </div>
       </div>
 

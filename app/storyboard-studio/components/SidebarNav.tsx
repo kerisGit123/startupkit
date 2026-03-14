@@ -3,16 +3,19 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Film, FolderOpen, Users, Star, Clock, Tag, Check, Globe,
-  ChevronDown, ChevronUp, Sparkles, BarChart2,
+  Film, FolderOpen, Users, Star, Clock, Tag, Check,
+  ChevronDown, ChevronUp, Sparkles, BarChart2, LayoutGrid, Settings,
+  LogOut,
 } from "lucide-react";
 import type { Project } from "../types";
+import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
 
 interface SidebarNavProps {
   open: boolean;
   activeNav: string;
   onNavChange: (key: string) => void;
   projects?: Project[];
+  onOpenSettings?: () => void;
 }
 
 const TOP_ITEMS = [
@@ -22,25 +25,31 @@ const TOP_ITEMS = [
 ];
 
 const ORGANIZE_ITEMS = [
-  { key: "favourite", icon: Star,  label: "Favourite" },
-  { key: "recent",    icon: Clock, label: "Recent" },
-  { key: "tags",      icon: Tag,   label: "Tags" },
-  { key: "statuses",  icon: Check, label: "Statuses" },
+  { key: "recent", icon: Clock, label: "Recent" },
+  { key: "tags",  icon: Tag,   label: "Tags" },
 ];
 
 const UNIVERSE_NAV_ITEMS = [
-  { key: "universe",        icon: Globe,    label: "Universe Manager" },
-  { key: "asset-generator", icon: Sparkles, label: "Asset Generator"  },
+  { key: "asset-generator", icon: Sparkles, label: "Element Generator"  },
+  { key: "image-maker", icon: LayoutGrid, label: "Reference Maker" },
 ];
 
 const EXTERNAL_LINK_ITEMS = [
   // Removed manga editor references
 ];
 
-export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: SidebarNavProps) {
+export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpenSettings }: SidebarNavProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    favourite: false, recent: false, tags: false, statuses: false,
+    recent: false, tags: false,
   });
+  const { setSidebarOpen } = useStoryboardStudioUI();
+
+  const handleNavChange = (key: string) => {
+    onNavChange(key);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
 
   const toggle = (key: string) =>
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
@@ -48,7 +57,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
   const navBtn = (key: string, Icon: React.ElementType, label: string) => (
     <button
       key={key}
-      onClick={() => onNavChange(key)}
+      onClick={() => handleNavChange(key)}
       className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
         activeNav === key ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/5"
       }`}
@@ -59,9 +68,14 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
   );
 
   return (
-    <aside
-      className={`flex flex-col bg-[#111118] border-r border-white/6 shrink-0 overflow-hidden transition-all duration-300 ${open ? "w-52" : "w-0"}`}
-    >
+    <>
+      <div
+        onClick={() => setSidebarOpen(false)}
+        className={`fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] transition-opacity duration-300 md:hidden ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}
+      />
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col bg-[#111118] border-r border-white/6 overflow-hidden transition-transform duration-300 md:static md:z-auto md:w-52 md:max-w-none md:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+      >
       {/* Logo */}
       <div className="px-4 py-3.5 border-b border-white/6 shrink-0">
         <div className="flex items-center gap-2.5">
@@ -78,7 +92,6 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
         {/* Top items */}
         {TOP_ITEMS.map(item => navBtn(item.key, item.icon, item.label))}
-
         {/* Organize section */}
         <div className="pt-3 pb-1 px-3">
           <span className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">Organize</span>
@@ -106,7 +119,14 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
                       return Array.from(allTags).map(tag => (
                         <button
                           key={tag}
-                          onClick={() => onNavChange(`tag:${tag}`)}
+                          onClick={() => {
+                            const filterKey = `tag:${tag}`;
+                            if (activeNav === filterKey) {
+                              handleNavChange('');
+                            } else {
+                              handleNavChange(filterKey);
+                            }
+                          }}
                           className={`w-full text-left px-2 py-1 rounded text-xs transition ${
                             activeNav === `tag:${tag}` ? "bg-white/10 text-white" : "text-gray-600 hover:text-white"
                           }`}
@@ -125,30 +145,19 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
                     })()}
                   </>
                 )}
-                {item.key === "favourite" && (
-                  <>
-                    {projects.filter(p => p.favourite).map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => onNavChange(`project:${p.id}`)}
-                        className={`w-full text-left px-2 py-1 rounded text-xs transition ${
-                          activeNav === `project:${p.id}` ? "bg-white/10 text-white" : "text-gray-600 hover:text-white"
-                        }`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                    {projects.filter(p => p.favourite).length === 0 && (
-                      <div className="text-xs text-gray-600">No favourites yet</div>
-                    )}
-                  </>
-                )}
                 {item.key === "recent" && (
                   <>
-                    {projects.slice(0, 5).map(p => (
+                    {[...projects].reverse().slice(0, 5).map(p => (
                       <button
                         key={p.id}
-                        onClick={() => onNavChange(`project:${p.id}`)}
+                        onClick={() => {
+                          const filterKey = `project:${p.id}`;
+                          if (activeNav === filterKey) {
+                            handleNavChange('');
+                          } else {
+                            handleNavChange(filterKey);
+                          }
+                        }}
                         className={`w-full text-left px-2 py-1 rounded text-xs transition ${
                           activeNav === `project:${p.id}` ? "bg-white/10 text-white" : "text-gray-600 hover:text-white"
                         }`}
@@ -159,21 +168,6 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
                     {projects.length === 0 && (
                       <div className="text-xs text-gray-600">No recent items</div>
                     )}
-                  </>
-                )}
-                {item.key === "statuses" && (
-                  <>
-                    {["On Hold", "In Progress", "Completed", "Draft"].map(status => (
-                      <button
-                        key={status}
-                        onClick={() => onNavChange(`status:${status}`)}
-                        className={`w-full text-left px-2 py-1 rounded text-xs transition ${
-                          activeNav === `status:${status}` ? "bg-white/10 text-white" : "text-gray-600 hover:text-white"
-                        }`}
-                      >
-                        {status}
-                      </button>
-                    ))}
                   </>
                 )}
               </div>
@@ -190,6 +184,34 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [] }: Side
 
         {/* External links section removed - no manga editor links */}
       </nav>
-    </aside>
+
+      <div className="border-t border-white/6 p-2 shrink-0">
+        <div className="space-y-1">
+          <button
+            onClick={() => handleNavChange("projects")}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
+              activeNav === "projects" ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <LogOut className="w-4 h-4 shrink-0" />
+            logout
+          </button>
+
+          <button
+            onClick={() => {
+              onOpenSettings?.();
+              if (typeof window !== "undefined" && window.innerWidth < 768) {
+                setSidebarOpen(false);
+              }
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-colors text-gray-400 hover:text-white hover:bg-white/5"
+          >
+            <Settings className="w-4 h-4 shrink-0" />
+            Setting
+          </button>
+        </div>
+      </div>
+      </aside>
+    </>
   );
 }

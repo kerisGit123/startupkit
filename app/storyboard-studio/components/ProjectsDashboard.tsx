@@ -1,15 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Star, MoreHorizontal, Search, Filter, Settings, Users, ChevronDown,
   Plus, Image as ImageIcon, LayoutGrid, Folder, FileText, Link2,
   PanelLeftClose, PanelLeftOpen, List, Share2, Pencil, Eye, Copy,
   Trash2, Tag, Hash, Grid3x3, Table2, Edit3, ChevronRight, Loader2, FolderOpen, X,
 } from "lucide-react";
+import { UserButton } from "@clerk/nextjs";
 import { VISUAL_STYLES, SIMPLE_TAGS, TAG_COLORS } from "../constants";
 import type { Project, Step } from "../types";
 import { TagEditor } from "./storyboard/TagEditor";
+import { TopNavSearch } from "./TopNavSearch";
+import { TopNavFilters } from "./TopNavFilters";
 
 type ProjectTagOption = {
   id: string;
@@ -58,6 +61,17 @@ const STATUS_STYLE: Record<Project["status"], string> = {
   "Draft":      "bg-white/5 text-gray-400",
 };
 
+const normalizeStatusFilter = (value: string): Project["status"] | null => {
+  const normalized = value.trim().toLowerCase().replace(/[_\s]+/g, "-");
+
+  if (normalized === "draft") return "Draft";
+  if (normalized === "completed") return "Completed";
+  if (normalized === "in-progress" || normalized === "progress" || normalized === "active") return "In Progress";
+  if (normalized === "on-hold" || normalized === "hold") return "On Hold";
+
+  return null;
+};
+
 export function ProjectsDashboard({
   sidebarOpen, onToggleSidebar, projects, onProjectsChange, onOpenProject, onCreateConvexProject, onDeleteProject, onDuplicateProject, onOpenFileBrowser, onOpenGlobalFileBrowser, activeFilter,
 }: ProjectsDashboardProps) {
@@ -75,6 +89,13 @@ export function ProjectsDashboard({
   const [editName, setEditName] = useState("");
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState({
+    status: [] as string[],
+    favorite: false,
+  });
+
   // Tag editor state for projects
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -89,6 +110,38 @@ export function ProjectsDashboard({
       p.id === selectedProjectId ? { ...p, tags: tagIds } : p
     ));
   };
+
+  // Filter and search logic
+  const filteredProjects = useMemo(() => {
+    let filtered = projects;
+
+    // Apply search filter
+    if (searchQuery && searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(project => 
+        project.name.toLowerCase().includes(query) ||
+        project.tags.some(tag => tag.toLowerCase().includes(query)) ||
+        project.status.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply status filter (only if status exists - for non-storyboard usage)
+    if (filters.status && filters.status.length > 0) {
+      filtered = filtered.filter(project => 
+        filters.status.includes(project.status)
+      );
+    }
+
+    // Apply favorite filter
+    if (filters.favorite) {
+      filtered = filtered.filter(project => project.favourite);
+    }
+
+    return filtered;
+  }, [projects, searchQuery, filters]);
+
+  // Calculate counts for UI
+  const favoriteCount = projects.filter(p => p.favourite).length;
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -171,26 +224,37 @@ export function ProjectsDashboard({
     setMenuPosition(null);
   };
 
-  // Filter projects based on activeFilter
-  const filteredProjects = activeFilter ? projects.filter(p => {
-    if (activeFilter.startsWith('tag:')) {
-      const tag = activeFilter.replace('tag:', '');
-      return p.tags.includes(tag);
-    } else if (activeFilter.startsWith('status:')) {
-      const status = activeFilter.replace('status:', '');
-      return p.status === status;
-    } else if (activeFilter.startsWith('project:')) {
-      const projectId = activeFilter.replace('project:', '');
-      return p.id === projectId;
-    } else if (activeFilter === 'favourite') {
-      return p.favourite;
-    } else if (activeFilter === 'recent') {
-      // Show last 5 projects (most recent first)
-      const sortedProjects = [...projects].reverse();
-      return sortedProjects.slice(0, 5).some(recent => p.id === recent.id);
+  // Combine all filters
+  const finalFilteredProjects = useMemo(() => {
+    let result = filteredProjects;
+    
+    // Apply active filter if exists - but apply it to already filtered results
+    if (activeFilter) {
+      if (activeFilter.startsWith('tag:')) {
+        const tag = activeFilter.replace('tag:', '');
+        result = result.filter(p => p.tags.some(projectTag => projectTag.toLowerCase() === tag.toLowerCase()));
+      } else if (activeFilter.startsWith('status:')) {
+        const rawStatus = activeFilter.replace('status:', '');
+        const normalizedStatus = normalizeStatusFilter(rawStatus);
+        if (normalizedStatus) {
+          result = result.filter(p => p.status === normalizedStatus);
+        }
+      } else if (activeFilter.startsWith('project:')) {
+        const projectId = activeFilter.replace('project:', '');
+        result = result.filter(p => p.id === projectId);
+      } else if (activeFilter === 'favourite') {
+        result = result.filter(p => p.favourite);
+      } else if (activeFilter === 'recent') {
+        // Show last 5 projects (most recent first) from filtered results
+        const sortedProjects = [...result].reverse();
+        result = sortedProjects.slice(0, 5).filter(recent => 
+          result.some(p => p.id === recent.id)
+        );
+      }
     }
-    return true;
-  }) : projects;
+    
+    return result;
+  }, [filteredProjects, activeFilter]);
 
   const NEW_ITEMS = [
     { icon: FileText, label: "Files",  desc: "Upload files: Video, Images, Audio, PDF", type: "stage"  as const },
@@ -200,95 +264,119 @@ export function ProjectsDashboard({
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d12]">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/6 shrink-0">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onToggleSidebar}
-            className="p-1.5 text-gray-400 hover:text-white rounded transition"
-          >
-            {sidebarOpen
-              ? <PanelLeftClose className="w-4 h-4" />
-              : <PanelLeftOpen  className="w-4 h-4" />}
-          </button>
-          <span className="text-white font-semibold text-sm">Any project</span>
-          <Star className="w-3.5 h-3.5 text-gray-500 hover:text-yellow-400 cursor-pointer transition" />
-          <MoreHorizontal className="w-4 h-4 text-gray-500 hover:text-white cursor-pointer transition" />
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Left side tools */}
-          <div className="flex items-center gap-2">
-            <button className="p-1.5 text-gray-400 hover:text-white transition"><Search className="w-4 h-4" /></button>
-            <button className="p-1.5 text-gray-400 hover:text-white transition"><Filter className="w-4 h-4" /></button>
-            <button className="p-1.5 text-gray-400 hover:text-white transition"><Settings className="w-4 h-4" /></button>
-          </div>
-          
-          {/* Spacer */}
-          <div className="flex-1" />
-          
-          {/* All Files button - Prominent position */}
-          <button onClick={onOpenGlobalFileBrowser} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium transition shadow-lg shadow-emerald-600/20">
-            <FolderOpen className="w-4 h-4" /> All Files
-          </button>
-          
-          {/* Share button */}
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm transition">
-            <Users className="w-3.5 h-3.5" /> Share
-          </button>
-          
-          {/* View toggle */}
-          <div className="flex items-center bg-white/5 rounded-lg p-0.5 gap-0.5">
-            <button onClick={() => setDashView("card")} title="Card view"
-              className={`p-1.5 rounded-md transition ${dashView === "card" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
-              <Grid3x3 className="w-3.5 h-3.5" />
-            </button>
-            <button onClick={() => setDashView("table")} title="Table view"
-              className={`p-1.5 rounded-md transition ${dashView === "table" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}>
-              <List className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          
-          {/* New dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setShowNewDropdown(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-semibold transition"
-            >
-              New <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            {showNewDropdown && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowNewDropdown(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl z-50 w-64 py-2">
-                  {NEW_ITEMS.map(item => (
-                    <button
-                      key={item.type}
-                      onClick={() => {
-                        setShowNewDropdown(false);
-                        if (item.type === "stage" && onOpenFileBrowser) {
-                          onOpenFileBrowser();
-                        } else {
-                          setNewType(item.type);
-                          setShowCreateModal(true);
-                        }
-                      }}
-                      className="w-full flex items-start gap-3 px-4 py-3 hover:bg-white/5 transition text-left"
-                    >
-                      <item.icon className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                      <div>
-                        <div className="text-white text-sm font-medium">{item.label}</div>
-                        <div className="text-gray-500 text-xs mt-0.5">{item.desc}</div>
-                      </div>
-                    </button>
-                  ))}
+      <div className="border-b border-white/6 shrink-0 px-3 py-3 md:px-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                onClick={onToggleSidebar}
+                className="rounded p-1.5 text-gray-400 transition hover:text-white md:hidden"
+              >
+                {sidebarOpen
+                  ? <PanelLeftClose className="w-4 h-4" />
+                  : <PanelLeftOpen className="w-4 h-4" />}
+              </button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1 text-[11px] text-gray-500 md:hidden">
+                  <span className="shrink-0">Projects</span>
+                  <span>/</span>
+                  <span className="truncate text-gray-300">Any project</span>
                 </div>
-              </>
-            )}
+                <span className="hidden truncate text-sm font-semibold text-white md:block">Any project</span>
+              </div>
+              <MoreHorizontal className="hidden w-4 h-4 shrink-0 cursor-pointer text-gray-500 transition hover:text-white md:block" />
+            </div>
+            <div className="flex items-center md:hidden">
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-8 h-8",
+                    userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
+                    userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                    userButtonPopoverActionButtonText: "text-sm",
+                    userButtonPopoverFooter: "border-t border-white/10",
+                  },
+                }}
+                afterSignOutUrl="/"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 rounded-2xl border border-white/6 bg-[#111118]/80 p-2.5 md:flex-1 md:min-w-0 md:flex-row md:items-center md:justify-end md:rounded-none md:border-0 md:bg-transparent md:p-0 lg:flex-row lg:items-center lg:justify-end">
+            <div className="flex flex-col gap-2 md:min-w-0 md:flex-1 md:justify-end lg:min-w-0 lg:flex-1 lg:justify-end">
+              <TopNavSearch onSearch={setSearchQuery} />
+            </div>
+            <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
+              <TopNavFilters
+                onFiltersChange={setFilters}
+                projectCount={finalFilteredProjects.length}
+              />
+              <button
+                onClick={onOpenGlobalFileBrowser}
+                className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:flex-none md:rounded-lg md:px-4 md:py-2"
+              >
+                <FolderOpen className="w-4 h-4" /> All Files
+              </button>
+              <div className="flex items-center gap-0.5 rounded-xl bg-white/5 p-0.5 md:rounded-lg">
+                <button
+                  onClick={() => setDashView("card")}
+                  title="Card view"
+                  className={`p-2 rounded-lg transition md:p-1.5 md:rounded-md ${dashView === "card" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}
+                >
+                  <Grid3x3 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setDashView("table")}
+                  title="Table view"
+                  className={`p-2 rounded-lg transition md:p-1.5 md:rounded-md ${dashView === "table" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}
+                >
+                  <List className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="relative">
+                <button
+                  onClick={() => setShowNewDropdown(v => !v)}
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 md:rounded-lg md:px-3 md:py-1.5"
+                >
+                  New <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {showNewDropdown && (
+                  <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-white/10 bg-[#1c1c26] py-2 shadow-2xl">
+                    <button
+                      onClick={() => {
+                        setShowCreateModal(true);
+                        setShowNewDropdown(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-300 transition hover:bg-white/5"
+                    >
+                      <Plus className="w-4 h-4" /> New Storyboard
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button className="hidden p-1.5 text-gray-400 transition hover:text-white lg:inline-flex">
+                <Settings className="w-4 h-4" />
+              </button>
+              <div className="hidden items-center self-end md:flex lg:self-auto">
+                <UserButton
+                  appearance={{
+                    elements: {
+                      avatarBox: "w-8 h-8",
+                      userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
+                      userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                      userButtonPopoverActionButtonText: "text-sm",
+                      userButtonPopoverFooter: "border-t border-white/10",
+                    },
+                  }}
+                  afterSignOutUrl="/"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6">
         {projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
             <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
@@ -303,17 +391,17 @@ export function ProjectsDashboard({
           </div>
         ) : dashView === "card" ? (
           /* ── Card view - Modern FrameCard style ── */
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filteredProjects.map(p => {
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {finalFilteredProjects.map(p => {
               const Icon = TYPE_ICON[p.type];
               return (
-                <div key={p.id} className="relative group cursor-pointer overflow-hidden rounded-2xl border transition-all duration-300 shadow-sm border-white/5 hover:border-white/10 hover:shadow-md bg-[#0a0a0f]">
+                <div key={p.id} className="relative group cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-[#0a0a0f] shadow-sm transition-all duration-300 hover:border-white/10 hover:shadow-md md:rounded-2xl">
                   {/* Image/Preview Area */}
-                  <div className="bg-[#0f0f14] aspect-video flex items-center justify-center relative" onClick={() => onOpenProject(p, "storyboard")}>
-                    <ImageIcon className="w-12 h-12 text-gray-700" />
+                  <div className="relative flex aspect-[3/4] items-center justify-center bg-[#0f0f14] sm:aspect-video" onClick={() => onOpenProject(p, "storyboard")}>
+                    <ImageIcon className="w-9 h-9 text-gray-700 md:w-12 md:h-12" />
                     
                     {/* Top overlay with version */}
-                    <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 via-black/30 to-transparent p-3">
+                    <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 via-black/30 to-transparent p-2 md:p-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
@@ -348,9 +436,9 @@ export function ProjectsDashboard({
                   </div>
 
                   {/* Content Area */}
-                  <div className="p-4 bg-[#0a0a0f] border-t border-white/5">
+                  <div className="border-t border-white/5 bg-[#0a0a0f] p-3 md:p-4">
                     {/* Title */}
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="mb-2 flex items-center gap-2">
                       <Icon className="w-4 h-4 text-gray-500 shrink-0" />
                       {editingProjectId === p.id ? (
                         <input
@@ -367,15 +455,17 @@ export function ProjectsDashboard({
                       )}
                     </div>
 
-                    {/* Type & Status */}
-                    <div className="flex items-center gap-2 mb-3">
+                    {/* Type & Status & Aspect Ratio */}
+                    <div className="mb-2.5 flex flex-wrap items-center gap-1.5 md:mb-3 md:gap-2">
                       <span className="text-xs text-gray-500 capitalize">{p.type}</span>
                       <span className="text-gray-700">•</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${STATUS_STYLE[p.status]}`}>{p.status}</span>
+                      <span className="text-gray-700">•</span>
+                      <span className="text-xs text-gray-500 font-mono bg-white/5 px-2 py-0.5 rounded">{p.settings?.frameRatio || "16:9"}</span>
                     </div>
 
                     {/* Visibility & Members */}
-                    <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+                    <div className="mb-2.5 flex flex-wrap items-center gap-2 text-[11px] text-gray-500 md:mb-3 md:gap-3 md:text-xs">
                       <div className="flex items-center gap-1">
                         <Eye className="w-3 h-3" />
                         <span>Everyone</span>
@@ -454,7 +544,7 @@ export function ProjectsDashboard({
               );
             })}
             <button onClick={() => setShowCreateModal(true)}
-              className="bg-[#16161f] border border-dashed border-white/8 rounded-xl flex flex-col items-center justify-center gap-2 min-h-[180px] hover:border-white/20 hover:bg-white/2 transition">
+              className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/8 bg-[#16161f] transition hover:border-white/20 hover:bg-white/2 md:min-h-[180px]">
               <Plus className="w-5 h-5 text-gray-600" />
               <span className="text-gray-600 text-xs">Add storyboard</span>
             </button>
@@ -462,19 +552,21 @@ export function ProjectsDashboard({
         ) : (
           /* ── Table view (pic9/pic11) ── */
           <div className="bg-[#111118] border border-white/6 rounded-xl overflow-hidden">
-            <table className="w-full">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px]">
               <thead>
                 <tr className="border-b border-white/6 text-left">
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium w-16">Preview</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium">Project</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium">Tags</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium">Status</th>
+                  <th className="px-4 py-3 text-gray-500 text-xs font-medium">Aspect Ratio</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium">Last Update</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium w-24">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredProjects.map(p => {
+                {finalFilteredProjects.map(p => {
                   const Icon = TYPE_ICON[p.type];
                   return (
                     <tr key={p.id} className="border-b border-white/4 hover:bg-white/2 transition cursor-pointer" onClick={() => onOpenProject(p, "storyboard")}>
@@ -553,6 +645,9 @@ export function ProjectsDashboard({
                          </div>
                        </div>
                       </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs text-gray-500 font-mono bg-white/5 px-2 py-1 rounded">{p.settings?.frameRatio || "16:9"}</span>
+                      </td>
                       <td className="px-4 py-3 text-gray-500 text-xs">{p.dueDate || "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
@@ -597,6 +692,7 @@ export function ProjectsDashboard({
                 })}
               </tbody>
             </table>
+            </div>
             {/* Add stage row */}
             <button onClick={() => setShowCreateModal(true)}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 border-t border-dashed border-white/6 text-gray-600 hover:text-gray-400 text-xs transition">

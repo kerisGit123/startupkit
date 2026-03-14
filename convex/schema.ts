@@ -25,6 +25,15 @@ export default defineSchema({
     isBlocked: v.optional(v.boolean()),
     adminNotes: v.optional(v.string()),
     
+    // Storyboard Studio Settings
+    settings: v.optional(v.object({
+      theme: v.string(),
+      defaultView: v.string(),
+      exportFormat: v.string(),
+      favoriteFilters: v.array(v.string()),
+      recentSearches: v.array(v.string()),
+    })),
+    
     createdAt: v.optional(v.number()),
     updatedAt: v.optional(v.number()),
     deletionTime: v.optional(v.number()),
@@ -1769,7 +1778,13 @@ export default defineSchema({
     })),
     generatedBy: v.string(),
     isAIGenerated: v.boolean(),
+    isFavorite: v.optional(v.boolean()), // per-frame favorite
     generationStatus: v.string(), // none | pending | generating | completed | failed
+    
+    // NEW: Frame status and notes (safe additive fields)
+    frameStatus: v.optional(v.string()), // 'draft' | 'in-progress' | 'completed'
+    notes: v.optional(v.string()), // Frame notes and annotations
+    
     createdAt: v.number(),
     updatedAt: v.number(),
   })

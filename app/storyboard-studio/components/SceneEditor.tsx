@@ -18,7 +18,8 @@ import type { BubbleType, TailDir, FontFamily } from "../shared/canvas-types";
 import { AIGeneratorModal } from "./storyboard/AIGeneratorModal";
 import { ImageAIPanel, type AIEditMode } from "./ImageAIPanel";
 import { VideoAIPanel, type VideoEditMode } from "./VideoAIPanel";
-import { Video, Image as ImageIcon } from "lucide-react";
+import { ElementAIPanel, type ElementAIEditMode } from "./storyboard/ElementAIPanel";
+import { Video, Image as ImageIcon, Box } from "lucide-react";
 
 type CanvasTool = CanvasActiveTool;
 
@@ -27,9 +28,10 @@ interface SceneEditorProps {
   initialShotId: string;
   onClose: () => void;
   onShotsChange: (shots: Shot[]) => void;
+  onSaveImageAsElement?: (draft: { imageUrl: string; name?: string; type?: string }) => void;
 }
 
-export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: SceneEditorProps) {
+export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement }: SceneEditorProps) {
   const [activeShotId, setActiveShotId] = useState(initialShotId);
   const [commentText, setCommentText] = useState("");
   const [editingField, setEditingField] = useState<"voice" | "notes" | "action" | null>(null);
@@ -50,12 +52,20 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
   
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
   const [selectedGeneratedImageIndex, setSelectedGeneratedImageIndex] = useState<number>(-1);
+  const [selectedSceneImageUrl, setSelectedSceneImageUrl] = useState<string | null>(null);
+  const [sceneImageContextMenu, setSceneImageContextMenu] = useState<{
+    x: number;
+    y: number;
+    imageUrl: string;
+    name?: string;
+    type?: string;
+  } | null>(null);
   
   // Debug: Track generated images changes
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const generatedImageRef = useRef<HTMLImageElement>(null);
-  const [activeAIPanel, setActiveAIPanel] = useState<'image' | 'video'>('image');
+  const [activeAIPanel, setActiveAIPanel] = useState<'image' | 'video' | 'element'>('image');
   
   // Video AI state management
   const [videoState, setVideoState] = useState({
@@ -127,6 +137,34 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
 
   // Information dialog state
   const [showInfoDialog, setShowInfoDialog] = useState(false);
+
+  const openSceneImageContextMenu = useCallback((event: React.MouseEvent, imageUrl: string, name?: string, type?: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedSceneImageUrl(imageUrl);
+    setSceneImageContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      imageUrl,
+      name,
+      type,
+    });
+  }, []);
+
+  const handleSaveCurrentImageAsElement = useCallback((imageUrl: string, name?: string, type?: string) => {
+    onSaveImageAsElement?.({ imageUrl, name, type });
+    setSceneImageContextMenu(null);
+  }, [onSaveImageAsElement]);
+
+  useEffect(() => {
+    const closeSceneImageContextMenu = () => setSceneImageContextMenu(null);
+    window.addEventListener("click", closeSceneImageContextMenu);
+    window.addEventListener("scroll", closeSceneImageContextMenu, true);
+    return () => {
+      window.removeEventListener("click", closeSceneImageContextMenu);
+      window.removeEventListener("scroll", closeSceneImageContextMenu, true);
+    };
+  }, []);
 
   // ── Zoom Functions ───────────────────────────────────────────────────
   const handleZoomIn = () => {
@@ -1221,8 +1259,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
     }
   };
 
-  // Reset video state when switching between Image and Video AI
-  const handleAIPanelSwitch = (panel: 'image' | 'video') => {
+  // Reset video state when switching between Image, Video, and Element AI
+  const handleAIPanelSwitch = (panel: 'image' | 'video' | 'element') => {
     setActiveAIPanel(panel);
     if (panel === 'image') {
       // Reset video state when switching to image
@@ -3005,17 +3043,32 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
             
             {/* AI Panel Switcher Button */}
             <button
-              onClick={() => setActiveAIPanel(activeAIPanel === 'image' ? 'video' : 'image')}
+              onClick={() => {
+                if (activeAIPanel === 'image') {
+                  setActiveAIPanel('video');
+                } else if (activeAIPanel === 'video') {
+                  setActiveAIPanel('element');
+                } else {
+                  setActiveAIPanel('image');
+                }
+              }}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
-                activeAIPanel === 'video' ? 'bg-purple-600/80' : 'bg-black/50 hover:bg-black/80'
+                activeAIPanel === 'video' ? 'bg-purple-600/80' : 
+                activeAIPanel === 'element' ? 'bg-green-600/80' : 
+                'bg-black/50 hover:bg-black/80'
               }`}
-              title={`Switch to ${activeAIPanel === 'image' ? 'Video' : 'Image'} AI`}
-              aria-label={`Switch to ${activeAIPanel === 'image' ? 'Video' : 'Image'} AI`}
+              title={`Switch to ${activeAIPanel === 'image' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
+              aria-label={`Switch to ${activeAIPanel === 'image' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
             >
               {activeAIPanel === 'image' ? (
                 <>
                   <Video className="w-4 h-4 text-purple-400" />
                   <span>Video AI</span>
+                </>
+              ) : activeAIPanel === 'video' ? (
+                <>
+                  <Box className="w-4 h-4 text-green-400" />
+                  <span>Element AI</span>
                 </>
               ) : (
                 <>
@@ -3131,10 +3184,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                        if (imageToSet) {
                          console.log("DEBUG: Setting background to:", imageToSet.substring(0,50));
                          setBackgroundImage(imageToSet);
+                         setSelectedSceneImageUrl(imageToSet);
                          // Don't clear generated images - keep them in the panel
                        } else {
                          console.log("DEBUG: No images available to set as background");
                        }
+                     }}
+                     onContextMenu={(event) => {
+                       const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
+                       if (!imageToSet) return;
+                       openSceneImageContextMenu(event, imageToSet, `${activeShot?.title || "Scene"} reference`, "environment");
                      }}>
                     <img
                       src={originalImage || backgroundImage || activeShot?.imageUrl}
@@ -3157,7 +3216,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                   <div className="space-y-3">
                     {generatedImages.map((imgUrl, i) => (
                       <div key={i} className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition ${
-                        backgroundImage === imgUrl
+                        selectedSceneImageUrl === imgUrl || backgroundImage === imgUrl
                           ? "border-blue-500/50"
                           : selectedGeneratedImageIndex === i
                           ? "border-emerald-500/50"
@@ -3178,7 +3237,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                           className="w-full h-32 object-cover cursor-pointer"
                           onClick={() => {
                             setSelectedGeneratedImageIndex(i);
+                            setSelectedSceneImageUrl(imgUrl);
                             setBackgroundImage(imgUrl);
+                          }}
+                          onContextMenu={(event) => {
+                            setSelectedGeneratedImageIndex(i);
+                            openSceneImageContextMenu(event, imgUrl, `${activeShot?.title || "Scene"} generated ${i + 1}`, "character");
                           }}
                           tabIndex={i === 0 ? 0 : -1}
                         />
@@ -3217,6 +3281,22 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
               )}
             </div>
           </div>
+
+          {sceneImageContextMenu && (
+            <div
+              className="fixed z-[10000] min-w-48 rounded-xl border border-white/10 bg-[#1a1a24] py-2 shadow-2xl"
+              style={{ left: sceneImageContextMenu.x, top: sceneImageContextMenu.y }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                onClick={() => handleSaveCurrentImageAsElement(sceneImageContextMenu.imageUrl, sceneImageContextMenu.name, sceneImageContextMenu.type)}
+                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-200 transition hover:bg-white/5 hover:text-white"
+              >
+                <Plus className="w-4 h-4" />
+                Save as Element
+              </button>
+            </div>
+          )}
 
           {/* ImageAI Panel container with gaps */}
           <div className="absolute inset-0 pointer-events-none z-10 flex flex-col">
@@ -3475,7 +3555,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                 onFitToScreen={handleFitToScreen}
                 zoomLevel={zoomLevel}
                 />
-                  ) : (
+                  ) : activeAIPanel === 'video' ? (
                     <VideoAIPanel
                       mode="describe"
                       onModeChange={() => {}}
@@ -3493,6 +3573,133 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange }: Sc
                       style="cinematic"
                       onStyleChange={(style) => console.log("Style changed:", style)}
                       isGenerating={false}
+                    />
+                  ) : (
+                    <ElementAIPanel
+                      mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ElementAIEditMode}
+                      onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
+                      onGenerate={async () => {
+                        console.log("=== ELEMENT AI GENERATE CALLED ===");
+                        console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
+                        console.log("Available aiRefImages (ElementAI Panel):", aiRefImages);
+                        console.log("Element generation prompt:", promptText);
+                        // TODO: Implement element generation logic
+                      }}
+                      credits={20}
+                      model={aiModel}
+                      onModelChange={setAiModel}
+                      referenceImages={aiRefImages}
+                      onAddReferenceImage={(file) => {
+                        const url = URL.createObjectURL(file);
+                        setAiRefImages(prev => [...prev, { id: `ref-${Date.now()}`, url }]);
+                      }}
+                      onRemoveReferenceImage={(id) => {
+                        setAiRefImages(prev => prev.filter(img => img.id !== id));
+                      }}
+                      userPrompt={promptText}
+                      onUserPromptChange={setPromptText}
+                      onAddCanvasElement={handleAddCanvasElement}
+                      // Brush inpaint props
+                      isEraser={isEraser}
+                      setIsEraser={setIsEraser}
+                      maskBrushSize={maskBrushSize}
+                      setMaskBrushSize={setMaskBrushSize}
+                      maskOpacity={maskOpacity}
+                      setMaskOpacity={setMaskOpacity}
+                      canvasState={canvasState}
+                      setCanvasState={setCanvasState}
+                      selectedColor={selectedColor}
+                      setSelectedColor={setSelectedColor}
+                      onColorPickerClick={() => {
+                        console.log("Color picker clicked from ElementAIPanel");
+                      }}
+                      onAspectRatioChange={handleAspectRatioChange}
+                      selectedAspectRatio={selectedAspectRatio}
+                      onRectangleMaskAspectRatioChange={handleRectangleMaskAspectRatioChange}
+                      onToolSelect={(tool) => {
+                        if (tool === "pen-brush" || tool === "brush" || tool === "eraser") {
+                          setCanvasTool("inpaint");
+                        } else if (tool === "crop") {
+                          setCanvasTool("crop");
+                        } else if (tool === "rectInpaint") {
+                          setCanvasTool("rectInpaint");
+                        } else if (tool === "move") {
+                          setCanvasTool("move");
+                        } else if (tool === "text") {
+                          setCanvasTool("text");
+                        } else {
+                          setCanvasTool(tool as any);
+                        }
+                      }}
+                      onCropRemove={() => {
+                        setCanvasTool("canvas-object");
+                      }}
+                      onCropExecute={async (aspectRatio) => {
+                        if (aspectRatio) {
+                          const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                          if (container) {
+                            const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                            const cRect = container.getBoundingClientRect();
+                            const iRect = img?.getBoundingClientRect();
+                            const dimensionMap: Record<string, { width: number; height: number }> = {
+                              "1:1":  { width: 200, height: 200 },
+                              "3:4":  { width: 300, height: 400 },
+                              "4:3":  { width: 400, height: 300 },
+                              "16:9": { width: 320, height: 180 },
+                              "9:16": { width: 180, height: 320 },
+                            };
+                            const { width: w, height: h } = dimensionMap[aspectRatio] || dimensionMap["16:9"];
+                            const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                            const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                            setRectangle({ x, y, width: w, height: h });
+                            setImageIsRectangleVisible(true);
+                            setRectangleMaskAspectRatio(aspectRatio);
+                          }
+                        }
+                      }}
+                      onSetSquareMode={(isSquare) => {
+                        console.log("Setting square mode:", isSquare);
+                        setIsSquareMode(isSquare);
+                        if (!isSquare) {
+                          const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                          if (container) {
+                            const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                            const cRect = container.getBoundingClientRect();
+                            const iRect = img?.getBoundingClientRect();
+                            const w = 300; const h = 200;
+                            const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                            const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                            setRectangle({ x, y, width: w, height: h });
+                            setImageIsRectangleVisible(true);
+                          }
+                        }
+                      }}
+                      onResetRectangle={() => {
+                        const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                        if (container) {
+                          const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+                          const cRect = container.getBoundingClientRect();
+                          const iRect = img?.getBoundingClientRect();
+                          const w = 200; const h = 200;
+                          const x = iRect ? (iRect.left - cRect.left) + (iRect.width - w) / 2 : (cRect.width - w) / 2;
+                          const y = iRect ? (iRect.top - cRect.top) + (iRect.height - h) / 2 : (cRect.height - h) / 2;
+                          setRectangle({ x, y, width: w, height: h });
+                          setImageIsRectangleVisible(true);
+                        }
+                      }}
+                      onSetOriginalImage={(imageUrl) => {
+                        console.log("Setting uploaded image as original image:", imageUrl);
+                        setBackgroundImage(imageUrl);
+                        setOriginalImage(imageUrl);
+                        setCanvasState(s => ({ ...s, mask: [] }));
+                        fitScaleRef.current = 1;
+                        setZoomLevel(100);
+                      }}
+                      backgroundImage={backgroundImage}
+                      onZoomIn={handleZoomIn}
+                      onZoomOut={handleZoomOut}
+                      onFitToScreen={handleFitToScreen}
+                      zoomLevel={zoomLevel}
                     />
                   )}
                 </div>

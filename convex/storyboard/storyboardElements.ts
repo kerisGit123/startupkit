@@ -45,6 +45,7 @@ export const update = mutation({
   args: {
     id: v.id("storyboard_elements"),
     name: v.optional(v.string()),
+    type: v.optional(v.string()),
     description: v.optional(v.string()),
     thumbnailUrl: v.optional(v.string()),
     referenceUrls: v.optional(v.array(v.string())),

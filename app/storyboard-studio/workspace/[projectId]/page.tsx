@@ -1,15 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { useUser } from "@clerk/nextjs";
+import { useUser, UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import {
-  ArrowLeft, Sparkles, Loader2, Plus, Trash2,
-  FileText, Grid3x3, Save, Play, Image as ImageIcon, Clock, Upload, FolderOpen, Users, Copy,
-} from "lucide-react";
+import { FrameFavoriteButton } from "../../components/FrameFavoriteButton";
 import { ImageAIPanel } from "../../components/storyboard/ImageAIPanel";
 import { VideoAIPanel } from "../../components/storyboard/VideoAIPanel";
 import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExportModal";
@@ -17,11 +14,15 @@ import { FileBrowser } from "../../components/storyboard/FileBrowser";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
 import { SceneEditor } from "../../components/SceneEditor";
 import { TagEditor } from "../../components/storyboard/TagEditor";
+import { DisplayFilters } from "../../components/storyboard/DisplayFilters";
+import { TopNavSearch } from "../../components/TopNavSearch";
+import { TopNavFilters } from "../../components/TopNavFilters";
 import { parseScriptScenes } from "@/lib/storyboard/sceneParser";
 import type { Shot } from "../../types";
+import { MessageSquare, X } from "lucide-react";
+import { Loader2, Upload, ImageIcon, Clock, Copy, Trash2, Tag, Plus, ChevronDown, Hash, Grid3x3, Table2, Settings, Users, Share2, PanelLeftClose, PanelLeftOpen, List, Search, Filter, Edit3, Eye, FolderOpen, Folder, FileText, Link2, LayoutGrid, ArrowLeft, Sparkles, Save, Play, Minus, Plus as ZoomIn, Video } from "lucide-react";
 
 type Tab = "script" | "storyboard";
-
 
 export default function StoryboardWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -38,6 +39,11 @@ export default function StoryboardWorkspacePage() {
   const createItem = useMutation(api.storyboard.storyboardItems.create);
   const updateItem = useMutation(api.storyboard.storyboardItems.update);
   const removeItem = useMutation(api.storyboard.storyboardItems.remove);
+  const updateFavorite = useMutation(api.storyboard.storyboardItems.updateFavorite);
+  
+  // NEW: Frame status and notes mutations
+  const updateFrameStatus = useMutation(api.storyboard.storyboardItems.updateFrameStatus);
+  const updateFrameNotes = useMutation(api.storyboard.storyboardItems.updateFrameNotes);
 
   // Duplicate item function
   const duplicateItem = async (itemToDuplicate: any) => {
@@ -65,17 +71,57 @@ export default function StoryboardWorkspacePage() {
     }
   };
 
-  // Handle tag changes
-  const handleTagsChange = async (itemId: string, newTags: Array<{ id: string; name: string; color: string }>) => {
-    try {
-      await updateItem({ 
-        id: itemId as Id<"storyboard_items">, 
-        tags: newTags 
-      });
-    } catch (error) {
-      console.error("Failed to update tags:", error);
+  // Search and filter state - similar to ProjectsDashboard
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState({
+    favorite: false,
+    frameStatus: [] as ('draft' | 'in-progress' | 'completed')[], // Frame status filter
+  });
+
+  // Handle filter changes from TopNavFilters
+  const handleFiltersChange = useCallback((newFilters: { favorite: boolean; frameStatus?: ('draft' | 'in-progress' | 'completed')[] }) => {
+    setFilters(prev => ({
+      ...prev,
+      favorite: newFilters.favorite,
+      frameStatus: newFilters.frameStatus || prev.frameStatus,
+    }));
+  }, []);
+
+  // Filter and search logic for frames - similar to ProjectsDashboard
+  const filteredItems = useMemo(() => {
+    let filtered = items || [];
+
+    // Apply search filter (same as ProjectsDashboard)
+    if (searchQuery && searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(item => 
+        item.title?.toLowerCase().includes(query) ||
+        item.description?.toLowerCase().includes(query) ||
+        (item.tags && item.tags.some((tag: { id: string; name: string; color: string }) => tag.name.toLowerCase().includes(query)))
+      );
     }
-  };
+
+    // Apply frame status filter
+    if (filters.frameStatus.length > 0) {
+      filtered = filtered.filter(item => 
+        item.frameStatus && filters.frameStatus.includes(item.frameStatus)
+      );
+    }
+
+    // Apply favorite filter (same as ProjectsDashboard)
+    if (filters.favorite) {
+      filtered = filtered.filter(item => item.isFavorite);
+    }
+
+    // Apply tag filter (additional for frames) - removed for now as TopNavFilters doesn't support tags
+    // if (filters.tags.length > 0) {
+    //   filtered = filtered.filter(item => 
+    //     item.tags && filters.tags.some((tag: string) => item.tags.includes(tag))
+    //   );
+    // }
+
+    return filtered;
+  }, [items, searchQuery, filters]);
 
   const [tab, setTab] = useState<Tab>("storyboard");
   const [scriptText, setScriptText] = useState("");
@@ -93,9 +139,58 @@ export default function StoryboardWorkspacePage() {
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [showSceneEditor, setShowSceneEditor] = useState(false);
   const [selectedSceneItem, setSelectedSceneItem] = useState<any>(null);
+  const [elementLibraryDraft, setElementLibraryDraft] = useState<{
+    imageUrls?: string[];
+    name?: string;
+    type?: string;
+  } | null>(null);
   const [characterRef, setCharacterRef] = useState<{ name: string; urls: string[] } | null>(null);
   const [genre, setGenre] = useState("drama");
   const [duration, setDuration] = useState(30);
+  const [zoomLevel, setZoomLevel] = useState(100); // 100, 80, 60, 40
+
+  // Zoom controls
+  const zoomLevels = [100, 80, 60, 40];
+  const currentZoomIndex = zoomLevels.indexOf(zoomLevel);
+  const canZoomIn = currentZoomIndex < zoomLevels.length - 1;
+  const canZoomOut = currentZoomIndex > 0;
+
+  const handleZoomIn = () => {
+    if (canZoomIn) {
+      setZoomLevel(zoomLevels[currentZoomIndex + 1]);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (canZoomOut) {
+      setZoomLevel(zoomLevels[currentZoomIndex - 1]);
+    }
+  };
+
+  const handleZoomReset = () => {
+    setZoomLevel(100);
+  };
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === "=" || e.key === "+") {
+          e.preventDefault();
+          handleZoomIn();
+        } else if (e.key === "-") {
+          e.preventDefault();
+          handleZoomOut();
+        } else if (e.key === "0") {
+          e.preventDefault();
+          handleZoomReset();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [zoomLevel]);
 
   // Sync script text from DB on first load
   const scriptFromDb = project?.script ?? "";
@@ -185,6 +280,45 @@ export default function StoryboardWorkspacePage() {
     }
   };
 
+  const handleTagsChange = (itemId: string, newTags: Array<{ id: string; name: string; color: string }>) => {
+    updateItem({
+      id: itemId as Id<"storyboard_items">,
+      tags: newTags,
+    });
+  };
+
+  const handleFavoriteToggle = (itemId: string) => {
+    const item = items?.find(i => i._id === itemId);
+    if (item) {
+      updateFavorite({
+        id: itemId as Id<"storyboard_items">,
+        isFavorite: !item.isFavorite,
+      });
+    }
+  };
+
+  // NEW: Handler functions for status and notes
+  const handleStatusChange = (itemId: string, status: 'draft' | 'in-progress' | 'completed') => {
+    updateFrameStatus({
+      id: itemId as Id<"storyboard_items">,
+      frameStatus: status,
+    });
+  };
+
+  const handleNotesChange = (itemId: string, notes: string) => {
+    updateFrameNotes({
+      id: itemId as Id<"storyboard_items">,
+      notes,
+    });
+  };
+
+  const handleTitleChange = (itemId: string, title: string) => {
+    updateItem({
+      id: itemId as Id<"storyboard_items">,
+      title,
+    });
+  };
+
   if (!project) {
     return (
       <div className="flex h-full items-center justify-center bg-[#0d0d12]">
@@ -221,25 +355,63 @@ export default function StoryboardWorkspacePage() {
             ))}
           </div>
 
-          {tab === "script" && (
+          {tab === "storyboard" && (
             <>
-              <button onClick={() => setShowAiInput(!showAiInput)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded-lg transition">
-                <Sparkles className="w-3.5 h-3.5" />
-                AI Script
-              </button>
-              <button onClick={handleSaveScript} disabled={!scriptDirty}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/8 hover:bg-white/12 text-white text-xs font-medium rounded-lg transition disabled:opacity-40">
-                <Save className="w-3.5 h-3.5" />
-                Save
-              </button>
-              <button onClick={handleBuildStoryboard} disabled={isBuilding || !displayScript.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition disabled:opacity-50">
-                {isBuilding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                Build Storyboard
-              </button>
+              {/* Search and Filters - similar to ProjectsDashboard */}
+              <div className="flex items-center gap-2">
+                <TopNavSearch 
+                  onSearch={setSearchQuery} 
+                  placeholder="Search frames, tags, status..." 
+                />
+                <TopNavFilters 
+                  onFiltersChange={handleFiltersChange} 
+                  projectCount={filteredItems.length}
+                  isStoryboard={true}
+                />
+              </div>
+
+              {/* Zoom Controls */}
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
+                <button
+                  onClick={handleZoomOut}
+                  disabled={!canZoomOut}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Zoom out (Ctrl+-)"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleZoomReset}
+                  className="px-2 py-1 text-xs text-gray-300 hover:text-white hover:bg-white/10 rounded transition-all min-w-[3rem] text-center"
+                  title="Reset zoom (Ctrl+0)"
+                >
+                  {zoomLevel}%
+                </button>
+                <button
+                  onClick={handleZoomIn}
+                  disabled={!canZoomIn}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Zoom in (Ctrl+)"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+              </div>
             </>
           )}
+
+          {/* User Account - Top Right Corner */}
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "w-8 h-8",
+                userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
+                userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                userButtonPopoverActionButtonText: "text-sm",
+                userButtonPopoverFooter: "border-t border-white/10",
+              },
+            }}
+            afterSignOutUrl="/"
+          />
         </div>
       </div>
 
@@ -358,10 +530,17 @@ export default function StoryboardWorkspacePage() {
                     </button>
                   </div>
                 </div>
-                <div className={`grid gap-4 ${project.settings.frameRatio === "9:16"
-                  ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6"
-                  : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"}`}>
-                  {items.map((item, i) => (
+                <div 
+                  className={`grid gap-4 ${project.settings.frameRatio === "9:16"
+                    ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6"
+                    : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"}`}
+                  style={{ 
+                    transform: `scale(${zoomLevel / 100})`,
+                    transformOrigin: 'top left',
+                    transition: 'transform 0.2s ease-in-out'
+                  }}
+                >
+                  {filteredItems.map((item, i) => (
                     <FrameCard
                       key={item._id}
                       item={item}
@@ -379,6 +558,10 @@ export default function StoryboardWorkspacePage() {
                       onDoubleClick={() => handleOpenSceneEditor(item)}
                       onDuplicate={() => duplicateItem(item)}
                       onTagsChange={(newTags) => handleTagsChange(item._id, newTags)}
+                      onFavoriteToggle={() => handleFavoriteToggle(item._id)}
+                      onStatusChange={(status) => handleStatusChange(item._id, status)}
+                      onNotesChange={(notes) => handleNotesChange(item._id, notes)}
+                      onTitleChange={(title) => handleTitleChange(item._id, title)}
                       userId={user?.id ?? "unknown"}
                     />
                   ))}
@@ -445,10 +628,15 @@ export default function StoryboardWorkspacePage() {
         <ElementLibrary
           projectId={pid}
           userId={user?.id ?? "unknown"}
-          onClose={() => setShowElementLibrary(false)}
+          initialCreateDraft={elementLibraryDraft}
+          onClose={() => {
+            setShowElementLibrary(false);
+            setElementLibraryDraft(null);
+          }}
           onSelectElement={(urls, name) => {
             setCharacterRef({ name, urls });
             setShowElementLibrary(false);
+            setElementLibraryDraft(null);
             setShowImagePanel(true);
           }}
         />
@@ -516,6 +704,14 @@ export default function StoryboardWorkspacePage() {
           ]}
           initialShotId={selectedSceneItem._id}
           onClose={handleCloseSceneEditor}
+          onSaveImageAsElement={({ imageUrl, name, type }) => {
+            setElementLibraryDraft({
+              imageUrls: [imageUrl],
+              name,
+              type,
+            });
+            setShowElementLibrary(true);
+          }}
           onShotsChange={(shots) => {
             // Update the item if needed
             console.log("Scene updated:", shots);
@@ -528,7 +724,7 @@ export default function StoryboardWorkspacePage() {
 
 // ── Frame Card ────────────────────────────────────────────────────────────────
 interface FrameCardProps {
-  item: { _id: string; title: string; description?: string; imageUrl?: string; videoUrl?: string; duration: number; generationStatus: string; order: number; tags?: Array<{ id: string; name: string; color: string }> };
+  item: { _id: string; title: string; description?: string; imageUrl?: string; videoUrl?: string; duration: number; generationStatus: string; order: number; tags?: Array<{ id: string; name: string; color: string }>; isFavorite?: boolean; frameStatus?: string; notes?: string };
   index: number;
   frameRatio: string;
   selected: boolean;
@@ -539,13 +735,31 @@ interface FrameCardProps {
   onDoubleClick: () => void;
   onDuplicate: () => void;
   onTagsChange: (tags: Array<{ id: string; name: string; color: string }>) => void;
+  onFavoriteToggle?: () => void;
+  // NEW: Safe optional props for status and notes
+  onStatusChange?: (status: 'draft' | 'in-progress' | 'completed') => void;
+  onNotesChange?: (notes: string) => void;
+  onTitleChange?: (title: string) => void;
   userId: string;
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, userId }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, userId }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newTitle, setNewTitle] = useState(item.title);
   const logFile = useMutation(api.storyboard.storyboardFiles.logFile);
+
+  // Frame status configuration
+  const FRAME_STATUS_CONFIG = {
+    'draft': { label: 'Draft', color: 'bg-gray-500' },
+    'in-progress': { label: 'In Progress', color: 'bg-blue-500' },
+    'completed': { label: 'Completed', color: 'bg-green-500' }
+  };
+
+  const statusConfig = item.frameStatus ? FRAME_STATUS_CONFIG[item.frameStatus as keyof typeof FRAME_STATUS_CONFIG] : null;
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -647,17 +861,42 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         {/* Top overlay with refined badges */}
         <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 via-black/30 to-transparent p-3">
           <div className="flex items-center justify-between">
-            {/* Frame number */}
-            <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
-              <span className="text-xs text-white font-medium tracking-wide">
-                {String(index + 1).padStart(2, "0")}
-              </span>
+            {/* Frame number and status */}
+            <div className="flex items-center gap-2">
+              <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
+                <span className="text-xs text-white font-medium tracking-wide">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+              </div>
+              
+              {/* NEW: Status Badge - Always visible */}
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowStatusMenu(!showStatusMenu); }}
+                className={`px-2 py-1 rounded-full text-xs font-medium text-white transition ${
+                  statusConfig 
+                    ? `${statusConfig.color} hover:opacity-80` 
+                    : 'bg-gray-600/60 hover:bg-gray-600/80 border border-gray-500/30'
+                }`}
+              >
+                {statusConfig ? statusConfig.label : 'Set Status'}
+              </button>
             </div>
             
-            {/* Duration */}
-            <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-gray-300" />
-              <span className="text-xs text-gray-200 font-medium">{formatDuration(item.duration)}</span>
+            <div className="flex items-center gap-2">
+              {/* Duration */}
+              <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-gray-300" />
+                <span className="text-xs text-gray-200 font-medium">{formatDuration(item.duration)}</span>
+              </div>
+
+              {/* Favorite button */}
+              {onFavoriteToggle && (
+                <FrameFavoriteButton
+                  frameId={item._id}
+                  isFavorite={item.isFavorite || false}
+                  size="sm"
+                />
+              )}
             </div>
           </div>
         </div>
@@ -689,6 +928,17 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           </div>
         )}
         
+        {/* NEW: Notes indicator */}
+        {item.notes && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowNotesModal(true); }}
+            className="absolute bottom-3 left-3 bg-gray-600/80 backdrop-blur-sm rounded-full p-2 border border-gray-500/30 hover:bg-gray-600 transition-colors"
+            title="View notes"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-white" />
+          </button>
+        )}
+        
         {/* Action buttons */}
         <div className="absolute bottom-3 right-3 flex gap-2">
           {/* Duplicate button */}
@@ -715,7 +965,52 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
       
       {/* Enhanced info section */}
       <div className="p-4 bg-[#0a0a0f] border-t border-white/5">
-        <p className="text-sm text-white font-medium mb-2">{item.title}</p>
+        <div className="flex items-start justify-between mb-2">
+          {isRenaming ? (
+            <input
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              onBlur={() => {
+                if (newTitle.trim() && newTitle !== item.title) {
+                  onTitleChange?.(newTitle.trim());
+                }
+                setIsRenaming(false);
+                setNewTitle(item.title);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (newTitle.trim() && newTitle !== item.title) {
+                    onTitleChange?.(newTitle.trim());
+                  }
+                  setIsRenaming(false);
+                  setNewTitle(item.title);
+                } else if (e.key === 'Escape') {
+                  setIsRenaming(false);
+                  setNewTitle(item.title);
+                }
+              }}
+              className="text-sm text-white font-medium flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 outline-none focus:border-purple-500"
+              autoFocus
+            />
+          ) : (
+            <p 
+              className="text-sm text-white font-medium flex-1 cursor-pointer hover:text-purple-400 transition-colors"
+              onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}
+              title="Click to rename"
+            >
+              {item.title}
+            </p>
+          )}
+          {/* Subtle user attribution */}
+          <div className="flex items-center gap-1 text-[10px] text-gray-600">
+            <div className="w-4 h-4 bg-gray-700 rounded-full flex items-center justify-center">
+              <span className="text-gray-500 font-medium">
+                {(item.generatedBy || userId || "U").charAt(0).toUpperCase()}
+              </span>
+            </div>
+          </div>
+        </div>
         {item.description && (
           <p className="text-xs text-gray-500 mb-3 line-clamp-2">{item.description}</p>
         )}
@@ -764,6 +1059,61 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           onTagsChange={onTagsChange}
           onClose={() => setShowTagEditor(false)}
         />
+      )}
+      
+      {/* NEW: Status Dropdown */}
+      {showStatusMenu && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowStatusMenu(false)}>
+          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-xs p-2" onClick={(e) => e.stopPropagation()}>
+            <div className="space-y-1">
+              {Object.entries(FRAME_STATUS_CONFIG).map(([key, config]) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    onStatusChange?.(key as 'draft' | 'in-progress' | 'completed');
+                    setShowStatusMenu(false);
+                  }}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition hover:bg-white/5 text-gray-300 hover:text-white ${
+                    item.frameStatus === key ? 'bg-white/10 text-white' : ''
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${config.color}`} />
+                  {config.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* NEW: Notes Modal */}
+      {showNotesModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-white/8">
+              <h3 className="text-sm font-bold text-white">Frame Notes</h3>
+              <button onClick={() => setShowNotesModal(false)} className="p-1 hover:bg-white/8 rounded-lg">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-4">
+              <textarea
+                value={item.notes || ''}
+                onChange={(e) => onNotesChange?.(e.target.value)}
+                placeholder="Add notes about this frame..."
+                className="w-full h-32 bg-white/6 border border-white/8 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none focus:border-purple-500/60 resize-none"
+              />
+            </div>
+            <div className="flex items-center justify-end p-4 border-t border-white/8">
+              <button
+                onClick={() => setShowNotesModal(false)}
+                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-xs text-white rounded-lg transition"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

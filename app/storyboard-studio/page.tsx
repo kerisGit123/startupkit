@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { useOrganization, useUser } from "@clerk/nextjs";
+import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Step, Orientation, ViewMode, Shot, Tag, CommentItem, CastMember, LocationAsset, BoardSettings, Project } from "./types";
 import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS } from "./constants";
@@ -13,17 +13,18 @@ import { BoardView }          from "./components/BoardView";
 import { SceneEditor }        from "./components/SceneEditor";
 import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./components/WizardSteps";
 import { PdfModal, ShareModal, TagModal } from "./components/Modals";
-import { UniverseManager }    from "./components/UniverseManager";
-import type { UMTab }         from "./components/UniverseManager";
 import { AssetGenerator }     from "./components/AssetGenerator";
+import { ImageMakerPage }     from "./components/ImageMakerPage";
 import { MembersPage }        from "./components/MembersPage";
 import { UsageDashboard }     from "./components/UsageDashboard";
 import { GlobalFileBrowser } from "./components/GlobalFileBrowser";
+import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
 
 export default function StoryboardPage() {
   const router = useRouter();
   const { organization } = useOrganization();
   const { user } = useUser();
+  const { activeNav, setActiveNav, sidebarOpen, setSidebarOpen } = useStoryboardStudioUI();
   const orgId = organization?.id ?? user?.id ?? "personal";
 
   // ── Convex project data ─────────────────────────────────────────────────────
@@ -37,9 +38,6 @@ export default function StoryboardPage() {
   const logFile = useMutation(api.storyboard.storyboardFiles.logUpload);
 
   // ── Layout ─────────────────────────────────────────────────────────────────
-  const [activeNav,   setActiveNav]   = useState("projects");
-  const [umTab,       setUmTab]       = useState<UMTab>("basic-info");
-
   // ── Projects (local state kept for legacy BoardView/SceneEditor) ────────────
   const [projects,        setProjects]        = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -204,21 +202,25 @@ export default function StoryboardPage() {
       setShots(s => s.map(x => x.id === selectedShotId ? { ...x, tags: [...x.tags, t] } : x));
     }
   };
+  useEffect(() => {
+    setActiveFilter(activeNav === "projects" ? null : activeNav);
 
+    if (activeNav === "projects") setCurrentStep("dashboard");
+    if (activeNav === "asset-generator") setCurrentStep("element-generator");
+    if (activeNav === "image-maker") setCurrentStep("image-maker");
+    if (activeNav === "members") setCurrentStep("members");
+    if (activeNav === "usage") setCurrentStep("usage");
 
-  const handleNavChange = (key: string) => {
-    setActiveNav(key);
-    setActiveFilter(key);
-    if (key === "projects")        setCurrentStep("dashboard");
-    if (key === "universe")        setCurrentStep("universe");
-    if (key === "asset-generator") setCurrentStep("asset-generator");
-    if (key === "members")          setCurrentStep("members");
-    if (key === "usage")            setCurrentStep("usage");
-    // For filters, stay on dashboard
-    if (key.startsWith("tag:") || key.startsWith("status:") || key.startsWith("project:") || key === "favourite" || key === "recent") {
+    if (
+      activeNav.startsWith("tag:") ||
+      activeNav.startsWith("status:") ||
+      activeNav.startsWith("project:") ||
+      activeNav === "favourite" ||
+      activeNav === "recent"
+    ) {
       setCurrentStep("dashboard");
     }
-  };
+  }, [activeNav]);
 
   const handleOpenProject = (project: Project, step: Step) => {
     // If this is a Convex project (ID looks like a Convex ID), navigate to workspace
@@ -288,7 +290,13 @@ export default function StoryboardPage() {
 
   // ── Breadcrumb for board views ─────────────────────────────────────────────
   const renderBreadcrumb = () => {
-    if (currentStep === "dashboard") return null;
+    if (
+      currentStep === "dashboard" ||
+      currentStep === "element-generator" ||
+      currentStep === "image-maker" ||
+      currentStep === "members" ||
+      currentStep === "usage"
+    ) return null;
     const crumbs: { label: string; step: Step }[] = [
       { label: "Projects", step: "dashboard" },
     ];
@@ -299,17 +307,20 @@ export default function StoryboardPage() {
     }
     return (
       <div className="flex items-center gap-1.5 px-4 py-2 border-b border-white/6 bg-[#0d0d12] text-xs text-gray-500 shrink-0">
-        {crumbs.map((c, i) => (
-          <span key={c.step} className="flex items-center gap-1.5">
-            {i > 0 && <span className="text-gray-700">/</span>}
-            <button
-              onClick={() => setCurrentStep(c.step)}
-              className={`hover:text-white transition ${i === crumbs.length - 1 ? "text-white font-medium" : "hover:text-gray-300"}`}
-            >
-              {c.label}
-            </button>
-          </span>
-        ))}
+        {/* Breadcrumb navigation */}
+        <div className="flex items-center gap-1.5">
+          {crumbs.map((c, i) => (
+            <span key={c.step} className="flex items-center gap-1.5">
+              {i > 0 && <span className="text-gray-700">/</span>}
+              <button
+                onClick={() => setCurrentStep(c.step)}
+                className={`hover:text-white transition ${i === crumbs.length - 1 ? "text-white font-medium" : "hover:text-gray-300"}`}
+              >
+                {c.label}
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
     );
   };
@@ -331,8 +342,8 @@ export default function StoryboardPage() {
 
         {currentStep === "dashboard" && (
           <ProjectsDashboard
-            sidebarOpen={true}
-            onToggleSidebar={() => {}}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
             projects={convexProjects?.map(p => ({
               id: p._id,
               name: p.name,
@@ -345,6 +356,7 @@ export default function StoryboardPage() {
               assignee: "You",
               tags: p.tags,
               favourite: p.isFavorite ?? false,
+              settings: p.settings,
             })) ?? projects}
             onProjectsChange={handleProjectsChange}
             onOpenProject={handleOpenProject}
@@ -460,16 +472,12 @@ export default function StoryboardPage() {
           />
         )}
 
-        {currentStep === "universe" && (
-          <UniverseManager
-            projectName={projectName}
-            activeTab={umTab}
-            onTabChange={setUmTab}
-          />
+        {currentStep === "element-generator" && (
+          <AssetGenerator />
         )}
 
-        {currentStep === "asset-generator" && (
-          <AssetGenerator />
+        {currentStep === "image-maker" && (
+          <ImageMakerPage />
         )}
 
         {currentStep === "members" && (
