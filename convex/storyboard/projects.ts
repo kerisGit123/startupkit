@@ -7,6 +7,7 @@ export const create = mutation({
     description: v.optional(v.string()),
     orgId: v.string(),
     ownerId: v.string(),
+    // Remove companyId - calculate from auth context
     settings: v.object({
       frameRatio: v.string(),
       style: v.string(),
@@ -15,11 +16,24 @@ export const create = mutation({
     isFavorite: v.optional(v.boolean()),
   },
   handler: async (ctx, { name, description, orgId, ownerId, settings, isFavorite }) => {
+    // Get user from auth context
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("User not authenticated");
+    }
+    
+    // Get user's organization from auth context
+    const userOrganizationId = identity.orgId;
+    const userId = identity.subject;
+    
+    const companyId = (userOrganizationId || userId) as string;
+    
     return await ctx.db.insert("storyboard_projects", {
       name,
       description,
       orgId,
       ownerId,
+      companyId, // Use the calculated companyId
       teamMemberIds: [],
       status: "draft",
       isFavorite: isFavorite ?? false,
@@ -105,6 +119,7 @@ export const duplicate = mutation({
       description: project.description,
       orgId: project.orgId,
       ownerId: project.ownerId,
+      companyId: project.companyId,
       teamMemberIds: project.teamMemberIds,
       status: project.status,
       isFavorite: false,
@@ -126,6 +141,7 @@ export const duplicate = mutation({
     for (const item of storyboardItems) {
       await ctx.db.insert("storyboard_items", {
         projectId: duplicatedProjectId,
+        companyId: project.companyId, // Inherit companyId from project
         sceneId: item.sceneId,
         order: item.order,
         title: item.title,
@@ -155,7 +171,75 @@ export const duplicate = mutation({
 export const remove = mutation({
   args: { id: v.id("storyboard_projects") },
   handler: async (ctx, { id }) => {
+    // Get user authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("User not authenticated");
+    }
+
+    // Get the project to verify it exists and get its ID
+    const project = await ctx.db.get(id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    console.log(`[Project Remove] Starting cleanup for project: ${id}`);
+
+    // 1. Remove all storyboard items for this project
+    const storyboardItems = await ctx.db
+      .query("storyboard_items")
+      .filter((q) => q.eq("projectId", id))
+      .collect();
+    
+    console.log(`[Project Remove] Found ${storyboardItems.length} storyboard items to delete`);
+    
+    for (const item of storyboardItems) {
+      await ctx.db.delete(item._id);
+    }
+
+    // 2. Remove all private elements for this project
+    const privateElements = await ctx.db
+      .query("storyboard_elements")
+      .filter((q) => 
+        q.eq("projectId", id) && 
+        q.eq("visibility", "private")
+      )
+      .collect();
+    
+    console.log(`[Project Remove] Found ${privateElements.length} private elements to delete`);
+    
+    for (const element of privateElements) {
+      await ctx.db.delete(element._id);
+    }
+
+    // 3. Remove all files for this project
+    const projectFiles = await ctx.db
+      .query("storyboard_files")
+      .filter((q) => q.eq("projectId", id))
+      .collect();
+    
+    console.log(`[Project Remove] Found ${projectFiles.length} files to delete`);
+    
+    for (const file of projectFiles) {
+      await ctx.db.delete(file._id);
+    }
+
+    // 4. Remove all credit usage records for this project
+    const creditUsage = await ctx.db
+      .query("storyboard_credit_usage")
+      .filter((q) => q.eq("projectId", id))
+      .collect();
+    
+    console.log(`[Project Remove] Found ${creditUsage.length} credit usage records to delete`);
+    
+    for (const usage of creditUsage) {
+      await ctx.db.delete(usage._id);
+    }
+
+    // 5. Finally, delete the project itself
     await ctx.db.delete(id);
+    
+    console.log(`[Project Remove] Successfully deleted project ${id} and all associated data`);
   },
 });
 

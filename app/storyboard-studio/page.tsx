@@ -7,6 +7,7 @@ import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Step, Orientation, ViewMode, Shot, Tag, CommentItem, CastMember, LocationAsset, BoardSettings, Project } from "./types";
 import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS } from "./constants";
+import { getCurrentCompanyId } from "@/lib/auth-utils";
 
 import { ProjectsDashboard }  from "./components/ProjectsDashboard";
 import { BoardView }          from "./components/BoardView";
@@ -25,6 +26,9 @@ export default function StoryboardPage() {
   const { organization } = useOrganization();
   const { user } = useUser();
   const { activeNav, setActiveNav, sidebarOpen, setSidebarOpen } = useStoryboardStudioUI();
+  
+  // ✅ Use global getCurrentCompanyId function
+  const companyId = getCurrentCompanyId(user);
   const orgId = organization?.id ?? user?.id ?? "personal";
 
   // ── Convex project data ─────────────────────────────────────────────────────
@@ -107,14 +111,14 @@ export default function StoryboardPage() {
         name: "Global Files",
         orgId,
         ownerId: user?.id ?? "unknown",
+        // ✅ Remove companyId - calculated on server from auth context
         settings: { frameRatio: "16:9", style: "realistic", layout: "grid" },
       });
     }
 
     try {
-      // Use org-based storage path: org-{orgId}/uploads/{timestamp}-{filename}
-      const orgPrefix = organization?.id ? `org-${organization.id}` : `user-${user?.id}`;
-      const r2Key = `${orgPrefix}/uploads/${Date.now()}-${file.name}`;
+      // Use companyId-based storage path: {companyId}/uploads/{timestamp}-{filename}
+      const r2Key = `${companyId}/uploads/${Date.now()}-${file.name}`;
       const sigRes = await fetch("/api/storyboard/r2-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -134,9 +138,10 @@ export default function StoryboardPage() {
       
       // Use client-side mutation like FrameCard
       await logFile({
-        orgId: organization?.id || undefined, // Use undefined instead of null for optional fields
-        userId: organization?.id ? undefined : (user?.id || undefined), // Only set userId if no org
-        projectId: undefined, // Main page uploads don't belong to specific projects
+        orgId: organization?.id ?? null, // Use null instead of undefined for optional fields
+        userId: organization?.id ? null : (user?.id ?? null), // Only set userId if no org
+        projectId: null, // Main page uploads don't belong to specific projects
+        // ✅ Remove companyId - calculated on server from auth context
         r2Key,
         filename: file.name,
         fileType: file.type.startsWith("video") ? "video" : 
@@ -240,6 +245,7 @@ export default function StoryboardPage() {
       name,
       orgId,
       ownerId: user?.id ?? "unknown",
+      // ✅ Remove companyId - calculated on server from auth context
       settings: { frameRatio, style, layout: "grid" },
     });
     router.push(`/storyboard-studio/workspace/${id}`);

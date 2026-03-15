@@ -26,7 +26,7 @@ export function emptyCanvasState(): CanvasEditorState {
   return { bubbles: [], textElements: [], assetElements: [], shapeElements: [], assetLibrary: [], mask: [], undoStack: [], redoStack: [] };
 }
 
-export type CanvasActiveTool = "layers" | "bubbles" | "text" | "canvas-objects" | "inpaint" | "rectInpaint" | "panel" | "aimanga" | "image" | "crop" | "comments" | "move" | "arrow" | "line" | "square" | "circle";
+export type CanvasActiveTool = "layers" | "bubbles" | "text" | "canvas-objects" | "inpaint" | "rectInpaint" | "panel" | "image" | "crop" | "comments" | "move" | "arrow" | "line" | "square" | "circle";
 
 export interface CanvasSelection {
   selectedBubbleId: string | null;

@@ -127,4 +127,4 @@ export type DragMode =
   | { type: "tail"; startX: number; startY: number; origTailX: number; origTailY: number }
   | null;
 
-export type CanvasActiveTool = "layers" | "bubbles" | "text" | "assets" | "paint" | "panel" | "aimanga" | "comments";
+export type CanvasActiveTool = "layers" | "bubbles" | "text" | "assets" | "paint" | "panel" | "comments";

@@ -24,7 +24,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Project Settings</h2>
-              <p className="text-sm text-gray-400">Configure your manga project</p>
+              <p className="text-sm text-gray-400">Configure your storyboard project</p>
             </div>
           </div>
           <button

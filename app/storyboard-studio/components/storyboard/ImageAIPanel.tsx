@@ -1,5 +1,7 @@
 "use client";
 
+import { useUser } from "@clerk/nextjs";
+import { getCurrentCompanyId } from "@/lib/auth-utils";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -22,12 +24,13 @@ interface ImageAIPanelProps {
   projectStyle: string;
   userId: string;
   orgId: string;
+  user: any; // Clerk user object
   onClose: () => void;
   characterRef?: { name: string; urls: string[] } | null;
 }
 
 export function ImageAIPanel({
-  projectId, items, selectedItemIds, frameRatio, projectStyle, userId, orgId, onClose, characterRef,
+  projectId, items, selectedItemIds, frameRatio, projectStyle, userId, orgId, user, onClose, characterRef,
 }: ImageAIPanelProps) {
   const [style, setStyle] = useState<ImageStyle>(
     (projectStyle as ImageStyle) in STYLE_PRESETS ? (projectStyle as ImageStyle) : "cinematic"
@@ -94,6 +97,16 @@ export function ImageAIPanel({
           generationStatus: "generating",
         });
 
+        const companyId = getCurrentCompanyId(user);
+        
+        await logImageGeneration({
+          projectId,
+          model: STYLE_PRESETS[style].model,
+          creditsUsed: IMAGE_CREDITS[quality],
+          metadata: { style, quality, taskId: data.taskId },
+          companyId: companyId,
+        });
+
         await logCredit({
           orgId,
           userId,
@@ -103,6 +116,7 @@ export function ImageAIPanel({
           model: STYLE_PRESETS[style].model,
           creditsUsed: IMAGE_CREDITS[quality],
           metadata: { style, quality, taskId: data.taskId },
+          companyId: companyId,
         });
 
         setProgress((prev) => ({ ...prev, [id]: "done" }));

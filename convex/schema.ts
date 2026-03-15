@@ -1690,7 +1690,8 @@ export default defineSchema({
   storyboard_projects: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
-    orgId: v.string(),
+    companyId: v.optional(v.string()), // Organization ID from Clerk
+    orgId: v.optional(v.string()),
     ownerId: v.string(),
     teamMemberIds: v.array(v.string()),
     status: v.string(), // draft | active | completed | archived
@@ -1724,6 +1725,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_companyId", ["companyId"])
     .index("by_org", ["orgId"])
     .index("by_owner", ["orgId", "ownerId"])
     .index("by_status", ["orgId", "status"]),
@@ -1733,6 +1735,7 @@ export default defineSchema({
   // ============================================
   storyboard_items: defineTable({
     projectId: v.id("storyboard_projects"),
+    companyId: v.optional(v.string()), // Organization ID from Clerk
     sceneId: v.string(),
     order: v.number(),
     title: v.string(),
@@ -1789,12 +1792,14 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])
+    .index("by_companyId", ["companyId"])
     .index("by_order", ["projectId", "order"]),
 
   // ============================================
   // STORYBOARD STUDIO: Files (R2 storage records)
   // ============================================
   storyboard_files: defineTable({
+    companyId: v.optional(v.string()), // Organization ID from Clerk
     orgId: v.optional(v.string()),
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("storyboard_projects")),
@@ -1811,6 +1816,7 @@ export default defineSchema({
     createdAt: v.number(),
     isFavorite: v.optional(v.boolean()), // For favoriting files (optional for existing data)
   })
+    .index("by_companyId", ["companyId"])
     .index("by_org", ["orgId"])
     .index("by_user", ["userId"])
     .index("by_project", ["projectId"])
@@ -1821,25 +1827,54 @@ export default defineSchema({
   // ============================================
   storyboard_elements: defineTable({
     projectId: v.id("storyboard_projects"),
+    companyId: v.optional(v.string()), // Organization ID from Clerk
     name: v.string(),
     type: v.string(), // character | object | logo | font | style
     description: v.optional(v.string()),
     thumbnailUrl: v.string(),
     referenceUrls: v.array(v.string()),
-    tags: v.array(v.string()),
+    tags: v.array(v.string()), // Tags for easy discovery and categorization
     createdBy: v.string(),
     usageCount: v.number(),
     status: v.string(), // draft | ready | archived
+    
+    // Sharing and visibility
+    visibility: v.optional(v.union(
+      v.literal("private"),           // Only current project
+      v.literal("public")            // Everyone (public access)
+    )),
+    tags: v.array(v.string()), // Tags for easy discovery and categorization
+    
+    // Usage tracking
+    lastUsedAt: v.optional(v.number()),
+    
+    // Cleanup tracking
+    isOrphaned: v.optional(v.boolean()),
+    orphanedAt: v.optional(v.number()),
+    originalProjectId: v.optional(v.string()),
+    cleanupStatus: v.optional(v.union(v.literal("active"), v.literal("orphaned"), v.literal("archived"))),
+    
+    // Ownership history
+    ownershipHistory: v.optional(v.array(v.object({
+      fromProjectId: v.optional(v.string()),
+      toProjectId: v.optional(v.string()),
+      timestamp: v.number(),
+      reason: v.string()
+    }))),
+    
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_project", ["projectId"])
-    .index("by_type", ["projectId", "type"]),
+    .index("by_type", ["projectId", "type"])
+    .index("by_companyId", ["companyId"])
+    .index("by_visibility", ["visibility"]),
 
   // ============================================
   // STORYBOARD STUDIO: Credit Usage (per-member tracking)
   // ============================================
   storyboard_credit_usage: defineTable({
+    companyId: v.optional(v.string()), // Organization ID from Clerk
     orgId: v.string(),
     userId: v.string(),
     projectId: v.id("storyboard_projects"),
@@ -1850,7 +1885,37 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     createdAt: v.number(),
   })
+    .index("by_companyId", ["companyId"])
     .index("by_org", ["orgId"])
     .index("by_user", ["orgId", "userId"])
     .index("by_project", ["projectId"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Element Usage Tracking
+  // ============================================
+  element_usage: defineTable({
+    elementId: v.id("storyboard_elements"),
+    projectId: v.string(),
+    action: v.string(), // "use_in_frame" | "view" | "select"
+    timestamp: v.number(),
+    userId: v.string(),
+  })
+    .index("by_element", ["elementId"])
+    .index("by_project", ["projectId"])
+    .index("by_timestamp", ["timestamp"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Element Ownership Logs
+  // ============================================
+  element_ownership_log: defineTable({
+    elementId: v.id("storyboard_elements"),
+    oldProjectId: v.string(),
+    newProjectId: v.string(),
+    reason: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_element", ["elementId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_oldProject", ["oldProjectId"])
+    .index("by_newProject", ["newProjectId"]),
 });

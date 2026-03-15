@@ -18,6 +18,15 @@ export async function POST(req: NextRequest) {
       const imageResponse = await fetch(result.image_url);
       const imageBuffer = await imageResponse.arrayBuffer();
       
+      // Get the storyboard item to find its companyId
+      const item = await convex.query(api.storyboard.storyboardItems.getByTaskId, { taskId });
+      if (!item) {
+        return NextResponse.json({ error: "Item not found for taskId" }, { status: 404 });
+      }
+      
+      // Use the item's companyId for folder structure
+      const companyId = item.companyId || "default-org";
+      
       // Get upload URL from R2
       const uploadRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/storyboard/r2-upload`, {
         method: "POST",
@@ -45,7 +54,7 @@ export async function POST(req: NextRequest) {
         generationStatus: "completed",
       });
 
-      console.log("[image callback] Success:", { taskId, publicUrl });
+      console.log("[image callback] Success:", { taskId, publicUrl, companyId });
     } else if (status === "failed") {
       await convex.mutation(api.storyboard.storyboardItems.updateByTaskId, {
         taskId,

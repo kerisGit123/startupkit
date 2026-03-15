@@ -1,0 +1,659 @@
+# Kie AI API — Complete Implementation Guide
+
+> **Purpose**: Comprehensive guide for integrating Kie AI image generation models
+> **Scope**: API endpoints, model configurations, implementation patterns, best practices
+> **Status**: Production-ready with latest Kie AI models
+
+---
+
+## 🎯 **Kie AI Overview**
+
+Kie AI provides unified access to the best AI models through a single API. For image generation, they offer premium models including Flux.1, Ideogram, Nano Banana, and more with competitive credit-based pricing.
+
+### **🔗 Base API Information**
+- **Base URL**: `https://api.kie.ai/api/v1/jobs/createTask`
+- **Authentication**: Bearer token (`Authorization: Bearer YOUR_API_KEY`)
+- **Method**: POST
+- **Response Format**: JSON with `taskId` for async processing
+
+### **💳 Credit System**
+- **1 Credit** = $0.0025 (400 credits = $1.00)
+- **Models range**: 1-45 credits per generation
+- **Billing**: Per-generation, not per-request
+- **Free Trial**: Available in playground
+
+---
+
+## 🎨 **Image Generation Models**
+
+### **📊 Model Categories & Credits**
+
+| Model | Credits | Max References | Best For | Aspect Ratios |
+|-------|----------|-----------------|----------|---------------|
+| **Text-to-Image** | | | | |
+| `gpt-image/1.5-text-to-image` | 8 | 0 | Photorealistic | 1:1, 3:2 |
+| `flux-2/flex-text-to-image` | 40 | 0 | High quality | 1:1 |
+| **Image-to-Image** | | | | |
+| `flux-2/flex-image-to-image` | 15-30 | 7 | General editing | 1:1, auto |
+| `flux-2/pro-image-to-image` | 15 | 7 | Professional | Multiple |
+| `gpt-image/1.5-image-to-image` | 45 | 15 | Character editing | 1:1, 3:2 |
+| `nano-banana-2` | 36-40 | 13 | Text translation | Multiple |
+| `ideogram/character-remix` | 40 | 4 | Character consistency | Square HD |
+| `qwen/image-edit` | 10 | 0 | Quick edits | Square, Square HD |
+| `google/nano-banana-edit` | 8 | 0 | Style transfer | Multiple |
+| `seedream/5-lite-image-to-image` | 10 | 13 | Lighting effects | Multiple |
+| **Upscale** | | | | |
+| `recraft/crisp-upscale` | 1 | 0 | Quality enhancement | N/A |
+| `topaz/image-upscale` | 20 | 0 | Professional upscale | N/A |
+
+---
+
+## 🔧 **API Implementation Patterns**
+
+### **📋 Base Request Structure**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'MODEL_NAME',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      // Model-specific parameters
+    }
+  })
+});
+
+const result = await response.json();
+console.log(result.taskId); // Use for polling
+```
+
+### **🔄 Callback Handling**
+```typescript
+// Callback endpoint receives POST when task completes
+export async function POST(request: Request) {
+  const data = await request.json();
+  
+  if (data.status === 'completed') {
+    // Success: data.result.imageUrl
+    console.log('Generated image:', data.result.imageUrl);
+  } else if (data.status === 'failed') {
+    // Error: data.error
+    console.error('Generation failed:', data.error);
+  }
+  
+  return Response.json({ received: true });
+}
+```
+
+---
+
+## 🎯 **Model-Specific Implementations**
+
+### **1. Text-to-Image Models**
+
+#### **GPT Image 1.5 Text-to-Image (8 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'gpt-image/1.5-text-to-image',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "prompt": "A photorealistic candid photograph of an elderly sailor standing on a small fishing boat. He has weathered skin with visible wrinkles, pores, and sun texture, and a few faded traditional sailor tattoos on his arms. Shot like a 35mm film photograph, medium close-up at eye level, using a 50mm lens.",
+      "aspect_ratio": "3:2",
+      "quality": "medium"
+    }
+  })
+});
+```
+
+#### **Flux 2 Flex Text-to-Image (40 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'flux-2/flex-text-to-image',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "prompt": "A humanoid figure with a vintage television set for a head, featuring a green-tinted screen displaying 'Hello FLUX.2' writing in ASCII font. The figure is wearing a yellow raincoat.",
+      "aspect_ratio": "1:1",
+      "resolution": "1K"
+    }
+  })
+});
+```
+
+### **2. Image-to-Image Models**
+
+#### **Flux 2 Flex Image-to-Image (15-30 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'flux-2/flex-image-to-image',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "input_urls": [
+        "https://example.com/image1.jpg",
+        "https://example.com/image2.jpg"
+      ],
+      "prompt": "Replace the can in image 2 with the can from image 1",
+      "aspect_ratio": "1:1",
+      "resolution": "1K"
+    }
+  })
+});
+```
+
+#### **Flux 2 Pro Image-to-Image (15 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'flux-2/pro-image-to-image',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "input_urls": [
+        "https://example.com/original.jpg",
+        "https://example.com/reference.jpg"
+      ],
+      "prompt": "Change the man into the outfit shown in picture two, full-body photo.",
+      "aspect_ratio": "4:3",
+      "resolution": "1K"
+    }
+  })
+});
+```
+
+#### **GPT Image 1.5 Image-to-Image (45 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'gpt-image/1.5-image-to-image',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "input_urls": [
+        "https://example.com/original.jpg"
+      ],
+      "prompt": "Change her clothing to an elegant blue evening gown. Preserve her face, identity, hairstyle, pose, body shape, background, lighting, and camera angle exactly as in the original image.",
+      "aspect_ratio": "3:2",
+      "quality": "medium"
+    }
+  })
+});
+```
+
+#### **Nano Banana 2 (36-40 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'nano-banana-2',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "prompt": "translation of all the text to Hindi.",
+      "image_input": [
+        "https://example.com/text-image.jpg"
+      ],
+      "aspect_ratio": "auto",
+      "google_search": false,
+      "resolution": "1K",
+      "output_format": "jpg"
+    }
+  })
+});
+```
+
+#### **Ideogram Character Remix (40 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'ideogram/character-remix',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "prompt": "A fisheye lens selfie photograph taken at night on an urban street. The image is circular with a black border and shows a person wearing dark sunglasses and a black jacket.",
+      "image_url": "https://example.com/character.jpg",
+      "reference_image_urls": [
+        "https://example.com/reference1.jpg",
+        "https://example.com/reference2.jpg"
+      ],
+      "rendering_speed": "BALANCED",
+      "style": "AUTO",
+      "expand_prompt": true,
+      "image_size": "square_hd",
+      "num_images": "1",
+      "strength": 0.8
+    }
+  })
+});
+```
+
+#### **Qwen Image Edit (10 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'qwen/image-edit',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "image_url": "https://example.com/source.jpg",
+      "prompt": "Change the lighting effect to warm sunset",
+      "image_size": "square_hd",
+      "num_inference_steps": 25,
+      "guidance_scale": 4,
+      "sync_mode": false,
+      "enable_safety_checker": true,
+      "output_format": "png",
+      "negative_prompt": "blurry, ugly, distorted"
+    }
+  })
+});
+```
+
+### **3. Upscale Models**
+
+#### **Recraft Crisp Upscale (1 credit)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'recraft/crisp-upscale',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "image": "https://example.com/low-res-image.jpg"
+    }
+  })
+});
+```
+
+#### **Topaz Image Upscale (20 credits)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'topaz/image-upscale',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "image": "https://example.com/medium-res-image.jpg"
+    }
+  })
+});
+```
+
+---
+
+## 🎛️ **Parameter Reference**
+
+### **📐 Aspect Ratios**
+| Ratio | Description | Models |
+|-------|-------------|---------|
+| `1:1` | Square | Most models |
+| `4:3` | Landscape | Flux 2 Pro, Nano Banana 2 |
+| `3:4` | Portrait | Flux 2 Pro, Nano Banana 2 |
+| `16:9` | Widescreen | Flux 2 Pro, Nano Banana 2 |
+| `9:16` | Vertical | Flux 2 Pro, Nano Banana 2 |
+| `3:2` | Classic | GPT Image, Nano Banana 2 |
+| `2:3` | Classic Portrait | Flux 2 Pro, Nano Banana 2 |
+| `auto` | Auto-detect | Flux 2 Flex, Nano Banana 2 |
+
+### **🎯 Resolution Options**
+| Resolution | Description | Models |
+|------------|-------------|---------|
+| `1K` | Standard (1024px) | Most models |
+| `2K` | High (2048px) | Nano Banana 2, Flux 2 Flex |
+| `4K` | Ultra (4096px) | Nano Banana 2 |
+
+### **🖼️ Output Formats**
+| Format | Description | Models |
+|--------|-------------|---------|
+| `jpg` | JPEG (smaller) | Nano Banana 2 |
+| `png` | PNG (transparent) | Qwen Image Edit |
+
+---
+
+## 🔧 **Implementation Best Practices**
+
+### **🏗️ Error Handling**
+```typescript
+async function generateImage(model: string, input: any) {
+  try {
+    const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model,
+        callBackUrl: 'https://your-domain.com/api/callback',
+        input
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    
+    if (!result.taskId) {
+      throw new Error('No taskId received from Kie AI');
+    }
+
+    return result.taskId;
+  } catch (error) {
+    console.error('Kie AI generation failed:', error);
+    throw error;
+  }
+}
+```
+
+### **⏱️ Polling for Results**
+```typescript
+async function pollForResult(taskId: string, timeout: number = 300000) {
+  const startTime = Date.now();
+  const pollInterval = 5000; // 5 seconds
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      const response = await fetch(`https://api.kie.ai/api/v1/jobs/status/${taskId}`);
+      const result = await response.json();
+
+      if (result.status === 'completed') {
+        return result.result.imageUrl;
+      } else if (result.status === 'failed') {
+        throw new Error(result.error || 'Generation failed');
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    } catch (error) {
+      console.error('Polling error:', error);
+      throw error;
+    }
+  }
+
+  throw new Error('Generation timeout');
+}
+```
+
+### **💰 Credit Management**
+```typescript
+const MODEL_CREDITS = {
+  'gpt-image/1.5-text-to-image': 8,
+  'flux-2/flex-text-to-image': 40,
+  'flux-2/flex-image-to-image': 15,
+  'flux-2/pro-image-to-image': 15,
+  'gpt-image/1.5-image-to-image': 45,
+  'nano-banana-2': 36,
+  'ideogram/character-remix': 40,
+  'qwen/image-edit': 10,
+  'google/nano-banana-edit': 8,
+  'seedream/5-lite-image-to-image': 10,
+  'recraft/crisp-upscale': 1,
+  'topaz/image-upscale': 20
+};
+
+function calculateCredits(model: string, quantity: number = 1): number {
+  const baseCredits = MODEL_CREDITS[model] || 10;
+  return baseCredits * quantity;
+}
+```
+
+### **🔐 Security Best Practices**
+```typescript
+// Server-side only - never expose API key to client
+const KIE_AI_API_KEY = process.env.KIE_AI_API_KEY;
+
+if (!KIE_AI_API_KEY) {
+  throw new Error('KIE_AI_API_KEY environment variable is required');
+}
+
+// Validate model names
+const VALID_MODELS = Object.keys(MODEL_CREDITS);
+if (!VALID_MODELS.includes(model)) {
+  throw new Error(`Invalid model: ${model}`);
+}
+```
+
+---
+
+## 🚀 **Integration Examples**
+
+### **🎨 Complete Image Generation Service**
+```typescript
+class KieAIService {
+  private apiKey: string;
+  private callbackUrl: string;
+
+  constructor(apiKey: string, callbackUrl: string) {
+    this.apiKey = apiKey;
+    this.callbackUrl = callbackUrl;
+  }
+
+  async generateImage(model: string, prompt: string, options: any = {}) {
+    const input = {
+      prompt,
+      ...options
+    };
+
+    const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        callBackUrl: this.callbackUrl,
+        input
+      })
+    });
+
+    const result = await response.json();
+    return result.taskId;
+  }
+
+  async generateWithImages(model: string, prompt: string, imageUrls: string[], options: any = {}) {
+    const input = {
+      prompt,
+      input_urls: imageUrls,
+      ...options
+    };
+
+    return this.generateImage(model, prompt, input);
+  }
+
+  async upscaleImage(imageUrl: string, model: string = 'recraft/crisp-upscale') {
+    return this.generateImage(model, '', { image: imageUrl });
+  }
+}
+```
+
+### **📱 React Hook Integration**
+```typescript
+import { useState, useCallback } from 'react';
+
+export function useKieAI() {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const generateImage = useCallback(async (model: string, input: any) => {
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, input })
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Generation failed');
+      }
+
+      return result.taskId;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      throw err;
+    } finally {
+      setIsGenerating(false);
+    }
+  }, []);
+
+  return { generateImage, isGenerating, error };
+}
+```
+
+---
+
+## 📊 **Performance & Optimization**
+
+### **⚡ Request Optimization**
+- **Batch Requests**: Process multiple images in parallel
+- **Callback URLs**: Use webhooks instead of polling when possible
+- **Timeout Handling**: Set reasonable timeouts (5 minutes max)
+- **Retry Logic**: Implement exponential backoff for failures
+
+### **💾 Cost Optimization**
+- **Model Selection**: Choose appropriate model for task complexity
+- **Resolution Settings**: Use 1K for drafts, 2K/4K for finals
+- **Reference Limits**: Don't exceed model's max reference images
+- **Batch Processing**: Group similar requests to optimize costs
+
+### **🔍 Monitoring & Logging**
+```typescript
+// Log all API calls for monitoring
+const logApiCall = (model: string, credits: number, success: boolean) => {
+  console.log(`Kie AI Call: ${model} (${credits} credits) - ${success ? 'SUCCESS' : 'FAILED'}`);
+  
+  // Send to monitoring service
+  if (process.env.MONITORING_WEBHOOK) {
+    fetch(process.env.MONITORING_WEBHOOK, {
+      method: 'POST',
+      body: JSON.stringify({
+        service: 'kie-ai',
+        model,
+        credits,
+        success,
+        timestamp: new Date().toISOString()
+      })
+    });
+  }
+};
+```
+
+---
+
+## 🎯 **Quick Reference Cheat Sheet**
+
+### **🔥 Most Popular Models**
+```typescript
+// Quick copy-paste examples
+
+// Text to Image (8 credits)
+gpt-image/1.5-text-to-image
+{ prompt: "...", aspect_ratio: "3:2", quality: "medium" }
+
+// Image to Image (15 credits)  
+flux-2/flex-image-to-image
+{ input_urls: [...], prompt: "...", aspect_ratio: "1:1", resolution: "1K" }
+
+// Character Remix (40 credits)
+ideogram/character-remix
+{ image_url: "...", reference_image_urls: [...], prompt: "...", image_size: "square_hd" }
+
+// Upscale (1 credit)
+recraft/crisp-upscale
+{ image: "..." }
+```
+
+### **📱 Environment Setup**
+```bash
+# .env.local
+KIE_AI_API_KEY=your_api_key_here
+KIE_AI_CALLBACK_URL=https://your-domain.com/api/callback
+```
+
+### **🔗 API Endpoints**
+```typescript
+// Create task
+POST https://api.kie.ai/api/v1/jobs/createTask
+
+// Check status  
+GET https://api.kie.ai/api/v1/jobs/status/{taskId}
+
+// Webhook callback
+POST https://your-domain.com/api/callback
+```
+
+---
+
+## 🎉 **Success Metrics**
+
+### **📈 Performance Targets**
+- **API Response Time**: < 2 seconds
+- **Generation Success Rate**: > 95%
+- **Callback Delivery**: > 99%
+- **Credit Accuracy**: 100%
+
+### **🎯 Implementation Checklist**
+- ✅ API key configured securely
+- ✅ Callback endpoint implemented
+- ✅ Error handling in place
+- ✅ Credit tracking implemented
+- ✅ Model validation added
+- ✅ Timeout handling configured
+- ✅ Monitoring/logging set up
+
+---
+
+*This guide provides everything you need to successfully integrate Kie AI image generation models into your application. Start with the basic patterns and gradually implement advanced features as needed! 🚀*

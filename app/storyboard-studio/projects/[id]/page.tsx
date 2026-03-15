@@ -75,7 +75,7 @@ export default function StoryboardWorkspace() {
       description: "A tale of determination and teamwork",
       settings: {
         theme: "sports",
-        style: "manga",
+        style: "storyboard",
         defaultView: "storyboard",
         aiModel: "gpt-4"
       },
@@ -161,7 +161,7 @@ export default function StoryboardWorkspace() {
           <h2 className="text-xl font-semibold text-white mb-2">Project not found</h2>
           <p className="text-gray-400 mb-4">The project you're looking for doesn't exist.</p>
           <button
-            onClick={() => router.push('/manga-studio/projects')}
+            onClick={() => router.push('/storyboard/projects')}
             className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition"
           >
             Back to Projects
@@ -188,7 +188,7 @@ export default function StoryboardWorkspace() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.push('/manga-studio/projects')}
+              onClick={() => router.push('/storyboard/projects')}
               className="p-2 hover:bg-white/10 rounded-lg transition text-gray-400 hover:text-white"
             >
               <ArrowLeft className="w-5 h-5" />

@@ -6,12 +6,14 @@ import { useQuery, useMutation } from "convex/react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { getCurrentCompanyId } from "@/lib/auth-utils";
 import { FrameFavoriteButton } from "../../components/FrameFavoriteButton";
 import { ImageAIPanel } from "../../components/storyboard/ImageAIPanel";
 import { VideoAIPanel } from "../../components/storyboard/VideoAIPanel";
 import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExportModal";
 import { FileBrowser } from "../../components/storyboard/FileBrowser";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
+import { BuildStoryboardModal } from "../../components/storyboard/BuildStoryboardModal";
 import { SceneEditor } from "../../components/SceneEditor";
 import { TagEditor } from "../../components/storyboard/TagEditor";
 import { DisplayFilters } from "../../components/storyboard/DisplayFilters";
@@ -36,6 +38,7 @@ export default function StoryboardWorkspacePage() {
 
   const updateScript = useMutation(api.storyboard.projects.updateScript);
   const createBatch = useMutation(api.storyboard.storyboardItems.createBatch);
+  const buildStoryboard = useMutation(api.storyboard.storyboardItems.buildStoryboard);
   const createItem = useMutation(api.storyboard.storyboardItems.create);
   const updateItem = useMutation(api.storyboard.storyboardItems.update);
   const removeItem = useMutation(api.storyboard.storyboardItems.remove);
@@ -53,6 +56,9 @@ export default function StoryboardWorkspacePage() {
       const originalIndex = currentItems.findIndex(item => item._id === itemToDuplicate._id);
       const insertOrder = originalIndex >= 0 ? itemToDuplicate.order + 0.5 : currentItems.length;
       
+      // ✅ Use global getCurrentCompanyId function
+      const companyId = getCurrentCompanyId(user);
+      
       // Create a new item with only the fields that match the Convex schema
       const newItem = {
         projectId: pid,
@@ -64,7 +70,10 @@ export default function StoryboardWorkspacePage() {
         generatedBy: user?.id || "unknown"
       };
 
-      const result = await createItem(newItem);
+      const result = await createItem({
+        ...newItem,
+        // ✅ Remove companyId - calculated on server from auth context
+      });
       console.log("Item duplicated successfully:", result);
     } catch (error) {
       console.error("Failed to duplicate item:", error);
@@ -137,6 +146,7 @@ export default function StoryboardWorkspacePage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showElementLibrary, setShowElementLibrary] = useState(false);
+  const [showBuildModal, setShowBuildModal] = useState(false);
   const [showSceneEditor, setShowSceneEditor] = useState(false);
   const [selectedSceneItem, setSelectedSceneItem] = useState<any>(null);
   const [elementLibraryDraft, setElementLibraryDraft] = useState<{
@@ -251,25 +261,102 @@ export default function StoryboardWorkspacePage() {
     }
   };
 
-  const handleBuildStoryboard = async () => {
+  const handleBuildStoryboard = () => {
+    setShowBuildModal(true);
+  };
+
+  const handleExecuteBuild = async (config: any) => {
     const src = scriptDirty ? scriptText : scriptFromDb;
     if (!src.trim()) return;
     setIsBuilding(true);
     try {
       const scenes = parseScriptScenes(src);
-      if (scenes.length === 0) return;
-      await createBatch({
-        projectId: pid,
-        items: scenes.map((s, i) => ({
-          sceneId: s.id,
-          order: i,
-          title: s.title,
-          description: s.content.substring(0, 300),
-          duration: 5,
-          generatedBy: user?.id ?? "unknown",
-          generationStatus: "none",
-        })),
-      });
+      console.log(`[Build Storyboard Frontend] Parsed scenes:`, scenes.map(s => ({ id: s.id, title: s.title, duration: s.duration, characters: s.characters })));
+      console.log(`[Build Storyboard Frontend] Build config:`, config);
+      
+      // Apply rebuild strategy logic
+      let filteredScenes = scenes;
+      if (config.rebuildStrategy === "append_update" && config.selectedScenes && config.selectedScenes.length > 0) {
+        // For Add/Update mode: filter scenes based on selection
+        filteredScenes = scenes.filter(scene => 
+          config.selectedScenes.includes(scene.id) // Update selected scenes (scene.id from script)
+          || !items || !items.some(item => item.sceneId === scene.id) // Add new scenes (scene.id from script)
+        );
+        console.log(`[Build Storyboard] Filtered ${filteredScenes.length} scenes for Add/Update mode`);
+        console.log(`[Build Storyboard] Selected scenes for update:`, config.selectedScenes);
+        console.log(`[Build Storyboard] Available existing sceneIds:`, items?.map(item => item.sceneId));
+      } else if (config.rebuildStrategy === "hard_rebuild") {
+        // For Replace All mode: use all scenes
+        filteredScenes = scenes;
+        console.log(`[Build Storyboard] Using all ${scenes.length} scenes for Hard Rebuild mode`);
+      }
+      
+      if (filteredScenes.length === 0) {
+        console.log(`[Build Storyboard] No scenes to process after filtering`);
+        return;
+      }
+      
+      // ✅ Use global getCurrentCompanyId function
+      const frontendCompanyId = getCurrentCompanyId(user);
+      console.log(`[Build Storyboard Frontend] Using companyId: "${frontendCompanyId}"`);
+      
+      let result;
+      if (config.buildType === "enhanced") {
+        // Use enhanced extraction API
+        const response = await fetch('/api/storyboard/enhanced-script-extraction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            scriptContent: src,
+            projectId: pid
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Enhanced extraction failed');
+        }
+        
+        const enhancedResult = await response.json();
+        console.log(`[Enhanced Build Storyboard] Extracted ${enhancedResult.extractedElements?.length || 0} elements with detailed descriptions`);
+        
+        // Apply element strategy
+        let finalElements = enhancedResult.extractedElements || [];
+        if (config.elementStrategy === "preserve") {
+          // Preserve existing elements - don't pass new ones
+          finalElements = [];
+          console.log(`[Build Storyboard] Preserving existing elements, not adding new ones`);
+        } else {
+          console.log(`[Build Storyboard] Using ${finalElements.length} enhanced elements`);
+        }
+        
+        // Build storyboard with enhanced elements and filtered scenes
+        result = await buildStoryboard({
+          projectId: pid,
+          script: src,
+          scenes: filteredScenes.map(({ technical, ...scene }) => scene),
+          enhancedElements: finalElements,
+        });
+      } else {
+        // Apply element strategy for normal build
+        let normalElements = [];
+        if (config.elementStrategy === "regenerate") {
+          // For normal build with regenerate, we still create elements but without AI extraction
+          console.log(`[Build Storyboard] Normal build with element regeneration`);
+        } else {
+          console.log(`[Build Storyboard] Normal build preserving elements`);
+        }
+        
+        // Build storyboard with normal elements and filtered scenes
+        result = await buildStoryboard({
+          projectId: pid,
+          script: src,
+          scenes: filteredScenes.map(({ technical, ...scene }) => scene),
+          enhancedElements: normalElements,
+        });
+      }
+      
+      console.log(`[Build Storyboard] Created ${result?.createdItems} frames, ${result?.createdCharacters} characters, and ${result?.createdEnvironments} environments`);
+      
       if (scriptDirty) {
         await updateScript({ id: pid, script: src, scenes, isAIGenerated: false });
         setScriptDirty(false);
@@ -354,6 +441,29 @@ export default function StoryboardWorkspacePage() {
               </button>
             ))}
           </div>
+
+          {/* Script Actions */}
+          {tab === "script" && (
+            <button
+              onClick={handleSaveScript}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition"
+            >
+              <Save className="w-3.5 h-3.5" />
+              Save Script
+            </button>
+          )}
+
+          {tab === "script" && !scriptDirty && parseScriptScenes(displayScript).length > 0 && (
+            <button
+              onClick={handleBuildStoryboard}
+              disabled={isBuilding}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition disabled:opacity-50"
+              title="Build storyboard with options for normal or enhanced mode"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Build Storyboard
+            </button>
+          )}
 
           {tab === "storyboard" && (
             <>
@@ -576,11 +686,13 @@ export default function StoryboardWorkspacePage() {
                       try {
                         await createItem({
                           projectId: pid,
+                          // ✅ Remove companyId - calculated on server from auth context
                           sceneId: `manual-${Date.now()}`,
                           order: (items?.length ?? 0),
                           title: `Frame ${(items?.length ?? 0) + 1}`,
-                          duration: 3,
-                          generatedBy: "manual",
+                          description: "",
+                          duration: 5,
+                          generatedBy: user?.id || "unknown"
                         });
                       } finally { setIsAddingFrame(false); }
                     }}>
@@ -603,6 +715,7 @@ export default function StoryboardWorkspacePage() {
                   projectStyle={project.settings.style}
                   userId={user?.id ?? "unknown"}
                   orgId={project.orgId}
+                  user={user}
                   onClose={() => setShowImagePanel(false)}
                   characterRef={characterRef}
                 />
@@ -617,6 +730,7 @@ export default function StoryboardWorkspacePage() {
                   frameRatio={project.settings.frameRatio}
                   userId={user?.id ?? "unknown"}
                   orgId={project.orgId}
+                  user={user}
                   onClose={() => setShowVideoPanel(false)}
                 />
               </div>
@@ -628,6 +742,7 @@ export default function StoryboardWorkspacePage() {
         <ElementLibrary
           projectId={pid}
           userId={user?.id ?? "unknown"}
+          user={user}
           initialCreateDraft={elementLibraryDraft}
           onClose={() => {
             setShowElementLibrary(false);
@@ -654,6 +769,16 @@ export default function StoryboardWorkspacePage() {
           items={items}
           frameRatio={project.settings.frameRatio}
           onClose={() => setShowExportModal(false)}
+        />
+      )}
+      {showBuildModal && (
+        <BuildStoryboardModal
+          isOpen={showBuildModal}
+          onClose={() => setShowBuildModal(false)}
+          projectId={pid}
+          onBuild={handleExecuteBuild}
+          isBuilding={isBuilding}
+          existingItems={items || []}
         />
       )}
       {showSceneEditor && selectedSceneItem && (
@@ -750,7 +875,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newTitle, setNewTitle] = useState(item.title);
-  const logFile = useMutation(api.storyboard.storyboardFiles.logFile);
+  const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
 
   // Frame status configuration
   const FRAME_STATUS_CONFIG = {
@@ -766,7 +891,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
     if (!file) return;
     setUploading(true);
     try {
-      const r2Key = `project-${projectId}/uploads/${item._id}-${Date.now()}-${file.name}`;
+      const r2Key = `${user?.organizationMemberships?.[0]?.organization?.id || user?.id}/uploads/${item._id}-${Date.now()}-${file.name}`;
       const sigRes = await fetch("/api/storyboard/r2-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -793,8 +918,9 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
       
       console.log("[R2 Upload Success]", uploadUrl);
       onImageUploaded(item._id, publicUrl);
-      await logFile({
+      await logUpload({
         projectId: projectId as Id<"storyboard_projects">,
+        // ✅ Remove companyId - calculated on server from auth context
         r2Key,
         filename: file.name,
         fileType: file.type.startsWith("video") ? "video" : "image",

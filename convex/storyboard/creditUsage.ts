@@ -11,6 +11,7 @@ export const log = mutation({
     model: v.string(),
     creditsUsed: v.number(),
     metadata: v.optional(v.any()),
+    companyId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("storyboard_credit_usage", {

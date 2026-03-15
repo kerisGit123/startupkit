@@ -6,6 +6,7 @@ export const logUpload = mutation({
     orgId: v.optional(v.string()),
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("storyboard_projects")),
+    // Remove companyId - calculate from auth context
     r2Key: v.string(),
     filename: v.string(),
     fileType: v.string(),
@@ -17,8 +18,21 @@ export const logUpload = mutation({
     status: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get user from auth context
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("User not authenticated");
+    }
+    
+    // Get user's organization from auth context
+    const userOrganizationId = identity.orgId;
+    const userId = identity.subject;
+    
+    const companyId = (userOrganizationId || userId) as string;
+    
     return await ctx.db.insert("storyboard_files", {
       ...args,
+      companyId, // Use the calculated companyId
       uploadedAt: Date.now(),
       createdAt: Date.now(),
       isFavorite: false, // Default to not favorited

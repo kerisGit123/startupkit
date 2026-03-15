@@ -1,5 +1,7 @@
 "use client";
 
+import { useUser } from "@clerk/nextjs";
+import { getCurrentCompanyId } from "@/lib/auth-utils";
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -25,6 +27,7 @@ interface VideoAIPanelProps {
   frameRatio: string;
   userId: string;
   orgId: string;
+  user: any; // Clerk user object
   onClose: () => void;
 }
 
@@ -34,7 +37,7 @@ const QUALITY_LABELS: Record<string, string> = {
 };
 
 export function VideoAIPanel({
-  projectId, items, selectedItemIds, frameRatio, userId, orgId, onClose,
+  projectId, items, selectedItemIds, frameRatio, userId, orgId, user, onClose,
 }: VideoAIPanelProps) {
   const [model, setModel] = useState<VideoModel>("kling-3.0");
   const [quality, setQuality] = useState<VideoQuality>("std");
@@ -103,6 +106,17 @@ export function VideoAIPanel({
           generationStatus: "generating",
         });
 
+        // ✅ Use global getCurrentCompanyId function
+        const companyId = getCurrentCompanyId(user);
+        
+        await logVideoGeneration({
+          projectId,
+          model,
+          creditsUsed: data.creditsUsed,
+          metadata: { quality, duration, taskId: data.taskId },
+          companyId: companyId, // ✅ Use global getCurrentCompanyId
+        });
+        
         await logCredit({
           orgId,
           userId,
@@ -112,6 +126,7 @@ export function VideoAIPanel({
           model,
           creditsUsed: data.creditsUsed,
           metadata: { quality, duration, taskId: data.taskId },
+          companyId,
         });
 
         setProgress((p) => ({ ...p, [id]: "done" }));
