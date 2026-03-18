@@ -13,14 +13,36 @@ export interface ParsedScene {
   };
 }
 
-export function parseScriptScenes(content: string): ParsedScene[] {
+export interface SceneParseResult {
+  scenes: ParsedScene[];
+  duplicates: Array<{
+    sceneNumber: number;
+    title: string;
+    count: number;
+  }>;
+  warnings: string[];
+}
+
+export function parseScriptScenes(content: string): SceneParseResult {
   const scenes: ParsedScene[] = [];
   const sceneRegex = /SCENE\s+(\d+)[:\s]+([^\n]+)\n([\s\S]*?)(?=SCENE\s+\d+[:\s]|$)/gi;
   let match;
+  const usedSceneNumbers = new Set<number>();
+  const duplicateScenes = new Map<number, { title: string; count: number }>();
+  const warnings: string[] = [];
 
   while ((match = sceneRegex.exec(content)) !== null) {
     const [, num, title, body] = match;
+    const sceneNumber = parseInt(num);
     const cleanBody = body.trim();
+
+    // Track duplicates
+    if (usedSceneNumbers.has(sceneNumber)) {
+      const existing = duplicateScenes.get(sceneNumber) || { title: title.trim(), count: 1 };
+      duplicateScenes.set(sceneNumber, { ...existing, count: existing.count + 1 });
+      continue;
+    }
+    usedSceneNumbers.add(sceneNumber);
 
     const charRegex = /^([A-Z][A-Z\s]{1,20}):/gm;
     const characters = [...new Set([...cleanBody.matchAll(charRegex)].map((m) => m[1].trim()))];
@@ -85,7 +107,7 @@ export function parseScriptScenes(content: string): ParsedScene[] {
     };
 
     scenes.push({
-      id: `scene-${num}`,
+      id: `scene-${sceneNumber}`,
       title: title.trim(),
       content: cleanBody,
       characters: allCharacters,
@@ -109,7 +131,31 @@ export function parseScriptScenes(content: string): ParsedScene[] {
     });
   }
 
-  return scenes;
+  // Final deduplication by ID to ensure unique keys
+  const uniqueScenes = scenes.filter((scene, index, self) => 
+    self.findIndex(s => s.id === scene.id) === index
+  );
+
+  // Convert duplicate map to array
+  const duplicates = Array.from(duplicateScenes.entries()).map(([sceneNumber, data]) => ({
+    sceneNumber,
+    title: data.title,
+    count: data.count
+  }));
+
+  // Add warnings for duplicates
+  if (duplicates.length > 0) {
+    warnings.push(`Found ${duplicates.length} duplicate scene(s): ${duplicates.map(d => `Scene ${d.sceneNumber}`).join(', ')}`);
+  }
+
+  console.log(`[parseScriptScenes] Parsed ${uniqueScenes.length} unique scenes from ${scenes.length} total matches`);
+  console.log(`[parseScriptScenes] Duplicates found:`, duplicates);
+  
+  return {
+    scenes: uniqueScenes,
+    duplicates,
+    warnings
+  };
 }
 
 export function scenesToStoryboardItems(

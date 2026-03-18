@@ -18,6 +18,7 @@ interface ElementLibraryProps {
     name?: string;
     type?: string;
   } | null;
+  selectedItemId?: Id<"storyboard_items"> | null; // For adding elements to specific storyboard item
 }
 
 const ELEMENT_TYPES = [
@@ -34,7 +35,10 @@ function sanitizeName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "element";
 }
 
-export function ElementLibrary({ projectId, userId, user, onClose, onSelectElement, initialCreateDraft }: ElementLibraryProps) {
+export function ElementLibrary({ projectId, userId, user, onClose, onSelectElement, initialCreateDraft, selectedItemId }: ElementLibraryProps) {
+  // Mutations at component top level (not inside onClick)
+  const removeUnusedElements = useMutation(api.storyboard.storyboardItemElements.removeUnusedElements);
+  const addElementToItem = useMutation(api.storyboard.storyboardItemElements.addElementToItem);
   const initialType = initialCreateDraft?.type ?? "character";
   const [activeType, setActiveType] = useState(initialType);
   const [showCreate, setShowCreate] = useState(Boolean(initialCreateDraft));
@@ -76,7 +80,9 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
       name: el.name,
       companyId: el.companyId,
       projectId: el.projectId,
-      type: el.type
+      type: el.type,
+      createdBy: el.createdBy,
+      description: el.description?.substring(0, 50) || 'none'
     })));
   }
   
@@ -140,6 +146,62 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
       console.log(`[ElementLibrary] Toggled element ${elementId} visibility to ${newVisibility}`);
     } catch (error) {
       console.error("[ElementLibrary] Failed to toggle visibility:", error);
+    }
+  };
+
+  // State for tracking deletion operations
+  const [deletingIds, setDeletingIds] = useState<Set<Id<"storyboard_elements">>>(new Set());
+  const [recentlyDeleted, setRecentlyDeleted] = useState<Set<Id<"storyboard_elements">>>(new Set());
+
+  // Safe element deletion with error handling and debouncing
+  const handleRemoveElement = async (elementId: Id<"storyboard_elements">, elementName: string) => {
+    // Reminder for developers - remove after Convex deployment
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🚀 REMINDER: Make sure to deploy Convex backend changes with: npx convex deploy');
+    }
+    
+    // Prevent duplicate deletions
+    if (deletingIds.has(elementId) || recentlyDeleted.has(elementId)) {
+      console.log(`[ElementLibrary] Deletion already in progress or recently completed for: ${elementName}`);
+      return;
+    }
+
+    // Add to tracking sets
+    setDeletingIds(prev => new Set(prev).add(elementId));
+    
+    try {
+      await removeElement({ id: elementId });
+      console.log(`[ElementLibrary] Successfully deleted element: ${elementName}`);
+      
+      // Add to recently deleted set for 2 seconds to prevent rapid re-deletion
+      setRecentlyDeleted(prev => new Set(prev).add(elementId));
+      setTimeout(() => {
+        setRecentlyDeleted(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(elementId);
+          return newSet;
+        });
+      }, 2000);
+      
+    } catch (error) {
+      console.error("[ElementLibrary] Failed to delete element:", error);
+      
+      // User-friendly error message
+      if (error instanceof Error && error.message.includes("Element not found")) {
+        // Don't show alert for recently deleted items (user experience)
+        if (!recentlyDeleted.has(elementId)) {
+          alert(`This element "${elementName}" may have already been deleted or is no longer available. The element list will refresh automatically.`);
+        }
+      } else {
+        alert(`Unable to delete element "${elementName}". Please try again or refresh the page.`);
+      }
+    } finally {
+      // Remove from deleting set
+      setDeletingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(elementId);
+        return newSet;
+      });
     }
   };
 
@@ -221,39 +283,59 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
       const uploadedUrls: string[] = [];
       
       // First, upload any new files that haven't been uploaded yet
-      if (referenceFiles.length > 0) {
-        const uploaded = await Promise.all(
-          referenceFiles.map((file) => {
-            const filename = `element-${Date.now()}-${Math.random().toString(36).slice(2)}-${file.name}`;
-            return uploadFile(file, filename);
-          })
-        );
-        uploadedUrls.push(...uploaded);
+      if (editingId) {
+        // For editing, just upload new files and update existing element
+        const newFileUploads = draftRefs.filter(ref => !ref.uploaded && ref.file);
+        for (const ref of newFileUploads) {
+          const url = await uploadFile(ref.file);
+          uploadedUrls.push(url);
+          ref.uploaded = true;
+          ref.url = url;
+        }
+      } else {
+        // For creating new elements, upload all files
+        for (const ref of draftRefs) {
+          const url = await uploadFile(ref.file);
+          uploadedUrls.push(url);
+          ref.uploaded = true;
+          ref.url = url;
+        }
       }
       
+      // Combine existing reference URLs with newly uploaded ones
+      const allReferenceUrls = [
+        ...referenceUrls.filter(url => url && !draftRefs.some(ref => ref.url === url)),
+        ...uploadedUrls
+      ];
+
       if (editingId) {
         // Update existing element
         await updateElement({
           id: editingId,
           name: newName.trim(),
-          type: activeType,
           description: description.trim(),
-          referenceUrls,
+          referenceUrls: allReferenceUrls.length > 0 ? allReferenceUrls : [""], // Use empty string if no images
           tags: tags,
-          thumbnailUrl: referenceUrls[thumbnailIndex] || "",
+          thumbnailUrl: allReferenceUrls.length > 0 ? allReferenceUrls[thumbnailIndex] : "", // Use empty string if no images
           visibility,
         });
         console.log(`[ElementLibrary] Updated element: ${newName}`);
       } else {
-        // Create new element - allow saving without images
+        if (activeType === 'environment') {
+          alert("Environment elements are generated from Build Storyboard. Use Enhanced Build with Regenerate Elements to create smart environments.");
+          setSaving(false);
+          return;
+        }
+        
+        // Fallback to basic element creation
         await createElement({
           projectId,
           name: newName.trim(),
           type: activeType,
           description: description.trim(),
-          referenceUrls: referenceUrls.length > 0 ? referenceUrls : [""], // Use empty string if no images
+          referenceUrls: allReferenceUrls.length > 0 ? allReferenceUrls : [""], // Use empty string if no images
           tags: tags,
-          thumbnailUrl: referenceUrls.length > 0 ? referenceUrls[thumbnailIndex] : "", // Use empty string if no images
+          thumbnailUrl: allReferenceUrls.length > 0 ? allReferenceUrls[thumbnailIndex] : "", // Use empty string if no images
           visibility,
           createdBy: "user", // Required field
         });
@@ -352,12 +434,26 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
               <>
                 <div className="mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
                   <p className="text-sm text-neutral-400">{displayElements?.length ?? 0} {activeType} elements</p>
-                  <button
-                    onClick={() => setShowCreate(true)}
-                    className="px-3 sm:px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-purple-700 transition-colors text-sm"
-                  >
-                    Create Element
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (confirm('Remove all private unused element references from storyboard items?')) {
+                          const result = await removeUnusedElements({ projectId });
+                          alert(result.message);
+                        }
+                      }}
+                      className="px-3 sm:px-4 py-2 bg-red-600/20 border border-red-500/30 text-red-300 rounded-lg font-medium hover:bg-red-600/30 transition-colors text-sm"
+                      title="Clean up private unused element references from storyboard items"
+                    >
+                      Remove Unused
+                    </button>
+                    <button
+                      onClick={() => setShowCreate(true)}
+                      className="px-3 sm:px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-purple-700 transition-colors text-sm"
+                    >
+                      Create Element
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
                   {displayElements?.map((element) => (
@@ -445,7 +541,20 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-end border-t border-neutral-800/50 px-3 sm:px-4 py-2 sm:py-3 bg-neutral-900">
+                      <div className="flex items-center justify-between border-t border-neutral-800/50 px-3 sm:px-4 py-2 sm:py-3 bg-neutral-900">
+                        {selectedItemId ? (
+                          <button
+                            onClick={async () => {
+                              await addElementToItem({ itemId: selectedItemId, elementId: element._id });
+                              onClose();
+                            }}
+                            className="flex-1 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-purple-700 transition-colors text-sm"
+                          >
+                            Add to Storyboard
+                          </button>
+                        ) : (
+                          <div className="flex-1"></div>
+                        )}
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => setEditingId(element._id)}
@@ -454,10 +563,20 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
                             <Pencil className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => removeElement({ id: element._id })}
-                            className="rounded-lg p-1.5 sm:p-2 text-neutral-400 transition hover:bg-red-500/20 hover:text-red-400"
+                            onClick={() => handleRemoveElement(element._id, element.name)}
+                            disabled={deletingIds.has(element._id) || recentlyDeleted.has(element._id)}
+                            className={`rounded-lg p-1.5 sm:p-2 transition ${
+                              deletingIds.has(element._id) || recentlyDeleted.has(element._id)
+                                ? 'text-gray-500 cursor-not-allowed opacity-50'
+                                : 'text-neutral-400 hover:bg-red-500/20 hover:text-red-400'
+                            }`}
+                            title={deletingIds.has(element._id) ? 'Deleting...' : recentlyDeleted.has(element._id) ? 'Recently deleted' : 'Delete element'}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {deletingIds.has(element._id) ? (
+                              <div className="animate-spin h-4 w-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </button>
                         </div>
                      </div>

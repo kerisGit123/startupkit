@@ -24,11 +24,16 @@ export const create = mutation({
     const userOrganizationId = identity.orgId;
     const userId = identity.subject;
     
-    const companyId = (userOrganizationId || userId) as string;
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    const companyId = (project.companyId || userOrganizationId || userId) as string;
     
     return await ctx.db.insert("storyboard_elements", {
       projectId: args.projectId,
-      companyId, // Use the calculated companyId (not from project)
+      companyId,
       name: args.name,
       type: args.type,
       description: args.description || "",
@@ -77,27 +82,36 @@ export const listByProject = query({
     
     console.log(`[listByProject] Project found:`, { id: project._id, name: project.name, companyId: project.companyId });
     
-    // ✅ FIX: Use simple query without index (index doesn't exist)
-    let query = ctx.db.query("storyboard_elements");
-    
-    // Filter by projectId first
+    const candidateCompanyIds = Array.from(new Set([
+      companyId,
+      project.companyId,
+      identity.orgId,
+      identity.subject,
+    ].filter((value): value is string => Boolean(value))));
+
+    console.log(`[listByProject] Candidate companyIds=${candidateCompanyIds.join(",")}`);
     console.log(`[listByProject] Filtering by projectId=${projectId}`);
-    query = query.filter((q) => q.eq("projectId", projectId));
-    
     if (type) {
       console.log(`[listByProject] Filtering by type=${type}`);
-      query = query.filter((q) => q.eq("type", type));
     }
-    
-    // Filter by companyId if provided
-    if (companyId) {
-      console.log(`[listByProject] Filtering by companyId=${companyId}`);
-      query = query.filter((q) => q.eq("companyId", companyId));
-    }
-    
-    const results = await query
+
+    const allProjectElements = await ctx.db
+      .query("storyboard_elements")
+      .filter((q) => q.eq("projectId", projectId))
       .order("desc")
       .collect();
+
+    const results = allProjectElements.filter((element) => {
+      if (type && element.type !== type) {
+        return false;
+      }
+
+      if (candidateCompanyIds.length > 0) {
+        return candidateCompanyIds.includes(element.companyId || "");
+      }
+
+      return true;
+    });
     
     console.log(`[listByProject] === RESULTS ===`);
     console.log(`[listByProject] Found ${results.length} elements`);
@@ -156,7 +170,8 @@ export const update = mutation({
   handler: async (ctx, { id, ...fields }) => {
     const element = await ctx.db.get(id);
     if (!element) {
-      throw new Error("Element not found");
+      console.log(`[Element Update] Element ${id} not found, skipping update`);
+      return; // Gracefully handle missing elements
     }
     
     // Get user from auth context
@@ -176,6 +191,7 @@ export const update = mutation({
     }
     
     await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });
+    console.log(`[Element Update] Successfully updated element ${id}`);
   },
 });
 
@@ -187,7 +203,8 @@ export const incrementUsage = mutation({
   handler: async (ctx, { id, projectId }) => {
     const el = await ctx.db.get(id);
     if (!el) {
-      throw new Error("Element not found");
+      console.log(`[Element IncrementUsage] Element ${id} not found, skipping usage increment`);
+      return; // Gracefully handle missing elements
     }
     
     // Get user from auth context
@@ -211,6 +228,7 @@ export const incrementUsage = mutation({
       lastUsedAt: Date.now(),
       updatedAt: Date.now() 
     });
+    console.log(`[Element IncrementUsage] Successfully incremented usage for element ${id}`);
   },
 });
 
@@ -219,7 +237,8 @@ export const remove = mutation({
   handler: async (ctx, { id }) => {
     const element = await ctx.db.get(id);
     if (!element) {
-      throw new Error("Element not found");
+      console.log(`[Element Remove] Element ${id} not found, skipping deletion`);
+      return; // Gracefully handle missing elements
     }
     
     // Get user from auth context
@@ -239,6 +258,7 @@ export const remove = mutation({
     }
     
     await ctx.db.delete(id);
+    console.log(`[Element Remove] Successfully deleted element ${id}`);
   },
 });
 
@@ -252,7 +272,8 @@ export const updateElementVisibility = mutation({
   handler: async (ctx, args) => {
     const element = await ctx.db.get(args.elementId);
     if (!element) {
-      throw new Error("Element not found");
+      console.log(`[Element UpdateVisibility] Element ${args.elementId} not found, skipping visibility update`);
+      return; // Gracefully handle missing elements
     }
     
     // Get user from auth context
@@ -276,6 +297,7 @@ export const updateElementVisibility = mutation({
       sharedWith: args.sharedWith || [],
       updatedAt: Date.now()
     });
+    console.log(`[Element UpdateVisibility] Successfully updated visibility for element ${args.elementId} to ${args.visibility}`);
   },
 });
 

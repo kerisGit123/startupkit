@@ -5,6 +5,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { X, AlertTriangle, Settings, Play } from "lucide-react";
+import { parseScriptScenes } from "@/lib/storyboard/sceneParser";
 
 interface BuildStoryboardModalProps {
   isOpen: boolean;
@@ -27,38 +28,54 @@ interface BuildAnalysis {
   hasExistingElements: boolean;
   sceneCount: number;
   elementCount: number;
-  scenes: Array<{ id: string; sceneNumber: number; title: string }>;
+  scenes: Array<{ 
+    id: string; 
+    sceneNumber: number; 
+    sceneId: string;
+    title: string;
+    content?: string;
+    characters?: string[];
+    locations?: string[];
+  }>;
 }
 
 export function BuildStoryboardModal({ isOpen, onClose, projectId, onBuild, isBuilding, existingItems = [] }: BuildStoryboardModalProps) {
   const [buildConfig, setBuildConfig] = useState<BuildConfig>({
-    buildType: "normal",
-    rebuildStrategy: "append_update",
+    buildType: "enhanced", // Use enhanced by default for smart environment detection
+    rebuildStrategy: "hard_rebuild", // Default to "Replace All" behavior
     selectedScenes: [],
-    elementStrategy: "preserve"
+    elementStrategy: "regenerate" // Create new elements by default
   });
 
   const [activeTab, setActiveTab] = useState<"basic" | "advanced">("basic");
 
-  // Use existing items instead of making a separate query
-  const analysis = existingItems;
+  // Get current project data to access the script
+  const project = useQuery(api.storyboard.projects.get, { id: projectId });
   
-  // Debug: Log the analysis data
-  console.log('[BuildStoryboardModal] Analysis data:', analysis);
-  console.log('[BuildStoryboardModal] Analysis length:', analysis?.length);
-  console.log('[BuildStoryboardModal] ProjectId:', projectId);
+  // Parse current script to get scenes
+  const currentScript = project?.script ?? "";
+  const scriptParseResult = parseScriptScenes(currentScript);
+  const currentScenes = scriptParseResult.scenes;
+  
+  // Debug: Log the current data
+  console.log('[BuildStoryboardModal] Current script scenes:', currentScenes.length);
+  console.log('[BuildStoryboardModal] Existing storyboard items:', existingItems.length);
+  console.log('[BuildStoryboardModal] Project script length:', currentScript.length);
   
   const buildAnalysis: BuildAnalysis = {
-    hasExistingItems: (analysis?.length || 0) > 0,
+    hasExistingItems: existingItems.length > 0,
     hasExistingElements: false, // TODO: Get from elements query
-    sceneCount: analysis?.length || 0,
+    sceneCount: currentScenes.length, // Use script scenes instead of existing items
     elementCount: 0, // TODO: Get from elements query
-    scenes: analysis?.map(item => ({
-      id: item._id,
-      sceneNumber: parseInt(item.sceneId?.replace('scene-', '') || '0') || 0,
-      sceneId: item.sceneId,
-      title: item.title
-    })) || []
+    scenes: currentScenes.map(scene => ({
+      id: scene.id,
+      sceneNumber: parseInt(scene.id.replace('scene-', '') || '0') || 0,
+      sceneId: scene.id,
+      title: scene.title,
+      content: scene.content,
+      characters: scene.characters,
+      locations: scene.locations
+    }))
   };
   
   // Debug: Log the mapped scenes

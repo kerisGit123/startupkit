@@ -61,8 +61,27 @@ This example demonstrates how the enhanced AI script extraction system processes
 
 ## 🎬 **Enhanced Prompt Generation Examples**
 
-### **Scene 1 — The Deep Ocean Mystery**
+## 🌍 **Smart Environment Identification Strategy**
 
+### **🎯 Key Principle: Group by Location, Not Scenes**
+
+Instead of creating 8 environments for 8 scenes, I've identified **4 unique locations** that serve multiple scenes:
+
+| Environment | Scenes Served | Location Type | Visual Continuity |
+|-------------|---------------|---------------|-------------------|
+| **Deep Ocean Abyss** | Scene 1, 3 | Natural Ocean | Dark, mysterious, vast |
+| **Research Control Room** | Scene 2, 4 | High-Tech Facility | Scientific, monitors, equipment |
+| **Giant Aquarium Facility** | Scene 5, 6, 7, 8 | Massive Aquarium | Glass containment, underwater views |
+
+---
+
+## 🏛️ **Environment 1: Deep Ocean Abyss**
+
+**Serves Scenes:** 1, 3
+**Location Type:** Natural deep ocean environment
+**Visual Theme:** Dark, mysterious, vast underwater world
+
+### **Scene 1 — The Deep Ocean Mystery**
 **Base Prompt**: "Dark deep ocean abyss, faint blue light filtering through water, mysterious atmosphere, deep sea particles floating, cinematic lighting, ultra-realistic."
 
 **Enhanced Prompt**:
@@ -70,22 +89,69 @@ This example demonstrates how the enhanced AI script extraction system processes
 Dark deep ocean abyss, faint blue light filtering through water, mysterious atmosphere, deep sea particles floating, cinematic lighting, ultra-realistic, epic wide cinematic perspective, cinematic short-film lighting, mysterious suspenseful atmosphere with room haze particles, water particles floating, deep shadow contrast, atmospheric depth, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, ultra realistic, 8k detail, cinematic film still, professional photography, dramatic shadows, volumetric light rays, softness + film grain, accurate location context
 ```
 
-**Visual Consistency Rules**:
-- **Perspective**: Epic wide cinematic perspective
-- **Lighting**: Cinematic short-film lighting, deep shadow contrast, atmospheric depth
-- **Atmosphere**: Mysterious suspenseful atmosphere, room haze particles, water particles floating
-- **Continuity**: Clear perspective, cinematic short-film lighting, environment continuity, height/scale control
-- **Quality**: Ultra realistic, 8k detail, cinematic film still, professional photography
+### **Scene 3 — Something Alive**
+**Base Prompt**: "Underwater submarine lights revealing a massive shadow moving slowly in the deep sea."
 
-**Animation Notes**:
-- Slow cinematic reveal, gradual focus pull
-- Environment: floating particle animation, atmospheric movement
-- Deep focus, maintain sharpness across frame
+**Enhanced Prompt**:
+```
+Underwater submarine lights revealing a massive shadow moving slowly in the deep sea, colossal mysterious shadow, submarine searchlights cutting through darkness, massive unknown creature silhouette, deep ocean abyss environment, mysterious suspenseful atmosphere with room haze particles, water particles floating, dramatic medium shot perspective, dramatic cinematic lighting, intense mysterious atmosphere, balanced illumination, natural shadows, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, high detail, sharp focus, cinematic photography, dramatic shadows, volumetric light rays, accurate location context
+```
+
+**Visual Consistency Rules**:
+- **Perspective**: Epic wide to medium underwater shots
+- **Lighting**: Submarine searchlights, faint blue ambient light
+- **Atmosphere**: Mysterious suspenseful with floating particles
+- **Continuity**: Deep ocean environment, consistent water quality
+- **Quality**: Ultra realistic, 8k detail, underwater photography
 
 ---
 
-### **Scene 6 — The Sea Eater**
+## 🏢 **Environment 2: Research Control Room**
 
+**Serves Scenes:** 2, 4
+**Location Type:** High-tech scientific facility
+**Visual Theme:** Modern research center with advanced technology
+
+### **Scene 2 — The Strange Signal**
+**Base Prompt**: "Ocean research control room, scientists watching sonar monitors with massive sound wave signals."
+
+**Enhanced Prompt**:
+```
+Ocean research control room, scientists watching sonar monitors with massive sound wave signals, high-tech research facility, advanced scientific equipment, multiple computer monitors displaying sonar data, dramatic medium shot perspective, dramatic cinematic lighting, intense scientific atmosphere with room haze particles, electronic equipment glow, balanced illumination, natural shadows, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, high detail, sharp focus, cinematic photography, dramatic shadows, volumetric light rays, accurate location context
+```
+
+### **Scene 4 — The Capture**
+**Base Prompt**: "Large futuristic underwater research facility lifting a massive containment capsule from the ocean."
+
+**Enhanced Prompt**:
+```
+Large futuristic underwater research facility lifting a massive containment capsule from the ocean, advanced underwater research station, massive crane system, containment capsule being raised from depths, dramatic wide shot perspective, dramatic cinematic lighting, intense scientific atmosphere with room haze particles, water spray, ocean surface, balanced illumination, natural shadows, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, high detail, sharp focus, cinematic photography, dramatic shadows, volumetric light rays, accurate location context
+```
+
+**Visual Consistency Rules**:
+- **Perspective**: Medium to wide shots of facility operations
+- **Lighting**: Scientific equipment glow, monitor lighting
+- **Atmosphere**: Professional research environment
+- **Continuity**: Consistent facility design and equipment
+- **Quality**: High-tech appearance, sharp technical details
+
+---
+
+## 🐠 **Environment 3: Giant Aquarium Facility**
+
+**Serves Scenes:** 5, 6, 7, 8
+**Location Type:** Massive aquarium research facility
+**Visual Theme:** Enormous glass tank with underwater creature
+
+### **Scene 5 — The Giant Aquarium**
+**Base Prompt**: "Enormous glass aquarium tank inside a secret research facility, scientists observing from outside."
+
+**Enhanced Prompt**:
+```
+Enormous glass aquarium tank inside a secret research facility, scientists observing from outside, massive glass containment, underwater research facility, high-tech observation deck, scientific equipment, dramatic wide shot perspective, dramatic cinematic lighting, mysterious scientific atmosphere with room haze particles, water reflections, balanced illumination, natural shadows, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, high detail, sharp focus, cinematic photography, dramatic shadows, volumetric light rays, accurate location context
+```
+
+### **Scene 6 — The Sea Eater**
 **Base Prompt**: "A colossal sea monster emerging from darkness inside the tank, glowing eyes, ancient and terrifying appearance."
 
 **Enhanced Prompt**:
@@ -93,21 +159,15 @@ Dark deep ocean abyss, faint blue light filtering through water, mysterious atmo
 A colossal sea monster emerging from darkness inside the tank, glowing eyes, ancient and terrifying appearance, colossal terrifying sea monster with glowing eyes, ancient appearance, massive scale, massive glass aquarium tank inside secret research facility, high-tech environment, scientific equipment, dramatic medium shot perspective, dramatic cinematic lighting, intense dramatic atmosphere with room haze particles, water particles floating, balanced illumination, natural shadows, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, high detail, sharp focus, cinematic photography, dramatic shadows, volumetric light rays, softness + film grain, accurate location context
 ```
 
-**Element Integration**:
-- **Sea Monster**: Colossal terrifying sea monster, glowing eyes, ancient appearance, massive scale, ancient terrifying presence
-- **Aquarium**: Massive glass aquarium tank, glass containment, massive scale, water environment, high-tech environment
-- **Research Facility**: Advanced research facility, high-tech environment, scientific equipment
+### **Scene 7 — Containment Failure**
+**Base Prompt**: "Cracks appearing across the thick aquarium glass as the monster pushes against it, alarms flashing."
 
-**Animation Notes**:
-- Balanced pacing, natural movement
-- Sea Monster: subtle eye glow animation, breathing effect
-- Environment: floating particle animation, atmospheric movement
-- Shallow depth of field, background blur
-
----
+**Enhanced Prompt**:
+```
+Cracks appearing across the thick aquarium glass as the monster pushes against it, alarms flashing, reinforced glass barrier, stress fractures, massive glass aquarium tank, glass containment, massive scale, water environment, dramatic close-up perspective, dramatic cinematic lighting, terrifying ominous atmosphere with room haze particles, water particles floating, focused illumination, high contrast, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, high detail, sharp focus, cinematic photography, dramatic shadows, volumetric light rays, softness + film grain, accurate location context
+```
 
 ### **Scene 8 — The Awakening**
-
 **Base Prompt**: "Massive sea monster staring directly through the cracked glass wall, glowing eyes in the dark water."
 
 **Enhanced Prompt**:
@@ -115,16 +175,35 @@ A colossal sea monster emerging from darkness inside the tank, glowing eyes, anc
 Massive sea monster staring directly through the cracked glass wall, glowing eyes in the dark water, colossal terrifying sea monster with glowing eyes, ancient appearance, massive scale, ancient terrifying presence, reinforced glass barrier, transparent containment, stress fractures, massive glass aquarium tank, glass containment, massive scale, water environment, intimate close-up perspective, dramatic cinematic lighting, terrifying ominous atmosphere with room haze particles, water particles floating, focused illumination, high contrast, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, high detail, sharp focus, cinematic photography, dramatic shadows, volumetric light rays, softness + film grain, accurate location context
 ```
 
-**Technical Specifications**:
-- **Aspect Ratio**: 16:9
-- **Quality**: High quality
-- **Style**: Cinematic photography
+**Visual Consistency Rules**:
+- **Perspective**: Wide to intimate shots of aquarium interior
+- **Lighting**: Underwater lighting, facility lighting mix
+- **Atmosphere**: Scientific observation meets underwater mystery
+- **Continuity**: Same glass tank, consistent creature appearance
+- **Quality**: Ultra realistic water effects, creature details
 
-**Animation Notes**:
-- Quick impactful shot, immediate focus
-- Sea Monster: subtle eye glow animation, breathing effect
-- Glass Wall: stress fracture animation, cracking effect
-- Shallow depth of field, background blur
+---
+
+## 🎯 **Environment Strategy Benefits**
+
+### **✅ Reduced Complexity**
+- **Before**: 8 separate environments to manage
+- **After**: 3 unique locations with consistent themes
+
+### **✅ Visual Continuity**
+- **Deep Ocean**: Consistent underwater atmosphere across scenes 1, 3
+- **Research Facility**: Consistent high-tech environment across scenes 2, 4
+- **Aquarium**: Consistent tank and creature views across scenes 5, 6, 7, 8
+
+### **✅ Production Efficiency**
+- **Fewer Environment Changes**: Smoother transitions between related scenes
+- **Consistent Asset Reuse**: Same environmental elements can be reused
+- **Better Story Flow**: Natural progression through locations
+
+### **✅ Enhanced Storytelling**
+- **Location Progression**: Ocean → Research → Aquarium (logical story flow)
+- **Atmospheric Building**: Each location builds on previous mystery
+- **Character Journey**: Follows creature from natural habitat to captivity
 
 ---
 

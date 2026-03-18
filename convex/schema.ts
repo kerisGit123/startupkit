@@ -1720,6 +1720,10 @@ export default defineSchema({
       sceneCount: v.number(),
       estimatedDuration: v.number(),
       aiModel: v.string(),
+      genre: v.optional(v.string()), // e.g., "Ocean Mystery / Sci-Fi"
+      visualStyle: v.optional(v.string()), // e.g., "cinematic short-film lighting, volumetric water rays..."
+      creatureDesign: v.optional(v.string()), // Consistent creature description
+      mainCharacter: v.optional(v.string()), // Main character description
     }),
     isAIGenerated: v.boolean(),
     createdAt: v.number(),
@@ -1772,6 +1776,11 @@ export default defineSchema({
       position: v.object({ x: v.number(), y: v.number() }),
       size: v.object({ width: v.number(), height: v.number() }),
     })),
+    linkedElements: v.optional(v.array(v.object({
+      id: v.id("storyboard_elements"),
+      name: v.string(),
+      type: v.string(),
+    }))), // Links to element library items (characters, environments, props)
     annotations: v.array(v.object({
       id: v.string(),
       content: v.string(),
@@ -1843,7 +1852,6 @@ export default defineSchema({
       v.literal("private"),           // Only current project
       v.literal("public")            // Everyone (public access)
     )),
-    tags: v.array(v.string()), // Tags for easy discovery and categorization
     
     // Usage tracking
     lastUsedAt: v.optional(v.number()),

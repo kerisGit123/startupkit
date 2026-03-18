@@ -21,8 +21,7 @@ import { TopNavSearch } from "../../components/TopNavSearch";
 import { TopNavFilters } from "../../components/TopNavFilters";
 import { parseScriptScenes } from "@/lib/storyboard/sceneParser";
 import type { Shot } from "../../types";
-import { MessageSquare, X } from "lucide-react";
-import { Loader2, Upload, ImageIcon, Clock, Copy, Trash2, Tag, Plus, ChevronDown, Hash, Grid3x3, Table2, Settings, Users, Share2, PanelLeftClose, PanelLeftOpen, List, Search, Filter, Edit3, Eye, FolderOpen, Folder, FileText, Link2, LayoutGrid, ArrowLeft, Sparkles, Save, Play, Minus, Plus as ZoomIn, Video } from "lucide-react";
+import { MessageSquare, X, Loader2, Upload, ImageIcon, Clock, Copy, Trash2, Tag, Plus, ChevronDown, Hash, Grid3x3, Table2, Settings, Users, Share2, PanelLeftClose, PanelLeftOpen, List, Search, Filter, Edit3, Eye, FolderOpen, Folder, FileText, Link2, LayoutGrid, ArrowLeft, Sparkles, Save, Play, Minus, Plus as ZoomIn, Video, AlertTriangle, CheckCircle } from "lucide-react";
 
 type Tab = "script" | "storyboard";
 
@@ -41,8 +40,61 @@ export default function StoryboardWorkspacePage() {
   const buildStoryboard = useMutation(api.storyboard.storyboardItems.buildStoryboard);
   const createItem = useMutation(api.storyboard.storyboardItems.create);
   const updateItem = useMutation(api.storyboard.storyboardItems.update);
+  const addElementToItem = useMutation(api.storyboard.storyboardItemElements.addElementToItem);
+  const removeElementFromItem = useMutation(api.storyboard.storyboardItemElements.removeElementFromItem);
   const removeItem = useMutation(api.storyboard.storyboardItems.remove);
   const updateFavorite = useMutation(api.storyboard.storyboardItems.updateFavorite);
+  
+  // State for tracking deletion operations
+  const [deletingItemIds, setDeletingItemIds] = useState<Set<Id<"storyboard_items">>>(new Set());
+  const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<Set<Id<"storyboard_items">>>(new Set());
+
+  // Safe item deletion with error handling and debouncing
+  const handleRemoveItem = async (itemId: Id<"storyboard_items">, sceneTitle?: string) => {
+    // Prevent duplicate deletions
+    if (deletingItemIds.has(itemId) || recentlyDeletedItems.has(itemId)) {
+      console.log(`[Workspace] Deletion already in progress or recently completed for: ${sceneTitle || itemId}`);
+      return;
+    }
+
+    // Add to tracking sets
+    setDeletingItemIds(prev => new Set(prev).add(itemId));
+    
+    try {
+      await removeItem({ id: itemId });
+      console.log(`[Workspace] Successfully deleted item: ${sceneTitle || itemId}`);
+      
+      // Add to recently deleted set for 2 seconds to prevent rapid re-deletion
+      setRecentlyDeletedItems(prev => new Set(prev).add(itemId));
+      setTimeout(() => {
+        setRecentlyDeletedItems(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(itemId);
+          return newSet;
+        });
+      }, 2000);
+      
+    } catch (error) {
+      console.error("[Workspace] Failed to delete item:", error);
+      
+      // User-friendly error message
+      if (error instanceof Error && error.message.includes("not found")) {
+        // Don't show alert for recently deleted items (user experience)
+        if (!recentlyDeletedItems.has(itemId)) {
+          alert(`This scene "${sceneTitle || 'Unknown'}" may have already been deleted or is no longer available. The scene list will refresh automatically.`);
+        }
+      } else {
+        alert(`Unable to delete scene "${sceneTitle || 'Unknown'}". Please try again or refresh the page.`);
+      }
+    } finally {
+      // Remove from deleting set
+      setDeletingItemIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemId);
+        return newSet;
+      });
+    }
+  };
   
   // NEW: Frame status and notes mutations
   const updateFrameStatus = useMutation(api.storyboard.storyboardItems.updateFrameStatus);
@@ -54,38 +106,157 @@ export default function StoryboardWorkspacePage() {
       // Find the position to insert the duplicate (right after the original)
       const currentItems = items || [];
       const originalIndex = currentItems.findIndex(item => item._id === itemToDuplicate._id);
-      const insertOrder = originalIndex >= 0 ? itemToDuplicate.order + 0.5 : currentItems.length;
+      const insertPosition = originalIndex >= 0 ? originalIndex + 1 : currentItems.length;
       
-      // ✅ Use global getCurrentCompanyId function
-      const companyId = getCurrentCompanyId(user);
-      
-      // Create a new item with only the fields that match the Convex schema
-      const newItem = {
+      // Create duplicate with updated order for all items
+      await createItem({
         projectId: pid,
         sceneId: itemToDuplicate.sceneId,
-        order: insertOrder,
         title: `${itemToDuplicate.title} (Copy)`,
-        description: itemToDuplicate.description,
+        order: insertPosition,
         duration: itemToDuplicate.duration,
-        generatedBy: user?.id || "unknown"
-      };
-
-      const result = await createItem({
-        ...newItem,
-        // ✅ Remove companyId - calculated on server from auth context
+        description: itemToDuplicate.description,
+        tags: itemToDuplicate.tags,
+        imageUrl: itemToDuplicate.imageUrl,
+        generationStatus: "pending",
+        isFavorite: false,
+        status: "draft",
+        notes: "",
       });
-      console.log("Item duplicated successfully:", result);
+      
+      console.log(`[Duplicate Item] Successfully duplicated item: ${itemToDuplicate.title}`);
     } catch (error) {
-      console.error("Failed to duplicate item:", error);
+      console.error("[Duplicate Item] Failed to duplicate item:", error);
+      alert("Failed to duplicate item. Please try again.");
     }
   };
 
-  // Search and filter state - similar to ProjectsDashboard
+  // Function to detect and remove duplicate items
+  const handleRemoveDuplicates = async () => {
+    const currentItems = items || [];
+    if (currentItems.length === 0) {
+      alert("No items to check for duplicates.");
+      return;
+    }
+
+    // Group items by name and description to find true duplicates (same project and companyId is implied)
+    const itemSignatures = new Map<string, any[]>();
+    
+    currentItems.forEach(item => {
+      // Create a signature based on name and description (case-insensitive, trimmed)
+      const name = (item.title || '').trim().toLowerCase();
+      const description = (item.description || '').trim().toLowerCase();
+      const signature = `${name}|${description}`;
+      
+      if (!itemSignatures.has(signature)) {
+        itemSignatures.set(signature, []);
+      }
+      itemSignatures.get(signature)!.push(item);
+    });
+
+    // Find duplicates (keep the first item in each group, delete the rest)
+    const duplicatesToDelete: Id<"storyboard_items">[] = [];
+    let totalDuplicates = 0;
+    const duplicateGroups: string[] = [];
+
+    itemSignatures.forEach((itemsInGroup, signature) => {
+      if (itemsInGroup.length > 1) {
+        // Sort by order to keep the first one
+        itemsInGroup.sort((a, b) => (a.order || 0) - (b.order || 0));
+        
+        // Mark all but the first as duplicates
+        for (let i = 1; i < itemsInGroup.length; i++) {
+          duplicatesToDelete.push(itemsInGroup[i]._id);
+          totalDuplicates++;
+        }
+        
+        // Add to duplicate groups for reporting
+        const displayName = itemsInGroup[0].title || 'Untitled';
+        const displayDesc = itemsInGroup[0].description ? ` (${itemsInGroup[0].description.substring(0, 30)}...)` : '';
+        duplicateGroups.push(`${displayName}${displayDesc} (${itemsInGroup.length} copies)`);
+      }
+    });
+
+    if (totalDuplicates === 0) {
+      alert("No duplicate items found. All storyboard items are unique.");
+      return;
+    }
+
+    // Show detailed confirmation
+    const duplicateList = duplicateGroups.join(', ');
+    const confirmed = confirm(
+      `Found ${totalDuplicates} duplicate item${totalDuplicates > 1 ? 's' : ''} with identical names and descriptions:\n\n${duplicateList}\n\nDo you want to remove the duplicates and keep only the first item of each group?`
+    );
+    if (!confirmed) return;
+
+    // Delete duplicates
+    try {
+      console.log(`[Remove Duplicates] Removing ${totalDuplicates} duplicate items`);
+      
+      // Delete all duplicates with progress feedback
+      let deletedCount = 0;
+      for (const itemId of duplicatesToDelete) {
+        await handleRemoveItem(itemId, `Duplicate Item`);
+        deletedCount++;
+        
+        // Update progress every 10 deletions
+        if (deletedCount % 10 === 0 || deletedCount === totalDuplicates) {
+          console.log(`[Remove Duplicates] Progress: ${deletedCount}/${totalDuplicates} items deleted`);
+        }
+      }
+
+      alert(`Successfully removed ${totalDuplicates} duplicate item${totalDuplicates > 1 ? 's' : ''}. Your storyboard now has ${currentItems.length - totalDuplicates} unique items.`);
+    } catch (error) {
+      console.error("[Remove Duplicates] Failed to remove duplicates:", error);
+      alert("Failed to remove some duplicates. Please try again or refresh the page.");
+    }
+  };
+
+  // Calculate duplicate count for display
+  const duplicateCount = useMemo(() => {
+    const currentItems = items || [];
+    const itemSignatures = new Map<string, any[]>();
+    
+    currentItems.forEach(item => {
+      // Create a signature based on name and description (case-insensitive, trimmed)
+      const name = (item.title || '').trim().toLowerCase();
+      const description = (item.description || '').trim().toLowerCase();
+      const signature = `${name}|${description}`;
+      
+      if (!itemSignatures.has(signature)) {
+        itemSignatures.set(signature, []);
+      }
+      itemSignatures.get(signature)!.push(item);
+    });
+
+    let duplicates = 0;
+    itemSignatures.forEach(itemsInGroup => {
+      if (itemsInGroup.length > 1) {
+        duplicates += itemsInGroup.length - 1; // Count all but the first as duplicates
+      }
+    });
+
+    return duplicates;
+  }, [items]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({
     favorite: false,
     frameStatus: [] as ('draft' | 'in-progress' | 'completed')[], // Frame status filter
   });
+
+  // Notification state for duplicate scenes
+  const [notification, setNotification] = useState<{
+    type: 'warning' | 'success' | 'error';
+    title: string;
+    message: string;
+    visible: boolean;
+  } | null>(null);
+
+  // Show notification function
+  const showNotification = (type: 'warning' | 'success' | 'error', title: string, message: string) => {
+    setNotification({ type, title, message, visible: true });
+    // Removed auto-hide timeout - notification stays until user closes it
+  };
 
   // Handle filter changes from TopNavFilters
   const handleFiltersChange = useCallback((newFilters: { favorite: boolean; frameStatus?: ('draft' | 'in-progress' | 'completed')[] }) => {
@@ -146,6 +317,7 @@ export default function StoryboardWorkspacePage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showElementLibrary, setShowElementLibrary] = useState(false);
+  const [selectedItemForElement, setSelectedItemForElement] = useState<Id<"storyboard_items"> | null>(null);
   const [showBuildModal, setShowBuildModal] = useState(false);
   const [showSceneEditor, setShowSceneEditor] = useState(false);
   const [selectedSceneItem, setSelectedSceneItem] = useState<any>(null);
@@ -209,17 +381,38 @@ export default function StoryboardWorkspacePage() {
   const handleScriptChange = (val: string) => {
     setScriptText(val);
     setScriptDirty(true);
+    
+    // Check for duplicate scenes when script changes
+    const parseResult = parseScriptScenes(val);
+    if (parseResult.duplicates.length > 0) {
+      const duplicateList = parseResult.duplicates.map(d => 
+        `Scene ${d.sceneNumber} (${d.count} copies)`
+      ).join(', ');
+      
+      showNotification(
+        'warning',
+        'Duplicate Scenes Detected',
+        `Found duplicate scenes: ${duplicateList}. Only the first occurrence of each scene will be used.`
+      );
+    }
   };
 
   const handleSaveScript = async () => {
-    const scenes = parseScriptScenes(displayScript);
+    const parseResult = parseScriptScenes(displayScript);
     await updateScript({
       id: pid,
       script: displayScript,
-      scenes,
+      scenes: parseResult.scenes,
       isAIGenerated: false,
     });
     setScriptDirty(false);
+    
+    // Show success notification with scene count
+    showNotification(
+      'success',
+      'Script Saved',
+      `Successfully saved script with ${parseResult.scenes.length} scene${parseResult.scenes.length !== 1 ? 's' : ''}${parseResult.duplicates.length > 0 ? ` (${parseResult.duplicates.length} duplicate${parseResult.duplicates.length !== 1 ? 's' : ''} removed)` : ''}`
+    );
   };
 
   const handleOpenSceneEditor = (item: any) => {
@@ -270,9 +463,12 @@ export default function StoryboardWorkspacePage() {
     if (!src.trim()) return;
     setIsBuilding(true);
     try {
-      const scenes = parseScriptScenes(src);
+      const parseResult = parseScriptScenes(src);
+      const scenes = parseResult.scenes;
       console.log(`[Build Storyboard Frontend] Parsed scenes:`, scenes.map(s => ({ id: s.id, title: s.title, duration: s.duration, characters: s.characters })));
       console.log(`[Build Storyboard Frontend] Build config:`, config);
+      console.log(`[Build Storyboard Frontend] Total scenes found: ${scenes.length}`);
+      console.log(`[Build Storyboard Frontend] Script length: ${src.length}`);
       
       // Apply rebuild strategy logic
       let filteredScenes = scenes;
@@ -291,6 +487,10 @@ export default function StoryboardWorkspacePage() {
         console.log(`[Build Storyboard] Using all ${scenes.length} scenes for Hard Rebuild mode`);
       }
       
+      console.log(`[Build Storyboard] Final scenes to process: ${filteredScenes.length}`);
+      console.log(`[Build Storyboard] Build type: ${config.buildType}`);
+      console.log(`[Build Storyboard] Element strategy: ${config.elementStrategy}`);
+      
       if (filteredScenes.length === 0) {
         console.log(`[Build Storyboard] No scenes to process after filtering`);
         return;
@@ -308,50 +508,66 @@ export default function StoryboardWorkspacePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             scriptContent: src,
-            projectId: pid
+            projectId: pid,
+            companyId: frontendCompanyId // Pass the current companyId for consistency
           })
         });
         
+        console.log(`[Enhanced Build Storyboard] API Response status: ${response.status}`);
+        console.log(`[Enhanced Build Storyboard] API Response headers:`, Object.fromEntries(response.headers.entries()));
+        
         if (!response.ok) {
-          throw new Error('Enhanced extraction failed');
+          const errorText = await response.text();
+          console.error(`[Enhanced Build Storyboard] API Error (${response.status}):`, errorText);
+          throw new Error(`Enhanced extraction failed: ${response.status} - ${errorText}`);
         }
         
         const enhancedResult = await response.json();
         console.log(`[Enhanced Build Storyboard] Extracted ${enhancedResult.extractedElements?.length || 0} elements with detailed descriptions`);
+        console.log(`[Enhanced Build Storyboard] Element details:`, enhancedResult.extractedElements?.map(e => ({ name: e.name, type: e.type, locationType: e.locationType })));
         
         // Apply element strategy
         let finalElements = enhancedResult.extractedElements || [];
+        let skipElementCreation = false;
+        
         if (config.elementStrategy === "preserve") {
-          // Preserve existing elements - don't pass new ones
-          finalElements = [];
-          console.log(`[Build Storyboard] Preserving existing elements, not adding new ones`);
-        } else {
-          console.log(`[Build Storyboard] Using ${finalElements.length} enhanced elements`);
+          // Preserve existing elements - skip all element creation in backend
+          skipElementCreation = true;
+          console.log(`[Build Storyboard] Preserving existing elements, skipping all element creation`);
+        } else if (config.elementStrategy === "regenerate") {
+          // Regenerate elements - use enhanced elements from AI extraction
+          console.log(`[Build Storyboard] Regenerating elements with ${finalElements.length} enhanced elements from smart detection`);
         }
         
         // Build storyboard with enhanced elements and filtered scenes
         result = await buildStoryboard({
           projectId: pid,
+          rebuildStrategy: config.rebuildStrategy,
           script: src,
           scenes: filteredScenes.map(({ technical, ...scene }) => scene),
-          enhancedElements: finalElements,
+          enhancedElements: skipElementCreation ? undefined : finalElements,
+          metadata: enhancedResult.metadata, // Pass extracted metadata (genre, visualStyle, etc.)
         });
       } else {
-        // Apply element strategy for normal build
-        let normalElements = [];
-        if (config.elementStrategy === "regenerate") {
-          // For normal build with regenerate, we still create elements but without AI extraction
-          console.log(`[Build Storyboard] Normal build with element regeneration`);
-        } else {
-          console.log(`[Build Storyboard] Normal build preserving elements`);
+        // Normal build - no AI extraction
+        let skipElementCreation = false;
+        
+        if (config.elementStrategy === "preserve") {
+          // Preserve existing elements - skip all element creation
+          skipElementCreation = true;
+          console.log(`[Build Storyboard] Normal build preserving existing elements`);
+        } else if (config.elementStrategy === "regenerate") {
+          // For normal build with regenerate, allow fallback element creation from scene locations
+          console.log(`[Build Storyboard] Normal build with element regeneration (fallback from scene locations)`);
         }
         
-        // Build storyboard with normal elements and filtered scenes
+        // Build storyboard with filtered scenes
         result = await buildStoryboard({
           projectId: pid,
+          rebuildStrategy: config.rebuildStrategy,
           script: src,
           scenes: filteredScenes.map(({ technical, ...scene }) => scene),
-          enhancedElements: normalElements,
+          enhancedElements: skipElementCreation ? undefined : [], // undefined = skip, [] = use fallback
         });
       }
       
@@ -453,7 +669,7 @@ export default function StoryboardWorkspacePage() {
             </button>
           )}
 
-          {tab === "script" && !scriptDirty && parseScriptScenes(displayScript).length > 0 && (
+          {tab === "script" && !scriptDirty && parseScriptScenes(displayScript).scenes.length > 0 && (
             <button
               onClick={handleBuildStoryboard}
               disabled={isBuilding}
@@ -571,13 +787,13 @@ export default function StoryboardWorkspacePage() {
               className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 p-6 outline-none resize-none font-mono leading-relaxed"
             />
             {/* Scene preview panel */}
-            {parseScriptScenes(displayScript).length > 0 && (
+            {parseScriptScenes(displayScript).scenes.length > 0 && (
               <div className="w-64 border-l border-white/8 overflow-y-auto p-3 shrink-0">
                 <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider mb-3">
-                  {parseScriptScenes(displayScript).length} Scenes
+                  {parseScriptScenes(displayScript).scenes.length} Scenes
                 </p>
-                {parseScriptScenes(displayScript).map((s, i) => (
-                  <div key={s.id} className="mb-2 p-2.5 rounded-lg bg-white/4 border border-white/6">
+                {parseScriptScenes(displayScript).scenes.map((s, i) => (
+                  <div key={`${s.id}-${i}`} className="mb-2 p-2.5 rounded-lg bg-white/4 border border-white/6">
                     <p className="text-[11px] text-gray-400 mb-0.5">Scene {i + 1}</p>
                     <p className="text-xs text-white font-medium truncate">{s.title}</p>
                     {s.characters.length > 0 && (
@@ -608,7 +824,17 @@ export default function StoryboardWorkspacePage() {
             ) : (
               <>
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-sm font-semibold text-gray-300">{items.length} Frames</h2>
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-semibold text-gray-300">{items.length} Frames</h2>
+                    {duplicateCount > 0 && (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 border border-orange-500/30 rounded-md">
+                        <AlertTriangle className="w-3 h-3 text-orange-400" />
+                        <span className="text-xs text-orange-400 font-medium">
+                          {duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <button onClick={() => { setShowImagePanel(!showImagePanel); setShowVideoPanel(false); }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
@@ -616,6 +842,12 @@ export default function StoryboardWorkspacePage() {
                       }`}>
                       <Sparkles className="w-3.5 h-3.5" />
                       AI Images
+                    </button>
+                    <button onClick={handleRemoveDuplicates}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600/80 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition"
+                      title="Remove duplicate storyboard items">
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Remove Duplicates
                     </button>
                     <button onClick={() => { setShowVideoPanel(!showVideoPanel); setShowImagePanel(false); }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
@@ -663,7 +895,7 @@ export default function StoryboardWorkspacePage() {
                           ? prev.filter((id) => id !== item._id)
                           : [...prev, item._id]
                       )}
-                      onDelete={() => removeItem({ id: item._id })}
+                      onDelete={() => handleRemoveItem(item._id, item.title)}
                       onImageUploaded={(id, url) => updateItem({ id: id as Id<"storyboard_items">, imageUrl: url, generationStatus: "completed" })}
                       onDoubleClick={() => handleOpenSceneEditor(item)}
                       onDuplicate={() => duplicateItem(item)}
@@ -672,6 +904,16 @@ export default function StoryboardWorkspacePage() {
                       onStatusChange={(status) => handleStatusChange(item._id, status)}
                       onNotesChange={(notes) => handleNotesChange(item._id, notes)}
                       onTitleChange={(title) => handleTitleChange(item._id, title)}
+                      onRemoveElement={async (elementId) => {
+                        await removeElementFromItem({ 
+                          itemId: item._id, 
+                          elementId: elementId as Id<"storyboard_elements"> 
+                        });
+                      }}
+                      onAddElement={() => {
+                        setShowElementLibrary(true);
+                        setSelectedItemForElement(item._id);
+                      }}
                       userId={user?.id ?? "unknown"}
                     />
                   ))}
@@ -744,14 +986,17 @@ export default function StoryboardWorkspacePage() {
           userId={user?.id ?? "unknown"}
           user={user}
           initialCreateDraft={elementLibraryDraft}
+          selectedItemId={selectedItemForElement}
           onClose={() => {
             setShowElementLibrary(false);
             setElementLibraryDraft(null);
+            setSelectedItemForElement(null);
           }}
           onSelectElement={(urls, name) => {
             setCharacterRef({ name, urls });
             setShowElementLibrary(false);
             setElementLibraryDraft(null);
+            setSelectedItemForElement(null);
             setShowImagePanel(true);
           }}
         />
@@ -773,6 +1018,7 @@ export default function StoryboardWorkspacePage() {
       )}
       {showBuildModal && (
         <BuildStoryboardModal
+          key={`build-modal-${project?.script?.length || 0}`} // Force re-render when script changes
           isOpen={showBuildModal}
           onClose={() => setShowBuildModal(false)}
           projectId={pid}
@@ -843,13 +1089,175 @@ export default function StoryboardWorkspacePage() {
           }}
         />
       )}
+      
+      {/* Notification Component */}
+      {notification && notification.visible && (
+        <div className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg border transition-all transform ${
+          notification.type === 'warning' 
+            ? 'bg-yellow-50 border-yellow-200 text-yellow-800' 
+            : notification.type === 'error'
+            ? 'bg-red-50 border-red-200 text-red-800'
+            : 'bg-green-50 border-green-200 text-green-800'
+        }`}>
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0">
+              {notification.type === 'warning' && <AlertTriangle className="w-5 h-5" />}
+              {notification.type === 'error' && <AlertTriangle className="w-5 h-5" />}
+              {notification.type === 'success' && <CheckCircle className="w-5 h-5" />}
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-sm">{notification.title}</h4>
+              <p className="text-sm mt-1">{notification.message}</p>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="flex-shrink-0 p-1 hover:bg-black/10 rounded-md transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Inline Tag Editor Component ──────────────────────────────────────────────
+interface TagEditorInlineProps {
+  selectedTags: Array<{ id: string; name: string; color: string }>;
+  onTagsChange: (tags: Array<{ id: string; name: string; color: string }>) => void;
+  onClose: () => void;
+}
+
+function TagEditorInline({ selectedTags, onTagsChange, onClose }: TagEditorInlineProps) {
+  const [customTagName, setCustomTagName] = useState("");
+  
+  // Import SIMPLE_TAGS and TAG_COLORS from constants
+  const SIMPLE_TAGS = [
+    { id: "action", name: "Action", color: "#ef4444" },
+    { id: "dialogue", name: "Dialogue", color: "#f97316" },
+    { id: "dramatic", name: "Dramatic", color: "#eab308" },
+    { id: "close-up", name: "Close Up", color: "#22c55e" },
+    { id: "wide", name: "Wide", color: "#3b82f6" },
+    { id: "interior", name: "Interior", color: "#8b5cf6" },
+    { id: "exterior", name: "Exterior", color: "#ec4899" },
+    { id: "day", name: "Day", color: "#06b6d4" },
+    { id: "night", name: "Night", color: "#6366f1" },
+    { id: "montage", name: "Montage", color: "#a855f7" }
+  ];
+  
+  const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#06b6d4"];
+  
+  const availableTags = SIMPLE_TAGS.filter(tag =>
+    !selectedTags.some(selected => selected.id === tag.id)
+  );
+
+  const addTag = (tag: { id: string; name: string; color: string }) => {
+    onTagsChange([...selectedTags, tag]);
+  };
+
+  const removeTag = (tagId: string) => {
+    onTagsChange(selectedTags.filter(tag => tag.id !== tagId));
+  };
+
+  const addCustomTag = () => {
+    if (customTagName.trim()) {
+      const newTag = {
+        id: `custom-${Date.now()}`,
+        name: customTagName.trim(),
+        color: TAG_COLORS[selectedTags.length % TAG_COLORS.length]
+      };
+      addTag(newTag);
+      setCustomTagName("");
+    }
+  };
+
+  return (
+    <div className="max-h-[400px] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-3 border-b border-white/10 sticky top-0 bg-[#1a1a1f] z-10">
+        <h3 className="text-white text-sm font-semibold">Edit Tags</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-white transition">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Custom Tag Input */}
+      <div className="p-3 border-b border-white/10">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Add custom tag..."
+            value={customTagName}
+            onChange={(e) => setCustomTagName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addCustomTag()}
+            className="flex-1 bg-[#25252f] border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-violet-500/50"
+          />
+          <button
+            onClick={addCustomTag}
+            disabled={!customTagName.trim()}
+            className="px-2 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:bg-white/10 disabled:text-gray-500 rounded-lg text-white text-xs font-medium transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Selected Tags */}
+      {selectedTags.length > 0 && (
+        <div className="p-3 border-b border-white/10">
+          <h4 className="text-gray-400 text-xs font-medium mb-2">Selected</h4>
+          <div className="flex flex-wrap gap-1.5">
+            {selectedTags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
+                style={{ 
+                  backgroundColor: tag.color + '25', 
+                  color: tag.color,
+                  border: `1px solid ${tag.color}30`
+                }}
+              >
+                {tag.name}
+                <button onClick={() => removeTag(tag.id)} className="ml-0.5 hover:opacity-70 transition">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Available Tags */}
+      <div className="p-3">
+        <h4 className="text-gray-400 text-xs font-medium mb-2">Available Tags</h4>
+        <div className="flex flex-wrap gap-1.5">
+          {availableTags.length > 0 ? (
+            availableTags.map((tag) => (
+              <button
+                key={tag.id}
+                onClick={() => addTag(tag)}
+                className="px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 hover:scale-105 border border-white/20 hover:border-white/40"
+                style={{ 
+                  backgroundColor: tag.color + '25', 
+                  color: tag.color
+                }}
+              >
+                {tag.name}
+              </button>
+            ))
+          ) : (
+            <p className="text-gray-500 text-xs">All tags selected</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Frame Card ────────────────────────────────────────────────────────────────
 interface FrameCardProps {
-  item: { _id: string; title: string; description?: string; imageUrl?: string; videoUrl?: string; duration: number; generationStatus: string; order: number; tags?: Array<{ id: string; name: string; color: string }>; isFavorite?: boolean; frameStatus?: string; notes?: string };
+  item: { _id: string; title: string; description?: string; imageUrl?: string; videoUrl?: string; duration: number; generationStatus: string; order: number; tags?: Array<{ id: string; name: string; color: string }>; isFavorite?: boolean; frameStatus?: string; notes?: string; linkedElements?: Array<{ id: string; name: string; type: string }> };
   index: number;
   frameRatio: string;
   selected: boolean;
@@ -865,10 +1273,12 @@ interface FrameCardProps {
   onStatusChange?: (status: 'draft' | 'in-progress' | 'completed') => void;
   onNotesChange?: (notes: string) => void;
   onTitleChange?: (title: string) => void;
+  onRemoveElement?: (elementId: string) => void;
+  onAddElement?: () => void;
   userId: string;
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, userId }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onRemoveElement, onAddElement, userId }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -986,28 +1396,114 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         
         {/* Top overlay with refined badges */}
         <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 via-black/30 to-transparent p-3">
-          <div className="flex items-center justify-between">
-            {/* Frame number and status */}
-            <div className="flex items-center gap-2">
-              <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
-                <span className="text-xs text-white font-medium tracking-wide">
-                  {String(index + 1).padStart(2, "0")}
-                </span>
+          <div className="flex items-start justify-between">
+            {/* Left side - Frame number, status, and tags */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
+                  <span className="text-xs text-white font-medium tracking-wide">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                </div>
+                
+                {/* NEW: Status Badge - Always visible with relative container */}
+                <div className="relative">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowStatusMenu(!showStatusMenu); }}
+                    className={`px-2 py-1 rounded-full text-xs font-medium text-white transition ${
+                      statusConfig 
+                        ? `${statusConfig.color} hover:opacity-80` 
+                        : 'bg-gray-600/60 hover:bg-gray-600/80 border border-gray-500/30'
+                    }`}
+                  >
+                    {statusConfig ? statusConfig.label : 'Set Status'}
+                  </button>
+                  
+                  {/* Status Dropdown - Positioned directly below button */}
+                  {showStatusMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowStatusMenu(false)} />
+                      <div 
+                        className="absolute top-full left-0 mt-1 bg-[#1a1a24] rounded-xl border border-white/10 shadow-lg z-50 min-w-[140px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="p-1">
+                          {Object.entries(FRAME_STATUS_CONFIG).map(([key, config]) => (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                onStatusChange?.(key as 'draft' | 'in-progress' | 'completed');
+                                setShowStatusMenu(false);
+                              }}
+                              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition hover:bg-white/5 text-gray-300 hover:text-white text-left ${
+                                item.frameStatus === key ? 'bg-white/10 text-white' : ''
+                              }`}
+                            >
+                              <div className={`w-2 h-2 rounded-full ${config.color}`} />
+                              {config.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               
-              {/* NEW: Status Badge - Always visible */}
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowStatusMenu(!showStatusMenu); }}
-                className={`px-2 py-1 rounded-full text-xs font-medium text-white transition ${
-                  statusConfig 
-                    ? `${statusConfig.color} hover:opacity-80` 
-                    : 'bg-gray-600/60 hover:bg-gray-600/80 border border-gray-500/30'
-                }`}
-              >
-                {statusConfig ? statusConfig.label : 'Set Status'}
-              </button>
+              {/* Tags section - Below frame number and status */}
+              <div className="relative">
+                <div 
+                  className="flex flex-wrap gap-1 items-center cursor-pointer group"
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setShowTagEditor(!showTagEditor);
+                  }}
+                >
+                  {item.tags && item.tags.length > 0 ? (
+                    <>
+                      {item.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-all duration-200 hover:scale-105"
+                          style={{ 
+                            backgroundColor: tag.color + '25', 
+                            color: tag.color,
+                            border: `1px solid ${tag.color}30`
+                          }}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                      {item.tags.length > 3 && (
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-700/50 text-gray-400 font-medium border border-gray-600/30">
+                          +{item.tags.length - 3}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 hover:text-gray-300 transition-colors">
+                      + Tags
+                    </span>
+                  )}
+                </div>
+                
+                {/* Tag Editor - Dropdown positioned below tags */}
+                {showTagEditor && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowTagEditor(false)} />
+                    <div className="absolute top-full left-0 mt-1 bg-[#1a1a1f] border border-white/10 rounded-xl z-50 shadow-xl w-64">
+                      <TagEditorInline
+                        selectedTags={item.tags || []}
+                        onTagsChange={onTagsChange}
+                        onClose={() => setShowTagEditor(false)}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
             
+            {/* Right side - Duration and favorite in top corner */}
             <div className="flex items-center gap-2">
               {/* Duration */}
               <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10 flex items-center gap-1.5">
@@ -1044,9 +1540,49 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           </div>
         )}
         
+        {/* Element badges - Bottom left inside image */}
+        <div className="absolute bottom-3 left-3 flex flex-wrap gap-1.5 max-w-[60%]">
+          {item.linkedElements && item.linkedElements.map((element) => (
+            <div
+              key={element.id}
+              className={`group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border ${
+                element.type === 'character' 
+                  ? 'bg-purple-600/80 border-purple-500/30 text-white hover:bg-purple-600'
+                  : element.type === 'environment'
+                  ? 'bg-blue-600/80 border-blue-500/30 text-white hover:bg-blue-600'
+                  : 'bg-green-600/80 border-green-500/30 text-white hover:bg-green-600'
+              } transition-colors`}
+              title={`${element.type}: ${element.name}`}
+            >
+              <span className="pr-1">{element.name}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveElement?.(element.id);
+                }}
+                className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+              >
+                <X className="w-2.5 h-2.5 text-white" />
+              </button>
+            </div>
+          ))}
+          {/* Add Element button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddElement?.();
+            }}
+            className="px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border border-white/30 bg-white/10 text-white hover:bg-white/20 transition-colors flex items-center gap-1"
+            title="Add element to this scene"
+          >
+            <Plus className="w-3 h-3" />
+            Element
+          </button>
+        </div>
+        
         {/* Video indicator */}
         {item.videoUrl && item.generationStatus !== "generating" && (
-          <div className="absolute bottom-3 left-3 bg-blue-600/80 backdrop-blur-sm rounded-full px-2.5 py-1 border border-blue-500/30">
+          <div className="absolute bottom-3 right-3 bg-blue-600/80 backdrop-blur-sm rounded-full px-2.5 py-1 border border-blue-500/30">
             <span className="text-xs text-white font-medium flex items-center gap-1">
               <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
               Video
@@ -1058,7 +1594,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         {item.notes && (
           <button
             onClick={(e) => { e.stopPropagation(); setShowNotesModal(true); }}
-            className="absolute bottom-3 left-3 bg-gray-600/80 backdrop-blur-sm rounded-full p-2 border border-gray-500/30 hover:bg-gray-600 transition-colors"
+            className="absolute top-3 right-3 bg-gray-600/80 backdrop-blur-sm rounded-full p-2 border border-gray-500/30 hover:bg-gray-600 transition-colors"
             title="View notes"
           >
             <MessageSquare className="w-3.5 h-3.5 text-white" />
@@ -1140,77 +1676,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         {item.description && (
           <p className="text-xs text-gray-500 mb-3 line-clamp-2">{item.description}</p>
         )}
-        
-        {/* Tags section */}
-        <div 
-          className="flex flex-wrap gap-1.5 items-center cursor-pointer group"
-          onClick={(e) => { e.stopPropagation(); setShowTagEditor(true); }}
-        >
-          {item.tags && item.tags.length > 0 ? (
-            <>
-              {item.tags.slice(0, 3).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="text-xs px-2 py-1 rounded-full font-medium transition-all duration-200 hover:scale-105"
-                  style={{ 
-                    backgroundColor: tag.color + '25', 
-                    color: tag.color,
-                    border: `1px solid ${tag.color}30`
-                  }}
-                >
-                  {tag.name}
-                </span>
-              ))}
-              {item.tags.length > 3 && (
-                <span className="text-xs px-2 py-1 rounded-full bg-gray-700/50 text-gray-400 font-medium border border-gray-600/30">
-                  +{item.tags.length - 3}
-                </span>
-              )}
-            </>
-          ) : (
-            <span className="text-xs text-gray-500 hover:text-gray-400 transition-colors">
-              + Add tags
-            </span>
-          )}
-          <span className="text-xs text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity">
-            Click to edit
-          </span>
-        </div>
       </div>
-      
-      {/* Tag Editor Modal */}
-      {showTagEditor && (
-        <TagEditor
-          selectedTags={item.tags || []}
-          onTagsChange={onTagsChange}
-          onClose={() => setShowTagEditor(false)}
-        />
-      )}
-      
-      {/* NEW: Status Dropdown */}
-      {showStatusMenu && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowStatusMenu(false)}>
-          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-xs p-2" onClick={(e) => e.stopPropagation()}>
-            <div className="space-y-1">
-              {Object.entries(FRAME_STATUS_CONFIG).map(([key, config]) => (
-                <button
-                  key={key}
-                  onClick={() => {
-                    onStatusChange?.(key as 'draft' | 'in-progress' | 'completed');
-                    setShowStatusMenu(false);
-                  }}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition hover:bg-white/5 text-gray-300 hover:text-white ${
-                    item.frameStatus === key ? 'bg-white/10 text-white' : ''
-                  }`}
-                >
-                  <div className={`w-2 h-2 rounded-full ${config.color}`} />
-                  {config.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
       
       {/* NEW: Notes Modal */}
       {showNotesModal && (

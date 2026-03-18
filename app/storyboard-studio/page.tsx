@@ -254,8 +254,16 @@ export default function StoryboardPage() {
   const handleDeleteConvexProject = async (id: string) => {
     try {
       await removeConvexProject({ id: id as Parameters<typeof removeConvexProject>[0]["id"] });
+      console.log(`[delete project] Successfully deleted project: ${id}`);
     } catch (err) {
       console.error("[delete project]", err);
+      
+      // User-friendly error message
+      if (err instanceof Error && err.message.includes("not found")) {
+        alert(`This project may have already been deleted or is no longer available. The project list will refresh automatically.`);
+      } else {
+        alert(`Unable to delete project. Please try again or refresh the page.`);
+      }
     }
   };
 

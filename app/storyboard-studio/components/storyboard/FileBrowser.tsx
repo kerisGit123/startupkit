@@ -225,16 +225,19 @@ export function FileBrowser({ projectId, onClose, onSelectFile }: FileBrowserPro
         if (confirm(`Are you sure you want to delete "${file.filename}"?`)) {
           try {
             console.log('Delete file:', file.filename);
-            
-            // Delete from R2 first
-            const r2Response = await fetch('/api/storyboard/delete-file', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ r2Key: file.r2Key })
-            });
-            
-            if (!r2Response.ok) {
-              throw new Error('Failed to delete from R2 storage');
+            try {
+              // Delete from R2 storage first
+              const r2Response = await fetch('/api/storyboard/delete-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ r2Key: file.r2Key })
+              });
+              if (!r2Response.ok) {
+                throw new Error('Failed to delete from R2 storage');
+              }
+            } catch (error) {
+              console.error('Failed to delete from R2 storage:', error);
+              throw error;
             }
             
             // Delete from database
@@ -244,7 +247,13 @@ export function FileBrowser({ projectId, onClose, onSelectFile }: FileBrowserPro
             alert(`Successfully deleted ${file.filename}`);
           } catch (error) {
             console.error('Failed to delete file:', error);
-            alert('Failed to delete file');
+            
+            // User-friendly error message
+            if (error instanceof Error && error.message.includes("not found")) {
+              alert(`This file "${file.filename}" may have already been deleted or is no longer available. The file list will refresh automatically.`);
+            } else {
+              alert(`Unable to delete file "${file.filename}". Please try again or refresh the page.`);
+            }
           }
         }
         break;

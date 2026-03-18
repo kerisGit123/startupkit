@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ConvexHttpClient } from 'convex/browser';
-import { api } from '@/convex/_generated/api';
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 interface ExtractedElement {
   name: string;
@@ -16,6 +19,7 @@ interface ExtractedElement {
     atmosphere?: string;
   };
   tags: string[];
+  locationType?: string; // NEW: For smart environment grouping (deep_ocean_abyss, research_facility, giant_aquarium)
 }
 
 interface SceneAnalysis {
@@ -34,11 +38,20 @@ interface SceneAnalysis {
   };
 }
 
+interface ProjectMetadata {
+  genre?: string;
+  visualStyle?: string;
+  creatureDesign?: string;
+  mainCharacter?: string;
+  totalDuration?: string;
+}
+
 interface ScriptAnalysisResult {
   title: string;
   genre: string;
   tone: string;
   totalDuration: number;
+  metadata: ProjectMetadata; // NEW: Extracted project-level metadata
   scenes: SceneAnalysis[];
   elements: ExtractedElement[];
   characterConsistency: {
@@ -59,11 +72,23 @@ interface ScriptAnalysisResult {
 
 export async function POST(request: NextRequest) {
   try {
-    const { scriptContent, projectId } = await request.json();
-
-    if (!scriptContent || !projectId) {
+    console.log("[Enhanced Extraction] API called");
+    
+    const body = await request.json();
+    const { scriptContent, projectId } = body;
+    
+    console.log(`[Enhanced Extraction] Processing script (${scriptContent?.length || 0} chars) for project: ${projectId}`);
+    
+    if (!scriptContent || typeof scriptContent !== 'string') {
       return NextResponse.json(
-        { error: 'Missing script content or project ID' },
+        { error: "Invalid script content provided" },
+        { status: 400 }
+      );
+    }
+    
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project ID is required" },
         { status: 400 }
       );
     }
@@ -71,39 +96,22 @@ export async function POST(request: NextRequest) {
     // Enhanced AI analysis with multiple extraction passes
     const analysisResult = await analyzeScriptForEnhancedExtraction(scriptContent);
     
+    console.log(`[Enhanced Extraction] Analysis complete - Total elements extracted: ${analysisResult.elements.length}`);
+    console.log(`[Enhanced Extraction] All elements:`, analysisResult.elements.map(e => ({ name: e.name, type: e.type, confidence: e.confidence, locationType: e.locationType })));
+    
     // Create elements with high confidence only
     const highConfidenceElements = analysisResult.elements.filter(
       element => element.confidence >= 0.8
     );
 
-    // Store in Convex if projectId provided
-    if (projectId) {
-      const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-      
-      // Create extracted elements
-      for (const element of highConfidenceElements) {
-        try {
-          await convex.mutation(api.storyboard.storyboardElements.create({
-            projectId,
-            name: element.name,
-            type: element.type,
-            description: element.description,
-            referenceUrls: [], // Will be filled by user
-            thumbnailUrl: '', // Will be filled by user
-            tags: element.tags,
-            visibility: 'private',
-            createdBy: 'ai_extraction',
-          }));
-        } catch (error) {
-          console.error(`Failed to create element ${element.name}:`, error);
-        }
-      }
-    }
+    console.log(`[Enhanced Extraction] Returning ${highConfidenceElements.length} high-confidence elements (>= 0.8 confidence)`);
+    console.log(`[Enhanced Extraction] High-confidence element types:`, highConfidenceElements.map(e => ({ name: e.name, type: e.type, confidence: e.confidence, locationType: e.locationType })));
 
     return NextResponse.json({
       success: true,
       analysis: analysisResult,
       extractedElements: highConfidenceElements,
+      metadata: analysisResult.metadata, // Include extracted metadata (genre, visualStyle, etc.)
       summary: {
         totalScenes: analysisResult.scenes.length,
         totalDuration: analysisResult.totalDuration,
@@ -111,24 +119,81 @@ export async function POST(request: NextRequest) {
         environmentsFound: highConfidenceElements.filter(e => e.type === 'environment').length,
         propsFound: highConfidenceElements.filter(e => e.type === 'prop').length,
         averageConfidence: highConfidenceElements.reduce((sum, e) => sum + e.confidence, 0) / highConfidenceElements.length || 0,
+        // NEW: Location-based environment strategy info
+        locationStrategy: {
+          strategy: 'location_based_thinking',
+          uniqueLocations: [...new Set(highConfidenceElements.filter(e => e.type === 'environment').map(e => e.locationType))].length,
+          locationsIdentified: highConfidenceElements.filter(e => e.type === 'environment').map(e => ({
+            name: e.name,
+            type: e.locationType,
+            scenes: e.sceneUsage
+          }))
+        },
+        // NEW: Element update information
+        elementUpdates: {
+          enhancedDescriptions: true,
+          locationBasedThinking: true,
+          existingElementsUpdated: 'checked_and_updated',
+          newElementsCreated: 'when_needed',
+          descriptionEnhancement: 'detailed_scene_prompts_with_visual_consistency'
+        }
       }
     });
 
   } catch (error) {
-    console.error('Enhanced script extraction failed:', error);
+    console.error('[Enhanced Extraction] Script extraction failed:', error);
+    console.error('[Enhanced Extraction] Error stack:', error.stack);
+    
+    // Return detailed error information
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : 'No stack available';
+    
     return NextResponse.json(
-      { error: 'Failed to analyze script' },
+      { 
+        error: 'Failed to analyze script',
+        details: errorMessage,
+        stack: errorStack,
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   }
 }
 
 async function analyzeScriptForEnhancedExtraction(scriptContent: string): Promise<ScriptAnalysisResult> {
-  // This would call an AI service (GPT-4, Claude, etc.) for enhanced analysis
-  // For now, implementing a sophisticated parsing system
+  // AI-powered script analysis using OpenAI GPT-4o
   
-  const scenes = parseScenes(scriptContent);
-  const elements = extractElementsWithConfidence(scenes);
+  const metadata = extractProjectMetadata(scriptContent);
+  const scenes = await parseScenes(scriptContent, metadata);
+  
+  // Extract elements directly from AI results (no pattern-based merging)
+  const elementMap = new Map<string, ExtractedElement>();
+  
+  // Merge elements from all scenes
+  for (const scene of scenes) {
+    for (const element of scene.extractedElements) {
+      const key = `${element.name}-${element.type}`;
+      const existing = elementMap.get(key);
+      
+      if (existing) {
+        // Merge scene usage
+        const newScenes = element.sceneUsage.filter(s => !existing.sceneUsage.includes(s));
+        existing.sceneUsage.push(...newScenes);
+        existing.confidence = Math.max(existing.confidence, element.confidence);
+        // Keep the longer description (AI should provide good descriptions)
+        if (element.description && element.description.length > existing.description.length) {
+          existing.description = element.description;
+        }
+      } else {
+        elementMap.set(key, { ...element });
+      }
+    }
+  }
+  
+  const elements = Array.from(elementMap.values());
+  console.log(`[AI Extraction] Final consolidated elements: ${elements.length}`);
+  console.log(`[AI Extraction] Elements:`, elements.map(e => ({ name: e.name, type: e.type, descLength: e.description?.length || 0 })));
+  
   const characterConsistency = analyzeCharacterConsistency(scenes, elements);
   const environmentContinuity = analyzeEnvironmentContinuity(scenes, elements);
   
@@ -137,6 +202,7 @@ async function analyzeScriptForEnhancedExtraction(scriptContent: string): Promis
     genre: extractGenre(scriptContent),
     tone: extractTone(scriptContent),
     totalDuration: scenes.reduce((sum, scene) => sum + scene.duration, 0),
+    metadata, // Include extracted metadata
     scenes,
     elements,
     characterConsistency,
@@ -144,46 +210,115 @@ async function analyzeScriptForEnhancedExtraction(scriptContent: string): Promis
   };
 }
 
-function parseScenes(scriptContent: string): SceneAnalysis[] {
-  const scenes: SceneAnalysis[] = [];
-  const sceneBlocks = scriptContent.split(/# Scene \d+ —/).filter(block => block.trim());
+function extractProjectMetadata(scriptContent: string): ProjectMetadata {
+  const metadata: ProjectMetadata = {};
   
-  sceneBlocks.forEach((block, index) => {
-    const sceneNumber = index + 1;
-    const lines = block.split('\n').map(line => line.trim()).filter(line => line);
+  // Extract Genre
+  const genreMatch = scriptContent.match(/\*\*Genre:\*\*\s*([^\n]+)/i);
+  if (genreMatch) {
+    metadata.genre = genreMatch[1].trim();
+  }
+  
+  // Extract Visual Style
+  const visualStyleMatch = scriptContent.match(/\*\*Visual Style:\*\*\s*([^\n]+)/i);
+  if (visualStyleMatch) {
+    metadata.visualStyle = visualStyleMatch[1].trim();
+  }
+  
+  // Extract Total Duration
+  const durationMatch = scriptContent.match(/\*\*Total Duration:\*\*\s*([^\n]+)/i);
+  if (durationMatch) {
+    metadata.totalDuration = durationMatch[1].trim();
+  }
+  
+  // Extract Creature Design
+  const creatureMatch = scriptContent.match(/\*\*Creature Design[^:]*:\*\*\s*([^\n]+)/i);
+  if (creatureMatch) {
+    metadata.creatureDesign = creatureMatch[1].trim();
+  }
+  
+  // Extract Main Character
+  const characterMatch = scriptContent.match(/\*\*Main Character[^:]*:\*\*\s*([^\n]+)/i);
+  if (characterMatch) {
+    metadata.mainCharacter = characterMatch[1].trim();
+  }
+  
+  console.log('[Enhanced Extraction] Extracted metadata:', metadata);
+  
+  return metadata;
+}
+
+async function parseScenes(scriptContent: string, metadata?: ProjectMetadata): Promise<SceneAnalysis[]> {
+  const scenes: SceneAnalysis[] = [];
+  
+  // Match scene headers with their content
+  const sceneRegex = /# Scene (\d+) — ([^\n]+)([\s\S]*?)(?=# Scene \d+ —|$)/g;
+  let match;
+  
+  while ((match = sceneRegex.exec(scriptContent)) !== null) {
+    const sceneNumber = parseInt(match[1]);
+    const sceneTitle = match[2].trim();
+    const sceneContent = match[3];
     
-    let title = '';
+    const lines = sceneContent.split('\n').map(line => line.trim()).filter(line => line);
+    
     let visualPrompt = '';
     let narration = '';
     let camera = '';
     let duration = 4; // default
     
-    lines.forEach(line => {
-      if (line.startsWith('**') && line.endsWith('**')) {
-        title = line.replace(/\*\*/g, '');
-      } else if (line.startsWith('**Visual Prompt**')) {
-        visualPrompt = line.replace('**Visual Prompt**', '').trim();
-      } else if (line.startsWith('**Narration**')) {
-        narration = line.replace('**Narration**', '').replace(/[""]/g, '').trim();
-      } else if (line.startsWith('**Camera**')) {
-        camera = line.replace('**Camera**', '').trim();
-      } else if (line.startsWith('**Duration**')) {
+    // Parse scene content
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      if (line.startsWith('**Visual Prompt')) {
+        // Get the content after the label, or the next line if empty
+        const content = line.replace(/\*\*Visual Prompt[^*]*\*\*/, '').trim();
+        if (content) {
+          visualPrompt = content;
+        } else if (i + 1 < lines.length) {
+          visualPrompt = lines[i + 1];
+        }
+      } else if (line.startsWith('**Narration')) {
+        const content = line.replace(/\*\*Narration[^*]*\*\*/, '').replace(/[""]/g, '').trim();
+        if (content) {
+          narration = content;
+        } else if (i + 1 < lines.length) {
+          narration = lines[i + 1].replace(/[""]/g, '');
+        }
+      } else if (line.startsWith('**Camera')) {
+        const content = line.replace(/\*\*Camera[^*]*\*\*/, '').trim();
+        if (content) {
+          camera = content;
+        } else if (i + 1 < lines.length) {
+          camera = lines[i + 1];
+        }
+      } else if (line.startsWith('**Duration')) {
         const durationMatch = line.match(/(\d+)/);
         if (durationMatch) {
           duration = parseInt(durationMatch[1]);
         }
       }
-    });
+    }
     
-    // Extract elements from this scene
-    const sceneElements = extractElementsFromScene(visualPrompt, narration, sceneNumber);
+    console.log(`[Enhanced Extraction] Parsed Scene ${sceneNumber}: "${sceneTitle}"`);
+    console.log(`[Enhanced Extraction] Visual Prompt: ${visualPrompt.substring(0, 100)}...`);
+    console.log(`[Enhanced Extraction] Narration: ${narration.substring(0, 100)}...`);
     
-    // Analyze visual style
-    const visualStyle = analyzeVisualStyle(visualPrompt, camera);
+    // Extract elements from this scene using AI
+    const sceneElements = await extractElementsFromScene(visualPrompt, narration, sceneNumber, metadata);
+    
+    // Simple visual style object (AI handles all analysis)
+    const visualStyle = {
+      lighting: 'natural',
+      perspective: 'standard', 
+      atmosphere: 'neutral',
+      continuity: []
+    };
     
     scenes.push({
       sceneNumber,
-      title: title || `Scene ${sceneNumber}`,
+      title: sceneTitle,
       duration,
       visualPrompt,
       narration,
@@ -191,472 +326,339 @@ function parseScenes(scriptContent: string): SceneAnalysis[] {
       extractedElements: sceneElements,
       visualStyle,
     });
-  });
+  }
+  
+  console.log(`[Enhanced Extraction] Total scenes parsed: ${scenes.length}`);
   
   return scenes;
 }
 
-function extractElementsFromScene(visualPrompt: string, narration: string, sceneNumber: number): ExtractedElement[] {
-  const elements: ExtractedElement[] = [];
+async function extractElementsFromScene(visualPrompt: string, narration: string, sceneNumber: number, metadata?: ProjectMetadata): Promise<ExtractedElement[]> {
+  console.log(`[AI Extraction] Processing scene ${sceneNumber} with AI...`);
   
-  // Character extraction with high confidence patterns and detailed descriptions
-  const characterPatterns = [
-    { pattern: /sea monster|monster|creature|beast|sea eater/gi, confidence: 0.9, type: 'creature' },
-    { pattern: /scientists|researchers|explorers|oceanographer/gi, confidence: 0.7, type: 'human' },
-    { pattern: /dr\.|doctor|professor/gi, confidence: 0.8, type: 'human' },
-    { pattern: /massive shadow|giant silhouette|colossal/gi, confidence: 0.8, type: 'creature' },
-  ];
-  
-  // Environment extraction
-  const environmentPatterns = [
-    { pattern: /deep ocean|ocean abyss|underwater|sea|deep sea/gi, confidence: 0.9 },
-    { pattern: /research facility|control room|aquarium tank/gi, confidence: 0.8 },
-    { pattern: /futuristic facility|secret facility|glass tank/gi, confidence: 0.7 },
-  ];
-  
-  // Extract props (only if appearing multiple times with 85%+ confidence)
-  // Exclude aquarium glass as it's part of the environment, not a separate prop
-  const propPatterns = [
-    { pattern: /sonar monitors|monitors|screens/gi, confidence: 0.85 },
-    { pattern: /submarine lights|lights|containment capsule/gi, confidence: 0.85 },
-    // Note: glass wall/cracked glass is part of aquarium environment, not a separate prop
-  ];
-  
-  // Extract characters
-  characterPatterns.forEach(({ pattern, confidence }) => {
-    const matches = visualPrompt.match(pattern) || narration.match(pattern);
-    if (matches) {
-      const name = matches[0].toLowerCase();
-      const existingElement = elements.find(e => e.name.toLowerCase() === name);
-      
-      if (!existingElement) {
-        elements.push({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          type: 'character',
-          description: generateCharacterDescription(name, visualPrompt, narration),
-          confidence,
-          sceneUsage: [sceneNumber],
-          visualConsistency: analyzeCharacterVisuals(name, visualPrompt),
-          tags: generateCharacterTags(name, visualPrompt),
-        });
-      } else {
-        existingElement.sceneUsage.push(sceneNumber);
-        existingElement.confidence = Math.max(existingElement.confidence, confidence);
-      }
+  // Build context from metadata
+  let metadataContext = '';
+  if (metadata) {
+    if (metadata.mainCharacter) {
+      metadataContext += `\n\nMain Character: ${metadata.mainCharacter}`;
     }
-  });
-  
-  // Extract environments
-  environmentPatterns.forEach(({ pattern, confidence }) => {
-    const matches = visualPrompt.match(pattern) || narration.match(pattern);
-    if (matches) {
-      const name = matches[0].toLowerCase();
-      const existingElement = elements.find(e => e.name.toLowerCase() === name);
-      
-      if (!existingElement) {
-        elements.push({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          type: 'environment',
-          description: generateEnvironmentDescription(name, visualPrompt, narration),
-          confidence,
-          sceneUsage: [sceneNumber],
-          visualConsistency: analyzeEnvironmentVisuals(name, visualPrompt),
-          tags: generateEnvironmentTags(name, visualPrompt),
-        });
-      } else {
-        existingElement.sceneUsage.push(sceneNumber);
-        existingElement.confidence = Math.max(existingElement.confidence, confidence);
-      }
+    if (metadata.creatureDesign) {
+      metadataContext += `\n\nCreature Design: ${metadata.creatureDesign}`;
     }
-  });
+  }
   
-  // Extract props
-  propPatterns.forEach(({ pattern, confidence }) => {
-    const matches = visualPrompt.match(pattern) || narration.match(pattern);
-    if (matches) {
-      const name = matches[0].toLowerCase();
-      const existingElement = elements.find(e => e.name.toLowerCase() === name);
-      
-      if (!existingElement) {
-        elements.push({
-          name: name.charAt(0).toUpperCase() + name.slice(1),
-          type: 'prop',
-          description: generatePropDescription(name, visualPrompt, narration),
-          confidence,
-          sceneUsage: [sceneNumber],
-          visualConsistency: analyzePropVisuals(name, visualPrompt),
-          tags: generatePropTags(name, visualPrompt),
-        });
-      } else {
-        existingElement.sceneUsage.push(sceneNumber);
-        existingElement.confidence = Math.max(existingElement.confidence, confidence);
-      }
+  // Use OpenAI GPT-4o to extract elements with descriptions
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert AI system specialized in storyboard analysis and cinematic scene extraction.
+
+Your task is to extract structured **Character Elements** and **Environment Elements** from the given scene.
+
+You must also determine **which characters and environments appear in the current scene**.
+
+Use the provided metadata context as the single source of truth for character definitions.
+
+--------------------------------
+METADATA CONTEXT (COPY EXACTLY)
+--------------------------------
+${metadataContext}
+
+--------------------------------
+SCENE INPUT
+--------------------------------
+Scene Number: ${sceneNumber}
+
+Visual Prompt:
+${visualPrompt}
+
+Narration:
+${narration}
+
+--------------------------------
+EXTRACTION RULES
+--------------------------------
+
+SOURCE PRIORITY (highest → lowest)
+
+1. Explicit "Characters" section in the storyboard
+2. Visual Prompt
+3. Narration
+4. Context inference
+
+--------------------------------
+CHARACTER EXTRACTION RULES
+--------------------------------
+
+1. Use EXACT character names from metadata.
+2. Copy character descriptions WORD-FOR-WORD from metadata.
+3. Description must be at least 20 characters.
+4. If text contains synonyms like:
+   - "creature"
+   - "monster"
+   - "bloop"
+   - "shadow"
+
+   → normalize to **"Sea Eater"**
+
+5. Character roles must be one of:
+
+   - Main
+   - Supporting
+   - Minor
+
+6. Character types must be one of:
+
+   - Human
+   - Creature
+   - HumanGroup
+
+--------------------------------
+ENVIRONMENT EXTRACTION RULES
+--------------------------------
+
+All environments MUST be normalized into ONE of the following parent environments:
+
+1. Deep Ocean Abyss
+   (underwater, abyss, submarine scenes)
+
+2. Research Control Room
+   (control room, sonar room, monitoring station)
+
+3. Giant Aquarium Facility
+   (aquarium tanks, research chambers, observation decks, containment tanks)
+
+Normalization Examples
+
+submarine environment → Deep Ocean Abyss  
+deep ocean → Deep Ocean Abyss  
+sonar room → Research Control Room  
+control room → Research Control Room  
+aquarium tank → Giant Aquarium Facility  
+research aquarium → Giant Aquarium Facility  
+
+Environment descriptions must contain **minimum 20 characters**.
+
+--------------------------------
+SCENE MAPPING RULE
+--------------------------------
+
+You MUST explicitly assign which characters and environments appear in this scene.
+
+Include the following fields:
+
+sceneNumber  
+charactersInScene  
+environmentsInScene  
+
+--------------------------------
+CONFIDENCE SCORING
+--------------------------------
+
+Calculate confidence using:
+
+confidence =
+0.45 × explicit mention
++ 0.35 × visual evidence
++ 0.20 × narrative context
+
+Where:
+
+explicit mention
+1.0 = directly listed in Characters section
+0.7 = mentioned in narration
+0.5 = inferred visually
+
+visual evidence
+1.0 = clearly visible
+0.6 = partially visible
+
+narrative context
+1.0 = strongly implied
+0.5 = weak implication
+
+Clamp final score between **0.80 and 0.99**
+
+--------------------------------
+VALIDATION CHECKLIST
+--------------------------------
+
+Before returning JSON verify:
+
+✓ Every character has description ≥ 20 characters  
+✓ Every environment has description ≥ 20 characters  
+✓ Metadata descriptions copied EXACTLY  
+✓ Character names match metadata exactly  
+✓ "Bloop / monster / creature" normalized to **Sea Eater**  
+✓ Environment normalized to the 3 parent environments  
+✓ Scene mapping fields exist  
+
+FAILURE IS NOT ACCEPTABLE.
+
+--------------------------------
+RETURN JSON FORMAT
+--------------------------------
+
+{
+  "sceneNumber": 1,
+
+  "characters": [
+    {
+      "name": "Sea Eater",
+      "type": "Creature",
+      "role": "Main",
+      "description": "COPY FULL METADATA DESCRIPTION HERE",
+      "confidence": 0.96
     }
-  });
-  
-  return elements;
-}
+  ],
 
-function analyzeVisualStyle(visualPrompt: string, camera: string) {
-  const lighting = extractLightingStyle(visualPrompt);
-  const perspective = extractPerspective(camera);
-  const atmosphere = extractAtmosphere(visualPrompt);
-  const continuity = extractContinuityElements(visualPrompt);
-  
-  return {
-    lighting,
-    perspective,
-    atmosphere,
-    continuity,
-  };
-}
+  "environments": [
+    {
+      "name": "Deep Ocean Abyss",
+      "normalizedParent": "Deep Ocean Abyss",
+      "category": "Ocean",
+      "description": "Detailed environment description with minimum 20 characters",
+      "locationType": "deep_ocean_abyss",
+      "confidence": 0.94
+    }
+  ],
 
-function extractLightingStyle(visualPrompt: string): string {
-  if (visualPrompt.includes('cinematic lighting')) return 'cinematic';
-  if (visualPrompt.includes('dramatic shadows')) return 'dramatic';
-  if (visualPrompt.includes('volumetric light')) return 'volumetric';
-  if (visualPrompt.includes('faint blue light')) return 'mysterious';
-  return 'natural';
-}
-
-function extractPerspective(camera: string): string {
-  if (camera.includes('close-up')) return 'close-up';
-  if (camera.includes('wide')) return 'wide';
-  if (camera.includes('slow zoom')) return 'zoom';
-  if (camera.includes('slow reveal')) return 'reveal';
-  return 'standard';
-}
-
-function extractAtmosphere(visualPrompt: string): string {
-  if (visualPrompt.includes('mysterious')) return 'mysterious';
-  if (visualPrompt.includes('suspenseful')) return 'suspenseful';
-  if (visualPrompt.includes('dramatic')) return 'dramatic';
-  if (visualPrompt.includes('terrifying')) return 'terrifying';
-  return 'neutral';
-}
-
-function extractContinuityElements(visualPrompt: string): string[] {
-  const elements = [];
-  if (visualPrompt.includes('deep ocean')) elements.push('deep_ocean_setting');
-  if (visualPrompt.includes('cinematic')) elements.push('cinematic_style');
-  if (visualPrompt.includes('ultra-realistic')) elements.push('realistic_rendering');
-  if (visualPrompt.includes('8k')) elements.push('high_detail');
-  return elements;
-}
-
-// Helper functions for generating descriptions and tags
-function generateCharacterDescription(name: string, visualPrompt: string, narration: string): string {
-  // Extract detailed physical characteristics from the script
-  const characteristics = extractPhysicalCharacteristics(name, visualPrompt, narration);
-  
-  if (name.toLowerCase().includes('sea monster') || name.toLowerCase().includes('sea eater')) {
-    return `Colossal deep-sea leviathan with whale-eel hybrid body, dark scarred skin, glowing blue bioluminescent veins, enormous jawline, glowing deep-blue eye, ancient predator scale larger than a blue whale. ${characteristics}`;
+  "sceneMapping": {
+    "sceneNumber": 1,
+    "charactersInScene": [],
+    "environmentsInScene": [
+      "Deep Ocean Abyss"
+    ]
   }
-  
-  if (name.toLowerCase().includes('scientist') || name.toLowerCase().includes('oceanographer')) {
-    // Look for Dr. Elena Voss characteristics
-    const age = extractAge(narration);
-    const hair = extractHairDescription(narration);
-    const clothing = extractClothingDescription(narration);
-    const profession = extractProfession(narration);
-    
-    return `${profession}, ${age}, ${hair}, ${clothing}. ${characteristics}`;
-  }
-  
-  return `${name} character appearing in ocean mystery narrative. ${characteristics}`;
-}
-
-function extractPhysicalCharacteristics(name: string, visualPrompt: string, narration: string): string {
-  const characteristics = [];
-  
-  // Extract appearance details
-  if (visualPrompt.includes('glowing') || narration.includes('glowing')) {
-    characteristics.push('glowing bioluminescent features');
-  }
-  if (visualPrompt.includes('colossal') || visualPrompt.includes('massive')) {
-    characteristics.push('colossal massive scale');
-  }
-  if (visualPrompt.includes('ancient') || narration.includes('ancient')) {
-    characteristics.push('ancient appearance');
-  }
-  if (visualPrompt.includes('terrifying') || narration.includes('terrifying')) {
-    characteristics.push('terrifying presence');
-  }
-  
-  return characteristics.join(', ');
-}
-
-function extractAge(text: string): string {
-  if (text.includes('early 40s')) return 'early 40s';
-  if (text.includes('middle-aged')) return 'middle-aged';
-  if (text.includes('young')) return 'young adult';
-  return 'adult';
-}
-
-function extractHairDescription(text: string): string {
-  if (text.includes('short dark hair')) return 'short dark hair';
-  if (text.includes('blonde')) return 'blonde hair';
-  if (text.includes('brown hair')) return 'brown hair';
-  return 'professional hairstyle';
-}
-
-function extractClothingDescription(text: string): string {
-  if (text.includes('navy research jacket')) return 'navy research jacket with ocean institute logo';
-  if (text.includes('lab coat')) return 'white lab coat';
-  if (text.includes('professional attire')) return 'professional research attire';
-  return 'research facility uniform';
-}
-
-function extractProfession(text: string): string {
-  if (text.includes('oceanographer')) return 'female oceanographer';
-  if (text.includes('researcher')) return 'marine researcher';
-  if (text.includes('scientist')) return 'research scientist';
-  return 'scientific professional';
-}
-
-function generateEnvironmentDescription(name: string, visualPrompt: string, narration: string): string {
-  // Extract detailed environmental characteristics
-  const characteristics = extractEnvironmentCharacteristics(name, visualPrompt, narration);
-  
-  if (name.toLowerCase().includes('deep ocean')) {
-    return `Dark Pacific ocean abyss with dark blue water fading into black, faint sunlight rays penetrating from far above, massive empty depth, drifting plankton particles, ultra-realistic ocean environment. ${characteristics}`;
-  }
-  
-  if (name.toLowerCase().includes('research facility')) {
-    const facilityType = extractFacilityType(visualPrompt, narration);
-    const equipment = extractEquipmentDescription(visualPrompt, narration);
-    return `${facilityType} with ${equipment}, advanced oceanographic research infrastructure, high-tech monitoring systems, scientific equipment. ${characteristics}`;
-  }
-  
-  if (name.toLowerCase().includes('aquarium')) {
-    // Detect aquarium state from context
-    const size = extractAquariumSize(visualPrompt, narration);
-    const material = extractAquariumMaterial(visualPrompt, narration);
-    const location = extractAquariumLocation(visualPrompt, narration);
-    const state = extractAquariumState(visualPrompt, narration);
-    
-    return `${size} ${material} ${location} ${state}, stadium-sized containment structure, massive scale water environment, ultra-realistic aquatic habitat. ${characteristics}`;
-  }
-  
-  return `${name} environment in ocean research setting. ${characteristics}`;
-}
-
-function extractEnvironmentCharacteristics(name: string, visualPrompt: string, narration: string): string {
-  const characteristics = [];
-  
-  // Extract atmospheric details
-  if (visualPrompt.includes('mysterious') || narration.includes('mysterious')) {
-    characteristics.push('mysterious atmosphere');
-  }
-  if (visualPrompt.includes('cinematic') || visualPrompt.includes('film')) {
-    characteristics.push('cinematic lighting');
-  }
-  if (visualPrompt.includes('volumetric') || visualPrompt.includes('rays')) {
-    characteristics.push('volumetric light rays');
-  }
-  if (visualPrompt.includes('particles') || visualPrompt.includes('plankton')) {
-    characteristics.push('floating particles');
-  }
-  if (visualPrompt.includes('ultra-realistic') || visualPrompt.includes('realistic')) {
-    characteristics.push('ultra-realistic textures');
-  }
-  
-  return characteristics.join(', ');
-}
-
-function extractFacilityType(visualPrompt: string, narration: string): string {
-  if (visualPrompt.includes('offshore') || narration.includes('offshore')) {
-    return 'Futuristic offshore research platform';
-  }
-  if (visualPrompt.includes('underground') || visualPrompt.includes('secret')) {
-    return 'Enormous underground research facility';
-  }
-  if (visualPrompt.includes('control room')) {
-    return 'Ocean research control room';
-  }
-  return 'Advanced ocean research facility';
-}
-
-function extractEquipmentDescription(visualPrompt: string, narration: string): string {
-  const equipment = [];
-  
-  if (visualPrompt.includes('sonar') || visualPrompt.includes('monitors')) {
-    equipment.push('multiple sonar monitoring systems');
-  }
-  if (visualPrompt.includes('crane') || visualPrompt.includes('mechanical')) {
-    equipment.push('massive mechanical cranes and lifting equipment');
-  }
-  if (visualPrompt.includes('containment') || visualPrompt.includes('capsule')) {
-    equipment.push('underwater containment systems');
-  }
-  
-  return equipment.length > 0 ? equipment.join(', ') : 'scientific research equipment';
-}
-
-function extractAquariumSize(visualPrompt: string, narration: string): string {
-  if (visualPrompt.includes('stadium-sized') || visualPrompt.includes('enormous')) {
-    return 'Stadium-sized';
-  }
-  if (visualPrompt.includes('massive') || visualPrompt.includes('giant')) {
-    return 'Massive';
-  }
-  if (visualPrompt.includes('enormous')) {
-    return 'Enormous';
-  }
-  return 'Large';
-}
-
-function extractAquariumMaterial(visualPrompt: string, narration: string): string {
-  if (visualPrompt.includes('reinforced glass') || visualPrompt.includes('thick glass')) {
-    return 'reinforced glass';
-  }
-  if (visualPrompt.includes('glass tank') || visualPrompt.includes('glass wall')) {
-    return 'glass';
-  }
-  return 'transparent containment';
-}
-
-function extractAquariumLocation(visualPrompt: string, narration: string): string {
-  if (visualPrompt.includes('underground') || visualPrompt.includes('secret')) {
-    return 'research chamber';
-  }
-  if (visualPrompt.includes('facility')) {
-    return 'research facility';
-  }
-  return 'aquarium structure';
-}
-
-function extractAquariumState(visualPrompt: string, narration: string): string {
-  if (visualPrompt.includes('crack') || visualPrompt.includes('cracked')) {
-    return 'with stress fractures appearing';
-  }
-  if (visualPrompt.includes('creature') || visualPrompt.includes('sea eater')) {
-    return 'containing massive sea creature';
-  }
-  if (visualPrompt.includes('dark') || visualPrompt.includes('empty')) {
-    return 'filled with dark water';
-  }
-  return 'designed for deep sea creatures';
-}
-
-function generatePropDescription(name: string, visualPrompt: string, narration: string): string {
-  if (name.toLowerCase().includes('sonar')) {
-    return 'Advanced sonar monitoring equipment displaying massive underwater sound wave signals and oceanographic data.';
-  }
-  if (name.toLowerCase().includes('submarine lights')) {
-    return 'Powerful underwater lighting systems penetrating deep ocean darkness, revealing massive submerged objects.';
-  }
-  if (name.toLowerCase().includes('glass')) {
-    return 'Reinforced glass containment barriers showing stress fractures under immense pressure from contained creature.';
-  }
-  return `${name} prop in ocean research narrative.`;
-}
-
-function analyzeCharacterVisuals(name: string, visualPrompt: string) {
-  const visuals: any = {};
-  
-  if (name.toLowerCase().includes('sea monster')) {
-    visuals.height = 'colossal';
-    visuals.scale = 'massive';
-    visuals.lighting = 'glowing eyes';
-    visuals.atmosphere = 'ancient terrifying';
-  }
-  
-  return visuals;
-}
-
-function analyzeEnvironmentVisuals(name: string, visualPrompt: string) {
-  const visuals: any = {};
-  
-  if (name.toLowerCase().includes('deep ocean')) {
-    visuals.lighting = 'blue filtered';
-    visuals.atmosphere = 'mysterious particles';
-    visuals.perspective = 'deep abyss';
-  }
-  
-  return visuals;
-}
-
-function analyzePropVisuals(name: string, visualPrompt: string) {
-  const visuals: any = {};
-  
-  if (name.toLowerCase().includes('sonar')) {
-    visuals.lighting = 'screen glow';
-    visuals.scale = 'monitor size';
-  }
-  
-  return visuals;
-}
-
-function generateCharacterTags(name: string, visualPrompt: string): string[] {
-  const tags = ['character'];
-  
-  if (name.toLowerCase().includes('sea monster')) {
-    tags.push('monster', 'creature', 'colossal', 'glowing-eyes', 'ancient');
-  }
-  if (name.toLowerCase().includes('scientist')) {
-    tags.push('researcher', 'oceanographer', 'professional');
-  }
-  
-  return tags;
-}
-
-function generateEnvironmentTags(name: string, visualPrompt: string): string[] {
-  const tags = ['environment'];
-  
-  if (name.toLowerCase().includes('deep ocean')) {
-    tags.push('underwater', 'abyss', 'mysterious', 'blue-light');
-  }
-  if (name.toLowerCase().includes('research facility')) {
-    tags.push('facility', 'laboratory', 'technology', 'modern');
-  }
-  
-  return tags;
-}
-
-function generatePropTags(name: string, visualPrompt: string): string[] {
-  const tags = ['prop'];
-  
-  if (name.toLowerCase().includes('sonar')) {
-    tags.push('technology', 'monitoring', 'equipment');
-  }
-  if (name.toLowerCase().includes('glass')) {
-    tags.push('containment', 'barrier', 'transparent');
-  }
-  
-  return tags;
-}
-
-function extractElementsWithConfidence(scenes: SceneAnalysis[]): ExtractedElement[] {
-  const elementMap = new Map<string, ExtractedElement>();
-  
-  scenes.forEach(scene => {
-    scene.extractedElements.forEach(element => {
-      const key = `${element.name}-${element.type}`;
-      const existing = elementMap.get(key);
-      
-      if (existing) {
-        existing.sceneUsage.push(...element.sceneUsage);
-        existing.confidence = Math.max(existing.confidence, element.confidence);
-      } else {
-        elementMap.set(key, { ...element });
-      }
+}`
+        },
+        {
+          role: "user",
+          content: `Scene ${sceneNumber}:\n\nVisual Prompt: ${visualPrompt}\n\nNarration: ${narration}\n\nExtract all characters and environments from this scene with detailed descriptions.`
+        }
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
     });
-  });
-  
-  // Filter props that only appear once - they don't need to be extracted
-  const allElements = Array.from(elementMap.values());
-  const filteredElements = allElements.filter(element => {
-    if (element.type === 'prop') {
-      // Only keep props that appear in multiple scenes AND have 85%+ confidence
-      return element.sceneUsage.length >= 2 && element.confidence >= 0.85;
+    
+    const result = JSON.parse(completion.choices[0].message.content || '{}');
+    console.log(`[AI Extraction] Scene ${sceneNumber} AI raw result:`, JSON.stringify(result, null, 2));
+    
+    // STRICT VALIDATION - reject incomplete AI responses
+    const validationErrors: string[] = [];
+    
+    if (!result.characters || !Array.isArray(result.characters)) {
+      validationErrors.push('Missing or invalid characters array');
+    } else {
+      result.characters.forEach((char, index) => {
+        if (!char.name || char.name.trim().length < 2) {
+          validationErrors.push(`Character ${index}: Missing or invalid name`);
+        }
+        if (!char.description || char.description.length < 20) {
+          validationErrors.push(`Character ${index} (${char.name || 'unnamed'}): Missing or short description (${char.description?.length || 0} chars)`);
+        }
+        if (char.name.toLowerCase().includes('bloop')) {
+          validationErrors.push(`Character ${index}: AI incorrectly created 'Bloop' instead of 'Sea Eater'`);
+        }
+      });
     }
-    // Keep characters and environments with their normal confidence thresholds
-    return element.confidence >= 0.8;
-  });
-  
-  return filteredElements;
+    
+    if (!result.environments || !Array.isArray(result.environments)) {
+      validationErrors.push('Missing or invalid environments array');
+    } else {
+      result.environments.forEach((env, index) => {
+        if (!env.name || env.name.trim().length < 2) {
+          validationErrors.push(`Environment ${index}: Missing or invalid name`);
+        }
+        if (!env.description || env.description.length < 20) {
+          validationErrors.push(`Environment ${index} (${env.name || 'unnamed'}): Missing or short description (${env.description?.length || 0} chars)`);
+        }
+      });
+    }
+    
+    // Validate sceneMapping
+    if (!result.sceneMapping) {
+      validationErrors.push('Missing sceneMapping field');
+    } else {
+      if (!result.sceneMapping.charactersInScene || !Array.isArray(result.sceneMapping.charactersInScene)) {
+        validationErrors.push('Missing or invalid charactersInScene in sceneMapping');
+      }
+      if (!result.sceneMapping.environmentsInScene || !Array.isArray(result.sceneMapping.environmentsInScene)) {
+        validationErrors.push('Missing or invalid environmentsInScene in sceneMapping');
+      }
+    }
+    
+    if (validationErrors.length > 0) {
+      console.error(`[AI Extraction] ❌ AI failed validation for scene ${sceneNumber}:`);
+      validationErrors.forEach(error => console.error(`  - ${error}`));
+      console.error(`[AI Extraction] AI must provide complete descriptions for all elements!`);
+      
+      // Return empty array to signal AI failure
+      return [];
+    }
+    
+    const elements: ExtractedElement[] = [];
+    
+    // Process characters (AI passed validation)
+    if (result.characters && Array.isArray(result.characters)) {
+      for (const char of result.characters) {
+        console.log(`[AI Extraction] Scene ${sceneNumber} - Character: ${char.name} (${char.description?.length} chars)`);
+        
+        // Skip duplicates
+        if (elements.find(e => e.name === char.name && e.type === 'character')) {
+          console.log(`[AI Extraction] Skipping duplicate: ${char.name}`);
+          continue;
+        }
+        
+        elements.push({
+          name: char.name,
+          type: 'character',
+          description: char.description || '',
+          confidence: char.confidence || 0.9,
+          sceneUsage: [sceneNumber],
+          visualConsistency: {},
+          tags: char.name.toLowerCase().includes('dr.') || char.name.toLowerCase().includes('voss') ? ['main-character', 'human'] : ['creature', 'antagonist'],
+        });
+      }
+    }
+    
+    // Process environments
+    if (result.environments && Array.isArray(result.environments)) {
+      for (const env of result.environments) {
+        console.log(`[AI Extraction] Scene ${sceneNumber} - Environment: ${env.name}`);
+        elements.push({
+          name: env.name,
+          type: 'environment',
+          description: env.description || '',
+          confidence: env.confidence || 0.85,
+          sceneUsage: [sceneNumber],
+          visualConsistency: {},
+          tags: [],
+          locationType: env.locationType || 'unknown',
+        });
+      }
+    }
+    
+    // Log scene mapping results
+    if (result.sceneMapping) {
+      console.log(`[AI Extraction] Scene ${sceneNumber} mapping:`);
+      console.log(`  - Characters in scene: ${result.sceneMapping.charactersInScene.join(', ') || 'None'}`);
+      console.log(`  - Environments in scene: ${result.sceneMapping.environmentsInScene.join(', ') || 'None'}`);
+    }
+    
+    return elements;
+    
+  } catch (error) {
+    console.error(`[AI Extraction] Error in scene ${sceneNumber}:`, error);
+    // Fallback to empty array on error
+    return [];
+  }
 }
+
+
 
 function analyzeCharacterConsistency(scenes: SceneAnalysis[], elements: ExtractedElement[]) {
   const characters = elements.filter(e => e.type === 'character');

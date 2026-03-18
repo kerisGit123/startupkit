@@ -186,60 +186,88 @@ export const remove = mutation({
     console.log(`[Project Remove] Starting cleanup for project: ${id}`);
 
     // 1. Remove all storyboard items for this project
-    const storyboardItems = await ctx.db
-      .query("storyboard_items")
-      .filter((q) => q.eq("projectId", id))
-      .collect();
-    
-    console.log(`[Project Remove] Found ${storyboardItems.length} storyboard items to delete`);
-    
-    for (const item of storyboardItems) {
-      await ctx.db.delete(item._id);
+    try {
+      const storyboardItems = await ctx.db
+        .query("storyboard_items")
+        .withIndex("by_project", (q) => q.eq("projectId", id))
+        .collect();
+      
+      console.log(`[Project Remove] Found ${storyboardItems.length} storyboard items to delete`);
+      
+      for (const item of storyboardItems) {
+        await ctx.db.delete(item._id);
+        console.log(`[Project Remove] Deleted storyboard item: ${item._id}`);
+      }
+    } catch (error) {
+      console.error(`[Project Remove] Error deleting storyboard items:`, error);
     }
 
     // 2. Remove all private elements for this project
-    const privateElements = await ctx.db
-      .query("storyboard_elements")
-      .filter((q) => 
-        q.eq("projectId", id) && 
-        q.eq("visibility", "private")
-      )
-      .collect();
-    
-    console.log(`[Project Remove] Found ${privateElements.length} private elements to delete`);
-    
-    for (const element of privateElements) {
-      await ctx.db.delete(element._id);
+    try {
+      // First get all elements for this project
+      const allElements = await ctx.db
+        .query("storyboard_elements")
+        .withIndex("by_project", (q) => q.eq("projectId", id))
+        .collect();
+      
+      // Filter for private elements only
+      const privateElements = allElements.filter(element => element.visibility === "private");
+      
+      console.log(`[Project Remove] Found ${privateElements.length} private elements to delete (out of ${allElements.length} total elements)`);
+      
+      for (const element of privateElements) {
+        await ctx.db.delete(element._id);
+        console.log(`[Project Remove] Deleted private element: ${element._id}`);
+      }
+    } catch (error) {
+      console.error(`[Project Remove] Error deleting private elements:`, error);
     }
 
     // 3. Remove all files for this project
-    const projectFiles = await ctx.db
-      .query("storyboard_files")
-      .filter((q) => q.eq("projectId", id))
-      .collect();
-    
-    console.log(`[Project Remove] Found ${projectFiles.length} files to delete`);
-    
-    for (const file of projectFiles) {
-      await ctx.db.delete(file._id);
+    try {
+      const projectFiles = await ctx.db
+        .query("storyboard_files")
+        .withIndex("by_project", (q) => q.eq("projectId", id))
+        .collect();
+      
+      console.log(`[Project Remove] Found ${projectFiles.length} files to delete`);
+      
+      for (const file of projectFiles) {
+        await ctx.db.delete(file._id);
+        console.log(`[Project Remove] Deleted project file: ${file._id}`);
+      }
+    } catch (error) {
+      console.error(`[Project Remove] Error deleting project files:`, error);
     }
 
-    // 4. Remove all credit usage records for this project
-    const creditUsage = await ctx.db
-      .query("storyboard_credit_usage")
-      .filter((q) => q.eq("projectId", id))
-      .collect();
-    
-    console.log(`[Project Remove] Found ${creditUsage.length} credit usage records to delete`);
-    
-    for (const usage of creditUsage) {
-      await ctx.db.delete(usage._id);
-    }
+    // NOTE: Credit usage records are PRESERVED for billing and audit purposes
+    // These records track user charges and should not be deleted
 
-    // 5. Finally, delete the project itself
+    // 4. Finally, delete the project itself
     await ctx.db.delete(id);
     
-    console.log(`[Project Remove] Successfully deleted project ${id} and all associated data`);
+    // 5. Verification - Check if deletion was successful
+    const remainingItems = await ctx.db
+      .query("storyboard_items")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+    
+    const remainingElements = await ctx.db
+      .query("storyboard_elements")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+    
+    const remainingFiles = await ctx.db
+      .query("storyboard_files")
+      .withIndex("by_project", (q) => q.eq("projectId", id))
+      .collect();
+    
+    console.log(`[Project Remove] Verification - Remaining data after deletion:`);
+    console.log(`  - Storyboard items: ${remainingItems.length} (should be 0)`);
+    console.log(`  - Elements: ${remainingElements.length} (should be public elements only)`);
+    console.log(`  - Files: ${remainingFiles.length} (should be 0)`);
+    
+    console.log(`[Project Remove] Successfully deleted project ${id} and all associated data (credit usage preserved)`);
   },
 });
 

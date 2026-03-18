@@ -103,6 +103,7 @@ import type * as storyboard_members from "../storyboard/members.js";
 import type * as storyboard_projects from "../storyboard/projects.js";
 import type * as storyboard_storyboardElements from "../storyboard/storyboardElements.js";
 import type * as storyboard_storyboardFiles from "../storyboard/storyboardFiles.js";
+import type * as storyboard_storyboardItemElements from "../storyboard/storyboardItemElements.js";
 import type * as storyboard_storyboardItems from "../storyboard/storyboardItems.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as syncUserData from "../syncUserData.js";
@@ -215,6 +216,7 @@ declare const fullApi: ApiFromModules<{
   "storyboard/projects": typeof storyboard_projects;
   "storyboard/storyboardElements": typeof storyboard_storyboardElements;
   "storyboard/storyboardFiles": typeof storyboard_storyboardFiles;
+  "storyboard/storyboardItemElements": typeof storyboard_storyboardItemElements;
   "storyboard/storyboardItems": typeof storyboard_storyboardItems;
   subscriptions: typeof subscriptions;
   syncUserData: typeof syncUserData;

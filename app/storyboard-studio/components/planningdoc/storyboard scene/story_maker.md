@@ -1,0 +1,1 @@
+you want to build story for generate image then video . you need to write story scene base on perspective , character , context , action , expression, visual prompt, narration . write a 1 min story for little dog and the little boy john story in paris, monster invade paris.
