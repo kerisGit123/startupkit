@@ -15,7 +15,7 @@ import { FileBrowser } from "../../components/storyboard/FileBrowser";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
 import { BuildStoryboardModal } from "../../components/storyboard/BuildStoryboardModal";
 import { BuildStoryboardDialog } from "../../components/storyboard/BuildStoryboardDialog";
-import { TaskStatusBadge } from "../../components/storyboard/TaskStatus";
+import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
 import { SceneEditor } from "../../components/SceneEditor";
 import { TagEditor } from "../../components/storyboard/TagEditor";
 import { DisplayFilters } from "../../components/storyboard/DisplayFilters";
@@ -26,6 +26,7 @@ import type { Shot } from "../../types";
 import { 
   CheckCircle, 
   AlertCircle, 
+  AlertTriangle,
   Play, 
   Plus, 
   Minus, 
@@ -733,6 +734,13 @@ export default function StoryboardWorkspacePage() {
     });
   };
 
+  const handleDescriptionChange = (itemId: string, description: string) => {
+    updateItem({
+      id: itemId as Id<"storyboard_items">,
+      description,
+    });
+  };
+
   const handleAddElement = (itemId: string) => {
     // Open the ElementLibrary to add elements to this specific storyboard item
     setSelectedItemForElement(itemId as Id<"storyboard_items">);
@@ -793,10 +801,10 @@ export default function StoryboardWorkspacePage() {
           <div>
             <h1 className="text-sm font-semibold">{project.name}</h1>
             <p className="text-[11px] text-gray-500 capitalize">{project.status} · {project.settings.frameRatio}</p>
-            {/* Task status badge */}
+            {/* Task status badge with progress */}
             {(project.taskStatus && project.taskStatus !== "idle") && (
               <div className="mt-1">
-                <TaskStatusBadge 
+                <TaskStatusWithProgress 
                   taskStatus={project.taskStatus}
                   taskMessage={project.taskMessage}
                   taskType={project.taskType}
@@ -1065,6 +1073,7 @@ export default function StoryboardWorkspacePage() {
                       onStatusChange={(status) => handleStatusChange(item._id, status)}
                       onNotesChange={(notes) => handleNotesChange(item._id, notes)}
                       onTitleChange={(title) => handleTitleChange(item._id, title)}
+                      onDescriptionChange={(description) => handleDescriptionChange(item._id, description)}
                       onRemoveElement={(elementId) => handleRemoveElement(item._id, elementId)}
                       onAddElement={() => handleAddElement(item._id)}
                       userId={user?.id || ""}
@@ -1435,6 +1444,7 @@ interface FrameCardProps {
   onStatusChange?: (status: 'draft' | 'in-progress' | 'completed') => void;
   onNotesChange?: (notes: string) => void;
   onTitleChange?: (title: string) => void;
+  onDescriptionChange?: (description: string) => void;
   onRemoveElement?: (elementId: string) => void;
   onAddElement?: () => void;
   userId: string;
@@ -1442,13 +1452,14 @@ interface FrameCardProps {
   onBuildStoryboard?: () => void;
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onRemoveElement, onAddElement, userId, onBuildStoryboard }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onRemoveElement, onAddElement, userId, onBuildStoryboard }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
-  const [isRenaming, setIsRenaming] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [newTitle, setNewTitle] = useState(item.title);
+  const [newDescription, setNewDescription] = useState(item.description || "");
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
 
   // Frame status configuration
@@ -1822,6 +1833,17 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         
         {/* Action buttons */}
         <div className="absolute bottom-12 right-3 flex gap-2 z-20">
+          {/* Edit button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowEditDialog(true); }}
+            className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
+            title="Edit title and description"
+          >
+            <div className="w-8 h-8 bg-blue-600/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors">
+              <Edit3 className="w-3.5 h-3.5 text-white" />
+            </div>
+          </button>
+          
           {/* Add Element button */}
           <button
             onClick={(e) => { e.stopPropagation(); onAddElement?.(); }}
@@ -1857,42 +1879,9 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
       {/* Enhanced info section */}
       <div className="p-4 bg-[#0a0a0f] border-t border-white/5">
         <div className="flex items-start justify-between mb-2">
-          {isRenaming ? (
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onBlur={() => {
-                if (newTitle.trim() && newTitle !== item.title) {
-                  onTitleChange?.(newTitle.trim());
-                }
-                setIsRenaming(false);
-                setNewTitle(item.title);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  if (newTitle.trim() && newTitle !== item.title) {
-                    onTitleChange?.(newTitle.trim());
-                  }
-                  setIsRenaming(false);
-                  setNewTitle(item.title);
-                } else if (e.key === 'Escape') {
-                  setIsRenaming(false);
-                  setNewTitle(item.title);
-                }
-              }}
-              className="text-sm text-white font-medium flex-1 bg-white/10 border border-white/20 rounded px-2 py-1 outline-none focus:border-purple-500"
-              autoFocus
-            />
-          ) : (
-            <p 
-              className="text-sm text-white font-medium flex-1 cursor-pointer hover:text-purple-300 transition-colors"
-              onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}
-              title="Click to rename"
-            >
-              {item.title}
-            </p>
-          )}
+          <p className="text-sm text-white font-medium flex-1">
+            {item.title}
+          </p>
           {/* Subtle user attribution */}
           <div className="flex items-center gap-1 text-[10px] text-gray-600">
             <div className="w-4 h-4 bg-gray-700 rounded-full flex items-center justify-center">
@@ -1902,10 +1891,78 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             </div>
           </div>
         </div>
-        {item.description && (
-          <p className="text-xs text-gray-500 mb-3 line-clamp-2">{item.description}</p>
-        )}
+        <p className="text-xs text-gray-500 mb-3 line-clamp-2">
+          {item.description || <span className="text-gray-600">No description</span>}
+        </p>
       </div>
+      
+      {/* NEW: Inline Edit Dialog */}
+      {showEditDialog && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
+          <div className="bg-[#1a1a24] rounded-xl border border-white/10 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-3 border-b border-white/8">
+              <h3 className="text-sm font-bold text-white">Edit Frame</h3>
+              <button onClick={() => setShowEditDialog(false)} className="p-1 hover:bg-white/8 rounded-lg transition-colors">
+                <X className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            </div>
+            
+            <div className="p-3 space-y-3">
+              {/* Title Input */}
+              <div>
+                <label className="text-xs text-gray-400 font-medium mb-1 block">Title</label>
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full text-sm text-white bg-white/10 border border-white/20 rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
+                  placeholder="Enter frame title..."
+                />
+              </div>
+              
+              {/* Description Input */}
+              <div>
+                <label className="text-xs text-gray-400 font-medium mb-1 block">Description</label>
+                <textarea
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  className="w-full text-sm text-gray-300 bg-white/10 border border-white/20 rounded-lg px-3 py-2 outline-none focus:border-purple-500 resize-none transition-colors"
+                  rows={3}
+                  placeholder="Enter frame description..."
+                />
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    if (newTitle.trim() && newTitle !== item.title) {
+                      onTitleChange?.(newTitle.trim());
+                    }
+                    if (newDescription.trim() !== (item.description || "")) {
+                      onDescriptionChange?.(newDescription.trim());
+                    }
+                    setShowEditDialog(false);
+                  }}
+                  className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                >
+                  Save Changes
+                </button>
+                <button
+                  onClick={() => {
+                    setShowEditDialog(false);
+                    setNewTitle(item.title);
+                    setNewDescription(item.description || "");
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium py-2 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* NEW: Notes Modal */}
       {showNotesModal && (

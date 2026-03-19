@@ -48,9 +48,21 @@ export async function POST(request: NextRequest) {
       return await handleN8nCallback(data, request, corsHeaders);
     }
     
-    // Otherwise, this is a frontend build request
-    console.log(' Processing frontend build request...');
-    return await handleFrontendBuildRequest(data, request, corsHeaders);
+    // Check if this is a progress update from n8n (has status and message)
+    if (data.status && data.message) {
+      console.log(' Processing n8n progress update...');
+      return await handleN8nWebhook(data, request, corsHeaders);
+    }
+    
+    // Check if this is a frontend build request (has projectId, buildType, script)
+    if (data.projectId && data.buildType && data.script) {
+      console.log(' Processing frontend build request...');
+      return await handleFrontendBuildRequest(data, request, corsHeaders);
+    }
+    
+    // Otherwise, handle as generic n8n webhook
+    console.log(' Processing n8n webhook request...');
+    return await handleN8nWebhook(data, request, corsHeaders);
     
   } catch (error: any) {
     console.error(' Site API error:', {
@@ -70,15 +82,93 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Handle n8n webhook without Clerk authentication
+async function handleN8nWebhook(data: any, request: NextRequest, corsHeaders: Record<string, string>) {
+  // Initialize Convex client
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  
+  const { 
+    project_id, 
+    elements, 
+    scenes, 
+    status, 
+    message,
+    scriptType = "ANIMATED_STORIES",
+    language = "en",
+    buildStrategy = "replace_all"
+  } = data;
+
+  console.log('🔍 DEBUG: n8n webhook received:', { project_id, status, message });
+
+  // Validate required fields
+  if (!project_id) {
+    return NextResponse.json(
+      { error: 'Missing project_id' },
+      { status: 400, headers: corsHeaders }
+    );
+  }
+
+  // Handle different webhook types
+  if (status === 'processing' && message) {
+    // Status update only (progress tracking)
+    console.log('📊 Updating task status:', message);
+    await convex.mutation(api.storyboard.projects.updateBuildStatus, {
+      id: project_id,
+      taskStatus: status,
+      taskMessage: message,
+      scriptType: scriptType,
+      scenes: [], // Empty scenes for progress updates
+      isAIGenerated: scriptType === "ANIMATED_STORIES"
+    });
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Status updated successfully' 
+    }, { headers: corsHeaders });
+  }
+
+  if (elements && scenes) {
+    // Full n8n callback with elements and scenes
+    console.log('🎬 Processing n8n callback with elements and scenes');
+    const result = await convex.mutation(api.storyboard.n8nWebhookCallback.n8nWebhookCallback, {
+      storyboardId: project_id, // Use project_id as storyboardId
+      scriptType,
+      language,
+      buildStrategy,
+      elements,
+      scenes
+    });
+    
+    return NextResponse.json(result, { headers: corsHeaders });
+  }
+
+  // Handle simple status updates
+  if (status) {
+    console.log('📊 Simple status update:', status);
+    await convex.mutation(api.storyboard.projects.updateBuildStatus, {
+      id: project_id,
+      taskStatus: status,
+      taskMessage: message || 'Processing...',
+      scriptType: scriptType,
+      scenes: [], // Empty scenes for status updates
+      isAIGenerated: scriptType === "ANIMATED_STORIES"
+    });
+    
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Status updated successfully' 
+    }, { headers: corsHeaders });
+  }
+
+  return NextResponse.json({ 
+    success: true, 
+    message: 'Webhook processed successfully' 
+  }, { headers: corsHeaders });
+}
+
 // Handle frontend build request with Clerk authentication
 async function handleFrontendBuildRequest(data: any, request: NextRequest, corsHeaders: Record<string, string>) {
-  // 1. Check if this is n8n sending processed data (has elements and scenes structure)
-  if (data.elements && data.scenes) {
-    console.log('🔄 Routing n8n data to callback handler...');
-    return await handleN8nCallback(data, request, corsHeaders);
-  }
-  
-  // 2. Otherwise, authenticate user with Clerk for frontend requests
+  // Authenticate user with Clerk for frontend requests
   console.log('🔍 DEBUG: Checking Clerk authentication...');
   const { userId } = getAuth(request);
   console.log('🔍 DEBUG: userId:', userId);
@@ -170,6 +260,39 @@ async function handleFrontendBuildRequest(data: any, request: NextRequest, corsH
 
 // Handle n8n callback (already implemented)
 async function handleN8nCallback(data: any, request: NextRequest, corsHeaders: Record<string, string>) {
+  // Check if this is a progress update (has status and message but no elements/scenes)
+  if (data.status && data.message && !data.elements && !data.scenes) {
+    console.log('📊 Processing n8n progress update');
+    
+    try {
+      // Initialize Convex client
+      const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+      
+      // Update project status
+      await convex.mutation(api.storyboard.projects.updateBuildStatus, {
+        id: data.projectId,
+        taskStatus: data.status,
+        taskMessage: data.message,
+        scriptType: data.scriptType || "ANIMATED_STORIES",
+        scenes: [], // Empty scenes for progress updates
+        isAIGenerated: data.scriptType === "ANIMATED_STORIES"
+      });
+      
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Progress updated successfully' 
+      }, { headers: corsHeaders });
+      
+    } catch (error: any) {
+      console.error('❌ Error updating progress:', error);
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+  }
+  
+  // Otherwise, this is a full callback with elements and scenes
   // Validate required fields for callback
   if (!data.projectId || !data.elements || !data.scenes) {
     console.error('❌ Invalid callback data - missing required fields');

@@ -876,18 +876,114 @@ async function enhancedBuildWithN8N(options) {
 - Test with different script types
 - Test with large scripts (50+ scenes)
 - Test error recovery scenarios
-
----
-
 ## 🚀 Future Enhancements
 
 ### **Priority 1: Performance**
-- Build progress indicators
+- Build progress indicators (Leverage existing task system)
+
+#### **Current Task System (Already Implemented)**
+```javascript
+// ✅ ALREADY EXISTS: Task-based status tracking
+interface TaskStatus {
+  taskStatus: "processing" | "ready" | "error" | "idle";
+  taskMessage: string; // Specific message like "Generating images..."
+  taskType: "image" | "video" | "script" | "ai_enhanced" | "normal";
+}
+
+// ✅ ALREADY EXISTS: Universal task status updates
+await ctx.db.patch(args.storyboardId, { 
+  taskStatus: "processing",
+  taskMessage: "Building storyboard...",
+  taskType: "script"
+});
+```
+
+#### **Enhanced Progress Indicators (Recommended)**
+```javascript
+// LEVERAGE EXISTING TASK SYSTEM: Add progress percentage to task messages
+const PROGRESS_MESSAGES = {
+  "script": {
+    start: "Starting build process...",
+    processing: "Processing script with AI...",
+    ready: "Build completed successfully!"
+  },
+  "image": {
+    start: "Starting image generation...",
+    processing: "Generating images... (1/5)",
+    ready: "Images generated!"
+  },
+  "video": {
+    start: "Starting video generation...",
+    processing: "Generating video... (3/5)",
+    ready: "Video generated!"
+  }
+};
+
+// Update task messages with progress info
+function updateTaskWithProgress(step, total, type) {
+  const progress = `(${step}/${total})`;
+  return `${PROGRESS_MESSAGES[type].processing.replace("...", progress)}`;
+}
+```
+
+#### **UI Implementation (Recommended)**
+```javascript
+// components/StoryboardCard.tsx - Enhanced with progress
+export function StoryboardCard({ storyboard }) {
+  const getProgressInfo = (taskType, taskStatus, taskMessage) => {
+    if (taskStatus === "processing" && taskMessage.includes("/")) {
+      // Extract progress from message like "Generating images... (1/5)"
+      const match = taskMessage.match(/\((\d+)\/(\d+)\)/);
+      if (match) {
+        const [_, current, total] = match;
+        return { current: parseInt(current), total: parseInt(total) };
+      }
+    }
+    return null;
+  };
+  
+  const progressInfo = getProgressInfo(storyboard.taskType, storyboard.taskStatus, storyboard.taskMessage);
+  
+  return (
+    <div className="relative storyboard-card border rounded-lg p-4">
+      {/* Progress bar for processing tasks */}
+      {storyboard.taskStatus === "processing" && progressInfo && (
+        <div className="absolute top-2 left-2 right-2">
+          <div className="w-full bg-gray-200 rounded-full h-1">
+            <div 
+              className="bg-emerald-500 h-1 rounded-full transition-all duration-500"
+              style={{ width: `${(progressInfo.current / progressInfo.total) * 100}%` }}
+            />
+          </div>
+          <span className="text-xs text-gray-500 mt-1">
+            {progressInfo.current}/{progressInfo.total}
+          </span>
+        </div>
+      )}
+      
+      {/* Existing status badge */}
+      {storyboard.taskStatus !== "idle" && (
+        <div className="absolute top-2 right-2">
+          <span className={`text-xs px-2 py-1 rounded ${
+            storyboard.taskStatus === "processing" ? "bg-blue-100 text-blue-800" :
+            storyboard.taskStatus === "ready" ? "bg-green-100 text-green-800" :
+            "bg-red-100 text-red-800"
+          }`}>
+            {storyboard.taskMessage || storyboard.taskStatus}
+          </span>
+        </div>
+      )}
+      
+      {/* Card content */}
+      <h3 className="font-semibold text-lg">{storyboard.title}</h3>
+      <p className="text-gray-600 text-sm mt-1">{storyboard.description}</p>
+    </div>
+  );
+}
+```
 
 ### **Priority 2: User Experience**
 - User experience improvements
-
----
 
 ## 📞 Support & Resources
 

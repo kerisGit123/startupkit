@@ -69,6 +69,28 @@ export function TaskStatus({
   const statusConfig = TASK_STATUS_CONFIG[taskStatus as keyof typeof TASK_STATUS_CONFIG] || TASK_STATUS_CONFIG.idle;
   const StatusIcon = statusConfig.icon;
   const TypeIcon = TASK_TYPE_ICONS[taskType as keyof typeof TASK_TYPE_ICONS] || TASK_TYPE_ICONS.normal;
+
+  // Parse progress info from task message
+  const getProgressInfo = (message?: string) => {
+    if (!message || taskStatus !== "processing") return null;
+    
+    // Extract progress from message like "Generating images... (1/5)" or "Processing step 2 of 4"
+    const match = message.match(/\((\d+)\/(\d+)\)/) || message.match(/step (\d+) of (\d+)/i);
+    if (match) {
+      const [_, current, total] = match;
+      const currentNum = parseInt(current);
+      const totalNum = parseInt(total);
+      return { 
+        current: currentNum, 
+        total: totalNum, 
+        percentage: Math.round((currentNum / totalNum) * 100) 
+      };
+    }
+    return null;
+  };
+
+  const progressInfo = getProgressInfo(taskMessage);
+  const displayProgress = progress !== undefined ? progress : progressInfo?.percentage;
   
   const sizeClasses = {
     sm: "text-xs px-2 py-1",
@@ -120,12 +142,19 @@ export function TaskStatus({
       )}
       
       {/* Progress bar */}
-      {showProgress && progress !== undefined && taskStatus === "processing" && (
-        <div className="w-16 bg-gray-200 rounded-full h-1.5">
-          <div 
-            className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
+      {showProgress && displayProgress !== undefined && taskStatus === "processing" && (
+        <div className="flex items-center gap-2">
+          <div className="w-16 bg-gray-200 rounded-full h-1.5">
+            <div 
+              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${displayProgress}%` }}
+            />
+          </div>
+          {progressInfo && (
+            <span className="text-xs text-gray-500 font-medium">
+              {progressInfo.current}/{progressInfo.total}
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -167,6 +196,25 @@ export function TaskStatusCard({
       showProgress={true}
       className={cn("w-full justify-center", className)}
       size="lg"
+    />
+  );
+}
+
+// Enhanced version with auto-progress detection
+export function TaskStatusWithProgress({ 
+  taskStatus = "idle", 
+  taskMessage, 
+  taskType = "normal",
+  className 
+}: Omit<TaskStatusProps, 'progress' | 'showProgress'>) {
+  return (
+    <TaskStatus
+      taskStatus={taskStatus}
+      taskMessage={taskMessage}
+      taskType={taskType}
+      showProgress={true}
+      className={className}
+      size="md"
     />
   );
 }
