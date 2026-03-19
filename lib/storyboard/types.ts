@@ -1,0 +1,23 @@
+export const STORYBOARD_SCRIPT_TYPES = {
+  ANIMATED_STORIES: "ANIMATED_STORIES",
+  KIDS_ANIMATED_STORIES: "KIDS_ANIMATED_STORIES",
+  EDUCATIONAL_ANIMATIONS: "EDUCATIONAL_ANIMATIONS",
+  TUTORIAL_ANIMATIONS: "TUTORIAL_ANIMATIONS",
+  DOCUMENTARY_SHORTS: "DOCUMENTARY_SHORTS",
+  EDUCATIONAL_SCIENCE_HISTORY: "EDUCATIONAL_SCIENCE_HISTORY",
+  FINANCE_EDUCATION: "FINANCE_EDUCATION",
+  AI_MUSIC_SONG_VIDEO: "AI_MUSIC_SONG_VIDEO",
+  HEALTH_EDUCATION: "HEALTH_EDUCATION",
+  ADVERTISING: "ADVERTISING",
+  TUTORIAL_STEP_BY_STEP: "TUTORIAL_STEP_BY_STEP"
+} as const;
+
+export type StoryboardScriptType = typeof STORYBOARD_SCRIPT_TYPES[keyof typeof STORYBOARD_SCRIPT_TYPES];
+
+export interface BuildStoryboardOptions {
+  buildType: "normal" | "enhanced";
+  rebuildStrategy: "add_update" | "replace_all";
+  elementStrategy: "preserve" | "regenerate";
+  scriptType: StoryboardScriptType;
+  language: string;
+}

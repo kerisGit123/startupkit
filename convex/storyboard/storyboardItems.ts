@@ -2,6 +2,51 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 
+// Special function for n8n webhook that doesn't require authentication
+export const createFromN8n = mutation({
+  args: {
+    projectId: v.id("storyboard_projects"),
+    sceneId: v.string(),
+    order: v.number(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    duration: v.number(),
+    generatedBy: v.string(),
+    companyId: v.optional(v.string()),
+    elementNames: v.optional(v.object({
+      characters: v.array(v.string()),
+      environments: v.array(v.string()),
+      props: v.array(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    // Skip authentication check for n8n webhook
+    // This is safe because we validate the Bearer token in the API route
+    
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+    
+    // Verify project exists and is accessible
+    if (project.status !== "active" && project.status !== "draft") {
+      throw new Error("Project is not accessible for scene creation");
+    }
+    
+    const sceneId = await ctx.db.insert("storyboard_items", {
+      ...args,
+      elements: [],
+      annotations: [],
+      isAIGenerated: false,
+      generationStatus: "completed",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    
+    return await ctx.db.get(sceneId);
+  },
+});
+
 export const create = mutation({
   args: {
     projectId: v.id("storyboard_projects"),
@@ -80,6 +125,16 @@ export const update = mutation({
       status: v.string(),
       taskId: v.optional(v.string()),
     })),
+    elementNames: v.optional(v.object({
+      characters: v.array(v.string()),
+      environments: v.array(v.string()),
+      props: v.array(v.string()),
+    })),
+    linkedElements: v.optional(v.array(v.object({
+      id: v.id("storyboard_elements"),
+      name: v.string(),
+      type: v.string(),
+    }))),
   },
   handler: async (ctx, { id, ...fields }) => {
     await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });

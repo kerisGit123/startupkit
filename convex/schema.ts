@@ -1695,6 +1695,13 @@ export default defineSchema({
     ownerId: v.string(),
     teamMemberIds: v.array(v.string()),
     status: v.string(), // draft | active | completed | archived
+    
+    // NEW: Task tracking fields for build system
+    taskStatus: v.optional(v.string()),          // "idle" | "processing" | "ready" | "error"
+    taskMessage: v.optional(v.string()), // "Building storyboard..." etc.
+    taskType: v.optional(v.string()),    // "script" | "image" | "video"
+    scriptType: v.optional(v.string()), // "ANIMATED_STORIES" | "KIDS_ANIMATED_STORIES" | etc.
+    
     isFavorite: v.optional(v.boolean()),
     tags: v.array(v.string()),
     script: v.string(),
@@ -1712,7 +1719,7 @@ export default defineSchema({
       })),
     })),
     settings: v.object({
-      frameRatio: v.string(),  // "9:16" | "16:9" | "1:1"
+      frameRatio: v.string(), // "9:16" | "16:9" | "1:1"
       style: v.string(),       // "realistic" | "cartoon" | "anime" | "cinematic"
       layout: v.string(),      // "grid" | "timeline" | "comic"
     }),
@@ -1781,6 +1788,11 @@ export default defineSchema({
       name: v.string(),
       type: v.string(),
     }))), // Links to element library items (characters, environments, props)
+    elementNames: v.optional(v.object({
+      characters: v.array(v.string()),
+      environments: v.array(v.string()),
+      props: v.array(v.string()),
+    })), // Element names from n8n processing
     annotations: v.array(v.object({
       id: v.string(),
       content: v.string(),
@@ -1838,7 +1850,7 @@ export default defineSchema({
     projectId: v.id("storyboard_projects"),
     companyId: v.optional(v.string()), // Organization ID from Clerk
     name: v.string(),
-    type: v.string(), // character | object | logo | font | style
+    type: v.string(), // character | prop | environment | logo | font | style
     description: v.optional(v.string()),
     thumbnailUrl: v.string(),
     referenceUrls: v.array(v.string()),
@@ -1846,6 +1858,7 @@ export default defineSchema({
     createdBy: v.string(),
     usageCount: v.number(),
     status: v.string(), // draft | ready | archived
+    appearsInScenes: v.optional(v.array(v.number())), // Scene numbers where this element appears
     
     // Sharing and visibility
     visibility: v.optional(v.union(

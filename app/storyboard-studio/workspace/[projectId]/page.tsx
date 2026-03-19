@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useUser, UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -14,6 +14,8 @@ import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExpor
 import { FileBrowser } from "../../components/storyboard/FileBrowser";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
 import { BuildStoryboardModal } from "../../components/storyboard/BuildStoryboardModal";
+import { BuildStoryboardDialog } from "../../components/storyboard/BuildStoryboardDialog";
+import { TaskStatusBadge } from "../../components/storyboard/TaskStatus";
 import { SceneEditor } from "../../components/SceneEditor";
 import { TagEditor } from "../../components/storyboard/TagEditor";
 import { DisplayFilters } from "../../components/storyboard/DisplayFilters";
@@ -21,7 +23,84 @@ import { TopNavSearch } from "../../components/TopNavSearch";
 import { TopNavFilters } from "../../components/TopNavFilters";
 import { parseScriptScenes } from "@/lib/storyboard/sceneParser";
 import type { Shot } from "../../types";
-import { MessageSquare, X, Loader2, Upload, ImageIcon, Clock, Copy, Trash2, Tag, Plus, ChevronDown, Hash, Grid3x3, Table2, Settings, Users, Share2, PanelLeftClose, PanelLeftOpen, List, Search, Filter, Edit3, Eye, FolderOpen, Folder, FileText, Link2, LayoutGrid, ArrowLeft, Sparkles, Save, Play, Minus, Plus as ZoomIn, Video, AlertTriangle, CheckCircle } from "lucide-react";
+import { 
+  CheckCircle, 
+  AlertCircle, 
+  Play, 
+  Plus, 
+  Minus, 
+  ZoomIn, 
+  Settings, 
+  Download, 
+  Upload, 
+  ArrowLeft, 
+  Sparkles, 
+  Image, 
+  ImageIcon, 
+  Video, 
+  Palette, 
+  Layers, 
+  FileText, 
+  Grid3x3, 
+  Trash2, 
+  Edit3, 
+  MoreVertical, 
+  Copy, 
+  Eye, 
+  EyeOff, 
+  Wand2, 
+  Loader2, 
+  RefreshCw, 
+  Save,
+  FileImage, 
+  FileVideo, 
+  File, 
+  X, 
+  ChevronDown, 
+  ChevronRight, 
+  ChevronLeft, 
+  ChevronUp, 
+  Users, 
+  CreditCard, 
+  Activity, 
+  DollarSign, 
+  BarChart3, 
+  PieChart, 
+  ShoppingCart, 
+  Package, 
+  HelpCircle, 
+  Mail, 
+  MessageSquare, 
+  Phone, 
+  Calendar, 
+  Clock, 
+  Star, 
+  Hash, 
+  FolderPlus, 
+  FolderOpen, 
+  Search, 
+  Filter, 
+  Grid, 
+  List, 
+  Zap, 
+  Target, 
+  Cpu, 
+  Database, 
+  Cloud, 
+  Shield, 
+  Lock, 
+  Unlock, 
+  User, 
+  UserPlus, 
+  UserCheck, 
+  UserX, 
+  LogOut, 
+  ArrowRight, 
+  Home, 
+  Building2, 
+  Briefcase, 
+  Menu 
+} from "lucide-react";
 
 type Tab = "script" | "storyboard";
 
@@ -37,7 +116,6 @@ export default function StoryboardWorkspacePage() {
 
   const updateScript = useMutation(api.storyboard.projects.updateScript);
   const createBatch = useMutation(api.storyboard.storyboardItems.createBatch);
-  const buildStoryboard = useMutation(api.storyboard.storyboardItems.buildStoryboard);
   const createItem = useMutation(api.storyboard.storyboardItems.create);
   const updateItem = useMutation(api.storyboard.storyboardItems.update);
   const addElementToItem = useMutation(api.storyboard.storyboardItemElements.addElementToItem);
@@ -307,6 +385,7 @@ export default function StoryboardWorkspacePage() {
   const [scriptText, setScriptText] = useState("");
   const [scriptDirty, setScriptDirty] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showBuildDialog, setShowBuildDialog] = useState(false);
   const [isBuilding, setIsBuilding] = useState(false);
   const [isAddingFrame, setIsAddingFrame] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -539,15 +618,31 @@ export default function StoryboardWorkspacePage() {
           console.log(`[Build Storyboard] Regenerating elements with ${finalElements.length} enhanced elements from smart detection`);
         }
         
-        // Build storyboard with enhanced elements and filtered scenes
-        result = await buildStoryboard({
-          projectId: pid,
-          rebuildStrategy: config.rebuildStrategy,
-          script: src,
-          scenes: filteredScenes.map(({ technical, ...scene }) => scene),
-          enhancedElements: skipElementCreation ? undefined : finalElements,
-          metadata: enhancedResult.metadata, // Pass extracted metadata (genre, visualStyle, etc.)
+        // Build storyboard with enhanced elements and filtered scenes via Site API
+        const buildResponse = await fetch('/api/n8n-webhook', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId: pid,
+            buildType: config.buildType || 'enhanced',
+            rebuildStrategy: config.rebuildStrategy,
+            scriptType: config.scriptType || 'ANIMATED_STORIES',
+            language: config.language || 'en',
+            script: src,
+            scenes: filteredScenes.map(({ technical, ...scene }) => scene),
+            enhancedElements: skipElementCreation ? undefined : finalElements,
+            metadata: enhancedResult.metadata, // Pass extracted metadata (genre, visualStyle, etc.)
+          })
         });
+        
+        if (!buildResponse.ok) {
+          const errorData = await buildResponse.json();
+          throw new Error(errorData.error || 'Build request failed');
+        }
+        
+        result = await buildResponse.json();
       } else {
         // Normal build - no AI extraction
         let skipElementCreation = false;
@@ -561,14 +656,30 @@ export default function StoryboardWorkspacePage() {
           console.log(`[Build Storyboard] Normal build with element regeneration (fallback from scene locations)`);
         }
         
-        // Build storyboard with filtered scenes
-        result = await buildStoryboard({
-          projectId: pid,
-          rebuildStrategy: config.rebuildStrategy,
-          script: src,
-          scenes: filteredScenes.map(({ technical, ...scene }) => scene),
-          enhancedElements: skipElementCreation ? undefined : [], // undefined = skip, [] = use fallback
+        // Build storyboard with filtered scenes via Site API
+        const normalBuildResponse = await fetch('/api/n8n-webhook', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId: pid,
+            buildType: config.buildType || 'normal',
+            rebuildStrategy: config.rebuildStrategy,
+            scriptType: config.scriptType || 'ANIMATED_STORIES',
+            language: config.language || 'en',
+            script: src,
+            scenes: filteredScenes.map(({ technical, ...scene }) => scene),
+            enhancedElements: skipElementCreation ? undefined : undefined, // No enhanced elements for normal build
+          })
         });
+        
+        if (!normalBuildResponse.ok) {
+          const errorData = await normalBuildResponse.json();
+          throw new Error(errorData.error || 'Build request failed');
+        }
+        
+        result = await normalBuildResponse.json();
       }
       
       console.log(`[Build Storyboard] Created ${result?.createdItems} frames, ${result?.createdCharacters} characters, and ${result?.createdEnvironments} environments`);
@@ -622,6 +733,46 @@ export default function StoryboardWorkspacePage() {
     });
   };
 
+  const handleAddElement = (itemId: string) => {
+    // Open the ElementLibrary to add elements to this specific storyboard item
+    setSelectedItemForElement(itemId as Id<"storyboard_items">);
+    setShowElementLibrary(true);
+  };
+
+  const handleRemoveElement = (itemId: string, elementId: string) => {
+    // Remove element from the storyboard item
+    console.log(`Removing element ${elementId} from item ${itemId}`);
+    
+    // Check if this is the new format (type-index) or legacy format (Convex ID)
+    if (elementId.includes('-')) {
+      // New format: "type-index" (from elementNames)
+      const [type, indexStr] = elementId.split('-');
+      const index = parseInt(indexStr);
+      
+      if (type === 'character' || type === 'environment' || type === 'prop') {
+        // Update the item's elementNames by removing the specific element
+        updateItem({
+          id: itemId as Id<"storyboard_items">,
+          elementNames: {
+            ...items?.find(item => item._id === itemId)?.elementNames,
+            [type + 's']: items?.find(item => item._id === itemId)?.elementNames?.[type + 's']?.filter((_, i) => i !== index) || []
+          }
+        });
+      }
+    } else {
+      // Legacy format: Convex ID (from linkedElements)
+      // Remove from linkedElements array
+      const currentItem = items?.find(item => item._id === itemId);
+      if (currentItem?.linkedElements) {
+        const updatedLinkedElements = currentItem.linkedElements.filter(el => el.id !== elementId);
+        updateItem({
+          id: itemId as Id<"storyboard_items">,
+          linkedElements: updatedLinkedElements
+        });
+      }
+    }
+  };
+
   if (!project) {
     return (
       <div className="flex h-full items-center justify-center bg-[#0d0d12]">
@@ -642,6 +793,16 @@ export default function StoryboardWorkspacePage() {
           <div>
             <h1 className="text-sm font-semibold">{project.name}</h1>
             <p className="text-[11px] text-gray-500 capitalize">{project.status} · {project.settings.frameRatio}</p>
+            {/* Task status badge */}
+            {(project.taskStatus && project.taskStatus !== "idle") && (
+              <div className="mt-1">
+                <TaskStatusBadge 
+                  taskStatus={project.taskStatus}
+                  taskMessage={project.taskMessage}
+                  taskType={project.taskType}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -671,7 +832,7 @@ export default function StoryboardWorkspacePage() {
 
           {tab === "script" && !scriptDirty && parseScriptScenes(displayScript).scenes.length > 0 && (
             <button
-              onClick={handleBuildStoryboard}
+              onClick={() => setShowBuildDialog(true)}
               disabled={isBuilding}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition disabled:opacity-50"
               title="Build storyboard with options for normal or enhanced mode"
@@ -896,25 +1057,18 @@ export default function StoryboardWorkspacePage() {
                           : [...prev, item._id]
                       )}
                       onDelete={() => handleRemoveItem(item._id, item.title)}
-                      onImageUploaded={(id, url) => updateItem({ id: id as Id<"storyboard_items">, imageUrl: url, generationStatus: "completed" })}
-                      onDoubleClick={() => handleOpenSceneEditor(item)}
-                      onDuplicate={() => duplicateItem(item)}
-                      onTagsChange={(newTags) => handleTagsChange(item._id, newTags)}
+                      onImageUploaded={(id, url) => handleImageUploaded(id, url)}
+                      onDoubleClick={() => handleDoubleClick(item)}
+                      onDuplicate={() => handleDuplicateItem(item)}
+                      onTagsChange={(tags) => handleTagsChange(item._id, tags)}
                       onFavoriteToggle={() => handleFavoriteToggle(item._id)}
                       onStatusChange={(status) => handleStatusChange(item._id, status)}
                       onNotesChange={(notes) => handleNotesChange(item._id, notes)}
                       onTitleChange={(title) => handleTitleChange(item._id, title)}
-                      onRemoveElement={async (elementId) => {
-                        await removeElementFromItem({ 
-                          itemId: item._id, 
-                          elementId: elementId as Id<"storyboard_elements"> 
-                        });
-                      }}
-                      onAddElement={() => {
-                        setShowElementLibrary(true);
-                        setSelectedItemForElement(item._id);
-                      }}
-                      userId={user?.id ?? "unknown"}
+                      onRemoveElement={(elementId) => handleRemoveElement(item._id, elementId)}
+                      onAddElement={() => handleAddElement(item._id)}
+                      userId={user?.id || ""}
+                      onBuildStoryboard={() => setShowBuildDialog(true)}
                     />
                   ))}
                   {/* Add frame button */}
@@ -1118,6 +1272,14 @@ export default function StoryboardWorkspacePage() {
           </div>
         </div>
       )}
+      <BuildStoryboardDialog
+        open={showBuildDialog}
+        onOpenChange={setShowBuildDialog}
+        projectId={pid}
+        onSuccess={() => {
+          console.log("Build started successfully!");
+        }}
+      />
     </div>
   );
 }
@@ -1276,9 +1438,11 @@ interface FrameCardProps {
   onRemoveElement?: (elementId: string) => void;
   onAddElement?: () => void;
   userId: string;
+  // Build dialog props
+  onBuildStoryboard?: () => void;
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onRemoveElement, onAddElement, userId }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onRemoveElement, onAddElement, userId, onBuildStoryboard }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -1451,7 +1615,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
               </div>
               
               {/* Tags section - Below frame number and status */}
-              <div className="relative">
+              <div className="relative z-30">
                 <div 
                   className="flex flex-wrap gap-1 items-center cursor-pointer group"
                   onClick={(e) => { 
@@ -1540,45 +1704,100 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           </div>
         )}
         
-        {/* Element badges - Bottom left inside image */}
-        <div className="absolute bottom-3 left-3 flex flex-wrap gap-1.5 max-w-[60%]">
-          {item.linkedElements && item.linkedElements.map((element) => (
-            <div
-              key={element.id}
-              className={`group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border ${
-                element.type === 'character' 
-                  ? 'bg-purple-600/80 border-purple-500/30 text-white hover:bg-purple-600'
-                  : element.type === 'environment'
-                  ? 'bg-blue-600/80 border-blue-500/30 text-white hover:bg-blue-600'
-                  : 'bg-green-600/80 border-green-500/30 text-white hover:bg-green-600'
-              } transition-colors`}
-              title={`${element.type}: ${element.name}`}
-            >
-              <span className="pr-1">{element.name}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemoveElement?.(element.id);
-                }}
-                className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+        {/* Element badges - Overlay with z-index */}
+        <div className="absolute bottom-36 left-2 right-2 flex flex-wrap gap-1.5 pointer-events-none z-10">
+          <div className="flex flex-wrap gap-1.5">
+            {/* Display elements from elementNames */}
+            {item.elementNames && (
+              <>
+                {/* Characters */}
+                {item.elementNames.characters?.map((elementName, index) => (
+                  <div
+                    key={`character-${index}`}
+                    className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-purple-600/80 border-purple-500/30 text-white hover:bg-purple-600 transition-colors pointer-events-auto"
+                    title={`Character: ${elementName}`}
+                  >
+                    <span className="pr-1">{elementName}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveElement(`character-${index}`);
+                      }}
+                      className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {/* Environments */}
+                {item.elementNames.environments?.map((elementName, index) => (
+                  <div
+                    key={`environment-${index}`}
+                    className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-emerald-600/80 border-emerald-500/30 text-white hover:bg-emerald-600 transition-colors pointer-events-auto"
+                    title={`Environment: ${elementName}`}
+                  >
+                    <span className="pr-1">{elementName}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveElement(`environment-${index}`);
+                      }}
+                      className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {/* Props */}
+                {item.elementNames.props?.map((elementName, index) => (
+                  <div
+                    key={`prop-${index}`}
+                    className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-blue-600/80 border-blue-500/30 text-white hover:bg-blue-600 transition-colors pointer-events-auto"
+                    title={`Prop: ${elementName}`}
+                  >
+                    <span className="pr-1">{elementName}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveElement(`prop-${index}`);
+                      }}
+                      className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
+            
+            {/* Legacy support for linkedElements */}
+            {item.linkedElements && item.linkedElements.map((element) => (
+              <div
+                key={element.id}
+                className={`group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border ${
+                  element.type === 'character' 
+                    ? 'bg-purple-600/80 border-purple-500/30 text-white hover:bg-purple-600'
+                    : element.type === 'environment'
+                    ? 'bg-blue-600/80 border-blue-500/30 text-white hover:bg-blue-600'
+                    : 'bg-green-600/80 border-green-500/30 text-white hover:bg-green-600'
+                } transition-colors pointer-events-auto`}
+                title={`${element.type}: ${element.name}`}
               >
-                <X className="w-2.5 h-2.5 text-white" />
-              </button>
-            </div>
-          ))}
-          {/* Add Element button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddElement?.();
-            }}
-            className="px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border border-white/30 bg-white/10 text-white hover:bg-white/20 transition-colors flex items-center gap-1"
-            title="Add element to this scene"
-          >
-            <Plus className="w-3 h-3" />
-            Element
-          </button>
+                <span className="pr-1">{element.name}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveElement(element.id);
+                  }}
+                  className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+                >
+                  <X className="w-2.5 h-2.5 text-white" />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
+      </div>
         
         {/* Video indicator */}
         {item.videoUrl && item.generationStatus !== "generating" && (
@@ -1602,7 +1821,18 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         )}
         
         {/* Action buttons */}
-        <div className="absolute bottom-3 right-3 flex gap-2">
+        <div className="absolute bottom-12 right-3 flex gap-2 z-20">
+          {/* Add Element button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddElement?.(); }}
+            className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
+            title="Add element to this scene"
+          >
+            <div className="w-8 h-8 bg-purple-600/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-purple-600 transition-colors">
+              <Plus className="w-3.5 h-3.5 text-white" />
+            </div>
+          </button>
+          
           {/* Duplicate button */}
           <button
             onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
@@ -1623,7 +1853,6 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             </div>
           </button>
         </div>
-      </div>
       
       {/* Enhanced info section */}
       <div className="p-4 bg-[#0a0a0f] border-t border-white/5">
@@ -1657,7 +1886,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             />
           ) : (
             <p 
-              className="text-sm text-white font-medium flex-1 cursor-pointer hover:text-purple-400 transition-colors"
+              className="text-sm text-white font-medium flex-1 cursor-pointer hover:text-purple-300 transition-colors"
               onClick={(e) => { e.stopPropagation(); setIsRenaming(true); }}
               title="Click to rename"
             >

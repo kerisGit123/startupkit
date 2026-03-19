@@ -23,7 +23,7 @@ interface ElementLibraryProps {
 
 const ELEMENT_TYPES = [
   { key: "character", label: "Characters", Icon: User, color: "text-purple-400" },
-  { key: "object", label: "Props", Icon: Package, color: "text-blue-400" },
+  { key: "prop", label: "Props", Icon: Package, color: "text-blue-400" },
   { key: "environment", label: "Environment", Icon: Trees, color: "text-emerald-400" },
   { key: "logo", label: "Logos", Icon: Shapes, color: "text-pink-400" },
   { key: "font", label: "Fonts", Icon: Type, color: "text-yellow-400" },
@@ -277,6 +277,13 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
 
   const handleCreateOrUpdate = async () => {
     if (!newName.trim() || saving) return;
+
+    // Create draftRefs structure from referenceFiles
+    const draftRefs = referenceFiles.map((file, index) => ({
+      file,
+      uploaded: false,
+      url: referenceUrls[index] || null,
+    }));
     setSaving(true);
     try {
       // Upload files to R2 only when saving

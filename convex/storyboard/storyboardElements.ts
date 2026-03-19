@@ -1,6 +1,47 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
+// Special function for n8n webhook that doesn't require authentication
+export const createFromN8n = mutation({
+  args: {
+    projectId: v.id("storyboard_projects"),
+    name: v.string(),
+    type: v.string(),
+    description: v.optional(v.string()),
+    thumbnailUrl: v.string(),
+    referenceUrls: v.array(v.string()),
+    tags: v.array(v.string()),
+    createdBy: v.string(),
+    visibility: v.optional(v.union(v.literal("private"), v.literal("public"))),
+    companyId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Skip authentication check for n8n webhook
+    // This is safe because we validate the Bearer token in the API route
+    
+    const project = await ctx.db.get(args.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+    
+    // Verify project exists and is accessible
+    if (project.status !== "active" && project.status !== "draft") {
+      throw new Error("Project is not accessible for element creation");
+    }
+    
+    const elementId = await ctx.db.insert("storyboard_elements", {
+      ...args,
+      usageCount: 0,
+      visibility: args.visibility ?? "private",
+      status: "ready",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    
+    return await ctx.db.get(elementId);
+  },
+});
+
 export const create = mutation({
   args: {
     projectId: v.id("storyboard_projects"),
@@ -11,7 +52,7 @@ export const create = mutation({
     referenceUrls: v.array(v.string()),
     tags: v.array(v.string()),
     createdBy: v.string(),
-    visibility: v.optional(v.union(v.literal("private"), v.literal("shared"), v.literal("public"))),
+    visibility: v.optional(v.union(v.literal("private"), v.literal("public"))),
   },
   handler: async (ctx, args) => {
     // Get user from auth context
@@ -43,7 +84,6 @@ export const create = mutation({
       createdBy: args.createdBy,
       usageCount: 0,
       visibility: args.visibility ?? "private",
-      sharedWith: [],
       status: "ready",
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -106,8 +146,17 @@ export const listByProject = query({
         return false;
       }
 
+      // TEMPORARY: Show all project elements regardless of companyId for debugging
       if (candidateCompanyIds.length > 0) {
-        return candidateCompanyIds.includes(element.companyId || "");
+        console.log(`[listByProject] Element "${element.name}":`, {
+          elementCompanyId: element.companyId,
+          elementCreatedBy: element.createdBy,
+          candidateCompanyIds,
+          projectId: element.projectId
+        });
+        
+        // TEMPORARILY include all elements that belong to this project
+        return element.projectId === projectId;
       }
 
       return true;

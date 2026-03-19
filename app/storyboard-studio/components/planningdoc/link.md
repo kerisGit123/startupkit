@@ -168,3 +168,28 @@ TUTORIAL_ANIMATIONS
 DOCUMENTARY_SHORTS
 EDUCATIONAL_SCIENCE_HISTORY
 FINANCE_EDUCATION
+
+
+
+
+
+
+
+
+
+
+// Call your Site API instead of n8n directly
+const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/n8n-webhook`, {
+  method: 'POST',
+  headers: { 
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer n8n-webhook-secret-2024`
+  },
+  body: JSON.stringify({
+    storyboardId: args.projectId,
+    scriptType: args.scriptType,
+    language: args.language,
+    buildStrategy: args.rebuildStrategy,
+    script: await getScriptContent(ctx, args.projectId)
+  })
+});

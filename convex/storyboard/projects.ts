@@ -271,6 +271,45 @@ export const remove = mutation({
   },
 });
 
+// Update project build status without changing script content
+export const updateBuildStatus = mutation({
+  args: {
+    id: v.id("storyboard_projects"),
+    taskStatus: v.optional(v.string()),          // "idle" | "processing" | "ready" | "error"
+    taskMessage: v.optional(v.string()), // "Building storyboard..." etc.
+    scriptType: v.optional(v.string()), // "ANIMATED_STORIES" | "KIDS_ANIMATED_STORIES" | etc.
+    scenes: v.array(v.object({
+      id: v.string(),
+      title: v.string(),
+      content: v.string(),
+      characters: v.array(v.string()),
+      locations: v.array(v.string()),
+      technical: v.optional(v.object({
+        camera: v.array(v.string()),
+        lighting: v.array(v.string()),
+        perspective: v.array(v.string()),
+        action: v.array(v.string()),
+      })),
+    })),
+    isAIGenerated: v.boolean(),
+  },
+  handler: async (ctx, { id, taskStatus, taskMessage, scriptType, scenes, isAIGenerated }) => {
+    await ctx.db.patch(id, {
+      taskStatus,
+      taskMessage,
+      scriptType,
+      scenes,
+      isAIGenerated,
+      metadata: {
+        sceneCount: scenes.length,
+        estimatedDuration: scenes.length * 5,
+        aiModel: "",
+      },
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const updateScript = mutation({
   args: {
     id: v.id("storyboard_projects"),
@@ -290,12 +329,18 @@ export const updateScript = mutation({
     })),
     isAIGenerated: v.boolean(),
     aiModel: v.optional(v.string()),
+    taskStatus: v.optional(v.string()),          // "idle" | "processing" | "ready" | "error"
+    taskMessage: v.optional(v.string()), // "Building storyboard..." etc.
+    scriptType: v.optional(v.string()), // "ANIMATED_STORIES" | "KIDS_ANIMATED_STORIES" | etc.
   },
-  handler: async (ctx, { id, script, scenes, isAIGenerated, aiModel }) => {
+  handler: async (ctx, { id, script, scenes, isAIGenerated, aiModel, taskStatus, taskMessage, scriptType }) => {
     await ctx.db.patch(id, {
       script,
       scenes,
       isAIGenerated,
+      taskStatus,
+      taskMessage,
+      scriptType,
       metadata: {
         sceneCount: scenes.length,
         estimatedDuration: scenes.length * 5,

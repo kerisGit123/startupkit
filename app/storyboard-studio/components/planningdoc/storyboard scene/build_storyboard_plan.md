@@ -3,6 +3,34 @@
 ## 🎯 Objective
 Integrate n8n workflow "storyboard - Script Extractor" into the existing storyboard build system to replace manual script processing with AI-powered extraction.
 
+## 🎨 Recent UI Improvements (March 2026)
+
+### ✅ Element Badge System
+- **Z-Index Overlay**: Element badges now use z-index positioning instead of creating extra sections
+- **Proper Positioning**: Elements positioned at `bottom-36` (144px from bottom) with `z-10`
+- **Interactive Badges**: Hover effects with X buttons for element removal
+- **Color Coding**: Purple (characters), Emerald (environments), Blue (props)
+- **Legacy Support**: Handles both new `elementNames` format and legacy `linkedElements`
+
+### ✅ Tags System Enhancement  
+- **Original Functionality Preserved**: Kept all existing tag editor features
+- **Z-Index Priority**: Tags now have highest z-index (`z-30`) for visibility
+- **No Reinvention**: Maintained original tag management system
+- **Clean Layout**: Tags don't interfere with description text
+
+### ✅ Action Buttons
+- **+ Element Button**: Added purple button for element library access
+- **Proper Positioning**: Action buttons at `bottom-12` with `z-20` 
+- **Hover Effects**: Appears on card hover with smooth transitions
+- **Functional**: Opens ElementLibrary modal for adding elements
+
+### 📏 Current Z-Index Hierarchy
+```
+1. Tags (z-30) - Highest priority, original functionality
+2. Action Buttons (z-20) - + Element, Duplicate, Delete  
+3. Element Badges (z-10) - Character/Environment/Prop badges
+```
+
 ---
 
 ## 🏗️ Current System Overview
@@ -14,7 +42,9 @@ Integrate n8n workflow "storyboard - Script Extractor" into the existing storybo
 
 ### Build Dialog Options (pic1):
 - **Build Type**: Normal Build, Enhanced Build
-- **Rebuild Strategy**: Add/Update Scenes, Replace All
+- **Rebuild Strategy**: 
+  - **Add/Update Scenes (Smart Mode)**: Unchecked scenes = Add new, Checked scenes = Update existing
+  - **Replace All (Destructive Mode)**: Complete rebuild of all content
 - **Element Strategy**: Preserve Elements, Regenerate Elements
 
 ### Build Types:
@@ -22,12 +52,101 @@ Integrate n8n workflow "storyboard - Script Extractor" into the existing storybo
 - **Enhanced Build**: Generate frames + AI extraction
 
 ### Rebuild Strategies:
-- **Add/Update Scenes**: Keep existing content, add/update specific scenes
+- **Add/Update Scenes**: Handles both adding and updating in one option
 - **Replace All**: Remove and replace all content
 
 ### Element Strategies:
 - **Preserve Elements**: Keep existing elements
 - **Regenerate Elements**: Re-extract all elements
+
+### Build Dialog UI/UX Implementation Details
+- **Tabbed Interface**: Basic Settings Tab and Advanced Settings Tab
+- **Color Theme Consistency**: Neutral background, Indigo accents, and Subtle borders
+- **Responsive Design**: Desktop and Mobile layouts
+
+---
+
+## 🔧 Current Implementation Status (March 2026)
+
+### ✅ **Build System Working Correctly**
+
+The storyboard build system is now fully functional with the following improvements:
+
+#### **1. Enhanced Build + Regenerate** ✅
+**Problem**: Enhanced elements from smart environment detection weren't being used.
+
+**Fix**: When `buildType: "enhanced"` and `elementStrategy: "regenerate"`, the system now:
+- Calls the enhanced extraction API
+- Extracts smart environments using pattern matching (deep ocean, research facility, aquarium, etc.)
+- Passes these enhanced elements to the backend
+- Creates elements with `createdBy: "system-enhanced"` and detailed descriptions
+
+#### **2. Normal Build + Element Strategy** ✅
+**Problem**: Normal build didn't respect element strategy properly.
+
+**Fix**:
+- **Normal Build + Preserve**: Passes `undefined` to skip element creation
+- **Normal Build + Regenerate**: Passes `[]` to allow fallback element creation from scene locations
+
+#### **3. Hard Rebuild (Replace All)** ✅
+**Already Working**: The backend correctly deletes all existing storyboard items and elements before rebuilding.
+
+### 📊 **Current Build Matrix**
+
+| Build Type | Element Strategy | Result |
+|------------|------------------|--------|
+| **Enhanced** | Regenerate | Smart AI-detected environments (e.g., "The Deep Ocean", "Research Control Room") |
+| **Enhanced** | Preserve | No new elements created, keeps existing ones |
+| **Normal** | Regenerate | Fallback elements from scene locations |
+| **Normal** | Preserve | No new elements created, keeps existing ones |
+
+### 🎯 **Testing Recommendation**
+Try: **Replace All + Enhanced Build + Regenerate Elements**
+
+This should:
+1. Delete all existing items and elements
+2. Extract smart environments using AI pattern matching
+3. Create properly named, consolidated environments instead of 9 generic ones
+4. Show elements like "The Deep Ocean", "Giant Aquarium Facility", "Research Control Room" in the Element Library
+
+---
+
+## 🔧 n8n Webhook Integration (Completed)
+
+### 📋 **Webhook Configuration**
+The "storyboard - script element extractor" workflow has been converted from form-based to webhook-based integration.
+
+#### **Webhook URL**
+```
+https://n8n.srv1010007.hstgr.cloud/webhook/storyboard-script-extractor
+```
+
+#### **Request Payload Structure**
+```json
+{
+  "project_id": "storyboard_project_id",
+  "script_type": "ANIMATED_STORIES",
+  "language": "en",
+  "script": "Your script content here...",
+  "build_strategy": "add_update",
+  "webhook_url": "https://your-domain.com/api/storyboard/n8n-webhook"
+}
+```
+
+#### **Response Webhook Structure**
+```json
+{
+  "project_id": "storyboard_project_id",
+  "status": "ready",
+  "message": "Build completed successfully",
+  "elements": {
+    "characters": [...],
+    "environments": [...],
+    "props": [...]
+  },
+  "scenes": [...]
+}
+```
 
 ---
 
@@ -46,7 +165,7 @@ User Selects Script Type (Dropdown) → Clicks Build Button
     ↓
 4. n8n Processes: Extracts elements + scenes from script
     ↓
-5. n8n Directly Updates Convex: elements table + storyboardItems table
+5. n8n Directly Updates Convex: storyboard_elements table + storyboard_items table
     ↓
 6. n8n Updates Task Status: taskStatus="ready", taskMessage="Build completed"
     ↓
@@ -72,6 +191,70 @@ User Selects Script Type (Dropdown) → Clicks Build Button
 
 ---
 
+## 🔧 n8n Workflow Conversion Steps (Completed)
+
+### **🔄 From Form to Webhook Migration**
+
+The "storyboard - script element extractor" workflow has been successfully converted from form-based to webhook-based integration.
+
+#### **BEFORE (Form-based)**
+```
+[Form Trigger] → [Script Processing] → [Form Response]
+```
+
+#### **AFTER (Webhook-based)**
+```
+[Webhook Trigger] → [Script Processing] → [HTTP Request (Callback)]
+```
+
+### **📋 Conversion Steps Completed**
+
+#### **Step 1: Webhook Trigger Setup**
+- **Path**: `/storyboard-script-extractor`
+- **HTTP Method**: POST
+- **Response Mode**: Wait for response
+- **Authentication**: None
+
+#### **Step 2: Request Body Configuration**
+The webhook receives JSON payload with:
+- `project_id`: Convex storyboard project ID
+- `script_type`: Script type (ANIMATED_STORIES, etc.)
+- `language`: Language code (en, zh, etc.)
+- `script`: Full script content
+- `build_strategy`: "add_update" or "replace_all"
+- `webhook_url`: Callback URL for results
+
+#### **Step 3: HTTP Request Node for Callback**
+- **Method**: POST to `{{ $json.webhook_url }}`
+- **Headers**: Content-Type: application/json
+- **Body**: JSON response with extracted elements and scenes
+
+#### **Step 4: Response Structure**
+```json
+{
+  "project_id": "{{ $json.project_id }}",
+  "status": "ready",
+  "message": "Build completed successfully",
+  "elements": {
+    "characters": [...],
+    "environments": [...],
+    "props": [...]
+  },
+  "scenes": [...]
+}
+```
+
+### **✅ Verification Checklist**
+- [x] Webhook trigger configured with correct path
+- [x] HTTP request node added for callback
+- [x] JSON payload structure matches expected format
+- [x] Error handling implemented
+- [x] Workflow activated and tested
+- [x] Callback URL receives correct data
+- [x] Task status updates work in UI
+
+---
+
 ## 🔧 Required Convex Mutations for n8n Integration
 
 ### Elements Batch Create Mutation (n8n calls this directly)
@@ -87,13 +270,13 @@ export const createBatch = mutation({
       type: v.string(), // element type from n8n
       appearsInScenes: v.array(v.number())
     })),
-    storyboardId: v.id("storyboards")
+    projectId: v.id("storyboard_projects")
   },
   handler: async (ctx, args) => {
     for (const element of args.elements) {
-      await ctx.db.insert("elements", {
+      await ctx.db.insert("storyboard_elements", {
         ...element,
-        storyboardId: args.storyboardId
+        projectId: args.projectId
       });
     }
     return { success: true, count: args.elements.length };
@@ -118,13 +301,13 @@ export const createBatch = mutation({
         props: v.array(v.string())
       })
     })),
-    storyboardId: v.id("storyboards")
+    projectId: v.id("storyboard_projects")
   },
   handler: async (ctx, args) => {
     for (const scene of args.scenes) {
-      await ctx.db.insert("storyboardItems", {
+      await ctx.db.insert("storyboard_items", {
         ...scene,
-        storyboardId: args.storyboardId
+        projectId: args.projectId
       });
     }
     return { success: true, count: args.scenes.length };
@@ -146,204 +329,506 @@ export const updateTaskStatus = mutation({
       taskStatus: args.taskStatus,
       taskMessage: args.taskMessage
     });
-    return { success: true };
-  }
+```
+
+**Result**: Basic, inconsistent imagery, limited visual quality
+
+#### **✅ Enhanced Build (AI-Powered Prompts)**
+```javascript
+// Detailed, cinematic-quality prompts with visual rules
+"Dark deep ocean abyss, faint blue light filtering through water, mysterious atmosphere, deep sea particles floating, cinematic lighting, ultra-realistic, epic wide cinematic perspective, cinematic short-film lighting, mysterious suspenseful atmosphere with room haze particles, water particles floating, deep shadow contrast, atmospheric depth, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, ultra realistic, 8k detail, cinematic film still, professional photography, dramatic shadows, volumetric light rays, accurate location context"
+```
+
+**Result**: Professional, consistent, cinematic-quality imagery
+
+### **🔧 How Enhanced Scripts Work**
+
+#### **1. AI Extraction Process**
+```javascript
+// When Enhanced Build is selected:
+const response = await fetch('/api/storyboard/enhanced-script-extraction', {
+  method: 'POST',
+  body: JSON.stringify({
+    scriptContent: src,
+    projectId: pid
+  })
 });
 ```
 
----
+#### **2. AI Prompt Enhancement**
+The AI service takes your basic script and **enhances each scene** with:
+- **Cinematic rules** (perspective, lighting, atmosphere)
+- **Quality specifications** (8k detail, professional photography)
+- **Visual consistency** (environment continuity, height/scale control)
+- **Professional terminology** (volumetric light rays, film grain)
 
-## 🎯 Detailed Implementation Plan
+#### **3. Visual Consistency Rules**
+From the enhanced script examples:
+- **Perspective**: Epic wide cinematic perspective
+- **Lighting**: Cinematic short-film lighting, deep shadow contrast
+- **Atmosphere**: Mysterious suspenseful with particles
+- **Quality**: Ultra realistic, 8k detail, professional photography
+- **Continuity**: Clear perspective, environment continuity
 
-### Phase 1: n8n Workflow Integration
+### **🎯 Example: Scene 1 - Deep Ocean Mystery**
 
-#### 1.1 API Integration Setup (Direct n8n → Convex)
+#### **Base Prompt (Normal)**
+```
+"Dark deep ocean abyss, faint blue light filtering through water, mysterious atmosphere, deep sea particles floating, cinematic lighting, ultra-realistic."
+```
+
+#### **Enhanced Prompt (AI-Powered)**
+```
+"Dark deep ocean abyss, faint blue light filtering through water, mysterious atmosphere, deep sea particles floating, cinematic lighting, ultra-realistic, epic wide cinematic perspective, cinematic short-film lighting, mysterious suspenseful atmosphere with room haze particles, water particles floating, deep shadow contrast, atmospheric depth, clear perspective, cinematic short-film lighting, environment continuity, height/scale control, softness + film grain, ultra realistic, 8k detail, cinematic film still, professional photography, dramatic shadows, volumetric light rays, softness + film grain, accurate location context"
+```
+
+### **🎨 Benefits of Enhanced Scripts**
+
+#### **✅ Visual Quality**
+- **8K Detail**: Ultra-high resolution imagery
+- **Professional Photography**: Cinematic quality standards
+- **Film Grain**: Authentic cinematic texture
+- **Dramatic Shadows**: Professional lighting effects
+
+#### **✅ Consistency**
+- **Visual Rules**: Consistent perspective and lighting across all scenes
+- **Environment Continuity**: Seamless transitions between scenes
+- **Height/Scale Control**: Proper proportions and scale
+- **Atmospheric Depth**: Rich, layered visual environments
+
+#### **✅ Cinematic Quality**
+- **Wide Perspective**: Epic cinematic framing
+- **Short-Film Lighting**: Professional movie lighting techniques
+- **Particle Effects**: Atmospheric particles for depth
+- **Volumetric Light**: Realistic light ray rendering
+
+### **🔗 Integration in Build System**
+
+#### **Build Type Selection**
 ```javascript
-// Build Storyboard Function - Non-Blocking with Real-Time Updates
-export const buildStoryboard = mutation({
-  args: {
-    storyboardId: v.id("storyboards"),
-    buildType: v.string(),        // "normal" | "enhanced"
-    rebuildStrategy: v.string(),   // "add_update" | "replace_all"
-    scriptType: v.string(),        // "ANIMATED_STORIES" | etc.
-    language: v.string()           // "en" | "zh"
-  },
-  handler: async (ctx, args) => {
-    // 1. Set task status immediately (non-blocking)
-    await ctx.db.patch(args.storyboardId, { 
-      taskStatus: "processing",
-      taskType: "script",
-      taskMessage: "Building storyboard..."
+// In BuildStoryboardModal.tsx
+<label className="flex items-start gap-3 cursor-pointer p-3 border border-neutral-800/50 rounded-lg hover:bg-neutral-900 transition-colors">
+  <input
+    type="radio"
+    name="buildType"
+    checked={buildConfig.buildType === "enhanced"}
+    onChange={() => setBuildConfig(prev => ({ ...prev, buildType: "enhanced" }))}
+    className="w-4 h-4 text-indigo-500 mt-1"
+  />
+  <div className="flex-1">
+    <div className="font-medium text-white">Enhanced Build</div>
+    <div className="text-sm text-neutral-400">Generate frames + AI extraction</div>
+  </div>
+</label>
+```
+
+#### **Execution Flow**
+1. **User selects "Enhanced Build"** → Modal captures this choice
+2. **Script parsing** → Scenes extracted from script
+3. **AI Enhancement** → Each scene enhanced with detailed prompts
+4. **Element Extraction** → AI identifies characters, objects, environments
+5. **Storyboard Generation** → High-quality frames with consistent visuals
+
+### **🎬 Result Comparison**
+
+| Feature | Normal Build | Enhanced Build |
+|---------|-------------|---------------|
+| **Image Quality** | Basic | **8K Ultra-Realistic** |
+| **Consistency** | Variable | **Cinematic Consistency** |
+| **Lighting** | Simple | **Professional Film Lighting** |
+| **Perspective** | Random | **Epic Wide Cinematic** |
+| **Atmosphere** | Basic | **Rich Particle Effects** |
+| **Processing Time** | Fast | **Slower but Comprehensive** |
+
+### **🚀 When to Use Enhanced Scripts**
+
+#### **✅ Best For**
+- **First-time builds** - Establish visual quality baseline
+- **Professional projects** - High-quality cinematic output
+- **Consistency critical** - Multiple scenes with unified style
+- **Client presentations** - Impressive, professional results
+// components/storyboard/BuildStoryboardDialog.tsx - Current Implementation
+const BUILD_TYPES = [
+  { value: "normal", label: "Normal Build", description: "Generate frames without AI extraction" },
+  { value: "enhanced", label: "Enhanced Build", description: "Generate frames + AI-powered extraction" }
+];
+
+const REBUILD_STRATEGIES = [
+  { value: "add_update", label: "Add/Update Scenes", description: "Keep existing content, add/update specific scenes" },
+  { value: "replace_all", label: "Replace All", description: "Remove and replace all content" }
+];
+
+const ELEMENT_STRATEGIES = [
+  { value: "preserve", label: "Preserve Elements", description: "Keep existing elements" },
+  { value: "regenerate", label: "Regenerate Elements", description: "Re-extract all elements with AI" }
+];
+
+const SCRIPT_TYPES = [
+  { value: "ANIMATED_STORIES", label: "Animated Stories", description: "General animated storytelling" },
+  { value: "KIDS_ANIMATED_STORIES", label: "Kids Animated Stories", description: "Child-friendly animation content" },
+  { value: "EDUCATIONAL_ANIMATIONS", label: "Educational Animations", description: "Learning-focused animations" },
+  { value: "TUTORIAL_ANIMATIONS", label: "Tutorial Animations", description: "Step-by-step tutorials" },
+  { value: "DOCUMENTARY_SHORTS", label: "Documentary Shorts", label: "Short documentary films" },
+  { value: "EDUCATIONAL_SCIENCE_HISTORY", label: "Educational Science History", description: "Historical and scientific content" },
+  { value: "FINANCE_EDUCATION", label: "Finance Education", description: "Financial concepts and tutorials" },
+  { value: "AI_MUSIC_SONG_VIDEO", label: "AI Music Song Video", description: "Music video generation" },
+  { value: "HEALTH_EDUCATION", label: "Health Education", description: "Medical and wellness content" },
+  { value: "ADVERTISING", label: "Advertising", description: "Commercial content creation" },
+  { value: "TUTORIAL_STEP_BY_STEP", label: "Tutorial Step by Step", description: "Detailed tutorials" }
+];
+
+const LANGUAGES = [
+  { value: "en", label: "English", flag: "🇺🇸" },
+  { value: "zh", label: "中文", flag: "🇨🇳" },
+  { value: "fr", label: "Français", flag: "🇫🇷" },
+  { value: "es", label: "Español", flag: "🇪🇸" },
+  { value: "de", label: "Deutsch", flag: "🇩🇪" },
+  { value: "it", label: "Italiano", flag: "🇮🇹" },
+  { value: "pt", label: "Português", flag: "🇵🇹" },
+  { value: "ru", label: "Русский", flag: "🇷🇺" },
+  { value: "ar", label: "العربية", flag: "🇸🇦" },
+  { value: "ja", label: "日本語", flag: "🇯🇵" },
+  { value: "ko", label: "한국어", flag: "🇰🇷" }
+];
+
+// Component state
+const [activeTab, setActiveTab] = useState<DialogTab>("basic");
+const [buildType, setBuildType] = useState(currentBuildType || "enhanced");
+const [rebuildStrategy, setRebuildStrategy] = useState(currentRebuildStrategy || "add_update");
+const [elementStrategy, setElementStrategy] = useState(currentElementStrategy || "regenerate");
+const [scriptType, setScriptType] = useState("ANIMATED_STORIES");
+const [language, setLanguage] = useState("en");
+const [selectedScenes, setSelectedScenes] = useState<string[]>([]);
+const [isSubmitting, setIsSubmitting] = useState(false);
+
+// Handle build function
+const handleBuild = async () => {
+  setIsSubmitting(true);
+  try {
+    const response = await fetch('/api/n8n-webhook', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        projectId: projectId,
+        buildType,
+        rebuildStrategy,
+        scriptType,
+        language,
+        companyId: project?.companyId || '',
+        script: project?.script || ''
+      })
     });
-
-    // 2. Strategy processing - clear data if needed
-    if (args.rebuildStrategy === "replace_all") {
-      await clearExistingElements(ctx, args.storyboardId);
-      await clearExistingScenes(ctx, args.storyboardId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Build request failed');
     }
-
-    // 3. Send to n8n workflow (fire and forget)
-    try {
-      const response = await fetch('https://n8n.srv1010007.hstgr.cloud/workflow/nvWSNw6bq3X81w8WPeeep', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          storyboard_id: args.storyboardId,
-          script_type: args.scriptType,
-          language: args.language,
-          script: await getScriptContent(ctx, args.storyboardId),
-          build_strategy: args.rebuildStrategy
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`n8n workflow error: ${response.status}`);
-      }
-      
-      // 4. Return immediately - n8n will handle the rest
-      return { success: true, message: "Build started successfully" };
-      
-    } catch (error) {
-      // 5. Handle errors - update task status
-      await ctx.db.patch(args.storyboardId, { 
-        taskStatus: "error",
-        taskMessage: "Failed to start build process"
-      });
-      throw error;
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      onSuccess?.();
+      onOpenChange(false);
+    } else {
+      throw new Error(result.error || 'Build failed');
     }
+  } catch (error) {
+    console.error('Build failed:', error);
+  } finally {
+    setIsSubmitting(false);
   }
-});
-
-// Helper function to get script content
-async function getScriptContent(ctx, storyboardId) {
-  const storyboard = await ctx.db.get(storyboardId);
-  return storyboard?.script || "";
-}
-
-// Helper functions for clearing data
-async function clearExistingElements(ctx, storyboardId) {
-  const existingElements = await ctx.db.query("elements")
-    .filter(q => q.eq(q.field("storyboardId"), storyboardId))
-    .collect();
-  
-  for (const element of existingElements) {
-    await ctx.db.delete(element._id);
-  }
-}
-
-async function clearExistingScenes(ctx, storyboardId) {
-  const existingScenes = await ctx.db.query("storyboardItems")
-    .filter(q => q.eq(q.field("storyboardId"), storyboardId))
-    .collect();
-  
-  for (const scene of existingScenes) {
-    await ctx.db.delete(scene._id);
-  }
-}
-```
-
-#### 1.2 Script Type Mapping
-```javascript
-// Map build dialog selections to n8n script types
-const SCRIPT_TYPE_MAPPING = {
-  'animated_stories': 'ANIMATED_STORIES',
-  'kids_animated_stories': 'KIDS_ANIMATED_STORIES',
-  'educational_animations': 'EDUCATIONAL_ANIMATIONS',
-  'tutorial_animations': 'TUTORIAL_ANIMATIONS',
-  'documentary_shorts': 'DOCUMENTARY_SHORTS',
-  'educational_science_history': 'EDUCATIONAL_SCIENCE_HISTORY',
-  'finance_education': 'FINANCE_EDUCATION',
-  'ai_music_song_video': 'AI_MUSIC_SONG_VIDEO',
-  'health_education': 'HEALTH_EDUCATION',
-  'advertising': 'ADVERTISING',
-  'tutorial_step_by_step': 'TUTORIAL_STEP_BY_STEP'
 };
-```
 
----
+// Dialog UI structure
+const ELEMENT_TYPES = [
+  { key: "character", label: "Characters", Icon: User, color: "text-purple-400" },
+  { key: "prop", label: "Props", Icon: Package, color: "text-blue-400" },
+  { key: "environment", label: "Environment", Icon: Trees, color: "text-emerald-400" },
+  { key: "logo", label: "Logos", Icon: Shapes, color: "text-pink-400" },
+  { key: "font", label: "Fonts", Icon: Type, color: "text-yellow-400" },
+  { key: "style", label: "Styles", Icon: Palette, color: "text-orange-400" },
+  { key: "other", label: "Other", Icon: Sparkles, color: "text-gray-300" },
+] as const;
 
-### Phase 2: Enhanced Build Dialog Design
-
-#### 2.1 Updated Build Dialog Options
-```javascript
-// Enhanced Build Dialog should include:
-const buildOptions = {
-  buildType: 'normal | enhanced',
-  rebuildStrategy: 'add_update | replace_all',
-  elementStrategy: 'preserve | regenerate',
-  scriptType: 'ANIMATED_STORIES | KIDS_ANIMATED_STORIES | ... (11 options)',
-  language: 'en | zh',
-  projectId: 'storyboard_id'
-};
-```
-
-#### 2.2 Build Dialog UI Components
-```javascript
-// Script Type Selection
-<select id="scriptType">
-  <option value="ANIMATED_STORIES">Animated Stories</option>
-  <option value="KIDS_ANIMATED_STORIES">Kids Animated Stories</option>
-  <option value="EDUCATIONAL_ANIMATIONS">Educational Animations</option>
-  <option value="TUTORIAL_ANIMATIONS">Tutorial Animations</option>
-  <option value="DOCUMENTARY_SHORTS">Documentary Shorts</option>
-  <option value="EDUCATIONAL_SCIENCE_HISTORY">Educational Science History</option>
-  <option value="FINANCE_EDUCATION">Finance Education</option>
-  <option value="AI_MUSIC_SONG_VIDEO">AI Music Song Video</option>
-  <option value="HEALTH_EDUCATION">Health Education</option>
-  <option value="ADVERTISING">Advertising</option>
-  <option value="TUTORIAL_STEP_BY_STEP">Tutorial Step by Step</option>
-</select>
-
-// Language Selection
-<select id="language">
-  <option value="en">English</option>
-  <option value="zh">中文 (Chinese)</option>
-  <option value="fr">Français (French)</option>
-  <option value="es">Español (Spanish)</option>
-  <option value="de">Deutsch (German)</option>
-  <option value="it">Italiano (Italian)</option>
-  <option value="pt">Português (Portuguese)</option>
-  <option value="ru">Русский (Russian)</option>
-  <option value="ar">العربية (Arabic)</option>
-  <option value="ja">日本語 (Japanese)</option>
-  <option value="ko">한국어 (Korean)</option>
-</select>
-```
-
-#### 2.3 Build Storyboard Action Redesign
-
-#### 2.1 Remove Old Code
-```javascript
-// DELETE: All existing manual script processing code
-// DELETE: Manual element extraction logic
-// DELETE: Manual scene parsing code
-// DELETE: Hardcoded element rules
-```
-
-#### 2.2 New Build Storyboard Function
-```javascript
-async function buildStoryboard(options) {
-  const {
-    buildType,
-    rebuildStrategy,
-    elementStrategy,
-    scriptContent,
-    scriptType,
-    language,
-    projectId
-  } = options;
-
-  // Only Enhanced Build calls n8n
-  if (buildType === 'enhanced' && elementStrategy === 'regenerate') {
-    return await enhancedBuildWithN8N(options);
-  } else {
-    return await normalBuild(options);
-  }
+interface ElementLibraryProps {
+  projectId: Id<"storyboard_projects">;
+  userId: string;
+  user: any; // Clerk user object
+  onClose: () => void;
+  onSelectElement?: (referenceUrls: string[], name: string) => void;
+  initialCreateDraft?: {
+    imageUrls?: string[];
+    name?: string;
+    type?: string;
+  } | null;
+  selectedItemId?: Id<"storyboard_items"> | null; // For adding elements to specific storyboard item
 }
+
+// Mutations for element management
+const removeUnusedElements = useMutation(api.storyboard.storyboardItemElements.removeUnusedElements);
+const addElementToItem = useMutation(api.storyboard.storyboardItemElements.addElementToItem);
+
+// Component state
+const [activeType, setActiveType] = useState(initialType);
+const [showCreate, setShowCreate] = useState(Boolean(initialCreateDraft));
+const [editingId, setEditingId] = useState<Id<"storyboard_elements"> | null>(null);
+const [newName, setNewName] = useState(initialCreateDraft?.name ?? "");
+const [referenceUrls, setReferenceUrls] = useState<string[]>(initialCreateDraft?.imageUrls ?? []);
+const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
+const [thumbnailIndex, setThumbnailIndex] = useState(0);
+const [saving, setSaving] = useState(false);
+const [uploading, setUploading] = useState(false);
+const [visibility, setVisibility] = useState<"private" | "public">("private");
+const [tags, setTags] = useState<string[]>([]);
+const [tagInput, setTagInput] = useState("");
+const [selectedTags, setSelectedTags] = useState<string[]>([]); // For filtering
+
+// New state for tabs and description
+const [activeTab, setActiveTab] = useState<"basic" | "visibility" | "details">("basic");
+const [description, setDescription] = useState("");
+
+// Component render structure
+return (
+  <div className="fixed inset-0 bg-black/98 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6">
+    <div className="w-full max-w-6xl bg-neutral-950 rounded-2xl shadow-2xl border border-neutral-800/50 max-h-[95vh] overflow-hidden flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-neutral-800/50">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg sm:rounded-xl flex items-center justify-center">
+            <Package className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg sm:text-2xl font-bold text-white">Element Library</h2>
+            <p className="text-xs text-neutral-400 hidden sm:block">Create and manage reusable visual elements</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="rounded-lg p-1.5 sm:p-2 text-neutral-400 hover:text-white hover:bg-neutral-800/50 transition-colors">
+          <X className="w-3.5 h-3.5 sm:w-5 h-4 sm:h-5" />
+        </button>
+      </div>
+
+      <div className="border-b border-neutral-800/50 px-3 sm:px-6 py-2 sm:py-4">
+        <div className="flex gap-1 flex-wrap overflow-x-auto">
+          {ELEMENT_TYPES.map(({ key, label, Icon, color }) => (
+            <button
+              key={key}
+              onClick={() => setActiveType(key)}
+              className={`flex items-center gap-1 sm:gap-2 rounded-lg px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+                activeType === key
+                  ? "bg-indigo-600 text-white"
+                  : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Content area */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Element creation/editing form */}
+        {showCreate && (
+          <div className="p-3 sm:p-6 border-b border-neutral-800/50">
+            {/* Form fields */}
+          </div>
+        )}
+
+        {/* Element list */}
+        <div className="p-3 sm:p-6">
+          {/* Element grid */}
+        </div>
+      </div>
+    </div>
+  </div>
+);
 ```
 
-#### 2.3 Enhanced Build with n8n
+### **Storyboard Item Card Implementation**
 ```javascript
+// workspace/[projectId]/page.tsx - FrameCard Props (Current Implementation)
+interface FrameCardProps {
+  item: { 
+    _id: string; 
+    title: string; 
+    description?: string; 
+    imageUrl?: string; 
+    videoUrl?: string; 
+    duration: number; 
+    generationStatus: string; 
+    order: number; 
+    tags?: Array<{ id: string; name: string; color: string }>; 
+    isFavorite?: boolean; 
+    frameStatus?: string; 
+    notes?: string; 
+    linkedElements?: Array<{ id: string; name: string; type: string }> 
+  };
+  index: number;
+  frameRatio: string;
+  selected: boolean;
+  projectId: string;
+  onSelect: () => void;
+  onDelete: () => void;
+  onImageUploaded: (id: string, url: string) => void;
+  onDoubleClick: () => void;
+  onDuplicate: () => void;
+  onTagsChange: (tags: Array<{ id: string; name: string; color: string }>) => void;
+  onFavoriteToggle?: () => void;
+  // NEW: Safe optional props for status and notes
+  onStatusChange?: (status: 'draft' | 'in-progress' | 'completed') => void;
+  onNotesChange?: (notes: string) => void;
+  onTitleChange?: (title: string) => void;
+  onRemoveElement?: (elementId: string) => void;
+  onAddElement?: () => void;
+  userId: string;
+  // Build dialog props
+  onBuildStoryboard?: () => void;
+}
+
+// Element badge system with z-index (Current Implementation)
+<div className="absolute bottom-36 left-2 right-2 flex flex-wrap gap-1.5 pointer-events-none z-10">
+  <div className="flex flex-wrap gap-1.5">
+    {/* Display elements from elementNames */}
+    {item.elementNames && (
+      <>
+        {/* Characters */}
+        {item.elementNames.characters?.map((elementName, index) => (
+          <div
+            key={`character-${index}`}
+            className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-purple-600/80 border-purple-500/30 text-white hover:bg-purple-600 transition-colors pointer-events-auto"
+            title={`Character: ${elementName}`}
+          >
+            <span className="pr-1">{elementName}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveElement(`character-${index}`);
+              }}
+              className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+            >
+              <X className="w-2.5 h-2.5 text-white" />
+            </button>
+          </div>
+        ))}
+        {/* Environments */}
+        {item.elementNames.environments?.map((elementName, index) => (
+          <div
+            key={`environment-${index}`}
+            className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-emerald-600/80 border-emerald-500/30 text-white hover:bg-emerald-600 transition-colors pointer-events-auto"
+            title={`Environment: ${elementName}`}
+          >
+            <span className="pr-1">{elementName}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveElement(`environment-${index}`);
+              }}
+              className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+            >
+              <X className="w-2.5 h-2.5 text-white" />
+            </button>
+          </div>
+        ))}
+        {/* Props */}
+        {item.elementNames.props?.map((elementName, index) => (
+          <div
+            key={`prop-${index}`}
+            className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-blue-600/80 border-blue-500/30 text-white hover:bg-blue-600 transition-colors pointer-events-auto"
+            title={`Prop: ${elementName}`}
+          >
+            <span className="pr-1">{elementName}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveElement(`prop-${index}`);
+              }}
+              className="opacity-0 group-hover/badge:opacity-100 absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-all"
+            >
+              <X className="w-2.5 h-2.5 text-white" />
+            </button>
+          </div>
+        ))}
+      </>
+    )}
+  </div>
+</div>
+
+// Action buttons (Current Implementation)
+<div className="absolute bottom-12 right-3 flex gap-2 z-20">
+  {/* Add Element button */}
+  <button
+    onClick={(e) => { e.stopPropagation(); onAddElement?.(); }}
+    className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
+    title="Add element to this scene"
+  >
+    <div className="w-8 h-8 bg-purple-600/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-purple-600 transition-colors">
+      <Plus className="w-3.5 h-3.5 text-white" />
+    </div>
+  </button>
+  
+  {/* Duplicate button */}
+  <button
+    onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+    className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
+  >
+    <div className="w-8 h-8 bg-gray-600/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-gray-600 transition-colors">
+      <Copy className="w-3.5 h-3.5 text-white" />
+    </div>
+  </button>
+  
+  {/* Delete button */}
+  <button
+    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+    className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
+  >
+    <div className="w-8 h-8 bg-red-600/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-red-600 transition-colors">
+      <Trash2 className="w-3.5 h-3.5 text-white" />
+    </div>
+  </button>
+</div>
+
+// Tags with highest z-index (Current Implementation)
+<div className="relative z-30">
+  <div 
+    className="flex flex-wrap gap-1 items-center cursor-pointer group"
+    onClick={(e) => { 
+      e.stopPropagation(); 
+      setShowTagEditor(!showTagEditor);
+    }}
+  >
+    {item.tags && item.tags.length > 0 ? (
+      <>
+        {item.tags.slice(0, 3).map((tag) => (
+          <span
+            key={tag.id}
+            className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-all duration-200 hover:scale-105"
+            style={{ 
+              backgroundColor: tag.color + '25', 
+              color: tag.color,
+              border: `1px solid ${tag.color}40`
+            }}
+          >
+            {tag.name}
+          </span>
+        ))}
+        {item.tags.length > 3 && (
+          <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-neutral-800 text-neutral-400 border border-neutral-700">
+            +{item.tags.length - 3}
+          </span>
+        )}
+      </>
+    ) : (
+      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-neutral-800 text-neutral-400 border border-neutral-700 cursor-pointer hover:bg-neutral-700 transition-colors">
+        + Tags
+      </span>
+    )}
+  </div>
+</div>
+
+// Enhanced Build with n8n
 async function enhancedBuildWithN8N(options) {
   try {
     // Step 1: Call n8n workflow
@@ -371,447 +856,77 @@ async function enhancedBuildWithN8N(options) {
     throw error;
   }
 }
+
+// Save Elements Directly
+### **Before Each Build**
+1. **Verify Script Content**: Ensure script has clear scene descriptions
+2. **Check n8n Status**: Confirm workflow is active
+3. **Test Convex Connection**: Run `npx convex dev --once`
+4. **Verify API Keys**: Check AI service credentials
+
+### **Build Testing Checklist**
+- [ ] Normal Build works
+- [ ] Enhanced Build works
+- [ ] Elements extract correctly
+- [ ] Task status updates work
+- [ ] Error handling works
+- [ ] UI remains responsive
+
+### **Advanced Testing**
+- Test with different script types
+- Test with large scripts (50+ scenes)
+- Test error recovery scenarios
+
+---
+
+## 🚀 Future Enhancements
+
+### **Priority 1: Performance**
+- Build progress indicators
+
+### **Priority 2: User Experience**
+- User experience improvements
+
+---
+
+## 📞 Support & Resources
+
+### **Technical Support**
+- **Convex Logs**: `npx convex dev --logs`
+- **n8n Dashboard**: Check workflow execution history
+- **Browser Console**: Check for JavaScript errors
+
+### **Documentation**
+- **n8n Workflow Guide**: Available in n8n dashboard
+- **Convex Functions**: Check `convex/` directory
+- **UI Components**: Check `components/storyboard/` directory
+
+### **Quick Commands**
+```bash
+# Deploy Convex changes
+npx convex dev --once
+
+# Check n8n workflow status
+# Visit: https://n8n.srv1010007.hstgr.cloud
+
+# View build logs
+# Check browser console + Convex logs
 ```
 
 ---
 
-### Phase 3: Element Processing
-
-#### 3.1 Process Extracted Elements
+**🎬 Storyboard Build System - Complete Implementation Guide**
 ```javascript
-async function processElements(elements) {
-  const processedElements = {
-    characters: [],
-    environments: [],
-    props: []
-  };
-
-  // Process Characters
-  if (elements.characters) {
-    processedElements.characters = elements.characters.map(char => ({
-      id: generateId(),
-      name: char.name,
-      description: char.description,
-      confidence: char.confidence,
-      type: char.type,
-      appearsInScenes: char.appearsInScenes,
-      role: char.role || 'supporting',
-      visualStyle: determineVisualStyle(char),
-      tags: extractTags(char.description)
-    }));
-  }
-
-  // Process Environments
-  if (elements.environments) {
-    processedElements.environments = elements.environments.map(env => ({
-      id: generateId(),
-      name: env.name,
-      description: env.description,
-      confidence: env.confidence,
-      type: env.type,
-      appearsInScenes: env.appearsInScenes,
-      function: env.function || 'primary',
-      visualStyle: determineVisualStyle(env),
-      tags: extractTags(env.description)
-    }));
-  }
-
-  // Process Props
-  if (elements.props) {
-    processedElements.props = elements.props.map(prop => ({
-      id: generateId(),
-      name: prop.name,
-      description: prop.description,
-      confidence: prop.confidence,
-      type: prop.type,
-      appearsInScenes: prop.appearsInScenes,
-      purpose: prop.purpose || 'plot',
-      visualStyle: determineVisualStyle(prop),
-      tags: extractTags(prop.description)
-    }));
-  }
-
-  return processedElements;
-}
-```
-
-#### 3.2 Save Elements to Card
-```javascript
-async function saveElementsToCard(elements, projectId) {
-  // Clear existing elements if Replace All strategy
-  if (rebuildStrategy === 'replace_all') {
-    await clearExistingElements(projectId);
-  }
-
-  // Save each element type
-  for (const character of elements.characters) {
-    await saveCharacterToCard(character, projectId);
-  }
-
-  for (const environment of elements.environments) {
-    await saveEnvironmentToCard(environment, projectId);
-  }
-
-  for (const prop of elements.props) {
-    await savePropToCard(prop, projectId);
-  }
-}
-```
-
----
-
-### Phase 4: Scene Processing
-
-#### 4.1 Process Extracted Scenes
-```javascript
-async function processScenes(scenes) {
-  return scenes.map(scene => ({
-    id: generateId(),
-    sceneNumber: scene.sceneNumber,
-    title: scene.title,
-    duration: scene.duration,
-    description: scene.description,
-    visualPrompt: scene.visualPrompt,
-    elements: {
-      characters: scene.elements.characters || [],
-      environments: scene.elements.environments || [],
-      props: scene.elements.props || []
-    },
-    timing: calculateSceneTiming(scene),
-    transitions: determineTransitions(scene),
-    cameraMovements: extractCameraMovements(scene.visualPrompt)
-  }));
-}
-```
-
-#### 4.2 Save Scenes to StoryboardItem Card
-```javascript
-async function saveScenesToCard(scenes, projectId) {
-  // Clear existing scenes if Replace All strategy
-  if (rebuildStrategy === 'replace_all') {
-    await clearExistingScenes(projectId);
-  }
-
-  // Save each scene
-  for (const scene of scenes) {
-    await saveSceneToCard(scene, projectId);
-  }
-}
-```
-
----
-
-### Phase 5: Frame Generation
-
-#### 5.1 Generate Frames from Processed Data
-```javascript
-async function generateFrames(scenes, elements) {
-  const frames = [];
-
-  for (const scene of scenes) {
-    const frameData = {
-      sceneId: scene.id,
-      sceneNumber: scene.sceneNumber,
-      title: scene.title,
-      duration: scene.duration,
-      visualPrompt: scene.visualPrompt,
-      elements: scene.elements,
-      elementDetails: getElementDetails(scene.elements, elements),
-      cameraWork: scene.cameraMovements,
-      transitions: scene.transitions
-    };
-
-    // Generate frame using existing frame generation logic
-    const frame = await generateSingleFrame(frameData);
-    frames.push(frame);
-  }
-
-  return frames;
-}
-```
-
----
-
-## 🎯 Build Strategy Logic
-
-### Normal Build (No AI)
-```javascript
-if (buildType === 'normal') {
-  // Use existing frame generation logic
-  // No n8n call
-  // No element extraction
-  return await generateFramesFromExistingData();
-}
-```
-
-### Enhanced Build + Preserve Elements
-```javascript
-if (buildType === 'enhanced' && elementStrategy === 'preserve') {
-  // Extract scenes only
-  // Keep existing elements
-  // n8n call for scene processing only
-  return await enhancedBuildPreserveElements();
-}
-```
-
-### Enhanced Build + Regenerate Elements (Full AI)
-```javascript
-if (buildType === 'enhanced' && elementStrategy === 'regenerate') {
-  // Full n8n integration
-  // Extract both elements and scenes
-  // Replace all content
-  return await enhancedBuildWithN8N();
-}
-```
-
----
-
-## 📊 Performance Considerations
-
-### Caching Strategy
-```javascript
-// Cache n8n results for identical scripts
-const scriptCache = new Map();
-```
-
----
-
-## 📊 Comprehensive Flow Analysis
-
-### 🎯 Overall Assessment: EXCELLENT with Convex Enhancements
-
----
-
-### ✅ STRONG POINTS (Current Design)
-
-#### 1. Hybrid Architecture (9/10)
-```javascript
-// PERFECT: Local + AI combination
-Scene Generation (Local/Fast) + Element Extraction (AI/Smart)
-```
-- **Speed**: Immediate scene feedback
-- **Intelligence**: AI-powered extraction
-- **Reliability**: Fallback to normal build
-
-#### 2. Error Handling (8/10)
-```javascript
-// GOOD: Comprehensive error coverage
-try {
-  const result = await callN8nWorkflow(options);
-} catch (error) {
-  // Handles 500, 400, network errors
-  // Fallback to normal build
-  // User-friendly messages
-}
-```
-
-#### 3. Build Strategy Flexibility (9/10)
-- **3 Build Types**: Normal, Enhanced, AI-only
-- **2 Rebuild Strategies**: Add/Update, Replace All
-- **2 Element Strategies**: Preserve, Regenerate
-- **11 Script Types**: Comprehensive coverage
-
----
-
-### ⚠️ AREAS FOR IMPROVEMENT (Convex Integration)
-
-#### 1. Real-Time Status (6/10 → 9/10 with Convex)
-```javascript
-// BEFORE: Silent processing
-await buildStoryboard(options);
-
-// AFTER: Real-time updates
-await ctx.db.patch(storyboardId, {
-  buildStatus: "processing",
-  buildProgress: 30,
-  buildMessage: "Calling n8n workflow..."
-});
-```
-
-#### 2. Notification System (5/10 → 9/10 with Convex)
-```javascript
-// BEFORE: User must check manually
-// AFTER: Automatic notifications
-<BuildStatus storyboardId={storyboardId} />
-// Shows: Processing (30%) → Ready → Error
-```
-
-#### 3. Concurrent Build Management (4/10 → 8/10 with Convex)
-```javascript
-// BEFORE: No build queue
-// AFTER: Build job tracking
-const buildJobs = await ctx.db.query("buildJobs")
-  .filter(q => q.eq(q.field("status"), "processing"))
-  .collect();
-```
-
----
-
-### 🚀 CONVEX-SPECIFIC BENEFITS
-
-#### 1. Real-Time Reactivity
-```javascript
-// Automatic UI updates
-const status = useQuery(api.storyboards.getBuildStatus, storyboardId);
-// UI updates instantly when Convex data changes
-```
-
-#### 2. Scalable Build Management
-```javascript
-// Multiple users, concurrent builds
-export const getActiveBuilds = query({
-  handler: async (ctx) => {
-    return await ctx.db.query("buildJobs")
-      .filter(q => q.eq(q.field("status"), "processing"))
-      .collect();
-  }
-});
-```
-
-#### 3. Persistent Build History
-```javascript
-// Track all builds over time
-export const getBuildHistory = query({
-  args: { storyboardId: v.id("storyboards") },
-  handler: async (ctx, args) => {
-    return await ctx.db.query("buildJobs")
-      .filter(q => q.eq(q.field("storyboardId"), args.storyboardId))
-      .order("desc")
-      .take(10);
-  }
-});
-```
-
----
-
-### 📈 PERFORMANCE ANALYSIS
-
-#### Current Performance (Good)
-- **Scene Generation**: ~100ms (local)
-- **n8n Call**: ~5-30 seconds (AI processing)
-- **Frame Generation**: ~2-10 seconds
-- **Total**: ~7-40 seconds
-
-#### With Convex Enhancements (Better)
-- **Real-time Feedback**: Immediate status updates
-- **Background Processing**: User can navigate away
-- **Build Queue**: Handle multiple concurrent builds
-- **Error Recovery**: Automatic retry mechanisms
-
----
-
-### 🎯 RECOMMENDATIONS
-
-#### 1. IMPLEMENT CONVEX STATUS TRACKING (HIGH PRIORITY)
-```javascript
-// Add to schema immediately
-buildStatus: v.string(), // "idle" | "processing" | "ready" | "error"
-buildProgress: v.number(), // 0-100
-buildMessage: v.string(), // Current operation
-```
-
-#### 2. ADD BUILD NOTIFICATION COMPONENT (HIGH PRIORITY)
-```javascript
-// Show in storyboard UI
-<BuildStatus storyboardId={storyboardId} />
-// Displays: 🔄 Processing (45%) → ✅ Ready → ❌ Error
-```
-
-#### 3. IMPLEMENT BUILD QUEUE (MEDIUM PRIORITY)
-```javascript
-// Handle concurrent builds
-const buildQueue = new BuildQueue({
-  maxConcurrent: 3,
-  retryAttempts: 2
-});
-```
-
-#### 4. ADD BUILD HISTORY (LOW PRIORITY)
-```javascript
-// Track build performance
-const buildMetrics = {
-  averageBuildTime: "12.5 seconds",
-  successRate: "94%",
-  totalBuilds: 156
-};
-```
-
----
-
-### 🏆 FINAL VERDICT
-
-#### Current Design: 8/10
-- **Architecture**: Excellent hybrid approach
-- **Error Handling**: Comprehensive
-- **User Experience**: Good (missing status updates)
-
-#### With Convex Integration: 9.5/10
-- **Real-Time Status**: Perfect user feedback
-- **Scalability**: Handles multiple users
-- **Reliability**: Persistent build tracking
-- **Performance**: Background processing
-
----
-
-## 🚀 Simplified Convex Integration (Minimalist Approach)
-
-### Convex Schema Update (Generic Status Field)
-```javascript
-// convex/schema.ts - Just add ONE field to existing storyboard table
-export default defineSchema({
-  storyboards: defineTable({
-    // ... your existing fields stay the same
-    title: v.string(),
-    script: v.string(),
-    scenes: v.array(v.any()),
-    elements: v.array(v.any()),
-    
-    // JUST ONE NEW FIELD - Generic status for all processes
-    status: v.string(), // "idle" | "processing" | "ready" | "error"
-    
-    // ... rest of your existing fields
-  })
-  // NO additional tables needed!
-});
-```
-
-### Direct Convex API Implementation
-```javascript
-// convex/functions/build.ts
-export const buildStoryboard = mutation({
-  args: {
-    storyboardId: v.id("storyboards"),
-    buildType: v.string(),
-    scriptType: v.string(),
-    language: v.string()
-  },
-  handler: async (ctx, args) => {
-    // 1. Set status to processing
-    await ctx.db.patch(args.storyboardId, { 
-      status: "processing"
-    });
-
-    try {
-      // 2. Call n8n workflow
-      const response = await fetch('https://n8n.srv1010007.hstgr.cloud/webhook/script-extractor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          script_type: args.scriptType,
-          language: args.language,
-          project_id: args.storyboardId,
-          script: await getScriptContent(ctx, args.storyboardId)
-        })
-      });
-      
-      const n8nResult = await response.json();
-      
-      // 3. Clear existing data (if replace all)
-      await clearExistingElements(ctx, args.storyboardId);
-      await clearExistingScenes(ctx, args.storyboardId);
-      
-      // 4. Save new elements directly
-      await saveElementsDirectly(ctx, args.storyboardId, n8nResult.elements);
+async function buildStoryboard(options) {
+  const {
+    buildType,
+    rebuildStrategy,
+    elementStrategy,
+    scriptContent,
+    scriptType,
+    language,
+    projectId
+  } = options;
       
       // 5. Save new scenes directly
       await saveScenesDirectly(ctx, args.storyboardId, n8nResult.scenes);
@@ -918,140 +1033,6 @@ export const generateVideo = mutation({
     }
   }
 });
-```
-
-### Minimal UI Implementation
-```javascript
-// components/StoryboardCard.tsx
-export function StoryboardCard({ storyboard }) {
-  const getStatusIcon = () => {
-    switch (storyboard.status) {
-      case "processing":
-        return <Spinner className="w-4 h-4 text-blue-500" />;
-      case "ready":
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case "error":
-        return <AlertCircle className="w-4 h-4 text-red-500" />;
-      default:
-        return null;
-    }
-  };
-
-  const getStatusColor = () => {
-    switch (storyboard.status) {
-      case "processing": return "bg-blue-100 text-blue-800";
-      case "ready": return "bg-green-100 text-green-800";
-      case "error": return "bg-red-100 text-red-800";
-    });
-
-    try {
-      // 2. Call n8n workflow
-      const response = await fetch('https://n8n.srv1010007.hstgr.cloud/webhook/script-extractor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          script_type: args.scriptType,
-          language: args.language,
-          project_id: args.storyboardId,
-          script: await getScriptContent(ctx, args.storyboardId)
-        })
-      });
-      
-      const n8nResult = await response.json();
-      
-      // 3. Clear existing data (if replace all strategy)
-      if (args.buildType === "replace_all") {
-        await clearExistingElements(ctx, args.storyboardId);
-        await clearExistingScenes(ctx, args.storyboardId);
-      }
-      
-      // 4. Save new elements using simplified approach
-      await saveElementsDirectly(ctx, args.storyboardId, n8nResult.elements);
-      
-      // 5. Save new scenes directly
-      await saveScenesDirectly(ctx, args.storyboardId, n8nResult.scenes);
-      
-      // 6. Mark as ready with specific message
-      await ctx.db.patch(args.storyboardId, { 
-        taskStatus: "ready",
-        taskMessage: "Build completed"
-      });
-      
-      return { success: true };
-      
-    } catch (error) {
-      // 7. Handle errors with specific message
-      await ctx.db.patch(args.storyboardId, { 
-        taskStatus: "error",
-        taskMessage: "Build failed"
-      });
-      throw error;
-    }
-  }
-});
-
-// HELPER FUNCTIONS
-
-// Get script content from storyboard table
-async function getScriptContent(ctx, storyboardId) {
-  const storyboard = await ctx.db.get(storyboardId);
-  return storyboard?.script || "";
-}
-
-// Clear existing elements for "replace all" strategy
-async function clearExistingElements(ctx, storyboardId) {
-  const existingElements = await ctx.db.query("elements")
-    .filter(q => q.eq(q.field("storyboardId"), storyboardId))
-    .collect();
-  
-  for (const element of existingElements) {
-    await ctx.db.delete(element._id);
-  }
-}
-
-// Clear existing scenes for "replace all" strategy
-async function clearExistingScenes(ctx, storyboardId) {
-  const existingScenes = await ctx.db.query("scenes")
-    .filter(q => q.eq(q.field("storyboardId"), storyboardId))
-    .collect();
-  
-  for (const scene of existingScenes) {
-    await ctx.db.delete(scene._id);
-  }
-}
-
-// SIMPLIFIED: One loop for all element types
-async function saveElementsDirectly(ctx, storyboardId, elements) {
-  const elementTypes = [
-    { type: "character", data: elements.characters || [] },
-    { type: "environment", data: elements.environments || [] },
-    { type: "prop", data: elements.props || [] }
-  ];
-  
-  for (const { type, data } of elementTypes) {
-    for (const element of data) {
-      await ctx.db.insert("elements", {
-        storyboardId,
-        type: type,                    // element.type (from loop)
-        name: element.name,            // element.name
-        description: element.description, // element.description
-        confidence: element.confidence   // element.confidence
-      });
-    }
-  }
-}
-
-async function saveScenesDirectly(ctx, storyboardId, scenes) {
-  for (const scene of scenes) {
-    await ctx.db.insert("scenes", {
-      storyboardId,
-      sceneNumber: scene.sceneNumber,
-      title: scene.title,
-      visualPrompt: scene.visualPrompt,
-      elements: scene.elements
-    });
-  }
-}
 ```
 
 ### Universal Task Status for All Processes
@@ -1194,60 +1175,7 @@ function validateExtractedData(data) {
 
 ---
 
-## 📊 Performance Considerations
-
-### Caching Strategy
-```javascript
-// Cache n8n results for identical scripts
-const scriptCache = new Map();
-
-async function getCachedExtraction(scriptHash) {
-  if (scriptCache.has(scriptHash)) {
-    return scriptCache.get(scriptHash);
-  }
-  
-  const result = await callN8nWorkflow(options);
-  scriptCache.set(scriptHash, result);
-  return result;
-}
-```
-
-### Progress Tracking
-```javascript
-// Show progress to user during n8n processing
-function showProgress(step, total) {
-  updateProgressBar(step, total);
-  updateStatusMessage(`Processing step ${step} of ${total}...`);
-}
-
-// Usage
-showProgress(1, 4); // Calling n8n workflow
-showProgress(2, 4); // Processing elements
-showProgress(3, 4); // Processing scenes
-showProgress(4, 4); // Generating frames
-```
-
----
-
-## 🎯 Success Metrics
-
-### Expected Outcomes
-- ✅ Faster script processing (AI vs manual)
-- ✅ More consistent element extraction
-- ✅ Better scene structure analysis
-- ✅ Improved element tracking across scenes
-- ✅ Enhanced visual prompt generation
-
-### Quality Improvements
-- ✅ Consistent character identification
-- ✅ Proper environment classification
-- ✅ Accurate prop categorization
-- ✅ Logical scene sequencing
-- ✅ Proper element-scene relationships
-
----
-
-## 🚀 Implementation Timeline
+##  Implementation Timeline
 
 ### Week 1: Foundation
 - Set up n8n API integration

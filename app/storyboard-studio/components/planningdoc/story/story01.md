@@ -235,3 +235,17 @@ Dark ocean tones with flashing emergency lights.
 “And now… it’s waking up.”
 
 ---
+
+
+
+ "elements": {
+        "characters": [
+          "Dr. Elena Voss" 
+        ],
+        "environments": [
+          "Ocean Research Control Room"
+        ],
+        "props": [
+         "Sonar Monitors"
+        ]
+      }

@@ -15,6 +15,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 1**
 
 **Perspective:** Wide aerial shot
+**Duration:** 5s
 **Character:** Little boy John (7 years old), small white dog
 **Context:** Morning in Paris, view of Eiffel Tower
 **Action:** John walks happily holding bread; dog walks beside him
@@ -27,6 +28,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 2**
 
 **Perspective:** Medium shot (street level)
+**Duration:** 8s
 **Character:** John, dog, background pedestrians
 **Context:** Café street with light crowd
 **Action:** Ground begins to shake slightly; cups rattle
@@ -39,6 +41,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 3**
 
 **Perspective:** Low angle shot
+**Duration:** 5s
 **Character:** Giant shadowy monster emerging
 **Context:** Behind Eiffel Tower
 **Action:** Massive creature rises, towering over buildings
@@ -51,6 +54,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 4**
 
 **Perspective:** Close-up
+**Duration:** 8s
 **Character:** John, dog
 **Context:** Street chaos
 **Action:** People run; John freezes; dog pulls his sleeve
@@ -63,6 +67,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 5**
 
 **Perspective:** Tracking shot (dynamic movement)
+**Duration:** 8s
 **Character:** John, dog
 **Context:** Narrow alleyways
 **Action:** Dog leads John through shortcuts, escaping danger
@@ -75,6 +80,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 6**
 
 **Perspective:** Medium wide shot
+**Duration:** 5s
 **Character:** John, dog, monster in distance
 **Context:** Open square
 **Action:** Dog barks loudly at monster; John stands beside it
@@ -87,6 +93,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 7**
 
 **Perspective:** Wide dramatic shot
+**Duration:** 6s
 **Character:** Monster retreating, John, dog
 **Context:** Light breaking through clouds over Paris
 **Action:** Monster slowly backs away, disappearing into shadows
@@ -99,6 +106,7 @@ Here is a **1-minute cinematic storyboard** designed for **image → video gener
 ### **Scene 8**
 
 **Perspective:** Silhouette sunset shot
+**Duration:** 7s
 **Character:** John, dog
 **Context:** Calm city with Eiffel Tower glowing at dusk
 **Action:** John hugs the dog tightly
