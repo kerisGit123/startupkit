@@ -128,9 +128,20 @@ async function clearExistingElements(ctx, storyboardId) {
     .filter(q => q.eq(q.field("projectId"), storyboardId))
     .collect();
   
+  let deletedCount = 0;
+  let preservedCount = 0;
+  
   for (const element of existingElements) {
-    await ctx.db.delete(element._id);
+    // Preserve public elements, delete private elements for clean regeneration
+    if (element.visibility === "public") {
+      preservedCount++;
+    } else {
+      await ctx.db.delete(element._id);
+      deletedCount++;
+    }
   }
+  
+  console.log(`Element cleanup: Deleted ${deletedCount} private elements, preserved ${preservedCount} public elements`);
 }
 
 async function clearExistingScenes(ctx, storyboardId) {
@@ -138,9 +149,21 @@ async function clearExistingScenes(ctx, storyboardId) {
     .filter(q => q.eq(q.field("projectId"), storyboardId))
     .collect();
   
+  let deletedCount = 0;
+  let preservedCount = 0;
+  
   for (const scene of existingScenes) {
-    await ctx.db.delete(scene._id);
+    if (scene.sceneId.startsWith("scene-")) {
+      // Delete script-based scenes
+      await ctx.db.delete(scene._id);
+      deletedCount++;
+    } else if (scene.sceneId.startsWith("manual-")) {
+      // Auto-preserve manual scenes - no user choice needed
+      preservedCount++;
+    }
   }
+  
+  console.log(`Build cleanup: Deleted ${deletedCount} script scenes, preserved ${preservedCount} manual scenes`);
 }
 
 // Query to check if project exists

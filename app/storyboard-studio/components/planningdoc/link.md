@@ -193,3 +193,22 @@ const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/n8n-webhook
     script: await getScriptContent(ctx, args.projectId)
   })
 });
+
+
+
+
+https://www.youtube.com/watch?v=ebiEKuMHbG8
+
+
+https://www.youtube.com/watch?v=cGTBzed4S4w
+
+
+https://n8n.srv1010007.hstgr.cloud/workflow/semWtxn45u6wNjM9-7JRi
+
+
+
+https://n8n.srv1010007.hstgr.cloud/settings/personal
+
+shangwey@yahoo.com
+
+Keris123@n8n

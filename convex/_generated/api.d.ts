@@ -101,6 +101,7 @@ import type * as soConfig from "../soConfig.js";
 import type * as storyboard_build from "../storyboard/build.js";
 import type * as storyboard_creditUsage from "../storyboard/creditUsage.js";
 import type * as storyboard_members from "../storyboard/members.js";
+import type * as storyboard_moveItems from "../storyboard/moveItems.js";
 import type * as storyboard_n8nWebhookCallback from "../storyboard/n8nWebhookCallback.js";
 import type * as storyboard_projects from "../storyboard/projects.js";
 import type * as storyboard_storyboardElements from "../storyboard/storyboardElements.js";
@@ -216,6 +217,7 @@ declare const fullApi: ApiFromModules<{
   "storyboard/build": typeof storyboard_build;
   "storyboard/creditUsage": typeof storyboard_creditUsage;
   "storyboard/members": typeof storyboard_members;
+  "storyboard/moveItems": typeof storyboard_moveItems;
   "storyboard/n8nWebhookCallback": typeof storyboard_n8nWebhookCallback;
   "storyboard/projects": typeof storyboard_projects;
   "storyboard/storyboardElements": typeof storyboard_storyboardElements;

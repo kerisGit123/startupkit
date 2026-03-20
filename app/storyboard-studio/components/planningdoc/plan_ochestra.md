@@ -15,7 +15,7 @@ The Storyboard Studio is composed of 5 core planning components that work togeth
 2. **`plan_storyboard.md`** - Core Storyboard System (projects, scripts, scenes)
 3. **`plan_imageAIPanel.md`** - AI Image Generation (Kie AI, styles, prompts)
 4. **`plan_video_planning.md`** - AI Video Generation (Veo-3.1, Kling 3.0, callbacks)
-5. **`plan_element.md`** - Element System (library, consistency, AI integration)
+5. **`plan_build_storyboard_item_element.md`** - Consolidated Build System (build + reorder + elements)
 
 ### **🔗 Component Relationships:**
 ```
@@ -27,8 +27,9 @@ The Storyboard Studio is composed of 5 core planning components that work togeth
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  plan_element   │◄──►│ plan_video      │◄──►│   Orchestra     │
-│ (Library System)│    │ (Video AI)      │    │ (Coordination)  │
+│ plan_build_sys  │◄──►│ plan_video      │◄──►│   Orchestra     │
+│ (Build+Reorder+ │    │ (Video AI)      │    │ (Coordination)  │
+│  Elements)      │    │                │    │                │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
@@ -206,17 +207,18 @@ User Input → UI Component → API Route → Convex Action → AI Service → C
 - Callback handling with R2 upload
 - Element integration for consistency
 
-### **5. Element System (`plan_element.md`)**
-**Role**: Reusable asset library service
+### **5. Consolidated Build System (`plan_build_storyboard_item_element.md`)**
+**Role**: Unified build, reorder, and element management system
 - **Uses**: File Management (storage), Storyboard Core (projects)
-- **Provides**: Character/prop library, consistency tracking
-- **Status**: ✅ **95% COMPLETE**
+- **Provides**: Build orchestration, item reordering, element library
+- **Status**: ✅ **98% COMPLETE**
 
 **Key Services:**
-- Element library with 7 types
-- CRUD operations with companyId security
-- Usage tracking and analytics
-- Mobile-first responsive UI
+- Build system with n8n integration and AI generation
+- Dual reorder system (buttons + drag-and-drop with direct positioning)
+- Element library with 7 types and advanced UI
+- SceneEditor integration for detailed frame editing
+- Company-based file organization and multi-user support
 
 ---
 

@@ -14,7 +14,7 @@ import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExpor
 import { FileBrowser } from "../../components/storyboard/FileBrowser";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
 import { BuildStoryboardModal } from "../../components/storyboard/BuildStoryboardModal";
-import { BuildStoryboardDialog } from "../../components/storyboard/BuildStoryboardDialog";
+import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
 import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
 import { SceneEditor } from "../../components/SceneEditor";
 import { TagEditor } from "../../components/storyboard/TagEditor";
@@ -113,7 +113,7 @@ export default function StoryboardWorkspacePage() {
   const pid = projectId as Id<"storyboard_projects">;
 
   const project = useQuery(api.storyboard.projects.get, { id: pid });
-  const items = useQuery(api.storyboard.storyboardItems.listByProject, { projectId: pid });
+  const items = useQuery(api.storyboard.moveItems.getStoryboardItemsOrdered, { projectId: pid });
 
   const updateScript = useMutation(api.storyboard.projects.updateScript);
   const createBatch = useMutation(api.storyboard.storyboardItems.createBatch);
@@ -123,10 +123,16 @@ export default function StoryboardWorkspacePage() {
   const removeElementFromItem = useMutation(api.storyboard.storyboardItemElements.removeElementFromItem);
   const removeItem = useMutation(api.storyboard.storyboardItems.remove);
   const updateFavorite = useMutation(api.storyboard.storyboardItems.updateFavorite);
+  const moveItem = useMutation(api.storyboard.moveItems.moveStoryboardItem);
+  const moveItemToPosition = useMutation(api.storyboard.moveItems.moveStoryboardItemToPosition);
   
   // State for tracking deletion operations
   const [deletingItemIds, setDeletingItemIds] = useState<Set<Id<"storyboard_items">>>(new Set());
   const [recentlyDeletedItems, setRecentlyDeletedItems] = useState<Set<Id<"storyboard_items">>>(new Set());
+
+  // Drag and drop state
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
+  const [dragOverItem, setDragOverItem] = useState<string | null>(null);
 
   // Safe item deletion with error handling and debouncing
   const handleRemoveItem = async (itemId: Id<"storyboard_items">, sceneTitle?: string) => {
@@ -207,6 +213,96 @@ export default function StoryboardWorkspacePage() {
     } catch (error) {
       console.error("[Duplicate Item] Failed to duplicate item:", error);
       alert("Failed to duplicate item. Please try again.");
+    }
+  };
+
+  // Move item handlers
+  const handleMoveUp = async (itemId: string) => {
+    try {
+      await moveItem({ 
+        projectId: pid, 
+        itemId: itemId as Id<"storyboard_items">, 
+        direction: "up" 
+      });
+      console.log(`[Move Item] Successfully moved item up: ${itemId}`);
+    } catch (error) {
+      console.error("[Move Item] Failed to move item up:", error);
+      alert("Failed to move item up. Please try again.");
+    }
+  };
+
+  const handleMoveDown = async (itemId: string) => {
+    try {
+      await moveItem({ 
+        projectId: pid, 
+        itemId: itemId as Id<"storyboard_items">, 
+        direction: "down" 
+      });
+      console.log(`[Move Item] Successfully moved item down: ${itemId}`);
+    } catch (error) {
+      console.error("[Move Item] Failed to move item down:", error);
+      alert("Failed to move item down. Please try again.");
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e: React.DragEvent, itemId: string) => {
+    setDraggedItem(itemId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', itemId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
+  const handleDragOver = (e: React.DragEvent, itemId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedItem && draggedItem !== itemId) {
+      setDragOverItem(itemId);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverItem(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetItemId: string) => {
+    e.preventDefault();
+    setDragOverItem(null);
+    
+    if (!draggedItem || draggedItem === targetItemId) {
+      return;
+    }
+
+    try {
+      // Find the items to determine target position
+      const draggedStoryboardItem = items?.find(item => item._id === draggedItem);
+      const targetStoryboardItem = items?.find(item => item._id === targetItemId);
+      
+      if (!draggedStoryboardItem || !targetStoryboardItem) {
+        console.error('Could not find items for drag operation');
+        return;
+      }
+
+      // Use the target item's order as the target position
+      const targetOrder = targetStoryboardItem.order;
+      
+      console.log(`[Drag Drop] Moving item ${draggedItem} directly to position ${targetOrder}`);
+      
+      // Use new direct positioning mutation
+      await moveItemToPosition({
+        projectId: pid,
+        itemId: draggedItem as Id<"storyboard_items">,
+        targetOrder
+      });
+      
+      console.log(`[Drag Drop] Successfully moved item: ${draggedItem} to position ${targetOrder}`);
+    } catch (error) {
+      console.error("[Drag Drop] Failed to move item:", error);
+      alert("Failed to move item. Please try again.");
     }
   };
 
@@ -741,6 +837,17 @@ export default function StoryboardWorkspacePage() {
     });
   };
 
+  const handleImageUploaded = (itemId: string, imageUrl: string) => {
+    updateItem({
+      id: itemId as Id<"storyboard_items">,
+      imageUrl,
+    });
+  };
+
+  const handleDoubleClick = (item: any) => {
+    handleOpenSceneEditor(item);
+  };
+
   const handleAddElement = (itemId: string) => {
     // Open the ElementLibrary to add elements to this specific storyboard item
     setSelectedItemForElement(itemId as Id<"storyboard_items">);
@@ -1052,38 +1159,57 @@ export default function StoryboardWorkspacePage() {
                   }}
                 >
                   {filteredItems.map((item, i) => (
-                    <FrameCard
+                    <div
                       key={item._id}
-                      item={item}
-                      index={i}
-                      frameRatio={project.settings.frameRatio}
-                      selected={selectedItemIds.includes(item._id)}
-                      projectId={pid}
-                      onSelect={() => setSelectedItemIds((prev) =>
-                        prev.includes(item._id)
-                          ? prev.filter((id) => id !== item._id)
-                          : [...prev, item._id]
-                      )}
-                      onDelete={() => handleRemoveItem(item._id, item.title)}
-                      onImageUploaded={(id, url) => handleImageUploaded(id, url)}
-                      onDoubleClick={() => handleDoubleClick(item)}
-                      onDuplicate={() => handleDuplicateItem(item)}
-                      onTagsChange={(tags) => handleTagsChange(item._id, tags)}
-                      onFavoriteToggle={() => handleFavoriteToggle(item._id)}
-                      onStatusChange={(status) => handleStatusChange(item._id, status)}
-                      onNotesChange={(notes) => handleNotesChange(item._id, notes)}
-                      onTitleChange={(title) => handleTitleChange(item._id, title)}
-                      onDescriptionChange={(description) => handleDescriptionChange(item._id, description)}
-                      onRemoveElement={(elementId) => handleRemoveElement(item._id, elementId)}
-                      onAddElement={() => handleAddElement(item._id)}
-                      userId={user?.id || ""}
-                      onBuildStoryboard={() => setShowBuildDialog(true)}
-                    />
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, item._id)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => handleDragOver(e, item._id)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, item._id)}
+                      className={`
+                        relative
+                        ${draggedItem === item._id ? 'opacity-50 cursor-grabbing' : 'cursor-grab'}
+                        ${dragOverItem === item._id ? 'ring-2 ring-purple-400 ring-opacity-50 rounded-xl' : ''}
+                        transition-all duration-200
+                      `}
+                    >
+                      <FrameCard
+                        item={item}
+                        index={i}
+                        frameRatio={project.settings.frameRatio}
+                        selected={selectedItemIds.includes(item._id)}
+                        projectId={pid}
+                        onSelect={() => setSelectedItemIds((prev) =>
+                          prev.includes(item._id)
+                            ? prev.filter((id) => id !== item._id)
+                            : [...prev, item._id]
+                        )}
+                        onDelete={() => handleRemoveItem(item._id, item.title)}
+                        onImageUploaded={(id, url) => handleImageUploaded(id, url)}
+                        onDoubleClick={() => handleDoubleClick(item)}
+                        onDuplicate={() => handleDuplicateItem(item)}
+                        onTagsChange={(tags) => handleTagsChange(item._id, tags)}
+                        onFavoriteToggle={() => handleFavoriteToggle(item._id)}
+                        onStatusChange={(status) => handleStatusChange(item._id, status)}
+                        onNotesChange={(notes) => handleNotesChange(item._id, notes)}
+                        onTitleChange={(title) => handleTitleChange(item._id, title)}
+                        onDescriptionChange={(description) => handleDescriptionChange(item._id, description)}
+                        onRemoveElement={(elementId) => handleRemoveElement(item._id, elementId)}
+                        onAddElement={() => handleAddElement(item._id)}
+                        onMoveUp={() => handleMoveUp(item._id)}
+                        onMoveDown={() => handleMoveDown(item._id)}
+                        totalItems={filteredItems?.length}
+                        userId={user?.id || ""}
+                        user={user}
+                        onBuildStoryboard={() => setShowBuildDialog(true)}
+                      />
+                    </div>
                   ))}
                   {/* Add frame button */}
                   <button
                     disabled={isAddingFrame}
-                    className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl hover:border-white/20 hover:bg-white/3 transition text-gray-600 hover:text-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl hover:border-purple-400/50 hover:bg-purple-400/5 transition-all duration-300 text-gray-600 hover:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed group"
                     style={{ aspectRatio: project.settings.frameRatio === "9:16" ? "9/16" : project.settings.frameRatio === "1:1" ? "1/1" : "16/9" }}
                     onClick={async () => {
                       if (isAddingFrame) return;
@@ -1103,8 +1229,9 @@ export default function StoryboardWorkspacePage() {
                     }}>
                     {isAddingFrame
                       ? <Loader2 className="w-6 h-6 mb-1 animate-spin" />
-                      : <Plus className="w-6 h-6 mb-1" />}
-                    <span className="text-xs">{isAddingFrame ? "Adding…" : "Add Frame"}</span>
+                      : <Plus className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />}
+                    <span className="text-xs font-medium">{isAddingFrame ? "Adding…" : "Add Frame"}</span>
+                    <span className="text-xs text-gray-500 mt-1">Create manually</span>
                   </button>
                 </div>
               </>
@@ -1281,7 +1408,7 @@ export default function StoryboardWorkspacePage() {
           </div>
         </div>
       )}
-      <BuildStoryboardDialog
+      <BuildStoryboardDialogSimplified
         open={showBuildDialog}
         onOpenChange={setShowBuildDialog}
         projectId={pid}
@@ -1447,12 +1574,16 @@ interface FrameCardProps {
   onDescriptionChange?: (description: string) => void;
   onRemoveElement?: (elementId: string) => void;
   onAddElement?: () => void;
+  onMoveUp?: (itemId: string) => void;
+  onMoveDown?: (itemId: string) => void;
+  totalItems?: number;
   userId: string;
+  user?: any; // Full user object for upload functionality
   // Build dialog props
   onBuildStoryboard?: () => void;
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onRemoveElement, onAddElement, userId, onBuildStoryboard }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -1476,7 +1607,8 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
     if (!file) return;
     setUploading(true);
     try {
-      const r2Key = `${user?.organizationMemberships?.[0]?.organization?.id || user?.id}/uploads/${item._id}-${Date.now()}-${file.name}`;
+      const companyId = getCurrentCompanyId(user);
+      const r2Key = `${companyId}/uploads/${item._id}-${Date.now()}-${file.name}`;
       const sigRes = await fetch("/api/storyboard/r2-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1569,6 +1701,32 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           </div>
         )}
         
+        {/* Move controls - Top left corner */}
+        <div className="absolute top-2 left-2 flex gap-1 z-20">
+          <button
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              onMoveUp?.(item._id); 
+            }}
+            className="p-1 bg-gray-100/90 hover:bg-gray-200/90 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={item.order === 0}
+            title="Move up"
+          >
+            <ChevronUp className="w-4 h-4 text-gray-700" />
+          </button>
+          <button
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              onMoveDown?.(item._id); 
+            }}
+            className="p-1 bg-gray-100/90 hover:bg-gray-200/90 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            disabled={item.order === (totalItems ?? 1) - 1}
+            title="Move down"
+          >
+            <ChevronDown className="w-4 h-4 text-gray-700" />
+          </button>
+        </div>
+
         {/* Top overlay with refined badges */}
         <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 via-black/30 to-transparent p-3">
           <div className="flex items-start justify-between">
@@ -1577,7 +1735,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
               <div className="flex items-center gap-2">
                 <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10">
                   <span className="text-xs text-white font-medium tracking-wide">
-                    {String(index + 1).padStart(2, "0")}
+                    {String(item.order + 1).padStart(2, "0")}
                   </span>
                 </div>
                 
