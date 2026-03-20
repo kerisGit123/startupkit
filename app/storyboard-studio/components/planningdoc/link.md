@@ -31,6 +31,19 @@ Keris123@n8n
 
 
 
+https://www.youtube.com/watch?v=RE9TeY-lqZ4
+
+
+
+
+
+
+
+youtube channel strategy
+https://www.youtube.com/watch?v=EWIkh5GBC3s
+
+
+
 
 
 
