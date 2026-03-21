@@ -5,8 +5,9 @@ import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
   Upload, Download, Save, History, Trash2,
-  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
+  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen,
 } from "lucide-react";
+import PromptLibrary from "./PromptLibrary";
 
 // Constants for mention system
 const TEXTAREA_MIN_HEIGHT = 60;
@@ -33,6 +34,7 @@ export interface ElementAIPanelProps {
   isGenerating?: boolean;
   userPrompt?: string;
   onUserPromptChange?: (prompt: string) => void;
+  userCompanyId?: string;
   // Brush inpaint integration
   isEraser?: boolean;
   setIsEraser?: (value: boolean) => void;
@@ -125,6 +127,7 @@ export function ElementAIPanel({
   isGenerating = false,
   userPrompt = "",
   onUserPromptChange,
+  userCompanyId = "",
   isEraser = false,
   setIsEraser,
   maskBrushSize = 20,
@@ -158,6 +161,7 @@ export function ElementAIPanel({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
   const [showImageMaskMenu, setShowImageMaskMenu] = useState(false);
+  const [isPromptLibraryOpen, setIsPromptLibraryOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -521,6 +525,17 @@ export function ElementAIPanel({
                   </div>
                 )}
               </div>
+              
+              {/* Prompt Library Button */}
+              <div className="flex items-center justify-end mt-2">
+                <button
+                  onClick={() => setIsPromptLibraryOpen(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-colors text-xs font-medium"
+                >
+                  <BookOpen className="w-3 h-3" />
+                  Prompt Library
+                </button>
+              </div>
             </div>
           )}
           
@@ -767,6 +782,22 @@ export function ElementAIPanel({
           {renderBottomBar()}
         </div>
       </div>
+
+      {/* Prompt Library Modal */}
+      <PromptLibrary
+        isOpen={isPromptLibraryOpen}
+        onClose={() => setIsPromptLibraryOpen(false)}
+        onSelectPrompt={(prompt) => {
+          const el = editorRef.current;
+          if (el) {
+            el.textContent = prompt;
+            setEditorIsEmpty(false);
+            setCurrentPrompt(prompt);
+            onUserPromptChange?.(prompt);
+          }
+        }}
+        userCompanyId={userCompanyId}
+      />
     </>
   );
 }

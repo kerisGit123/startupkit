@@ -1,7 +1,7 @@
 # Consistent Character / Image Generator — Implementation Plan
 
 > **Status**: ElementAIPanel UI ~80% done. Need: template selector, generation API, job tracking, results panel.
-> **n8n Webhook**: `https://n8n.srv1010007.hstgr.cloud/webhook-test/17db7375-08b3-461c-9701-58f47b32db99`
+> **n8n Webhook**: `https://n8n.srv1010007.hstgr.cloud/webhook-test/51ab96a7-7138-4e26-908d-360575e10a99`
 > **UI Reference**: Freepik Image Generator (left panel → results grid) + Luma AI (@mention references)
 > **Core Plan**: Follows `element_consistent_character_plan.md` (template-based, not artStyleId)
 
@@ -28,11 +28,11 @@
 ## 🔴 Missing — Build These (Priority Order)
 
 ### 1. Template Selector (in ElementAIPanel)
-### 2. Convex Job Table (`ai_generation_jobs`)
+### 2. Convex Job Table (`storyboard_ai_generation_jobs`)
 ### 3. API Route `/api/storyboard/generate-element/route.ts`
 ### 4. n8n Callback Handler `/api/callback/element/route.ts`
 ### 5. Results Panel with Dual Download (sliding panel in SceneEditor)
-### 6. Template Management Modal
+### 6. PromptLibrary Modal
 
 ---
 
@@ -354,97 +354,71 @@ const MobileResultCard = ({ result, index }) => {
 ## 📝 Prompt Template Management
 
 ### Template System Architecture
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   User Prompt    │ +  │   Template      │ →  │  Final Prompt    │
-│   "Young hero"   │    │ "Consistency"   │    │  Combined Text   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
+```typescript
+// Simplified template model
+const templateSystem = {
+  // Store reusable prompts as a simple saved library
+  // No category picker in the prompt library UI
+  // Search, usage count, public/private sharing, and quick apply only
+  // New prompts default to a single reusable template type behind the scenes
+};
 ```
 
-### Template Categories
-- **Character**: Character poses, expressions, outfits
-- **Environment**: Scene settings, backgrounds, locations
-- **Prop**: Objects, items, accessories
-- **Style**: Art styles, lighting, composition
-- **Custom**: User-created templates
+### Simplified Template Model
+- Store reusable prompts as a simple saved library
+- No category picker in the prompt library UI
+- Search, usage count, public/private sharing, and quick apply only
+- New prompts default to a single reusable template type behind the scenes
 
 ### Template Data Structure
 ```typescript
 // Prompt Templates Table
-promptTemplates: defineTable({
+storyboard_promptTemplates: defineTable({
   name: v.string(),
-  type: v.union(
-    v.literal("character"),
-    v.literal("environment"), 
-    v.literal("prop"),
-    v.literal("style"),
-    v.literal("custom")
-  ),
   prompt: v.string(),
   companyId: v.string(),
   isPublic: v.boolean(),
-  usageCount: v.number(),
+  tags: v.optional(v.array(v.string())),
+  isFavourite: v.optional(v.boolean()),
   createdAt: v.number(),
 }).index("by_company", ["companyId"])
-  .index("by_type", ["type"])
-  .index("public_templates", ["isPublic", "type"]),
+  .index("public_templates", ["isPublic"])
+  .index("favourite_templates", ["isFavourite"]),
 ```
 
 ### Template Selector Component
 ```typescript
-// Mobile template selector
-const MobileTemplateSelector = ({ value, onChange }) => {
+const PromptLibraryTrigger = ({ onOpen }) => {
   return (
-    <div className="px-4 pb-4">
-      <label className="block text-xs font-medium text-gray-400 mb-2">
-        Type
-      </label>
-      <div className="grid grid-cols-3 gap-2">
-        {[
-          { id: 'character', label: 'Character', icon: '👤' },
-          { id: 'environment', label: 'Environment', icon: '🌍' },
-          { id: 'prop', label: 'Prop', icon: '📦' }
-        ].map(type => (
-          <button
-            key={type.id}
-            onClick={() => onChange(type.id)}
-            className={`py-3 px-2 rounded-lg text-xs font-medium transition-colors ${
-              value === type.id 
-                ? 'bg-emerald-500 text-white' 
-                : 'bg-gray-800 text-gray-300'
-            }`}
-          >
-            <div className="text-lg mb-1">{type.icon}</div>
-            <div>{type.label}</div>
-          </button>
-        ))}
-      </div>
-    </div>
+    <button
+      onClick={onOpen}
+      className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-400"
+    >
+      Open Prompt Library
+    </button>
   );
 };
 ```
 
-### Template Manager Modal
+### Prompt Library Modal
 ```typescript
-const MobileTemplateManager = ({ isOpen, onClose, templates }) => {
+const PromptLibraryModal = ({ isOpen, onClose, templates }) => {
   return (
     <div className={`fixed inset-0 z-50 ${isOpen ? 'block' : 'hidden'}`}>
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl max-h-[80vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <h2 className="text-lg font-semibold text-white">Templates</h2>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-4xl overflow-y-auto border-l border-white/10 bg-[#141414]">
+        <div className="flex items-center justify-between border-b border-white/10 p-6">
+          <h2 className="text-xl font-semibold text-white">Prompt Library</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             ✕
           </button>
         </div>
         
-        <div className="p-4 space-y-3">
+        <div className="p-6 space-y-4">
           {templates.map(template => (
-            <div key={template.id} className="bg-gray-800 rounded-lg p-3">
+            <div key={template.id} className="rounded-xl border border-white/10 bg-[#1A1A1A] p-4">
               <h3 className="font-medium text-white">{template.name}</h3>
-              <p className="text-sm text-gray-400 mt-1">{template.type}</p>
-              <p className="text-xs text-gray-500 mt-2 line-clamp-2">
+              <p className="mt-2 line-clamp-2 text-sm text-gray-400">
                 {template.prompt}
               </p>
             </div>
@@ -457,54 +431,31 @@ const MobileTemplateManager = ({ isOpen, onClose, templates }) => {
 ```
 
 ### Template Integration Flow
-1. **User writes prompt** + **selects template** (optional)
-2. **System combines** user prompt + template prompt = final prompt
-3. **Template categories**: Character, Environment, Prop, Style, Composition, Lighting
-4. **Company-based templates**: Private and public template sharing
-5. **Simple integration**: Template + User prompt combined on generate
+1. **User writes prompt** and can optionally open prompt library
+2. **User selects a saved prompt** to replace or seed the prompt field
+3. **User can save a new reusable prompt** from the same dark modal flow
+4. **Company-based templates** remain supported with public/private sharing
+5. **Simple integration**: no category selection, no category validation, no extra complexity
 
 ---
 
-## 🗄️ Database Schema
+## Database Schema
 
-### Prompt Templates Table
-```typescript
-// convex/schema.ts
-promptTemplates: defineTable({
-  name: v.string(),
-  type: v.union(
-    v.literal("character"),
-    v.literal("environment"), 
-    v.literal("prop"),
-    v.literal("style"),
-    v.literal("custom")
-  ),
-  prompt: v.string(),
-  companyId: v.string(),
-  isPublic: v.boolean(),
-  usageCount: v.number(),
-  createdAt: v.number(),
-}).index("by_company", ["companyId"])
-  .index("by_type", ["type"])
-  .index("public_templates", ["isPublic", "type"]),
-```
 
 ### AI Generation Jobs Table
 ```typescript
 // convex/schema.ts
-ai_generation_jobs: defineTable({
+storyboard_ai_generation_jobs: defineTable({
   companyId: v.string(),
   projectId: v.string(),
-  elementType: v.union(v.literal("character"), v.literal("environment"), v.literal("prop")),
+  type: v.union(v.literal("image"), v.literal("video")),
   status: v.union(
     v.literal("pending"),
     v.literal("processing"),
     v.literal("completed"),
     v.literal("failed")
   ),
-  userPrompt: v.string(),
-  templateType: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"))),
-  customTemplate: v.optional(v.string()),
+  prompt: v.string(),
   referenceImageUrls: v.optional(v.array(v.string())),
   aspectRatio: v.optional(v.string()),
   resolution: v.optional(v.string()),
@@ -525,19 +476,17 @@ ai_generation_jobs: defineTable({
 
 ### AI Generation Jobs Mutations
 ```typescript
-// convex/mutations/aiGenerationJobs.ts
+// convex/storyboard/imageGeneration.ts
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { auth } from "./auth";
+import { auth } from "../auth";
 
 export const create = mutation({
   args: {
     companyId: v.string(),
     projectId: v.string(),
-    elementType: v.union(v.literal("character"), v.literal("environment"), v.literal("prop")),
-    userPrompt: v.string(),
-    templateType: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"))),
-    customTemplate: v.optional(v.string()),
+    type: v.union(v.literal("image"), v.literal("video")),
+    prompt: v.string(),
     referenceImageUrls: v.optional(v.array(v.string())),
     aspectRatio: v.optional(v.string()),
     resolution: v.optional(v.string()),
@@ -547,7 +496,7 @@ export const create = mutation({
     const identity = await auth.getUserId(ctx);
     if (!identity) throw new Error("Unauthorized");
 
-    const jobId = await ctx.db.insert("ai_generation_jobs", {
+    const jobId = await ctx.db.insert("storyboard_ai_generation_jobs", {
       ...args,
       status: "pending",
       creditsUsed: 1, // Simplified credit system to basic deduction only
@@ -560,7 +509,7 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    jobId: v.id("ai_generation_jobs"),
+    jobId: v.id("storyboard_ai_generation_jobs"),
     status: v.optional(v.union(v.literal("pending"), v.literal("processing"), v.literal("completed"), v.literal("failed"))),
     resultUrls: v.optional(v.array(v.string())),
     errorMessage: v.optional(v.string()),
@@ -578,7 +527,7 @@ export const update = mutation({
 });
 
 export const get = query({
-  args: { jobId: v.id("ai_generation_jobs") },
+  args: { jobId: v.id("storyboard_ai_generation_jobs") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.jobId);
   },
@@ -588,7 +537,7 @@ export const listByProject = query({
   args: { projectId: v.string() },
   handler: async (ctx, args) => {
     const jobs = await ctx.db
-      .query("ai_generation_jobs")
+      .query("storyboard_ai_generation_jobs")
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
     
@@ -600,7 +549,7 @@ export const listByCompany = query({
   args: { companyId: v.string() },
   handler: async (ctx, args) => {
     const jobs = await ctx.db
-      .query("ai_generation_jobs")
+      .query("storyboard_ai_generation_jobs")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
       .collect();
     
@@ -611,7 +560,7 @@ export const listByCompany = query({
 
 ### Prompt Templates Mutations
 ```typescript
-// convex/mutations/promptTemplates.ts
+// convex/promptTemplates.ts
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { auth } from "./auth";
@@ -619,18 +568,18 @@ import { auth } from "./auth";
 export const create = mutation({
   args: {
     name: v.string(),
-    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("custom")),
     prompt: v.string(),
     companyId: v.string(),
     isPublic: v.boolean(),
+    tags: v.optional(v.array(v.string())),
+    isFavourite: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await auth.getUserId(ctx);
     if (!identity) throw new Error("Unauthorized");
 
-    const templateId = await ctx.db.insert("promptTemplates", {
+    const templateId = await ctx.db.insert("storyboard_promptTemplates", {
       ...args,
-      usageCount: 0,
       createdAt: Date.now(),
     });
 
@@ -640,11 +589,12 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    id: v.id("promptTemplates"),
+    id: v.id("storyboard_promptTemplates"),
     name: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("custom"))),
     prompt: v.optional(v.string()),
     isPublic: v.optional(v.boolean()),
+    tags: v.optional(v.array(v.string())),
+    isFavourite: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await auth.getUserId(ctx);
@@ -658,7 +608,7 @@ export const update = mutation({
 });
 
 export const remove = mutation({
-  args: { id: v.id("promptTemplates") },
+  args: { id: v.id("storyboard_promptTemplates") },
   handler: async (ctx, args) => {
     const identity = await auth.getUserId(ctx);
     if (!identity) throw new Error("Unauthorized");
@@ -669,7 +619,7 @@ export const remove = mutation({
 });
 
 export const get = query({
-  args: { id: v.id("promptTemplates") },
+  args: { id: v.id("storyboard_promptTemplates") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
   },
@@ -679,7 +629,7 @@ export const getByCompany = query({
   args: { companyId: v.string() },
   handler: async (ctx, args) => {
     const templates = await ctx.db
-      .query("promptTemplates")
+      .query("storyboard_promptTemplates")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
       .collect();
     
@@ -688,31 +638,47 @@ export const getByCompany = query({
 });
 
 export const getPublicTemplates = query({
-  args: { type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("custom"))) },
+  args: {},
   handler: async (ctx, args) => {
-    let query = ctx.db
-      .query("promptTemplates")
-      .withIndex("public_templates", (q) => q.eq("isPublic", true));
+    const templates = await ctx.db
+      .query("storyboard_promptTemplates")
+      .withIndex("public_templates", (q) => q.eq("isPublic", true))
+      .collect();
     
-    if (args.type) {
-      query = query.filter((q) => q.eq("type", args.type));
-    }
-    
-    return await query.collect();
+    return templates;
   },
 });
 
-export const incrementUsage = mutation({
-  args: { id: v.id("promptTemplates") },
+export const toggleFavourite = mutation({
+  args: {
+    id: v.id("storyboard_promptTemplates"),
+  },
   handler: async (ctx, args) => {
+    const identity = await auth.getUserId(ctx);
+    if (!identity) throw new Error("Unauthorized");
+
     const template = await ctx.db.get(args.id);
     if (!template) throw new Error("Template not found");
-
+    
     await ctx.db.patch(args.id, {
-      usageCount: template.usageCount + 1,
+      isFavourite: !template.isFavourite
     });
-
+    
     return args.id;
+  },
+});
+
+export const getFavourites = query({
+  args: {
+    companyId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("storyboard_promptTemplates")
+      .withIndex("favourite_templates", (q) => 
+        q.eq("isFavourite", true).eq("companyId", args.companyId)
+      )
+      .collect();
   },
 });
 ```
@@ -722,35 +688,60 @@ export const incrementUsage = mutation({
 ## �️ Core Components
 
 
-### TemplateManager Component
+### PromptLibrary Component
 ```typescript
-// components/storyboard/TemplateManager.tsx
-interface TemplateManagerProps {
-  templates: Template[];
+// components/storyboard/PromptLibrary.tsx
+import { useState, useEffect } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
+
+interface Template {
+  _id: string;
+  name: string;
+  prompt: string;
+  companyId: string;
+  isPublic: boolean;
+  tags?: string[];
+  isFavourite?: boolean;
+  createdAt: number;
+}
+
+interface CreateTemplateData {
+  name: string;
+  prompt: string;
+  isPublic: boolean;
+  tags?: string[];
+  isFavourite?: boolean;
+}
+
+interface UpdateTemplateData {
+  name?: string;
+  prompt?: string;
+  isPublic?: boolean;
+  tags?: string[];
+  isFavourite?: boolean;
+}
+
+interface PromptLibraryProps {
+  userCompanyId: string;
   onTemplateCreate: (template: CreateTemplateData) => void;
   onTemplateUpdate: (id: string, template: UpdateTemplateData) => void;
   onTemplateDelete: (id: string) => void;
+  onTemplateToggleFavourite: (id: string) => void;
 }
 
-const TemplateManager = ({ templates, onTemplateCreate, onTemplateUpdate, onTemplateDelete }) => {
+const PromptLibrary = ({ userCompanyId, onTemplateCreate, onTemplateUpdate, onTemplateDelete, onTemplateToggleFavourite }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   
   // Load templates using Convex
-  const allTemplates = useQuery(api.promptTemplates.getByCompany, { companyId: projectId });
+  const allTemplates = useQuery(api["mutations/promptTemplates"].getByCompany, { companyId: userCompanyId });
   
-  useEffect(() => {
-    if (allTemplates) {
-      setTemplates(allTemplates);
-    }
-  }, [allTemplates]);
-  
-  const handleCreateTemplate = async (templateData) => {
+  const handleCreateTemplate = async (templateData: CreateTemplateData) => {
     try {
       await onTemplateCreate({
         ...templateData,
-        companyId: projectId,
-        createdAt: Date.now()
+        companyId: userCompanyId
       });
       setIsModalOpen(false);
       setEditingTemplate(null);
@@ -759,9 +750,9 @@ const TemplateManager = ({ templates, onTemplateCreate, onTemplateUpdate, onTemp
     }
   };
   
-  const handleUpdateTemplate = async (templateData) => {
+  const handleUpdateTemplate = async (templateData: UpdateTemplateData) => {
     try {
-      await onTemplateUpdate(editingTemplate.id, templateData);
+      await onTemplateUpdate(editingTemplate!._id, templateData);
       setIsModalOpen(false);
       setEditingTemplate(null);
     } catch (error) {
@@ -769,7 +760,7 @@ const TemplateManager = ({ templates, onTemplateCreate, onTemplateUpdate, onTemp
     }
   };
   
-  const handleDeleteTemplate = async (templateId) => {
+  const handleDeleteTemplate = async (templateId: string) => {
     if (confirm('Are you sure you want to delete this template?')) {
       try {
         await onTemplateDelete(templateId);
@@ -779,10 +770,18 @@ const TemplateManager = ({ templates, onTemplateCreate, onTemplateUpdate, onTemp
     }
   };
   
+  const handleToggleFavourite = async (templateId: string) => {
+    try {
+      await onTemplateToggleFavourite(templateId);
+    } catch (error) {
+      console.error('Failed to toggle favourite:', error);
+    }
+  };
+  
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-white">Template Library</h3>
+        <h3 className="text-lg font-semibold text-white">Prompt Library</h3>
         <button
           onClick={() => setIsModalOpen(true)}
           className="px-3 py-1 bg-emerald-500 hover:bg-emerald-600 text-white text-sm rounded-lg transition-colors"
@@ -792,35 +791,53 @@ const TemplateManager = ({ templates, onTemplateCreate, onTemplateUpdate, onTemp
       </div>
       
       <div className="grid gap-3">
-        {templates.map(template => (
-          <div key={template.id} className="p-3 bg-gray-800 rounded-lg border border-gray-700">
+        {allTemplates?.map(template => (
+          <div key={template._id} className="p-3 bg-[#1A1A1A] rounded-lg border border-white/10">
             <div className="flex justify-between items-start">
-              <div>
+              <div className="flex-1">
                 <h4 className="font-medium text-white">{template.name}</h4>
-                <p className="text-sm text-gray-400 mt-1">{template.prompt}</p>
-                <div className="flex gap-2 mt-2">
-                  <span className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded">
-                    {template.type}
-                  </span>
+                <p className="text-sm text-gray-400 mt-1 line-clamp-2">{template.prompt}</p>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {template.isFavourite && (
+                    <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">
+                      ⭐ Favourite
+                    </span>
+                  )}
                   {template.isPublic && (
                     <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded">
                       Public
                     </span>
                   )}
+                  {template.tags && template.tags.length > 0 && (
+                    template.tags.map((tag, index) => (
+                      <span key={index} className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded">
+                        {tag}
+                      </span>
+                    ))
+                  )}
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 ml-4">
                 <button
                   onClick={() => setEditingTemplate(template)}
                   className="text-blue-400 hover:text-blue-300 text-sm"
+                  title="Edit template"
                 >
-                  Edit
+                  ✏️
                 </button>
                 <button
-                  onClick={() => handleDeleteTemplate(template.id)}
+                  onClick={() => handleDeleteTemplate(template._id)}
                   className="text-red-400 hover:text-red-300 text-sm"
+                  title="Delete template"
                 >
-                  Delete
+                  🗑️
+                </button>
+                <button
+                  onClick={() => handleToggleFavourite(template._id)}
+                  className="text-yellow-400 hover:text-yellow-300 text-sm"
+                  title="Toggle favourite"
+                >
+                  {template.isFavourite ? '⭐' : '☆'}
                 </button>
               </div>
             </div>
@@ -828,195 +845,93 @@ const TemplateManager = ({ templates, onTemplateCreate, onTemplateUpdate, onTemp
         ))}
       </div>
       
+      {/* Template Editor Modal would go here */}
       {isModalOpen && (
-        <TemplateEditorModal
-          template={editingTemplate}
-          onSave={editingTemplate ? handleUpdateTemplate : handleCreateTemplate}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingTemplate(null);
-          }}
-        />
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/70" onClick={() => setIsModalOpen(false)} />
+          <div className="relative bg-[#141414] border border-white/10 rounded-lg p-6 max-w-2xl w-full mx-4">
+            <h3 className="text-xl font-semibold text-white mb-4">
+              {editingTemplate ? 'Edit Template' : 'Create Template'}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Template Name</label>
+                <input
+                  type="text"
+                  defaultValue={editingTemplate?.name || ''}
+                  placeholder="Enter template name..."
+                  className="w-full px-3 py-2 bg-[#1A1A1A] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Prompt</label>
+                <textarea
+                  defaultValue={editingTemplate?.prompt || ''}
+                  placeholder="Enter template prompt..."
+                  rows={4}
+                  className="w-full px-3 py-2 bg-[#1A1A1A] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none resize-none"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Tags (comma separated)</label>
+                <input
+                  type="text"
+                  defaultValue={editingTemplate?.tags?.join(', ') || ''}
+                  placeholder="character, consistent, style..."
+                  className="w-full px-3 py-2 bg-[#1A1A1A] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <input
+                    type="checkbox"
+                    defaultChecked={editingTemplate?.isPublic || false}
+                    className="rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  Make public
+                </label>
+                
+                <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <input
+                    type="checkbox"
+                    defaultChecked={editingTemplate?.isFavourite || false}
+                    className="rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  Mark as favourite
+                </label>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  // Handle save logic here
+                  setIsModalOpen(false);
+                  setEditingTemplate(null);
+                }}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+              >
+                {editingTemplate ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 };
 
-// Template Editor Modal (Create/Edit)
-const TemplateEditorModal = ({ template, onSave, onClose }) => {
-  const [formData, setFormData] = useState({
-    name: template?.name || '',
-    type: template?.type || 'character',
-    prompt: template?.prompt || '',
-    isPublic: template?.isPublic || false
-  });
-
-### TemplateEditor Component
-```typescript
-// components/storyboard/TemplateEditor.tsx
-interface TemplateEditorProps {
-  template?: Template | null;
-  onSave: (template: CreateTemplateData | UpdateTemplateData) => void;
-  onClose: () => void;
-}
-
-const TemplateEditor = ({ template, onSave, onClose }: TemplateEditorProps) => {
-  const [name, setName] = useState(template?.name || "");
-  const [type, setType] = useState(template?.type || "character");
-  const [prompt, setPrompt] = useState(template?.prompt || "");
-  const [isPublic, setIsPublic] = useState(template?.isPublic || false);
-  
-  const handleSave = () => {
-    const templateData = {
-      name,
-      type,
-      prompt,
-      isPublic
-    };
-    
-    if (template) {
-      onSave({ ...templateData, id: template.id });
-    } else {
-      onSave(templateData);
-    }
-    onClose();
-  };
-  
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl">
-        <h2 className="text-xl font-semibold text-white mb-4">
-          {template ? "Edit Template" : "Create Template"}
-        </h2>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Type</label>
-            <TemplateTypeSelector
-              value={type}
-              onChange={setType}
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Prompt</label>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={4}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
-              placeholder="Enter template prompt..."
-            />
-          </div>
-          
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="isPublic"
-              checked={isPublic}
-              onChange={(e) => setIsPublic(e.target.checked)}
-              className="mr-2"
-            />
-            <label htmlFor="isPublic" className="text-sm text-gray-300">
-              Make public (available to all users)
-            </label>
-          </div>
-        </div>
-        
-        <div className="flex justify-end gap-3 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-300 hover:text-white"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!name || !prompt}
-            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50"
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-```
-
-### TemplateTypeSelector Component
-```typescript
-// components/storyboard/TemplateTypeSelector.tsx
-interface TemplateTypeSelectorProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-
-const TemplateTypeSelector = ({ value, onChange }: TemplateTypeSelectorProps) => {
-  const types = [
-    { value: "character", label: "Character", icon: "👤" },
-    { value: "environment", label: "Environment", icon: "🌍" },
-    { value: "prop", label: "Prop", icon: "📦" },
-    { value: "style", label: "Style", icon: "🎨" },
-    { value: "custom", label: "Custom", icon: "⚙️" }
-  ];
-  
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {types.map(type => (
-        <button
-          key={type.value}
-          onClick={() => onChange(type.value)}
-          className={`p-3 rounded-lg border transition-colors ${
-            value === type.value
-              ? "border-emerald-500 bg-emerald-500/20 text-emerald-300"
-              : "border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500"
-          }`}
-        >
-          <div className="text-lg mb-1">{type.icon}</div>
-          <div className="text-xs">{type.label}</div>
-        </button>
-      ))}
-    </div>
-  );
-};
-```
-
-### CustomTemplateInput Component
-```typescript
-// components/storyboard/CustomTemplateInput.tsx
-interface CustomTemplateInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-}
-
-const CustomTemplateInput = ({ value, onChange, placeholder = "Enter custom template..." }: CustomTemplateInputProps) => {
-  return (
-    <div className="relative">
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        rows={3}
-        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-emerald-500 focus:outline-none"
-      />
-      <div className="absolute bottom-2 right-2 text-xs text-gray-500">
-        {value.length}/500
-      </div>
-    </div>
-  );
-};
+export default PromptLibrary;
 ```
 
 ---
@@ -1026,11 +941,11 @@ const CustomTemplateInput = ({ value, onChange, placeholder = "Enter custom temp
 ### Generate Image Route
 ```typescript
 // app/api/storyboard/generate-element/route.ts
+import { convex } from '@/convex/_generated/server';
+
 export async function POST(request: Request) {
   const { 
-    userPrompt, 
-    templateType, 
-    customTemplate, 
+    prompt, 
     referenceImageUrls,
     aspectRatio,
     resolution,
@@ -1040,44 +955,34 @@ export async function POST(request: Request) {
   } = await request.json();
   
   // 1. Validate inputs
-  if (!userPrompt || !projectId || !companyId) {
+  if (!prompt || !projectId || !companyId) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
   }
   
-  // 2. Build final prompt
-  let finalPrompt = userPrompt;
-  if (customTemplate) {
-    finalPrompt += '\n\n' + customTemplate;
-  }
-  
-  // 3. Create job in Convex
-  const jobId = await convex.mutations.aiGenerationJobs.create({
+  // 2. Create job in Convex
+  const jobId = await convex.mutations.storyboard.imageGeneration.create({
     companyId,
     projectId,
-    elementType: templateType || "character",
+    type: "image",
     status: "pending",
-    userPrompt,
-    templateType,
-    customTemplate,
+    prompt,
     referenceImageUrls,
     aspectRatio,
     resolution,
     outputFormat,
-    creditsUsed: 20,
-    createdAt: Date.now()
+    creditsUsed: 20
   });
   
-  // 4. Send to n8n workflow
+  // 3. Send to n8n workflow
   try {
-    const n8nResponse = await fetch(`${process.env.N8N_WEBHOOK_URL}/element-generate`, {
+    const n8nResponse = await fetch(`${process.env.N8N_IMAGE_ELEMENT_GENERATOR_WEBHOOK_PATH}`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": process.env.N8N_API_KEY!
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         jobId,
-        prompt: finalPrompt,
+        prompt,
         referenceImages: referenceImageUrls,
         aspectRatio,
         resolution,
@@ -1091,7 +996,7 @@ export async function POST(request: Request) {
     }
     
     // 5. Update job status to processing
-    await convex.mutations.aiGenerationJobs.update(jobId, {
+    await convex.mutations.storyboard.imageGeneration.update(jobId, {
       status: "processing"
     });
     
@@ -1103,7 +1008,7 @@ export async function POST(request: Request) {
     
   } catch (error) {
     // 6. Update job status to failed
-    await convex.mutations.aiGenerationJobs.update(jobId, {
+    await convex.mutations.storyboard.imageGeneration.update(jobId, {
       status: "failed",
       errorMessage: error.message
     });
@@ -1118,6 +1023,8 @@ export async function POST(request: Request) {
 ### Callback Route
 ```typescript
 // app/api/callback/element/route.ts
+import { convex } from '@/convex/_generated/server';
+
 export async function POST(request: Request) {
   const { jobId, status, resultUrls, errorMessage } = await request.json();
   
@@ -1136,14 +1043,14 @@ export async function POST(request: Request) {
       updateData.errorMessage = errorMessage;
     }
     
-    await convex.mutations.aiGenerationJobs.update(jobId, updateData);
+    await convex.mutations.storyboard.imageGeneration.update(jobId, updateData);
     
     // If successful, store images in R2 and update element library
     if (status === "completed" && resultUrls) {
       for (const imageUrl of resultUrls) {
         // Save to element library
-        await convex.mutations.storyboardElements.create({
-          projectId: (await convex.mutations.aiGenerationJobs.get(jobId)).projectId,
+        await convex.mutations.storyboard.elements.create({
+          projectId: (await convex.mutations.storyboard.imageGeneration.get(jobId)).projectId,
           name: `Generated Element ${Date.now()}`,
           imageUrl,
           type: "generated",
@@ -1166,9 +1073,9 @@ export async function POST(request: Request) {
 ## 📅 Implementation Roadmap
 
 ### 🎯 Phase 1: Foundation (Weeks 1-3) - HIGH PRIORITY
-- [ ] **Convex schema** for ai_generation_jobs table
-- [ ] **Template type selector** (character/environment/prop)
-- [ ] **Custom template text field** implementation
+- [ ] **Convex schema** for storyboard_ai_generation_jobs table
+- [ ] **Prompt template library** integration
+- [ ] **Template selector dropdown** implementation
 - [ ] **Reference image upload** functionality
 
 ### 🎯 Phase 2: n8n Integration (Weeks 4-5) - HIGH PRIORITY
@@ -1204,8 +1111,8 @@ export async function POST(request: Request) {
 
 ### ✅ User Experience Success
 - [ ] Intuitive reference image upload and processing
-- [ ] Simple template type selection (character/environment/prop)
-- [ ] Custom template text field works
+- [ ] Simple prompt template selection from library
+- [ ] Template library management works
 - [ ] Fast generation with clear progress indicators
 - [ ] Mobile-responsive interface
 
@@ -1233,14 +1140,7 @@ import { v } from "convex/values";
 
 export const validateGenerationRequest = {
   userPrompt: v.string().min(1).max(1000),
-  templateType: v.optional(v.union(
-    v.literal("character"),
-    v.literal("environment"), 
-    v.literal("prop"),
-    v.literal("style"),
-    v.literal("custom")
-  )),
-  customTemplate: v.optional(v.string().max(2000)),
+  promptTemplateId: v.optional(v.id("promptTemplates")),
   referenceImageUrls: v.optional(v.array(v.string()).max(5)),
   aspectRatio: v.optional(v.union(v.literal("1:1"), v.literal("6:19"), v.literal("19:6"))),
   resolution: v.optional(v.union(v.literal("1K"), v.literal("2K"))),
@@ -1268,9 +1168,9 @@ export const validateGenerationRequestClient = (data) => {
     errors.push("Too many reference images (max 5)");
   }
   
-  // Custom template validation
-  if (data.customTemplate && data.customTemplate.length > 2000) {
-    errors.push("Custom template too long (max 2000 characters)");
+  // Prompt template validation
+  if (data.promptTemplateId && !isValidPromptTemplateId(data.promptTemplateId)) {
+    errors.push("Invalid prompt template ID");
   }
   
   // Credits validation
@@ -1293,7 +1193,7 @@ export const validateGenerationRequestClient = (data) => {
     sanitizedData: errors.length === 0 ? {
       ...data,
       userPrompt: data.userPrompt.trim(),
-      customTemplate: data.customTemplate?.trim() || undefined,
+      promptTemplateId: data.promptTemplateId,
     } : null
   };
 };
@@ -3106,49 +3006,26 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 const N8N_WEBHOOK = process.env.N8N_IMAGE_ELEMENT_GENERATOR_WEBHOOK_PATH!;
 
-const TEMPLATE_CATEGORIES = {
-  character: [
-    { id: "natural-pose", name: "Natural Character Pose", prompt: "standing naturally, relaxed pose, full body" },
-    { id: "action-pose", name: "Action Pose", prompt: "dynamic action pose, movement, energy" },
-    { id: "portrait", name: "Portrait", prompt: "headshot, facial expression, detailed face" },
-  ],
-  environment: [
-    { id: "outdoor-nature", name: "Outdoor Nature", prompt: "natural landscape, outdoor environment" },
-    { id: "interior-room", name: "Interior Room", prompt: "indoor space, room interior, furniture" },
-    { id: "urban-city", name: "Urban City", prompt: "cityscape, buildings, urban environment" },
-  ],
-  prop: [
-    { id: "weapon", name: "Weapon", prompt: "weapon, tool, equipment, detailed object" },
-    { id: "accessory", name: "Accessory", prompt: "personal item, accessory, wearable" },
-    { id: "object", name: "Object", prompt: "standalone object, item, prop" },
-  ],
-  style: [
-    { id: "cinematic-lighting", name: "Cinematic Lighting", prompt: "cinematic lighting, dramatic shadows" },
-    { id: "soft-lighting", name: "Soft Lighting", prompt: "soft diffused lighting, gentle shadows" },
-    { id: "studio-lighting", name: "Studio Lighting", prompt: "studio lighting, clean background" },
-  ],
-  composition: [
-    { id: "centered", name: "Centered Shot", prompt: "centered composition, subject in middle" },
-    { id: "rule-thirds", name: "Rule of Thirds", prompt: "rule of thirds composition, balanced" },
-    { id: "close-up", name: "Close Up", prompt: "close up shot, detailed view" },
-  ],
-  lighting: [
-    { id: "golden-hour", name: "Golden Hour", prompt: "golden hour lighting, warm tones" },
-    { id: "blue-hour", name: "Blue Hour", prompt: "blue hour lighting, cool tones" },
-    { id: "dramatic", name: "Dramatic Lighting", prompt: "dramatic lighting, high contrast" },
-  ],
-};
+// Template categories removed - using simplified prompt template system
+// Templates are now stored in Convex promptTemplates table with tags and favourite functionality
 
 export async function POST(request: Request) {
-  const { companyId, projectId, jobType, prompt, templateCategory, templateId, referenceImages } = await request.json();
+  const { companyId, projectId, jobType, prompt, templateId, referenceImages } = await request.json();
   // referenceImages: array of base64 strings or already-uploaded URLs
 
   // 1. Build final prompt with template
   let finalPrompt = prompt;
-  if (templateCategory && templateId) {
-    const template = TEMPLATE_CATEGORIES[templateCategory]?.find(t => t.id === templateId);
-    if (template) {
-      finalPrompt = `${prompt}\n\nTemplate: ${template.prompt}`;
+  if (templateId) {
+    // Fetch template from Convex promptTemplates table
+    try {
+      const template = await convex.query(api.promptTemplates.get, { id: templateId });
+      if (template) {
+        finalPrompt = `${prompt}\n\nTemplate: ${template.prompt}`;
+        // Increment usage count
+        await convex.mutation(api.promptTemplates.incrementUsage, { id: templateId });
+      }
+    } catch (error) {
+      console.error('Failed to fetch template:', error);
     }
   }
 
@@ -3743,14 +3620,14 @@ N8N_IMAGE_ELEMENT_GENERATOR_WEBHOOK_PATH=https://n8n.srv1010007.hstgr.cloud/webh
 ### **New Files to Create:**
 ```typescript
 // Backend
-convex/mutations/aiGenerationJobs.ts           // Job management mutations
-convex/mutations/promptTemplates.ts           // Template CRUD mutations
+convex/storyboard/imageGeneration.ts           // Job management mutations
+convex/promptTemplates.ts                       // Template CRUD mutations
 app/api/storyboard/generate-element/route.ts    // Generation API endpoint
 app/api/callback/element/route.ts              // n8n webhook callback
-app/api/r2/presigned-url/route.ts              // R2 presigned URL API
+app/api/storyboard/save-to-library/route.ts    // Save to file library API
 
 // Frontend Components
-components/storyboard/TemplateManagerModal.tsx  // Template management UI
+components/storyboard/PromptLibrary.tsx         // Template management UI
 components/storyboard/CreditBalance.tsx         // Credit display component
 components/storyboard/GenerationErrorBoundary.tsx // Error boundary wrapper
 
@@ -3771,7 +3648,7 @@ components/SceneEditor.tsx                      // Add results panel + job track
 ### **Environment Variables to Add:**
 ```bash
 # Element AI Generation
-N8N_WEBHOOK_URL=https://n8n.srv1010007.hstgr.cloud/webhook-test/51ab96a7-7138-4e26-908d-360575e10a99
+N8N_IMAGE_ELEMENT_GENERATOR_WEBHOOK_PATH=https://n8n.srv1010007.hstgr.cloud/webhook-test/51ab96a7-7138-4e26-908d-360575e10a99
 N8N_API_KEY=your_n8n_api_key
 AI_GENERATION_TIMEOUT=120000
 MAX_CONCURRENT_GENERATIONS=10
@@ -3796,13 +3673,11 @@ R2_BUCKET_NAME=storyboardbucket
 export default defineSchema({
   // ... existing tables
   
-  ai_generation_jobs: defineTable({
+  storyboard_ai_generation_jobs: defineTable({
     companyId: v.string(),
     projectId: v.string(),
-    elementType: v.union(v.literal("character"), v.literal("environment"), v.literal("prop")),
-    userPrompt: v.string(),
-    templateType: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"))),
-    customTemplate: v.optional(v.string()),
+    type: v.union(v.literal("image"), v.literal("video")),
+    prompt: v.string(),
     referenceImageUrls: v.optional(v.array(v.string())),
     aspectRatio: v.optional(v.string()),
     resolution: v.optional(v.string()),
@@ -3817,48 +3692,49 @@ export default defineSchema({
     .index("by_company", ["companyId"])
     .index("by_project", ["projectId"]),
     
-  promptTemplates: defineTable({
+  storyboard_promptTemplates: defineTable({
     name: v.string(),
-    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("custom")),
     prompt: v.string(),
     companyId: v.string(),
     isPublic: v.boolean(),
-    usageCount: v.number(),
+    tags: v.optional(v.array(v.string())),
+    isFavourite: v.optional(v.boolean()),
     createdAt: v.number(),
   })
     .index("by_company", ["companyId"])
-    .index("public_templates", ["isPublic"]),
+    .index("public_templates", ["isPublic"])
+    .index("favourite_templates", ["isFavourite"]),
 });
 ```
 
 ### **Day 2: Core Mutations**
 ```typescript
-// Create convex/mutations/aiGenerationJobs.ts
-// Copy from the plan above
+// Create convex/storyboard/imageGeneration.ts
+// Use the mutations from the "AI Generation Jobs Mutations" section above
 
-// Create convex/mutations/promptTemplates.ts  
-// Copy from the plan above
+// Create convex/promptTemplates.ts  
+// Use the mutations from the "Prompt Templates Mutations" section above
 ```
 
 ### **Day 3: API Routes**
 ```typescript
 // Create app/api/storyboard/generate-element/route.ts
-// Copy from the plan above
+// Use the route from the "Generate Image Route" section above
 
 // Create app/api/callback/element/route.ts
-// Copy from the plan above
+// Use the route from the "Callback Route" section above
 ```
 
 ### **Day 4: UI Components**
 ```typescript
-// Create components/storyboard/TemplateManagerModal.tsx
-// Copy from the plan above (complete modal)
+// Create components/storyboard/PromptLibrary.tsx
+// Use the component from the "PromptLibrary Component" section above
 
 // Create components/storyboard/CreditBalance.tsx
-// Copy from the plan above
+// Simple credit display component with user's current balance
 
 // Create components/storyboard/GenerationErrorBoundary.tsx
-// Copy from the plan above
+// Error boundary wrapper for generation failures
 ```
 
 ### **Day 5: Integration**
@@ -3897,66 +3773,6 @@ export default defineSchema({
 - ✅ Positive user feedback
 - ✅ Stable performance under load
 
----
-
-## 📊 Current Status: **95% Complete**
-
-### **✅ Completed:**
-- Complete architecture and API design
-- Full UI component specifications
-- Error handling and validation
-- Performance optimizations
-- Security considerations
-- Template management system
-- Credit integration
-- SceneEditor results panel
-- Real-time job tracking
-
-### **🔧 Ready for Implementation:**
-The plan is **production-ready** with all necessary components, integration points, and implementation details fully specified. You can start implementing immediately following the phased approach outlined above.
-
-### **⏱️ Estimated Timeline:**
-- **Backend Setup:** 3 days
-- **UI Components:** 2 days  
-- **Integration:** 2 days
-- **Testing & Polish:** 2 days
-- **Total:** 9-10 days for full implementation
-
-The `consistent_plan.md` is now **complete and ready for development**! 🚀
-
-```
-Phase 1 — Backend (1–2 days)
-□ Add ai_generation_jobs to convex/schema.ts
-□ Create convex/storyboard/elementGeneration.ts (mutations + queries)
-□ Create app/api/storyboard/generate-element/route.ts
-□ Create app/api/callback/element/route.ts
-□ Test n8n webhook manually with Postman
-
-Phase 2 — UI Enhancements (2 days)
-□ Add @mention system to ElementAIPanel (reference thumbnails with @Image labels)
-□ Add mention insertion when clicking references
-□ Add template props + TEMPLATE_CATEGORIES to ElementAIPanel.tsx
-□ Add template category tabs + dropdown selector
-□ Add ⚙️ Manage Templates button + modal
-□ Wire template state in SceneEditor.tsx
-
-Phase 3 — Results Panel & Downloads (1 day)
-□ Add elementJobId, elementResultUrls, elementGenerating state to SceneEditor
-□ Add useQuery for real-time job polling
-□ Add results grid panel UI (3-col grid)
-□ Add 💾 Desktop and 📁 Library download buttons
-□ Add downloadToDesktop() and saveToFileLibrary() functions
-□ Add Download Best and Regenerate buttons
-□ Wire handleElementGenerate to call /api/storyboard/generate-element
-
-Phase 4 — Polish & Template Management (1 day)
-□ Add loading skeleton while generating
-□ Error toast on failed jobs
-□ Credit deduction validation
-□ Template CRUD operations (create, edit, delete)
-□ Template persistence to Convex settings
-□ @mention rendering as green chips in prompt
-```
 
 ---
 
@@ -3964,11 +3780,12 @@ Phase 4 — Polish & Template Management (1 day)
 
 | File | Action |
 |------|--------|
-| `convex/schema.ts` | Add `ai_generation_jobs` table |
-| `convex/storyboard/elementGeneration.ts` | **NEW** — mutations + queries |
+| `convex/schema.ts` | Add `storyboard_ai_generation_jobs` and `storyboard_promptTemplates` tables |
+| `convex/storyboard/imageGeneration.ts` | **NEW** — mutations + queries |
+| `convex/promptTemplates.ts` | **NEW** — template mutations + queries |
 | `app/api/storyboard/generate-element/route.ts` | **NEW** — generation API |
 | `app/api/callback/element/route.ts` | **NEW** — n8n callback |
 | `app/api/storyboard/save-to-library/route.ts` | **NEW** — save to file library |
 | `components/storyboard/ElementAIPanel.tsx` | **ENHANCE** — add @mentions + templates |
-| `components/storyboard/TemplateManagerModal.tsx` | **NEW** — template CRUD UI |
+| `components/storyboard/PromptLibrary.tsx` | **NEW** — template CRUD UI |
 | `components/SceneEditor.tsx` | **ENHANCE** — wire generate handler + results panel + downloads |

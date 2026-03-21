@@ -81,6 +81,7 @@ import type * as migrations_populateCompanyId from "../migrations/populateCompan
 import type * as migrations_syncTicketsToInbox from "../migrations/syncTicketsToInbox.js";
 import type * as platformConfig from "../platformConfig.js";
 import type * as poConfig from "../poConfig.js";
+import type * as promptTemplates from "../promptTemplates.js";
 import type * as purchaseOrders_canConvertPO from "../purchaseOrders/canConvertPO.js";
 import type * as purchaseOrders_config from "../purchaseOrders/config.js";
 import type * as purchaseOrders_convertPOToInvoice from "../purchaseOrders/convertPOToInvoice.js";
@@ -197,6 +198,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/syncTicketsToInbox": typeof migrations_syncTicketsToInbox;
   platformConfig: typeof platformConfig;
   poConfig: typeof poConfig;
+  promptTemplates: typeof promptTemplates;
   "purchaseOrders/canConvertPO": typeof purchaseOrders_canConvertPO;
   "purchaseOrders/config": typeof purchaseOrders_config;
   "purchaseOrders/convertPOToInvoice": typeof purchaseOrders_convertPOToInvoice;

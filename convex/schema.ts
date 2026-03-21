@@ -1939,4 +1939,26 @@ export default defineSchema({
     .index("by_timestamp", ["timestamp"])
     .index("by_oldProject", ["oldProjectId"])
     .index("by_newProject", ["newProjectId"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Prompt Templates
+  // ============================================
+  promptTemplates: defineTable({
+    name: v.string(),
+    type: v.union(
+      v.literal("character"),
+      v.literal("environment"), 
+      v.literal("prop"),
+      v.literal("style"),
+      v.literal("custom")
+    ),
+    prompt: v.string(),
+    companyId: v.string(),
+    isPublic: v.boolean(),
+    usageCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_company", ["companyId"])
+    .index("by_type", ["type"])
+    .index("public_templates", ["isPublic", "type"]),
 });
