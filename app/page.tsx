@@ -9,42 +9,6 @@ import { ChatWidget } from "@/components/ChatWidget";
 export default function Home() {
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="bg-black/95 backdrop-blur-sm border-b border-gray-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-yellow-400">StartupKit</h1>
-          <nav className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-gray-300 hover:text-yellow-400 transition font-medium">Features</a>
-            <a href="#pricing" className="text-gray-300 hover:text-yellow-400 transition font-medium">Pricing</a>
-            <a href="#faq" className="text-gray-300 hover:text-yellow-400 transition font-medium">FAQ</a>
-          </nav>
-          <div className="flex items-center gap-4">
-            <SignedOut>
-              <SignInButton forceRedirectUrl="/dashboard">
-                <button className="px-4 py-2 text-white hover:text-yellow-400 transition">
-                  Sign In
-                </button>
-              </SignInButton>
-              <SignUpButton forceRedirectUrl="/dashboard">
-                <button className="px-4 py-2 bg-yellow-400 text-black rounded-lg hover:bg-yellow-500 font-semibold transition">
-                  Sign Up
-                </button>
-              </SignUpButton>
-            </SignedOut>
-            <SignedIn>
-              <a href="/dashboard" className="px-4 py-2 text-white hover:text-yellow-400 transition">
-                Dashboard
-              </a>
-              <Link href="/dashboard">
-                <button className="px-4 py-2 bg-yellow-400 text-black rounded-lg hover:bg-yellow-500 font-semibold transition">
-                  Go to Dashboard
-                </button>
-              </Link>
-            </SignedIn>
-          </div>
-        </div>
-      </header>
-
       {/* Hero Section */}
       <section className="relative w-full min-h-screen flex items-center justify-center overflow-hidden">
         {/* Animated Background Gradients */}

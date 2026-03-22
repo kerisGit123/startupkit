@@ -6,10 +6,14 @@ import {
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
+  FolderOpen, FileText, Video, Filter, Search,
 } from "lucide-react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import PromptLibrary from "./PromptLibrary";
+import { FileBrowser } from "./FileBrowser";
+import { ElementLibrary } from "./ElementLibrary";
 
 // Constants for mention system
 const TEXTAREA_MIN_HEIGHT = 60;
@@ -67,6 +71,10 @@ export interface ElementAIPanelProps {
   onAspectRatioChange?: (aspectRatio: string) => void;
   selectedAspectRatio?: string;
   onRectangleMaskAspectRatioChange?: (aspectRatio: string) => void;
+  // New props for R2 and element library
+  projectId?: Id<"storyboard_projects">;
+  userId?: string;
+  user?: any; // Clerk user object
 }
 
 // ── Available Models ─────────────────────────────────────────────────
@@ -157,6 +165,10 @@ export function ElementAIPanel({
   onAspectRatioChange,
   selectedAspectRatio,
   onRectangleMaskAspectRatioChange,
+  // New props for R2 and element library
+  projectId,
+  userId,
+  user,
 }: ElementAIPanelProps) {
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
@@ -168,6 +180,9 @@ export function ElementAIPanel({
   const [savePromptName, setSavePromptName] = useState("");
   const [savePromptSaving, setSavePromptSaving] = useState(false);
   const [savePromptSuccess, setSavePromptSuccess] = useState(false);
+  // New state for R2 and element library
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [showElementLibrary, setShowElementLibrary] = useState(false);
   const createTemplate = useMutation(api.promptTemplates.create);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -351,6 +366,36 @@ export function ElementAIPanel({
     onAddReferenceImage?.(file);
   };
 
+  // New handlers for R2 and element library
+  const handleFileBrowserSelect = (url: string, type: string) => {
+    if (type === 'image') {
+      // Convert URL to File-like object for reference image
+      fetch(url)
+        .then(res => res.blob())
+        .then(blob => {
+          const filename = url.split('/').pop() || 'image.png';
+          const file = new File([blob], filename, { type: 'image/png' });
+          onAddReferenceImage?.(file);
+        })
+        .catch(err => console.error('Error fetching image:', err));
+    }
+    setShowFileBrowser(false);
+  };
+
+  const handleElementLibrarySelect = (referenceUrls: string[], name: string) => {
+    referenceUrls.forEach(url => {
+      fetch(url)
+        .then(res => res.blob())
+        .then(blob => {
+          const filename = url.split('/').pop() || 'element.png';
+          const file = new File([blob], filename, { type: 'image/png' });
+          onAddReferenceImage?.(file);
+        })
+        .catch(err => console.error('Error fetching element image:', err));
+    });
+    setShowElementLibrary(false);
+  };
+
   const handleEditorInput = () => {
     if (isComposingRef.current) return;
     const el = editorRef.current;
@@ -484,19 +529,40 @@ export function ElementAIPanel({
               </div>
             ))}
             
-            {/* Add reference button - positioned after last image */}
+            {/* Upload from computer button */}
             <button
               onClick={() => fileInputRef.current?.click()}
               className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-white/20 hover:border-white/30 transition-colors flex flex-col items-center justify-center gap-1 group"
+              title="Upload from computer"
             >
-              <Plus className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-              <span className="text-[10px] text-gray-400 group-hover:text-white transition-colors">Add</span>
+              <Upload className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+              <span className="text-[10px] text-gray-400 group-hover:text-white transition-colors">Upload</span>
+            </button>
+
+            {/* R2 File Browser button */}
+            <button
+              onClick={() => setShowFileBrowser(true)}
+              className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-blue-500/30 hover:border-blue-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
+              title="Browse R2 files"
+            >
+              <FolderOpen className="w-4 h-4 text-blue-400 group-hover:text-blue-300 transition-colors" />
+              <span className="text-[10px] text-blue-400 group-hover:text-blue-300 transition-colors">R2</span>
+            </button>
+
+            {/* Element Library button */}
+            <button
+              onClick={() => setShowElementLibrary(true)}
+              className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-purple-500/30 hover:border-purple-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
+              title="Browse element library"
+            >
+              <FileText className="w-4 h-4 text-purple-400 group-hover:text-purple-300 transition-colors" />
+              <span className="text-[10px] text-purple-400 group-hover:text-purple-300 transition-colors">Elements</span>
             </button>
           </div>
           
           {referenceImages.length === 0 && (
             <p className="text-xs text-gray-500">
-              Click to add reference images for consistent characters and props
+              Click to add reference images from computer, R2 storage, or element library for consistent characters and props
             </p>
           )}
         </div>
@@ -899,6 +965,26 @@ export function ElementAIPanel({
         }}
         userCompanyId={userCompanyId}
       />
+
+      {/* R2 File Browser Modal */}
+      {showFileBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowFileBrowser(false)}
+          onSelectFile={handleFileBrowserSelect}
+        />
+      )}
+
+      {/* Element Library Modal */}
+      {showElementLibrary && projectId && userId && user && (
+        <ElementLibrary
+          projectId={projectId}
+          userId={userId}
+          user={user}
+          onClose={() => setShowElementLibrary(false)}
+          onSelectElement={handleElementLibrarySelect}
+        />
+      )}
     </>
   );
 }

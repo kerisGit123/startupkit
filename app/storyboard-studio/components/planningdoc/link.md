@@ -40,7 +40,7 @@ https://www.youtube.com/watch?v=RE9TeY-lqZ4
 
 
 youtube channel strategy
-https://www.youtube.com/watch?v=EWIkh5GBC3s
+https://www.youtube.com/watch?v=EWIkh5GBC3s         
 
 
 
@@ -236,3 +236,9 @@ https://www.youtube.com/watch?v=HVNZzN3xERw
 
 
 i need to create a price calculator button beside nano banana2 . when click it show the credit . since you have my @price_plan_formula.md u can get my price base on the calculator for nano banana2
+
+
+
+
+link tutorial for video making:
+https://www.youtube.com/watch?v=0doAdc9H6DM

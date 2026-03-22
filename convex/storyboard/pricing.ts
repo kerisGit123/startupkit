@@ -15,6 +15,11 @@ export const pricingModels = {
   
   // For formula pricing
   formulaJson: v.optional(v.string()),     // JSON string with pricing formula
+  assignedFunction: v.optional(v.union(    // Function mapping for formula types
+    v.literal("getTopazUpscale"),
+    v.literal("getSeedance15"),
+    v.literal("getNanoBananaPrice")
+  )),
   
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -62,6 +67,11 @@ export const updatePricingModel = mutation({
     creditCost: v.optional(v.number()),
     factor: v.optional(v.number()),
     formulaJson: v.optional(v.string()),
+    assignedFunction: v.optional(v.union(
+      v.literal("getTopazUpscale"),
+      v.literal("getSeedance15"),
+      v.literal("getNanoBananaPrice")
+    )),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -70,46 +80,67 @@ export const updatePricingModel = mutation({
       .filter((q) => q.eq("modelId", args.modelId))
       .first();
     
-    if (!existing) {
-      throw new Error(`Pricing model ${args.modelId} not found`);
+    const timestamp = Date.now();
+    
+    if (existing) {
+      // Update existing record
+      const updateData: any = { updatedAt: timestamp };
+      
+      // Only include fields that are being updated
+      if (args.modelName !== undefined) updateData.modelName = args.modelName;
+      if (args.modelType !== undefined) updateData.modelType = args.modelType;
+      if (args.isActive !== undefined) updateData.isActive = args.isActive;
+      if (args.pricingType !== undefined) updateData.pricingType = args.pricingType;
+      if (args.creditCost !== undefined) updateData.creditCost = args.creditCost;
+      if (args.factor !== undefined) updateData.factor = args.factor;
+      if (args.formulaJson !== undefined) updateData.formulaJson = args.formulaJson;
+      if (args.assignedFunction !== undefined) updateData.assignedFunction = args.assignedFunction;
+      
+      await ctx.db.patch(existing._id, updateData);
+      return existing._id;
+    } else {
+      // Create new record
+      const newRecord = {
+        modelId: args.modelId,
+        modelName: args.modelName || args.modelId,
+        modelType: args.modelType || "image",
+        isActive: args.isActive !== undefined ? args.isActive : true,
+        pricingType: args.pricingType || "fixed",
+        creditCost: args.creditCost,
+        factor: args.factor,
+        formulaJson: args.formulaJson,
+        assignedFunction: args.assignedFunction,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+      
+      const newId = await ctx.db.insert("storyboard_model_credit", newRecord);
+      return newId;
     }
-    
-    const updateData: any = {
-      updatedAt: Date.now(),
-    };
-    
-    // Only include fields that are being updated
-    if (args.modelName !== undefined) updateData.modelName = args.modelName;
-    if (args.modelType !== undefined) updateData.modelType = args.modelType;
-    if (args.isActive !== undefined) updateData.isActive = args.isActive;
-    if (args.pricingType !== undefined) updateData.pricingType = args.pricingType;
-    if (args.creditCost !== undefined) updateData.creditCost = args.creditCost;
-    if (args.factor !== undefined) updateData.factor = args.factor;
-    if (args.formulaJson !== undefined) updateData.formulaJson = args.formulaJson;
-    
-    await ctx.db.patch(existing._id, updateData);
-    
-    return existing._id;
   },
 });
 
 // Delete a pricing model
 export const deletePricingModel = mutation({
   args: {
-    modelId: v.string(),
+    id: v.id("storyboard_model_credit"), // Accept the Convex _id directly
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("storyboard_model_credit")
-      .withIndex("by_model_id")
-      .filter((q) => q.eq("modelId", args.modelId))
-      .first();
+    console.log("Convex: Trying to delete by _id:", args.id);
+    
+    // Get the model directly by _id
+    const existing = await ctx.db.get(args.id);
+    
+    console.log("Convex: Found model:", existing);
     
     if (!existing) {
-      throw new Error(`Pricing model ${args.modelId} not found`);
+      throw new Error(`Pricing model with _id ${args.id} not found`);
     }
     
-    await ctx.db.delete(existing._id);
+    // Delete the model directly
+    await ctx.db.delete(args.id);
+    
+    console.log("Convex: Successfully deleted model:", existing.modelId);
     
     return existing._id;
   },

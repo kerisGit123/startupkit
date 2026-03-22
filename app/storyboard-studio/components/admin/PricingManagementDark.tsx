@@ -36,6 +36,7 @@ interface PricingModel {
   creditCost?: number;
   factor?: number;
   formulaJson?: string;
+  assignedFunction?: "getTopazUpscale" | "getSeedance15" | "getNanoBananaPrice";
   createdAt: number;
   updatedAt: number;
 }
@@ -120,9 +121,23 @@ export default function PricingManagementDark() {
     favorite: false
   });
   
-  const { models, analytics, loading, error, saveModel, toggleModelActive, deleteModel, resetToDefaults } = usePricingData();
+  const { models, analytics, loading, error, saveModel, toggleModelActive, deleteModel, resetToDefaults, refetch: fetchModels } = usePricingData();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  
+  // Testing state
+  const [testParams, setTestParams] = useState({
+    base: 8,
+    multiplier: 1.0,
+    quality: '1K',
+    resolution: '720p',
+    audio: false,
+    duration: 5,
+    upscaleFactor: '1x'
+  });
+  const [testResult, setTestResult] = useState<number | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  const [showTestingPanel, setShowTestingPanel] = useState(false);
 
   const handleReset = async () => {
     setIsResetting(true);
@@ -132,16 +147,110 @@ export default function PricingManagementDark() {
   };
 
   const handleSave = (data: Partial<PricingModel>) => {
-    saveModel(data).then(success => {
+    // Filter out database-specific fields that shouldn't be sent to the API
+    const apiData = {
+      modelId: data.modelId,
+      modelName: data.modelName,
+      modelType: data.modelType,
+      isActive: data.isActive,
+      pricingType: data.pricingType,
+      creditCost: data.creditCost,
+      factor: data.factor,
+      formulaJson: data.formulaJson,
+      assignedFunction: data.assignedFunction,
+    };
+    
+    console.log("Sending filtered data to API:", apiData);
+    saveModel(apiData).then(success => {
       if (success) {
-        setIsEditing(false);
-        setSelectedModel(null);
-        setFormData({});
+        // Refresh the models list to get the updated data from database
+        fetchModels().then(() => {
+          // Find the updated model in the refreshed models list
+          const updatedModel = models.find(m => m.modelId === data.modelId);
+          if (updatedModel) {
+            // Update selectedModel with the actual saved data from database
+            setSelectedModel(updatedModel);
+            // Update formData with the actual saved data to show the assigned function
+            setFormData({
+              modelId: updatedModel.modelId,
+              modelName: updatedModel.modelName,
+              modelType: updatedModel.modelType,
+              isActive: updatedModel.isActive,
+              pricingType: updatedModel.pricingType,
+              creditCost: updatedModel.creditCost,
+              factor: updatedModel.factor,
+              formulaJson: updatedModel.formulaJson,
+              assignedFunction: updatedModel.assignedFunction,
+            });
+            
+            console.log("Pricing model saved and refreshed successfully!");
+            console.log("Updated assignedFunction:", updatedModel.assignedFunction);
+          }
+        });
       }
     });
   };
 
+  // Test pricing function
+  const handleTestPricing = async (model: PricingModel) => {
+    setIsTesting(true);
+    setTestResult(null);
+    
+    try {
+      let result = 0;
+      
+      // Check if model has assignedFunction (from database schema)
+      const assignedFunction = (model as any).assignedFunction;
+      
+      if (assignedFunction === 'getTopazUpscale') {
+        result = getTopazUpscale(testParams.base, testParams.multiplier, testParams.upscaleFactor);
+      } else if (assignedFunction === 'getSeedance15') {
+        result = getSeedance15(
+          testParams.base, 
+          testParams.multiplier, 
+          testParams.resolution, 
+          testParams.audio, 
+          testParams.duration
+        );
+      } else if (assignedFunction === 'getNanoBananaPrice') {
+        result = getNanoBananaPrice(testParams.base, testParams.multiplier, testParams.quality);
+      } else {
+        // Fallback to model type detection
+        if (model.modelType === 'video') {
+          result = getSeedance15(
+            testParams.base, 
+            testParams.multiplier, 
+            testParams.resolution, 
+            testParams.audio, 
+            testParams.duration
+          );
+        } else {
+          result = getNanoBananaPrice(testParams.base, testParams.multiplier, testParams.quality);
+        }
+      }
+      
+      setTestResult(result);
+    } catch (error) {
+      console.error('Testing failed:', error);
+      setTestResult(null);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   const toggleFavorite = (modelId: string) => {
+    // Check if model exists in current models list
+    const model = models?.find(m => m.modelId === modelId);
+    
+    if (!model) {
+      alert(`Model "${modelId}" not found in current data. Please refresh and try again.`);
+      setActiveDropdown(null);
+      return;
+    }
+    
+    const modelName = model.modelName || modelId;
+    const isCurrentlyFavorite = favoriteModels.has(modelId);
+    
     setFavoriteModels(prev => {
       const newFavorites = new Set(prev);
       if (newFavorites.has(modelId)) {
@@ -151,20 +260,46 @@ export default function PricingManagementDark() {
       }
       return newFavorites;
     });
+    
     setActiveDropdown(null);
   };
 
-  const handleDelete = (modelId: string) => {
-    if (confirm('Are you sure you want to delete this pricing model? This action cannot be undone.')) {
-      deleteModel(modelId);
+  const handleDelete = async (modelId: string) => {
+    // Find the model in current models list to get the _id
+    const model = models?.find(m => m.modelId === modelId);
+    
+    if (!model) {
+      alert(`Model "${modelId}" not found in current data. Please refresh and try again.`);
+      setActiveDropdown(null);
+      return;
     }
+    
+    const modelName = model.modelName || modelId;
+    const convexId = model._id; // Use the Convex _id directly
+    
+    if (confirm(`Are you sure you want to delete "${modelName}"? This action cannot be undone.`)) {
+      // Call delete API with the _id instead of modelId
+      const success = await deleteModel(convexId);
+      
+      if (success) {
+        // Optionally show success message
+        alert(`"${modelName}" has been deleted successfully.`);
+      } else {
+        alert(`Failed to delete "${modelName}". Please try again.`);
+      }
+    }
+    
     setActiveDropdown(null);
   };
 
   // Close dropdown when clicking outside and handle fixed positioning
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (activeDropdown && !(event.target as Element).closest('.dropdown-menu')) {
+      // Check if click is outside dropdown and dropdown buttons
+      const isDropdownClick = (event.target as Element).closest('.dropdown-menu, .dropdown-btn');
+      const isDebugButton = (event.target as Element).closest('[class*="dropdown"]');
+      
+      if (activeDropdown && !isDropdownClick && !isDebugButton) {
         setActiveDropdown(null);
       }
     };
@@ -180,12 +315,15 @@ export default function PricingManagementDark() {
   useEffect(() => {
     if (activeDropdown) {
       const button = document.querySelector(`[data-dropdown-btn="${activeDropdown}"]`) as HTMLElement;
+      
       if (button) {
         const rect = button.getBoundingClientRect();
         setDropdownPosition({
           top: rect.bottom + window.scrollY + 4,
           right: window.innerWidth - rect.right
         });
+      } else {
+        setDropdownPosition(null);
       }
     } else {
       setDropdownPosition(null);
@@ -235,6 +373,20 @@ export default function PricingManagementDark() {
           <p className="text-gray-400 text-sm">Configure pricing for different AI models</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Testing Panel Toggle */}
+          <button
+            onClick={() => setShowTestingPanel(!showTestingPanel)}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+              showTestingPanel 
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
+                : 'bg-[#3D3D3D] text-gray-400 hover:text-white border border-[#3D3D3D]'
+            }`}
+            title="Toggle Testing Parameters Panel"
+          >
+            <TrendingUp className="w-4 h-4" />
+            {showTestingPanel ? 'Hide Testing' : 'Show Testing'}
+          </button>
+          
           {/* View Toggle */}
           <div className="flex items-center bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg p-1">
             <button
@@ -474,6 +626,21 @@ export default function PricingManagementDark() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center justify-end gap-2">
+                    {/* Test Pricing Button */}
+                    {model.pricingType === 'formula' && (
+                      <button 
+                        onClick={() => handleTestPricing(model)} 
+                        disabled={isTesting}
+                        className="text-purple-400 hover:text-white p-1 rounded hover:bg-purple-400/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Test Pricing Formula"
+                      >
+                        {isTesting ? (
+                          <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <TrendingUp className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
                     <button 
                       onClick={() => { setSelectedModel(model); setFormData(model); setIsEditing(true); }} 
                       className="text-[#4A90E2] hover:text-white p-1 rounded hover:bg-[#4A90E2]/20 transition-colors"
@@ -658,8 +825,11 @@ export default function PricingManagementDark() {
                     </button>
                     <button 
                       data-dropdown-btn={model._id}
-                      onClick={() => setActiveDropdown(activeDropdown === model._id ? null : model._id)}
-                      className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-400/20 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent event bubbling
+                        setActiveDropdown(activeDropdown === model._id ? null : model._id);
+                      }}
+                      className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-400/20 transition-colors dropdown-btn"
                     >
                       <MoreVertical className="w-4 h-4" />
                     </button>
@@ -675,7 +845,7 @@ export default function PricingManagementDark() {
       {/* Fixed Dropdown - Outside all containers */}
       {activeDropdown && dropdownPosition && (
         <div 
-          className="fixed bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg shadow-lg z-[9999]"
+          className="fixed bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg shadow-lg z-[9999] dropdown-menu"
           style={{
             top: `${dropdownPosition.top}px`,
             right: `${dropdownPosition.right}px`,
@@ -685,9 +855,11 @@ export default function PricingManagementDark() {
           <button
             onClick={() => {
               const model = models?.find(m => m._id === activeDropdown);
-              if (model) toggleFavorite(model.modelId);
+              if (model) {
+                toggleFavorite(model.modelId);
+              }
             }}
-            className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#3D3D3D] hover:text-white transition-colors"
+            className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#3D3D3D] hover:text-yellow-400 transition-colors"
           >
             <Star className={`w-4 h-4 ${models?.find(m => m._id === activeDropdown && favoriteModels.has(m.modelId)) ? 'text-yellow-400 fill-current' : ''}`} />
             {models?.find(m => m._id === activeDropdown && favoriteModels.has(m.modelId)) ? 'Remove from Favorites' : 'Add to Favorites'}
@@ -695,7 +867,9 @@ export default function PricingManagementDark() {
           <button
             onClick={() => {
               const model = models?.find(m => m._id === activeDropdown);
-              if (model) handleDelete(model.modelId);
+              if (model) {
+                handleDelete(model.modelId);
+              }
             }}
             className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#3D3D3D] hover:text-red-400 transition-colors"
           >
@@ -774,6 +948,134 @@ export default function PricingManagementDark() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Testing Panel */}
+      {testResult !== null && (
+        <div className="fixed bottom-4 right-4 bg-[#2C2C2C] border border-[#4A90E2] rounded-xl p-4 shadow-2xl max-w-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-white">Test Result</h3>
+            <button 
+              onClick={() => setTestResult(null)}
+              className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#3D3D3D] transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="bg-[#1A1A1A] rounded-lg p-3">
+            <div className="text-2xl font-bold text-[#4A90E2] mb-1">{testResult} credits</div>
+            <div className="text-xs text-gray-400">
+              Base: {testParams.base} × Multiplier: {testParams.multiplier}
+              {testParams.quality && ` × Quality: ${testParams.quality}`}
+              {testParams.resolution && ` × Resolution: ${testParams.resolution}`}
+              {testParams.audio && ` × Audio: ${testParams.audio ? 'Yes' : 'No'}`}
+              {testParams.duration && ` × Duration: ${testParams.duration}s`}
+              {testParams.upscaleFactor && ` × Upscale: ${testParams.upscaleFactor}`}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Testing Parameters Panel */}
+      {showTestingPanel && (
+        <div className="bg-[#2C2C2C] border border-[#3D3D3D] rounded-xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Testing Parameters</h3>
+            <button 
+              onClick={() => setShowTestingPanel(false)}
+              className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#3D3D3D] transition-colors"
+              title="Hide Testing Panel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Base Cost</label>
+            <input 
+              type="number" 
+              value={testParams.base}
+              onChange={(e) => setTestParams({...testParams, base: Number(e.target.value)})}
+              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+              min="1"
+              step="1"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Multiplier</label>
+            <input 
+              type="number" 
+              value={testParams.multiplier}
+              onChange={(e) => setTestParams({...testParams, multiplier: Number(e.target.value)})}
+              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+              min="0.1"
+              step="0.1"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Quality</label>
+            <select 
+              value={testParams.quality}
+              onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
+              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+            >
+              <option value="1K">1K</option>
+              <option value="2K">2K</option>
+              <option value="4K">4K</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Resolution</label>
+            <select 
+              value={testParams.resolution}
+              onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
+              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+            >
+              <option value="480p">480p</option>
+              <option value="720p">720p</option>
+              <option value="1080p">1080p</option>
+              <option value="4K">4K</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Duration (s)</label>
+            <input 
+              type="number" 
+              value={testParams.duration}
+              onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
+              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+              min="1"
+              step="1"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Upscale</label>
+            <select 
+              value={testParams.upscaleFactor}
+              onChange={(e) => setTestParams({...testParams, upscaleFactor: e.target.value})}
+              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+            >
+              <option value="1x">1x</option>
+              <option value="2x">2x</option>
+              <option value="4x">4x</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 mt-4">
+          <label className="flex items-center text-sm text-gray-300">
+            <input 
+              type="checkbox" 
+              checked={testParams.audio}
+              onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
+              className="mr-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded focus:ring-2 focus:ring-[#4A90E2]"
+            />
+            Include Audio
+          </label>
+          <div className="text-xs text-gray-500">
+            Click the 📈 button on any formula model to test pricing
+          </div>
+        </div>
+      </div>
       )}
 
       {isEditing && (
@@ -929,6 +1231,22 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                     step="0.1"
                   />
                 </div>
+              </div>
+
+              {/* Function Assignment */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Assigned Function</label>
+                <select 
+                  value={formData.assignedFunction || ''} 
+                  onChange={(e) => setFormData({...formData, assignedFunction: e.target.value})} 
+                  className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                >
+                  <option value="">Select Function (Optional)</option>
+                  <option value="getNanoBananaPrice">getNanoBananaPrice - Image Generation</option>
+                  <option value="getSeedance15">getSeedance15 - Video Generation</option>
+                  <option value="getTopazUpscale">getTopazUpscale - AI Upscaling</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-2">Assign a specific pricing function. If not set, will auto-detect based on model type.</p>
               </div>
               
               <h3 className="text-lg font-medium text-white mb-4">Formula Configuration</h3>

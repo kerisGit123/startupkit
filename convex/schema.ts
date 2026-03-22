@@ -1961,4 +1961,33 @@ export default defineSchema({
     .index("by_company", ["companyId"])
     .index("by_type", ["type"])
     .index("public_templates", ["isPublic", "type"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Model Credit Pricing
+  // ============================================
+  storyboard_model_credit: defineTable({
+    modelId: v.string(),                    // "nano-banana-2", "seedance-1.5-pro"
+    modelName: v.string(),                  // "Nano Banana 2", "Seedance 1.5 Pro"
+    modelType: v.union(v.literal("image"), v.literal("video")),
+    isActive: v.boolean(),                   // true = available, false = disabled
+    pricingType: v.union(v.literal("fixed"), v.literal("formula")),
+    
+    // For fixed pricing
+    creditCost: v.optional(v.number()),      // Base credit cost
+    factor: v.optional(v.number()),         // Multiplier factor
+    
+    // For formula pricing
+    formulaJson: v.optional(v.string()),     // JSON string with pricing formula
+    assignedFunction: v.optional(v.union(    // Function mapping for formula types
+      v.literal("getTopazUpscale"),
+      v.literal("getSeedance15"),
+      v.literal("getNanoBananaPrice")
+    )),
+    
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_model_type", ["modelType", "isActive"])
+    .index("by_model_id", ["modelId"])
+    .index("by_assigned_function", ["assignedFunction"]),
 });

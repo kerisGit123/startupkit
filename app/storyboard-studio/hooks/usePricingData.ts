@@ -12,6 +12,7 @@ export interface PricingModel {
   creditCost?: number;
   factor?: number;
   formulaJson?: string;
+  assignedFunction?: "getTopazUpscale" | "getSeedance15" | "getNanoBananaPrice";
   createdAt: number;
   updatedAt: number;
 }
@@ -62,8 +63,33 @@ export function usePricingData() {
 
   // Placeholder functions for other operations (still use Convex directly)
   const saveModel = async (data: Partial<PricingModel>) => {
-    console.log("Save model (placeholder):", data);
-    return true;
+    try {
+      console.log("Saving pricing model with data:", data);
+      
+      const response = await fetch("/api/storyboard/pricing/models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      
+      console.log("API response status:", response.status);
+      console.log("API response ok:", response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("API error response:", errorText);
+        throw new Error(`Failed to save pricing model: ${response.status} - ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log("API response result:", result);
+      
+      await fetchModels(); // Refresh the list
+      return true;
+    } catch (err) {
+      console.error("Failed to save model:", err);
+      return false;
+    }
   };
 
   const toggleModelActive = async (modelId: string) => {
@@ -71,10 +97,35 @@ export function usePricingData() {
     return true;
   };
 
-  const deleteModel = async (modelId: string) => {
-    console.log("Delete model (placeholder):", modelId);
+  const deleteModel = async (id: string) => {
+  try {
+    console.log("Deleting pricing model by _id:", id);
+    
+    const response = await fetch(`/api/storyboard/pricing/models`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }), // Send _id in request body
+    });
+    
+    console.log("Delete API response status:", response.status);
+    console.log("Delete API response ok:", response.ok);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Delete API error response:", errorText);
+      throw new Error(`Failed to delete pricing model: ${response.status} - ${errorText}`);
+    }
+    
+    const result = await response.json();
+    console.log("Delete API response result:", result);
+    
+    await fetchModels(); // Refresh the list
     return true;
-  };
+  } catch (err) {
+    console.error("Failed to delete model:", err);
+    return false;
+  }
+};
 
   const analytics: Analytics | null = models
     ? {

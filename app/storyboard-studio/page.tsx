@@ -346,9 +346,6 @@ export default function StoryboardPage() {
     <div className="flex h-screen bg-[#0d0d12] overflow-hidden">
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Breadcrumb */}
-        {renderBreadcrumb()}
-
         {/* Step nav (wizard steps only) */}
         {(currentStep === "script" || currentStep === "breakdown" || currentStep === "style" || currentStep === "cast") && (
           <StepNav currentStep={currentStep} onStepClick={setCurrentStep} />
