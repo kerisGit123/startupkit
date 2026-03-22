@@ -20,6 +20,7 @@ import { MembersPage }        from "./components/MembersPage";
 import { UsageDashboard }     from "./components/UsageDashboard";
 import { GlobalFileBrowser } from "./components/GlobalFileBrowser";
 import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
+import PricingManagementPage from "./components/admin/PricingManagementPage";
 
 export default function StoryboardPage() {
   const router = useRouter();
@@ -213,6 +214,7 @@ export default function StoryboardPage() {
     if (activeNav === "projects") setCurrentStep("dashboard");
     if (activeNav === "asset-generator") setCurrentStep("element-generator");
     if (activeNav === "image-maker") setCurrentStep("image-maker");
+    if (activeNav === "price-management") setCurrentStep("price-management");
     if (activeNav === "members") setCurrentStep("members");
     if (activeNav === "usage") setCurrentStep("usage");
 
@@ -305,11 +307,11 @@ export default function StoryboardPage() {
   // ── Breadcrumb for board views ─────────────────────────────────────────────
   const renderBreadcrumb = () => {
     if (
-      currentStep === "dashboard" ||
       currentStep === "element-generator" ||
       currentStep === "image-maker" ||
       currentStep === "members" ||
-      currentStep === "usage"
+      currentStep === "usage" ||
+      currentStep === "price-management"
     ) return null;
     const crumbs: { label: string; step: Step }[] = [
       { label: "Projects", step: "dashboard" },
@@ -502,6 +504,13 @@ export default function StoryboardPage() {
           <div className="flex-1 overflow-y-auto">
             <UsageDashboard />
           </div>
+        )}
+
+        {currentStep === "price-management" && (
+          <PricingManagementPage 
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
         )}
       </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Users, MapPin, Wrench, ChevronDown, ChevronUp, Upload, Sparkles, Plus, Check, Image as ImageIcon } from "lucide-react";
+import { PricingCalculatorComponent } from "./PricingCalculator";
 
 const ELEMENT_TYPES = [
   { id: "characters", label: "Characters",    icon: Users   },
@@ -40,6 +41,8 @@ export function AssetGenerator() {
   const [stylePickerOpen, setStylePickerOpen] = useState(false);
   const [generated,    setGenerated]    = useState(false);
   const [generating,   setGenerating]   = useState(false);
+  const [selectedModel, setSelectedModel] = useState("nano-banana-2");
+  const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
 
   const currentStyle = ART_STYLES.find(s => s.id === selectedStyle) ?? ART_STYLES[0];
 
@@ -170,6 +173,13 @@ export function AssetGenerator() {
             </button>
           </div>
 
+          {/* Pricing Calculator */}
+          <PricingCalculatorComponent
+            modelId={selectedModel}
+            onCostCalculated={(credits) => setEstimatedCost(credits)}
+            disabled={!description.trim()}
+          />
+
           {/* Generate button */}
           <button
             onClick={handleGenerate}
@@ -181,7 +191,7 @@ export function AssetGenerator() {
             }`}
           >
             <Sparkles className="w-4 h-4" />
-            {generating ? "Generating..." : GENERATE_LABELS[elementType]}
+            {generating ? "Generating..." : `${GENERATE_LABELS[elementType]}${estimatedCost ? ` (${estimatedCost} credits)` : ''}`}
           </button>
 
           <p className="px-1 text-[11px] leading-relaxed text-gray-600">Generated images should be saved into the Element Library so they can be reused across storyboard frames.</p>

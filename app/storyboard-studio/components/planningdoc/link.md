@@ -230,3 +230,9 @@ Keris123@n8n
 
 freepik
 https://www.youtube.com/watch?v=HVNZzN3xERw
+
+
+
+
+
+i need to create a price calculator button beside nano banana2 . when click it show the credit . since you have my @price_plan_formula.md u can get my price base on the calculator for nano banana2

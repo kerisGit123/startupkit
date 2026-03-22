@@ -920,3 +920,62 @@ export const Button: React.FC<ButtonProps> = ({
 ---
 
 **This style guide provides a comprehensive design system for Storyboard Studio, focusing on modern, simple, and efficient UI/UX principles. The system includes all necessary design tokens, component styles, and implementation guidance to ensure consistency across the entire application.**
+
+---
+
+## 🎨 **Dark Theme (LTX Studio Style)**
+
+### **🌑 **Core Principles**
+- **Sleek & Modern**: Dark-themed UI with a focus on typography and spacing.
+- **Efficient**: Minimalist design to reduce cognitive load and improve focus.
+- **Professional**: High-contrast, clean aesthetic suitable for creative professionals.
+
+### **🎨 **Dark Theme Color Palette**
+```css
+/* Backgrounds */
+--bg-dark-primary: #1A1A1A;      /* Main background */
+--bg-dark-secondary: #2C2C2C;    /* Card and panel backgrounds */
+--bg-dark-tertiary: #3D3D3D;     /* Hover states, borders */
+
+/* Text */
+--text-dark-primary: #FFFFFF;       /* Primary text */
+--text-dark-secondary: #A0A0A0;     /* Secondary text, labels */
+--text-dark-tertiary: #6E6E6E;      /* Tertiary text, placeholders */
+
+/* Accents */
+--accent-blue: #4A90E2;         /* Primary buttons, highlights */
+--accent-blue-dark: #357ABD;      /* Button hover states */
+
+/* Borders */
+--border-dark: #3D3D3D;
+```
+
+### **🔘 **Component Styles (Dark Theme)**
+
+#### **Modals & Panels**
+- **Background**: `var(--bg-dark-secondary)`
+- **Border Radius**: `0.75rem` (12px)
+- **Border**: `1px solid var(--border-dark)`
+- **Header**: Bold white text, separated by a subtle border.
+
+#### **Buttons**
+- **Primary**: 
+  - Background: `var(--accent-blue)`
+  - Text: `var(--text-dark-primary)`
+  - Hover: `var(--accent-blue-dark)`
+- **Secondary/Cancel**: 
+  - Background: `transparent` or `var(--bg-dark-tertiary)`
+  - Text: `var(--text-dark-secondary)`
+  - Border: `1px solid var(--border-dark)`
+
+#### **Input Fields**
+- **Background**: `var(--bg-dark-primary)`
+- **Border**: `1px solid var(--border-dark)`
+- **Text**: `var(--text-dark-primary)`
+- **Placeholder**: `var(--text-dark-tertiary)`
+- **Focus**: Blue ring or border (`var(--accent-blue)`) 
+
+#### **Dropdowns & Popovers**
+- **Background**: `var(--bg-dark-secondary)`
+- **Separators**: `1px solid var(--border-dark)`
+- **Selected Item**: Blue background or text color (`var(--accent-blue)`)

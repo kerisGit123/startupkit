@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Film, FolderOpen, Users, Star, Clock, Tag, Check,
   ChevronDown, ChevronUp, Sparkles, BarChart2, LayoutGrid, Settings,
-  LogOut,
+  LogOut, DollarSign,
 } from "lucide-react";
 import type { Project } from "../types";
 import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
@@ -32,6 +32,7 @@ const ORGANIZE_ITEMS = [
 const UNIVERSE_NAV_ITEMS = [
   { key: "asset-generator", icon: Sparkles, label: "Element Generator"  },
   { key: "image-maker", icon: LayoutGrid, label: "Reference Maker" },
+  { key: "price-management", icon: DollarSign, label: "Price Management" },
 ];
 
 const EXTERNAL_LINK_ITEMS = [

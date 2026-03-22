@@ -28,19 +28,17 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
   const [sortBy, setSortBy] = useState<'name' | 'usage'>('usage');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Prompt | null>(null);
-  const promptTemplatesApi = api["mutations/promptTemplates"];
-
   // Fetch templates from Convex
-  const userTemplates = useQuery(promptTemplatesApi.getByCompany, { 
+  const userTemplates = useQuery(api.promptTemplates.getByCompany, { 
     companyId: userCompanyId 
   });
-  const publicTemplates = useQuery(promptTemplatesApi.getPublicTemplates, {});
+  const publicTemplates = useQuery(api.promptTemplates.getPublicTemplates, {});
 
   // Mutations
-  const createTemplate = useMutation(promptTemplatesApi.create);
-  const updateTemplate = useMutation(promptTemplatesApi.update);
-  const deleteTemplate = useMutation(promptTemplatesApi.remove);
-  const incrementUsage = useMutation(promptTemplatesApi.incrementUsage);
+  const createTemplate = useMutation(api.promptTemplates.create);
+  const updateTemplate = useMutation(api.promptTemplates.update);
+  const deleteTemplate = useMutation(api.promptTemplates.remove);
+  const incrementUsage = useMutation(api.promptTemplates.incrementUsage);
 
   const allTemplates = [...(userTemplates || []), ...(publicTemplates || [])];
 

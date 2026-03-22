@@ -5,8 +5,10 @@ import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
   Upload, Download, Save, History, Trash2,
-  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen,
+  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
 } from "lucide-react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import PromptLibrary from "./PromptLibrary";
 
 // Constants for mention system
@@ -162,6 +164,11 @@ export function ElementAIPanel({
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
   const [showImageMaskMenu, setShowImageMaskMenu] = useState(false);
   const [isPromptLibraryOpen, setIsPromptLibraryOpen] = useState(false);
+  const [isSavePromptOpen, setIsSavePromptOpen] = useState(false);
+  const [savePromptName, setSavePromptName] = useState("");
+  const [savePromptSaving, setSavePromptSaving] = useState(false);
+  const [savePromptSuccess, setSavePromptSuccess] = useState(false);
+  const createTemplate = useMutation(api.promptTemplates.create);
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -526,16 +533,110 @@ export function ElementAIPanel({
                 )}
               </div>
               
-              {/* Prompt Library Button */}
-              <div className="flex items-center justify-end mt-2">
+              {/* Prompt Library & Save Buttons */}
+              <div className="flex items-center justify-end mt-2 gap-2">
+                <button
+                  onClick={() => {
+                    const prompt = extractPlainText();
+                    if (!prompt.trim()) return;
+                    setSavePromptName("");
+                    setSavePromptSuccess(false);
+                    setIsSavePromptOpen(true);
+                  }}
+                  disabled={editorIsEmpty}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-colors text-xs font-medium disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="Save current prompt to library"
+                >
+                  <Save className="w-3 h-3" />
+                  Save Prompt
+                </button>
                 <button
                   onClick={() => setIsPromptLibraryOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-colors text-xs font-medium"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-colors text-xs font-medium"
                 >
                   <BookOpen className="w-3 h-3" />
                   Prompt Library
                 </button>
               </div>
+
+              {/* Save Prompt Inline Modal */}
+              {isSavePromptOpen && (
+                <div className="mt-2 p-3 bg-[#1a1a2e] border border-blue-500/30 rounded-lg">
+                  <p className="text-xs text-gray-400 mb-2">Save prompt as:</p>
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="e.g. Dark fantasy warrior..."
+                    value={savePromptName}
+                    onChange={(e) => setSavePromptName(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!savePromptName.trim()) return;
+                        setSavePromptSaving(true);
+                        try {
+                          await createTemplate({
+                            name: savePromptName.trim(),
+                            prompt: extractPlainText(),
+                            type: 'custom',
+                            companyId: userCompanyId,
+                            isPublic: false,
+                          });
+                          setSavePromptSuccess(true);
+                          setTimeout(() => setIsSavePromptOpen(false), 1000);
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setSavePromptSaving(false);
+                        }
+                      } else if (e.key === 'Escape') {
+                        setIsSavePromptOpen(false);
+                      }
+                    }}
+                    className="w-full bg-[#0a0a0f] border border-white/10 rounded px-2 py-1.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={async () => {
+                        if (!savePromptName.trim()) return;
+                        setSavePromptSaving(true);
+                        try {
+                          await createTemplate({
+                            name: savePromptName.trim(),
+                            prompt: extractPlainText(),
+                            type: 'custom',
+                            companyId: userCompanyId,
+                            isPublic: false,
+                          });
+                          setSavePromptSuccess(true);
+                          setTimeout(() => setIsSavePromptOpen(false), 1000);
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setSavePromptSaving(false);
+                        }
+                      }}
+                      disabled={!savePromptName.trim() || savePromptSaving}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {savePromptSuccess ? (
+                        <><Check className="w-3 h-3" /> Saved!</>
+                      ) : savePromptSaving ? (
+                        <><div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" /> Saving...</>
+                      ) : (
+                        <><Save className="w-3 h-3" /> Save</>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setIsSavePromptOpen(false)}
+                      className="px-3 py-1 text-gray-400 hover:text-white text-xs transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <span className="text-xs text-gray-500 ml-auto">Enter to save · Esc to cancel</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           
