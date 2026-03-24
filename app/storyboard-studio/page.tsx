@@ -15,10 +15,9 @@ import { SceneEditor }        from "./components/SceneEditor";
 import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./components/WizardSteps";
 import { PdfModal, ShareModal, TagModal } from "./components/Modals";
 import { AssetGenerator }     from "./components/AssetGenerator";
-import { ImageMakerPage }     from "./components/ImageMakerPage";
 import { MembersPage }        from "./components/MembersPage";
 import { UsageDashboard }     from "./components/UsageDashboard";
-import { GlobalFileBrowser } from "./components/GlobalFileBrowser";
+import { FileBrowser } from "./components/storyboard/FileBrowser";
 import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
 import PricingManagementPage from "./components/admin/PricingManagementPage";
 
@@ -277,6 +276,18 @@ export default function StoryboardPage() {
     }
   };
 
+  const handleRemoveImageUrl = async (id: string) => {
+    try {
+      await updateConvexProject({
+        id: id as any,
+        imageUrl: undefined
+      });
+      console.log("ImageUrl unset successfully from project");
+    } catch (error) {
+      console.error("Failed to unset ImageUrl:", error);
+    }
+  };
+
   const handleProjectsChange = async (nextProjects: Project[]) => {
     setProjects(nextProjects);
 
@@ -370,12 +381,14 @@ export default function StoryboardPage() {
               tags: p.tags,
               favourite: p.isFavorite ?? false,
               settings: p.settings,
+              imageUrl: p.imageUrl, // ✅ Add imageUrl field
             })) ?? projects}
             onProjectsChange={handleProjectsChange}
             onOpenProject={handleOpenProject}
             onCreateConvexProject={handleCreateConvexProject}
             onDeleteProject={handleDeleteConvexProject}
             onDuplicateProject={handleDuplicateConvexProject}
+            onRemoveImageUrl={handleRemoveImageUrl}
             onOpenFileBrowser={() => {
               // Trigger simple file input click
               const fileInput = document.getElementById('files-upload-input') as HTMLInputElement;
@@ -489,10 +502,6 @@ export default function StoryboardPage() {
           <AssetGenerator />
         )}
 
-        {currentStep === "image-maker" && (
-          <ImageMakerPage />
-        )}
-
         {currentStep === "members" && (
           <MembersPage />
         )}
@@ -516,7 +525,10 @@ export default function StoryboardPage() {
       {showShareModal  && <ShareModal onClose={() => setShowShareModal(false)} projectName={projectName} />}
       {showTagModal    && <TagModal   onClose={() => setShowTagModal(false)}   onAdd={handleAddTag} />}
       {showGlobalFileBrowser && (
-        <GlobalFileBrowser onClose={() => setShowGlobalFileBrowser(false)} />
+        <FileBrowser
+          projectId="" // Pass empty string for global files (no project association)
+          onClose={() => setShowGlobalFileBrowser(false)}
+        />
       )}
       
       {/* Hidden file input for Files upload */}

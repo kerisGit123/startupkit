@@ -255,8 +255,8 @@ export function ElementLibrary({
     if ((imageSelectionState.mode !== 'enabled' && imageSelectionState.mode !== 'selecting') || !element.referenceUrls?.length) return null;
     
     return (
-      <div className="absolute top-2 left-2 z-10">
-        <span className="text-xs bg-purple-500/80 text-white rounded px-2 py-1 font-medium backdrop-blur-sm">
+      <div className="absolute top-2 right-2 z-10">
+        <span className="text-xs bg-(--accent-purple)/80 text-white rounded-xl px-2 py-1 font-medium backdrop-blur-sm">
           {element.referenceUrls.length} images
         </span>
       </div>
@@ -674,68 +674,76 @@ export function ElementLibrary({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/98 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6">
-      <div className="w-full max-w-6xl bg-neutral-950 rounded-2xl shadow-2xl border border-neutral-800/50 max-h-[95vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-neutral-800/50">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg sm:rounded-xl flex items-center justify-center">
-              <Package className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-6xl bg-(--bg-secondary) rounded-2xl border border-(--border-primary) shadow-2xl max-h-[95vh] overflow-hidden flex flex-col">
+        {/* Header - LTX Design Style */}
+        <div className="bg-(--bg-secondary) p-4 rounded-t-2xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-(--accent-blue) to-(--accent-teal) rounded-xl flex items-center justify-center">
+                <Package className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-(--text-primary)">Element Library</h2>
+                <p className="text-sm text-(--text-tertiary)">Create and manage reusable visual elements</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg sm:text-2xl font-bold text-white">Element Library</h2>
-              <p className="text-xs text-neutral-400 hidden sm:block">Create and manage reusable visual elements</p>
-            </div>
+            <button 
+              onClick={onClose} 
+              className="p-2.5 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200 hover:scale-105"
+            >
+              <X className="w-5 h-5 text-(--text-secondary)" />
+            </button>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 sm:p-2 text-neutral-400 hover:text-white hover:bg-neutral-800/50 transition-colors">
-            <X className="w-3.5 h-3.5 sm:w-5 h-4 sm:h-5" />
-          </button>
         </div>
+        
+        {/* Subtle divider */}
+        <div className="h-px bg-(--border-primary)" />
 
-        <div className="border-b border-neutral-800/50 px-3 sm:px-6 py-2 sm:py-4">
-          <div className="flex gap-1 flex-wrap overflow-x-auto">
+        <div className="p-4">
+          <div className="flex gap-2 flex-wrap overflow-x-auto">
             {ELEMENT_TYPES.map(({ key, label, Icon, color }) => (
               <button
                 key={key}
                 onClick={() => setActiveType(key)}
-                className={`flex items-center gap-1 sm:gap-2 rounded-lg px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition whitespace-nowrap ${
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                   activeType === key
-                    ? "bg-indigo-600 text-white"
-                    : "text-neutral-400 hover:bg-neutral-800/50 hover:text-white"
+                    ? "bg-(--accent-blue) text-white shadow-lg hover:shadow-xl"
+                    : "bg-(--bg-primary) border border-(--border-primary) text-(--text-secondary) hover:border-(--accent-blue) hover:text-(--text-primary)"
                 }`}
               >
-                <Icon className={`h-3 w-3 sm:h-4 w-4 ${color}`} />
-                <span className="hidden xs:inline sm:inline">{label}</span>
+                <Icon className={`w-4 h-4 ${activeType === key ? "text-white" : "text-(--text-secondary)"}`} />
+                <span>{label}</span>
               </button>
             ))}
           </div>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+          <div className="flex-1 overflow-y-auto p-6">
             {!elements ? (
               <div className="flex h-40 items-center justify-center">
-                <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+                <Loader2 className="h-6 w-6 animate-spin text-(--accent-blue)" />
               </div>
             ) : (displayElements?.length ?? 0) === 0 ? (
-              <div className="flex h-40 sm:h-52 flex-col items-center justify-center rounded-xl border border-dashed border-neutral-800/50 bg-neutral-950 text-center px-4">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-indigo-500/20 to-purple-600/20 rounded-2xl flex items-center justify-center mb-3 sm:mb-4">
-                  <Sparkles className="h-6 w-6 sm:h-8 w-8 text-indigo-400" />
+              <div className="flex h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-(--border-primary) bg-(--bg-primary) text-center px-6">
+                <div className="w-16 h-16 bg-linear-to-br from-(--accent-blue)/20 to-(--accent-teal)/20 rounded-2xl flex items-center justify-center mb-4">
+                  <Sparkles className="h-8 w-8 text-(--accent-blue)" />
                 </div>
-                <p className="text-sm font-medium text-neutral-300">No {activeType} elements yet</p>
-                <p className="mt-1 text-xs text-neutral-500">Create your first element to get started</p>
+                <p className="text-base font-medium text-(--text-secondary)">No {activeType} elements yet</p>
+                <p className="mt-2 text-sm text-(--text-tertiary)">Create your first element to get started</p>
                 <button
                   onClick={() => setShowCreate(true)}
-                  className="mt-3 sm:mt-4 px-3 sm:px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-purple-700 transition-colors text-sm"
+                  className="mt-4 px-6 py-3 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) text-white rounded-xl font-medium hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
                   Create Element
                 </button>
               </div>
             ) : (
               <>
-                <div className="mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
-                  <p className="text-sm text-neutral-400">{displayElements?.length ?? 0} {activeType} elements</p>
-                  <div className="flex gap-2">
+                <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <p className="text-sm text-(--text-secondary)">{displayElements?.length ?? 0} {activeType} elements</p>
+                  <div className="flex gap-3">
                     <button
                       onClick={async () => {
                         if (confirm('Remove all private unused element references from storyboard items?')) {
@@ -743,33 +751,33 @@ export function ElementLibrary({
                           alert(result.message);
                         }
                       }}
-                      className="px-3 sm:px-4 py-2 bg-red-600/20 border border-red-500/30 text-red-300 rounded-lg font-medium hover:bg-red-600/30 transition-colors text-sm"
+                      className="px-4 py-2 bg-(--color-error)/20 border border-(--color-error)/30 text-(--color-error) rounded-xl font-medium hover:bg-(--color-error)/30 transition-all duration-200 text-sm"
                       title="Clean up private unused element references from storyboard items"
                     >
                       Remove Unused
                     </button>
                     <button
                       onClick={() => setShowCreate(true)}
-                      className="px-3 sm:px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-purple-700 transition-colors text-sm"
+                      className="px-4 py-2 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) text-white rounded-xl font-medium hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) transition-all duration-200 shadow-lg hover:shadow-xl text-sm"
                     >
                       Create Element
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                   {displayElements?.map((element) => (
-                    <div key={element._id} className="group overflow-hidden rounded-xl border border-neutral-800/50 bg-neutral-950 hover:border-indigo-500 transition-all hover:shadow-lg">
+                    <div key={element._id} className="group overflow-hidden rounded-2xl border border-(--border-primary) bg-(--bg-secondary) hover:border-(--accent-blue) transition-all duration-300 hover:shadow-xl hover:shadow-(--accent-blue)/20">
                       <div
                         onClick={() => handleElementClick(element)}
                         className="block w-full text-left cursor-pointer"
                       >
-                        <div className="aspect-square overflow-hidden bg-neutral-900 relative">
+                        <div className="aspect-square overflow-hidden bg-(--bg-primary) relative rounded-2xl">
                           {/* Multi-image badge */}
                           {MultiImageBadge(element)}
                           
                           {/* Type Badge in Top-Left Corner */}
-                          <div className="absolute top-2 left-2 z-10">
-                            <span className="text-xs bg-indigo-500/80 text-white rounded px-2 py-1 font-medium backdrop-blur-sm">
+                          <div className="absolute top-3 left-3 z-10">
+                            <span className="text-xs bg-(--accent-blue)/80 text-white rounded-xl px-3 py-1.5 font-medium backdrop-blur-sm">
                               {element.type === 'IMG' ? 'Image' : element.type}
                             </span>
                           </div>
@@ -893,19 +901,22 @@ export function ElementLibrary({
          </div>
 
           {showCreate && (
-            <div className="w-full max-w-xs sm:max-w-md border-t sm:border-t-0 sm:border-l border-neutral-800/50 bg-neutral-950 p-3 sm:p-6">
-              <div className="mb-3 sm:mb-6 flex items-center justify-between">
+            <div className="w-full max-w-md border-l border-(--border-primary) bg-(--bg-secondary) p-6">
+              <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <p className="text-base sm:text-lg font-bold text-white">{editingId ? "Edit Element" : "Create Element"}</p>
-                  <p className="text-xs text-neutral-400 mt-1 hidden sm:block">Reference images are saved when you confirm this form.</p>
+                  <p className="text-lg font-bold text-(--text-primary)">{editingId ? "Edit Element" : "Create Element"}</p>
+                  <p className="text-sm text-(--text-tertiary) mt-1">Reference images are saved when you confirm this form.</p>
                 </div>
-                <button onClick={resetForm} className="rounded-lg p-1.5 sm:p-2 text-neutral-400 hover:text-white hover:bg-neutral-800/50 transition-colors">
-                  <X className="w-3.5 h-3.5 sm:w-4 h-4" />
+                <button 
+                  onClick={resetForm} 
+                  className="p-2.5 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200 hover:scale-105"
+                >
+                  <X className="w-4 h-4 text-(--text-secondary)" />
                 </button>
               </div>
 
-              <div className="space-y-3 sm:space-y-4">
-                <div className="flex border border-neutral-800/50 rounded-lg p-1 bg-neutral-900">
+              <div className="space-y-4">
+                <div className="flex border border-(--border-primary) rounded-xl p-1 bg-(--bg-primary)">
                   {[
                     { id: "basic", label: "Basic", Icon: Package },
                     { id: "details", label: "Details", Icon: FileText },
@@ -915,36 +926,36 @@ export function ElementLibrary({
                       key={id}
                       type="button"
                       onClick={() => setActiveTab(id as "basic" | "visibility" | "details")}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-all ${
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 ${
                         activeTab === id
-                          ? "bg-indigo-500 text-white"
-                          : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                          ? "bg-(--accent-blue) text-white shadow-lg"
+                          : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)"
                       }`}
                     >
-                      <Icon className="w-3.5 h-3.5" />
+                      <Icon className="w-4 h-4" />
                       {label}
                     </button>
                   ))}
                 </div>
 
                 {activeTab === "basic" && (
-                  <div className="space-y-3 sm:space-y-4">
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-neutral-300 mb-1.5 sm:mb-2">Element Name</label>
+                      <label className="block text-sm font-medium text-(--text-secondary) mb-2">Element Name</label>
                       <input
                         value={newName}
                         onChange={(event) => setNewName(event.target.value)}
                         placeholder="Enter element name..."
-                        className="w-full rounded-lg border border-neutral-800/50 bg-neutral-900 px-2.5 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white outline-none placeholder:text-neutral-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
+                        className="w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3 text-sm text-(--text-primary) outline-none placeholder-(--text-tertiary) focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-neutral-300 mb-1.5 sm:mb-2">Element Type</label>
+                      <label className="block text-sm font-medium text-(--text-secondary) mb-2">Element Type</label>
                       <select
                         value={activeType}
                         onChange={(event) => setActiveType(event.target.value)}
-                        className="w-full rounded-lg border border-neutral-800/50 bg-neutral-900 px-2.5 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
+                        className="w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3 text-sm text-(--text-primary) outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200"
                       >
                         {ELEMENT_TYPES.map((type) => (
                           <option key={type.key} value={type.key}>
@@ -954,31 +965,29 @@ export function ElementLibrary({
                       </select>
                     </div>
 
-                    {editingId && (
                     <div>
-                      <label className="flex cursor-pointer items-center justify-center gap-2 sm:gap-3 rounded-xl border border-dashed border-neutral-800/50 bg-neutral-900 px-2.5 sm:px-4 py-2.5 sm:py-4 text-xs sm:text-sm text-neutral-300 transition-all hover:bg-neutral-800 hover:border-neutral-700">
-                        {uploading ? <Loader2 className="h-3.5 w-3.5 sm:h-4 w-4 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 sm:h-4 w-4" />}
-                        <span className="text-xs sm:text-sm">Add reference images</span>
+                      <label className="flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-primary) px-4 py-4 text-sm text-(--text-secondary) transition-all duration-200 hover:bg-(--bg-tertiary) hover:border-(--accent-blue)">
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                        <span className="text-sm">Add reference images</span>
                         <input className="hidden" type="file" accept="image/*" multiple onChange={handleUploadDraftRefs} />
                       </label>
                     </div>
-                    )}
 
                     {referencePreviewItems.length > 0 && (
                       <div>
-                        <div className="flex items-center justify-between mb-2 sm:mb-3">
-                          <label className="block text-sm font-medium text-neutral-300">Reference Images</label>
-                          <span className={`text-xs ${referencePreviewItems.length >= 14 ? 'text-red-400' : 'text-neutral-400'}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="block text-sm font-medium text-(--text-secondary)">Reference Images</label>
+                          <span className={`text-sm ${referencePreviewItems.length >= 14 ? 'text-(--color-error)' : 'text-(--text-tertiary)'}`}>
                             {referencePreviewItems.length}/14 images
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-2 sm:gap-3">
+                        <div className="flex flex-wrap gap-3">
                           {referencePreviewItems.map(({ rawUrl, displayUrl, originalIndex }, index) => (
-                            <div key={`ref-${originalIndex}-${rawUrl}`} className={`group relative overflow-hidden rounded-lg sm:rounded-xl border ${originalIndex === thumbnailIndex ? "border-indigo-500 ring-2 ring-indigo-500/50" : "border-neutral-800/50"} bg-neutral-900 flex-shrink-0`} style={{ width: "100px", height: "100px" }}>
+                            <div key={`ref-${originalIndex}-${rawUrl}`} className={`group relative overflow-hidden rounded-xl border ${originalIndex === thumbnailIndex ? "border-(--accent-blue) ring-2 ring-(--accent-blue)/50" : "border-(--border-primary)"} bg-(--bg-primary) shrink-0`} style={{ width: "100px", height: "100px" }}>
                               <img
                                 src={displayUrl}
                                 alt={`Reference ${index + 1}`}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-cover rounded-xl"
                                 onError={(event) => {
                                   if (!displayUrl.startsWith("blob:")) {
                                     console.error("[ElementLibrary] Failed to render reference image:", displayUrl);
@@ -1133,11 +1142,11 @@ export function ElementLibrary({
                 )}
               </div>
 
-              <div className="mt-2.5">
+              <div className="mt-6">
                 <button
                   onClick={handleCreateOrUpdate}
                   disabled={saving || !newName.trim()}
-                  className="flex w-full items-center justify-center gap-2 sm:gap-3 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-2.5 sm:py-3 text-sm font-semibold text-white transition-all hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  className="flex w-full items-center justify-center gap-3 rounded-xl bg-linear-to-r from-(--accent-blue) to-(--accent-teal) py-3 text-sm font-semibold text-white transition-all duration-200 hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                   {editingId ? "Save Changes" : "Create Element"}
@@ -1154,10 +1163,10 @@ export function ElementLibrary({
           return (
             <>
               {/* Overlay sidebar - doesn't block the main content */}
-              <div className="fixed top-0 right-0 w-80 h-full bg-neutral-950 border-l border-neutral-800 z-50 overflow-y-auto">
-                <div className="p-4 space-y-4">
+              <div className="fixed top-0 right-0 w-80 h-full bg-(--bg-secondary) border-l border-(--border-primary) z-50 overflow-y-auto">
+                <div className="p-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-white">
+                    <h3 className="text-lg font-semibold text-(--text-primary)">
                       Select Images
                     </h3>
                     <button 
@@ -1165,15 +1174,15 @@ export function ElementLibrary({
                         dispatch({ type: 'END_SELECTION' });
                         setEditingId(null);
                       }} 
-                      className="text-neutral-400 hover:text-white"
+                      className="p-2.5 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200 hover:scale-105"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-4 h-4 text-(--text-secondary)" />
                     </button>
                   </div>
                   
-                  <div className="bg-neutral-900 rounded-lg p-3">
-                    <p className="text-sm font-medium text-white mb-1">{selectedElement.name}</p>
-                    <p className="text-xs text-neutral-400">Click images below to select</p>
+                  <div className="bg-(--bg-primary) rounded-xl p-4 border border-(--border-primary)">
+                    <p className="text-sm font-medium text-(--text-primary) mb-1">{selectedElement.name}</p>
+                    <p className="text-xs text-(--text-tertiary)">Click images below to select</p>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3">
@@ -1189,22 +1198,22 @@ export function ElementLibrary({
                   </div>
                   
                   {/* Instructions */}
-                  <div className="text-center text-xs text-neutral-400">
+                  <div className="text-center text-xs text-(--text-tertiary)">
                     Click on any image to add it as a reference
                   </div>
                   
-                  <div className="bg-neutral-800 rounded-lg p-3">
-                    <div className="text-center text-xs text-neutral-300">
+                  <div className="bg-(--bg-tertiary) rounded-xl p-4 border border-(--border-primary)">
+                    <div className="text-center text-xs text-(--text-secondary)">
                       <div className="font-medium mb-1">💡 Want to switch elements?</div>
                       <div>Click any element in the main area</div>
-                      <div className="text-neutral-500 mt-1">Library closes when image is added</div>
+                      <div className="text-(--text-tertiary) mt-1">Library closes when image is added</div>
                     </div>
                   </div>
                 </div>
               </div>
               
               {/* Subtle hint overlay */}
-              <div className="fixed top-4 left-4 bg-neutral-900/90 rounded-lg px-3 py-2 text-xs text-neutral-300 z-40 pointer-events-none">
+              <div className="fixed top-4 left-4 bg-(--bg-tertiary)/90 rounded-xl px-3 py-2 text-xs text-(--text-secondary) z-40 pointer-events-none border border-(--border-primary)">
                 👆 Click any element to switch
               </div>
             </>

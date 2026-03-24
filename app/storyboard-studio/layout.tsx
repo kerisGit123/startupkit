@@ -9,6 +9,7 @@ import { SidebarNav } from "./components/SidebarNav";
 import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import type { Project } from "./types";
+import "./globals.css";
 
 export default function StoryboardStudioLayout({
   children,
@@ -53,7 +54,7 @@ export default function StoryboardStudioLayout({
   })) ?? [];
 
   return (
-    <div className="flex h-screen bg-[#0f0f14] overflow-hidden">
+    <div className="flex h-screen bg-(--bg-primary) overflow-hidden">
       <StoryboardStudioUIProvider
         value={{
           activeNav,

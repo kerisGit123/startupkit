@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   DollarSign,
-  TrendingUp,
+  Calculator,
   CreditCard,
   Plus,
   Edit3,
@@ -21,7 +21,11 @@ import {
   Table2,
   List,
   RotateCcw,
-  AlertTriangle
+  AlertTriangle,
+  Image,
+  Film,
+  Check,
+  Circle
 } from "lucide-react";
 import { usePricingData } from "../../hooks/usePricingData";
 
@@ -354,47 +358,47 @@ export default function PricingManagementDark() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#1A1A1A] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-(--bg-primary) text-(--text-primary) flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-400 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading pricing models...</p>
+          <div className="w-12 h-12 border-4 border-(--accent-blue) border-t-(--accent-blue-hover) rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-(--text-tertiary)">Loading pricing models...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A] p-8">
+    <div className="min-h-screen bg-(--bg-primary) p-8">
 
       {/* Header with Add Button and View Toggle */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-semibold text-white">Pricing Models</h2>
-          <p className="text-gray-400 text-sm">Configure pricing for different AI models</p>
+          <h2 className="text-xl font-semibold text-(--text-primary)">Pricing Models</h2>
+          <p className="text-(--text-tertiary) text-sm">Configure pricing for different AI models</p>
         </div>
         <div className="flex items-center gap-3">
           {/* Testing Panel Toggle */}
           <button
             onClick={() => setShowTestingPanel(!showTestingPanel)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+            className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 ${
               showTestingPanel 
-                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' 
-                : 'bg-[#3D3D3D] text-gray-400 hover:text-white border border-[#3D3D3D]'
+                ? 'bg-(--accent-purple)/20 text-(--accent-purple) border border-(--accent-purple)/30' 
+                : 'bg-(--bg-tertiary) text-(--text-secondary) hover:text-(--text-primary) border border-(--border-primary)'
             }`}
             title="Toggle Testing Parameters Panel"
           >
-            <TrendingUp className="w-4 h-4" />
+            <Calculator className="w-6 h-6" />
             {showTestingPanel ? 'Hide Testing' : 'Show Testing'}
           </button>
           
           {/* View Toggle */}
-          <div className="flex items-center bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg p-1">
+          <div className="flex items-center bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-1">
             <button
               onClick={() => setViewMode('table')}
-              className={`p-2 rounded transition-colors ${
+              className={`p-2 rounded-xl transition-all duration-200 ${
                 viewMode === 'table' 
-                  ? 'bg-[#4A90E2] text-white' 
-                  : 'text-gray-400 hover:text-white hover:bg-[#2C2C2C]'
+                  ? 'bg-(--accent-blue) text-(--text-primary)' 
+                  : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
               }`}
               title="Table View"
             >
@@ -402,10 +406,10 @@ export default function PricingManagementDark() {
             </button>
             <button
               onClick={() => setViewMode('grid')}
-              className={`p-2 rounded transition-colors ${
+              className={`p-2 rounded-xl transition-all duration-200 ${
                 viewMode === 'grid' 
-                  ? 'bg-[#4A90E2] text-white' 
-                  : 'text-gray-400 hover:text-white hover:bg-[#2C2C2C]'
+                  ? 'bg-(--accent-blue) text-(--text-primary)' 
+                  : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
               }`}
               title="Grid View"
             >
@@ -425,7 +429,7 @@ export default function PricingManagementDark() {
           </div>
           <button
             onClick={() => setShowResetConfirm(true)}
-            className="bg-[#3D3D3D] hover:bg-[#4A4A4A] text-orange-400 hover:text-orange-300 font-medium py-3 px-4 rounded-lg flex items-center gap-2 transition-colors border border-orange-500/30"
+            className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--accent-orange) hover:text-(--accent-orange-hover) font-medium py-3 px-4 rounded-xl flex items-center gap-2 transition-all duration-200 border border-(--accent-orange)/30"
             title="Reset all pricing models to factory defaults"
           >
             <RotateCcw className="w-4 h-4" />
@@ -437,7 +441,7 @@ export default function PricingManagementDark() {
               setFormData({});
               setIsEditing(true);
             }}
-            className="bg-[#4A90E2] hover:bg-[#357ABD] text-white font-semibold py-3 px-6 rounded-lg flex items-center gap-2 transition-colors shadow-lg"
+            className="bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-(--text-primary) font-semibold py-3 px-6 rounded-xl flex items-center gap-2 transition-all duration-200 shadow-lg"
           >
             <Plus className="w-5 h-5" />
             Add New Model
@@ -449,13 +453,13 @@ export default function PricingManagementDark() {
       <div className="flex flex-col gap-4 mb-6">
         <div className="w-full">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-(--text-tertiary)" />
             <input
               type="text"
               placeholder="Search pricing models..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+              className="w-full bg-(--bg-secondary) border border-(--border-primary) rounded-xl pl-10 pr-4 py-3 text-(--text-primary) placeholder-(--text-tertiary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
             />
           </div>
         </div>
@@ -463,7 +467,7 @@ export default function PricingManagementDark() {
           <div className="relative">
             <button 
               onClick={() => setShowFilters(!showFilters)}
-              className="bg-[#3D3D3D] hover:bg-[#4A4A4A] text-gray-300 font-medium py-3 px-4 rounded-lg transition-colors flex items-center"
+              className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--text-secondary) font-medium py-3 px-4 rounded-xl transition-all duration-200 flex items-center"
             >
               <Filter className="w-5 h-5 mr-2" />
               <span className="hidden sm:inline">Filters</span>
@@ -472,15 +476,15 @@ export default function PricingManagementDark() {
             
             {/* Filter Dropdown */}
             {showFilters && (
-              <div className="absolute top-full mt-2 left-0 w-72 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg shadow-lg z-50">
+              <div className="absolute top-full mt-2 left-0 w-72 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-lg z-50">
                 <div className="p-4 space-y-4">
                   {/* Pricing Type Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Pricing Type</label>
+                    <label className="block text-sm font-medium text-(--text-secondary) mb-2">Pricing Type</label>
                     <select 
                       value={filters.pricingType}
                       onChange={(e) => setFilters({...filters, pricingType: e.target.value})}
-                      className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                      className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                     >
                       <option value="all">All Types</option>
                       <option value="fixed">Fixed Price</option>
@@ -490,11 +494,11 @@ export default function PricingManagementDark() {
 
                   {/* Status Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Status</label>
+                    <label className="block text-sm font-medium text-(--text-secondary) mb-2">Status</label>
                     <select 
                       value={filters.status}
                       onChange={(e) => setFilters({...filters, status: e.target.value})}
-                      className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                      className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                     >
                       <option value="all">All Status</option>
                       <option value="active">Active</option>
@@ -504,11 +508,11 @@ export default function PricingManagementDark() {
 
                   {/* Model Type Filter */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+                    <label className="block text-sm font-medium text-(--text-secondary) mb-2">Type</label>
                     <select 
                       value={filters.modelType}
                       onChange={(e) => setFilters({...filters, modelType: e.target.value})}
-                      className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                      className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                     >
                       <option value="all">All Types</option>
                       <option value="image">Image</option>
@@ -518,22 +522,22 @@ export default function PricingManagementDark() {
 
                   {/* Favorite Filter */}
                   <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-300 cursor-pointer">
+                    <label className="flex items-center gap-2 text-sm font-medium text-(--text-secondary) cursor-pointer">
                       <input 
                         type="checkbox"
                         checked={filters.favorite}
                         onChange={(e) => setFilters({...filters, favorite: e.target.checked})}
-                        className="w-4 h-4 bg-[#1A1A1A] border border-[#3D3D3D] rounded focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                        className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                       />
                       Show only favorites
                     </label>
                   </div>
 
                   {/* Clear Filters */}
-                  <div className="pt-2 border-t border-[#3D3D3D]">
+                  <div className="pt-2 border-t border-(--border-primary)">
                     <button 
                       onClick={() => setFilters({ pricingType: 'all', status: 'all', modelType: 'all', favorite: false })}
-                      className="w-full bg-[#4A90E2] hover:bg-[#357ABD] text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                      className="w-full bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-(--text-primary) font-medium py-2 px-4 rounded-xl transition-all duration-200"
                     >
                       Clear Filters
                     </button>
@@ -547,78 +551,88 @@ export default function PricingManagementDark() {
 
       {/* Models Display - Different Views */}
       {viewMode === 'table' && (
-        <div className="bg-[#2C2C2C] rounded-xl border border-[#3D3D3D]">
+        <div className="bg-(--bg-secondary) rounded-xl border border-(--border-primary)">
           <div className="overflow-x-auto">
             <div className="max-h-[600px] overflow-y-auto">
               <table className="w-full min-w-[800px]">
           <thead>
-            <tr className="border-b border-[#3D3D3D] bg-[#1A1A1A]">
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Model Name</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Model ID</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Type</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Pricing Type</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Cost</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">Price</th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
+            <tr className="border-b border-(--border-primary) bg-(--bg-tertiary)">
+              <th className="px-6 py-4 text-left text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Model Name</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Model ID</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Type</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Pricing Type</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Status</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Cost</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Price</th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-(--text-tertiary) uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#3D3D3D]">
+          <tbody className="divide-y divide-(--border-primary)">
             {filteredModels.map((model) => (
-              <tr key={model._id} className="hover:bg-[#3D3D3D] transition-colors">
+              <tr key={model._id} className="hover:bg-(--bg-tertiary) transition-all duration-200">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
-                    <div className="w-8 h-8 bg-[#4A90E2]/20 rounded-lg flex items-center justify-center mr-3">
-                      <DollarSign className="w-4 h-4 text-[#4A90E2]" />
+                    <div className="w-8 h-8 bg-(--accent-blue)/20 rounded-xl flex items-center justify-center mr-3">
+                      <DollarSign className="w-4 h-4 text-(--accent-blue)" />
                     </div>
                     <div className="flex items-center gap-2">
                       {favoriteModels.has(model.modelId) && (
                         <Star className="w-4 h-4 text-yellow-400 fill-current" />
                       )}
                       <div>
-                        <div className="text-sm font-medium text-white">{model.modelName}</div>
-                        <div className="text-xs text-gray-500">{model.modelId}</div>
+                        <div className="text-sm font-medium text-(--text-primary)">{model.modelName}</div>
+                        <div className="text-xs text-(--text-tertiary)">{model.modelId}</div>
                       </div>
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <code className="text-xs text-gray-400 bg-[#1A1A1A] px-2 py-1 rounded">{model.modelId}</code>
+                  <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border bg-black/20 text-white border-black/30">
+                    <code className="text-xs font-medium">{model.modelId}</code>
+                  </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                  <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${
                     model.modelType === 'image' 
-                      ? 'bg-purple-900/30 text-purple-300' 
-                      : 'bg-orange-900/30 text-orange-300'
+                      ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
+                      : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
                   }`}>
-                    {model.modelType === 'image' ? '🖼️' : '🎬'} {model.modelType}
+                    {model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
+                    <span className="font-medium">{model.modelType}</span>
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                     model.pricingType === 'fixed' 
-                      ? 'bg-blue-900/30 text-blue-300' 
-                      : 'bg-green-900/30 text-green-300'
+                      ? 'bg-(--accent-blue)/20 text-(--accent-blue)' 
+                      : 'bg-(--accent-teal)/20 text-(--accent-teal)'
                   }`}>
                     {model.pricingType === 'fixed' ? '💰' : '📊'} {model.pricingType}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    model.isActive 
-                      ? 'bg-green-900/30 text-green-300' 
-                      : 'bg-gray-700 text-gray-400'
-                  }`}>
-                    {model.isActive ? '✓' : '○'} {model.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                  <button
+                    onClick={() => {
+                      toggleModelActive(model.modelId);
+                    }}
+                    className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-105 ${
+                      model.isActive 
+                        ? 'bg-(--color-success)/20 text-(--color-success) border-(--color-success)/40 hover:bg-(--color-success)/30' 
+                        : 'bg-(--bg-tertiary) text-(--text-tertiary) border-(--border-primary) hover:bg-(--bg-primary) hover:text-(--text-secondary)'
+                    }`}
+                    title={`Click to ${model.isActive ? 'deactivate' : 'activate'} model`}
+                  >
+                    {model.isActive ? <Check className="w-3.5 h-3.5 mr-1.5" /> : <Circle className="w-3.5 h-3.5 mr-1.5" />}
+                    <span className="font-medium">{model.isActive ? 'Active' : 'Inactive'}</span>
+                  </button>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-(--text-tertiary)">
                   {model.pricingType === 'fixed' 
                     ? `${model.creditCost} credits` 
                     : 'Formula'
                   }
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-(--text-tertiary)">
                   {model.pricingType === 'fixed' 
                     ? `${getFixedPrice(Number(model.creditCost || 0), Number(model.factor || 1.3))} credits` 
                     : 'Variable'
@@ -631,37 +645,27 @@ export default function PricingManagementDark() {
                       <button 
                         onClick={() => handleTestPricing(model)} 
                         disabled={isTesting}
-                        className="text-purple-400 hover:text-white p-1 rounded hover:bg-purple-400/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="text-(--accent-purple) hover:text-(--text-primary) p-1 rounded-xl hover:bg-(--accent-purple)/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Test Pricing Formula"
                       >
                         {isTesting ? (
-                          <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                          <div className="w-4 h-4 border-2 border-(--accent-purple) border-t-transparent rounded-full animate-spin" />
                         ) : (
-                          <TrendingUp className="w-4 h-4" />
+                          <Calculator className="w-6 h-6" />
                         )}
                       </button>
                     )}
                     <button 
                       onClick={() => { setSelectedModel(model); setFormData(model); setIsEditing(true); }} 
-                      className="text-[#4A90E2] hover:text-white p-1 rounded hover:bg-[#4A90E2]/20 transition-colors"
+                      className="text-(--accent-blue) hover:text-(--text-primary) p-1 rounded-xl hover:bg-(--accent-blue)/20 transition-all duration-200"
                     >
                       <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => toggleModelActive(model.modelId)} 
-                      className={`p-1 rounded hover:bg-opacity-20 transition-colors ${
-                        model.isActive 
-                          ? 'text-red-400 hover:text-white hover:bg-red-400/20' 
-                          : 'text-green-400 hover:text-white hover:bg-green-400/20'
-                      }`}
-                    >
-                      <Power className="w-4 h-4" />
                     </button>
                     <div className="relative dropdown-menu">
                       <button 
                         data-dropdown-btn={model._id}
                         onClick={() => setActiveDropdown(activeDropdown === model._id ? null : model._id)}
-                        className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-400/20 transition-colors"
+                        className="text-(--text-secondary) hover:text-(--text-primary) p-1 rounded-xl hover:bg-(--bg-tertiary) transition-all duration-200"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
@@ -682,7 +686,7 @@ export default function PricingManagementDark() {
         <div className="max-h-[600px] overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredModels.map((model) => (
-            <div key={model._id} className="bg-[#2C2C2C] rounded-xl border border-[#3D3D3D] p-6 hover:border-[#4A90E2] transition-colors">
+            <div key={model._id} className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) p-6 hover:border-(--accent-blue) transition-all duration-200">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-2">
                   {favoriteModels.has(model.modelId) && (
@@ -704,35 +708,49 @@ export default function PricingManagementDark() {
               
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Type</span>
-                  <span className="text-white text-sm capitalize">{model.modelType}</span>
+                  <span className="text-(--text-secondary) text-sm">Type</span>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
+                    model.modelType === 'image' 
+                      ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
+                      : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
+                  }`}>
+                    {model.modelType === 'image' ? <Image className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
+                    <span>{model.modelType}</span>
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-sm">Pricing</span>
                   <span className="text-white text-sm">{model.pricingType}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Status</span>
-                  <span className={`text-sm px-2 py-1 rounded ${
-                    model.isActive 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-red-500/20 text-red-400'
-                  }`}>
-                    {model.isActive ? 'Active' : 'Inactive'}
-                  </span>
+                  <span className="text-(--text-secondary) text-sm">Status</span>
+                  <button
+                    onClick={() => {
+                      toggleModelActive(model.modelId);
+                    }}
+                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-105 ${
+                      model.isActive 
+                        ? 'bg-(--color-success)/20 text-(--color-success) border-(--color-success)/40 hover:bg-(--color-success)/30' 
+                        : 'bg-(--bg-tertiary) text-(--text-tertiary) border-(--border-primary) hover:bg-(--bg-primary) hover:text-(--text-secondary)'
+                    }`}
+                    title={`Click to ${model.isActive ? 'deactivate' : 'activate'} model`}
+                  >
+                    {model.isActive ? <Check className="w-3.5 h-3.5 mr-1.5" /> : <Circle className="w-3.5 h-3.5 mr-1.5" />}
+                    <span className="font-medium">{model.isActive ? 'Active' : 'Inactive'}</span>
+                  </button>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 text-sm">Cost</span>
                   <span className="text-white text-sm">
                     {model.pricingType === 'fixed' 
-                      ? `${model.creditCost || 0} credits`
+                      ? `${model.creditCost} credits` 
                       : 'Formula'
                     }
                   </span>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[#3D3D3D]">
+              <div className="flex items-center gap-2 mt-4 pt-4 border-t border-(--border-primary)">
                 <button
                   onClick={() => {
                     setSelectedModel(model);
@@ -740,13 +758,14 @@ export default function PricingManagementDark() {
                     setIsEditing(true);
                     setActiveDropdown(null);
                   }}
-                  className="flex-1 bg-[#4A90E2] hover:bg-[#357ABD] text-white text-sm py-2 px-3 rounded transition-colors"
+                  className="flex-1 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-(--text-primary) text-sm py-2 px-3 rounded-xl transition-all duration-200"
                 >
                   Edit
                 </button>
                 <button
                   onClick={() => {
                     toggleModelActive(model.modelId);
+                    fetchModels(); // Refetch data to reflect changes
                     setActiveDropdown(null);
                   }}
                   className={`p-2 rounded hover:bg-opacity-20 transition-colors ${
@@ -754,6 +773,7 @@ export default function PricingManagementDark() {
                       ? 'text-red-400 hover:text-white hover:bg-red-400/20' 
                       : 'text-green-400 hover:text-white hover:bg-green-400/20'
                   }`}
+                  title={model.isActive ? 'Deactivate Model' : 'Activate Model'}
                 >
                   <Power className="w-4 h-4" />
                 </button>
@@ -769,7 +789,7 @@ export default function PricingManagementDark() {
         <div className="max-h-[600px] overflow-y-auto">
           <div className="space-y-4">
           {filteredModels.map((model) => (
-            <div key={model._id} className="bg-[#2C2C2C] rounded-xl border border-[#3D3D3D] p-6 hover:border-[#4A90E2] transition-colors">
+            <div key={model._id} className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) p-6 hover:border-(--accent-blue) transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   {favoriteModels.has(model.modelId) && (
@@ -782,18 +802,32 @@ export default function PricingManagementDark() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-4 text-sm">
-                    <span className={`px-3 py-1 rounded ${
-                      model.isActive 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-red-500/20 text-red-400'
+                    <button
+                      onClick={() => {
+                        toggleModelActive(model.modelId);
+                      }}
+                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-105 ${
+                        model.isActive 
+                          ? 'bg-(--color-success)/20 text-(--color-success) border-(--color-success)/40 hover:bg-(--color-success)/30' 
+                          : 'bg-(--bg-tertiary) text-(--text-tertiary) border-(--border-primary) hover:bg-(--bg-primary) hover:text-(--text-secondary)'
+                      }`}
+                      title={`Click to ${model.isActive ? 'deactivate' : 'activate'} model`}
+                    >
+                      {model.isActive ? <Check className="w-3 h-3 mr-1" /> : <Circle className="w-3 h-3 mr-1" />}
+                      <span className="font-medium">{model.isActive ? 'Active' : 'Inactive'}</span>
+                    </button>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
+                      model.modelType === 'image' 
+                        ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
+                        : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
                     }`}>
-                      {model.isActive ? 'Active' : 'Inactive'}
+                      {model.modelType === 'image' ? <Image className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
+                      <span>{model.modelType}</span>
                     </span>
-                    <span className="text-gray-400 capitalize">{model.modelType}</span>
                     <span className="text-white">{model.pricingType}</span>
                     <span className="text-white">
                     {model.pricingType === 'fixed' 
-                      ? `${model.creditCost || 0} credits`
+                      ? `${model.creditCost} credits`
                       : 'Formula'
                     }
                   </span>
@@ -806,13 +840,14 @@ export default function PricingManagementDark() {
                         setIsEditing(true);
                         setActiveDropdown(null);
                       }}
-                      className="bg-[#4A90E2] hover:bg-[#357ABD] text-white text-sm py-2 px-4 rounded transition-colors"
+                      className="bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-(--text-primary) text-sm py-2 px-4 rounded-xl transition-all duration-200"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => {
                         toggleModelActive(model.modelId);
+                        fetchModels(); // Refetch data to reflect changes
                         setActiveDropdown(null);
                       }}
                       className={`p-2 rounded hover:bg-opacity-20 transition-colors ${
@@ -820,6 +855,7 @@ export default function PricingManagementDark() {
                           ? 'text-red-400 hover:text-white hover:bg-red-400/20' 
                           : 'text-green-400 hover:text-white hover:bg-green-400/20'
                       }`}
+                      title={model.isActive ? 'Deactivate Model' : 'Activate Model'}
                     >
                       <Power className="w-4 h-4" />
                     </button>
@@ -845,7 +881,7 @@ export default function PricingManagementDark() {
       {/* Fixed Dropdown - Outside all containers */}
       {activeDropdown && dropdownPosition && (
         <div 
-          className="fixed bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg shadow-lg z-[9999] dropdown-menu"
+          className="fixed bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-lg z-9999 dropdown-menu"
           style={{
             top: `${dropdownPosition.top}px`,
             right: `${dropdownPosition.right}px`,
@@ -859,7 +895,7 @@ export default function PricingManagementDark() {
                 toggleFavorite(model.modelId);
               }
             }}
-            className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#3D3D3D] hover:text-yellow-400 transition-colors"
+            className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--accent-yellow) transition-all duration-200"
           >
             <Star className={`w-4 h-4 ${models?.find(m => m._id === activeDropdown && favoriteModels.has(m.modelId)) ? 'text-yellow-400 fill-current' : ''}`} />
             {models?.find(m => m._id === activeDropdown && favoriteModels.has(m.modelId)) ? 'Remove from Favorites' : 'Add to Favorites'}
@@ -871,7 +907,7 @@ export default function PricingManagementDark() {
                 handleDelete(model.modelId);
               }
             }}
-            className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#3D3D3D] hover:text-red-400 transition-colors"
+            className="w-full flex items-center gap-2 px-4 py-2 text-left text-sm text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--accent-red) transition-all duration-200"
           >
             <Trash2 className="w-4 h-4" />
             Delete Model
@@ -882,10 +918,10 @@ export default function PricingManagementDark() {
       {/* Empty State */}
       {filteredModels.length === 0 && (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-[#3D3D3D] rounded-full flex items-center justify-center mx-auto mb-4">
-            <DollarSign className="w-8 h-8 text-gray-500" />
+          <div className="w-16 h-16 bg-(--bg-tertiary) rounded-full flex items-center justify-center mx-auto mb-4">
+            <DollarSign className="w-8 h-8 text-(--text-tertiary)" />
           </div>
-          <h3 className="text-lg font-medium text-white mb-2">No models found</h3>
+          <h3 className="text-lg font-medium text-(--text-primary) mb-2">No models found</h3>
           <p className="text-gray-400 mb-4">Get started by creating your first pricing model</p>
           <button 
             onClick={() => {
@@ -893,7 +929,7 @@ export default function PricingManagementDark() {
               setFormData({});
               setIsEditing(true);
             }}
-            className="bg-[#4A90E2] hover:bg-[#357ABD] text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+            className="bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-(--text-primary) font-semibold py-2 px-4 rounded-xl transition-all duration-200"
           >
             <Plus className="w-4 h-4 mr-2" />
             Create Model
@@ -906,10 +942,10 @@ export default function PricingManagementDark() {
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
-          <div className="relative bg-[#2C2C2C] border border-[#3D3D3D] rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+          <div className="relative bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-orange-400" />
+              <div className="w-10 h-10 rounded-full bg-(--accent-orange)/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-(--accent-orange)" />
               </div>
               <div>
                 <h3 className="text-white font-semibold text-lg">Reset to Factory Defaults</h3>
@@ -930,7 +966,7 @@ export default function PricingManagementDark() {
               <button
                 onClick={() => setShowResetConfirm(false)}
                 disabled={isResetting}
-                className="px-4 py-2 text-gray-300 border border-[#3D3D3D] rounded-lg hover:bg-[#3D3D3D] transition-colors text-sm"
+                className="px-4 py-2 text-(--text-secondary) border border-(--border-primary) rounded-xl hover:bg-(--bg-tertiary) transition-all duration-200 text-sm"
               >
                 Cancel
               </button>
@@ -952,19 +988,19 @@ export default function PricingManagementDark() {
 
       {/* Testing Panel */}
       {testResult !== null && (
-        <div className="fixed bottom-4 right-4 bg-[#2C2C2C] border border-[#4A90E2] rounded-xl p-4 shadow-2xl max-w-sm">
+        <div className="fixed bottom-4 right-4 bg-(--bg-secondary) border border-(--accent-blue) rounded-xl p-4 shadow-2xl max-w-sm">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-white">Test Result</h3>
+            <h3 className="text-lg font-semibold text-(--text-primary)">Test Result</h3>
             <button 
               onClick={() => setTestResult(null)}
-              className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#3D3D3D] transition-colors"
+              className="text-(--text-tertiary) hover:text-(--text-primary) p-1 rounded-xl hover:bg-(--bg-tertiary) transition-all duration-200"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-          <div className="bg-[#1A1A1A] rounded-lg p-3">
-            <div className="text-2xl font-bold text-[#4A90E2] mb-1">{testResult} credits</div>
-            <div className="text-xs text-gray-400">
+          <div className="bg-(--bg-tertiary) rounded-xl p-3">
+            <div className="text-2xl font-bold text-(--accent-blue) mb-1">{testResult} credits</div>
+            <div className="text-xs text-(--text-tertiary)">
               Base: {testParams.base} × Multiplier: {testParams.multiplier}
               {testParams.quality && ` × Quality: ${testParams.quality}`}
               {testParams.resolution && ` × Resolution: ${testParams.resolution}`}
@@ -978,12 +1014,12 @@ export default function PricingManagementDark() {
 
       {/* Testing Parameters Panel */}
       {showTestingPanel && (
-        <div className="bg-[#2C2C2C] border border-[#3D3D3D] rounded-xl p-6 mb-6">
+        <div className="bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Testing Parameters</h3>
+            <h3 className="text-lg font-semibold text-(--text-primary)">Testing Parameters</h3>
             <button 
               onClick={() => setShowTestingPanel(false)}
-              className="text-gray-400 hover:text-white p-1 rounded hover:bg-[#3D3D3D] transition-colors"
+              className="text-(--text-tertiary) hover:text-(--text-primary) p-1 rounded-xl hover:bg-(--bg-tertiary) transition-all duration-200"
               title="Hide Testing Panel"
             >
               <X className="w-4 h-4" />
@@ -991,7 +1027,7 @@ export default function PricingManagementDark() {
           </div>
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Base Cost</label>
+            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Base Cost</label>
             <input 
               type="number" 
               value={testParams.base}
@@ -1002,7 +1038,7 @@ export default function PricingManagementDark() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Multiplier</label>
+            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Multiplier</label>
             <input 
               type="number" 
               value={testParams.multiplier}
@@ -1013,7 +1049,7 @@ export default function PricingManagementDark() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Quality</label>
+            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
             <select 
               value={testParams.quality}
               onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
@@ -1025,7 +1061,7 @@ export default function PricingManagementDark() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Resolution</label>
+            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
             <select 
               value={testParams.resolution}
               onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
@@ -1038,22 +1074,22 @@ export default function PricingManagementDark() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Duration (s)</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Duration (seconds)</label>
             <input 
               type="number" 
               value={testParams.duration}
               onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
-              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               min="1"
               step="1"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Upscale</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Upscale Factor</label>
             <select 
               value={testParams.upscaleFactor}
               onChange={(e) => setTestParams({...testParams, upscaleFactor: e.target.value})}
-              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
             >
               <option value="1x">1x</option>
               <option value="2x">2x</option>
@@ -1067,7 +1103,7 @@ export default function PricingManagementDark() {
               type="checkbox" 
               checked={testParams.audio}
               onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
-              className="mr-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded focus:ring-2 focus:ring-[#4A90E2]"
+              className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
             />
             Include Audio
           </label>
@@ -1102,14 +1138,14 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#2C2C2C] rounded-2xl border border-[#3D3D3D] w-full max-w-2xl shadow-2xl">
+      <div className="bg-(--bg-secondary) border border-(--border-primary) rounded-2xl w-full max-w-2xl shadow-2xl">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[#3D3D3D]">
+        <div className="px-6 py-4 border-b border-(--border-primary)">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">{model ? 'Edit Pricing Model' : 'Create Pricing Model'}</h2>
+            <h2 className="text-xl font-semibold text-(--text-primary)">{model ? 'Edit Pricing Model' : 'Create Pricing Model'}</h2>
             <button 
               onClick={onCancel}
-              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-[#3D3D3D] transition-colors"
+              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-(--bg-tertiary) transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1126,7 +1162,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                 type="text" 
                 value={formData.modelName || ''} 
                 onChange={(e) => setFormData({...formData, modelName: e.target.value})} 
-                className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent" 
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent" 
                 placeholder="e.g., Nano Banana 2"
               />
             </div>
@@ -1136,7 +1172,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                 type="text" 
                 value={formData.modelId || ''} 
                 onChange={(e) => setFormData({...formData, modelId: e.target.value})} 
-                className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent" 
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent" 
                 placeholder="e.g., nano-banana-2"
               />
             </div>
@@ -1149,7 +1185,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
               <select 
                 value={formData.modelType || ''} 
                 onChange={(e) => setFormData({...formData, modelType: e.target.value as 'image' | 'video'})} 
-                className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               >
                 <option value="">Select Type</option>
                 <option value="image">Image</option>
@@ -1161,7 +1197,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
               <select 
                 value={pricingType} 
                 onChange={(e) => setFormData({...formData, pricingType: e.target.value as 'fixed' | 'formula'})} 
-                className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               >
                 <option value="fixed">Fixed Price</option>
                 <option value="formula">Formula Based</option>
@@ -1172,7 +1208,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
           {/* Pricing Details */}
           {pricingType === 'fixed' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-medium text-white mb-4">Pricing Details</h3>
+              <h3 className="text-lg font-medium text-(--text-primary) mb-4">Pricing Details</h3>
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Credit Cost</label>
@@ -1180,7 +1216,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                     type="number" 
                     value={formData.creditCost || ''} 
                     onChange={(e) => setFormData({...formData, creditCost: Number(e.target.value)})} 
-                    className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent" 
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent" 
                     placeholder="e.g., 8"
                     min="1"
                     step="0.1"
@@ -1192,7 +1228,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                     type="number" 
                     value={formData.factor || ''} 
                     onChange={(e) => setFormData({...formData, factor: Number(e.target.value)})} 
-                    className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent" 
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent" 
                     placeholder="e.g., 1.0"
                     min="0.1"
                     step="0.1"
@@ -1205,7 +1241,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
           {/* Formula Configuration */}
           {pricingType === 'formula' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-medium text-white mb-4">Base Pricing</h3>
+              <h3 className="text-lg font-medium text-(--text-primary) mb-4">Base Pricing</h3>
               <div className="grid grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">Base Credit Cost</label>
@@ -1213,7 +1249,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                     type="number" 
                     value={formData.creditCost || ''} 
                     onChange={(e) => setFormData({...formData, creditCost: Number(e.target.value)})} 
-                    className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent" 
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent" 
                     placeholder="e.g., 8"
                     min="1"
                     step="0.1"
@@ -1225,7 +1261,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                     type="number" 
                     value={formData.factor || ''} 
                     onChange={(e) => setFormData({...formData, factor: Number(e.target.value)})} 
-                    className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent" 
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent" 
                     placeholder="e.g., 1.3"
                     min="0.1"
                     step="0.1"
@@ -1239,7 +1275,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                 <select 
                   value={formData.assignedFunction || ''} 
                   onChange={(e) => setFormData({...formData, assignedFunction: e.target.value})} 
-                  className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#4A90E2] focus:border-transparent"
+                  className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                 >
                   <option value="">Select Function (Optional)</option>
                   <option value="getNanoBananaPrice">getNanoBananaPrice - Image Generation</option>

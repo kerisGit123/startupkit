@@ -1696,6 +1696,9 @@ export default defineSchema({
     teamMemberIds: v.array(v.string()),
     status: v.string(), // draft | active | completed | archived
     
+    // NEW: Image URL for the project's main image (displayed on storyboard cards)
+    imageUrl: v.optional(v.union(v.string(), v.null())),
+    
     // NEW: Task tracking fields for build system
     taskStatus: v.optional(v.string()),          // "idle" | "processing" | "ready" | "error"
     taskMessage: v.optional(v.string()), // "Building storyboard..." etc.
@@ -1753,6 +1756,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     duration: v.number(),
     imageUrl: v.optional(v.string()),
+    primaryImage: v.optional(v.string()), // NEW: Primary image for storyboard cards
     imagePrompt: v.optional(v.string()),
     videoUrl: v.optional(v.string()),
     audioUrl: v.optional(v.string()),

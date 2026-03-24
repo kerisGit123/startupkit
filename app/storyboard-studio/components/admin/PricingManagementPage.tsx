@@ -22,30 +22,30 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
   return (
     <div className="flex-1 flex flex-col overflow-hidden min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/6 bg-[#0d0d12] shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-(--border-primary) bg-(--bg-secondary) shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onToggleSidebar}
-            className="text-gray-500 transition hover:text-white md:hidden"
+            className="text-(--text-secondary) transition hover:text-(--text-primary) md:hidden"
           >
             {sidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
           </button>
           
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-semibold text-white">Pricing Management</h1>
-            <ChevronDown className="w-4 h-4 text-gray-500" />
+            <h1 className="text-lg font-semibold text-(--text-primary)">Pricing Management</h1>
+            <ChevronDown className="w-4 h-4 text-(--text-tertiary)" />
           </div>
         </div>
 
         <div className="flex items-center gap-3">
           {/* Filters */}
-          <button className="hidden md:flex items-center gap-2 px-3 py-2 bg-[#1a1a1f] border border-white/10 rounded-lg text-sm text-gray-300 hover:bg-white/5 hover:text-white transition">
+          <button className="hidden md:flex items-center gap-2 px-3 py-2 bg-(--bg-tertiary) border border-(--border-primary) rounded-xl text-sm text-(--text-secondary) hover:bg-(--bg-primary) hover:text-(--text-primary) transition-all duration-200">
             <Filter className="w-4 h-4" />
             <span>Filters</span>
           </button>
 
           {/* Settings */}
-          <button className="hidden md:flex items-center gap-2 px-3 py-2 bg-[#1a1a1f] border border-white/10 rounded-lg text-sm text-gray-300 hover:bg-white/5 hover:text-white transition">
+          <button className="hidden md:flex items-center gap-2 px-3 py-2 bg-(--bg-tertiary) border border-(--border-primary) rounded-xl text-sm text-(--text-secondary) hover:bg-(--bg-primary) hover:text-(--text-primary) transition-all duration-200">
             <Settings className="w-4 h-4" />
           </button>
 
@@ -55,10 +55,10 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
               appearance={{
                 elements: {
                   avatarBox: "w-8 h-8",
-                  userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
-                  userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                  userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
+                  userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
                   userButtonPopoverActionButtonText: "text-sm",
-                  userButtonPopoverFooter: "border-t border-white/10",
+                  userButtonPopoverFooter: "border-t border-(--border-primary)",
                 },
               }}
               afterSignOutUrl="/"
@@ -71,15 +71,15 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
               appearance={{
                 elements: {
                   avatarBox: "w-8 h-8",
-                  userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
-                  userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                  userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
+                  userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
                   userButtonPopoverActionButtonText: "text-sm",
-                  userButtonPopoverFooter: "border-t border-white/10",
+                  userButtonPopoverFooter: "border-t border-(--border-primary)",
                 },
               }}
               afterSignOutUrl="/"
             />
-            <button className="text-gray-500 transition hover:text-white ml-2">
+            <button className="text-(--text-secondary) transition hover:text-(--text-primary) ml-2">
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>

@@ -103,10 +103,10 @@ export function BuildStoryboardDialogSimplified({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden border border-white/10 bg-[#0b0b0d] p-0 text-white shadow-2xl sm:max-w-2xl">
-        <DialogHeader className="border-b border-white/10 px-6 py-4">
-          <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-500 shadow-lg shadow-violet-500/20">
+      <DialogContent className="overflow-hidden border border-[#3D3D3D] !bg-[#2C2C2C] p-0 text-[#FFFFFF] shadow-2xl sm:max-w-2xl rounded-2xl">
+        <DialogHeader className="border-b border-[#3D3D3D] px-6 py-4">
+          <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-[#FFFFFF]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#4A90E2] shadow-lg shadow-[#4A90E2]/20">
               <Play className="h-4 w-4 text-white" />
             </span>
             Build Storyboard from Script
@@ -116,42 +116,42 @@ export function BuildStoryboardDialogSimplified({
         <div className="px-6 py-6 space-y-6">
           {/* Description */}
           <div className="text-center">
-            <p className="text-neutral-300 mb-6">
+            <p className="text-[#A0A0A0] mb-6">
               Create storyboard items from your script with AI-powered elements and visuals
             </p>
           </div>
 
           {/* Features Checklist */}
-          <div className="rounded-xl border border-white/10 bg-gradient-to-r from-violet-500/5 to-indigo-500/5 p-6">
-            <h3 className="text-base font-medium text-white mb-4">What will happen automatically:</h3>
+          <div className="rounded-xl border border-[#3D3D3D] bg-[#3D3D3D]/20 p-6">
+            <h3 className="text-base font-medium text-[#FFFFFF] mb-4">What will happen automatically:</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-neutral-200">Parse script scenes automatically</span>
+                <span className="text-sm text-[#A0A0A0]">Parse script scenes automatically</span>
               </div>
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-neutral-200">Create storyboard items for all scenes</span>
+                <span className="text-sm text-[#A0A0A0]">Create storyboard items for all scenes</span>
               </div>
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-neutral-200">Generate AI elements and visuals</span>
+                <span className="text-sm text-[#A0A0A0]">Generate AI elements and visuals</span>
               </div>
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-neutral-200">Replace existing items with fresh content</span>
+                <span className="text-sm text-[#A0A0A0]">Replace existing items with fresh content</span>
               </div>
             </div>
           </div>
 
           {/* Script Settings */}
-          <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
-            <h3 className="text-base font-medium text-white mb-4">Script Settings</h3>
+          <div className="rounded-xl border border-[#3D3D3D] bg-[#3D3D3D]/20 p-6">
+            <h3 className="text-base font-medium text-[#FFFFFF] mb-4">Script Settings</h3>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <Label className="text-sm font-medium text-neutral-300 mb-2 block">Script Type</Label>
+                <Label className="text-sm font-medium text-[#A0A0A0] mb-2 block">Script Type</Label>
                 <Select value={scriptType} onValueChange={setScriptType}>
-                  <SelectTrigger className="border-white/10 bg-black/30 text-white">
+                  <SelectTrigger className="border-[#3D3D3D] bg-[#1A1A1A] text-[#FFFFFF]">
                     <SelectValue placeholder="Select script type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -159,7 +159,7 @@ export function BuildStoryboardDialogSimplified({
                       <SelectItem key={type.value} value={type.value}>
                         <div className="flex flex-col">
                           <span>{type.label}</span>
-                          <span className="text-xs text-neutral-400">{type.description}</span>
+                          <span className="text-xs text-[#6E6E6E]">{type.description}</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -168,9 +168,9 @@ export function BuildStoryboardDialogSimplified({
               </div>
 
               <div>
-                <Label className="text-sm font-medium text-neutral-300 mb-2 block">Language</Label>
+                <Label className="text-sm font-medium text-[#A0A0A0] mb-2 block">Language</Label>
                 <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="border-white/10 bg-black/30 text-white">
+                  <SelectTrigger className="border-[#3D3D3D] bg-[#1A1A1A] text-[#FFFFFF]">
                     <SelectValue placeholder="Select language" />
                   </SelectTrigger>
                   <SelectContent>
@@ -189,55 +189,55 @@ export function BuildStoryboardDialogSimplified({
             
             <div className="grid grid-cols-2 gap-4 text-center mt-4">
               <div>
-                <div className="text-xs text-neutral-400 mb-1">Scenes Found</div>
-                <div className="text-sm font-medium text-white">{sceneCount}</div>
+                <div className="text-xs text-[#6E6E6E] mb-1">Scenes Found</div>
+                <div className="text-sm font-medium text-[#FFFFFF]">{sceneCount}</div>
               </div>
               <div>
-                <div className="text-xs text-neutral-400 mb-1">Build Mode</div>
-                <div className="text-sm font-medium text-white">Enhanced</div>
+                <div className="text-xs text-[#6E6E6E] mb-1">Build Mode</div>
+                <div className="text-sm font-medium text-[#FFFFFF]">Enhanced</div>
               </div>
             </div>
           </div>
 
           {/* Warning */}
-          <div className="rounded-xl border border-green-500/40 bg-green-500/10 p-4">
-            <div className="flex items-center gap-2 font-medium text-green-300">
+          <div className="rounded-xl border border-[#52C41A]/40 bg-[#52C41A]/10 p-4">
+              <div className="flex items-center gap-2 font-medium text-[#52C41A]">
               <CheckCircle2 className="h-4 w-4" />
               Smart Build
             </div>
-            <p className="mt-2 text-sm text-green-200">
+            <p className="mt-2 text-sm text-[#52C41A]">
               Script-based content will be replaced with new items from your script.
               <br />
               <strong>Manual frames are automatically preserved.</strong>
               <br />
-              <span className="text-xs">Private elements will be regenerated, public elements preserved.</span>
+              <span className="text-xs text-[#6E6E6E]">Private elements will be regenerated, public elements preserved.</span>
             </p>
           </div>
 
           {/* Alternative Option */}
           <div className="text-center">
-            <p className="text-sm text-neutral-400 mb-2">
+            <p className="text-sm text-[#6E6E6E] mb-2">
               Want to add frames manually instead?
             </p>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-[#6E6E6E]">
               Use the "+ Add Frame" button to create individual storyboard items
             </p>
           </div>
         </div>
 
-        <DialogFooter className="border-t border-white/10 bg-white/[0.03] px-6 py-4">
+        <DialogFooter className="border-t border-[#3D3D3D] bg-[#3D3D3D]/20 px-6 py-4">
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
             <Button 
               variant="outline" 
               onClick={() => onOpenChange(false)} 
-              className="border-white/10 bg-white/5 text-neutral-200 hover:bg-white/10"
+              className="border-[#3D3D3D] bg-[#3D3D3D] text-[#A0A0A0] hover:bg-[#3D3D3D]"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleBuild}
               disabled={isSubmitting || !project?.script}
-              className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-[#4A90E2] text-white hover:bg-[#357ABD] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <div className="flex items-center gap-2">

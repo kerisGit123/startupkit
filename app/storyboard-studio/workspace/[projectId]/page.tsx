@@ -8,11 +8,11 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { getCurrentCompanyId } from "@/lib/auth-utils";
 import { FrameFavoriteButton } from "../../components/FrameFavoriteButton";
+import { FramePrimaryImageButton } from "../../components/FramePrimaryImageButton";
 import { VideoAIPanel } from "../../components/storyboard/VideoAIPanel";
 import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExportModal";
 import { FileBrowser } from "../../components/storyboard/FileBrowser";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
-import { BuildStoryboardModal } from "../../components/storyboard/BuildStoryboardModal";
 import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
 import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
 import { SceneEditor } from "../../components/SceneEditor";
@@ -115,9 +115,11 @@ export default function StoryboardWorkspacePage() {
   const items = useQuery(api.storyboard.moveItems.getStoryboardItemsOrdered, { projectId: pid });
 
   const updateScript = useMutation(api.storyboard.projects.updateScript);
+  const updateProject = useMutation(api.storyboard.projects.update);
   const createBatch = useMutation(api.storyboard.storyboardItems.createBatch);
   const createItem = useMutation(api.storyboard.storyboardItems.create);
   const updateItem = useMutation(api.storyboard.storyboardItems.update);
+  const setPrimaryImage = useMutation(api.storyboard.storyboardItems.setPrimaryImage);
   const addElementToItem = useMutation(api.storyboard.storyboardItemElements.addElementToItem);
   const removeElementFromItem = useMutation(api.storyboard.storyboardItemElements.removeElementFromItem);
   const removeItem = useMutation(api.storyboard.storyboardItems.remove);
@@ -492,7 +494,6 @@ export default function StoryboardWorkspacePage() {
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [selectedItemForElement, setSelectedItemForElement] = useState<Id<"storyboard_items"> | null>(null);
-  const [showBuildModal, setShowBuildModal] = useState(false);
   const [showSceneEditor, setShowSceneEditor] = useState(false);
   const [selectedSceneItem, setSelectedSceneItem] = useState<any>(null);
   const [elementLibraryDraft, setElementLibraryDraft] = useState<{
@@ -626,10 +627,6 @@ export default function StoryboardWorkspacePage() {
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const handleBuildStoryboard = () => {
-    setShowBuildModal(true);
   };
 
   const handleExecuteBuild = async (config: any) => {
@@ -842,6 +839,32 @@ export default function StoryboardWorkspacePage() {
     });
   };
 
+  const handleSetPrimaryImage = async (itemId: string, imageUrl: string) => {
+    try {
+      await setPrimaryImage({
+        itemId: itemId as Id<"storyboard_items">,
+        primaryImageUrl: imageUrl,
+      });
+      console.log("Primary image set successfully");
+    } catch (error) {
+      console.error("Failed to set primary image:", error);
+    }
+  };
+
+  const handleSetStoryboardUrl = (imageUrl: string) => {
+    updateProject({
+      id: pid as Id<"storyboard_projects">,
+      imageUrl: imageUrl,
+    });
+  };
+
+  const handleClearStoryboardUrl = () => {
+    updateProject({
+      id: pid as Id<"storyboard_projects">,
+      imageUrl: undefined, // Clear the image URL
+    });
+  };
+
   const handleDoubleClick = (item: any) => {
     handleOpenSceneEditor(item);
   };
@@ -888,24 +911,24 @@ export default function StoryboardWorkspacePage() {
 
   if (!project) {
     return (
-      <div className="flex h-full items-center justify-center bg-[#0d0d12]">
-        <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+      <div className="flex h-full items-center justify-center bg-(--bg-primary)">
+        <Loader2 className="w-6 h-6 text-(--accent-blue) animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0d12] text-white overflow-hidden">
+    <div className="flex flex-col h-full bg-(--bg-primary) text-(--text-primary) overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/8 shrink-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-(--border-primary) shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => router.push("/storyboard-studio")}
-            className="p-1.5 rounded-lg hover:bg-white/8 transition text-gray-400 hover:text-white">
+            className="p-1.5 rounded-xl hover:bg-(--bg-tertiary) transition-all duration-200 text-(--text-secondary) hover:text-(--text-primary) hover:scale-105">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div>
-            <h1 className="text-sm font-semibold">{project.name}</h1>
-            <p className="text-[11px] text-gray-500 capitalize">{project.status} · {project.settings.frameRatio}</p>
+            <h1 className="text-sm font-bold text-(--text-primary)">{project.name}</h1>
+            <p className="text-[11px] text-(--text-tertiary) capitalize">{project.status} · {project.settings.frameRatio}</p>
             {/* Task status badge with progress */}
             {(project.taskStatus && project.taskStatus !== "idle") && (
               <div className="mt-1">
@@ -921,11 +944,11 @@ export default function StoryboardWorkspacePage() {
 
         <div className="flex items-center gap-2">
           {/* Tab switcher */}
-          <div className="flex bg-white/5 rounded-lg p-0.5 gap-0.5">
+          <div className="flex bg-(--bg-tertiary) rounded-xl p-0.5 gap-0.5 border border-(--border-primary)">
             {(["script", "storyboard"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition
-                  ${tab === t ? "bg-white/10 text-white" : "text-gray-400 hover:text-gray-200"}`}>
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
+                  ${tab === t ? "bg-(--accent-blue) text-white shadow-lg" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary)"}`}>
                 {t === "script" ? <FileText className="w-3.5 h-3.5" /> : <Grid3x3 className="w-3.5 h-3.5" />}
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
@@ -936,7 +959,7 @@ export default function StoryboardWorkspacePage() {
           {tab === "script" && (
             <button
               onClick={handleSaveScript}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-(--accent-teal) to-(--accent-teal-hover) hover:from-(--accent-teal-hover) hover:to-(--accent-teal) text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <Save className="w-3.5 h-3.5" />
               Save Script
@@ -947,7 +970,7 @@ export default function StoryboardWorkspacePage() {
             <button
               onClick={() => setShowBuildDialog(true)}
               disabled={isBuilding}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg transition disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               title="Build storyboard with options for normal or enhanced mode"
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -971,18 +994,18 @@ export default function StoryboardWorkspacePage() {
               </div>
 
               {/* Zoom Controls */}
-              <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
+              <div className="flex items-center gap-1 bg-(--bg-tertiary) rounded-xl p-1 border border-(--border-primary)">
                 <button
                   onClick={handleZoomOut}
                   disabled={!canZoomOut}
-                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary) rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Zoom out (Ctrl+-)"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
                 <button
                   onClick={handleZoomReset}
-                  className="px-2 py-1 text-xs text-gray-300 hover:text-white hover:bg-white/10 rounded transition-all min-w-[3rem] text-center"
+                  className="px-2 py-1 text-xs text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary) rounded-lg transition-all duration-200 min-w-12 text-center"
                   title="Reset zoom (Ctrl+0)"
                 >
                   {zoomLevel}%
@@ -990,7 +1013,7 @@ export default function StoryboardWorkspacePage() {
                 <button
                   onClick={handleZoomIn}
                   disabled={!canZoomIn}
-                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary) rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Zoom in (Ctrl+)"
                 >
                   <ZoomIn className="w-4 h-4" />
@@ -1004,10 +1027,10 @@ export default function StoryboardWorkspacePage() {
             appearance={{
               elements: {
                 avatarBox: "w-8 h-8",
-                userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
-                userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
+                userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
                 userButtonPopoverActionButtonText: "text-sm",
-                userButtonPopoverFooter: "border-t border-white/10",
+                userButtonPopoverFooter: "border-t border-(--border-primary)",
               },
             }}
             afterSignOutUrl="/"
@@ -1017,31 +1040,31 @@ export default function StoryboardWorkspacePage() {
 
       {/* AI Prompt Bar */}
       {tab === "script" && showAiInput && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-purple-950/40 border-b border-purple-500/20 shrink-0">
-          <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 bg-[#4A90E2]/20 border-b border-[#4A90E2]/30 shrink-0">
+          <Sparkles className="w-4 h-4 text-[#4A90E2] shrink-0" />
           <input
             value={aiPrompt}
             onChange={(e) => setAiPrompt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleGenerateScript()}
             placeholder="Describe your story idea… e.g. 'A thriller about a hacker who discovers government secrets'"
-            className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 outline-none"
+            className="flex-1 bg-transparent text-sm text-(--text-primary) placeholder-(--text-tertiary) outline-none"
           />
           <div className="flex items-center gap-2 shrink-0">
             <select value={genre} onChange={(e) => setGenre(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg text-xs text-gray-300 px-2 py-1.5 outline-none">
+              className="bg-(--bg-primary) border border-(--border-primary) rounded-xl text-xs text-(--text-secondary) px-2 py-1.5 outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200">
               {["drama", "comedy", "thriller", "horror", "romance", "action", "documentary"].map((g) => (
                 <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>
               ))}
             </select>
             <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
-              className="bg-white/5 border border-white/10 rounded-lg text-xs text-gray-300 px-2 py-1.5 outline-none">
+              className="bg-(--bg-primary) border border-(--border-primary) rounded-xl text-xs text-(--text-secondary) px-2 py-1.5 outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200">
               <option value={15}>15s</option>
               <option value={30}>30s</option>
               <option value={60}>60s</option>
               <option value={90}>90s</option>
             </select>
             <button onClick={handleGenerateScript} disabled={isGenerating || !aiPrompt.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded-lg transition disabled:opacity-50">
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-[#4A90E2] to-[#4A9E8E] hover:from-[#357ABD] hover:to-[#378B7C] text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">
               {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
               Generate
             </button>
@@ -1058,20 +1081,20 @@ export default function StoryboardWorkspacePage() {
               value={displayScript}
               onChange={(e) => handleScriptChange(e.target.value)}
               placeholder={`Write your script here...\n\nTip: Format scenes as:\nSCENE 1: Title - Location\n[Scene description]\n\nOr use AI to generate a script automatically.`}
-              className="flex-1 bg-transparent text-sm text-gray-200 placeholder-gray-600 p-6 outline-none resize-none font-mono leading-relaxed"
+              className="flex-1 bg-transparent text-sm text-[#A0A0A0] placeholder-[#6E6E6E] p-6 outline-none resize-none font-mono leading-relaxed"
             />
             {/* Scene preview panel */}
             {parseScriptScenes(displayScript).scenes.length > 0 && (
-              <div className="w-64 border-l border-white/8 overflow-y-auto p-3 shrink-0">
-                <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider mb-3">
+              <div className="w-64 border-l border-[#3D3D3D] overflow-y-auto p-3 shrink-0">
+                <p className="text-[11px] text-[#6E6E6E] font-medium uppercase tracking-wider mb-3">
                   {parseScriptScenes(displayScript).scenes.length} Scenes
                 </p>
                 {parseScriptScenes(displayScript).scenes.map((s, i) => (
-                  <div key={`${s.id}-${i}`} className="mb-2 p-2.5 rounded-lg bg-white/4 border border-white/6">
-                    <p className="text-[11px] text-gray-400 mb-0.5">Scene {i + 1}</p>
-                    <p className="text-xs text-white font-medium truncate">{s.title}</p>
+                  <div key={`${s.id}-${i}`} className="mb-2 p-2.5 rounded-lg bg-[#3D3D3D]/20 border border-[#3D3D3D]">
+                    <p className="text-[11px] text-[#A0A0A0] mb-0.5">Scene {i + 1}</p>
+                    <p className="text-xs text-[#FFFFFF] font-medium truncate">{s.title}</p>
                     {s.characters.length > 0 && (
-                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">{s.characters.slice(0, 3).join(", ")}</p>
+                      <p className="text-[10px] text-[#6E6E6E] mt-0.5 truncate">{s.characters.slice(0, 3).join(", ")}</p>
                     )}
                   </div>
                 ))}
@@ -1086,11 +1109,11 @@ export default function StoryboardWorkspacePage() {
             <div className="flex-1 overflow-y-auto p-6">
             {!items || items.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <Grid3x3 className="w-12 h-12 text-gray-700 mb-4" />
-                <p className="text-gray-400 font-medium mb-2">No frames yet</p>
-                <p className="text-gray-600 text-sm mb-6">Write a script and click "Build Storyboard" to create frames</p>
+                <Grid3x3 className="w-12 h-12 text-[#6E6E6E] mb-4" />
+                <p className="text-[#A0A0A0] font-medium mb-2">No frames yet</p>
+                <p className="text-[#6E6E6E] text-sm mb-6">Write a script and click "Build Storyboard" to create frames</p>
                 <button onClick={() => setTab("script")}
-                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition">
+                  className="flex items-center gap-2 px-4 py-2 bg-[#4A90E2] hover:bg-[#357ABD] text-white text-sm font-medium rounded-lg transition">
                   <FileText className="w-4 h-4" />
                   Go to Script
                 </button>
@@ -1099,11 +1122,11 @@ export default function StoryboardWorkspacePage() {
               <>
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-semibold text-gray-300">{items.length} Frames</h2>
+                    <h2 className="text-sm font-semibold text-[#FFFFFF]">{items.length} Frames</h2>
                     {duplicateCount > 0 && (
-                      <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/20 border border-orange-500/30 rounded-md">
-                        <AlertTriangle className="w-3 h-3 text-orange-400" />
-                        <span className="text-xs text-orange-400 font-medium">
+                      <div className="flex items-center gap-1 px-2 py-1 bg-[#FAAD14]/20 border border-[#FAAD14]/30 rounded-md">
+                        <AlertTriangle className="w-3 h-3 text-[#FAAD14]" />
+                        <span className="text-xs text-[#FAAD14] font-medium">
                           {duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''}
                         </span>
                       </div>
@@ -1111,30 +1134,30 @@ export default function StoryboardWorkspacePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={handleRemoveDuplicates}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600/80 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAAD14]/80 hover:bg-[#FAAD14] text-white text-xs font-medium rounded-lg transition"
                       title="Remove duplicate storyboard items">
                       <Trash2 className="w-3.5 h-3.5" />
                       Remove Duplicates
                     </button>
                     <button onClick={() => { setShowVideoPanel(!showVideoPanel); }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                        showVideoPanel ? "bg-blue-600 text-white" : "bg-white/8 hover:bg-white/12 text-gray-300"
+                        showVideoPanel ? "bg-[#4A90E2] text-white" : "bg-[#3D3D3D] hover:bg-[#2C2C2C] text-[#A0A0A0]"
                       }`}>
                       <Play className="w-3.5 h-3.5" />
                       AI Video
                     </button>
                     <button onClick={() => setShowFileBrowser(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white/8 hover:bg-white/12 text-xs text-gray-300 rounded-lg transition">
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition">
                       <FolderOpen className="w-3.5 h-3.5" />
                       Files
                     </button>
                     <button onClick={() => setShowElementLibrary(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white/8 hover:bg-white/12 text-xs text-gray-300 rounded-lg transition">
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition">
                       <Users className="w-3.5 h-3.5" />
                       Elements
                     </button>
                     <button onClick={() => setShowExportModal(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700/70 hover:bg-emerald-700 text-xs text-white rounded-lg transition">
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#52C41A]/70 hover:bg-[#52C41A] text-xs text-white rounded-lg transition">
                       Export
                     </button>
                   </div>
@@ -1161,7 +1184,7 @@ export default function StoryboardWorkspacePage() {
                       className={`
                         relative
                         ${draggedItem === item._id ? 'opacity-50 cursor-grabbing' : 'cursor-grab'}
-                        ${dragOverItem === item._id ? 'ring-2 ring-purple-400 ring-opacity-50 rounded-xl' : ''}
+                        ${dragOverItem === item._id ? 'ring-2 ring-[#4A90E2] ring-opacity-50 rounded-xl' : ''}
                         transition-all duration-200
                       `}
                     >
@@ -1178,6 +1201,7 @@ export default function StoryboardWorkspacePage() {
                         )}
                         onDelete={() => handleRemoveItem(item._id, item.title)}
                         onImageUploaded={(id, url) => handleImageUploaded(id, url)}
+                        onSetPrimaryImage={(id, url) => handleSetPrimaryImage(id, url)}
                         onDoubleClick={() => handleDoubleClick(item)}
                         onDuplicate={() => handleDuplicateItem(item)}
                         onTagsChange={(tags) => handleTagsChange(item._id, tags)}
@@ -1194,13 +1218,16 @@ export default function StoryboardWorkspacePage() {
                         userId={user?.id || ""}
                         user={user}
                         onBuildStoryboard={() => setShowBuildDialog(true)}
+                        onSetStoryboardUrl={(imageUrl) => handleSetStoryboardUrl(imageUrl)}
+                        onClearStoryboardUrl={() => handleClearStoryboardUrl()}
+                        projectStoryboardUrl={project?.imageUrl}
                       />
                     </div>
                   ))}
                   {/* Add frame button */}
                   <button
                     disabled={isAddingFrame}
-                    className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl hover:border-purple-400/50 hover:bg-purple-400/5 transition-all duration-300 text-gray-600 hover:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed group"
+                    className="flex flex-col items-center justify-center border-2 border-dashed border-[#3D3D3D]/50 rounded-xl hover:border-[#4A90E2]/50 hover:bg-[#4A90E2]/5 transition-all duration-300 text-[#6E6E6E] hover:text-[#4A90E2] disabled:opacity-50 disabled:cursor-not-allowed group"
                     style={{ aspectRatio: project.settings.frameRatio === "9:16" ? "9/16" : project.settings.frameRatio === "1:1" ? "1/1" : "16/9" }}
                     onClick={async () => {
                       if (isAddingFrame) return;
@@ -1222,7 +1249,7 @@ export default function StoryboardWorkspacePage() {
                       ? <Loader2 className="w-6 h-6 mb-1 animate-spin" />
                       : <Plus className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />}
                     <span className="text-xs font-medium">{isAddingFrame ? "Adding…" : "Add Frame"}</span>
-                    <span className="text-xs text-gray-500 mt-1">Create manually</span>
+                    <span className="text-xs text-[#A0A0A0] mt-1">Create manually</span>
                   </button>
                 </div>
               </>
@@ -1283,17 +1310,6 @@ export default function StoryboardWorkspacePage() {
           items={items}
           frameRatio={project.settings.frameRatio}
           onClose={() => setShowExportModal(false)}
-        />
-      )}
-      {showBuildModal && (
-        <BuildStoryboardModal
-          key={`build-modal-${project?.script?.length || 0}`} // Force re-render when script changes
-          isOpen={showBuildModal}
-          onClose={() => setShowBuildModal(false)}
-          projectId={pid}
-          onBuild={handleExecuteBuild}
-          isBuilding={isBuilding}
-          existingItems={items || []}
         />
       )}
       {showSceneEditor && selectedSceneItem && (
@@ -1457,9 +1473,9 @@ function TagEditorInline({ selectedTags, onTagsChange, onClose }: TagEditorInlin
   return (
     <div className="max-h-[400px] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-white/10 sticky top-0 bg-[#1a1a1f] z-10">
-        <h3 className="text-white text-sm font-semibold">Edit Tags</h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-white transition">
+      <div className="flex items-center justify-between p-3 border-b border-(--border-primary) sticky top-0 bg-(--bg-secondary) z-10">
+        <h3 className="text-(--text-primary) text-sm font-bold">Edit Tags</h3>
+        <button onClick={onClose} className="text-(--text-secondary) hover:text-(--text-primary) transition-all duration-200">
           <X className="w-4 h-4" />
         </button>
       </div>
@@ -1473,7 +1489,7 @@ function TagEditorInline({ selectedTags, onTagsChange, onClose }: TagEditorInlin
             value={customTagName}
             onChange={(e) => setCustomTagName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addCustomTag()}
-            className="flex-1 bg-[#25252f] border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-violet-500/50"
+            className="flex-1 bg-(--bg-primary) border border-(--border-primary) rounded-xl px-2 py-1.5 text-(--text-primary) text-xs focus:outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200"
           />
           <button
             onClick={addCustomTag}
@@ -1537,7 +1553,6 @@ function TagEditorInline({ selectedTags, onTagsChange, onClose }: TagEditorInlin
   );
 }
 
-// ── Frame Card ────────────────────────────────────────────────────────────────
 interface FrameCardProps {
   item: { _id: string; title: string; description?: string; imageUrl?: string; videoUrl?: string; duration: number; generationStatus: string; order: number; tags?: Array<{ id: string; name: string; color: string }>; isFavorite?: boolean; frameStatus?: string; notes?: string; linkedElements?: Array<{ id: string; name: string; type: string }> };
   index: number;
@@ -1547,17 +1562,17 @@ interface FrameCardProps {
   onSelect: () => void;
   onDelete: () => void;
   onImageUploaded: (id: string, url: string) => void;
-  onDoubleClick: () => void;
-  onDuplicate: () => void;
-  onTagsChange: (tags: Array<{ id: string; name: string; color: string }>) => void;
-  onFavoriteToggle?: () => void;
-  // NEW: Safe optional props for status and notes
-  onStatusChange?: (status: 'draft' | 'in-progress' | 'completed') => void;
-  onNotesChange?: (notes: string) => void;
-  onTitleChange?: (title: string) => void;
-  onDescriptionChange?: (description: string) => void;
-  onRemoveElement?: (elementId: string) => void;
-  onAddElement?: () => void;
+  onSetPrimaryImage: (id: string, url: string) => void;
+  onDoubleClick: (item: any) => void;
+  onDuplicate: (item: any) => void;
+  onTagsChange: (tags: any) => void;
+  onFavoriteToggle: (id: string) => void;
+  onStatusChange: (status: string) => void;
+  onNotesChange: (notes: string) => void;
+  onTitleChange: (title: string) => void;
+  onDescriptionChange: (description: string) => void;
+  onRemoveElement: (elementId: string) => void;
+  onAddElement: () => void;
   onMoveUp?: (itemId: string) => void;
   onMoveDown?: (itemId: string) => void;
   totalItems?: number;
@@ -1565,9 +1580,13 @@ interface FrameCardProps {
   user?: any; // Full user object for upload functionality
   // Build dialog props
   onBuildStoryboard?: () => void;
+  // NEW: Storyboard URL functionality
+  onSetStoryboardUrl?: (imageUrl: string) => void;
+  onClearStoryboardUrl?: () => void;
+  projectStoryboardUrl?: string; // To show if this frame's image is the storyboard URL
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onSetPrimaryImage, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard, onSetStoryboardUrl, onClearStoryboardUrl, projectStoryboardUrl }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -1648,15 +1667,14 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
-  
   return (
     <div onClick={onSelect} onDoubleClick={onDoubleClick}
       className={`relative group cursor-pointer overflow-hidden rounded-2xl border transition-all duration-300 shadow-sm
         ${selected 
-          ? "border-purple-400/50 ring-2 ring-purple-400/20 shadow-purple-400/10" 
-          : "border-white/5 hover:border-white/10 hover:shadow-md"}`}>
+          ? "border-[#4A90E2]/50 ring-2 ring-[#4A90E2]/20 shadow-[#4A90E2]/10" 
+          : "border-(--border-primary) hover:border-(--accent-blue) hover:shadow-md"}`}>
       {/* Media area */}
-      <div className="bg-[#0f0f14]" style={{ aspectRatio: ratio }}>
+      <div className="bg-(--bg-primary)" style={{ aspectRatio: ratio }}>
         {item.videoUrl ? (
           <>
             <video src={item.videoUrl} className="w-full h-full object-cover" />
@@ -1668,6 +1686,39 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
             {/* Subtle vignette effect */}
             <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+            
+            {/* Action Buttons - Show on hover */}
+            {item.imageUrl && (
+              <div className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
+                {/* Remove Image Button - Show if this frame IS the storyboard URL */}
+                {projectStoryboardUrl === item.imageUrl && onClearStoryboardUrl && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClearStoryboardUrl();
+                    }}
+                    className="bg-(--color-error)/90 backdrop-blur-sm rounded-full p-1.5 border border-white/20 hover:bg-(--color-error) transition-all duration-200 shadow-lg"
+                    title="Remove Image"
+                  >
+                    <X className="w-3 h-3 text-white" />
+                  </button>
+                )}
+                
+                {/* Set as Storyboard URL Button - Show if this frame is NOT the storyboard URL */}
+                {projectStoryboardUrl !== item.imageUrl && onSetStoryboardUrl && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSetStoryboardUrl(item.imageUrl!);
+                    }}
+                    className="bg-(--bg-secondary)/90 backdrop-blur-sm rounded-full p-1.5 border border-(--border-primary) hover:bg-(--bg-primary) transition-all duration-200 shadow-lg"
+                    title="Set as Storyboard URL"
+                  >
+                    <Image className="w-3 h-3 text-(--text-secondary)" />
+                  </button>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-3">
@@ -1685,29 +1736,29 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           </div>
         )}
         
-        {/* Move controls - Top left corner */}
-        <div className="absolute top-2 left-2 flex gap-1 z-20">
+        {/* Move controls - Top left corner, only show on hover */}
+        <div className="absolute top-2 left-2 flex gap-1 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105">
           <button
             onClick={(e) => { 
               e.stopPropagation(); 
               onMoveUp?.(item._id); 
             }}
-            className="p-1 bg-gray-100/90 hover:bg-gray-200/90 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 bg-(--bg-secondary)/90 backdrop-blur-sm border border-(--border-primary) rounded-xl hover:bg-(--bg-primary) disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"
             disabled={item.order === 0}
             title="Move up"
           >
-            <ChevronUp className="w-4 h-4 text-gray-700" />
+            <ChevronUp className="w-4 h-4 text-(--text-secondary)" />
           </button>
           <button
             onClick={(e) => { 
               e.stopPropagation(); 
               onMoveDown?.(item._id); 
             }}
-            className="p-1 bg-gray-100/90 hover:bg-gray-200/90 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="p-1.5 bg-(--bg-secondary)/90 backdrop-blur-sm border border-(--border-primary) rounded-xl hover:bg-(--bg-primary) disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg"
             disabled={item.order === (totalItems ?? 1) - 1}
             title="Move down"
           >
-            <ChevronDown className="w-4 h-4 text-gray-700" />
+            <ChevronDown className="w-4 h-4 text-(--text-secondary)" />
           </button>
         </div>
 
@@ -1741,7 +1792,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setShowStatusMenu(false)} />
                       <div 
-                        className="absolute top-full left-0 mt-1 bg-[#1a1a24] rounded-xl border border-white/10 shadow-lg z-50 min-w-[140px]"
+                        className="absolute top-full left-0 mt-1 bg-(--bg-secondary) rounded-xl border border-(--border-primary) shadow-lg z-50 min-w-[140px]"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="p-1">
@@ -1752,8 +1803,8 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                                 onStatusChange?.(key as 'draft' | 'in-progress' | 'completed');
                                 setShowStatusMenu(false);
                               }}
-                              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition hover:bg-white/5 text-gray-300 hover:text-white text-left ${
-                                item.frameStatus === key ? 'bg-white/10 text-white' : ''
+                              className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all duration-200 hover:bg-(--bg-tertiary) text-(--text-secondary) hover:text-(--text-primary) text-left ${
+                                item.frameStatus === key ? 'bg-(--bg-tertiary) text-(--text-primary)' : ''
                               }`}
                             >
                               <div className={`w-2 h-2 rounded-full ${config.color}`} />
@@ -1808,7 +1859,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                 {showTagEditor && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowTagEditor(false)} />
-                    <div className="absolute top-full left-0 mt-1 bg-[#1a1a1f] border border-white/10 rounded-xl z-50 shadow-xl w-64">
+                    <div className="absolute top-full left-0 mt-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl z-50 shadow-xl w-64">
                       <TagEditorInline
                         selectedTags={item.tags || []}
                         onTagsChange={onTagsChange}
@@ -1820,13 +1871,20 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
               </div>
             </div>
             
-            {/* Right side - Duration and favorite in top corner */}
-            <div className="flex items-center gap-2">
-              {/* Duration */}
+            {/* Right side - Duration, primary indicator, and favorite in top corner */}
+            <div className="absolute top-2 right-2 flex items-center gap-2">
+              {/* Duration badge */}
               <div className="bg-black/40 backdrop-blur-md rounded-full px-2.5 py-1 border border-white/10 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-gray-300" />
                 <span className="text-xs text-gray-200 font-medium">{formatDuration(item.duration)}</span>
               </div>
+
+              {/* Primary image indicator - Only show if this frame IS the storyboard URL AND there IS a primary URL */}
+              {projectStoryboardUrl && projectStoryboardUrl === item.imageUrl && (
+                <div className="bg-blue-500/90 backdrop-blur-sm rounded-lg border border-white/20 shadow-lg flex items-center justify-center w-6 h-6">
+                  <ImageIcon className="w-3.5 h-3.5 text-white" />
+                </div>
+              )}
 
               {/* Favorite button */}
               {onFavoriteToggle && (
@@ -2019,9 +2077,9 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         </div>
       
       {/* Enhanced info section */}
-      <div className="p-4 bg-[#0a0a0f] border-t border-white/5">
+      <div className="p-4 bg-(--bg-secondary) border-t border-(--border-primary)">
         <div className="flex items-start justify-between mb-2">
-          <p className="text-sm text-white font-medium flex-1">
+          <p className="text-sm text-(--text-primary) font-medium flex-1">
             {item.title}
           </p>
           {/* Subtle user attribution */}
@@ -2041,10 +2099,10 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
       {/* NEW: Inline Edit Dialog */}
       {showEditDialog && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
-          <div className="bg-[#1a1a24] rounded-xl border border-white/10 w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-3 border-b border-white/8">
-              <h3 className="text-sm font-bold text-white">Edit Frame</h3>
-              <button onClick={() => setShowEditDialog(false)} className="p-1 hover:bg-white/8 rounded-lg transition-colors">
+          <div className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-3 border-b border-(--border-primary)">
+              <h3 className="text-sm font-bold text-(--text-primary)">Edit Frame</h3>
+              <button onClick={() => setShowEditDialog(false)} className="p-1 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200">
                 <X className="w-3.5 h-3.5 text-gray-400" />
               </button>
             </div>
@@ -2052,19 +2110,19 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             <div className="p-3 space-y-3">
               {/* Title Input */}
               <div>
-                <label className="text-xs text-gray-400 font-medium mb-1 block">Title</label>
+                <label className="text-xs text-(--text-tertiary) font-medium mb-1 block">Title</label>
                 <input
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full text-sm text-white bg-white/10 border border-white/20 rounded-lg px-3 py-2 outline-none focus:border-purple-500 transition-colors"
+                  className="flex-1 bg-(--bg-primary) border border-(--border-primary) rounded-xl px-2 py-1.5 text-(--text-primary) text-xs focus:outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200"
                   placeholder="Enter frame title..."
                 />
               </div>
               
               {/* Description Input */}
               <div>
-                <label className="text-xs text-gray-400 font-medium mb-1 block">Description</label>
+                <label className="text-xs text-(--text-tertiary) font-medium mb-1 block">Description</label>
                 <textarea
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
@@ -2109,10 +2167,10 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
       {/* NEW: Notes Modal */}
       {showNotesModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b border-white/8">
-              <h3 className="text-sm font-bold text-white">Frame Notes</h3>
-              <button onClick={() => setShowNotesModal(false)} className="p-1 hover:bg-white/8 rounded-lg">
+          <div className="bg-(--bg-secondary) rounded-2xl border border-(--border-primary) w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
+              <h3 className="text-sm font-bold text-(--text-primary)">Frame Notes</h3>
+              <button onClick={() => setShowNotesModal(false)} className="p-1 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200">
                 <X className="w-4 h-4 text-gray-400" />
               </button>
             </div>
@@ -2121,7 +2179,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                 value={item.notes || ''}
                 onChange={(e) => onNotesChange?.(e.target.value)}
                 placeholder="Add notes about this frame..."
-                className="w-full h-32 bg-white/6 border border-white/8 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none focus:border-purple-500/60 resize-none"
+                className="w-full h-32 bg-(--bg-primary) border border-(--border-primary) rounded-xl px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-tertiary) outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 resize-none transition-all duration-200"
               />
             </div>
             <div className="flex items-center justify-end p-4 border-t border-white/8">

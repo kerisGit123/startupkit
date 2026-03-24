@@ -64,8 +64,8 @@ export function FrameFavoriteButton({
       onClick={handleToggle}
       disabled={isLoading}
       className={`
-        ${containerClasses[size]}
-        rounded-lg backdrop-blur-md transition-all duration-200
+        p-1.5
+        rounded-full backdrop-blur-md transition-all duration-200
         ${isFavorite 
           ? "bg-yellow-400/20 text-yellow-400 border border-yellow-400/30" 
           : "bg-black/40 text-white/60 border border-white/10 hover:text-white hover:bg-white/10"

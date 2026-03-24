@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* LTX Dark Theme Color Palette */
+    /* Backgrounds */
+    --bg-primary: #1A1A1A;      /* Main app background */
+    --bg-secondary: #2C2C2C;    /* Cards, panels, and secondary surfaces */
+    --bg-tertiary: #3D3D3D;     /* UI controls, borders, hover states */
+
+    /* Text */
+    --text-primary: #FFFFFF;       /* Primary text, headings */
+    --text-secondary: #A0A0A0;     /* Secondary text, labels, descriptions */
+    --text-tertiary: #6E6E6E;      /* Tertiary text, placeholders, disabled states */
+
+    /* Borders */
+    --border-primary: #3D3D3D;     /* Default border color */
+    --border-secondary: #4A4A4A;   /* Subtle borders */
+
+    /* Accent Colors */
+    --accent-blue: #4A90E2;         /* Primary buttons, links, focus rings, selected states */
+    --accent-blue-hover: #357ABD;   /* Hover state for primary blue elements */
+
+    /* Secondary Accent (Teal) */
+    --accent-teal: #4A9E8E;         /* Secondary buttons or highlights */
+    --accent-teal-hover: #378B7C;   /* Hover state for teal elements */
+
+    /* Semantic Colors */
+    --color-success: #52C41A;       /* Success messages, confirmation */
+    --color-warning: #FAAD14;       /* Warnings, alerts */
+    --color-error: #FF4D4F;         /* Error messages, destructive actions */
+  }
+}

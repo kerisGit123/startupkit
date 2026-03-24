@@ -42,6 +42,7 @@ interface ProjectsDashboardProps {
   onCreateConvexProject?: (name: string, frameRatio: string, style: string) => Promise<void>;
   onDeleteProject?: (id: string) => Promise<void>;
   onDuplicateProject?: (id: string) => Promise<void>;
+  onRemoveImageUrl?: (id: string) => Promise<void>;
   onOpenFileBrowser?: () => void;
   onOpenGlobalFileBrowser?: () => void;
   activeFilter?: string | null;
@@ -73,7 +74,7 @@ const normalizeStatusFilter = (value: string): Project["status"] | null => {
 };
 
 export function ProjectsDashboard({
-  sidebarOpen, onToggleSidebar, projects, onProjectsChange, onOpenProject, onCreateConvexProject, onDeleteProject, onDuplicateProject, onOpenFileBrowser, onOpenGlobalFileBrowser, activeFilter,
+  sidebarOpen, onToggleSidebar, projects, onProjectsChange, onOpenProject, onCreateConvexProject, onDeleteProject, onDuplicateProject, onRemoveImageUrl, onOpenFileBrowser, onOpenGlobalFileBrowser, activeFilter,
 }: ProjectsDashboardProps) {
   const [showNewDropdown, setShowNewDropdown] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -215,13 +216,27 @@ export function ProjectsDashboard({
     if (!project) return;
     const duplicate: Project = {
       ...project,
-      id: `p${Date.now()}`,
+      id: `project-${Date.now()}`,
       name: `${project.name} (copy)`,
     };
     onProjectsChange([...projects, duplicate]);
     setStatusMenuId(null);
     setContextMenuId(null);
     setMenuPosition(null);
+  };
+
+  const handleRemoveImageUrl = async (id: string) => {
+    if (onRemoveImageUrl) {
+      await onRemoveImageUrl(id);
+    } else {
+      // Fallback: update local projects array
+      onProjectsChange(projects.map(p => 
+        p.id === id ? { ...p, imageUrl: undefined } : p
+      ));
+    }
+    setContextMenuId(null);
+    setMenuPosition(null);
+    console.log("ImageUrl unset successfully from project");
   };
 
   // Combine all filters
@@ -262,9 +277,9 @@ export function ProjectsDashboard({
   ];
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d12]">
+    <div className="flex-1 flex flex-col overflow-hidden bg-(--bg-primary)">
       {/* Top bar */}
-      <div className="border-b border-white/6 shrink-0 px-3 py-3 md:px-5">
+      <div className="border-b border-(--border-primary) shrink-0 px-3 py-3 md:px-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
@@ -291,17 +306,17 @@ export function ProjectsDashboard({
                 appearance={{
                   elements: {
                     avatarBox: "w-8 h-8",
-                    userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
-                    userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                    userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
+                    userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
                     userButtonPopoverActionButtonText: "text-sm",
-                    userButtonPopoverFooter: "border-t border-white/10",
+                    userButtonPopoverFooter: "border-t border-(--border-primary)",
                   },
                 }}
                 afterSignOutUrl="/"
               />
             </div>
           </div>
-          <div className="flex flex-col gap-2 rounded-2xl border border-white/6 bg-[#111118]/80 p-2.5 md:flex-1 md:min-w-0 md:flex-row md:items-center md:justify-end md:rounded-none md:border-0 md:bg-transparent md:p-0 lg:flex-row lg:items-center lg:justify-end">
+          <div className="flex flex-col gap-2 rounded-2xl border border-(--border-primary) bg-(--bg-secondary)/80 p-2.5 md:flex-1 md:min-w-0 md:flex-row md:items-center md:justify-end md:rounded-none md:border-0 md:bg-transparent md:p-0 lg:flex-row lg:items-center lg:justify-end">
             <div className="flex flex-col gap-2 md:min-w-0 md:flex-1 md:justify-end lg:min-w-0 lg:flex-1 lg:justify-end">
               <TopNavSearch onSearch={setSearchQuery} />
             </div>
@@ -340,7 +355,7 @@ export function ProjectsDashboard({
                   New <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {showNewDropdown && (
-                  <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-white/10 bg-[#1c1c26] py-2 shadow-2xl">
+                  <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-(--border-primary) bg-(--bg-secondary) py-2 shadow-2xl">
                     <button
                       onClick={() => {
                         setShowCreateModal(true);
@@ -395,10 +410,22 @@ export function ProjectsDashboard({
             {finalFilteredProjects.map(p => {
               const Icon = TYPE_ICON[p.type];
               return (
-                <div key={p.id} className="relative group cursor-pointer overflow-hidden rounded-xl border border-white/5 bg-[#0a0a0f] shadow-sm transition-all duration-300 hover:border-white/10 hover:shadow-md md:rounded-2xl">
+                <div key={p.id} className="relative group cursor-pointer overflow-hidden rounded-xl border border-(--border-primary) bg-(--bg-secondary) shadow-sm transition-all duration-300 hover:border-(--accent-blue) hover:shadow-xl hover:shadow-(--accent-blue)/20 md:rounded-2xl">
                   {/* Image/Preview Area */}
-                  <div className="relative flex aspect-[3/4] items-center justify-center bg-[#0f0f14] sm:aspect-video" onClick={() => onOpenProject(p, "storyboard")}>
-                    <ImageIcon className="w-9 h-9 text-gray-700 md:w-12 md:h-12" />
+                  <div className="relative flex aspect-[3/4] items-center justify-center bg-(--bg-primary) sm:aspect-video" onClick={() => onOpenProject(p, "storyboard")}>
+                    {p.imageUrl ? (
+                      <>
+                        <img 
+                          src={p.imageUrl} 
+                          alt={p.name} 
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Subtle vignette effect */}
+                        <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/20 via-transparent to-transparent" />
+                      </>
+                    ) : (
+                      <ImageIcon className="w-9 h-9 text-(--text-tertiary) md:w-12 md:h-12" />
+                    )}
                     
                     {/* Top overlay with version */}
                     <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 via-black/30 to-transparent p-2 md:p-3">
@@ -410,6 +437,12 @@ export function ProjectsDashboard({
                           {p.favourite && (
                             <div className="bg-black/40 backdrop-blur-md rounded-full p-1.5 border border-white/10">
                               <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                            </div>
+                          )}
+                          {/* Image URL Indicator */}
+                          {p.imageUrl && (
+                            <div className="bg-yellow-500/90 backdrop-blur-sm rounded-full p-1.5 border border-white/20 shadow-lg">
+                              <Star className="w-3.5 h-3.5 text-white fill-current" />
                             </div>
                           )}
                         </div>
@@ -436,10 +469,10 @@ export function ProjectsDashboard({
                   </div>
 
                   {/* Content Area */}
-                  <div className="border-t border-white/5 bg-[#0a0a0f] p-3 md:p-4">
+                  <div className="border-t border-(--border-primary) bg-(--bg-secondary) p-3 md:p-4">
                     {/* Title */}
                     <div className="mb-2 flex items-center gap-2">
-                      <Icon className="w-4 h-4 text-gray-500 shrink-0" />
+                      <Icon className="w-4 h-4 text-(--text-tertiary) shrink-0" />
                       {editingProjectId === p.id ? (
                         <input
                           value={editName}
@@ -508,35 +541,39 @@ export function ProjectsDashboard({
                       )}
                     </div>
                   </div>
-                  {/* Context menu (pic16) */}
+                  {/* Context menu (LTX Theme) */}
                   {contextMenuId === p.id && menuPosition && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => { setContextMenuId(null); setMenuPosition(null); }} />
-                      <div className="fixed bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl z-[100] w-52 py-1.5" style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}>
-                        <button onClick={() => handleToggleFavourite(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Star className={`w-3.5 h-3.5 ${p.favourite ? 'fill-yellow-400 text-yellow-400' : ''}`} /> {p.favourite ? 'Remove from favourite' : 'Add to favourite'}</button>
-                        <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Share2 className="w-3.5 h-3.5" /> Share</button>
-                        <button onClick={() => { setEditingProjectId(p.id); setEditName(p.name); setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Pencil className="w-3.5 h-3.5" /> Rename</button>
+                      <div className="fixed bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-[100] w-52 py-1.5" style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}>
+                        <button onClick={() => handleToggleFavourite(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Star className={`w-3.5 h-3.5 ${p.favourite ? 'fill-yellow-400 text-yellow-400' : ''}`} /> {p.favourite ? 'Remove from favourite' : 'Add to favourite'}</button>
+                        <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Share2 className="w-3.5 h-3.5" /> Share</button>
+                        <button onClick={() => { setEditingProjectId(p.id); setEditName(p.name); setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Pencil className="w-3.5 h-3.5" /> Rename</button>
                         <div className="relative group/status">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setStatusMenuId((current) => current === p.id ? null : p.id);
                             }}
-                            className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition justify-between"
+                            className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition justify-between"
                           >
                             <span className="flex items-center gap-2.5"><Hash className="w-3.5 h-3.5" /> Status</span>
-                            <ChevronDown className="w-3 h-3 text-gray-600" />
+                            <ChevronDown className="w-3 h-3 text-(--text-tertiary)" />
                           </button>
-                          <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-full top-0 ml-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl w-36 py-1`}>
+                          <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-full top-0 ml-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl w-36 py-1`}>
                             {(["On Hold", "In Progress", "Completed", "Draft"] as const).map(s => (
-                              <button key={s} onClick={(e) => { e.stopPropagation(); handleStatusChange(p.id, s); }} className="w-full px-4 py-2 hover:bg-white/5 text-gray-300 text-xs text-left transition">{s}</button>
+                              <button key={s} onClick={(e) => { e.stopPropagation(); handleStatusChange(p.id, s); }} className="w-full px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs text-left transition-all duration-200">{s}</button>
                             ))}
                           </div>
                         </div>
-                        <button onClick={() => { setContextMenuId(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Eye className="w-3.5 h-3.5" /> Visibility</button>
-                        <button onClick={() => handleDuplicate(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Copy className="w-3.5 h-3.5" /> Duplicate storyboard</button>
-                        <div className="border-t border-white/6 my-1" />
-                        <button onClick={() => handleDeleteProject(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-red-500/10 text-red-400 text-xs transition"><Trash2 className="w-3.5 h-3.5" /> Delete storyboard</button>
+                        <button onClick={() => { setContextMenuId(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Eye className="w-3.5 h-3.5" /> Visibility</button>
+                        <button onClick={() => handleDuplicate(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Copy className="w-3.5 h-3.5" /> Duplicate storyboard</button>
+                        {/* Remove ImageUrl Option */}
+                        {p.imageUrl && (
+                          <button onClick={() => handleRemoveImageUrl(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--color-error) text-xs transition"><Trash2 className="w-3.5 h-3.5" /> remove ImageUrl</button>
+                        )}
+                        <div className="border-t border-(--border-primary) my-1" />
+                        <button onClick={() => handleDeleteProject(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--color-error)/10 text-(--color-error) text-xs transition"><Trash2 className="w-3.5 h-3.5" /> Delete storyboard</button>
                       </div>
                     </>
                   )}
@@ -544,14 +581,14 @@ export function ProjectsDashboard({
               );
             })}
             <button onClick={() => setShowCreateModal(true)}
-              className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-white/8 bg-[#16161f] transition hover:border-white/20 hover:bg-white/2 md:min-h-[180px]">
-              <Plus className="w-5 h-5 text-gray-600" />
-              <span className="text-gray-600 text-xs">Add storyboard</span>
+              className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-tertiary) transition hover:border-(--accent-blue) hover:bg-(--bg-secondary) md:min-h-[180px]">
+              <Plus className="w-5 h-5 text-(--text-tertiary)" />
+              <span className="text-(--text-tertiary) text-xs">Add storyboard</span>
             </button>
           </div>
         ) : (
           /* ── Table view (pic9/pic11) ── */
-          <div className="bg-[#111118] border border-white/6 rounded-xl overflow-hidden">
+          <div className="bg-(--bg-secondary) border border-(--border-primary) rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
             <table className="w-full min-w-[760px]">
               <thead>
@@ -569,10 +606,18 @@ export function ProjectsDashboard({
                 {finalFilteredProjects.map(p => {
                   const Icon = TYPE_ICON[p.type];
                   return (
-                    <tr key={p.id} className="border-b border-white/4 hover:bg-white/2 transition cursor-pointer" onClick={() => onOpenProject(p, "storyboard")}>
+                    <tr className="border-b border-(--border-primary) hover:bg-(--bg-tertiary) transition cursor-pointer" onClick={() => onOpenProject(p, "storyboard")}>
                       <td className="px-4 py-3">
-                        <div className="w-10 h-10 bg-[#1e1e2a] rounded-lg flex items-center justify-center">
-                          <ImageIcon className="w-4 h-4 text-gray-700" />
+                        <div className="w-10 h-10 bg-[#1e1e2a] rounded-lg overflow-hidden flex items-center justify-center">
+                          {p.imageUrl ? (
+                            <img 
+                              src={p.imageUrl} 
+                              alt={p.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <ImageIcon className="w-5 h-5 text-gray-500" />
+                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -673,14 +718,18 @@ export function ProjectsDashboard({
                             {contextMenuId === p.id && menuPosition && (
                               <>
                                 <div className="fixed inset-0 z-40" onClick={ev => { ev.stopPropagation(); setContextMenuId(null); setMenuPosition(null); }} />
-                                <div className="fixed bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl z-[100] w-52 py-1.5" style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}>
-                                  <button onClick={() => handleToggleFavourite(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Star className={`w-3.5 h-3.5 ${p.favourite ? 'fill-yellow-400 text-yellow-400' : ''}`} /> {p.favourite ? 'Remove from favourite' : 'Add to favourite'}</button>
-                                  <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Share2 className="w-3.5 h-3.5" /> Share</button>
-                                  <button onClick={() => { setEditingProjectId(p.id); setEditName(p.name); setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Pencil className="w-3.5 h-3.5" /> Rename</button>
-                                  <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Eye className="w-3.5 h-3.5" /> Visibility</button>
-                                  <button onClick={() => handleDuplicate(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-white/5 text-gray-300 text-xs transition"><Copy className="w-3.5 h-3.5" /> Duplicate storyboard</button>
-                                  <div className="border-t border-white/6 my-1" />
-                                  <button onClick={() => handleDeleteProject(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-red-500/10 text-red-400 text-xs transition"><Trash2 className="w-3.5 h-3.5" /> Delete storyboard</button>
+                                <div className="fixed bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-[100] w-52 py-1.5" style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}>
+                                  <button onClick={() => handleToggleFavourite(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Star className={`w-3.5 h-3.5 ${p.favourite ? 'fill-yellow-400 text-yellow-400' : ''}`} /> {p.favourite ? 'Remove from favourite' : 'Add to favourite'}</button>
+                                  <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Share2 className="w-3.5 h-3.5" /> Share</button>
+                                  <button onClick={() => { setEditingProjectId(p.id); setEditName(p.name); setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Pencil className="w-3.5 h-3.5" /> Rename</button>
+                                  <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Eye className="w-3.5 h-3.5" /> Visibility</button>
+                                  <button onClick={() => handleDuplicate(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Copy className="w-3.5 h-3.5" /> Duplicate storyboard</button>
+                                  {/* Remove ImageUrl Option */}
+                                  {p.imageUrl && (
+                                    <button onClick={() => handleRemoveImageUrl(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--color-error) text-xs transition"><Trash2 className="w-3.5 h-3.5" /> remove ImageUrl</button>
+                                  )}
+                                  <div className="border-t border-(--border-primary) my-1" />
+                                  <button onClick={() => handleDeleteProject(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--color-error)/10 text-(--color-error) text-xs transition"><Trash2 className="w-3.5 h-3.5" /> Delete storyboard</button>
                                 </div>
                               </>
                             )}
@@ -709,15 +758,15 @@ export function ProjectsDashboard({
           onClick={() => setShowCreateModal(false)}
         >
           <div
-            className="bg-[#1c1c26] border border-white/10 rounded-2xl w-full max-w-3xl p-6"
+            className="bg-[#2C2C2C] border border-[#3D3D3D] rounded-2xl w-full max-w-3xl p-6"
             onClick={e => e.stopPropagation()}
           >
             {/* Header with X button */}
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-white text-lg font-semibold">Create new</h3>
+              <h3 className="text-[#FFFFFF] text-lg font-semibold">Create new</h3>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="text-gray-400 hover:text-white transition"
+                className="text-[#A0A0A0] hover:text-[#FFFFFF] transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -726,51 +775,51 @@ export function ProjectsDashboard({
             {/* Files name, Files type, and Frame ratio row */}
             <div className="flex gap-4 mb-5">
               <div className="flex-1">
-                <label className="text-gray-400 text-xs mb-1.5 block">Files name</label>
+                <label className="text-[#A0A0A0] text-xs mb-1.5 block">Files name</label>
                 <input
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCreate()}
                   placeholder="ex. Animation"
-                  className="w-full bg-[#25252f] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-violet-500/50"
+                  className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2.5 text-[#FFFFFF] text-sm focus:outline-none focus:border-[#4A90E2] focus:ring-2 focus:ring-[#4A90E2]/20"
                   autoFocus
                 />
-                <div className="text-[10px] text-gray-500 mt-1">{newName.length} / 50</div>
+                <div className="text-[10px] text-[#6E6E6E] mt-1">{newName.length} / 50</div>
               </div>
               <div className="w-28">
-                <label className="text-gray-400 text-xs mb-1.5 block">Files type</label>
-                <div className="w-full bg-[#25252f] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm">
+                <label className="text-[#A0A0A0] text-xs mb-1.5 block">Files type</label>
+                <div className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2.5 text-[#FFFFFF] text-sm">
                   Board
                 </div>
               </div>
               <div className="w-36">
-                <label className="text-gray-400 text-xs mb-1.5 block">Frame ratio</label>
+                <label className="text-[#A0A0A0] text-xs mb-1.5 block">Frame ratio</label>
                 <div className="relative">
                   <select
                     value={newFrameRatio}
                     onChange={(e) => setNewFrameRatio(e.target.value)}
-                    className="w-full bg-[#1a1a1f] border border-white/10 rounded-full px-4 py-2.5 text-white text-sm appearance-none cursor-pointer hover:bg-[#25252a] transition focus:outline-none focus:border-violet-500/50"
+                    className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-full px-4 py-2.5 text-[#FFFFFF] text-sm appearance-none cursor-pointer hover:bg-[#2C2C2C] transition focus:outline-none focus:border-[#4A90E2] focus:ring-2 focus:ring-[#4A90E2]/20"
                   >
                     <option value="9:16">TikTok</option>
                     <option value="16:9">YouTube</option>
                     <option value="1:1">Square</option>
                   </select>
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs">{newFrameRatio}</span>
-                  <ChevronDown className="w-4 h-4 text-gray-400 absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#A0A0A0] text-xs">{newFrameRatio}</span>
+                  <ChevronDown className="w-4 h-4 text-[#A0A0A0] absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
             </div>
 
             {/* Art style picker with preview images - 6 columns, 3 rows, no scroll */}
             <div className="mb-6">
-              <label className="text-gray-400 text-sm mb-3 block">Art style</label>
+              <label className="text-[#A0A0A0] text-sm mb-3 block">Art style</label>
               <div className="grid grid-cols-6 gap-2">
                 {VISUAL_STYLES.map(style => (
                   <button
                     key={style.id}
                     onClick={() => setNewArtStyle(style.id)}
                     className={`relative aspect-[4/3] rounded-lg border-2 transition overflow-hidden ${
-                      newArtStyle === style.id ? "border-violet-500" : "border-white/10 hover:border-white/30"
+                      newArtStyle === style.id ? "border-[#4A90E2]" : "border-[#3D3D3D] hover:border-[#4A90E2]/50"
                     }`}
                   >
                     <img 
@@ -781,11 +830,11 @@ export function ProjectsDashboard({
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-1.5">
-                      <span className="text-white text-[10px] font-medium leading-tight block">{style.label}</span>
+                      <span className="text-[#FFFFFF] text-[10px] font-medium leading-tight block">{style.label}</span>
                     </div>
                     {newArtStyle === style.id && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-violet-500 rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A90E2] rounded-full flex items-center justify-center">
+                        <svg className="w-2.5 h-2.5 text-[#FFFFFF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       </div>
@@ -799,7 +848,7 @@ export function ProjectsDashboard({
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-gray-400 hover:text-white text-sm transition"
+                className="px-4 py-2 text-[#A0A0A0] hover:text-[#FFFFFF] text-sm transition"
               >
                 Cancel
               </button>
@@ -808,8 +857,8 @@ export function ProjectsDashboard({
                 disabled={!newName.trim() || isCreating}
                 className={`px-5 py-2 rounded-lg text-sm font-medium transition ${
                   newName.trim() && !isCreating
-                    ? "bg-blue-600 hover:bg-blue-500 text-white"
-                    : "bg-white/10 text-gray-500 cursor-not-allowed"
+                    ? "bg-[#4A90E2] hover:bg-[#357ABD] text-[#FFFFFF]"
+                    : "bg-[#3D3D3D] text-[#6E6E6E] cursor-not-allowed"
                 }`}
               >
                 {isCreating && <Loader2 className="w-4 h-4 animate-spin inline mr-2" />}

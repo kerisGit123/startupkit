@@ -93,13 +93,80 @@ export function usePricingData() {
   };
 
   const toggleModelActive = async (modelId: string) => {
-    console.log("Toggle model active (placeholder):", modelId);
-    return true;
+    try {
+      console.log("Toggling model active status for modelId:", modelId);
+      
+      // Find the current model to get its current status
+      const currentModel = models.find(m => m.modelId === modelId);
+      if (!currentModel) {
+        throw new Error("Model not found");
+      }
+      
+      // Toggle the isActive status
+      const updatedData = {
+        modelId: modelId,
+        isActive: !currentModel.isActive
+      };
+      
+      console.log("Sending update with data:", updatedData);
+      
+      // Update local state immediately for instant UI feedback
+      setModels(prevModels => 
+        prevModels.map(model => 
+          model.modelId === modelId 
+            ? { ...model, isActive: !model.isActive }
+            : model
+        )
+      );
+      
+      const response = await fetch("/api/storyboard/pricing/models", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedData),
+      });
+      
+      console.log("Toggle API response status:", response.status);
+      console.log("Toggle API response ok:", response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Toggle API error response:", errorText);
+        
+        // Revert local state on error
+        setModels(prevModels => 
+          prevModels.map(model => 
+            model.modelId === modelId 
+              ? { ...model, isActive: model.isActive }
+              : model
+          )
+        );
+        
+        throw new Error(`Failed to toggle model active status: ${response.status} - ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log("Toggle API response result:", result);
+      
+      // No need to fetchModels() since Convex handles real-time updates
+      return true;
+    } catch (err) {
+      console.error("Failed to toggle model active status:", err);
+      return false;
+    }
   };
 
   const deleteModel = async (id: string) => {
   try {
     console.log("Deleting pricing model by _id:", id);
+    
+    // Find the model to delete for local state update
+    const modelToDelete = models.find(m => m._id === id);
+    if (!modelToDelete) {
+      throw new Error("Model not found");
+    }
+    
+    // Remove from local state immediately for instant UI feedback
+    setModels(prevModels => prevModels.filter(model => model._id !== id));
     
     const response = await fetch(`/api/storyboard/pricing/models`, {
       method: "DELETE",
@@ -113,13 +180,17 @@ export function usePricingData() {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Delete API error response:", errorText);
+      
+      // Revert local state on error
+      setModels(prevModels => [...prevModels, modelToDelete]);
+      
       throw new Error(`Failed to delete pricing model: ${response.status} - ${errorText}`);
     }
     
     const result = await response.json();
     console.log("Delete API response result:", result);
     
-    await fetchModels(); // Refresh the list
+    // No need to fetchModels() since Convex handles real-time updates
     return true;
   } catch (err) {
     console.error("Failed to delete model:", err);

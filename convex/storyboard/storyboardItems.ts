@@ -102,6 +102,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     duration: v.optional(v.number()),
     imageUrl: v.optional(v.string()),
+    primaryImage: v.optional(v.string()), // NEW: Primary image field
     imagePrompt: v.optional(v.string()),
     videoUrl: v.optional(v.string()),
     generationStatus: v.optional(v.string()),
@@ -138,6 +139,49 @@ export const update = mutation({
   },
   handler: async (ctx, { id, ...fields }) => {
     await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });
+  },
+});
+
+// NEW: Set primary image for a storyboard item and clear all others in the project
+export const setPrimaryImage = mutation({
+  args: {
+    itemId: v.id("storyboard_items"),
+    primaryImageUrl: v.string(),
+  },
+  handler: async (ctx, { itemId, primaryImageUrl }) => {
+    // Get the current item to find its project
+    const currentItem = await ctx.db.get(itemId);
+    if (!currentItem) {
+      throw new Error("Storyboard item not found");
+    }
+
+    const projectId = currentItem.projectId;
+
+    // Clear all primaryImage fields from all items in this project
+    const allProjectItems = await ctx.db
+      .query("storyboard_items")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+
+    // Clear primaryImage from all items first
+    await Promise.all(
+      allProjectItems.map(async (item) => {
+        if (item.primaryImage) {
+          await ctx.db.patch(item._id, { 
+            primaryImage: undefined,
+            updatedAt: Date.now() 
+          });
+        }
+      })
+    );
+
+    // Set primaryImage on the current item
+    await ctx.db.patch(itemId, { 
+      primaryImage: primaryImageUrl,
+      updatedAt: Date.now() 
+    });
+
+    console.log(`[setPrimaryImage] Set primary image for item ${itemId} in project ${projectId}`);
   },
 });
 

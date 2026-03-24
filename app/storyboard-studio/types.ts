@@ -12,6 +12,7 @@ export interface Project {
   assignee?: string;
   tags: string[];
   favourite?: boolean;
+  imageUrl?: string; // NEW: Image URL for the project's main image
   settings?: {
     frameRatio: string;
     style: string;

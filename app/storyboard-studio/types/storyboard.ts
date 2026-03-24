@@ -4,6 +4,7 @@ export interface StoryboardItem {
   projectId: string;
   visual: {
     imageUrl?: string;
+    primaryImage?: string; // NEW: Primary image for the storyboard card
     composition: string;
     cameraAngle: string;
     style: string;
@@ -35,6 +36,7 @@ export interface Project {
   name: string;
   description: string;
   thumbnail?: string;
+  imageUrl?: string; // NEW: Image URL for the project's main image
   storyboard: StoryboardItem[];
   settings: {
     theme: string;

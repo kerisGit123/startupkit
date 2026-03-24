@@ -81,6 +81,7 @@ export const update = mutation({
     isFavorite: v.optional(v.boolean()),
     tags: v.optional(v.array(v.string())),
     script: v.optional(v.string()),
+    imageUrl: v.optional(v.string()), // NEW: Image URL for project's main image
     scenes: v.optional(v.array(v.object({
       id: v.string(),
       title: v.string(),
@@ -101,8 +102,24 @@ export const update = mutation({
     })),
     isAIGenerated: v.optional(v.boolean()),
   },
-  handler: async (ctx, { id, ...fields }) => {
-    await ctx.db.patch(id, { ...fields, updatedAt: Date.now() });
+  handler: async (ctx, { id, imageUrl, ...fields }) => {
+    const existing = await ctx.db.get(id);
+    if (!existing) {
+      throw new Error("Project not found");
+    }
+
+    // Create updated document
+    const updatedDoc = { ...existing, ...fields, updatedAt: Date.now() };
+    
+    // Handle imageUrl specially: if imageUrl is undefined, remove it from the document
+    if (imageUrl !== undefined) {
+      updatedDoc.imageUrl = imageUrl;
+    } else {
+      // Remove imageUrl field entirely
+      delete updatedDoc.imageUrl;
+    }
+
+    await ctx.db.replace(id, updatedDoc);
   },
 });
 
