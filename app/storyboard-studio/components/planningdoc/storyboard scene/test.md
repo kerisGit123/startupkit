@@ -143,7 +143,7 @@ export function ImageAIPanel({
           <span className="text-sm font-semibold text-white">Image AI</span>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-white/8 rounded-lg transition">
-          <X className="w-4 h-4 text-gray-400" />
+          <X className="w-4 h-4 text-gray-400" />============
         </button>
       </div>
 
@@ -240,7 +240,7 @@ export function ImageAIPanel({
           className="w-full flex items-center justify-center gap-2 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50">
           {generating
             ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating…</>
-            : <><ImageIcon className="w-4 h-4" /> Generate {pendingCount > 1 ? `${pendingCount} Images` : "Image"}</>}
+            : <><ImageIcon className="w-4 h-4" /> Generate 8888 {pendingCount > 1 ? `${pendingCount} Images` : "Image"}</>}
         </button>
       </div>
     </div>

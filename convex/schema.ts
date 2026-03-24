@@ -1863,8 +1863,10 @@ export default defineSchema({
     // Sharing and visibility
     visibility: v.optional(v.union(
       v.literal("private"),           // Only current project
-      v.literal("public")            // Everyone (public access)
+      v.literal("public"),            // Everyone (public access)
+      v.literal("shared")             // Shared with specific projects
     )),
+    sharedWith: v.optional(v.array(v.id("storyboard_projects"))), // Projects this element is shared with
     
     // Usage tracking
     lastUsedAt: v.optional(v.number()),

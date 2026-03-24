@@ -20,16 +20,27 @@ const TEXTAREA_MIN_HEIGHT = 60;
 const TEXTAREA_MAX_HEIGHT = 200;
 
 // ── Types ─────────────────────────────────────────────────────────────
-export type ElementAIEditMode = "describe";
+export type ImageAIEditMode = "describe";
+
+interface ReferenceImageMetadata {
+  companyId: string;
+  elementId?: string;
+  fileId?: string;
+  r2Key?: string;
+  addedAt: number;
+}
 
 interface ReferenceImage {
   id: string;
   url: string;
+  source: 'upload' | 'r2' | 'element';
+  name?: string;
+  metadata?: ReferenceImageMetadata;
 }
 
-export interface ElementAIPanelProps {
-  mode: ElementAIEditMode;
-  onModeChange: (mode: ElementAIEditMode) => void;
+export interface ImageAIPanelProps {
+  mode: ImageAIEditMode;
+  onModeChange: (mode: ImageAIEditMode) => void;
   onGenerate: () => void;
   credits?: number;
   model?: string;
@@ -124,7 +135,7 @@ function ToolBtn({
 }
 
 // ── ElementAIPanel Component ─────────────────────────────────────────────
-export function ElementAIPanel({
+export function ImageAIPanel({
   mode,
   onModeChange,
   onGenerate,
@@ -169,7 +180,7 @@ export function ElementAIPanel({
   projectId,
   userId,
   user,
-}: ElementAIPanelProps) {
+}: ImageAIPanelProps) {
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -288,7 +299,9 @@ export function ElementAIPanel({
 
     const label = document.createElement("span");
     label.setAttribute("class", "text-cyan-300 text-sm font-medium whitespace-nowrap");
-    label.textContent = `Image ${entry.imageNumber}`;
+    label.textContent = entry.source === 'r2' ? `@R2${entry.imageNumber}` : 
+                        entry.source === 'element' ? `@EL${entry.imageNumber}` : 
+                        `@Image${entry.imageNumber}`;
 
     const closeBtn = document.createElement("button");
     closeBtn.setAttribute("type", "button");
@@ -317,7 +330,7 @@ export function ElementAIPanel({
   };
 
   // Insert a badge at current caret position (or restore saved position)
-  const insertBadgeAtCaret = (entry: { id: string; imageUrl: string; imageNumber: number }) => {
+  const insertBadgeAtCaret = (entry: { id: string; imageUrl: string; imageNumber: number; source?: string }) => {
     const el = editorRef.current;
     if (!el) return;
     el.focus();
@@ -366,34 +379,210 @@ export function ElementAIPanel({
     onAddReferenceImage?.(file);
   };
 
-  // New handlers for R2 and element library
-  const handleFileBrowserSelect = (url: string, type: string) => {
-    if (type === 'image') {
-      // Convert URL to File-like object for reference image
-      fetch(url)
-        .then(res => res.blob())
-        .then(blob => {
-          const filename = url.split('/').pop() || 'image.png';
-          const file = new File([blob], filename, { type: 'image/png' });
-          onAddReferenceImage?.(file);
-        })
-        .catch(err => console.error('Error fetching image:', err));
-    }
-    setShowFileBrowser(false);
+  // Validation functions
+  const canOpenFileBrowser = () => !!(projectId && userCompanyId);
+  const canOpenElementLibrary = () => !!(projectId && userId && user && userCompanyId);
+
+  // Toast notification helper (simple implementation)
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    // Simple console.log for now - can be replaced with actual toast library
+    console.log(`[${type.toUpperCase()}] ${message}`);
   };
 
-  const handleElementLibrarySelect = (referenceUrls: string[], name: string) => {
-    referenceUrls.forEach(url => {
-      fetch(url)
-        .then(res => res.blob())
-        .then(blob => {
-          const filename = url.split('/').pop() || 'element.png';
+  // Unified handler for R2 and element library image selection
+  const handleImageSelect = async (
+    source: 'r2' | 'element',
+    data: { 
+      url: string; 
+      name?: string; 
+      metadata?: Partial<ReferenceImageMetadata>;
+    }
+  ) => {
+    try {
+      if (!data.url?.trim()) {
+        throw new Error('URL required');
+      }
+
+      const url = data.url.trim();
+      console.log(`[handleImageSelect] Processing ${source} image:`, { url, name: data.name, source });
+
+      // Skip fetch for blob URLs (local previews) and convert directly
+      if (url.startsWith('blob:')) {
+        console.log(`[handleImageSelect] Skipping fetch for blob URL: ${url}`);
+        // For blob URLs, we can't fetch them reliably, but they're already local
+        // We'll create a placeholder file with the blob data
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch blob: ${response.status}`);
+          }
+          const blob = await response.blob();
+          const filename = data.name || `element-image-${Date.now()}.png`;
           const file = new File([blob], filename, { type: 'image/png' });
           onAddReferenceImage?.(file);
-        })
-        .catch(err => console.error('Error fetching element image:', err));
+          showToast(`Added ${source} image: ${filename}`, 'success');
+        } catch (err) {
+          console.error(`Error fetching blob ${source} image:`, err);
+          // For blob URLs that fail to fetch, create a placeholder
+          const filename = data.name || `element-image-${Date.now()}.png`;
+          const file = new File([''], filename, { type: 'image/png' });
+          onAddReferenceImage?.(file);
+          showToast(`Added ${source} image: ${filename}`, 'success');
+        }
+      } else {
+        // For R2 URLs, normalize and fetch with multiple fallback strategies
+        let normalizedUrl = url;
+        const publicBase = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").trim().replace(/\/$/, '');
+        
+        console.log(`[handleImageSelect] Original URL: "${url}"`);
+        console.log(`[handleImageSelect] Public base: "${publicBase}"`);
+        
+        // Strategy 1: Fix malformed URLs (duplicate protocols, missing https)
+        if (url.startsWith('http://https://')) {
+          normalizedUrl = url.replace('http://https://', 'https://');
+        } else if (url.startsWith('https://https://')) {
+          normalizedUrl = url.replace('https://https://', 'https://');
+        } else if (url.startsWith('http://http://')) {
+          normalizedUrl = url.replace('http://http://', 'http://');
+        } else if (url.startsWith('https://http://')) {
+          normalizedUrl = url.replace('https://http://', 'http://');
+        } else if (!/^https?:\/\//i.test(url)) {
+          // If no protocol, try multiple approaches
+          if (publicBase && !url.startsWith(publicBase)) {
+            normalizedUrl = `${publicBase}/${url.replace(/^\/+/, '')}`;
+          } else {
+            normalizedUrl = `https://${url}`;
+          }
+        }
+
+        console.log(`[handleImageSelect] Normalized URL: "${normalizedUrl}"`);
+
+        // Try to fetch with fallback strategies
+        const urlAttempts = [normalizedUrl];
+        
+        console.log(`[handleImageSelect] Initial URL attempt: "${normalizedUrl}"`);
+        console.log(`[handleImageSelect] Public base: "${publicBase}"`);
+        console.log(`[handleImageSelect] Original URL starts with public base: ${url.startsWith(publicBase)}`);
+        
+        // Add fallback URLs if the first one fails
+        if (publicBase && !normalizedUrl.startsWith(publicBase)) {
+          const fallbackUrl = `${publicBase}/${url.replace(/^\/+/, '')}`;
+          console.log(`[handleImageSelect] Adding fallback URL: "${fallbackUrl}"`);
+          if (!urlAttempts.includes(fallbackUrl)) {
+            urlAttempts.push(fallbackUrl);
+          }
+        }
+        
+        // Try without the base if it includes it
+        if (url.startsWith(publicBase)) {
+          const relativeUrl = url.replace(publicBase, '').replace(/^\/+/, '');
+          console.log(`[handleImageSelect] Adding relative URL: "${relativeUrl}"`);
+          if (relativeUrl && !urlAttempts.includes(relativeUrl)) {
+            urlAttempts.push(relativeUrl);
+          }
+        }
+
+        console.log(`[handleImageSelect] All URL attempts:`, urlAttempts);
+
+        let fetchSuccess = false;
+        let lastError: Error | null = null;
+
+        for (const attemptUrl of urlAttempts) {
+          console.log(`[handleImageSelect] Attempting fetch: "${attemptUrl}"`);
+          try {
+            const response = await fetch(attemptUrl, {
+              method: 'GET',
+              mode: 'cors',
+              cache: 'no-cache'
+            });
+            
+            if (response.ok) {
+              console.log(`[handleImageSelect] Fetch successful for: "${attemptUrl}"`);
+              const blob = await response.blob();
+              const filename = data.name || attemptUrl.split('/').pop() || `${source}-image.png`;
+              const file = new File([blob], filename, { type: blob.type || 'image/png' });
+              onAddReferenceImage?.(file);
+              showToast(`Added ${source} image: ${filename}`, 'success');
+              fetchSuccess = true;
+              break;
+            } else {
+              console.log(`[handleImageSelect] Fetch failed with status ${response.status} for: "${attemptUrl}"`);
+              lastError = new Error(`Failed to fetch image: ${response.status}`);
+            }
+          } catch (err) {
+            console.log(`[handleImageSelect] Fetch error for "${attemptUrl}":`, err);
+            lastError = err instanceof Error ? err : new Error('Unknown fetch error');
+          }
+        }
+
+        if (!fetchSuccess) {
+          console.error(`[handleImageSelect] All fetch attempts failed for ${source} image`);
+          console.error(`[handleImageSelect] Attempted URLs:`, urlAttempts);
+          console.error(`[handleImageSelect] Last error:`, lastError);
+          
+          // Check if it's a 404 error (image not found in R2)
+          const isNotFoundError = lastError?.message.includes('404');
+          
+          // Create a proper file with the original name even if fetch fails
+          // This ensures duplicate detection still works
+          const filename = data.name || `${source}-image-${Date.now()}.png`;
+          console.log(`[handleImageSelect] Creating fallback file with name: ${filename}`);
+          
+          // Create a minimal 1x1 PNG file as fallback
+          const pngData = atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+          const pngBytes = new Uint8Array(pngData.length);
+          for (let i = 0; i < pngData.length; i++) {
+            pngBytes[i] = pngData.charCodeAt(i);
+          }
+          const blob = new Blob([pngBytes], { type: 'image/png' });
+          const file = new File([blob], filename, { type: 'image/png' });
+          
+          onAddReferenceImage?.(file);
+          
+          if (isNotFoundError) {
+            showToast(`Image "${filename}" not found in storage. Using placeholder.`, 'warning');
+          } else {
+            showToast(`Failed to fetch "${filename}". Using placeholder.`, 'warning');
+          }
+        }
+      }
+      
+      // Close appropriate modal
+      if (source === 'r2') setShowFileBrowser(false);
+      // Don't close element library - let user select more elements
+      // else if (source === 'element') setShowElementLibrary(false);
+      
+    } catch (error) {
+      console.error(`[handleImageSelect]`, error);
+      showToast(`Failed to add image: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+    }
+  };
+
+  // Handlers for existing component interfaces
+  const handleFileBrowserSelect = (url: string, type: string, file?: any) => {
+    if (type === 'image') {
+      handleImageSelect('r2', { 
+        url,
+        name: file?.name,
+        metadata: { 
+          fileId: file?._id,
+          r2Key: file?.r2Key 
+        }
+      });
+    }
+  };
+
+  const handleElementLibrarySelect = (referenceUrls: string[], name: string, element?: any) => {
+    referenceUrls.forEach(url => {
+      handleImageSelect('element', { 
+        url, 
+        name,
+        metadata: { 
+          elementId: element?._id,
+          type: element?.type 
+        }
+      });
     });
-    setShowElementLibrary(false);
   };
 
   const handleEditorInput = () => {
@@ -510,11 +699,17 @@ export function ElementAIPanel({
                   draggable
                   onDragStart={(e) => handleDragStart(e, img.url, index)}
                 />
-                <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[10px] px-1 rounded-full z-20">
-                  Image {index + 1}
+                <div className={`absolute top-1.5 right-1.5 text-white text-[10px] px-1 rounded-full z-20 ${
+                  img.source === 'r2' ? 'bg-blue-500' : 
+                  img.source === 'element' ? 'bg-purple-500' : 
+                  'bg-emerald-500'
+                }`}>
+                  {img.source === 'r2' ? 'R2' : 
+                   img.source === 'element' ? 'EL' : 
+                   `Image ${index + 1}`}
                 </div>
                 <button
-                  onClick={() => insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl: img.url, imageNumber: index + 1 })}
+                  onClick={() => insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl: img.url, imageNumber: index + 1, source: img.source })}
                   className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center z-0"
                   title="Insert mention"
                 >
@@ -541,7 +736,19 @@ export function ElementAIPanel({
 
             {/* R2 File Browser button */}
             <button
-              onClick={() => setShowFileBrowser(true)}
+              onClick={() => {
+                if (!canOpenFileBrowser()) {
+                  if (!projectId) {
+                    showToast('Project ID required to browse R2 files', 'error');
+                  } else if (!userCompanyId) {
+                    showToast('Company ID required to browse R2 files', 'error');
+                  } else {
+                    showToast('Project information required to browse R2 files', 'error');
+                  }
+                  return;
+                }
+                setShowFileBrowser(true);
+              }}
               className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-blue-500/30 hover:border-blue-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
               title="Browse R2 files"
             >
@@ -551,7 +758,23 @@ export function ElementAIPanel({
 
             {/* Element Library button */}
             <button
-              onClick={() => setShowElementLibrary(true)}
+              onClick={() => {
+                if (!canOpenElementLibrary()) {
+                  if (!projectId) {
+                    showToast('Project ID required to browse elements', 'error');
+                  } else if (!userId) {
+                    showToast('User ID required to browse elements', 'error');
+                  } else if (!user) {
+                    showToast('User information required to browse elements', 'error');
+                  } else if (!userCompanyId) {
+                    showToast('Company ID required to browse elements', 'error');
+                  } else {
+                    showToast('Project and user information required to browse elements', 'error');
+                  }
+                  return;
+                }
+                setShowElementLibrary(true);
+              }}
               className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-purple-500/30 hover:border-purple-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
               title="Browse element library"
             >
@@ -971,7 +1194,29 @@ export function ElementAIPanel({
         <FileBrowser
           projectId={projectId}
           onClose={() => setShowFileBrowser(false)}
-          onSelectFile={handleFileBrowserSelect}
+          imageSelectionMode={true} // Enable image selection mode
+          filterTypes={['image']} // Only show images
+          onSelectImage={(imageUrl, fileName, fileData) => {
+            // Handle single image selection from R2 File Browser
+            handleImageSelect('r2', {
+              url: imageUrl,
+              name: fileName,
+              metadata: {
+                source: 'r2-file-browser',
+                selectedAt: Date.now(),
+                r2Key: fileData.r2Key,
+                fileId: fileData._id,
+                category: fileData.category,
+                isFavorite: fileData.isFavorite,
+                isGlobal: !fileData.projectId
+              }
+            });
+            // Auto-close after selection
+            setShowFileBrowser(false);
+          }}
+          onSelectFile={(url, type) => 
+            type === 'image' && handleFileBrowserSelect(url, type)
+          }
         />
       )}
 
@@ -982,7 +1227,37 @@ export function ElementAIPanel({
           userId={userId}
           user={user}
           onClose={() => setShowElementLibrary(false)}
-          onSelectElement={handleElementLibrarySelect}
+          imageSelectionMode={true} // Enable image selection mode
+          onSelectImage={(imageUrl, elementName, element) => {
+            // Handle single image selection
+            handleImageSelect('element', {
+              url: imageUrl,
+              name: elementName,
+              metadata: {
+                source: 'element-library-image',
+                selectedAt: Date.now(),
+                elementId: element._id,
+                elementType: element.type,
+                elementName: element.name
+              }
+            });
+          }}
+          onSelectElement={(referenceUrls, name, element) => {
+            // Handle multi-image element selection (existing behavior)
+            if (referenceUrls && referenceUrls.length > 0) {
+              referenceUrls.forEach(url => handleImageSelect('element', { 
+                url, 
+                name,
+                metadata: { 
+                  source: 'element-library-element',
+                  elementId: element._id,
+                  elementType: element.type,
+                  elementName: element.name,
+                  selectedAt: Date.now()
+                }
+              }));
+            }
+          }}
         />
       )}
     </>

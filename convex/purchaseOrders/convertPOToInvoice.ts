@@ -49,11 +49,54 @@ export const convertPOToInvoice = mutation({
     const discount = overrides?.discount ?? po.discount ?? 0;
     const total = subtotal + tax - discount;
 
-    // Generate invoice number
-    const { invoiceNumber } = await ctx.runMutation(
-      internal.invoiceConfig.getNextInvoiceNumber,
-      {}
-    );
+    // Generate invoice number inline to avoid circular reference
+    const config = await ctx.db
+      .query("platform_config")
+      .withIndex("by_category", (q) => q.eq("category", "invoice_config"))
+      .collect();
+
+    const configObj: Record<string, any> = {};
+    for (const item of config) {
+      configObj[item.key] = item.value;
+    }
+
+    const prefix = configObj.invoicePrefix || "INV-";
+    const format = configObj.invoiceNumberFormat || "Year + Running";
+    const leadingZeros = configObj.invoiceLeadingZeros || 4;
+    const counter = configObj.invoiceCurrentCounter || 1;
+
+    const year = new Date().getFullYear();
+    const yearShort = year.toString().slice(-2);
+    const paddedCounter = counter.toString().padStart(leadingZeros, "0");
+
+    let invoiceNumber: string;
+    switch (format) {
+      case "Year + Running":
+        invoiceNumber = `${prefix}${yearShort}${paddedCounter}`;
+        break;
+      case "Running Only":
+        invoiceNumber = `${prefix}${paddedCounter}`;
+        break;
+      case "Month + Running":
+        const month = (new Date().getMonth() + 1).toString().padStart(2, "0");
+        invoiceNumber = `${prefix}${yearShort}${month}${paddedCounter}`;
+        break;
+      default:
+        invoiceNumber = `${prefix}${yearShort}${paddedCounter}`;
+    }
+
+    // Increment counter
+    const counterConfig = await ctx.db
+      .query("platform_config")
+      .withIndex("by_key", (q) => q.eq("key", "invoiceCurrentCounter"))
+      .first();
+
+    if (counterConfig) {
+      await ctx.db.patch(counterConfig._id, {
+        value: counter + 1,
+        updatedAt: Date.now(),
+      });
+    }
 
     // Create invoice
     const invoiceId = await ctx.db.insert("invoices", {

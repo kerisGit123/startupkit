@@ -16,7 +16,7 @@ interface ReferenceImage {
   url: string;
 }
 
-export interface ImageAIPanelProps {
+export interface EditImageAIPanelProps {
   mode: AIEditMode;
   onModeChange: (mode: AIEditMode) => void;
   onGenerate: () => void;
@@ -113,7 +113,7 @@ function ToolBtn({
 }
 
 // ── Component ─────────────────────────────────────────────────────────
-export function ImageAIPanel({
+export function EditImageAIPanel({
   mode,
   onModeChange,
   onGenerate,
@@ -154,7 +154,7 @@ export function ImageAIPanel({
   onAspectRatioChange,
   selectedAspectRatio,
   onRectangleMaskAspectRatioChange,
-}: ImageAIPanelProps) {
+}: EditImageAIPanelProps) {
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [contentType, setContentType] = useState("image");

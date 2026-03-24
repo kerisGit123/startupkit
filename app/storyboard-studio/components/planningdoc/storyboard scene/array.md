@@ -24,3 +24,8 @@ Perfect! Added Important User-Facing Fields
 appearsInScenes to the schema - Shows user which scenes each element appears in
 taskMessage to project updates - Shows user the current task status/message
 Additional required fields like usageCount and status for elements
+
+
+
+
+ visual limitation that should be 14-image cap

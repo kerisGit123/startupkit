@@ -71,7 +71,7 @@ interface CanvasAreaProps {
   mode?: "describe" | "area-edit" | "annotate";
   
   // Video AI Props
-  activeAIPanel?: 'image' | 'video' | 'element';
+  activeAIPanel?: 'editimage' | 'video' | 'element';
   videoState?: any;
   onVideoClick?: (videoUrl: string) => void;
   
@@ -240,7 +240,7 @@ export function CanvasArea({
         )}
         
         {/* Image AI Canvas - Default CanvasEditor */}
-        {activeAIPanel === 'image' && (
+        {activeAIPanel === 'editimage' && (
           <CanvasEditor
           panelId={panelId}
           imageUrl={backgroundImage || activeShot?.imageUrl}

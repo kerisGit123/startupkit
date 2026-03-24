@@ -322,7 +322,7 @@ export const buildStoryboard = mutation({
 
       const existingProjectElements = await ctx.db
         .query("storyboard_elements")
-        .filter((q) => q.eq("projectId", projectId))
+        .withIndex("by_project", (q) => q.eq("projectId", projectId))
         .collect();
 
       if (existingProjectElements.length > 0) {
@@ -611,11 +611,12 @@ export const createBatch = mutation({
     for (const item of items) {
       const id = await ctx.db.insert("storyboard_items", {
         projectId,
-        companyId: actualCompanyId,
+        companyId: String(actualCompanyId),
         ...item,
         elements: [],
         annotations: [],
         isAIGenerated: false,
+        generationStatus: "idle",
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });

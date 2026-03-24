@@ -119,9 +119,9 @@ export function getServerCurrentCompanyId(auth: { userId?: string | null }): str
 export function isOrganizationUser(user: ExtendedUserOrNull): boolean {
   if (!user) return false;
   
-  return user.organizationMemberships && 
+  return !!(user.organizationMemberships && 
          user.organizationMemberships.length > 0 && 
-         !!user.organizationMemberships[0]?.organization;
+         user.organizationMemberships[0]?.organization);
 }
 
 /**

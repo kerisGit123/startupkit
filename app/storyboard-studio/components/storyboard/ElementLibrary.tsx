@@ -1,24 +1,69 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, useReducer, useCallback, memo, type ChangeEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText } from "lucide-react";
+import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus } from "lucide-react";
 import { useCurrentCompanyId, getCurrentCompanyId, logUserInfo } from "@/lib/auth-utils";
+
+// Enhanced Element interface
+interface Element {
+  _id: Id<"storyboard_elements">;
+  name: string;
+  thumbnailUrl?: string;
+  referenceUrls?: string[];
+  type: string;
+  visibility?: "private" | "public";
+  tags?: string[];
+  description?: string;
+}
+
+// Image selection state management
+interface ImageSelectionState {
+  mode: 'disabled' | 'enabled' | 'selecting';
+  selectedElement: Element | null;
+}
+
+type ImageSelectionAction = 
+  | { type: 'ENABLE_MODE' }
+  | { type: 'DISABLE_MODE' }
+  | { type: 'START_SELECTION'; element: Element }
+  | { type: 'END_SELECTION' };
+
+const imageSelectionReducer = (
+  state: ImageSelectionState, 
+  action: ImageSelectionAction
+): ImageSelectionState => {
+  switch (action.type) {
+    case 'ENABLE_MODE':
+      return { ...state, mode: 'enabled' };
+    case 'DISABLE_MODE':
+      return { mode: 'disabled', selectedElement: null };
+    case 'START_SELECTION':
+      return { mode: 'selecting', selectedElement: action.element };
+    case 'END_SELECTION':
+      return { mode: 'enabled', selectedElement: null };
+    default:
+      return state;
+  }
+};
 
 interface ElementLibraryProps {
   projectId: Id<"storyboard_projects">;
   userId: string;
   user: any; // Clerk user object
   onClose: () => void;
-  onSelectElement?: (referenceUrls: string[], name: string) => void;
+  onSelectElement?: (referenceUrls: string[], name: string, element: Element) => void;
   initialCreateDraft?: {
     imageUrls?: string[];
     name?: string;
     type?: string;
   } | null;
   selectedItemId?: Id<"storyboard_items"> | null; // For adding elements to specific storyboard item
+  // New props for image selection
+  imageSelectionMode?: boolean;
+  onSelectImage?: (imageUrl: string, elementName: string, element: Element) => void;
 }
 
 const ELEMENT_TYPES = [
@@ -31,11 +76,83 @@ const ELEMENT_TYPES = [
   { key: "other", label: "Other", Icon: Sparkles, color: "text-gray-300" },
 ] as const;
 
+function normalizeAssetUrl(url?: string | null) {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("blob:")) return trimmed;
+  if (trimmed.startsWith("http://https://")) return trimmed.replace("http://https://", "https://");
+  if (trimmed.startsWith("https://https://")) return trimmed.replace("https://https://", "https://");
+  if (trimmed.startsWith("http://http://")) return trimmed.replace("http://http://", "http://");
+  if (trimmed.startsWith("https://http://")) return trimmed.replace("https://http://", "http://");
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+ 
+  const publicBase = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").trim().replace(/\/$/, "");
+  if (!publicBase) return trimmed;
+  return `${publicBase}/${trimmed.replace(/^\/+/, "")}`;
+}
+
 function sanitizeName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "element";
 }
 
-export function ElementLibrary({ projectId, userId, user, onClose, onSelectElement, initialCreateDraft, selectedItemId }: ElementLibraryProps) {
+// Optimized image card component
+const ImageCard = memo(({ 
+  url, 
+  index, 
+  elementName, 
+  onSelect 
+}: {
+  url: string;
+  index: number;
+  elementName: string;
+  onSelect: () => void;
+}) => (
+  <div className="group relative overflow-hidden rounded-lg border border-neutral-800/50 bg-neutral-900">
+    <img 
+      src={url} 
+      alt={`${elementName} - Image ${index + 1}`} 
+      className="aspect-square w-full object-cover" 
+      loading="lazy"
+      onError={(e) => {
+        e.currentTarget.style.display = 'none';
+      }}
+    />
+    
+    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+      <button
+        onClick={onSelect}
+        className="rounded-full bg-indigo-500 p-2 text-white hover:bg-indigo-600 transition-colors"
+        title="Add this image to references"
+        aria-label={`Add image ${index + 1} to references`}
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+    </div>
+    
+    <div className="absolute top-2 right-2 bg-black/60 text-white text-xs rounded px-2 py-1">
+      {index + 1}
+    </div>
+  </div>
+));
+
+export function ElementLibrary({ 
+  projectId, 
+  userId, 
+  user, 
+  onClose, 
+  onSelectElement, 
+  initialCreateDraft, 
+  selectedItemId,
+  imageSelectionMode = false,
+  onSelectImage 
+}: ElementLibraryProps) {
+  // Image selection state management
+  const [imageSelectionState, dispatch] = useReducer(imageSelectionReducer, {
+    mode: imageSelectionMode ? 'enabled' : 'disabled',
+    selectedElement: null
+  });
+
   // Mutations at component top level (not inside onClick)
   const removeUnusedElements = useMutation(api.storyboard.storyboardItemElements.removeUnusedElements);
   const addElementToItem = useMutation(api.storyboard.storyboardItemElements.addElementToItem);
@@ -57,6 +174,110 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
   // New state for tabs and description
   const [activeTab, setActiveTab] = useState<"basic" | "visibility" | "details">("basic");
   const [description, setDescription] = useState("");
+
+  const currentEditingElement = useMemo<Element | null>(() => {
+    if (!editingId) return null;
+
+    return {
+      _id: editingId,
+      name: newName || "element",
+      thumbnailUrl: referenceUrls[thumbnailIndex],
+      referenceUrls,
+      type: activeType,
+      visibility,
+      tags,
+      description,
+    };
+  }, [editingId, newName, referenceUrls, thumbnailIndex, activeType, visibility, tags, description]);
+
+  const normalizedReferenceUrls = useMemo(
+    () => referenceUrls.map((url) => normalizeAssetUrl(url)).filter((url): url is string => url.length > 0),
+    [referenceUrls]
+  );
+
+  const referencePreviewItems = useMemo(
+    () => referenceUrls
+      .map((rawUrl, originalIndex) => ({
+        rawUrl,
+        displayUrl: normalizeAssetUrl(rawUrl),
+        originalIndex,
+      }))
+      .filter((item) => item.displayUrl.length > 0),
+    [referenceUrls]
+  );
+
+  const validReferenceUrls = useMemo(
+    () => normalizedReferenceUrls,
+    [normalizedReferenceUrls]
+  );
+
+  // Memoized click handler for element selection
+  const handleElementClick = useCallback((element: Element) => {
+    const normalizedElementUrls = (element.referenceUrls ?? []).map((url) => normalizeAssetUrl(url)).filter((url) => url.length > 0);
+    const normalizedThumbnailUrl = normalizeAssetUrl(element.thumbnailUrl);
+
+    if (imageSelectionState.mode === 'enabled' && normalizedElementUrls.length > 1) {
+      // Open image selection view for multi-image elements
+      dispatch({ type: 'START_SELECTION', element });
+      // Don't set editingId - just show image selections
+    } else if (imageSelectionState.mode === 'selecting') {
+      // User is switching to a different element while in selection mode
+      if (normalizedElementUrls.length > 1) {
+        // Switch to the new element's selection
+        dispatch({ type: 'START_SELECTION', element });
+      } else {
+        // New element doesn't have multiple images, exit selection mode
+        dispatch({ type: 'END_SELECTION' });
+        setEditingId(null);
+        // Handle as regular element selection
+        onSelectElement?.(
+          normalizedElementUrls.length > 0
+            ? normalizedElementUrls
+            : (normalizedThumbnailUrl ? [normalizedThumbnailUrl] : []),
+          element.name,
+          element
+        );
+      }
+    } else {
+      // Preserve existing behavior for all other cases
+      onSelectElement?.(
+        normalizedElementUrls.length > 0
+          ? normalizedElementUrls
+          : (normalizedThumbnailUrl ? [normalizedThumbnailUrl] : []),
+        element.name,
+        element
+      );
+    }
+  }, [imageSelectionState.mode, onSelectElement]);
+
+  // Memoized multi-image badge
+  const MultiImageBadge = useCallback((element: Element) => {
+    if ((imageSelectionState.mode !== 'enabled' && imageSelectionState.mode !== 'selecting') || !element.referenceUrls?.length) return null;
+    
+    return (
+      <div className="absolute top-2 left-2 z-10">
+        <span className="text-xs bg-purple-500/80 text-white rounded px-2 py-1 font-medium backdrop-blur-sm">
+          {element.referenceUrls.length} images
+        </span>
+      </div>
+    );
+  }, [imageSelectionState.mode]);
+
+  // Custom hook for image selection logic
+  const handleImageSelect = useCallback((url: string, index: number) => {
+    const element = imageSelectionState.selectedElement;
+    if (!element || !onSelectImage) return;
+    
+    try {
+      onSelectImage(url, `${element.name} - Image ${index + 1}`, element);
+      dispatch({ type: 'END_SELECTION' });
+      setEditingId(null);
+      // Close the library when user adds an image
+      onClose();
+    } catch (error) {
+      console.error('Error selecting image:', error);
+    }
+  }, [imageSelectionState.selectedElement, onSelectImage, onClose]);
 
   const project = useQuery(api.storyboard.projects.get, { id: projectId });
   const projectCompanyId = useCurrentCompanyId(); // ✅ Use hook for active organization detection
@@ -222,15 +443,48 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
   useEffect(() => {
     if (!editingElement) return;
     setNewName(editingElement.name ?? "");
-    setReferenceUrls(editingElement.referenceUrls ?? []);
+    setReferenceUrls((editingElement.referenceUrls ?? []).map((url) => normalizeAssetUrl(url)));
+    setReferenceFiles([]);
     setActiveType(editingElement.type ?? "character");
     setVisibility(editingElement.visibility === "public" ? "public" : "private");
     setDescription(editingElement.description ?? "");
     setTags(editingElement.tags ?? []);
+    const normalizedThumbnail = normalizeAssetUrl(editingElement.thumbnailUrl);
+    const normalizedUrls = (editingElement.referenceUrls ?? []).map((url) => normalizeAssetUrl(url));
+    const thumbnailUrlIndex = normalizedThumbnail ? normalizedUrls.findIndex((url) => url === normalizedThumbnail) : -1;
+    setThumbnailIndex(thumbnailUrlIndex >= 0 ? thumbnailUrlIndex : 0);
     setShowCreate(true);
   }, [editingElement]);
 
+  // Handle immediate thumbnail update
+  const handleSetThumbnail = async (originalIndex: number) => {
+    if (!editingId) return;
+    
+    const thumbnailUrl = referencePreviewItems[originalIndex]?.displayUrl;
+    if (!thumbnailUrl) return;
+    
+    try {
+      await updateElement({
+        id: editingId,
+        thumbnailUrl,
+      });
+      console.log(`[ElementLibrary] Updated thumbnail to: ${thumbnailUrl}`);
+      
+      // Update local state immediately
+      setThumbnailIndex(originalIndex);
+    } catch (error) {
+      console.error("[ElementLibrary] Failed to update thumbnail:", error);
+      // Still update local state for better UX
+      setThumbnailIndex(originalIndex);
+    }
+  };
+
   const resetForm = () => {
+    referenceUrls.forEach((url) => {
+      if (url.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+      }
+    });
     setEditingId(null);
     setNewName("");
     setReferenceUrls([]);
@@ -244,7 +498,10 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
     setTagInput("");
   };
 
-  const uploadFile = async (file: File, filename: string) => {
+  const uploadFile = async (file: File, filename?: string) => {
+    const safeFilename = filename?.trim() || file.name?.trim() || `element-${Date.now()}.png`;
+    const safeContentType = file.type?.trim() || "image/png";
+
     // ✅ Use companyId from component level, not hook call
     console.log("[ElementLibrary] Using companyId from component:", projectCompanyId);
     
@@ -252,8 +509,8 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        filename, 
-        contentType: file.type,
+        filename: safeFilename,
+        contentType: safeContentType,
         category: "elements", // Specify category for element uploads
         companyId: projectCompanyId, // ✅ Pass correct companyId from Clerk
       }),
@@ -268,62 +525,47 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
     await fetch(data.uploadUrl, {
       method: "PUT",
       body: file,
-      headers: { "Content-Type": file.type },
+      headers: { "Content-Type": safeContentType },
     });
     
     // Return the publicUrl from API response, or construct it if not provided
-    return data.publicUrl || `https://${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${data.key}`;
+    return normalizeAssetUrl(data.publicUrl || data.key);
   };
 
   const handleCreateOrUpdate = async () => {
     if (!newName.trim() || saving) return;
 
-    // Create draftRefs structure from referenceFiles
-    const draftRefs = referenceFiles.map((file, index) => ({
-      file,
-      uploaded: false,
-      url: referenceUrls[index] || null,
-    }));
     setSaving(true);
     try {
-      // Upload files to R2 only when saving
       const uploadedUrls: string[] = [];
-      
-      // First, upload any new files that haven't been uploaded yet
-      if (editingId) {
-        // For editing, just upload new files and update existing element
-        const newFileUploads = draftRefs.filter(ref => !ref.uploaded && ref.file);
-        for (const ref of newFileUploads) {
-          const url = await uploadFile(ref.file);
-          uploadedUrls.push(url);
-          ref.uploaded = true;
-          ref.url = url;
-        }
-      } else {
-        // For creating new elements, upload all files
-        for (const ref of draftRefs) {
-          const url = await uploadFile(ref.file);
-          uploadedUrls.push(url);
-          ref.uploaded = true;
-          ref.url = url;
-        }
+
+      for (const file of referenceFiles) {
+        const url = await uploadFile(file, file.name);
+        uploadedUrls.push(url);
       }
-      
-      // Combine existing reference URLs with newly uploaded ones
-      const allReferenceUrls = [
-        ...referenceUrls.filter(url => url && !draftRefs.some(ref => ref.url === url)),
-        ...uploadedUrls
-      ];
+
+      const existingPersistedUrls = referenceUrls
+        .filter((url): url is string => typeof url === "string" && url.trim().length > 0 && !url.startsWith("blob:"))
+        .map((url) => normalizeAssetUrl(url))
+        .filter((url): url is string => url.length > 0);
+
+      const allReferenceUrls = Array.from(new Set([...existingPersistedUrls, ...uploadedUrls]));
+
+      const persistedCountBeforeUpload = existingPersistedUrls.length;
+      const nextThumbnailUrl = allReferenceUrls.length > 0
+        ? (thumbnailIndex < persistedCountBeforeUpload
+            ? allReferenceUrls[thumbnailIndex]
+            : allReferenceUrls[persistedCountBeforeUpload + (thumbnailIndex - persistedCountBeforeUpload)] ?? allReferenceUrls[0])
+        : "";
 
       if (editingId) {
-        // Update existing element
         await updateElement({
           id: editingId,
           name: newName.trim(),
           description: description.trim(),
-          referenceUrls: allReferenceUrls.length > 0 ? allReferenceUrls : [""], // Use empty string if no images
+          referenceUrls: allReferenceUrls.length > 0 ? allReferenceUrls : [""],
           tags: tags,
-          thumbnailUrl: allReferenceUrls.length > 0 ? allReferenceUrls[thumbnailIndex] : "", // Use empty string if no images
+          thumbnailUrl: nextThumbnailUrl,
           visibility,
         });
         console.log(`[ElementLibrary] Updated element: ${newName}`);
@@ -340,9 +582,9 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
           name: newName.trim(),
           type: activeType,
           description: description.trim(),
-          referenceUrls: allReferenceUrls.length > 0 ? allReferenceUrls : [""], // Use empty string if no images
+          referenceUrls: allReferenceUrls.length > 0 ? allReferenceUrls : [""],
           tags: tags,
-          thumbnailUrl: allReferenceUrls.length > 0 ? allReferenceUrls[thumbnailIndex] : "", // Use empty string if no images
+          thumbnailUrl: nextThumbnailUrl,
           visibility,
           createdBy: "user", // Required field
         });
@@ -361,13 +603,65 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
   const handleUploadDraftRefs = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     if (files.length === 0) return;
+    
+    // Enforce 14-image limit
+    const currentCount = referenceUrls.length;
+    const maxImages = 14;
+    
+    if (currentCount >= maxImages) {
+      alert(`Maximum of ${maxImages} reference images allowed. Please remove some images first.`);
+      event.target.value = "";
+      return;
+    }
+    
+    const remainingSlots = maxImages - currentCount;
+    const filesToAdd = files.slice(0, remainingSlots);
+    
+    if (files.length > remainingSlots) {
+      alert(`Only ${remainingSlots} more image${remainingSlots === 1 ? '' : 's'} can be added (maximum ${maxImages} total).`);
+    }
+    
+    // Check for duplicates by comparing file names only
+    console.log("[ElementLibrary] Checking for duplicates...");
+    console.log("[ElementLibrary] Current referenceFiles:", referenceFiles.map(f => f.name));
+    console.log("[ElementLibrary] Files to add:", filesToAdd.map(f => f.name));
+    
+    const duplicateFiles: string[] = [];
+    const uniqueFilesToAdd: File[] = [];
+    
+    // Get existing file names from referenceFiles
+    const existingFileNames = new Set(referenceFiles.map(f => f.name));
+    
+    console.log("[ElementLibrary] Existing file names:", Array.from(existingFileNames));
+    
+    for (const file of filesToAdd) {
+      // Check if filename already exists
+      const isDuplicate = existingFileNames.has(file.name);
+      
+      console.log(`[ElementLibrary] Checking file: ${file.name} - isDuplicate: ${isDuplicate}`);
+      
+      if (isDuplicate) {
+        duplicateFiles.push(file.name);
+      } else {
+        uniqueFilesToAdd.push(file);
+      }
+    }
+    
+    // Alert about duplicates
+    if (duplicateFiles.length > 0) {
+      alert(`The following image${duplicateFiles.length === 1 ? '' : 's'} already exist${duplicateFiles.length === 1 ? 's' : ''} and will not be added:\n${duplicateFiles.join('\n')}`);
+    }
+    
+    if (uniqueFilesToAdd.length === 0) {
+      event.target.value = "";
+      return;
+    }
+    
     setUploading(true);
     try {
-      // Create blob URLs for local preview (not uploaded to R2 yet)
-      const blobUrls = files.map((file) => URL.createObjectURL(file));
+      const blobUrls = uniqueFilesToAdd.map((file) => URL.createObjectURL(file));
       setReferenceUrls((prev) => [...prev, ...blobUrls]);
-      setReferenceFiles((prev) => [...prev, ...files]);
-      // Reset thumbnail index to first image if this is the first upload
+      setReferenceFiles((prev) => [...prev, ...uniqueFilesToAdd]);
       if (referenceUrls.length === 0) {
         setThumbnailIndex(0);
       }
@@ -466,14 +760,17 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
                   {displayElements?.map((element) => (
                     <div key={element._id} className="group overflow-hidden rounded-xl border border-neutral-800/50 bg-neutral-950 hover:border-indigo-500 transition-all hover:shadow-lg">
                       <div
-                        onClick={() => onSelectElement?.(element.referenceUrls ?? [element.thumbnailUrl], element.name)}
+                        onClick={() => handleElementClick(element)}
                         className="block w-full text-left cursor-pointer"
                       >
                         <div className="aspect-square overflow-hidden bg-neutral-900 relative">
+                          {/* Multi-image badge */}
+                          {MultiImageBadge(element)}
+                          
                           {/* Type Badge in Top-Left Corner */}
                           <div className="absolute top-2 left-2 z-10">
                             <span className="text-xs bg-indigo-500/80 text-white rounded px-2 py-1 font-medium backdrop-blur-sm">
-                              {element.type}
+                              {element.type === 'IMG' ? 'Image' : element.type}
                             </span>
                           </div>
                           
@@ -523,9 +820,9 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
                             </div>
                           )}
                           
-                          {element.thumbnailUrl ? (
+                          {normalizeAssetUrl(element.thumbnailUrl) ? (
                             <img 
-                              src={element.thumbnailUrl} 
+                              src={normalizeAssetUrl(element.thumbnailUrl)} 
                               alt={element.name} 
                               className="h-full w-full object-cover transition-transform group-hover:scale-105" 
                               onError={(e) => {
@@ -553,7 +850,8 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
                           <button
                             onClick={async () => {
                               await addElementToItem({ itemId: selectedItemId, elementId: element._id });
-                              onClose();
+                              // Don't close the library - let user add more elements
+                              // onClose();
                             }}
                             className="flex-1 px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-medium hover:from-indigo-600 hover:to-purple-700 transition-colors text-sm"
                           >
@@ -656,6 +954,7 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
                       </select>
                     </div>
 
+                    {editingId && (
                     <div>
                       <label className="flex cursor-pointer items-center justify-center gap-2 sm:gap-3 rounded-xl border border-dashed border-neutral-800/50 bg-neutral-900 px-2.5 sm:px-4 py-2.5 sm:py-4 text-xs sm:text-sm text-neutral-300 transition-all hover:bg-neutral-800 hover:border-neutral-700">
                         {uploading ? <Loader2 className="h-3.5 w-3.5 sm:h-4 w-4 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 sm:h-4 w-4" />}
@@ -663,22 +962,64 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
                         <input className="hidden" type="file" accept="image/*" multiple onChange={handleUploadDraftRefs} />
                       </label>
                     </div>
+                    )}
 
-                    {referenceUrls.length > 0 && (
+                    {referencePreviewItems.length > 0 && (
                       <div>
-                        <label className="block text-sm font-medium text-neutral-300 mb-2 sm:mb-3">Reference Images</label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
-                          {referenceUrls.map((url, index) => (
-                            <div key={`ref-${index}-${Date.now()}-${Math.random()}`} className={`group relative overflow-hidden rounded-lg sm:rounded-xl border ${index === thumbnailIndex ? "border-indigo-500 ring-2 ring-indigo-500/50" : "border-neutral-800/50"} bg-neutral-900`}>
-                              <img src={url} alt={`Reference ${index + 1}`} className="aspect-square h-full w-full object-cover" />
+                        <div className="flex items-center justify-between mb-2 sm:mb-3">
+                          <label className="block text-sm font-medium text-neutral-300">Reference Images</label>
+                          <span className={`text-xs ${referencePreviewItems.length >= 14 ? 'text-red-400' : 'text-neutral-400'}`}>
+                            {referencePreviewItems.length}/14 images
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 sm:gap-3">
+                          {referencePreviewItems.map(({ rawUrl, displayUrl, originalIndex }, index) => (
+                            <div key={`ref-${originalIndex}-${rawUrl}`} className={`group relative overflow-hidden rounded-lg sm:rounded-xl border ${originalIndex === thumbnailIndex ? "border-indigo-500 ring-2 ring-indigo-500/50" : "border-neutral-800/50"} bg-neutral-900 flex-shrink-0`} style={{ width: "100px", height: "100px" }}>
+                              <img
+                                src={displayUrl}
+                                alt={`Reference ${index + 1}`}
+                                className="w-full h-full object-cover"
+                                onError={(event) => {
+                                  if (!displayUrl.startsWith("blob:")) {
+                                    console.error("[ElementLibrary] Failed to render reference image:", displayUrl);
+                                  }
+                                  event.currentTarget.style.display = "none";
+                                }}
+                              />
+                              {/* Plus button removed - no longer available in edit mode */}
+                              {/* Set as primary thumbnail button - top-left */}
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleSetThumbnail(originalIndex);
+                                }}
+                                className="absolute top-1 left-1 rounded bg-blue-500/80 p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-blue-600/90"
+                                title="Set as primary thumbnail"
+                                aria-label={`Set image ${index + 1} as primary thumbnail`}
+                              >
+                                <ImagePlus className="w-3 h-3 text-white" />
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  if (url.startsWith("blob:")) {
-                                    URL.revokeObjectURL(url);
+                                  const removedUrl = referenceUrls[originalIndex];
+                                  if (removedUrl?.startsWith("blob:")) {
+                                    URL.revokeObjectURL(removedUrl);
                                   }
-                                  setReferenceUrls((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
-                                  setReferenceFiles((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+                                  setReferenceUrls((prev) => prev.filter((_, itemIndex) => itemIndex !== originalIndex));
+                                  if (removedUrl?.startsWith("blob:")) {
+                                    const draftBlobIndex = referenceUrls
+                                      .slice(0, originalIndex + 1)
+                                      .filter((item) => item.startsWith("blob:"))
+                                      .length - 1;
+                                    setReferenceFiles((prev) => prev.filter((_, itemIndex) => itemIndex !== draftBlobIndex));
+                                  }
+                                  setThumbnailIndex((prev) => {
+                                    if (prev === originalIndex) return 0;
+                                    if (prev > originalIndex) return prev - 1;
+                                    return prev;
+                                  });
                                 }}
                                 className="absolute top-1 right-1 rounded bg-red-500/80 p-1 opacity-0 transition-opacity group-hover:opacity-100"
                               >
@@ -805,6 +1146,70 @@ export function ElementLibrary({ projectId, userId, user, onClose, onSelectEleme
             </div>
           )}
         </div>
+
+        {/* Image Selection Sidebar */}
+        {imageSelectionState.mode === 'selecting' && imageSelectionState.selectedElement && (() => {
+          const selectedElement = imageSelectionState.selectedElement;
+
+          return (
+            <>
+              {/* Overlay sidebar - doesn't block the main content */}
+              <div className="fixed top-0 right-0 w-80 h-full bg-neutral-950 border-l border-neutral-800 z-50 overflow-y-auto">
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-white">
+                      Select Images
+                    </h3>
+                    <button 
+                      onClick={() => {
+                        dispatch({ type: 'END_SELECTION' });
+                        setEditingId(null);
+                      }} 
+                      className="text-neutral-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <div className="bg-neutral-900 rounded-lg p-3">
+                    <p className="text-sm font-medium text-white mb-1">{selectedElement.name}</p>
+                    <p className="text-xs text-neutral-400">Click images below to select</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedElement.referenceUrls?.map((url, index) => (
+                      <ImageCard
+                        key={`${selectedElement._id}-${index}`}
+                        url={url}
+                        index={index}
+                        elementName={selectedElement.name}
+                        onSelect={() => handleImageSelect(url, index)}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Instructions */}
+                  <div className="text-center text-xs text-neutral-400">
+                    Click on any image to add it as a reference
+                  </div>
+                  
+                  <div className="bg-neutral-800 rounded-lg p-3">
+                    <div className="text-center text-xs text-neutral-300">
+                      <div className="font-medium mb-1">💡 Want to switch elements?</div>
+                      <div>Click any element in the main area</div>
+                      <div className="text-neutral-500 mt-1">Library closes when image is added</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Subtle hint overlay */}
+              <div className="fixed top-4 left-4 bg-neutral-900/90 rounded-lg px-3 py-2 text-xs text-neutral-300 z-40 pointer-events-none">
+                👆 Click any element to switch
+              </div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );

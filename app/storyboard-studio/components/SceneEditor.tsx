@@ -8,6 +8,7 @@ import {
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import { CanvasArea } from "./CanvasArea";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
+import type { Id } from "@/convex/_generated/dataModel";
 import { TAG_COLORS } from "../constants";
 import {
   CanvasEditor, emptyCanvasState, undoMask, redoMask,
@@ -16,9 +17,9 @@ import {
 import { makeId, bubbleEllipse, cloudPath, tailPath, rectTailPath, rectOutlinePathWithGap, burstPoints, roughEllipsePath, estimateFontSize } from "../shared/canvas-helpers";
 import type { BubbleType, TailDir, FontFamily } from "../shared/canvas-types";
 import { AIGeneratorModal } from "./storyboard/AIGeneratorModal";
-import { ImageAIPanel, type AIEditMode } from "./ImageAIPanel";
+import { EditImageAIPanel, type AIEditMode } from "./EditImageAIPanel";
 import { VideoAIPanel, type VideoEditMode } from "./VideoAIPanel";
-import { ElementAIPanel, type ElementAIEditMode } from "./storyboard/ElementAIPanel";
+import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/ElementImageAIPanel";
 import { Video, Image as ImageIcon, Box } from "lucide-react";
 
 type CanvasTool = CanvasActiveTool;
@@ -29,9 +30,14 @@ interface SceneEditorProps {
   onClose: () => void;
   onShotsChange: (shots: Shot[]) => void;
   onSaveImageAsElement?: (draft: { imageUrl: string; name?: string; type?: string }) => void;
+  // New props for R2 and element library
+  projectId?: Id<"storyboard_projects">;
+  userId?: string;
+  user?: any;
+  userCompanyId?: string;
 }
 
-export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement }: SceneEditorProps) {
+export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, projectId, userId, user, userCompanyId }: SceneEditorProps) {
   const [activeShotId, setActiveShotId] = useState(initialShotId);
   const [commentText, setCommentText] = useState("");
   const [editingField, setEditingField] = useState<"voice" | "notes" | "action" | null>(null);
@@ -65,7 +71,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const generatedImageRef = useRef<HTMLImageElement>(null);
-  const [activeAIPanel, setActiveAIPanel] = useState<'image' | 'video' | 'element'>('image');
+  const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'video' | 'element'>('editimage');
   
   // Video AI state management
   const [videoState, setVideoState] = useState({
@@ -133,7 +139,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   // ImageAI Panel state
   const [aiEditMode, setAiEditMode] = useState<AIEditMode>("describe");
   const [aiModel, setAiModel] = useState("nano-banana-2");
-  const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string }[]>([]);
+  const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string; filename?: string }[]>([]);
 
   // Information dialog state
   const [showInfoDialog, setShowInfoDialog] = useState(false);
@@ -907,7 +913,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         try {
           console.log("DEBUG: Capturing canvas with elements...");
           console.log("DEBUG: Current canvas state:", canvasState);
-          console.log("DEBUG: Canvas elements count:", canvasState.elements?.length || 0);
+          console.log("DEBUG: Canvas elements count:", 0); // CanvasEditorState doesn't have elements property
           
           // Generate image with current canvas elements
           const elementsImage = await new Promise<string>((resolve, reject) => {
@@ -923,6 +929,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               
               // Draw original image as background
               const img = new Image();
+              img.src = originalImage || '';
               img.onload = () => {
                 tempCtx.drawImage(img, 0, 0, width, height);
                 
@@ -1260,9 +1267,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   };
 
   // Reset video state when switching between Image, Video, and Element AI
-  const handleAIPanelSwitch = (panel: 'image' | 'video' | 'element') => {
+  const handleAIPanelSwitch = (panel: 'editimage' | 'video' | 'element') => {
     setActiveAIPanel(panel);
-    if (panel === 'image') {
+    if (panel === 'editimage') {
       // Reset video state when switching to image
       setVideoState({
         status: 'empty',
@@ -1297,7 +1304,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       if (isBrushTool && aiModel !== "ideogram/character-edit") {
         console.log("Brush tool detected but not using character-edit model");
         setInpaintError("Please select 'Character-edit' model for faceshift functionality in area-edit mode");
-        return;
+        return null;
       }
       
       if (isSquareMaskActive) {
@@ -1307,7 +1314,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         console.log("Area-edit mode - canvasTool:", canvasTool);
         // Use square mask logic with the selected model
         await runRectangleInpaint();
-        return;
+        return null;
       }
       
       // Use the updated isBrushTool definition
@@ -1931,6 +1938,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     } finally {
       setIsInpainting(false);
     }
+    return null; // Return null if no image was generated
   };
 
   // ── Rectangle Inpaint via n8n ───────────────────────────────────────────────
@@ -3044,12 +3052,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             {/* AI Panel Switcher Button */}
             <button
               onClick={() => {
-                if (activeAIPanel === 'image') {
+                if (activeAIPanel === 'editimage') {
                   setActiveAIPanel('video');
                 } else if (activeAIPanel === 'video') {
                   setActiveAIPanel('element');
                 } else {
-                  setActiveAIPanel('image');
+                  setActiveAIPanel('editimage');
                 }
               }}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
@@ -3057,10 +3065,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 activeAIPanel === 'element' ? 'bg-green-600/80' : 
                 'bg-black/50 hover:bg-black/80'
               }`}
-              title={`Switch to ${activeAIPanel === 'image' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
-              aria-label={`Switch to ${activeAIPanel === 'image' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
+              title={`Switch to ${activeAIPanel === 'editimage' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
+              aria-label={`Switch to ${activeAIPanel === 'editimage' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
             >
-              {activeAIPanel === 'image' ? (
+              {activeAIPanel === 'editimage' ? (
                 <>
                   <Video className="w-4 h-4 text-purple-400" />
                   <span>Video AI</span>
@@ -3337,8 +3345,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               {/* AI Panel overlay on canvas */}
               {showImageAIPanel && (
                 <div className="pointer-events-auto">
-                  {activeAIPanel === 'image' ? (
-                    <ImageAIPanel
+                  {activeAIPanel === 'editimage' ? (
+                    <EditImageAIPanel
                   mode={aiEditMode}
                   onModeChange={setAiEditMode}
                   onGenerate={async () => {
@@ -3379,7 +3387,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   credits={20}
                   model={aiModel}
                   onModelChange={setAiModel}
-                  referenceImages={aiRefImages}
+                  referenceImages={aiRefImages.map(img => ({
+                        id: img.id,
+                        url: img.url,
+                        name: img.filename,
+                        source: 'upload' as const
+                      }))}
                   onAddReferenceImage={(file) => {
                     const url = URL.createObjectURL(file);
                     setAiRefImages(prev => [...prev, { id: `ref-${Date.now()}`, url }]);
@@ -3473,7 +3486,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     }
                   }}
                   onCropRemove={() => {
-                    setCanvasTool("canvas-object");
+                    setCanvasTool("select" as any);
                     // TODO: Clear crop rectangle from canvas
                     // This should remove the crop rectangle overlay
                   }}
@@ -3575,8 +3588,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       isGenerating={false}
                     />
                   ) : (
-                    <ElementAIPanel
-                      mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ElementAIEditMode}
+                    <ImageAIPanel
+                      mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
                       onGenerate={async () => {
                         console.log("=== ELEMENT AI GENERATE CALLED ===");
@@ -3588,10 +3601,31 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       credits={20}
                       model={aiModel}
                       onModelChange={setAiModel}
-                      referenceImages={aiRefImages}
+                      referenceImages={aiRefImages.map(img => ({
+                        id: img.id,
+                        url: img.url,
+                        name: img.filename,
+                        source: 'upload' as const
+                      }))}
                       onAddReferenceImage={(file) => {
+                        // Check for duplicate by filename
+                        const existingFilenames = aiRefImages.map(img => img.filename || '').filter(Boolean);
+                        console.log(`[SceneEditor] Checking for duplicate: ${file.name}`);
+                        console.log(`[SceneEditor] Existing filenames:`, existingFilenames);
+                        
+                        if (existingFilenames.includes(file.name)) {
+                          console.log(`[SceneEditor] Duplicate image detected: ${file.name}, skipping...`);
+                          return; // Don't add duplicate
+                        }
+                        
+                        console.log(`[SceneEditor] Adding new reference image: ${file.name}`);
                         const url = URL.createObjectURL(file);
-                        setAiRefImages(prev => [...prev, { id: `ref-${Date.now()}`, url }]);
+                        setAiRefImages(prev => [...prev, { 
+                          id: `ref-${Date.now()}`, 
+                          url, 
+                          source: 'upload' as const,
+                          filename: file.name // Store the original filename
+                        }]);
                       }}
                       onRemoveReferenceImage={(id) => {
                         setAiRefImages(prev => prev.filter(img => img.id !== id));
@@ -3611,11 +3645,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       selectedColor={selectedColor}
                       setSelectedColor={setSelectedColor}
                       onColorPickerClick={() => {
-                        console.log("Color picker clicked from ElementAIPanel");
+                        console.log("Color picker clicked from ImageAIPanel");
                       }}
                       onAspectRatioChange={handleAspectRatioChange}
                       selectedAspectRatio={selectedAspectRatio}
                       onRectangleMaskAspectRatioChange={handleRectangleMaskAspectRatioChange}
+                      // R2 and Element Library props
+                      projectId={projectId}
+                      userId={userId}
+                      user={user}
+                      userCompanyId={userCompanyId}
                       onToolSelect={(tool) => {
                         if (tool === "pen-brush" || tool === "brush" || tool === "eraser") {
                           setCanvasTool("inpaint");
@@ -3632,7 +3671,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         }
                       }}
                       onCropRemove={() => {
-                        setCanvasTool("canvas-object");
+                        setCanvasTool("select" as any);
                       }}
                       onCropExecute={async (aspectRatio) => {
                         if (aspectRatio) {

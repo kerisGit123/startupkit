@@ -8,7 +8,6 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { getCurrentCompanyId } from "@/lib/auth-utils";
 import { FrameFavoriteButton } from "../../components/FrameFavoriteButton";
-import { ImageAIPanel } from "../../components/storyboard/ImageAIPanel";
 import { VideoAIPanel } from "../../components/storyboard/VideoAIPanel";
 import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExportModal";
 import { FileBrowser } from "../../components/storyboard/FileBrowser";
@@ -488,7 +487,6 @@ export default function StoryboardWorkspacePage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [showAiInput, setShowAiInput] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [showImagePanel, setShowImagePanel] = useState(false);
   const [showVideoPanel, setShowVideoPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
@@ -1112,20 +1110,13 @@ export default function StoryboardWorkspacePage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => { setShowImagePanel(!showImagePanel); setShowVideoPanel(false); }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                        showImagePanel ? "bg-purple-600 text-white" : "bg-white/8 hover:bg-white/12 text-gray-300"
-                      }`}>
-                      <Sparkles className="w-3.5 h-3.5" />
-                      AI Images
-                    </button>
                     <button onClick={handleRemoveDuplicates}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600/80 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition"
                       title="Remove duplicate storyboard items">
                       <Trash2 className="w-3.5 h-3.5" />
                       Remove Duplicates
                     </button>
-                    <button onClick={() => { setShowVideoPanel(!showVideoPanel); setShowImagePanel(false); }}
+                    <button onClick={() => { setShowVideoPanel(!showVideoPanel); }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
                         showVideoPanel ? "bg-blue-600 text-white" : "bg-white/8 hover:bg-white/12 text-gray-300"
                       }`}>
@@ -1237,22 +1228,6 @@ export default function StoryboardWorkspacePage() {
               </>
             )}
             </div>
-            {showImagePanel && items && items.length > 0 && (
-              <div className="w-72 shrink-0">
-                <ImageAIPanel
-                  projectId={pid}
-                  items={items}
-                  selectedItemIds={selectedItemIds}
-                  frameRatio={project.settings.frameRatio}
-                  projectStyle={project.settings.style}
-                  userId={user?.id ?? "unknown"}
-                  orgId={project.orgId}
-                  user={user}
-                  onClose={() => setShowImagePanel(false)}
-                  characterRef={characterRef}
-                />
-              </div>
-            )}
             {showVideoPanel && items && items.length > 0 && (
               <div className="w-72 shrink-0">
                 <VideoAIPanel
@@ -1277,6 +1252,13 @@ export default function StoryboardWorkspacePage() {
           user={user}
           initialCreateDraft={elementLibraryDraft}
           selectedItemId={selectedItemForElement}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl, elementName, element) => {
+            // Handle image selection from element
+            console.log('Element image selected:', { imageUrl, elementName, element });
+            // Don't close the library - let user select more elements
+            // You can add logic here to handle the selected image
+          }}
           onClose={() => {
             setShowElementLibrary(false);
             setElementLibraryDraft(null);
@@ -1284,10 +1266,7 @@ export default function StoryboardWorkspacePage() {
           }}
           onSelectElement={(urls, name) => {
             setCharacterRef({ name, urls });
-            setShowElementLibrary(false);
-            setElementLibraryDraft(null);
-            setSelectedItemForElement(null);
-            setShowImagePanel(true);
+            // Don't close the library - let user select more elements
           }}
         />
       )}
@@ -1377,6 +1356,11 @@ export default function StoryboardWorkspacePage() {
             // Update the item if needed
             console.log("Scene updated:", shots);
           }}
+          // R2 and Element Library props
+          projectId={pid}
+          userId={user?.id}
+          user={user}
+          userCompanyId={getCurrentCompanyId(user)}
         />
       )}
       

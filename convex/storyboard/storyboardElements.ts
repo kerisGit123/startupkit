@@ -137,7 +137,7 @@ export const listByProject = query({
 
     const allProjectElements = await ctx.db
       .query("storyboard_elements")
-      .filter((q) => q.eq("projectId", projectId))
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .order("desc")
       .collect();
 
@@ -213,7 +213,7 @@ export const update = mutation({
     referenceUrls: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.string())),
     visibility: v.optional(v.union(v.literal("private"), v.literal("shared"), v.literal("public"))),
-    sharedWith: v.optional(v.array(v.string())),
+    sharedWith: v.optional(v.array(v.id("storyboard_projects"))),
     status: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...fields }) => {
@@ -316,7 +316,7 @@ export const updateElementVisibility = mutation({
   args: {
     elementId: v.id("storyboard_elements"),
     visibility: v.union(v.literal("private"), v.literal("public"), v.literal("shared")), // "private" | "public" | "shared"
-    sharedWith: v.optional(v.array(v.string())),
+    sharedWith: v.optional(v.array(v.id("storyboard_projects"))),
   },
   handler: async (ctx, args) => {
     const element = await ctx.db.get(args.elementId);
@@ -354,7 +354,7 @@ export const findReusableElement = query({
   args: { 
     elementName: v.string(), 
     elementType: v.string(), 
-    projectId: v.string() 
+    projectId: v.id("storyboard_projects") 
   },
   handler: async (ctx, { elementName, elementType, projectId }) => {
     // Priority 1: Check project's own elements
