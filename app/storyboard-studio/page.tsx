@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Step, Orientation, ViewMode, Shot, Tag, CommentItem, CastMember, LocationAsset, BoardSettings, Project } from "./types";
-import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS } from "./constants";
+import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS, SIMPLE_TAGS, TAG_COLORS } from "./constants";
 import { getCurrentCompanyId } from "@/lib/auth-utils";
 
 import { ProjectsDashboard }  from "./components/ProjectsDashboard";
@@ -301,12 +301,27 @@ export default function StoryboardPage() {
     await Promise.all(
       changedConvexProjects.map(async (project) => {
         try {
+          // Convert tag strings to objects for Convex to match deployed schema
+          const tagObjects = project.tags.map((tag, index) => {
+            const tagString = typeof tag === 'string' ? tag : (tag as any).id || (tag as any).name || String(tag);
+            const predefinedTag = SIMPLE_TAGS.find((t) => t.id === tagString || t.name === tagString);
+            if (predefinedTag) {
+              return predefinedTag;
+            }
+            const color = TAG_COLORS[index % TAG_COLORS.length];
+            return {
+              id: tagString,
+              name: tagString,
+              color: color
+            };
+          });
+
           await updateConvexProject({
             id: project.id as Parameters<typeof updateConvexProject>[0]["id"],
             name: project.name,
             status: project.status,
             isFavorite: project.favourite,
-            tags: project.tags,
+            tags: tagObjects,
           });
         } catch (err) {
           console.error("[update project]", project.id, err);
@@ -378,7 +393,7 @@ export default function StoryboardPage() {
               reviewers: 0,
               dueDate: "",
               assignee: "You",
-              tags: p.tags,
+              tags: p.tags.map((tag: any) => typeof tag === 'string' ? tag : tag.id || tag.name || String(tag)),
               favourite: p.isFavorite ?? false,
               settings: p.settings,
               imageUrl: p.imageUrl, // ✅ Add imageUrl field

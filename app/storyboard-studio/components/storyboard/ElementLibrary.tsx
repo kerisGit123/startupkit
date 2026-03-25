@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useReducer, useCallback, memo, type Chang
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus } from "lucide-react";
+import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus, Hash } from "lucide-react";
 import { useCurrentCompanyId, getCurrentCompanyId, logUserInfo } from "@/lib/auth-utils";
 
 // Enhanced Element interface
@@ -815,7 +815,8 @@ export function ElementLibrary({
                             <div className="absolute bottom-0 left-0 right-0 z-10 p-2 bg-gradient-to-t from-black/80 to-transparent">
                               <div className="flex flex-wrap gap-1">
                                 {element.tags.slice(0, 3).map((tag, index) => (
-                                  <span key={index} className="text-xs bg-purple-500/80 text-white rounded px-1.5 py-0.5 backdrop-blur-sm">
+                                  <span key={index} className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs flex items-center gap-1">
+                                    <Hash className="w-3 h-3" />
                                     {tag}
                                   </span>
                                 ))}

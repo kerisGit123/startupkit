@@ -47,17 +47,6 @@ const VIEW_ICONS = [
   { mode: "video"  as ViewMode, Icon: Film,        title: "Video view"  },
 ];
 
-const TAG_PILL_COLORS: Record<string, string> = {
-  motion:      "bg-violet-500/80",
-  "live action":"bg-yellow-500/80",
-  "3D":        "bg-blue-500/80",
-  cel:         "bg-green-500/80",
-};
-
-function tagPillClass(name: string) {
-  return TAG_PILL_COLORS[name] ?? "bg-gray-500/80";
-}
-
 export function BoardView({
   sidebarOpen, onToggleSidebar, project, shots, viewMode, onViewModeChange,
   zoomLevel, onZoomChange, selectedShotId, onSelectShot, onOpenSceneEditor,
@@ -237,9 +226,11 @@ export function BoardView({
                   <div className="p-2">
                     {boardSettings.showTags && shot.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mb-1.5">
-                        <Hash className="w-3 h-3 text-gray-600 mt-0.5 shrink-0" />
                         {shot.tags.map(t => (
-                          <span key={t.id} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold text-white ${tagPillClass(t.name)}`}>{t.name}</span>
+                          <span key={t.id} className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs flex items-center gap-1">
+                            <Hash className="w-3 h-3" />
+                            {t.name}
+                          </span>
                         ))}
                       </div>
                     )}
@@ -302,7 +293,10 @@ export function BoardView({
                         </span>
                       )}
                       {shot.tags.map(t => (
-                        <span key={t.id} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold text-white ${tagPillClass(t.name)}`}>{t.name}</span>
+                        <span key={t.id} className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs flex items-center gap-1">
+                          <Hash className="w-3 h-3" />
+                          {t.name}
+                        </span>
                       ))}
                     </div>
                     {/* Image */}

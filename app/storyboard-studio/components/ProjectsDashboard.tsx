@@ -20,16 +20,18 @@ type ProjectTagOption = {
   color: string;
 };
 
-const toProjectTagOption = (tagId: string, index: number): ProjectTagOption => {
-  const predefinedTag = SIMPLE_TAGS.find((tag) => tag.id === tagId);
+const toProjectTagOption = (tag: string, index: number): ProjectTagOption => {
+  const predefinedTag = SIMPLE_TAGS.find((t) => t.id === tag || t.name === tag);
   if (predefinedTag) {
     return predefinedTag;
   }
 
+  // Create a tag option from string tag
+  const color = TAG_COLORS[index % TAG_COLORS.length];
   return {
-    id: tagId,
-    name: tagId,
-    color: TAG_COLORS[index % TAG_COLORS.length],
+    id: tag,
+    name: tag,
+    color: color
   };
 };
 
@@ -104,11 +106,10 @@ export function ProjectsDashboard({
   const handleProjectTagsChange = (newTags: ProjectTagOption[]) => {
     if (!selectedProjectId) return;
 
-    // Convert tag objects back to string IDs for project storage
-    const tagIds = newTags.map((tag) => tag.id);
-
+    // Convert tag objects back to strings and deduplicate
+    const tagStrings = [...new Set(newTags.map(tag => tag.name))];
     onProjectsChange(projects.map((p) =>
-      p.id === selectedProjectId ? { ...p, tags: tagIds } : p
+      p.id === selectedProjectId ? { ...p, tags: tagStrings } : p
     ));
   };
 
@@ -517,18 +518,22 @@ export function ProjectsDashboard({
                       {p.tags.length > 0 ? (
                         <>
                           {p.tags.slice(0, 3).map((tag, index) => {
-                            const tagObj = toProjectTagOption(tag, index);
+                            // Ensure tag is a string, not an object
+                            const tagString = typeof tag === 'string' ? tag : (tag as any).id || (tag as any).name || String(tag);
+                            // Get tag color from predefined tags or use default
+                            const tagColor = SIMPLE_TAGS.find(t => t.id === tagString)?.color || TAG_COLORS[index % TAG_COLORS.length];
                             return (
                               <span 
-                                key={tag} 
-                                className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 hover:scale-105"
+                                key={`${tagString}-${index}`} 
+                                className="px-2 py-1 rounded text-xs flex items-center gap-1"
                                 style={{ 
-                                  backgroundColor: tagObj.color + '25', 
-                                  color: tagObj.color,
-                                  border: `1px solid ${tagObj.color}30`
+                                  backgroundColor: tagColor + '15', 
+                                  color: tagColor,
+                                  border: `1px solid ${tagColor}25`
                                 }}
                               >
-                                {tagObj.name}
+                                <Hash className="w-3 h-3" />
+                                {tagString}
                               </span>
                             );
                           })}
@@ -648,18 +653,22 @@ export function ProjectsDashboard({
                           {p.tags.length > 0 ? (
                             <>
                               {p.tags.slice(0, 2).map((tag, index) => {
-                                const tagObj = toProjectTagOption(tag, index);
+                                // Ensure tag is a string, not an object
+                                const tagString = typeof tag === 'string' ? tag : (tag as any).id || (tag as any).name || String(tag);
+                                // Get tag color from predefined tags or use default
+                                const tagColor = SIMPLE_TAGS.find(t => t.id === tagString)?.color || TAG_COLORS[index % TAG_COLORS.length];
                                 return (
                                   <span 
-                                    key={tag} 
-                                    className="inline-flex items-center px-2 py-1 rounded-full text-[9px] font-medium transition-all duration-200 hover:scale-105"
+                                    key={`${tagString}-${index}`} 
+                                    className="px-2 py-1 rounded text-xs flex items-center gap-1"
                                     style={{ 
-                                      backgroundColor: tagObj.color + '25', 
-                                      color: tagObj.color,
-                                      border: `1px solid ${tagObj.color}30`
+                                      backgroundColor: tagColor + '15', 
+                                      color: tagColor,
+                                      border: `1px solid ${tagColor}25`
                                     }}
                                   >
-                                    {tagObj.name}
+                                    <Hash className="w-3 h-3" />
+                                    {tagString}
                                   </span>
                                 );
                               })}
@@ -876,7 +885,9 @@ export function ProjectsDashboard({
             const project = projects.find((p) => p.id === selectedProjectId);
             if (!project) return [];
             
-            return project.tags.map((tagId, index) => toProjectTagOption(tagId, index));
+            // Deduplicate tags safely and convert to objects
+            const uniqueTagStrings = Array.from(new Set(project.tags.filter(tag => typeof tag === 'string')));
+            return uniqueTagStrings.map((tagId, index) => toProjectTagOption(tagId, index));
           })()}
           onTagsChange={handleProjectTagsChange}
           onClose={() => {

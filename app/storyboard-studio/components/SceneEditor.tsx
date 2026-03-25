@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info,
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import { CanvasArea } from "./CanvasArea";
@@ -3976,7 +3976,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         <div className="flex flex-wrap gap-2">
                           {activeShot.tags?.length > 0 ? (
                             activeShot.tags.map(tag => (
-                              <span key={tag.id} className="px-2 py-1 rounded text-xs text-white bg-gray-600">
+                              <span key={tag.id} className="px-2 py-0.5 rounded text-[10px] font-semibold text-white" style={{ backgroundColor: tag.color + "cc" }}>
                                 {tag.name}
                               </span>
                             ))

@@ -1008,7 +1008,139 @@ const companyId = userCompanyId;
 
 ---
 
-## 🎯 Final Status
+## �️ Tags System Implementation (UPDATED)
+
+### **Current Tags Architecture**
+The storyboard system now implements a comprehensive tags system with different patterns for different contexts:
+
+#### **1. Data Structure**
+```typescript
+// Backend Storage (Convex)
+storyboard_projects: {
+  tags: v.array(v.string()) // Simple string array
+}
+
+storyboard_items: {
+  tags: v.optional(v.array(v.object({
+    id: v.string(),
+    name: v.string(), 
+    color: v.string(),
+  })))
+}
+
+// Frontend Display
+interface Tag {
+  id: string;
+  name: string;
+  color: string;
+}
+```
+
+#### **2. Tag Patterns Implemented**
+
+**Pattern 1: Storyboard Item Tags (Primary)**
+- Used in: TimelineView, ProjectsDashboard
+- Style: Purple theme with Hash icon
+- Purpose: Consistent visual identification
+
+**Pattern 2: Scene Editor Tags (Dynamic Colors)**
+- Used in: SceneEditor component
+- Style: Dynamic colored backgrounds with white text
+- Purpose: Visual differentiation by tag type
+
+**Pattern 3: Element Library Tags**
+- Used in: ElementLibrary component
+- Style: Purple theme with backdrop blur
+- Purpose: Compact element categorization
+
+**Pattern 4: TagEditor Tags (Interactive)**
+- Used in: TagEditor component
+- Style: Dynamic colors with rounded-full shape and remove button
+- Purpose: Interactive tag management
+
+#### **3. ProjectsDashboard Tags Implementation**
+```typescript
+// Current Implementation (Hybrid Approach)
+{p.tags.slice(0, 3).map((tag, index) => {
+  const tagString = typeof tag === 'string' ? tag : (tag as any).id || (tag as any).name || String(tag);
+  const tagColor = SIMPLE_TAGS.find(t => t.id === tagString)?.color || TAG_COLORS[index % TAG_COLORS.length];
+  return (
+    <span 
+      key={`${tagString}-${index}`} 
+      className="px-2 py-1 rounded text-xs flex items-center gap-1"
+      style={{ 
+        backgroundColor: tagColor + '15', 
+        color: tagColor,
+        border: `1px solid ${tagColor}25`
+      }}
+    >
+      <Hash className="w-3 h-3" />
+      {tagString}
+    </span>
+  );
+})}
+```
+
+**Features:**
+- Dynamic colored backgrounds (8% opacity)
+- Matching Hash icons
+- Subtle borders for definition
+- Consistent spacing and typography
+- Individual tag colors (red for "action", orange for "dialogue", etc.)
+
+#### **4. Tag Color System**
+```typescript
+// Predefined tag colors
+const TAG_COLORS = [
+  "#ef4444", "#f97316", "#eab308", "#84cc16", 
+  "#22c55e", "#14b8a6", "#06b6d4", "#3b82f6", 
+  "#8b5cf6", "#d946ef", "#ec4899", "#f43f5e"
+];
+
+// Predefined tags with colors
+const SIMPLE_TAGS = [
+  { id: "action", name: "Action", color: "#ef4444" },
+  { id: "dialogue", name: "Dialogue", color: "#f97316" },
+  { id: "interior", name: "Interior", color: "#8b5cf6" },
+  // ... more predefined tags
+];
+```
+
+#### **5. Data Conversion Functions**
+```typescript
+// Convert string tags to rich objects for display
+const toProjectTagOption = (tag: string, index: number): ProjectTagOption => {
+  const predefinedTag = SIMPLE_TAGS.find((t) => t.id === tag);
+  if (predefinedTag) return predefinedTag;
+  
+  const color = TAG_COLORS[index % TAG_COLORS.length];
+  return { id: tag, name: tag, color };
+};
+
+// Convert rich objects back to strings for storage
+const handleProjectTagsChange = (newTags: ProjectTagOption[]) => {
+  const tagStrings = [...new Set(newTags.map(tag => tag.id))];
+  // Save to Convex as string array
+};
+```
+
+#### **6. Components Updated**
+- ✅ **ProjectsDashboard** - Hybrid pattern with dynamic colors + Hash icons
+- ✅ **TimelineView** - Primary pattern with purple theme + Hash icons
+- ✅ **SceneEditor** - Dynamic colored backgrounds (no icons)
+- ✅ **BoardView** - Dynamic colored backgrounds with Hash icons
+- ✅ **TagEditor** - Interactive pattern with remove functionality
+
+#### **7. Tag System Benefits**
+- **Visual Consistency**: Each component uses appropriate pattern
+- **Color Coding**: Tags are visually distinct by type
+- **Scalability**: Easy to add new predefined tags
+- **Backward Compatibility**: Works with existing string-based storage
+- **User Experience**: Intuitive visual feedback
+
+---
+
+## �🎯 Final Status
 
 **The storyboard & script system is now COMPLETE with:**
 

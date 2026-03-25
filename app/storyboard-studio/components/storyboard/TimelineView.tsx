@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { StoryboardItem } from "../../types/storyboard";
-import { Clock, Users, MapPin, Tag, Edit3, Trash2, Copy, Eye } from "lucide-react";
+import { Clock, Users, MapPin, Tag, Hash, Edit3, Trash2, Copy, Eye } from "lucide-react";
 
 interface TimelineViewProps {
   items: StoryboardItem[];
@@ -175,7 +175,7 @@ export function TimelineView({
                       ))}
                       {item.metadata.tags.slice(0, 3).map(tag => (
                         <span key={tag} className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs flex items-center gap-1">
-                          <Tag className="w-3 h-3" />
+                          <Hash className="w-3 h-3" />
                           {tag}
                         </span>
                       ))}

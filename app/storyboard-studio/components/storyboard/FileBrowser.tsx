@@ -275,19 +275,19 @@ export function FileBrowser({
               <div className="relative">
                 <button
                   onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                  className="flex items-center gap-2 px-4 py-2 bg-(--bg-primary) border border-(--border-primary) rounded-xl hover:border-(--accent-blue) transition-all duration-200"
+                  className="flex items-center gap-2 px-4 py-2 bg-(--bg-tertiary) border border-(--border-primary) rounded-xl hover:bg-(--bg-primary) hover:border-(--accent-blue) transition-all duration-200 group"
                 >
-                  <Filter className="w-4 h-4 text-(--text-secondary)" />
-                  <span className="text-sm text-(--text-secondary)">Filter</span>
-                  <ChevronDown className={`w-4 h-4 text-(--text-secondary) transition-transform duration-200 ${showFilterDropdown ? 'rotate-180' : ''}`} />
+                  <Filter className="w-4 h-4 text-(--text-secondary) group-hover:text-(--accent-blue) transition-colors" />
+                  <span className="text-sm text-(--text-secondary) group-hover:text-(--text-primary) transition-colors">Filter</span>
+                  <ChevronDown className={`w-4 h-4 text-(--text-secondary) transition-all duration-200 ${showFilterDropdown ? 'rotate-180 text-(--accent-blue)' : 'group-hover:text-(--text-primary)'}`} />
                 </button>
                 
                 {/* Filter Dropdown */}
                 {showFilterDropdown && (
-                  <div className="absolute top-full left-0 mt-2 w-64 bg-(--bg-primary) border border-(--border-primary) rounded-xl shadow-xl z-50">
+                  <div className="absolute top-full left-0 mt-2 w-72 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50">
                     <div className="p-4">
                       <h3 className="text-sm font-semibold text-(--text-primary) mb-3">File Type</h3>
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         {[
                           { value: 'all', label: 'All Files', icon: Grid3x3 },
                           { value: 'image', label: 'Images', icon: ImageIcon },
@@ -301,26 +301,32 @@ export function FileBrowser({
                               setSelectedType(value as any);
                               setShowFilterDropdown(false);
                             }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
                               selectedType === value 
-                                ? 'bg-(--bg-tertiary) text-(--text-primary)' 
-                                : 'text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)'
+                                ? 'bg-(--accent-blue)/20 text-(--accent-blue) border border-(--accent-blue)/30' 
+                                : 'text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary) hover:border border-(--border-primary)'
                             }`}
                           >
-                            <Icon className="w-4 h-4" />
-                            <span className="text-sm">{label}</span>
+                            <Icon className={`w-4 h-4 ${selectedType === value ? 'text-(--accent-blue)' : ''}`} />
+                            <span className="text-sm font-medium">{label}</span>
+                            {selectedType === value && (
+                              <div className="ml-auto w-2 h-2 bg-(--accent-blue) rounded-full"></div>
+                            )}
                           </button>
                         ))}
                       </div>
                       
-                      <h3 className="text-sm font-semibold text-(--text-primary) mb-3 mt-4">Source</h3>
-                      <div className="space-y-2">
+                      <div className="h-px bg-(--border-primary) my-4"></div>
+                      
+                      <h3 className="text-sm font-semibold text-(--text-primary) mb-3">Source</h3>
+                      <div className="space-y-1">
                         {[
                           { value: 'uploads', label: '📤 Uploads' },
                           { value: 'generated', label: '🎨 Generated' },
                           { value: 'elements', label: '🧩 Elements' },
                           { value: 'storyboard', label: '🎬 Storyboard' },
-                          { value: 'videos', label: '🎥 Videos' }
+                          { value: 'videos', label: '🎥 Videos' },
+                          { value: 'favorites', label: '⭐ Favorites' }
                         ].map(({ value, label }) => (
                           <button
                             key={value}
@@ -328,13 +334,16 @@ export function FileBrowser({
                               setSelectedFilter(value as any);
                               setShowFilterDropdown(false);
                             }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 ${
+                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
                               selectedFilter === value 
-                                ? 'bg-(--bg-tertiary) text-(--text-primary)' 
-                                : 'text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)'
+                                ? 'bg-(--accent-blue)/20 text-(--accent-blue) border border-(--accent-blue)/30' 
+                                : 'text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary) hover:border border-(--border-primary)'
                             }`}
                           >
-                            <span className="text-sm">{label}</span>
+                            <span className="text-sm font-medium">{label}</span>
+                            {selectedFilter === value && (
+                              <div className="ml-auto w-2 h-2 bg-(--accent-blue) rounded-full"></div>
+                            )}
                           </button>
                         ))}
                       </div>

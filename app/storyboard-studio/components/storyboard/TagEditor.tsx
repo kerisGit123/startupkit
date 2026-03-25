@@ -84,9 +84,9 @@ export function TagEditor({ selectedTags, onTagsChange, onClose }: TagEditorProp
           <div className="p-4 border-b border-white/10">
             <h4 className="text-gray-400 text-xs font-medium mb-2">Selected</h4>
             <div className="flex flex-wrap gap-2">
-              {selectedTags.map((tag) => (
+              {selectedTags.map((tag, index) => (
                 <span
-                  key={tag.id}
+                  key={`${tag.id}-${index}`}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 hover:scale-105"
                   style={{ 
                     backgroundColor: tag.color + '25', 
