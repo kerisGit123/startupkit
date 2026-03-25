@@ -684,12 +684,11 @@ export function ImageAIPanel({
     ];
 
     return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* Reference Images */}
-        <div className="space-y-2">
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Reference Images</p>
-          
-          <div className="flex gap-2 overflow-x-auto pb-2">
+    <div className="absolute bottom-0 left-0 right-0 mx-[20px] mb-[20px] flex flex-col gap-3">
+        {/* Reference Images Panel */}
+        <div className="mb-[0px]">
+          <div className="px-0 py-0">
+            <div className="flex items-start gap-2.5 overflow-x-auto">
             {referenceImages.map((img, index) => (
               <div key={img.id} className="relative flex-shrink-0 group">
                 <img
@@ -781,6 +780,7 @@ export function ImageAIPanel({
               <FileText className="w-4 h-4 text-purple-400 group-hover:text-purple-300 transition-colors" />
               <span className="text-[10px] text-purple-400 group-hover:text-purple-300 transition-colors">Elements</span>
             </button>
+          </div>
           </div>
           
           {referenceImages.length === 0 && (
@@ -1245,10 +1245,10 @@ export function ImageAIPanel({
           onSelectElement={(referenceUrls, name, element) => {
             // Handle multi-image element selection (existing behavior)
             if (referenceUrls && referenceUrls.length > 0) {
-              referenceUrls.forEach(url => handleImageSelect('element', { 
-                url, 
+              referenceUrls.forEach(url => handleImageSelect('element', {
+                url,
                 name,
-                metadata: { 
+                metadata: {
                   source: 'element-library-element',
                   elementId: element._id,
                   elementType: element.type,

@@ -5,11 +5,18 @@ import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
   Upload, Download, Save, History, Trash2,
-  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
+  ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
 } from "lucide-react";
 
+// Import Paintbrush separately to avoid conflicts
+const Paintbrush = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+  </svg>
+);
+
 // ── Types ─────────────────────────────────────────────────────────────
-export type AIEditMode = "describe" | "area-edit" | "annotate";
+export type AIEditMode = "area-edit" | "annotate";
 
 interface ReferenceImage {
   id: string;
@@ -52,6 +59,7 @@ export interface EditImageAIPanelProps {
   onZoomOut?: () => void;
   onFitToScreen?: () => void;
   zoomLevel?: number;
+  onZoomChange?: (level: number) => void;
   selectedColor?: string;
   setSelectedColor?: (color: string) => void;
   onColorPickerClick?: () => void; // Add handler for color picker click
@@ -147,6 +155,7 @@ export function EditImageAIPanel({
   onZoomOut,
   onFitToScreen,
   zoomLevel,
+  onZoomChange,
   selectedColor,
   setSelectedColor,
   onColorPickerClick,
@@ -166,7 +175,6 @@ export function EditImageAIPanel({
   };
   
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
-  const [showImageMaskMenu, setShowImageMaskMenu] = useState(false);
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
   const [showColorMenu, setShowColorMenu] = useState(false);
   // Use existing brush size from props instead of local state
@@ -188,10 +196,6 @@ export function EditImageAIPanel({
   ] : activeTool === "upscale" ? [
     { value: "recraft/crisp-upscale", label: "🎨 Recraft Crisp", sub: "AI Upscale 1 credit", credits: 1, maxReferenceImages: 0 },
     { value: "topaz/image-upscale", label: "💎 Topaz Upscale", sub: "AI Upscale 20 credits", credits: 20, maxReferenceImages: 0 },
-  ] : mode === "describe" ? [
-    // Describe mode specific models
-    { value: "nano-banana-2", label: "🟩 Nano Banana 2", sub: "13 refs • 40 credits", credits: 40, maxReferenceImages: 13 },
-    { value: "seedream-5-lite-image-to-image", label: "🌸 SeeDream 5 Lite", sub: "13 refs • 10 credits", credits: 10, maxReferenceImages: 13 },
   ] : [
     // Default: include character-edit for any other tools in area-edit mode
     { value: "ideogram/character-edit", label: "Character-edit", sub: "Faceshift" },
@@ -323,7 +327,7 @@ export function EditImageAIPanel({
       setActiveTool(id);
       setIsEraser?.(false);
       setShowBrushSizeMenu(false);
-      onToolSelect?.("brush");
+      onToolSelect?.("inpaint");
       // Auto-set character-edit model for brush tools
       onModelChange?.("character-edit");
     } else if (id === "pen-brush") {
@@ -331,7 +335,7 @@ export function EditImageAIPanel({
       setActiveTool(id);
       setIsEraser?.(false);
       setShowBrushSizeMenu(false);
-      onToolSelect?.("pen-brush");
+      onToolSelect?.("inpaint");
       // Auto-set character-edit model for brush tools
       onModelChange?.("character-edit");
     } else if (id === "eraser") {
@@ -339,7 +343,7 @@ export function EditImageAIPanel({
       setActiveTool(id);
       setIsEraser?.(true);
       setShowBrushSizeMenu(false);
-      onToolSelect?.("eraser");
+      onToolSelect?.("inpaint");
       // Auto-set character-edit model for brush tools
       onModelChange?.("character-edit");
     } else if (id === "text") {
@@ -441,8 +445,6 @@ export function EditImageAIPanel({
 
   // ── Left Toolbar (Annotate + Area Edit) ────────────────────────────
   const renderLeftToolbar = () => {
-    if (mode === "describe") return null;
-    
     return (
       <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
         <div className={`flex flex-col gap-1 rounded-lg p-1 shadow-lg border ${
@@ -452,24 +454,24 @@ export function EditImageAIPanel({
         }`}>
           {mode === "annotate" ? (
             <>
-              <ToolBtn active={activeTool === "canvas-object"} onClick={() => { pick("canvas-object"); setShowImageMaskMenu(false); }} title="Canvas Object (no tool)">
+              <ToolBtn active={activeTool === "canvas-object"} onClick={() => pick("canvas-object")} title="Canvas Object (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-white/[0.08] my-0.5" />
-              <ToolBtn active={activeTool === "text"} onClick={() => { pick("text"); setShowImageMaskMenu(false); }} title="Text">
+              <ToolBtn active={activeTool === "text"} onClick={() => pick("text")} title="Text">
                 <Type className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "arrow"} onClick={() => { pick("arrow"); setShowImageMaskMenu(false); }} title="Arrow">
+              <ToolBtn active={activeTool === "arrow"} onClick={() => pick("arrow")} title="Arrow">
                 <ArrowUpRight className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "line"} onClick={() => { pick("line"); setShowImageMaskMenu(false); }} title="Line">
+              <ToolBtn active={activeTool === "line"} onClick={() => pick("line")} title="Line">
                 <Minus className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "square"} onClick={() => { pick("square"); setShowImageMaskMenu(false); }} title="Square">
+              <ToolBtn active={activeTool === "square"} onClick={() => pick("square")} title="Square">
                 <Square className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "circle"} onClick={() => { pick("circle"); setShowImageMaskMenu(false); }} title="Circle">
+              <ToolBtn active={activeTool === "circle"} onClick={() => pick("circle")} title="Circle">
                 <Circle className={ic} />
               </ToolBtn>
               <ToolBtn active={false} onClick={() => {
@@ -498,15 +500,15 @@ export function EditImageAIPanel({
           ) : (
             /* Area Edit tools */
             <>
-              <ToolBtn active={activeTool === "canvas-object"} onClick={() => { pick("canvas-object"); setShowImageMaskMenu(false); }} title="Canvas Object (no tool)">
+              <ToolBtn active={activeTool === "canvas-object"} onClick={() => pick("canvas-object")} title="Canvas Object (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-white/8 my-0.5" />
-              <ToolBtn active={activeTool === "brush"} onClick={() => { pick("brush"); setShowImageMaskMenu(false); }} title="Brush">
+              <ToolBtn active={activeTool === "brush"} onClick={() => pick("brush")} title="Brush">
                 <Brush className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "eraser"} onClick={() => { pick("eraser"); setShowImageMaskMenu(false); }} title="Eraser">
+              <ToolBtn active={activeTool === "eraser"} onClick={() => pick("eraser")} title="Eraser">
                 <Eraser className={ic} />
               </ToolBtn>
               {/* Pen size - shows actual brush size, independent button */}
@@ -538,18 +540,18 @@ export function EditImageAIPanel({
               >
                 <Image className={`${ic} ${activeTool === "image-to-image" ? "text-cyan-400" : ""}`} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "text-to-image"} onClick={() => { pick("text-to-image"); setShowImageMaskMenu(false); }} title="Text to Image">
+              <ToolBtn active={activeTool === "text-to-image"} onClick={() => pick("text-to-image")} title="Text to Image">
                 <Square className={`${ic} ${activeTool === "text-to-image" ? "text-purple-400" : ""}`} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "crop"} onClick={() => { pick("crop"); setShowImageMaskMenu(false); }} title="Crop">
+              <ToolBtn active={activeTool === "crop"} onClick={() => pick("crop")} title="Crop">
                 <Scissors className={ic} />
               </ToolBtn>
-              <ToolBtn active={activeTool === "upscale"} onClick={() => { pick("upscale"); setShowImageMaskMenu(false); }} title="Upscale">
+              <ToolBtn active={activeTool === "upscale"} onClick={() => pick("upscale")} title="Upscale">
                 <ArrowUp className={`${ic} ${activeTool === "upscale" ? "text-yellow-400" : ""}`} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-white/8 my-0.5" />
-              {/* Clear Mask */}
+                            {/* Clear Mask */}
               <button
                 onClick={() => {
                   setCanvasState?.(s => ({ ...s, mask: [] }));
@@ -567,7 +569,7 @@ export function EditImageAIPanel({
         
         {/* Brush Size Menu */}
         {showBrushSizeMenu && (
-          <div className="absolute left-[52px] top-[80px] translate-y-0 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg border border-white/10 shadow-xl p-2 z-30">
+          <div className="absolute left-[52px] top-[129px] translate-y-0 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg border border-white/10 shadow-xl p-2 z-30">
             <div className="flex items-center gap-2">
               {[10, 20, 30, 50, 80].map((size) => (
                 <button
@@ -659,8 +661,6 @@ export function EditImageAIPanel({
 
   // ── Right Toolbar (Annotate + Area Edit) ───────────────────────────
   const renderRightToolbar = () => {
-    if (mode === "describe") return null;
-
     const grp =
       mode === "annotate" 
         ? "flex flex-col gap-1 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg p-1 shadow-lg border border-white/10"
@@ -743,8 +743,8 @@ export function EditImageAIPanel({
             </div>
           ))}
 
-          {/* Add Image button - only show if no images or in describe mode */}
-          {(mode === "describe" || (referenceImages ?? []).length === 0) && (
+          {/* Add Image button - only show if no images */}
+          {(referenceImages ?? []).length === 0 && (
             <button
               onClick={() => fileInputRef.current?.click()}
               className="shrink-0 w-14 h-14 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 flex flex-col items-center justify-center gap-1 transition text-gray-400 hover:text-gray-200"
@@ -767,7 +767,7 @@ export function EditImageAIPanel({
 
   // ── User Prompt Text Area (inside bottom panel) ───────────────────────
   const renderUserPromptArea = () => {
-    if (mode !== "describe" && mode !== "area-edit") return null;
+    if (mode !== "area-edit") return null;
 
     return (
       <div className="px-[10px] pt-[10px] pb-0">
@@ -788,12 +788,6 @@ export function EditImageAIPanel({
               target.style.height = `${target.scrollHeight}px`;
             }}
           />
-          <button
-            className="shrink-0 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 flex items-center justify-center transition text-gray-400 hover:text-gray-200 mt-1"
-            title="Settings"
-          >
-            <Settings className="w-4 h-4" />
-          </button>
         </div>
       </div>
     );
@@ -806,7 +800,6 @@ export function EditImageAIPanel({
       label: string;
       icon: React.ComponentType<{ className?: string }>;
     }[] = [
-      { id: "describe", label: "Describe", icon: MessageSquareText },
       { id: "area-edit", label: "Area Edit", icon: Scan },
       { id: "annotate", label: "Annote", icon: Wand2 },
     ];
@@ -834,8 +827,8 @@ export function EditImageAIPanel({
                   key={tab.id}
                   onClick={() => {
                     onModeChange(tab.id);
-                    // Auto-select canvas-object (no tool) when switching to describe or area-edit
-                    if (tab.id === "describe" || tab.id === "area-edit") {
+                    // Auto-select canvas-object (no tool) when switching to area-edit
+                    if (tab.id === "area-edit") {
                       pick("canvas-object");
                     }
                   }}
@@ -858,8 +851,8 @@ export function EditImageAIPanel({
           {/* Model Dropdown */}
       
 
-          {/* Model Select Box (in describe and area-edit modes) */}
-          {(mode === "area-edit" || mode === "describe") && inpaintModelOptions.length > 0 && (
+          {/* Model Select Box (in area-edit mode) */}
+          {mode === "area-edit" && inpaintModelOptions.length > 0 && (
             <div className="relative" style={{ width: "200px" }}>
               <button
                 onClick={() => setShowInpaintModelDropdown(!showInpaintModelDropdown)}
@@ -890,6 +883,34 @@ export function EditImageAIPanel({
             </div>
           )}
 
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-1 bg-[#1a1a24] rounded-lg p-1 border border-white/10">
+            <button
+              onClick={() => onZoomChange?.(Math.max(25, (zoomLevel || 100) - 25))}
+              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <div className="min-w-[50px] text-center">
+              <span className="text-xs font-medium text-white">{(zoomLevel || 100)}%</span>
+            </div>
+            <button
+              onClick={() => onZoomChange?.(Math.min(200, (zoomLevel || 100) + 25))}
+              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onZoomChange?.(100)}
+              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
+              title="Fit to Screen"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          
           {/* Generate Button */}
           <button
             onClick={onGenerate}

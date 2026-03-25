@@ -25,13 +25,12 @@ interface CanvasAreaProps {
   setCanvasState: (state: CanvasEditorState) => void;
   canvasContainerRef: React.RefObject<HTMLDivElement>;
   generateImageWithElements?: () => void;
+  zoomLevel?: number;
   
   // Brush Props
   maskBrushSize: number;
   isEraser: boolean;
   maskOpacity: number;
-  hideBrushMask: boolean;
-  setHideBrushMask: (value: boolean) => void;
   
   // Canvas Selection
   hiddenIds: Set<string>;
@@ -91,13 +90,12 @@ export function CanvasArea({
   canvasActiveTool,
   canvasState,
   setCanvasState,
+  zoomLevel = 100,
   canvasContainerRef,
   generateImageWithElements,
   maskBrushSize,
   isEraser,
   maskOpacity,
-  hideBrushMask,
-  setHideBrushMask,
   hiddenIds,
   setCanvasSelection,
   activeAIPanel,
@@ -208,7 +206,6 @@ export function CanvasArea({
           brushSize={maskBrushSize}
           isEraser={isEraser}
           maskOpacity={maskOpacity}
-          hideMask={hideBrushMask}
           hiddenObjectIds={hiddenIds}
           onSelectionChange={setCanvasSelection}
           selection={canvasSelection}
@@ -228,6 +225,7 @@ export function CanvasArea({
           onDeleteSelected={onDeleteSelected}
           mode={mode}
           onSetOriginalImage={onSetOriginalImage}
+          zoomLevel={zoomLevel}
           resetAllTransformations={() => {
             setCanvasState({
               ...canvasState,
@@ -251,14 +249,13 @@ export function CanvasArea({
           brushSize={maskBrushSize}
           isEraser={isEraser}
           maskOpacity={maskOpacity}
-          hideBrushMask={hideBrushMask}
-          setHideBrushMask={setHideBrushMask}
-          hiddenIds={hiddenIds}
+          hiddenObjectIds={hiddenIds}
           onSelectionChange={setCanvasSelection}
-          canvasSelection={canvasSelection}
+          selection={canvasSelection}
+          aspectRatio={activeShot?.aspectRatio || "16:9"}
           rectangle={rectangle}
-          setRectangle={setRectangle}
-          imageIsRectangleVisible={imageIsRectangleVisible}
+          onRectangleChange={setRectangle}
+          rectangleVisible={imageIsRectangleVisible}
           canvasTool={canvasTool}
           isAspectRatioAnimating={isAspectRatioAnimating}
           isSquareMode={isSquareMode}
@@ -271,6 +268,7 @@ export function CanvasArea({
           onDeleteSelected={onDeleteSelected}
           mode={mode}
           onSetOriginalImage={onSetOriginalImage}
+          zoomLevel={zoomLevel}
           resetAllTransformations={() => {
             setCanvasState({
               ...canvasState,

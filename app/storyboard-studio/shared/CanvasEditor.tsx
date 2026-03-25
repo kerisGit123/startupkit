@@ -44,7 +44,6 @@ interface CanvasEditorProps {
   brushSize: number;
   isEraser: boolean;
   maskOpacity: number;
-  hideMask?: boolean;
   hiddenObjectIds?: Set<string>;
   onSelectionChange?: (sel: CanvasSelection) => void;
   selection?: CanvasSelection;
@@ -69,6 +68,7 @@ interface CanvasEditorProps {
   onAspectRatioChange?: (aspectRatio: string) => void; // Add handler for aspect ratio changes
   mode?: "describe" | "area-edit" | "annotate"; // AI Edit mode
   onSetOriginalImage?: (imageUrl: string) => void; // Add handler for setting original image
+  zoomLevel?: number; // Zoom level in percent (100 = fit to screen)
 }
 
 type DragInfo = {
@@ -95,10 +95,10 @@ type RotDragInfo = {
 // ── CanvasEditor ───────────────────────────────────────────────────────────
 export function CanvasEditor({
   panelId, imageUrl, activeTool, state, onStateChange,
-  brushSize, isEraser, maskOpacity, hideMask = false, hiddenObjectIds = new Set(),
+  brushSize, isEraser, maskOpacity, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
   rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, onToolSelect, generateImageWithElements,
-  onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected, onAspectRatioChange, mode, onSetOriginalImage,
+  onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected, onAspectRatioChange, mode, onSetOriginalImage, zoomLevel = 100,
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -107,6 +107,23 @@ export function CanvasEditor({
   useEffect(() => {
     console.log("DEBUG: CanvasEditor imageUrl changed to: ",imageUrl?.substring(0,50));
   }, [imageUrl]);
+
+  // Update image transform when zoomLevel changes
+  useEffect(() => {
+    const container = containerRef.current;
+    const img = container?.querySelector('img') as HTMLImageElement;
+    if (!container || !img || !img.naturalWidth || !img.naturalHeight) return;
+    
+    const cW = container.offsetWidth;
+    const cH = container.offsetHeight;
+    if (!cW || !cH) return;
+    
+    const baseScale = Math.min(cW / img.naturalWidth, cH / img.naturalHeight);
+    const zoomScale = baseScale * (zoomLevel / 100);
+    const tx = (cW - img.naturalWidth * zoomScale) / 2;
+    const ty = (cH - img.naturalHeight * zoomScale) / 2;
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${zoomScale})`;
+  }, [zoomLevel]);
   const dragRef = useRef<DragInfo>(null);
   const rotDragRef = useRef<RotDragInfo>(null);
   const [outerSize, setOuterSize] = useState({ w: 0, h: 0 });
@@ -378,14 +395,14 @@ export function CanvasEditor({
     const r = brushSize;
 
     const newMask = isEraser
-      ? mask.filter(d => Math.hypot(d.x - x, d.y - y) > r / 2)
-      : [...mask, { x, y, r }];
+      ? state.mask.filter(d => Math.hypot(d.x - x, d.y - y) > r / 2)
+      : [...state.mask, { x, y, r }];
     onStateChange({ ...state, mask: newMask });
-  }, [state, mask, isEraser, brushSize, onStateChange]);
+  }, [state, isEraser, brushSize, onStateChange]);
 
   const commitMaskSnapshot = useCallback(() => {
-    onStateChange({ ...state, undoStack: [...state.undoStack, mask], redoStack: [] });
-  }, [state, mask, onStateChange]);
+    onStateChange({ ...state, undoStack: [...state.undoStack, state.mask], redoStack: [] });
+  }, [state, onStateChange]);
 
   // ── Mouse down ──
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -874,14 +891,15 @@ export function CanvasEditor({
   const ar = aspectRatio ? (arMap[aspectRatio] ?? null) : null;
 
   // Compute exact pixel box that fits inside outer container preserving aspect ratio
-  // Leave 50px padding on all sides so the canvas never touches the edges
+  // Leave 100px padding on all sides so the canvas never touches the edges
   // Add extra 128px bottom padding to avoid being hidden by bottom panel
-  const PAD = 50;
+  const PAD = 100;
+  const TOP_PAD = 100; // Ensure minimum 100px top padding
   const BOTTOM_EXTRA = 128;
   let canvasStyle: React.CSSProperties = { width: "100%", height: "100%" };
   if (ar && outerSize.w > 0 && outerSize.h > 0) {
     const maxW = outerSize.w - PAD * 2;
-    const maxH = outerSize.h - PAD * 2 - BOTTOM_EXTRA;
+    const maxH = outerSize.h - TOP_PAD - PAD - BOTTOM_EXTRA; // Use TOP_PAD for top, PAD for bottom
     // "contain" logic: fit by width first, fall back to height if overflows
     let w = maxW;
     let h = w / ar;
@@ -953,11 +971,12 @@ export function CanvasEditor({
                 const cW = container.offsetWidth;
                 const cH = container.offsetHeight;
                 if (!cW || !cH || !img.naturalWidth || !img.naturalHeight) return;
-                const scale = Math.min(cW / img.naturalWidth, cH / img.naturalHeight);
-                const tx = (cW - img.naturalWidth * scale) / 2;
-                const ty = (cH - img.naturalHeight * scale) / 2;
-                img.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
-                onImageLoad?.(scale);
+                const baseScale = Math.min(cW / img.naturalWidth, cH / img.naturalHeight);
+                const zoomScale = baseScale * (zoomLevel / 100);
+                const tx = (cW - img.naturalWidth * zoomScale) / 2;
+                const ty = (cH - img.naturalHeight * zoomScale) / 2;
+                img.style.transform = `translate(${tx}px, ${ty}px) scale(${zoomScale})`;
+                onImageLoad?.(baseScale);
                 // Notify parent that image loaded (parent decides whether to set as original)
                 if (imageUrl) {
                   onSetOriginalImage?.(imageUrl);
@@ -969,7 +988,8 @@ export function CanvasEditor({
               <span className="text-sm">No image — upload one to start</span>
             </div>
         }
-        {mask.length > 0 && !hideMask && <MaskCanvas mask={mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} />}
+        {/* Mask Canvas */}
+        {state.mask.length > 0 && <MaskCanvas mask={state.mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} />}
         {canvasTool === "rectInpaint" && rectangle && rectangleVisible && (
           <>
             <RectangleCanvas 
@@ -1983,7 +2003,7 @@ export function CanvasEditor({
                   { label: currentBubble?.tailMode === "none" ? "Show Tail" : "Hide Tail", shortcut: "", icon: "M15 12a3 3 0 11-6 0 3 3 0 016 0z", action: (e) => {
                       e?.stopPropagation();
                       if (ctxMenu.id && currentBubble) {
-                        const newTailMode = currentBubble.tailMode === "none" ? "default" : "none";
+                        const newTailMode = currentBubble.tailMode === "none" ? "auto" : "none";
                         patchBubble(ctxMenu.id, { tailMode: newTailMode });
                       }
                       setCtxMenu(null);
@@ -2790,10 +2810,10 @@ export function CanvasEditor({
             { label: "↙ Tail Bottom Left", icon: "M7 16l-4-4 4-4", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "bottom-left" as any }); setCtxMenu(null); } },
             { label: "↘ Tail Bottom Right", icon: "M17 8l4 4-4 4", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { tailDir: "bottom-right" as any }); setCtxMenu(null); } },
           ] : ctxMenu.submenu === 'layer' ? [
-            { label: "↑ Bring Forward", icon: "M12 5l7 7-7 7M5 5l7 7-7 7", action: () => { if (ctxMenu.id) { bringForward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
-            { label: "⇈ Bring to Front", icon: "M5 3h14M12 7l7 7-7 7M5 7l7 7-7 7", action: () => { if (ctxMenu.id) { bringToFront(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
-            { label: "↓ Send Backward", icon: "M12 19l-7-7 7-7M19 19l-7-7 7-7", action: () => { if (ctxMenu.id) { sendBackward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
-            { label: "⇊ Send to Back", icon: "M19 21H5M12 17l-7-7 7-7M19 17l-7-7 7-7", action: () => { if (ctxMenu.id) { sendToBack(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+            { label: "↑ Bring Forward", icon: "M12 5l7 7-7 7M5 5l7 7-7 7", action: () => { if (ctxMenu.id && ctxMenu.kind !== "canvas") { bringForward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+            { label: "⇈ Bring to Front", icon: "M5 3h14M12 7l7 7-7 7M5 7l7 7-7 7", action: () => { if (ctxMenu.id && ctxMenu.kind !== "canvas") { bringToFront(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+            { label: "↓ Send Backward", icon: "M12 19l-7-7 7-7M19 19l-7-7 7-7", action: () => { if (ctxMenu.id && ctxMenu.kind !== "canvas") { sendBackward(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
+            { label: "⇊ Send to Back", icon: "M19 21H5M12 17l-7-7 7-7M19 17l-7-7 7-7", action: () => { if (ctxMenu.id && ctxMenu.kind !== "canvas") { sendToBack(ctxMenu.kind, ctxMenu.id); } setCtxMenu(null); } },
           ] : ctxMenu.submenu === 'bubbleType' ? [
             { label: "Speech", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "speech" as any }); setCtxMenu(null); } },
             { label: "Speech (Rough)", icon: "M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z", action: () => { if (ctxMenu.id) patchBubble(ctxMenu.id, { bubbleType: "speechRough" as any }); setCtxMenu(null); } },
@@ -2904,19 +2924,4 @@ export function CanvasEditor({
       </div>
     </div>
   );
-}
-
-// ── Mask undo/redo helpers (call from parent) ─────────────────────────────
-export function undoMask(state: CanvasEditorState): CanvasEditorState {
-  if (state.undoStack.length === 0) return state;
-  const undoStack = [...state.undoStack];
-  const last = undoStack.pop()!;
-  return { ...state, mask: last, undoStack, redoStack: [...state.redoStack, state.mask] };
-}
-
-export function redoMask(state: CanvasEditorState): CanvasEditorState {
-  if (state.redoStack.length === 0) return state;
-  const redoStack = [...state.redoStack];
-  const next = redoStack.pop()!;
-  return { ...state, mask: next, redoStack, undoStack: [...state.undoStack, state.mask] };
 }

@@ -11,7 +11,7 @@ import type { Shot, CommentItem, Tag as TagType } from "../types";
 import type { Id } from "@/convex/_generated/dataModel";
 import { TAG_COLORS } from "../constants";
 import {
-  CanvasEditor, emptyCanvasState, undoMask, redoMask,
+  CanvasEditor, emptyCanvasState,
   type CanvasEditorState, type CanvasActiveTool, type CanvasSelection,
 } from "../shared/CanvasEditor";
 import { makeId, bubbleEllipse, cloudPath, tailPath, rectTailPath, rectOutlinePathWithGap, burstPoints, roughEllipsePath, estimateFontSize } from "../shared/canvas-helpers";
@@ -23,6 +23,26 @@ import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/ElementImageAIP
 import { Video, Image as ImageIcon, Box } from "lucide-react";
 
 type CanvasTool = CanvasActiveTool;
+
+// Mobile detection hook
+const useMobileDetection = () => {
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+  
+  useEffect(() => {
+    const checkDevice = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 768);
+      setIsTablet(width >= 768 && width < 1024);
+    };
+    
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+  
+  return { isMobile, isTablet, isDesktop: !isMobile && !isTablet };
+};
 
 interface SceneEditorProps {
   shots: Shot[];
@@ -38,6 +58,15 @@ interface SceneEditorProps {
 }
 
 export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, projectId, userId, user, userCompanyId }: SceneEditorProps) {
+  // Mobile detection
+  const { isMobile, isTablet, isDesktop } = useMobileDetection();
+  
+  // Mobile-specific state
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(isMobile);
+  const [activeToolCategory, setActiveToolCategory] = useState<'basic' | 'advanced'>('basic');
+  const [showMobileToolbar, setShowMobileToolbar] = useState(true);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  
   const [activeShotId, setActiveShotId] = useState(initialShotId);
   const [commentText, setCommentText] = useState("");
   const [editingField, setEditingField] = useState<"voice" | "notes" | "action" | null>(null);
@@ -50,6 +79,78 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [promptText, setPromptText] = useState("");
   const [isInpainting, setIsInpainting] = useState(false);
   const [inpaintError, setInpaintError] = useState<string | null>(null);
+  
+  // Mobile gesture handling
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isMobile) {
+      setTouchStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+      // Hide mobile toolbar during interaction
+      if (showMobileToolbar) {
+        setShowMobileToolbar(false);
+      }
+    }
+  }, [isMobile, showMobileToolbar]);
+  
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (isMobile && touchStart) {
+      const touchEnd = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+      const deltaX = touchEnd.x - touchStart.x;
+      const deltaY = touchEnd.y - touchStart.y;
+      
+      // Swipe gestures for mobile
+      if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        // Horizontal swipe - switch AI panels
+        if (deltaX > 0) {
+          // Swipe right - previous panel
+          setActiveAIPanel(prev => {
+            if (prev === 'element') return 'video';
+            if (prev === 'video') return 'editimage';
+            return prev;
+          });
+        } else {
+          // Swipe left - next panel
+          setActiveAIPanel(prev => {
+            if (prev === 'editimage') return 'video';
+            if (prev === 'video') return 'element';
+            return prev;
+          });
+        }
+        // Haptic feedback for panel switch
+        if ('vibrate' in navigator) {
+          navigator.vibrate(20);
+        }
+      } else if (Math.abs(deltaY) > 50 && Math.abs(deltaY) > Math.abs(deltaX)) {
+        // Vertical swipe - toggle panel visibility
+        if (deltaY > 0) {
+          // Swipe down - hide panel
+          setIsPanelCollapsed(true);
+        } else {
+          // Swipe up - show panel
+          setIsPanelCollapsed(false);
+        }
+        // Haptic feedback for panel toggle
+        if ('vibrate' in navigator) {
+          navigator.vibrate(15);
+        }
+      }
+      
+      setTouchStart(null);
+      
+      // Show mobile toolbar after interaction
+      setTimeout(() => {
+        setShowMobileToolbar(true);
+      }, 1000);
+    }
+  }, [isMobile, touchStart]);
+  
+  // Zoom handlers for mobile
+  const handleZoomIn = useCallback(() => {
+    setZoomLevel(prev => Math.min(prev + 10, 300));
+  }, []);
+  
+  const handleZoomOut = useCallback(() => {
+    setZoomLevel(prev => Math.max(prev - 10, 25));
+  }, []);
   
   // Sliding panels state
   const [generatedImagesPanelOpen, setGeneratedImagesPanelOpen] = useState(false);
@@ -137,7 +238,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [showTagPopup, setShowTagPopup] = useState(false);
 
   // ImageAI Panel state
-  const [aiEditMode, setAiEditMode] = useState<AIEditMode>("describe");
+  const [aiEditMode, setAiEditMode] = useState<AIEditMode>("area-edit");
   const [aiModel, setAiModel] = useState("nano-banana-2");
   const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string; filename?: string }[]>([]);
 
@@ -172,19 +273,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     };
   }, []);
 
-  // ── Zoom Functions ───────────────────────────────────────────────────
-  const handleZoomIn = () => {
-    const newZoom = Math.min(zoomLevel + 20, 200);
-    setZoomLevel(newZoom);
-    applyZoomToImage(newZoom);
-  };
-
-  const handleZoomOut = () => {
-    const newZoom = Math.max(zoomLevel - 20, 20);
-    setZoomLevel(newZoom);
-    applyZoomToImage(newZoom);
-  };
-
+  // ── Mobile-Friendly Zoom Functions ───────────────────────────────────────────────────
+  const [pinchDistance, setPinchDistance] = useState<number | null>(null);
+  
   const handleFitToScreen = () => {
     const canvasContainer = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
     const image = canvasContainer?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
@@ -206,7 +297,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       
       image.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
       image.style.transformOrigin = 'top left';
-      image.style.transition = '';
+      image.style.transition = isMobile ? 'transform 0.3s ease-out' : '';
       image.style.position = 'absolute';
       image.style.left = '0px';
       image.style.top = '0px';
@@ -214,9 +305,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       // Store fit scale as the "100%" baseline for zoom in/out
       fitScaleRef.current = scale;
       setZoomLevel(100);
+      
+      // Haptic feedback on mobile
+      if (isMobile && 'vibrate' in navigator) {
+        navigator.vibrate(15);
+      }
     }
   };
-
+  
   // Re-centers the active rectangle to the image center without needing stale state
   const recenterRectangleIfActive = useCallback(() => {
     // Skip recentering if we're in square mask mode for debugging
@@ -321,7 +417,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  const [hideBrushMask, setHideBrushMask] = useState(false); // Hide/show blue brush mask on canvas
   const [newBubbleText, setNewBubbleText] = useState("test...");
   const [newBubbleType, setNewBubbleType] = useState<BubbleType>("speech");
   const [newTextContent, setNewTextContent] = useState("test...");
@@ -928,7 +1023,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               tempCanvas.height = height;
               
               // Draw original image as background
-              const img = new Image();
+              const img = document.createElement('img');
               img.src = originalImage || '';
               img.onload = () => {
                 tempCtx.drawImage(img, 0, 0, width, height);
@@ -2915,9 +3010,52 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   if (!activeShot) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0d0d12]">
+    <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0d0d12] ${isMobile ? 'touch-pan-y' : ''}`}
+         onTouchStart={handleTouchStart}
+         onTouchEnd={handleTouchEnd}>
+      
+      {/* Mobile Toolbar */}
+      {isMobile && showMobileToolbar && (
+        <div className="absolute top-0 left-0 right-0 z-20 bg-[#1a1a24]/95 backdrop-blur-sm border-b border-white/10 px-4 py-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveAIPanel(prev => {
+                  if (prev === 'editimage') return 'video';
+                  if (prev === 'video') return 'element';
+                  return 'editimage';
+                })}
+                className="px-3 py-1.5 bg-(--accent-blue) text-white rounded-lg text-xs font-medium transition"
+              >
+                {activeAIPanel === 'editimage' ? '🎬 Video' : activeAIPanel === 'video' ? '🎨 Element' : '🖼️ Image'}
+              </button>
+              <button
+                onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
+                className="px-3 py-1.5 bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) rounded-lg text-xs font-medium transition"
+              >
+                {isPanelCollapsed ? '📱 Show' : '📱 Hide'}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleZoomIn}
+                className="px-2 py-1 bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) rounded text-xs transition"
+              >
+                🔍+
+              </button>
+              <button
+                onClick={handleZoomOut}
+                className="px-2 py-1 bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) rounded text-xs transition"
+              >
+                🔍-
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
         {/* ── Top bar ── */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/6 shrink-0">
+        <div className={`${isMobile ? 'pt-12' : ''} flex items-center gap-3 px-4 py-2.5 border-b border-white/6 shrink-0`}>
         <button onClick={onClose} className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition">
           <ChevronLeft className="w-4 h-4" /> Back
         </button>
@@ -3029,11 +3167,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       </div>
 
       {/* ── Main area ── */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Center: large image */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* Top Right Controls */}
-          <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+      <div className={`flex-1 flex overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
+        {/* Center: Canvas Area */}
+        <div className={`flex-1 flex flex-col overflow-hidden relative ${isMobile ? 'order-2' : ''}`}>
+          {/* Top Right Controls - Mobile Optimized */}
+          <div className={`absolute top-3 right-3 z-10 ${isMobile ? 'flex flex-row gap-2' : 'flex flex-col gap-2'}`}>
             {/* Generated Images Button */}
             <button
               onClick={() => {
@@ -3101,11 +3239,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             setCanvasState={setCanvasState}
             canvasContainerRef={canvasContainerRef as React.RefObject<HTMLDivElement>}
             generateImageWithElements={generateImageWithElements}
+            zoomLevel={zoomLevel}
             maskBrushSize={maskBrushSize}
             isEraser={isEraser}
             maskOpacity={maskOpacity}
-            hideBrushMask={hideBrushMask}
-            setHideBrushMask={setHideBrushMask}
             hiddenIds={hiddenIds}
             setCanvasSelection={setCanvasSelection}
             canvasSelection={canvasSelection}
@@ -3324,27 +3461,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 <span className="text-[8px] font-medium leading-none">{showImageAIPanel ? 'Hide' : 'Show'}</span>
               </button>
               
-              {/* Brush Mask Toggle Button - Below ImageAI Panel Toggle */}
-              {canvasTool === "inpaint" && (
-                <button
-                  onClick={() => setHideBrushMask(!hideBrushMask)}
-                  className={`absolute top-16 left-4 z-[9999] w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all pointer-events-auto ${
-                    hideBrushMask 
-                      ? 'bg-purple-500/15 text-purple-300' 
-                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                  }`}
-                  style={{ pointerEvents: 'auto' }}
-                  title={hideBrushMask ? "Show brush mask" : "Hide brush mask"}
-                  aria-label={hideBrushMask ? "Show brush mask" : "Hide brush mask"}
-                >
-                  <Paintbrush className="w-4 h-4" />
-                  <span className="text-[8px] font-medium leading-none">{hideBrushMask ? 'Show' : 'Hide'}</span>
-                </button>
-              )}
-              
               {/* AI Panel overlay on canvas */}
               {showImageAIPanel && (
-                <div className="pointer-events-auto">
+                <div className={`pointer-events-auto ${isMobile ? 'absolute inset-0 z-30' : ''}`}>
                   {activeAIPanel === 'editimage' ? (
                     <EditImageAIPanel
                   mode={aiEditMode}
@@ -3567,6 +3686,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 onZoomOut={handleZoomOut}
                 onFitToScreen={handleFitToScreen}
                 zoomLevel={zoomLevel}
+                onZoomChange={setZoomLevel}
                 />
                   ) : activeAIPanel === 'video' ? (
                     <VideoAIPanel
