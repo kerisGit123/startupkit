@@ -20,12 +20,29 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const result = await convex.mutation(api.storyboard.pricing.resetToDefaults, body);
+    if (body?.action === "resetDefaults") {
+      const result = await convex.mutation(api.storyboard.pricing.resetToDefaults, {});
+      return NextResponse.json(result);
+    }
+
+    const result = await convex.mutation(api.storyboard.pricing.createPricingModel, {
+      modelId: body.modelId,
+      modelName: body.modelName,
+      modelType: body.modelType,
+      pricingType: body.pricingType,
+      creditCost: body.creditCost,
+      factor: body.factor,
+      formulaJson: body.formulaJson,
+    });
+
     return NextResponse.json(result);
   } catch (err) {
-    console.error("Failed to reset pricing models:", err);
+    console.error("Failed to create/reset pricing model(s):", err);
     return NextResponse.json(
-      { error: "Failed to reset pricing models" },
+      {
+        error: "Failed to create/reset pricing models",
+        details: err instanceof Error ? err.message : "Unknown error",
+      },
       { status: 500 }
     );
   }

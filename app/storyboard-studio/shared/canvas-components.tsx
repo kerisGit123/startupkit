@@ -271,8 +271,9 @@ export function MaskCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const container = canvas.closest('[data-canvas-editor="true"]');
-    const image = container?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
-    if (!image) return;
+    const image = container?.querySelector('img:not([class*="mask])') as HTMLImageElement;
+    
+    if (!image || !image.naturalWidth) return;
 
     const update = () => {
       // Copy image transform directly to canvas
@@ -295,7 +296,7 @@ export function MaskCanvas({
     if (!ctx) return;
 
     const container = canvas.closest('[data-canvas-editor="true"]') as HTMLElement;
-    const image = container?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
+    const image = container?.querySelector('img:not([class*="mask])') as HTMLImageElement;
 
     // Resize canvas to natural image dimensions so 1 canvas px = 1 image px
     const natW = image?.naturalWidth  || width;

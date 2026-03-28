@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { auth } from "@clerk/nextjs/server";
 
 const r2 = new S3Client({
   region: "auto",
@@ -14,6 +15,11 @@ const BUCKET = process.env.R2_BUCKET_NAME ?? "storyboardbucket";
 
 export async function POST(req: NextRequest) {
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { r2Key } = await req.json();
     
     if (!r2Key) {

@@ -12,7 +12,7 @@ export const createFromN8n = mutation({
     referenceUrls: v.array(v.string()),
     tags: v.array(v.string()),
     createdBy: v.string(),
-    visibility: v.optional(v.union(v.literal("private"), v.literal("public"))),
+    visibility: v.optional(v.union(v.literal("private"), v.literal("public"), v.literal("shared"))),
     companyId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -52,7 +52,7 @@ export const create = mutation({
     referenceUrls: v.array(v.string()),
     tags: v.array(v.string()),
     createdBy: v.string(),
-    visibility: v.optional(v.union(v.literal("private"), v.literal("public"))),
+    visibility: v.optional(v.union(v.literal("private"), v.literal("public"), v.literal("shared"))),
   },
   handler: async (ctx, args) => {
     // Get user from auth context

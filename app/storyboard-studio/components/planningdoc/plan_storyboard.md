@@ -6,6 +6,318 @@
 
 ---
 
+## 💰 Quality-Based Pricing Integration (March 2026)
+
+### **Overview**
+Advanced pricing system for AI models with dynamic quality selection and real-time credit calculation integrated into the storyboard core system.
+
+### **Implemented Models with Quality Pricing**
+
+#### **Nano Banana 2** (Storyboard Frame Generation)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+#### **Topaz Upscale** (Storyboard Frame Enhancement)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**:
+  - 1K: 10 × 1.3 = **13 credits**
+  - 2K: 18 × 1.3 = **24 credits**
+  - 4K: 30 × 1.3 = **39 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+### **Storyboard Core Integration with Quality Pricing**
+
+#### **✅ Frame Generation with Quality Parameters**
+```typescript
+// StoryboardGeneration.ts - Generate frames with quality-based pricing
+export const generateItemsFromScenes = action({
+  args: {
+    projectId: v.id('storyboard_projects'),
+    generateImages: v.boolean(),
+    style: v.string(),
+    quality: v.optional(v.string()), // "1K", "2K", "4K"
+  },
+  handler: async (ctx, { projectId, generateImages, style, quality = '2K' }) => {
+    const project = await ctx.runQuery(internal.storyboardProjects.get, { id: projectId });
+    
+    // Validate user access
+    const identity = await ctx.auth.getUserIdentity();
+    const userCompanyId = identity.orgId || identity.subject;
+    
+    if (project.companyId !== userCompanyId) {
+      throw new Error('Access denied');
+    }
+
+    // Calculate credit cost for quality-based generation
+    const selectedModel = "nano-banana-2"; // or "topaz/image-upscale"
+    const creditCost = getModelCredits(selectedModel, quality);
+    
+    // Check user credits before generation
+    const userCredits = await ctx.runQuery(internal.credits.getUserBalance, {
+      userId: identity.subject,
+      companyId: userCompanyId
+    });
+    
+    if (userCredits < creditCost * project.scenes.length) {
+      throw new Error(`Insufficient credits. Need ${creditCost * project.scenes.length} credits for ${quality} generation.`);
+    }
+
+    // Generate frames with quality parameters
+    for (let i = 0; i < project.scenes.length; i++) {
+      const scene = project.scenes[i];
+
+      await ctx.runMutation(internal.storyboardItems.create, {
+        projectId,
+        companyId: userCompanyId,
+        sceneId: scene.id,
+        order: i,
+        title: scene.title,
+        description: scene.content.substring(0, 200),
+        duration: 5,
+        elements: [],
+        annotations: [],
+        fileIds: [],
+        isAIGenerated: false,
+        generationStatus: generateImages ? 'pending' : 'none',
+        qualityMetadata: generateImages ? {
+          model: selectedModel,
+          quality: quality,
+          creditCost: creditCost
+        } : undefined,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+    }
+
+    // If generateImages, trigger batch image generation with quality
+    if (generateImages) {
+      await ctx.runAction(internal.storyboardImageGeneration.batchGenerateImages, {
+        projectId,
+        style,
+        quality,
+        model: selectedModel
+      });
+    }
+
+    await ctx.runMutation(internal.storyboardProjects.patch, {
+      id: projectId,
+      status: 'active',
+      updatedAt: Date.now(),
+    });
+
+    return { total: project.scenes.length, quality, creditCost };
+  },
+});
+```
+
+#### **✅ Quality-Aware Frame Management**
+```typescript
+// StoryboardItems.ts - Enhanced with quality metadata
+export const create = mutation({
+  args: {
+    projectId: v.id('storyboard_projects'),
+    sceneId: v.string(),
+    order: v.number(),
+    title: v.string(),
+    description: v.optional(v.string()),
+    duration: v.number(),
+    elements: v.optional(v.array(v.any())),
+    annotations: v.optional(v.array(v.any())),
+    qualityMetadata: v.optional(v.object({
+      model: v.string(),
+      quality: v.string(),
+      creditCost: v.number()
+    }))
+  },
+  handler: async (ctx, args) => {
+    // Get user for companyId
+    const identity = await ctx.auth.getUserIdentity();
+    const userCompanyId = identity.orgId || identity.subject;
+
+    return await ctx.db.insert('storyboard_items', {
+      ...args,
+      companyId: userCompanyId,
+      fileIds: [],
+      isAIGenerated: false,
+      generationStatus: 'none',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+});
+```
+
+#### **✅ Quality-Based Credit Logging**
+```typescript
+// CreditUsage.ts - Enhanced logging with quality information
+export const log = mutation({
+  args: {
+    orgId: v.string(),
+    userId: v.string(),
+    projectId: v.id('storyboard_projects'),
+    companyId: v.string(),
+    action: v.string(),
+    model: v.string(),
+    creditsUsed: v.number(),
+    quality: v.optional(v.string()), // "1K", "2K", "4K"
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert('storyboard_credit_usage', {
+      ...args,
+      timestamp: Date.now(),
+      metadata: args.quality ? {
+        quality: args.quality,
+        model: args.model,
+        qualityBased: true
+      } : undefined
+    });
+  },
+});
+```
+
+### **Storyboard UI Integration with Quality Pricing**
+
+#### **✅ Quality Selection in Storyboard Tools**
+```typescript
+// ToolsPanel.tsx - Enhanced with quality options
+export function ToolsPanel({ projectId, selectedItemIds, onClose }: ToolsPanelProps) {
+  const [activeTool, setActiveTool] = useState<'images' | 'videos' | 'elements' | null>(null);
+  const [selectedQuality, setSelectedQuality] = useState('2K'); // Default quality
+
+  return (
+    <div className="space-y-4">
+      {/* Tool Selection */}
+      <div className="grid grid-cols-1 gap-2">
+        <button
+          onClick={() => setActiveTool('images')}
+          className={`p-3 rounded-lg border text-left transition-colors ${
+            activeTool === 'images' 
+              ? 'border-emerald-500 bg-emerald-50' 
+              : 'border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <ImageIcon className="w-5 h-5 text-emerald-600" />
+            <div>
+              <div className="font-medium text-sm">AI Images</div>
+              <div className="text-xs text-gray-500">Generate with quality</div>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      {/* Quality Selection for Images */}
+      {activeTool === 'images' && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">Quality</label>
+          <div className="flex gap-2">
+            {['1K', '2K', '4K'].map((quality) => (
+              <button
+                key={quality}
+                onClick={() => setSelectedQuality(quality)}
+                className={`px-3 py-1 rounded text-sm ${
+                  selectedQuality === quality
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {quality}
+              </button>
+            ))}
+          </div>
+          <div className="text-xs text-gray-500">
+            Credits: {getModelCredits('nano-banana-2', selectedQuality)} per frame
+          </div>
+        </div>
+      )}
+
+      {/* Tool Content */}
+      {activeTool === 'images' && (
+        <ImageAIPanel 
+          projectId={projectId} 
+          selectedItemIds={selectedItemIds}
+          quality={selectedQuality}
+          onClose={() => setActiveTool(null)} 
+        />
+      )}
+    </div>
+  );
+}
+```
+
+#### **✅ Frame Card with Quality Display**
+```typescript
+// FrameCard.tsx - Enhanced with quality metadata
+export function FrameCard({ item, index, selected, onSelect }: FrameCardProps) {
+  return (
+    <div className={`relative border rounded-xl overflow-hidden cursor-pointer transition-all ${
+      selected 
+        ? 'ring-2 ring-emerald-500 border-emerald-500' 
+        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+    }`}>
+      {/* Frame Number */}
+      <div className="absolute top-2 left-2 z-10 bg-black/70 text-white text-xs px-2 py-1 rounded">
+        #{index + 1}
+      </div>
+
+      {/* Quality Badge */}
+      {item.qualityMetadata && (
+        <div className="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded">
+          {item.qualityMetadata.quality}
+        </div>
+      )}
+
+      {/* Media Content */}
+      <div className="aspect-video bg-gray-50 relative">
+        {item.videoUrl ? (
+          <video src={item.videoUrl} className="w-full h-full object-cover" muted loop />
+        ) : item.imageUrl ? (
+          <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-400">
+            <div className="text-center">
+              <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+              <p className="text-xs">No media</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3">
+        <h3 className="text-sm font-medium text-gray-900 truncate mb-1">
+          {item.title}
+        </h3>
+        <p className="text-xs text-gray-500 line-clamp-2 mb-2">
+          {item.description}
+        </p>
+        
+        <div className="flex items-center justify-between text-xs text-gray-400">
+          <span>{item.duration}s</span>
+          <div className="flex gap-1">
+            {item.imageUrl && <ImageIcon className="w-3 h-3" />}
+            {item.videoUrl && <VideoIcon className="w-3 h-3" />}
+          </div>
+        </div>
+
+        {/* Quality Cost */}
+        {item.qualityMetadata && (
+          <div className="mt-1 text-xs text-purple-600">
+            {item.qualityMetadata.quality} - {item.qualityMetadata.creditCost} credits
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
 ## Implementation Status: 95% COMPLETE
 
 ### Fully Implemented:

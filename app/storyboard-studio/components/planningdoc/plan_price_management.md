@@ -1,56 +1,67 @@
 # Pricing Management System
 
+
 ## Overview
 
 A comprehensive pricing management system for AI models that supports both fixed price and formula-based calculations. The system provides a complete admin interface for managing pricing models, real-time testing, and instant price calculators.
 
-## Current Implementation Status: ✅ **FULLY OPERATIONAL - UPDATED**
+
+## Current Implementation Status: ✅ **IMPLEMENTED AND ALIGNED WITH CURRENT CODE**
+
 
 ### ✅ **Core Features Implemented**
-- **Complete CRUD Operations**: Create, read, update, delete pricing models
-- **Real-time Testing**: Test pricing formulas with configurable parameters
-- **Price Calculators**: Instant credit calculation buttons beside each model
-- **Dropdown Menus**: Functional add to favorites and delete operations
-- **Professional UI**: Dark theme with table/grid/card view modes
-- **Database Integration**: Full Convex database with proper ID handling
-- **Formula Validation**: JSON schema validation for pricing formulas
-- **Multi-model Support**: Image generation, video generation, AI upscaling
-- **Quality Presets**: 1K, 2K, 4K resolution support
-- **Audio Support**: Video pricing with audio options
-- **Duration-based Pricing**: Video pricing based on length
-- **Batch Operations**: Bulk pricing calculations
-- **Export/Import**: Pricing model backup and restore
 
-### ✅ **Advanced Features**
-- **Dynamic Pricing**: Real-time price adjustments based on market conditions
-- **Usage Analytics**: Track pricing model usage and revenue
-- **A/B Testing**: Compare different pricing strategies
-- **User Segmentation**: Different pricing for different user tiers
-- **Promotional Pricing**: Temporary discounts and special offers
-- **Cost Analysis**: Detailed cost breakdown per model
-- **Revenue Forecasting**: Predict future revenue based on usage patterns
+- **CRUD Operations**: Create, read, update, delete pricing models
+- **Real-time Testing**: Test pricing formulas with configurable parameters
+- **Price Calculation Display**: Fixed price and derived price shown in admin UI
+- **Dark Theme Admin UI**: Table/grid/card view modes
+- **Convex Integration**: Pricing models stored in `storyboard_model_credit`
+- **Fixed and Formula Pricing**: Supports both pricing strategies
+- **Image / Video Support**: Model type specific pricing rules
+- **Resolution / Quality / Duration Inputs**: Used in formula testing
+
+
+### ✅ **Important Current Behavior**
+
+- **Edit is update-only**: Editing an existing pricing model must never create a new model
+- **Create is separate**: New models are created only through the create flow
+- **Reset to Default is explicit**: Reset uses a dedicated `action: "resetDefaults"` POST payload
+- **Fresh form state after save**: The edit modal is repopulated from freshly fetched saved data, not stale component state
+- **Duplicate create protection**: Creating a model with an existing `modelId` throws an error
+
 
 ### ✅ **Technical Implementation**
-- **TypeScript**: Full type safety for all pricing functions
-- **Convex Integration**: Real-time database synchronization
-- **Error Handling**: Comprehensive error management and logging
-- **Performance**: Optimized calculations with caching
-- **Security**: Role-based access control for pricing management
-- **API Integration**: RESTful endpoints for external systems
-- **Webhooks**: Real-time notifications for pricing changes
+
+- **TypeScript**: Typed pricing models and functions
+- **Convex Integration**: Database mutations and queries for pricing models
+- **Error Handling**: API returns validation/update errors clearly
+- **Strict Save Semantics**:
+  - `POST` = create new model or reset defaults when explicitly requested
+  - `PUT` = update existing model only
+- **Fresh Data Sync After Save**: UI uses refreshed models returned after save
+
 
 ### ✅ **Recent Updates (2026)**
-- **Enhanced UI Components**: Improved dark theme with better contrast
-- **Mobile Responsiveness**: Pricing management now mobile-friendly
-- **Advanced Filtering**: Filter by model type, pricing method, status
-- **Bulk Operations**: Mass update pricing models
-- **Audit Logging**: Complete change tracking with user attribution
-- **Performance Optimization**: Faster loading with pagination
-- **Integration Updates**: Compatible with latest storyboard studio features
+
+- **Strict edit/update flow**: Prevents edit from accidentally creating duplicates
+- **Separated create vs update API flow**
+- **Reset defaults moved behind explicit action payload**
+- **Stale edit modal fix**: Saved values remain visible after save
+- **Current admin list aligned with actual pricing model IDs used by the UI**
+- **✅ QUALITY-BASED PRICING IMPLEMENTED**: Dynamic quality selection for Nano Banana 2 and Topaz Upscale models
+- **✅ FORMULA JSON PRICING**: Direct cost extraction from formulaJson with factor multiplication
+- **✅ REAL-TIME QUALITY UPDATES**: Quality dropdown with immediate credit recalculation
+- **✅ ACCURATE ALERT MESSAGES**: Quality-specific alerts showing correct model names and credits
+- **✅ TAB-BASED TESTING INTERFACE**: Separate Models and Testing tabs with model-aware parameters
+- **✅ UPDATED SEEDANCE PRICING**: Corrected 4-second duration intervals and proper multipliers
+- **✅ FUNCTION-BASED CALCULATIONS**: Testing panel uses assigned pricing functions for accuracy
+
 
 ## Pricing Functions
 
+
 ### 1. getNanoBananaPrice - Image Generation
+
 ```typescript
 function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
   const qualityMultipliers = {
@@ -65,23 +76,40 @@ function getNanoBananaPrice(base: number, multiplier: number, quality: string): 
 ```
 
 **Usage:** `getNanoBananaPrice(base, multiplier, quality)`
-**Examples:** 
-- `getNanoBananaPrice(8, 1.3, '1K')` → 10 credits
-- `getNanoBananaPrice(8, 1.3, '2K')` → 15 credits
-- `getNanoBananaPrice(8, 1.3, '4K')` → 23 credits
+
+**Examples:**
+
+- `getNanoBananaPrice(8, 1.3, '1K')` → 11 credits
+- `getNanoBananaPrice(8, 1.3, '2K')` → 16 credits
+- `getNanoBananaPrice(8, 1.3, '4K')` → 24 credits
+
 
 ### 2. getSeedance15 - Video Generation
+
 ```typescript
 function getSeedance15(base: number, multiplier: number, resolution: string, audio: boolean, duration: number): number {
   const resolutionMultipliers = {
     '480p': 1,
-    '720p': 1.5,
-    '1080p': 2.5,
+    '720p': 2,
+    '1080p': 4,
     '4K': 5
   };
   
-  const audioMultiplier = audio ? 1.5 : 1;
-  const durationMultiplier = Math.ceil(duration / 5); // Every 5 seconds adds multiplier
+  // Duration multiplier based on 4-second intervals
+  let durationMultiplier = 1;
+  if (duration <= 4) {
+    durationMultiplier = 1;
+  } else if (duration <= 8) {
+    durationMultiplier = 2;
+  } else if (duration <= 12) {
+    durationMultiplier = 4;
+  } else {
+    // For durations longer than 12 seconds, calculate additional 4-second blocks
+    const additionalBlocks = Math.ceil((duration - 12) / 4);
+    durationMultiplier = 4 + additionalBlocks;
+  }
+  
+  const audioMultiplier = audio ? 2 : 1;
   const resolutionMultiplier = resolutionMultipliers[resolution] || 1;
   
   return Math.ceil(base * multiplier * resolutionMultiplier * audioMultiplier * durationMultiplier);
@@ -89,11 +117,16 @@ function getSeedance15(base: number, multiplier: number, resolution: string, aud
 ```
 
 **Usage:** `getSeedance15(base, multiplier, resolution, audio, duration)`
-**Examples:**
-- `getSeedance15(12, 1.3, '720p', false, 5)` → 78 credits
-- `getSeedance15(12, 1.3, '1080p', true, 10)` → 234 credits
+
+**Examples** (with factor 1.3):
+
+- `getSeedance15(7, 1.3, '720p', true, 8)` → 73 credits
+- `getSeedance15(7, 1.3, '1080p', true, 12)` → 146 credits
+- `getSeedance15(7, 1.3, '480p', false, 4)` → 10 credits
+
 
 ### 3. getTopazUpscale - AI Upscaling
+
 ```typescript
 function getTopazUpscale(base: number, multiplier: number, upscaleFactor: string): number {
   const qualityMultipliers = {
@@ -102,86 +135,137 @@ function getTopazUpscale(base: number, multiplier: number, upscaleFactor: string
     '3x': 3,
     '4x': 4
   };
-  
+
   const qualityMultiplier = qualityMultipliers[upscaleFactor] || 1;
   return Math.ceil(base * multiplier * qualityMultiplier);
 }
 ```
 
 **Usage:** `getTopazUpscale(base, multiplier, upscaleFactor)`
+
 **Examples:**
+
 - `getTopazUpscale(10, 1.3, '1x')` → 13 credits
 - `getTopazUpscale(10, 1.3, '2x')` → 26 credits
 - `getTopazUpscale(10, 1.3, '4x')` → 52 credits
 
-## Database Schema
+
+## Global getModelCredits Function
+
+A single global function that fetches a pricing model by `modelId` and returns the calculated credits. No hardcoded values, no manual lookups—available everywhere without imports.
+
+### Goal
+
+- One call: `getModelCredits(modelId, options)` → credits
+- Works for both fixed and formula pricing
+- Available globally in any component
+- Consistent pricing across the entire app
+
+### Implementation
 
 ```typescript
-interface PricingModel {
-  _id: string;                           // Convex unique identifier
-  modelId: string;                       // "nano-banana-2", "seedance-1.5-pro"
-  modelName: string;                     // "Nano Banana 2", "Seedance 1.5 Pro"
-  modelType: "image" | "video";          // Model category
-  isActive: boolean;                     // true = available, false = disabled
-  pricingType: "fixed" | "formula";      // Pricing method
-  creditCost?: number;                   // Base cost for fixed pricing
-  factor?: number;                       // Multiplier for pricing
-  formulaJson?: string;                  // JSON formula configuration
-  assignedFunction?: "getTopazUpscale" | "getSeedance15" | "getNanoBananaPrice";
-  createdAt: number;
-  updatedAt: number;
+// lib/storyboard/pricing.ts
+type CreditOptions = {
+  quality?: "1K" | "2K" | "4K";
+  resolution?: "480p" | "720p" | "1080p" | "4K";
+  audio?: boolean;
+  duration?: number;
+  upscaleFactor?: "1x" | "2x" | "3x" | "4x";
+};
+
+export async function getModelCredits(
+  modelId: string,
+  options: CreditOptions = {}
+): Promise<number> {
+  const model = await fetchPricingModel(modelId);
+  if (!model) return 0;
+
+  const base = model.creditCost || 0;
+  const factor = model.factor || 1;
+
+  if (model.pricingType === "fixed") {
+    return Math.ceil(base * factor);
+  }
+
+  switch (model.assignedFunction) {
+    case "getNanoBananaPrice":
+      return getNanoBananaPrice(base, factor, options.quality || "1K");
+    case "getSeedance15":
+      return getSeedance15(
+        base,
+        factor,
+        options.resolution || "720p",
+        options.audio || false,
+        options.duration || 5
+      );
+    case "getTopazUpscale":
+      return getTopazUpscale(base, factor, options.upscaleFactor || "1x");
+    default:
+      return Math.ceil(base * factor);
+  }
+}
+
+// Helper to fetch the pricing model (choose one approach)
+async function fetchPricingModel(modelId: string): Promise<PricingModel | null> {
+  // Option 1: Direct Convex query
+  // return await convex.query(api.storyboard.pricing.getPricingModelByModelId, { modelId });
+
+  // Option 2: API endpoint
+  // const res = await fetch(`/api/storyboard/pricing/models?modelId=${modelId}`);
+  // return res.ok ? res.json() : null;
+
+  // Option 3: In-memory cache (if already loaded)
+  // return pricingModelsCache.get(modelId) || null;
 }
 ```
 
-## User Interface Components
+### Global Setup
 
-### Pricing Management Dark Theme
-**Location**: `/storyboard-studio/components/admin/PricingManagementDark.tsx`
-
-**Key Features:**
-- **Table/Grid/Card Views**: Multiple display modes
-- **Search & Filter**: Find models by name, type, status
-- **Dropdown Menus**: Add to favorites, delete models
-- **Price Calculators**: 💰 buttons for instant pricing
-- **Testing Panel**: Real-time formula testing
-
-### Price Calculator Implementation
 ```typescript
-// Calculator button beside each model
-<button
-  onClick={() => showCalculator(model)}
-  className="text-green-400 hover:text-green-300 p-1 rounded hover:bg-green-400/20 transition-colors"
-  title="Calculate Price"
->
-  <DollarSign className="w-4 h-4" />
-</button>
+// globals.d.ts
+declare global {
+  const pricing: {
+    getModelCredits: (modelId: string, options?: CreditOptions) => Promise<number>;
+  };
+}
 
-// Calculator popup shows instant pricing
-const credits = model.pricingType === 'fixed' 
-  ? Math.ceil((model.creditCost || 0) * (model.factor || 1))
-  : calculateFormula(model.assignedFunction, defaultParams);
+// In a shared layout or app initialization:
+import { getModelCredits } from '@/lib/storyboard/pricing';
+(window as any).pricing = { getModelCredits };
 ```
 
-### Dropdown Menu System
+### Usage (any component, no imports)
+
 ```typescript
-// Functional dropdown with favorites and delete
-{activeDropdown && dropdownPosition && (
-  <div className="fixed bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg shadow-lg z-[9999]">
-    <button onClick={() => toggleFavorite(model.modelId)}>
-      <Star className="w-4 h-4" />
-      {favoriteModels.has(model.modelId) ? 'Remove from Favorites' : 'Add to Favorites'}
-    </button>
-    <button onClick={() => handleDelete(model.modelId)}>
-      <Trash2 className="w-4 h-4" />
-      Delete Model
-    </button>
-  </div>
-)}
+// Dropdowns / generate buttons
+const credits = await pricing.getModelCredits("nano-banana-2", { quality: "2K" });
+
+// Admin pricing table
+const credits = await pricing.getModelCredits(model.modelId);
+
+// Billing / validation
+const charge = await pricing.getModelCredits(selectedModel, {
+  quality,
+  resolution,
+  audio,
+  duration,
+  upscaleFactor,
+});
 ```
+
+### Why This Is Better
+
+- **One call, no boilerplate**: components don't need to fetch, then calculate
+- **No hardcoded credits**: eliminates duplicate price logic
+- **Consistent everywhere**: admin UI and generation UI always match
+- **Future-proof**: change pricing models, everything updates automatically
+
 
 ## API Endpoints
 
+
 ### Pricing Models API
+
 **Location**: `/api/storyboard/pricing/models/route.ts`
 
 ```typescript
@@ -191,8 +275,30 @@ export async function GET() {
   return NextResponse.json(models);
 }
 
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+
+  if (body?.action === "resetDefaults") {
+    return NextResponse.json(
+      await convex.mutation(api.storyboard.pricing.resetToDefaults, {})
+    );
+  }
+
+  return NextResponse.json(
+    await convex.mutation(api.storyboard.pricing.createPricingModel, {
+      modelId: body.modelId,
+      modelName: body.modelName,
+      modelType: body.modelType,
+      pricingType: body.pricingType,
+      creditCost: body.creditCost,
+      factor: body.factor,
+      formulaJson: body.formulaJson,
+    })
+  );
+}
+
 export async function PUT(req: NextRequest) {
-  // Update pricing model
+  // Update existing pricing model only
   const body = await req.json();
   const result = await convex.mutation(api.storyboard.pricing.updatePricingModel, body);
   return NextResponse.json(result);
@@ -207,6 +313,7 @@ export async function DELETE(req: NextRequest) {
 ```
 
 ### Convex Mutations
+
 **Location**: `/convex/storyboard/pricing.ts`
 
 ```typescript
@@ -227,25 +334,46 @@ export const updatePricingModel = mutation({
     )),
   },
   handler: async (ctx, args) => {
-    // Upsert logic - create or update
     const existing = await ctx.db.query("storyboard_model_credit")
       .withIndex("by_model_id")
-      .filter((q) => q.eq("modelId", args.modelId))
+      .filter((q) => q.eq(q.field("modelId"), args.modelId))
       .first();
-    
-    if (existing) {
-      // Update existing
-      await ctx.db.patch(existing._id, { ...args, updatedAt: Date.now() });
-      return existing._id;
-    } else {
-      // Create new
-      const newId = await ctx.db.insert("storyboard_model_credit", {
-        ...args,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-      return newId;
+
+    if (!existing) {
+      throw new Error(`Pricing model ${args.modelId} not found for update`);
     }
+
+    await ctx.db.patch(existing._id, { ...args, updatedAt: Date.now() });
+    return existing._id;
+  },
+});
+
+export const createPricingModel = mutation({
+  args: {
+    modelId: v.string(),
+    modelName: v.string(),
+    modelType: v.union(v.literal("image"), v.literal("video")),
+    pricingType: v.union(v.literal("fixed"), v.literal("formula")),
+    creditCost: v.optional(v.number()),
+    factor: v.optional(v.number()),
+    formulaJson: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("storyboard_model_credit")
+      .withIndex("by_model_id")
+      .filter((q) => q.eq(q.field("modelId"), args.modelId))
+      .first();
+
+    if (existing) {
+      throw new Error(`Pricing model ${args.modelId} already exists`);
+    }
+
+    return await ctx.db.insert("storyboard_model_credit", {
+      ...args,
+      isActive: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   },
 });
 
@@ -264,26 +392,32 @@ export const deletePricingModel = mutation({
 
 ## Usage Examples
 
+
 ### Managing Pricing Models
+
 1. **Navigate**: `/storyboard-studio/admin/pricing`
 2. **View Models**: Table shows all pricing models with current settings
 3. **Edit Model**: Click edit button to modify pricing
-4. **Test Pricing**: Use testing panel to verify calculations
-5. **Delete Model**: Use dropdown menu to remove models
+4. **Save Existing Model**: Edit flow updates the current record only
+5. **Create New Model**: Add New Model uses create flow only
+6. **Delete Model**: Use dropdown menu to remove models
+7. **Test Pricing**: Use testing panel to verify calculations
 
 ### Using Price Calculators
+
 1. **Find Model**: Locate model in pricing table
 2. **Click Calculator**: Click 💰 icon beside model name
 3. **View Pricing**: Instant credit calculation appears
 4. **Real-time Updates**: Reflects current model settings
 
 ### Testing Formulas
+
 1. **Toggle Testing**: Click "Show Testing" in header
 2. **Configure Parameters**: Set base, multiplier, quality, etc.
 3. **Test Model**: Click 📈 button on formula models
 4. **View Results**: See calculated credits with breakdown
 
-## Default Models Configuration
+## Current Default / Seed Model Configuration
 
 ```typescript
 const DEFAULT_PRICING_MODELS = [
@@ -343,30 +477,95 @@ const DEFAULT_PRICING_MODELS = [
       },
     }),
   },
+  {
+    modelId: "flux-2/pro-text-to-image",
+    modelName: "Flux 2 Pro",
+    modelType: "image",
+    pricingType: "fixed",
+    creditCost: 10,
+    factor: 1.3,
+  },
+  {
+    modelId: "ideogram/character-edit",
+    modelName: "Character Edit",
+    modelType: "image",
+    pricingType: "fixed",
+    creditCost: 5,
+    factor: 1.3,
+  },
+  {
+    modelId: "gpt-image",
+    modelName: "GPT Image 1.5",
+    modelType: "image",
+    pricingType: "fixed",
+    creditCost: 35,
+    factor: 1.3,
+  },
+  {
+    modelId: "gpt-image/1.5-text-to-image",
+    modelName: "1.5 Text to Image",
+    modelType: "image",
+    pricingType: "fixed",
+    creditCost: 4,
+    factor: 1.3,
+  },
+  {
+    modelId: "google/nano-banana-edit",
+    modelName: "Nano Banana Edit",
+    modelType: "image",
+    pricingType: "fixed",
+    creditCost: 4,
+    factor: 1.3,
+  },
+  {
+    modelId: "qwen/image-to-image",
+    modelName: "Image to Image",
+    modelType: "image",
+    pricingType: "fixed",
+    creditCost: 4,
+    factor: 1.6,
+  },
+  {
+    modelId: "recraft/crisp-upscale",
+    modelName: "Crisp Upscale",
+    modelType: "image",
+    pricingType: "fixed",
+    creditCost: 0.5,
+    factor: 1.3,
+  },
 ];
 ```
+
+## Notes About Current Behavior
+
+- **Edit modal model ID is locked** when editing an existing model
+- **Edit save uses update-only** flow
+- **Create save uses create-only** flow
+- **Saving after edit keeps the newly saved values in the modal**
+- **Duplicate rows created before the strict update fix may still need manual cleanup**
 
 ## Benefits of Current Implementation
 
 ### ✅ **Complete Functionality**
+
 - **Full CRUD Operations**: Create, read, update, delete models
 - **Working Dropdowns**: Favorites and delete operations functional
 - **Price Calculators**: Instant credit checking for all models
 - **Real-time Testing**: Verify pricing changes instantly
-
-### ✅ **User Experience**
 - **Professional UI**: Dark theme with multiple view modes
 - **Intuitive Controls**: Clear buttons and dropdown menus
 - **Instant Feedback**: Real-time calculations and updates
 - **Error Handling**: Proper validation and user messages
 
 ### ✅ **Developer Experience**
-- **Type Safety**: Complete TypeScript interfaces
+
+- **TypeScript**: Typed pricing models and functions
 - **Clean Code**: Well-organized and maintainable
 - **Proper Database**: Convex with correct schema and indexes
 - **API Integration**: Full REST API with proper error handling
 
 ### ✅ **Business Control**
+
 - **Model Management**: Enable/disable models instantly
 - **Pricing Flexibility**: Fixed and formula-based pricing
 - **Testing Tools**: Verify pricing before deployment
@@ -375,30 +574,174 @@ const DEFAULT_PRICING_MODELS = [
 ## File Structure
 
 ### Core Implementation Files
+
 - **`PricingManagementDark.tsx`**: Main UI component
 - **`PricingManagementPage.tsx`**: Page wrapper
 - **`usePricingData.ts`**: Data fetching hook
 - **`pricing.ts`**: Convex database mutations
 
 ### API Routes
+
 - **`/api/storyboard/pricing/models/route.ts`**: Main API endpoint
 
 ### Documentation
-- **`price_plan_formula.md`**: This file (main documentation)
+
+- **`plan_price_management.md`**: Main pricing management documentation
 - **`link.md`**: External resources and tutorials
+
 
 ---
 
-## ✅ **Implementation Status: PRODUCTION READY**
+## ✅ **Quality-Based Pricing Implementation (March 2026)**
 
-The pricing management system is fully implemented and operational with:
-- ✅ Complete CRUD operations working
-- ✅ Functional dropdown menus (favorites, delete)
-- ✅ Price calculators for instant credit checking
-- ✅ Real-time testing functionality
-- ✅ Professional dark theme UI
-- ✅ Database integration with proper ID handling
-- ✅ Full API endpoints
-- ✅ Type safety throughout
+### **Overview**
+Dynamic quality selection for formula-based models with real-time credit calculation and accurate alert messaging.
 
-**Ready for production use!** 🎉
+### **Implemented Models**
+
+#### **Nano Banana 2**
+- **Quality Options**: 1K, 2K, 4K
+- **Formula JSON**: Direct cost extraction with factor multiplication
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+
+#### **Topaz Upscale**
+- **Quality Options**: 1K, 2K, 4K
+- **Formula JSON**: Direct cost extraction with factor multiplication
+- **Pricing**:
+  - 1K: 10 × 1.3 = **13 credits**
+  - 2K: 18 × 1.3 = **24 credits**
+  - 4K: 30 × 1.3 = **39 credits**
+
+### **Technical Implementation**
+
+#### **Quality Dropdown UI**
+```typescript
+// Conditional rendering based on model selection
+{(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale") && (
+  <div className="quality-dropdown">
+    {["1K", "2K", "4K"].map((quality) => (
+      <button onClick={() => {
+        setSelectedQuality(quality);
+        alertModelCredits(currentModelId, quality);
+      }}>
+        {quality}
+      </button>
+    ))}
+  </div>
+)}
+```
+
+#### **Formula-Based Calculation**
+```typescript
+// Direct cost extraction from formulaJson
+if (model.formulaJson) {
+  const formula = JSON.parse(model.formulaJson);
+  const quality = formula.pricing?.qualities?.find(q => q.name === selectedQuality);
+  if (quality) {
+    const factor = model.factor || 1;
+    return Math.ceil(quality.cost * factor);
+  }
+}
+```
+
+#### **Quality-Aware Alert System**
+```typescript
+const alertModelCredits = (selectedModelId: string, quality?: string) => {
+  // Use provided quality or fallback to current state
+  const qualityForCalculation = quality || selectedQuality;
+  
+  // Direct formula calculation for immediate accuracy
+  const creditCharge = calculateFromFormula(modelId, qualityForCalculation);
+  const qualityInfo = ` (${qualityForCalculation})`;
+  
+  window.alert(`${modelLabel}${qualityInfo} will charge ${creditCharge} credits.`);
+};
+```
+
+### **Key Features**
+
+#### **✅ Dynamic Quality Selection**
+- Quality dropdown appears only for Nano Banana 2 and Topaz Upscale models
+- Hidden by default when other models are selected
+- Immediate UI updates when quality changes
+
+#### **✅ Real-Time Credit Calculation**
+- Credits update instantly when quality is selected
+- Formula-based pricing uses exact costs from formulaJson
+- Factor multiplication applied consistently (1.3 for both models)
+
+#### **✅ Accurate Alert Messaging**
+- Alerts show correct model name and selected quality
+- No state timing issues - quality passed directly to alert
+- Example: "Topaz Upscale (4K) will charge 39 credits."
+
+#### **✅ Formula JSON Integration**
+- Direct cost extraction from formula quality arrays
+- Eliminates hardcoded multiplier calculations
+- Consistent with admin pricing management formulas
+
+### **User Experience Flow**
+
+1. **Model Selection**: User selects Nano Banana 2 or Topaz Upscale
+2. **Quality Dropdown**: Appears automatically with 1K, 2K, 4K options
+3. **Quality Selection**: User clicks desired quality (e.g., "4K")
+4. **Immediate Update**: 
+   - UI shows new credit cost
+   - Alert displays correct pricing with quality
+   - State updates for future interactions
+
+### **Debugging & Monitoring**
+
+#### **Console Logging**
+```typescript
+console.log("[EditImageAIPanel] Nano Banana from formula:", { 
+  selectedQuality, 
+  cost: quality.cost, 
+  factor, 
+  result: Math.ceil(quality.cost * factor)
+});
+```
+
+#### **Alert Debug Info**
+```typescript
+console.log("[EditImageAIPanel] Alert debug:", { 
+  selectedModelId, 
+  normalizedSelectedModelId, 
+  modelLabel, 
+  creditCharge, 
+  qualityInfo,
+  qualityForCalculation,
+  activeTool
+});
+```
+
+### **Implementation Files**
+
+- **`EditImageAIPanel.tsx`**: Quality dropdown UI and calculation logic
+- **`usePricingData.ts`**: Dynamic pricing data with formula support
+- **`convex/storyboard/pricing.ts`**: Default models with assignedFunction field
+
+### **Benefits Achieved**
+
+- **✅ User-Friendly**: Clear quality selection with immediate feedback
+- **✅ Accurate Pricing**: Formula-based calculations match admin settings
+- **✅ Real-Time Updates**: No delays or stale data issues
+- **✅ Consistent Experience**: Alerts match UI calculations exactly
+- **✅ Maintainable**: Formula-driven pricing reduces hardcoded values
+
+---
+
+## ✅ **Implementation Status: CURRENTLY IN USE**
+
+The pricing management system is implemented and currently used with:
+- ✅ Separate create and update flows
+- ✅ Edit flow that does not create new models
+- ✅ Fresh modal state after save
+- ✅ Formula and fixed price support
+- ✅ Admin testing panel
+- ✅ Convex-backed pricing storage
+
+**Keep this document aligned with the actual model IDs and save flow in code.**

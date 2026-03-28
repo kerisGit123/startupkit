@@ -95,7 +95,6 @@ const MODELS = [
   { id: "stable-diffusion", label: "Stable Diffusion", icon: "S" },
   { id: "gpt-image-1-5-text-to-image", label: "GPT Image 1.5 Text", icon: "🟦" },
   { id: "nano-banana-edit", label: "Nano Banana Edit", icon: "🟩" },
-  { id: "flux-2/flex-image-to-image", label: "Flux 2 Flex", icon: "🟡" },
   { id: "character-remix", label: "Character Remix", icon: "🟣" },
   { id: "qwen-z-image", label: "Qwen Image Edit", icon: "🟠" },
   { id: "ideogram/character-edit", label: "Character Edit", icon: "🔵" },

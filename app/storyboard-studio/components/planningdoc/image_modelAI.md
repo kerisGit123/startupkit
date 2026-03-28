@@ -2,7 +2,8 @@
 
 > **Purpose**: Comprehensive guide for integrating Kie AI image generation models
 > **Scope**: API endpoints, model configurations, implementation patterns, best practices
-> **Status**: Production-ready with latest Kie AI models
+> **Status**: Production-ready with latest Kie AI models and quality-based pricing
+> **Updated**: March 2026 - Aligned with pricing management system
 
 ---
 
@@ -20,31 +21,51 @@ Kie AI provides unified access to the best AI models through a single API. For i
 - **1 Credit** = $0.0025 (400 credits = $1.00)
 - **Models range**: 1-45 credits per generation
 - **Billing**: Per-generation, not per-request
+- **Quality-Based Pricing**: Dynamic pricing based on resolution/quality
 - **Free Trial**: Available in playground
 
 ---
 
 ## 🎨 **Image Generation Models**
 
-### **📊 Model Categories & Credits**
+### **📊 Updated Model Pricing (March 2026)**
 
-| Model | Credits | Max References | Best For | Aspect Ratios |
-|-------|----------|-----------------|----------|---------------|
+| Model | Base Credits | Quality Multipliers | Max References | Best For |
+|-------|--------------|-------------------|----------------|----------|
 | **Text-to-Image** | | | | |
-| `gpt-image/1.5-text-to-image` | 8 | 0 | Photorealistic | 1:1, 3:2 |
-| `flux-2/flex-text-to-image` | 40 | 0 | High quality | 1:1 |
+| `gpt-image/1.5-text-to-image` | 4 | 1x (fixed) | 0 | Photorealistic |
+| `flux-2/flex-text-to-image` | 5 | 1K:1x, 2K:1.4x | 0 | High quality |
 | **Image-to-Image** | | | | |
-| `flux-2/flex-image-to-image` | 15-30 | 7 | General editing | 1:1, auto |
-| `flux-2/pro-image-to-image` | 15 | 7 | Professional | Multiple |
-| `gpt-image/1.5-image-to-image` | 45 | 15 | Character editing | 1:1, 3:2 |
-| `nano-banana-2` | 36-40 | 13 | Text translation | Multiple |
-| `ideogram/character-remix` | 40 | 4 | Character consistency | Square HD |
-| `qwen/image-edit` | 10 | 0 | Quick edits | Square, Square HD |
-| `google/nano-banana-edit` | 8 | 0 | Style transfer | Multiple |
-| `seedream/5-lite-image-to-image` | 10 | 13 | Lighting effects | Multiple |
+| `flux-2/flex-image-to-image` | 5 | 1K:1x, 2K:1.4x | 7 | General editing |
+| `flux-2/pro-image-to-image` | 5 | 1K:1x, 2K:1.4x | 7 | Professional |
+| `gpt-image/1.5-image-to-image` | 4 | 1x (fixed) | 15 | Character editing |
+| `nano-banana-2` | 8 | 1K:1x, 2K:1.5x, 4K:2.25x | 13 | Text translation |
+| `ideogram/character-remix` | 12 | 1x (fixed) | 4 | Character consistency |
+| `qwen/image-edit` | 4 | 1x (fixed) | 0 | Quick edits |
+| `google/nano-banana-edit` | 4 | 1x (fixed) | 0 | Style transfer |
+| `seedream/5-lite-image-to-image` | 4 | 1x (fixed) | 13 | Lighting effects |
 | **Upscale** | | | | |
-| `recraft/crisp-upscale` | 1 | 0 | Quality enhancement | N/A |
-| `topaz/image-upscale` | 20 | 0 | Professional upscale | N/A |
+| `recraft/crisp-upscale` | 1 | 1x (fixed) | 0 | Quality enhancement |
+| `topaz/image-upscale` | 10 | 1K:1x, 2K:2x, 4K:4x | 0 | Professional upscale |
+
+### **💰 Quality-Based Pricing Examples**
+
+#### **Nano Banana 2 (Formula-Based)**
+- **Base**: 8 credits with 1.3x factor
+- **1K Quality**: 8 × 1.3 × 1 = **11 credits**
+- **2K Quality**: 8 × 1.3 × 1.5 = **16 credits**  
+- **4K Quality**: 8 × 1.3 × 2.25 = **24 credits**
+
+#### **Topaz Upscale (Formula-Based)**
+- **Base**: 10 credits with 1.3x factor
+- **1K (1x upscale)**: 10 × 1.3 × 1 = **13 credits**
+- **2K (2x upscale)**: 10 × 1.3 × 2 = **26 credits**
+- **4K (4x upscale)**: 10 × 1.3 × 4 = **52 credits**
+
+#### **Fixed Pricing Models**
+- **GPT Image 1.5**: 4 credits × 1.3 = **5 credits**
+- **Flux 2 Flex**: 5 credits × 1.3 = **7 credits** (1K), **10 credits** (2K)
+- **Ideogram Character**: 12 credits × 1.3 = **16 credits**
 
 ---
 
@@ -417,36 +438,50 @@ async function pollForResult(taskId: string, timeout: number = 300000) {
       throw error;
     }
   }
-
-  throw new Error('Generation timeout');
-}
-```
-
-### **💰 Credit Management**
-```typescript
-const MODEL_CREDITS = {
-  'gpt-image/1.5-text-to-image': 8,
-  'flux-2/flex-text-to-image': 40,
-  'flux-2/flex-image-to-image': 15,
-  'flux-2/pro-image-to-image': 15,
-  'gpt-image/1.5-image-to-image': 45,
-  'nano-banana-2': 36,
-  'ideogram/character-remix': 40,
-  'qwen/image-edit': 10,
-  'google/nano-banana-edit': 8,
-  'seedream/5-lite-image-to-image': 10,
   'recraft/crisp-upscale': 1,
-  'topaz/image-upscale': 20
+  'topaz/image-upscale': 10   // Formula-based with upscale multipliers
 };
 
-function calculateCredits(model: string, quantity: number = 1): number {
-  const baseCredits = MODEL_CREDITS[model] || 10;
-  return baseCredits * quantity;
-}
-```
+// Quality multipliers for formula-based models
+const QUALITY_MULTIPLIERS = {
+  'nano-banana-2': {
+    '1K': 1.0,
+    '2K': 1.5,
+    '4K': 2.25
+  },
+  'topaz/image-upscale': {
+    '1K': 1.0,  // 1x upscale
+    '2K': 2.0,  // 2x upscale
+    '4K': 4.0   // 4x upscale
+  }
+};
 
-### **🔐 Security Best Practices**
-```typescript
+// Standard factor applied to all models
+const PRICING_FACTOR = 1.3;
+
+function calculateCredits(model: string, quality?: string, quantity: number = 1): number {
+  const baseCredits = MODEL_BASE_CREDITS[model] || 10;
+  
+  // Check if model uses quality-based pricing
+  if (model === 'nano-banana-2' && quality) {
+    const qualityMultiplier = QUALITY_MULTIPLIERS[model][quality] || 1;
+    return Math.ceil(baseCredits * PRICING_FACTOR * qualityMultiplier * quantity);
+  }
+  
+  if (model === 'topaz/image-upscale' && quality) {
+    const qualityMultiplier = QUALITY_MULTIPLIERS[model][quality] || 1;
+    return Math.ceil(baseCredits * PRICING_FACTOR * qualityMultiplier * quantity);
+  }
+  
+  // Fixed pricing models
+  return Math.ceil(baseCredits * PRICING_FACTOR * quantity);
+}
+
+// Examples:
+// calculateCredits('nano-banana-2', '2K') → 16 credits
+// calculateCredits('topaz/image-upscale', '4K') → 52 credits
+// calculateCredits('gpt-image/1.5-text-to-image') → 5 credits
+
 // Server-side only - never expose API key to client
 const KIE_AI_API_KEY = process.env.KIE_AI_API_KEY;
 

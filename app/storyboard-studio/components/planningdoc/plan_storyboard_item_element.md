@@ -33,6 +33,155 @@ Integrate n8n workflow "storyboard - Script Extractor" into the existing storybo
 
 ---
 
+## 💰 Quality-Based Pricing Integration (March 2026)
+
+### **Overview**
+Advanced pricing system for AI models with dynamic quality selection and real-time credit calculation integrated into the storyboard studio.
+
+### **Implemented Models with Quality Pricing**
+
+#### **Nano Banana 2** (Image Generation)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+#### **Topaz Upscale** (Image Enhancement)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**:
+  - 1K: 10 × 1.3 = **13 credits**
+  - 2K: 18 × 1.3 = **24 credits**
+  - 4K: 30 × 1.3 = **39 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+### **Technical Implementation**
+
+#### **Quality Dropdown UI**
+```typescript
+// EditImageAIPanel.tsx - Quality dropdown for AI generation
+{(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale") && (
+  <div className="quality-dropdown">
+    {["1K", "2K", "4K"].map((quality) => (
+      <button onClick={() => {
+        setSelectedQuality(quality);
+        alertModelCredits(currentModelId, quality);
+      }}>
+        {quality}
+      </button>
+    ))}
+  </div>
+)}
+```
+
+#### **Formula-Based Credit Calculation**
+```typescript
+// usePricingData.ts - Dynamic pricing calculation
+const getModelCredits = (modelId: string, selectedQuality: string): number => {
+  const model = models.find(m => m.modelId === modelId);
+  
+  if (model.formulaJson) {
+    const formula = JSON.parse(model.formulaJson);
+    const quality = formula.pricing?.qualities?.find(q => q.name === selectedQuality);
+    if (quality) {
+      const factor = model.factor || 1;
+      return Math.ceil(quality.cost * factor);
+    }
+  }
+  
+  return Math.ceil((model.creditCost || 0) * (model.factor || 1));
+};
+```
+
+#### **Quality-Aware Alert System**
+```typescript
+// EditImageAIPanel.tsx - Accurate credit alerts
+const alertModelCredits = (selectedModelId: string, quality?: string) => {
+  // Direct formula calculation for immediate accuracy
+  const creditCharge = calculateFromFormula(modelId, quality);
+  const qualityInfo = ` (${quality})`;
+  
+  window.alert(`${modelLabel}${qualityInfo} will charge ${creditCharge} credits.`);
+};
+```
+
+### **Integration with Storyboard Elements**
+
+#### **AI Generation with Quality Pricing**
+```typescript
+// SceneEditor.tsx - Generate frames with quality-based pricing
+const handleGenerateFrames = async () => {
+  const selectedModel = "nano-banana-2"; // or "topaz/image-upscale"
+  const selectedQuality = "2K"; // from quality dropdown
+  const creditCost = getModelCredits(selectedModel, selectedQuality);
+  
+  // Check user credits before generation
+  if (userCredits < creditCost) {
+    alert(`Insufficient credits. Need ${creditCost} credits for ${selectedQuality} generation.`);
+    return;
+  }
+  
+  // Generate frames with quality parameters
+  const result = await generateStoryboardFrames({
+    projectId,
+    scenes,
+    model: selectedModel,
+    quality: selectedQuality,
+    referenceImages
+  });
+  
+  // Store generated frames with quality metadata
+  result.frames.forEach(frame => {
+    await uploadToR2({
+      file: frame.imageFile,
+      category: 'generated',
+      userId,
+      companyId,
+      projectId,
+      tags: [selectedModel, selectedQuality, `scene-${frame.sceneNumber}`]
+    });
+  });
+};
+```
+
+#### **Element Generation with Quality Metadata**
+```typescript
+// ElementLibrary.tsx - Save elements with generation quality
+const handleSaveElement = async () => {
+  const generationParams = {
+    model: selectedModel,
+    quality: selectedQuality,
+    creditCost: getModelCredits(selectedModel, selectedQuality)
+  };
+  
+  await createElement({
+    name: newName,
+    type: activeType,
+    referenceUrls: finalReferenceUrls,
+    thumbnailUrl: finalReferenceUrls[thumbnailIndex] || "",
+    companyId,
+    projectId,
+    createdBy: user.id,
+    generationParams // Store quality and cost metadata
+  });
+};
+```
+
+### **User Experience Benefits**
+
+#### **✅ Transparent Pricing**
+- **Quality Selection**: Clear 1K, 2K, 4K options with immediate cost display
+- **Real-Time Updates**: Credit costs update instantly when quality changes
+- **Accurate Alerts**: Quality-specific alerts showing exact credit charges
+
+#### **✅ Consistent Experience**
+- **Formula-Based**: All calculations use formulaJson for consistency
+- **Factor Application**: Consistent 1.3x multiplier across all models
+- **Quality Metadata**: Generation parameters stored for future reference
+
+---
+
 ## 🏗️ Current System Overview
 
 ### Scene Auto-Generation:

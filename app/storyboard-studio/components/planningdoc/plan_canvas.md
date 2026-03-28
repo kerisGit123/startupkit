@@ -7,6 +7,149 @@ description: Canvas Implementation Plan
 ## Overview
 This document outlines the current canvas implementation in the storyboard studio, covering the core components, styling, dimensions, and interaction patterns.
 
+---
+
+## 💰 Quality-Based Pricing Integration (March 2026)
+
+### **Overview**
+Advanced pricing system for AI models with dynamic quality selection and real-time credit calculation integrated into the canvas-based AI editing workflow.
+
+### **Implemented Models with Quality Pricing**
+
+#### **Nano Banana 2** (Canvas-Based Image Generation)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+#### **Topaz Upscale** (Canvas-Based Image Enhancement)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**:
+  - 1K: 10 × 1.3 = **13 credits**
+  - 2K: 18 × 1.3 = **24 credits**
+  - 4K: 30 × 1.3 = **39 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+### **Canvas Integration with Quality Pricing**
+
+#### **Quality Selection in Canvas Context**
+```typescript
+// EditImageAIPanel.tsx - Quality dropdown for canvas-based AI editing
+{(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale") && (
+  <div className="quality-dropdown">
+    {["1K", "2K", "4K"].map((quality) => (
+      <button onClick={() => {
+        setSelectedQuality(quality);
+        alertModelCredits(currentModelId, quality);
+      }}>
+        {quality}
+      </button>
+    ))}
+  </div>
+)}
+```
+
+#### **Canvas-Based Generation with Quality Parameters**
+```typescript
+// CanvasEditor.tsx - Generate with quality-based pricing
+const handleCanvasGeneration = async () => {
+  const selectedModel = "nano-banana-2"; // or "topaz/image-upscale"
+  const selectedQuality = "2K"; // from quality dropdown
+  const creditCost = getModelCredits(selectedModel, selectedQuality);
+  
+  // Check user credits before generation
+  if (userCredits < creditCost) {
+    alert(`Insufficient credits. Need ${creditCost} credits for ${selectedQuality} generation.`);
+    return;
+  }
+  
+  // Generate with canvas context and quality parameters
+  const result = await generateFromCanvas({
+    canvasState,
+    model: selectedModel,
+    quality: selectedQuality,
+    referenceImages,
+    maskData: canvasState.mask
+  });
+  
+  // Store generated result with quality metadata
+  await uploadToR2({
+    file: result.imageFile,
+    category: 'generated',
+    userId,
+    companyId,
+    projectId,
+    tags: [selectedModel, selectedQuality, 'canvas-generated']
+  });
+};
+```
+
+#### **Canvas Mask Integration with Quality Pricing**
+```typescript
+// CanvasEditor.tsx - Apply AI edits with quality-based pricing
+const handleApplyAIEdit = async () => {
+  const selectedModel = "nano-banana-2";
+  const selectedQuality = "4K"; // user-selected quality
+  const creditCost = getModelCredits(selectedModel, selectedQuality);
+  
+  // Canvas mask data for inpainting
+  const maskData = canvasState.mask;
+  const baseImage = canvasState.backgroundImage;
+  
+  // Generate with quality parameters
+  const result = await aiInpaint({
+    image: baseImage,
+    mask: maskData,
+    model: selectedModel,
+    quality: selectedQuality,
+    prompt: userPrompt
+  });
+  
+  // Update canvas with result
+  setCanvasState(prev => ({
+    ...prev,
+    backgroundImage: result.imageUrl,
+    generatedWithQuality: selectedQuality,
+    creditCost: creditCost
+  }));
+};
+```
+
+### **Canvas-Specific Quality Features**
+
+#### **✅ Quality-Aware Canvas Operations**
+- **Generation Quality**: Canvas-based generation respects quality selection
+- **Edit Quality**: AI edits (inpainting, upscaling) use quality parameters
+- **Cost Display**: Real-time credit cost updates in canvas context
+- **Metadata Storage**: Quality information stored with canvas-generated assets
+
+#### **✅ Canvas Workflow Integration**
+```typescript
+// Canvas workflow with quality-based pricing
+const canvasWorkflow = {
+  1: "Select AI model (Nano Banana 2 / Topaz Upscale)",
+  2: "Choose quality (1K, 2K, 4K)",
+  3: "Create mask or select area on canvas",
+  4: "Review credit cost for selected quality",
+  5: "Generate with quality parameters",
+  6: "Store result with quality metadata"
+};
+```
+
+#### **✅ Quality Metadata in Canvas State**
+```typescript
+interface CanvasEditorState {
+  // ... existing state
+  generatedWithQuality?: string; // "1K", "2K", "4K"
+  creditCost?: number; // Actual cost for last generation
+  modelUsed?: string; // "nano-banana-2" or "topaz/image-upscale"
+}
+```
+
+---
+
 ## Core Components
 
 ### 1. CanvasEditor (`shared/CanvasEditor.tsx`)
@@ -180,6 +323,31 @@ Each tool has specific:
 - Eraser mode for mask correction
 - Opacity control for mask visibility
 - Undo/redo stack for mask operations
+- **Fixed coordinate calculation** for accurate brush positioning across all images
+- **CSS transform handling** for proper brush alignment on transformed images
+- **Consistent brush behavior** across original, generated, and panel images
+- **Image loading verification** to ensure proper coordinate calculations
+
+### Coordinate Calculation System
+The brush system uses a simplified coordinate calculation approach:
+```typescript
+// Calculate scale from actual rendered dimensions
+const scale = imgRect.width / image.naturalWidth;
+
+// Use actual visual position (already includes CSS transforms)
+const imgLeft = imgRect.left - containerRect.left;
+const imgTop = imgRect.top - containerRect.top;
+
+// Convert to image-pixel space
+const x = (mouseX - imgLeft) / scale;
+const y = (mouseY - imgTop) / scale;
+```
+
+**Key Improvements**:
+- Eliminates manual CSS transform parsing
+- Uses browser's native getBoundingClientRect() for accurate positioning
+- Handles all image types consistently (original, generated, panel images)
+- Prevents coordinate drift and offset issues
 
 ### Rectangle Masks
 - Fixed aspect ratio rectangles (1:1 by default)
@@ -304,6 +472,9 @@ const handleFitToScreen = () => setZoomLevel(100);
 3. **Mask not visible**: Check opacity settings and brush size
 4. **Selection not working**: Ensure mouse event handlers are properly bound
 5. **Performance issues**: Monitor canvas state size and render frequency
+6. **Brush positioning offset**: Fixed by using simplified coordinate calculation with getBoundingClientRect()
+7. **Brush drift on transformed images**: Resolved by eliminating manual CSS transform parsing
+8. **Inconsistent brush behavior across images**: Fixed by using consistent image selection and coordinate system
 
 ### Debug Tools
 - Canvas state inspection in React DevTools

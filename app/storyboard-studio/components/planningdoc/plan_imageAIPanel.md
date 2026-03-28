@@ -499,3 +499,316 @@ The Image AI Panel is now **100% complete** and production-ready with:
 - **Security First**: CompanyId-based access control throughout
 
 **Ready for production use with excellent user experience and reliable performance!** 🚀
+
+---
+
+## Credit Calculation Integration Plan
+
+### Overview
+Integrate the Nano Banana 2 pricing calculation from the pricing management system into the EditImageAIPanel's Generate button. When users click Generate, show a popup alert with the calculated credit cost based on resolution (1K, 2K, 4K).
+
+### Credit Calculation Logic
+Based on `plan_price_management.md`, the `getNanoBananaPrice` function:
+
+```typescript
+function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
+  const qualityMultipliers = {
+    '1K': 1,
+    '2K': 1.5,
+    '4K': 2.25
+  };
+  
+  const qualityMultiplier = qualityMultipliers[quality] || 1;
+  return Math.ceil(base * multiplier * qualityMultiplier);
+}
+```
+
+**Default Parameters for Nano Banana 2:**
+- Base: 8 credits
+- Multiplier: 1.3
+- Quality: User-selected resolution
+
+**Credit Examples:**
+- 1K: `Math.ceil(8 * 1.3 * 1)` = **11 credits**
+- 2K: `Math.ceil(8 * 1.3 * 1.5)` = **16 credits** 
+- 4K: `Math.ceil(8 * 1.3 * 2.25)` = **24 credits**
+
+### Implementation Plan
+
+#### 1. Add Credit Calculation Utility
+Create a shared utility function for credit calculations:
+
+```typescript
+// utils/creditCalculations.ts
+export function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
+  const qualityMultipliers = {
+    '1K': 1,
+    '2K': 1.5,
+    '4K': 2.25
+  };
+  
+  const qualityMultiplier = qualityMultipliers[quality] || 1;
+  return Math.ceil(base * multiplier * qualityMultiplier);
+}
+
+export function calculateNanoBananaCredits(quality: string): number {
+  // Default values from pricing management system
+  const base = 8;
+  const multiplier = 1.3;
+  return getNanoBananaPrice(base, multiplier, quality);
+}
+```
+
+#### 2. Add Resolution Selector to EditImageAIPanel
+Add resolution selection UI to EditImageAIPanel:
+
+```typescript
+// Add to EditImageAIPanel component
+const [selectedResolution, setSelectedResolution] = useState<'1K' | '2K' | '4K'>('1K');
+
+// Resolution selector UI
+<div className="flex items-center gap-2 mb-4">
+  <span className="text-xs font-medium text-gray-400">Resolution:</span>
+  <div className="flex gap-1">
+    {(['1K', '2K', '4K'] as const).map((resolution) => (
+      <button
+        key={resolution}
+        onClick={() => setSelectedResolution(resolution)}
+        className={`px-2 py-1 rounded text-xs font-medium transition-all ${
+          selectedResolution === resolution
+            ? 'bg-emerald-600 text-white'
+            : 'bg-[#2a2a3a] text-gray-400 hover:text-white hover:bg-[#3a3a4a]'
+        }`}
+      >
+        {resolution}
+      </button>
+    ))}
+  </div>
+</div>
+```
+
+#### 3. Add Credit Cost Display
+Show current credit cost based on selected resolution:
+
+```typescript
+// Calculate credits for current selection
+const currentCredits = calculateNanoBananaCredits(selectedResolution);
+
+// Credit display component
+<div className="flex items-center gap-2 px-3 py-1 bg-[#1a1a24] rounded-lg border border-white/10">
+  <span className="text-xs text-gray-400">Credits:</span>
+  <span className="text-sm font-medium text-white">{currentCredits}</span>
+</div>
+```
+
+#### 4. Generate Button with Credit Alert
+Modify the Generate button to show credit confirmation:
+
+```typescript
+// Enhanced generate handler
+const handleGenerateWithCreditCheck = async () => {
+  const credits = calculateNanoBananaCredits(selectedResolution);
+  
+  // Show credit confirmation dialog
+  const confirmed = window.confirm(
+    `This will use ${credits} credits for ${selectedResolution} resolution. Continue?`
+  );
+  
+  if (confirmed) {
+    await onGenerate();
+  }
+};
+
+// Updated generate button
+<button
+  onClick={handleGenerateWithCreditCheck}
+  disabled={isGenerating}
+  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
+    mode === "annotate" 
+      ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
+      : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
+  }`}
+>
+  {isGenerating ? (
+    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+  ) : (
+    <Sparkles className="w-4 h-4" />
+  )}
+  <span className="hidden sm:inline">Generate ({currentCredits} credits)</span>
+</button>
+```
+
+#### 5. Enhanced Credit Alert Component
+Create a more sophisticated credit confirmation dialog:
+
+```typescript
+// CreditConfirmationDialog component
+interface CreditConfirmationDialogProps {
+  credits: number;
+  resolution: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  isOpen: boolean;
+}
+
+export function CreditConfirmationDialog({ 
+  credits, 
+  resolution, 
+  onConfirm, 
+  onCancel, 
+  isOpen 
+}: CreditConfirmationDialogProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999]">
+      <div className="bg-[#1a1a24] border border-white/20 rounded-xl p-6 max-w-sm w-full mx-4">
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 bg-emerald-600/20 rounded-full flex items-center justify-center mx-auto">
+            <Sparkles className="w-6 h-6 text-emerald-400" />
+          </div>
+          
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-2">Confirm Generation</h3>
+            <p className="text-gray-400 text-sm">
+              This will use <span className="font-medium text-white">{credits} credits</span> for {resolution} resolution.
+            </p>
+          </div>
+          
+          <div className="bg-[#2a2a3a] rounded-lg p-3 text-xs text-gray-400">
+            <div className="flex justify-between mb-1">
+              <span>Base Cost:</span>
+              <span>8 credits</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Multiplier:</span>
+              <span>1.3x</span>
+            </div>
+            <div className="flex justify-between mb-1">
+              <span>Quality ({resolution}):</span>
+              <span>{resolution === '1K' ? '1x' : resolution === '2K' ? '1.5x' : '2.25x'}</span>
+            </div>
+            <div className="flex justify-between font-medium text-white pt-2 border-t border-white/10">
+              <span>Total:</span>
+              <span>{credits} credits</span>
+            </div>
+          </div>
+          
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 px-4 py-2 bg-[#2a2a3a] text-gray-400 rounded-lg hover:bg-[#3a3a4a] hover:text-white transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            >
+              Generate
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+#### 6. Integration with EditImageAIPanel
+Update EditImageAIPanel to use the credit confirmation:
+
+```typescript
+// Add state for dialog
+const [showCreditDialog, setShowCreditDialog] = useState(false);
+
+// Enhanced handler
+const handleGenerateClick = () => {
+  const credits = calculateNanoBananaCredits(selectedResolution);
+  setCurrentCredits(credits);
+  setShowCreditDialog(true);
+};
+
+// In component JSX
+<>
+  {/* Existing UI */}
+  
+  {/* Credit Confirmation Dialog */}
+  <CreditConfirmationDialog
+    credits={currentCredits}
+    resolution={selectedResolution}
+    onConfirm={() => {
+      setShowCreditDialog(false);
+      onGenerate();
+    }}
+    onCancel={() => setShowCreditDialog(false)}
+    isOpen={showCreditDialog}
+  />
+</>
+```
+
+#### 7. Props Interface Update
+Add resolution prop to EditImageAIPanel:
+
+```typescript
+export interface EditImageAIPanelProps {
+  // ... existing props
+  selectedResolution?: '1K' | '2K' | '4K';
+  onResolutionChange?: (resolution: '1K' | '2K' | '4K') => void;
+}
+```
+
+#### 8. SceneEditor Integration
+Update SceneEditor to manage resolution state:
+
+```typescript
+// Add resolution state
+const [selectedResolution, setSelectedResolution] = useState<'1K' | '2K' | '4K'>('1K');
+
+// Pass to EditImageAIPanel
+<EditImageAIPanel
+  // ... existing props
+  selectedResolution={selectedResolution}
+  onResolutionChange={setSelectedResolution}
+/>
+```
+
+### Implementation Steps
+
+1. **Create credit calculation utility** (`utils/creditCalculations.ts`)
+2. **Add resolution selector UI** to EditImageAIPanel
+3. **Implement credit display** based on current selection
+4. **Create credit confirmation dialog** component
+5. **Update Generate button** to trigger credit check
+6. **Integrate with EditImageAIPanel** state management
+7. **Update SceneEditor** to manage resolution state
+8. **Test credit calculations** for all resolutions
+9. **Add error handling** for invalid selections
+10. **Style polish** for consistent dark theme
+
+### Testing Requirements
+
+- Verify credit calculations match pricing management system
+- Test resolution selection and credit updates
+- Confirm dialog shows correct breakdown
+- Test cancel/confirm functionality
+- Verify accessibility and mobile responsiveness
+- Test edge cases (invalid resolutions, network errors)
+
+### Future Enhancements
+
+- Support for other models (Flux, GPT Image, etc.)
+- Dynamic pricing from database
+- Credit balance checking before generation
+- Batch generation with credit summaries
+- User preference persistence for resolution
+
+### Benefits
+
+- **Transparency**: Users see exact credit cost before generation
+- **Control**: Users can choose resolution based on budget
+- **Consistency**: Uses same calculation as pricing management
+- **User Experience**: Clear confirmation prevents accidental credit usage
+- **Flexibility**: Easy to extend for other models and pricing tiers
+
+This integration provides users with clear visibility into credit costs and control over generation quality while maintaining consistency with the pricing management system.

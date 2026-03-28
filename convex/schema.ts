@@ -1840,12 +1840,20 @@ export default defineSchema({
     status: v.string(),     // uploading | ready | error
     createdAt: v.number(),
     isFavorite: v.optional(v.boolean()), // For favoriting files (optional for existing data)
+    categoryId: v.optional(v.union(
+      v.id("storyboard_elements"),     // Parent element ID
+      v.id("storyboard_items"),        // Parent storyboard item ID  
+      v.id("storyboard_projects"),     // Parent project ID (for project-level files)
+      v.null()                         // No parent (orphaned/general files)
+    )), // Parent entity ID for easy cleanup
   })
     .index("by_companyId", ["companyId"])
     .index("by_org", ["orgId"])
     .index("by_user", ["userId"])
     .index("by_project", ["projectId"])
-    .index("by_category", ["projectId", "category"]),
+    .index("by_category", ["projectId", "category"])
+    .index("by_r2Key", ["r2Key"])
+    .index("by_categoryId", ["categoryId"]), // For efficient cleanup by parent entity
 
   // ============================================
   // STORYBOARD STUDIO: Elements (LTX-style reusable assets)

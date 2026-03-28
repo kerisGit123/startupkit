@@ -301,19 +301,15 @@ export default function StoryboardPage() {
     await Promise.all(
       changedConvexProjects.map(async (project) => {
         try {
-          // Convert tag strings to objects for Convex to match deployed schema
-          const tagObjects = project.tags.map((tag, index) => {
-            const tagString = typeof tag === 'string' ? tag : (tag as any).id || (tag as any).name || String(tag);
-            const predefinedTag = SIMPLE_TAGS.find((t) => t.id === tagString || t.name === tagString);
-            if (predefinedTag) {
-              return predefinedTag;
+          // ✅ CRITICAL: storyboard_projects.tags expects v.array(v.string())
+          // Convert any tag objects to strings (tag IDs only)
+          const tagStrings = project.tags.map((tag) => {
+            // If tag is already a string, use it directly
+            if (typeof tag === 'string') {
+              return tag;
             }
-            const color = TAG_COLORS[index % TAG_COLORS.length];
-            return {
-              id: tagString,
-              name: tagString,
-              color: color
-            };
+            // If tag is an object, extract the id field
+            return (tag as any).id || (tag as any).name || String(tag);
           });
 
           await updateConvexProject({
@@ -321,7 +317,7 @@ export default function StoryboardPage() {
             name: project.name,
             status: project.status,
             isFavorite: project.favourite,
-            tags: tagObjects,
+            tags: tagStrings, // ✅ Pass array of strings to match schema: v.array(v.string())
           });
         } catch (err) {
           console.error("[update project]", project.id, err);

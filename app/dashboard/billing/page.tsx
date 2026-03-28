@@ -1,20 +1,26 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
+import { useUser, useOrganization } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCompany } from "@/hooks/useCompany";
 import { useSubscription } from "@/hooks/useSubscription";
-import { CreditCard, Calendar, ShoppingCart, ExternalLink, Gift } from "lucide-react";
+import { CreditCard, Calendar, ShoppingCart, ExternalLink, Gift, Users } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 export default function BillingPage() {
   const { user } = useUser();
-  const { companyId } = useCompany();
+  const { organization } = useOrganization();
+  const { companyId, subjectType } = useCompany();
   const { plan, entitlements, isLoading } = useSubscription();
   const [isCanceling, setIsCanceling] = useState(false);
   const [showFullHistory, setShowFullHistory] = useState(false);
+
+  // Check if user is organization admin
+  const isOrgAdmin = organization && user?.organizationMemberships?.some(
+    membership => membership.organization.id === organization.id && membership.role === "org:admin"
+  );
 
   const handleBuyCredits = async (tokens: number, amount: number) => {
     if (!user || !companyId) {
@@ -118,7 +124,20 @@ export default function BillingPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Billing & Subscription</h1>
-            <p className="text-[13px] text-gray-500 mt-0.5">Manage your plan, credits, and payment methods</p>
+            <p className="text-[13px] text-gray-500 mt-0.5">
+              {subjectType === "organization" 
+                ? `Manage ${organization?.name}'s plan, credits, and payment methods`
+                : "Manage your plan, credits, and payment methods"
+              }
+            </p>
+            {subjectType === "organization" && (
+              <div className="flex items-center gap-2 mt-2">
+                <Users className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs text-emerald-600 font-medium">
+                  Organization Account {isOrgAdmin ? "(Admin)" : "(Member)"}
+                </span>
+              </div>
+            )}
           </div>
           <Link
             href="/pricing"
@@ -209,15 +228,37 @@ export default function BillingPage() {
 
           {/* Buy Credits Section */}
           <div className="border-t border-gray-100 pt-6">
-            <h3 className="text-base font-semibold mb-1 text-gray-900">Buy Credits</h3>
-            <p className="text-sm text-gray-500 mb-4">One-time credit purchases for additional scans</p>
+            <h3 className="text-base font-semibold mb-1 text-gray-900">
+              {subjectType === "organization" 
+                ? `Buy Credits for ${organization?.name}`
+                : "Buy Credits"
+              }
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {subjectType === "organization" 
+                ? "One-time credit purchases for your organization's team members"
+                : "One-time credit purchases for additional scans"
+              }
+            </p>
+            
+            {/* Permission check for org members */}
+            {subjectType === "organization" && !isOrgAdmin && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                <p className="text-sm font-semibold text-amber-800">Admin Access Required</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Only organization administrators can purchase credits. Contact your org admin to request credits.
+                </p>
+              </div>
+            )}
+            
             <div className="grid md:grid-cols-3 gap-4">
               <div className="border border-gray-100 rounded-lg p-5 bg-white">
                 <p className="text-lg font-bold text-gray-900 mb-0.5">100 Credits</p>
                 <p className="text-2xl font-bold text-gray-900 mb-4">MYR 10<span className="text-sm font-normal text-gray-400">.00</span></p>
                 <button
                   onClick={() => handleBuyCredits(100, 1000)}
-                  className="w-full py-2.5 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-[13px]"
+                  disabled={subjectType === "organization" && !isOrgAdmin}
+                  className="w-full py-2.5 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Buy Now
                 </button>
@@ -230,7 +271,8 @@ export default function BillingPage() {
                 <p className="text-2xl font-bold text-gray-900 mb-4">MYR 40<span className="text-sm font-normal text-gray-400">.00</span></p>
                 <button
                   onClick={() => handleBuyCredits(500, 4000)}
-                  className="w-full py-2.5 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-[13px]"
+                  disabled={subjectType === "organization" && !isOrgAdmin}
+                  className="w-full py-2.5 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Buy Now
                 </button>
@@ -240,7 +282,8 @@ export default function BillingPage() {
                 <p className="text-2xl font-bold text-gray-900 mb-4">MYR 70<span className="text-sm font-normal text-gray-400">.00</span></p>
                 <button
                   onClick={() => handleBuyCredits(1000, 7000)}
-                  className="w-full py-2.5 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-[13px]"
+                  disabled={subjectType === "organization" && !isOrgAdmin}
+                  className="w-full py-2.5 px-4 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium transition-all text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Buy Now
                 </button>

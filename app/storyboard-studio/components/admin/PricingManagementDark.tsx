@@ -58,10 +58,10 @@ function getFixedPrice(base: number, multiplier: number): number {
   return Math.ceil(base * multiplier);
 }
 
-// Custom Nano Banana pricing function
-// getNanoBananaPrice(8, 1.3, '1K')  // → 11 credits
-// getNanoBananaPrice(8, 1.3, '2K')  // → 16 credits  
-// getNanoBananaPrice(8, 1.3, '4K')  // → 24 credits
+// Custom Nano Banana pricing function (Updated from plan_price_management.md)
+// getNanoBananaPrice(8, 1.3, '1K')  // → 11 credits (8 × 1.3 = 10.4 → 11)
+// getNanoBananaPrice(8, 1.3, '2K')  // → 16 credits (12 × 1.3 = 15.6 → 16)  
+// getNanoBananaPrice(8, 1.3, '4K')  // → 24 credits (18 × 1.3 = 23.4 → 24)
 function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
   const qualityMultipliers: Record<string, number> = {
     '1K': 1,
@@ -73,36 +73,63 @@ function getNanoBananaPrice(base: number, multiplier: number, quality: string): 
   return Math.ceil(base * multiplier * qualityMultiplier);
 }
 
-// Topaz AI upscaling pricing function
-// getTopazUpscale(10, 1.3, '1x')  // → 13 credits
-// getTopazUpscale(10, 1.3, '2x')  // → 26 credits
-// getTopazUpscale(10, 1.3, '4x')  // → 52 credits
-
-function getTopazUpscale(base: number, multiplier: number, qualities: string): number {
-  const qualityMultipliers: Record<string, number> = {
+// Topaz AI upscaling pricing function (Updated from plan_price_management.md)
+// getTopazUpscale(10, 1.3, '1x')  // → 13 credits (10 × 1.3 = 13)
+// getTopazUpscale(10, 1.3, '2x')  // → 26 credits (18 × 1.3 = 23.4 → 26)
+// getTopazUpscale(10, 1.3, '4x')  // → 52 credits (30 × 1.3 = 39 → 52)
+// Note: Updated to use quality-based costs from formulaJson
+function getTopazUpscale(base: number, multiplier: number, quality: string): number {
+  // Map quality to upscale factors for Topaz Upscale
+  const qualityToUpscale: Record<string, string> = {
+    '1K': '1x',
+    '2K': '2x', 
+    '4K': '4x'
+  };
+  
+  const upscaleFactors: Record<string, number> = {
     '1x': 1,
     '2x': 2,
     '3x': 3,
     '4x': 4
   };
   
-  const qualityMultiplier = qualityMultipliers[qualities] || 1;
-  return Math.ceil(base * multiplier * qualityMultiplier);
+  const upscaleKey = qualityToUpscale[quality] || '2x';
+  const upscaleMultiplier = upscaleFactors[upscaleKey] || 1;
+  
+  return Math.ceil(base * multiplier * upscaleMultiplier);
 }
 
-// Seedance 1.5 video generation pricing function
-// getSeedance15(12, 1.3, '720p', false, 5)  // → 78 credits
-// getSeedance15(12, 1.3, '1080p', true, 10)  // → 234 credits
+// Seedance 1.5 video generation pricing function (Updated for correct calculation)
+// Base cost: 7 credits
+// Resolution multipliers: 480p: 1, 720p: 2, 1080p: 4, 4K: 5
+// Audio multiplier: 2 (when audio is enabled)
+// Duration multipliers: 4s: 1, 8s: 2, 12s: 4 (every 4 seconds)
+// Examples with factor 1.3:
+// - 7 base, with audio, 720p, 8s: 7 × 2 × 2 × 1.3 = 36.4 → 37 credits
+// - 7 base, with audio, 1080p, 12s: 7 × 2 × 4 × 1.3 = 72.8 → 73 credits
 function getSeedance15(base: number, multiplier: number, resolution: string, audio: boolean, duration: number): number {
   const resolutionMultipliers: Record<string, number> = {
     '480p': 1,
-    '720p': 1.5,
-    '1080p': 2.5,
+    '720p': 2,
+    '1080p': 4,
     '4K': 5
   };
   
-  const audioMultiplier = audio ? 1.5 : 1;
-  const durationMultiplier = Math.ceil(duration / 5); // Every 5 seconds adds multiplier
+  // Duration multiplier based on 4-second intervals
+  let durationMultiplier = 1;
+  if (duration <= 4) {
+    durationMultiplier = 1;
+  } else if (duration <= 8) {
+    durationMultiplier = 2;
+  } else if (duration <= 12) {
+    durationMultiplier = 4;
+  } else {
+    // For durations longer than 12 seconds, calculate additional 4-second blocks
+    const additionalBlocks = Math.ceil((duration - 12) / 4);
+    durationMultiplier = 4 + additionalBlocks;
+  }
+  
+  const audioMultiplier = audio ? 2 : 1;
   const resolutionMultiplier = resolutionMultipliers[resolution] || 1;
   
   return Math.ceil(base * multiplier * resolutionMultiplier * audioMultiplier * durationMultiplier);
@@ -118,6 +145,7 @@ export default function PricingManagementDark() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'grid' | 'card'>('table');
+  const [activeTab, setActiveTab] = useState<'models' | 'testing'>('models'); // New tab state
   const [filters, setFilters] = useState({
     pricingType: 'all',
     status: 'all',
@@ -129,15 +157,14 @@ export default function PricingManagementDark() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   
-  // Testing state
+  // Testing state - Updated to be model-focused
   const [testParams, setTestParams] = useState({
-    base: 8,
-    multiplier: 1.0,
-    quality: '1K',
+    modelId: 'nano-banana-2', // Default model
+    quality: '2K',
     resolution: '720p',
     audio: false,
     duration: 5,
-    upscaleFactor: '1x'
+    upscaleFactor: '2x'
   });
   const [testResult, setTestResult] = useState<number | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -164,38 +191,28 @@ export default function PricingManagementDark() {
       assignedFunction: data.assignedFunction,
     };
     
-    console.log("Sending filtered data to API:", apiData);
-    saveModel(apiData).then(success => {
-      if (success) {
-        // Refresh the models list to get the updated data from database
-        fetchModels().then(() => {
-          // Find the updated model in the refreshed models list
-          const updatedModel = models.find(m => m.modelId === data.modelId);
-          if (updatedModel) {
-            // Update selectedModel with the actual saved data from database
-            setSelectedModel(updatedModel);
-            // Update formData with the actual saved data to show the assigned function
-            setFormData({
-              modelId: updatedModel.modelId,
-              modelName: updatedModel.modelName,
-              modelType: updatedModel.modelType,
-              isActive: updatedModel.isActive,
-              pricingType: updatedModel.pricingType,
-              creditCost: updatedModel.creditCost,
-              factor: updatedModel.factor,
-              formulaJson: updatedModel.formulaJson,
-              assignedFunction: updatedModel.assignedFunction,
-            });
-            
-            console.log("Pricing model saved and refreshed successfully!");
-            console.log("Updated assignedFunction:", updatedModel.assignedFunction);
-          }
-        });
+    saveModel(apiData, { isEdit: !!selectedModel }).then(result => {
+      if (result.success && result.models) {
+        const updatedModel = result.models.find(m => m.modelId === data.modelId);
+        if (updatedModel) {
+          setSelectedModel(updatedModel);
+          setFormData({
+            modelId: updatedModel.modelId,
+            modelName: updatedModel.modelName,
+            modelType: updatedModel.modelType,
+            isActive: updatedModel.isActive,
+            pricingType: updatedModel.pricingType,
+            creditCost: updatedModel.creditCost,
+            factor: updatedModel.factor,
+            formulaJson: updatedModel.formulaJson,
+            assignedFunction: updatedModel.assignedFunction,
+          });
+        }
       }
     });
   };
 
-  // Test pricing function
+  // Test pricing function (Updated to use model's actual costs)
   const handleTestPricing = async (model: PricingModel) => {
     setIsTesting(true);
     setTestResult(null);
@@ -203,33 +220,38 @@ export default function PricingManagementDark() {
     try {
       let result = 0;
       
+      // Use the model's actual base cost and factor from database
+      const baseCost = model.creditCost || 0;
+      const factor = model.factor || 1.3;
+      
       // Check if model has assignedFunction (from database schema)
       const assignedFunction = (model as any).assignedFunction;
       
       if (assignedFunction === 'getTopazUpscale') {
-        result = getTopazUpscale(testParams.base, testParams.multiplier, testParams.upscaleFactor);
+        // Updated to use quality parameter instead of upscaleFactor
+        result = getTopazUpscale(baseCost, factor, testParams.quality);
       } else if (assignedFunction === 'getSeedance15') {
         result = getSeedance15(
-          testParams.base, 
-          testParams.multiplier, 
+          baseCost, 
+          factor, 
           testParams.resolution, 
           testParams.audio, 
           testParams.duration
         );
       } else if (assignedFunction === 'getNanoBananaPrice') {
-        result = getNanoBananaPrice(testParams.base, testParams.multiplier, testParams.quality);
+        result = getNanoBananaPrice(baseCost, factor, testParams.quality);
       } else {
         // Fallback to model type detection
         if (model.modelType === 'video') {
           result = getSeedance15(
-            testParams.base, 
-            testParams.multiplier, 
+            baseCost, 
+            factor, 
             testParams.resolution, 
             testParams.audio, 
             testParams.duration
           );
         } else {
-          result = getNanoBananaPrice(testParams.base, testParams.multiplier, testParams.quality);
+          result = getNanoBananaPrice(baseCost, factor, testParams.quality);
         }
       }
       
@@ -377,20 +399,6 @@ export default function PricingManagementDark() {
           <p className="text-(--text-tertiary) text-sm">Configure pricing for different AI models</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Testing Panel Toggle */}
-          <button
-            onClick={() => setShowTestingPanel(!showTestingPanel)}
-            className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 flex items-center gap-2 ${
-              showTestingPanel 
-                ? 'bg-(--accent-purple)/20 text-(--accent-purple) border border-(--accent-purple)/30' 
-                : 'bg-(--bg-tertiary) text-(--text-secondary) hover:text-(--text-primary) border border-(--border-primary)'
-            }`}
-            title="Toggle Testing Parameters Panel"
-          >
-            <Calculator className="w-6 h-6" />
-            {showTestingPanel ? 'Hide Testing' : 'Show Testing'}
-          </button>
-          
           {/* View Toggle */}
           <div className="flex items-center bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-1">
             <button
@@ -449,30 +457,59 @@ export default function PricingManagementDark() {
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="w-full">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-(--text-tertiary)" />
-            <input
-              type="text"
-              placeholder="Search pricing models..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-(--bg-secondary) border border-(--border-primary) rounded-xl pl-10 pr-4 py-3 text-(--text-primary) placeholder-(--text-tertiary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-            />
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <div className="relative">
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--text-secondary) font-medium py-3 px-4 rounded-xl transition-all duration-200 flex items-center"
-            >
-              <Filter className="w-5 h-5 mr-2" />
-              <span className="hidden sm:inline">Filters</span>
-              <span className="sm:hidden">Filter</span>
-            </button>
+      {/* Tab Navigation */}
+      <div className="flex items-center bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-1 mb-6">
+        <button
+          onClick={() => setActiveTab('models')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
+            activeTab === 'models' 
+              ? 'bg-(--accent-blue) text-(--text-primary)' 
+              : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
+          }`}
+        >
+          <DollarSign className="w-4 h-4" />
+          Models
+        </button>
+        <button
+          onClick={() => setActiveTab('testing')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
+            activeTab === 'testing' 
+              ? 'bg-(--accent-purple) text-(--text-primary)' 
+              : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
+          }`}
+        >
+          <Calculator className="w-4 h-4" />
+          Testing
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'models' && (
+        <>
+          {/* Search and Filters */}
+          <div className="flex flex-col gap-4 mb-6">
+            <div className="w-full">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-(--text-tertiary)" />
+                <input
+                  type="text"
+                  placeholder="Search pricing models..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-(--bg-secondary) border border-(--border-primary) rounded-xl pl-10 pr-4 py-3 text-(--text-primary) placeholder-(--text-tertiary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="relative">
+                <button 
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--text-secondary) font-medium py-3 px-4 rounded-xl transition-all duration-200 flex items-center"
+                >
+                  <Filter className="w-5 h-5 mr-2" />
+                  <span className="hidden sm:inline">Filters</span>
+                  <span className="sm:hidden">Filter</span>
+                </button>
             
             {/* Filter Dropdown */}
             {showFilters && (
@@ -937,6 +974,145 @@ export default function PricingManagementDark() {
           </div>
         
       )}
+        </>
+      )}
+
+      {/* Testing Tab */}
+      {activeTab === 'testing' && (
+        <div className="bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-(--text-primary)">Testing Parameters</h3>
+            <div className="text-xs text-(--text-tertiary)">
+              Test pricing calculations for different models and parameters
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-(--text-secondary) mb-1">Select Model</label>
+              <select 
+                value={testParams.modelId}
+                onChange={(e) => setTestParams({...testParams, modelId: e.target.value})}
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+              >
+                {models?.map(model => (
+                  <option key={model.modelId} value={model.modelId}>
+                    {model.modelName} ({model.modelId})
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Show Quality for image models */}
+            {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'image' && (
+              <div>
+                <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
+                <select 
+                  value={testParams.quality}
+                  onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
+                  className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                >
+                  <option value="1K">1K</option>
+                  <option value="2K">2K</option>
+                  <option value="4K">4K</option>
+                </select>
+              </div>
+            )}
+            
+            {/* Show Resolution for video models */}
+            {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
+                  <select 
+                    value={testParams.resolution}
+                    onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                  >
+                    <option value="480p">480p</option>
+                    <option value="720p">720p</option>
+                    <option value="1080p">1080p</option>
+                    <option value="4K">4K</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
+                  <select 
+                    value={testParams.duration}
+                    onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                  >
+                    <option value="4">4 seconds</option>
+                    <option value="8">8 seconds</option>
+                    <option value="12">12 seconds</option>
+                    <option value="16">16 seconds</option>
+                    <option value="20">20 seconds</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="flex items-center text-sm text-(--text-secondary) mb-1">
+                    <input 
+                      type="checkbox" 
+                      checked={testParams.audio}
+                      onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
+                      className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                    />
+                    Include Audio
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+          
+          {/* Model Information Display */}
+          <div className="bg-(--bg-tertiary) rounded-xl p-4 mb-6 border border-(--border-primary) mt-6">
+            <h4 className="text-sm font-medium text-(--text-primary) mb-2">Selected Model Information</h4>
+            <div className="text-xs text-(--text-tertiary) space-y-1">
+              {models?.find(m => m.modelId === testParams.modelId) && (
+                <>
+                  <div><strong>Model:</strong> {models.find(m => m.modelId === testParams.modelId)?.modelName}</div>
+                  <div><strong>Type:</strong> {models.find(m => m.modelId === testParams.modelId)?.modelType}</div>
+                  <div><strong>Pricing:</strong> {models.find(m => m.modelId === testParams.modelId)?.pricingType}</div>
+                  <div><strong>Base Cost:</strong> {models.find(m => m.modelId === testParams.modelId)?.creditCost} credits</div>
+                  <div><strong>Factor:</strong> {models.find(m => m.modelId === testParams.modelId)?.factor}</div>
+                  {models.find(m => m.modelId === testParams.modelId)?.assignedFunction && (
+                    <div><strong>Function:</strong> {models.find(m => m.modelId === testParams.modelId)?.assignedFunction}</div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Calculator Button */}
+          <div className="flex items-center gap-4 mt-6">
+            <button
+              onClick={() => {
+                const selectedModel = models?.find(m => m.modelId === testParams.modelId);
+                if (selectedModel) {
+                  handleTestPricing(selectedModel);
+                }
+              }}
+              className="bg-(--accent-purple) hover:bg-(--accent-purple-hover) text-(--text-primary) font-medium py-3 px-6 rounded-xl flex items-center gap-2 transition-all duration-200 shadow-lg"
+              disabled={isTesting}
+            >
+              {isTesting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-(--accent-purple) border-t-transparent rounded-full animate-spin" />
+                  Calculating...
+                </>
+              ) : (
+                <>
+                  <Calculator className="w-5 h-5" />
+                  Calculate Credits
+                </>
+              )}
+            </button>
+            <div className="text-xs text-(--text-tertiary)">
+              Click to calculate credits for selected model with current parameters
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reset to Defaults Confirmation Modal */}
       {showResetConfirm && (
@@ -1001,12 +1177,14 @@ export default function PricingManagementDark() {
           <div className="bg-(--bg-tertiary) rounded-xl p-3">
             <div className="text-2xl font-bold text-(--accent-blue) mb-1">{testResult} credits</div>
             <div className="text-xs text-(--text-tertiary)">
-              Base: {testParams.base} × Multiplier: {testParams.multiplier}
+              Model: {testParams.modelId}
               {testParams.quality && ` × Quality: ${testParams.quality}`}
               {testParams.resolution && ` × Resolution: ${testParams.resolution}`}
               {testParams.audio && ` × Audio: ${testParams.audio ? 'Yes' : 'No'}`}
               {testParams.duration && ` × Duration: ${testParams.duration}s`}
-              {testParams.upscaleFactor && ` × Upscale: ${testParams.upscaleFactor}`}
+            </div>
+            <div className="text-xs text-(--accent-purple) mt-2">
+              Using model's configured base cost and factor
             </div>
           </div>
         </div>
@@ -1025,35 +1203,27 @@ export default function PricingManagementDark() {
               <X className="w-4 h-4" />
             </button>
           </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Base Cost</label>
-            <input 
-              type="number" 
-              value={testParams.base}
-              onChange={(e) => setTestParams({...testParams, base: Number(e.target.value)})}
-              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
-              min="1"
-              step="1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Multiplier</label>
-            <input 
-              type="number" 
-              value={testParams.multiplier}
-              onChange={(e) => setTestParams({...testParams, multiplier: Number(e.target.value)})}
-              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
-              min="0.1"
-              step="0.1"
-            />
+            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Select Model</label>
+            <select 
+              value={testParams.modelId}
+              onChange={(e) => setTestParams({...testParams, modelId: e.target.value})}
+              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+            >
+              {models?.map(model => (
+                <option key={model.modelId} value={model.modelId}>
+                  {model.modelName} ({model.modelId})
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
             <select 
               value={testParams.quality}
               onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
-              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
             >
               <option value="1K">1K</option>
               <option value="2K">2K</option>
@@ -1065,7 +1235,7 @@ export default function PricingManagementDark() {
             <select 
               value={testParams.resolution}
               onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
-              className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#4A90E2]"
+              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
             >
               <option value="480p">480p</option>
               <option value="720p">720p</option>
@@ -1074,41 +1244,74 @@ export default function PricingManagementDark() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Duration (seconds)</label>
+            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
             <input 
               type="number" 
               value={testParams.duration}
               onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
-              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               min="1"
               step="1"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Upscale Factor</label>
-            <select 
-              value={testParams.upscaleFactor}
-              onChange={(e) => setTestParams({...testParams, upscaleFactor: e.target.value})}
-              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-            >
-              <option value="1x">1x</option>
-              <option value="2x">2x</option>
-              <option value="4x">4x</option>
-            </select>
+            <label className="flex items-center text-sm text-(--text-secondary) mb-1">
+              <input 
+                type="checkbox" 
+                checked={testParams.audio}
+                onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
+                className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+              />
+              Include Audio
+            </label>
           </div>
         </div>
-        <div className="flex items-center gap-4 mt-4">
-          <label className="flex items-center text-sm text-gray-300">
-            <input 
-              type="checkbox" 
-              checked={testParams.audio}
-              onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
-              className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-            />
-            Include Audio
-          </label>
-          <div className="text-xs text-gray-500">
-            Click the 📈 button on any formula model to test pricing
+        
+        {/* Model Information Display */}
+        <div className="bg-(--bg-tertiary) rounded-xl p-4 mb-4 border border-(--border-primary)">
+          <h4 className="text-sm font-medium text-(--text-primary) mb-2">Selected Model Information</h4>
+          <div className="text-xs text-(--text-tertiary) space-y-1">
+            {models?.find(m => m.modelId === testParams.modelId) && (
+              <>
+                <div><strong>Model:</strong> {models.find(m => m.modelId === testParams.modelId)?.modelName}</div>
+                <div><strong>Type:</strong> {models.find(m => m.modelId === testParams.modelId)?.modelType}</div>
+                <div><strong>Pricing:</strong> {models.find(m => m.modelId === testParams.modelId)?.pricingType}</div>
+                <div><strong>Base Cost:</strong> {models.find(m => m.modelId === testParams.modelId)?.creditCost} credits</div>
+                <div><strong>Factor:</strong> {models.find(m => m.modelId === testParams.modelId)?.factor}</div>
+                {models.find(m => m.modelId === testParams.modelId)?.assignedFunction && (
+                  <div><strong>Function:</strong> {models.find(m => m.modelId === testParams.modelId)?.assignedFunction}</div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Calculator Button */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              const selectedModel = models?.find(m => m.modelId === testParams.modelId);
+              if (selectedModel) {
+                handleTestPricing(selectedModel);
+              }
+            }}
+            className="bg-(--accent-purple) hover:bg-(--accent-purple-hover) text-(--text-primary) font-medium py-3 px-6 rounded-xl flex items-center gap-2 transition-all duration-200 shadow-lg"
+            disabled={isTesting}
+          >
+            {isTesting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-(--accent-purple) border-t-transparent rounded-full animate-spin" />
+                Calculating...
+              </>
+            ) : (
+              <>
+                <Calculator className="w-5 h-5" />
+                Calculate Credits
+              </>
+            )}
+          </button>
+          <div className="text-xs text-(--text-tertiary)">
+            Click to calculate credits for selected model with current parameters
           </div>
         </div>
       </div>
@@ -1172,9 +1375,15 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                 type="text" 
                 value={formData.modelId || ''} 
                 onChange={(e) => setFormData({...formData, modelId: e.target.value})} 
-                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent" 
+                disabled={!!model} // Disable when editing existing model
+                className={`w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent ${
+                  model ? 'opacity-50 cursor-not-allowed' : ''
+                }`} 
                 placeholder="e.g., nano-banana-2"
               />
+              {model && (
+                <p className="text-xs text-gray-400 mt-1">Model ID cannot be changed when editing existing models</p>
+              )}
             </div>
           </div>
 

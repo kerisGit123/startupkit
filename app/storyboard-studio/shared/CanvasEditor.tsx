@@ -372,26 +372,37 @@ export function CanvasEditor({
 
     // Use getBoundingClientRect to get the actual rendered image position
     // This correctly handles: CSS transforms, flexbox centering, any layout positioning
-    const image = containerRef.current?.querySelector('img:not([class*="mask"])') as HTMLImageElement;
-    if (!image || !image.naturalWidth) return;
+    const image = containerRef.current?.querySelector('img:not([class*="mask])') as HTMLImageElement;
+    
+    if (!image || !image.naturalWidth || !image.complete) return;
 
     const imgRect = image.getBoundingClientRect();
-    const scale = imgRect.width / image.naturalWidth; // actual rendered scale
-    const imgLeft = imgRect.left - containerRect.left; // image left in container coords
-    const imgTop = imgRect.top - containerRect.top;   // image top in container coords
+    
+    // Get the computed style to check for CSS transforms
+    const computedStyle = window.getComputedStyle(image);
+    const transform = computedStyle.transform;
+    
+    // Calculate scale from the actual rendered dimensions
+    const scale = imgRect.width / image.naturalWidth;
+    
+    // Use the actual visual position from getBoundingClientRect - this already includes all transforms
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
 
     // Mouse position relative to container
     const mouseX = e.clientX - containerRect.left;
     const mouseY = e.clientY - containerRect.top;
 
-    // Convert to image-pixel space (stable coordinate system)
+    // Convert to image-pixel space using the actual visual position
     const x = (mouseX - imgLeft) / scale;
     const y = (mouseY - imgTop) / scale;
 
+        
     // Reject painting outside the image bounds — eraser still runs to clean up any stray dots
     if (!isEraser && (x < 0 || x > image.naturalWidth || y < 0 || y > image.naturalHeight)) return;
 
-    // Store brush size in image space; rendering will scale it by zoom
+    // Use brush size directly without problematic normalization
+    // The CSS transform handling should handle scaling appropriately
     const r = brushSize;
 
     const newMask = isEraser
@@ -459,7 +470,10 @@ export function CanvasEditor({
   // ── Global mouse move/up ──
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
-      if (isPainting && activeTool === "inpaint" && isMouseDown) { addMaskDot(e); return; }
+      if (isPainting && activeTool === "inpaint" && isMouseDown) { 
+        addMaskDot(e); 
+        return; 
+      }
 
       if (rotDragRef.current) {
         const rd = rotDragRef.current;

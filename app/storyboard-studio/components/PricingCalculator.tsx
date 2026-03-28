@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { CreditCard, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
-import { PricingCalculator, PricingParams } from "../lib/pricing/calculator";
+import { usePricingData } from "./usePricingData";
 
 interface PricingCalculatorProps {
   modelId: string;
@@ -11,40 +11,81 @@ interface PricingCalculatorProps {
 }
 
 export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled = false }: PricingCalculatorProps) {
-  const [params, setParams] = useState<PricingParams>({ modelId });
+  const { models } = usePricingData();
+  const [quality, setQuality] = useState<string>("2K");
+  const [resolution, setResolution] = useState<string>("720P");
+  const [duration, setDuration] = useState<string>("8s");
+  const [hasAudio, setHasAudio] = useState<boolean>(false);
   const [cost, setCost] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [requiredParams, setRequiredParams] = useState<string[]>([]);
 
-  // Get required parameters for the model
-  useEffect(() => {
-    const getRequiredParams = async () => {
-      try {
-        const required = await PricingCalculator.getModelRequiredParams(modelId);
-        setRequiredParams(required);
-      } catch (err) {
-        console.error("Failed to get required params:", err);
-      }
-    };
-
-    if (modelId) {
-      getRequiredParams();
-    }
-  }, [modelId]);
+  // Get the model data
+  const model = models.find(m => m.modelId === modelId);
+  const isFormulaBased = model?.pricingType === 'formula';
+  const requiresQuality = model?.modelId === "nano-banana-2" || model?.modelId === "topaz/image-upscale";
+  const requiresVideoParams = model?.modelId === "bytedance/seedance-1.5-pro";
 
   // Calculate cost when parameters change
   useEffect(() => {
-    if (!modelId || disabled) return;
+    if (!modelId || disabled || !model) return;
 
     const calculateCost = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const result = await PricingCalculator.calculateCost(params);
-        setCost(result.credits);
-        onCostCalculated?.(result.credits);
+        let calculatedCost = 0;
+
+        if (model.pricingType === 'fixed') {
+          // Fixed pricing: base cost * factor
+          calculatedCost = Math.ceil((model.creditCost || 0) * (model.factor || 1));
+        } else if (model.assignedFunction && model.formulaJson) {
+          // Formula-based pricing: extract from formulaJson
+          const formula = JSON.parse(model.formulaJson);
+          
+          switch (model.assignedFunction) {
+            case 'getNanoBananaPrice':
+              if (requiresQuality) {
+                const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === quality);
+                if (qualityData) {
+                  const factor = model.factor || 1;
+                  calculatedCost = Math.ceil(qualityData.cost * factor);
+                }
+              }
+              break;
+              
+            case 'getTopazUpscale':
+              if (requiresQuality) {
+                const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === quality);
+                if (qualityData) {
+                  const factor = model.factor || 1;
+                  calculatedCost = Math.ceil(qualityData.cost * factor);
+                }
+              }
+              break;
+              
+            case 'getSeedance15':
+              if (requiresVideoParams) {
+                const base = model.creditCost || 0;
+                const factor = model.factor || 1;
+                const resolutionMultipliers = { "480P": 1, "720P": 1.5, "1080P": 2.5, "4K": 5 };
+                const resolutionMultiplier = resolutionMultipliers[resolution as keyof typeof resolutionMultipliers] || 1;
+                const audioMultiplier = hasAudio ? 1.5 : 1;
+                const durationValue = parseInt(duration) || 8;
+                const durationMultiplier = Math.ceil(durationValue / 4); // Every 4 seconds adds multiplier
+                
+                calculatedCost = Math.ceil(base * factor * resolutionMultiplier * audioMultiplier * durationMultiplier);
+              }
+              break;
+              
+            default:
+              calculatedCost = Math.ceil((model.creditCost || 0) * (model.factor || 1));
+          }
+        }
+
+        setCost(calculatedCost);
+        onCostCalculated?.(calculatedCost);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to calculate cost');
         setCost(null);
@@ -57,89 +98,7 @@ export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled
     // Debounce calculation
     const timeoutId = setTimeout(calculateCost, 300);
     return () => clearTimeout(timeoutId);
-  }, [params, modelId, disabled, onCostCalculated]);
-
-  const handleParamChange = (key: string, value: any) => {
-    setParams(prev => ({ ...prev, [key]: value }));
-  };
-
-  const renderParamInput = (paramName: string) => {
-    switch (paramName) {
-      case 'quality':
-        return (
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400 w-16">Quality:</label>
-            <select
-              value={params.quality || ''}
-              onChange={(e) => handleParamChange('quality', e.target.value)}
-              disabled={disabled}
-              className="flex-1 px-2 py-1 bg-[#13131a] border border-white/8 rounded text-white text-xs focus:outline-none focus:border-emerald-500/40 disabled:opacity-50"
-            >
-              <option value="">Select</option>
-              <option value="1K">1K</option>
-              <option value="2K">2K</option>
-              <option value="4K">4K</option>
-            </select>
-          </div>
-        );
-
-      case 'resolution':
-        return (
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400 w-16">Resolution:</label>
-            <select
-              value={params.resolution || ''}
-              onChange={(e) => handleParamChange('resolution', e.target.value)}
-              disabled={disabled}
-              className="flex-1 px-2 py-1 bg-[#13131a] border border-white/8 rounded text-white text-xs focus:outline-none focus:border-emerald-500/40 disabled:opacity-50"
-            >
-              <option value="">Select</option>
-              <option value="480P">480P</option>
-              <option value="720P">720P</option>
-              <option value="1080P">1080P</option>
-            </select>
-          </div>
-        );
-
-      case 'duration':
-        return (
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400 w-16">Duration:</label>
-            <select
-              value={params.duration || ''}
-              onChange={(e) => handleParamChange('duration', e.target.value)}
-              disabled={disabled}
-              className="flex-1 px-2 py-1 bg-[#13131a] border border-white/8 rounded text-white text-xs focus:outline-none focus:border-emerald-500/40 disabled:opacity-50"
-            >
-              <option value="">Select</option>
-              <option value="4s">4 seconds</option>
-              <option value="8s">8 seconds</option>
-              <option value="12s">12 seconds</option>
-            </select>
-          </div>
-        );
-
-      case 'hasAudio':
-        return (
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400 w-16">Audio:</label>
-            <label className="flex items-center gap-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={params.hasAudio || false}
-                onChange={(e) => handleParamChange('hasAudio', e.target.checked)}
-                disabled={disabled}
-                className="w-3 h-3 rounded border-white/8 bg-[#13131a] text-emerald-500 focus:outline-none focus:ring-emerald-500/10 disabled:opacity-50"
-              />
-              <span className="text-xs text-gray-400">Include audio</span>
-            </label>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
+  }, [modelId, model, quality, resolution, duration, hasAudio, disabled, onCostCalculated]);
 
   if (disabled) {
     return (
@@ -164,14 +123,76 @@ export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled
         )}
       </div>
 
-      {/* Required Parameters */}
-      {requiredParams.length > 0 && (
+      {/* Model Info */}
+      <div className="mb-4 p-2 bg-white/2 rounded-lg">
+        <p className="text-xs text-gray-400">Model: {model?.modelName || modelId}</p>
+        <p className="text-xs text-gray-500">Type: {isFormulaBased ? 'Formula-based' : 'Fixed pricing'}</p>
+      </div>
+
+      {/* Quality Parameters (for Nano Banana 2 and Topaz Upscale) */}
+      {requiresQuality && (
         <div className="space-y-2 mb-4">
-          {requiredParams.map(param => (
-            <div key={param}>
-              {renderParamInput(param)}
-            </div>
-          ))}
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400 w-16">Quality:</label>
+            <select
+              value={quality}
+              onChange={(e) => setQuality(e.target.value)}
+              disabled={disabled}
+              className="flex-1 px-2 py-1 bg-[#13131a] border border-white/8 rounded text-white text-xs focus:outline-none focus:border-emerald-500/40 disabled:opacity-50"
+            >
+              <option value="1K">1K Resolution</option>
+              <option value="2K">2K Resolution</option>
+              <option value="4K">4K Resolution</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Video Parameters (for Seedance 1.5 Pro) */}
+      {requiresVideoParams && (
+        <div className="space-y-2 mb-4">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400 w-16">Resolution:</label>
+            <select
+              value={resolution}
+              onChange={(e) => setResolution(e.target.value)}
+              disabled={disabled}
+              className="flex-1 px-2 py-1 bg-[#13131a] border border-white/8 rounded text-white text-xs focus:outline-none focus:border-emerald-500/40 disabled:opacity-50"
+            >
+              <option value="480P">480P</option>
+              <option value="720P">720P</option>
+              <option value="1080P">1080P</option>
+              <option value="4K">4K</option>
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400 w-16">Duration:</label>
+            <select
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              disabled={disabled}
+              className="flex-1 px-2 py-1 bg-[#13131a] border border-white/8 rounded text-white text-xs focus:outline-none focus:border-emerald-500/40 disabled:opacity-50"
+            >
+              <option value="4s">4 seconds</option>
+              <option value="8s">8 seconds</option>
+              <option value="12s">12 seconds</option>
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-400 w-16">Audio:</label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasAudio}
+                onChange={(e) => setHasAudio(e.target.checked)}
+                disabled={disabled}
+                className="w-3 h-3 rounded border-white/8 bg-[#13131a] text-emerald-500 focus:outline-none focus:ring-emerald-500/10 disabled:opacity-50"
+              />
+              <span className="text-xs text-gray-400">Include audio</span>
+            </label>
+          </div>
         </div>
       )}
 
@@ -199,15 +220,20 @@ export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled
         ) : (
           <div className="flex items-center gap-2 text-gray-500 p-3">
             <CreditCard className="w-4 h-4" />
-            <span className="text-xs">Configure parameters to see cost</span>
+            <span className="text-xs">Loading pricing information...</span>
           </div>
         )}
       </div>
 
-      {/* Cost Breakdown Tooltip */}
-      {cost !== null && !error && (
+      {/* Cost Breakdown */}
+      {cost !== null && !error && isFormulaBased && (
         <div className="mt-2 text-[10px] text-gray-600">
-          <p>Cost calculated based on model configuration and selected parameters</p>
+          {requiresQuality && (
+            <p>Cost calculated using formula: base cost × factor ({model?.factor || 1})</p>
+          )}
+          {requiresVideoParams && (
+            <p>Cost calculated using video formula with resolution, duration, and audio parameters</p>
+          )}
         </div>
       )}
     </div>

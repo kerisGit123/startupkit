@@ -38,6 +38,15 @@ export const createPricingModel = mutation({
   },
   handler: async (ctx, args) => {
     const timestamp = Date.now();
+    const existing = await ctx.db
+      .query("storyboard_model_credit")
+      .withIndex("by_model_id")
+      .filter((q) => q.eq(q.field("modelId"), args.modelId))
+      .first();
+
+    if (existing) {
+      throw new Error(`Pricing model ${args.modelId} already exists`);
+    }
     
     const modelId = await ctx.db.insert("storyboard_model_credit", {
       modelId: args.modelId,
@@ -77,46 +86,28 @@ export const updatePricingModel = mutation({
     const existing = await ctx.db
       .query("storyboard_model_credit")
       .withIndex("by_model_id")
-      .filter((q) => q.eq("modelId", args.modelId))
+      .filter((q) => q.eq(q.field("modelId"), args.modelId))
       .first();
-    
-    const timestamp = Date.now();
-    
-    if (existing) {
-      // Update existing record
-      const updateData: any = { updatedAt: timestamp };
-      
-      // Only include fields that are being updated
-      if (args.modelName !== undefined) updateData.modelName = args.modelName;
-      if (args.modelType !== undefined) updateData.modelType = args.modelType;
-      if (args.isActive !== undefined) updateData.isActive = args.isActive;
-      if (args.pricingType !== undefined) updateData.pricingType = args.pricingType;
-      if (args.creditCost !== undefined) updateData.creditCost = args.creditCost;
-      if (args.factor !== undefined) updateData.factor = args.factor;
-      if (args.formulaJson !== undefined) updateData.formulaJson = args.formulaJson;
-      if (args.assignedFunction !== undefined) updateData.assignedFunction = args.assignedFunction;
-      
-      await ctx.db.patch(existing._id, updateData);
-      return existing._id;
-    } else {
-      // Create new record
-      const newRecord = {
-        modelId: args.modelId,
-        modelName: args.modelName || args.modelId,
-        modelType: args.modelType || "image",
-        isActive: args.isActive !== undefined ? args.isActive : true,
-        pricingType: args.pricingType || "fixed",
-        creditCost: args.creditCost,
-        factor: args.factor,
-        formulaJson: args.formulaJson,
-        assignedFunction: args.assignedFunction,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      
-      const newId = await ctx.db.insert("storyboard_model_credit", newRecord);
-      return newId;
+
+    if (!existing) {
+      throw new Error(`Pricing model ${args.modelId} not found for update`);
     }
+
+    const timestamp = Date.now();
+
+    const updateData: any = { updatedAt: timestamp };
+
+    if (args.modelName !== undefined) updateData.modelName = args.modelName;
+    if (args.modelType !== undefined) updateData.modelType = args.modelType;
+    if (args.isActive !== undefined) updateData.isActive = args.isActive;
+    if (args.pricingType !== undefined) updateData.pricingType = args.pricingType;
+    if (args.creditCost !== undefined) updateData.creditCost = args.creditCost;
+    if (args.factor !== undefined) updateData.factor = args.factor;
+    if (args.formulaJson !== undefined) updateData.formulaJson = args.formulaJson;
+    if (args.assignedFunction !== undefined) updateData.assignedFunction = args.assignedFunction;
+
+    await ctx.db.patch(existing._id, updateData);
+    return existing._id;
   },
 });
 
@@ -195,17 +186,33 @@ export const getActivePricingModels = query({
     modelType: v.optional(v.union(v.literal("image"), v.literal("video"))),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db
+    return await ctx.db
       .query("storyboard_model_credit")
-      .filter((q) => q.eq("isActive", true));
+      .filter((q) =>
+        args.modelType
+          ? q.and(
+              q.eq(q.field("isActive"), true),
+              q.eq(q.field("modelType"), args.modelType)
+            )
+          : q.eq(q.field("isActive"), true)
+      )
+      .collect();
+  },
+});
+
+// Get a single pricing model by modelId
+export const getPricingModelByModelId = query({
+  args: {
+    modelId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const model = await ctx.db
+      .query("storyboard_model_credit")
+      .withIndex("by_model_id")
+      .filter((q) => q.eq("modelId", args.modelId))
+      .first();
     
-    if (args.modelType) {
-      query = query.withIndex("by_model_type").filter((q) => q.eq("modelType", args.modelType));
-    }
-    
-    const models = await query.collect();
-    
-    return models;
+    return model || null;
   },
 });
 
@@ -310,6 +317,7 @@ const DEFAULT_PRICING_MODELS = [
     modelType: "image" as const,
     isActive: true,
     pricingType: "formula" as const,
+    assignedFunction: "getNanoBananaPrice" as const,
     creditCost: 8,
     factor: 1.3,
     formulaJson: JSON.stringify({
@@ -356,6 +364,15 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 5,
+    factor: 1.3,
+  },
+  {
+    modelId: "gpt-image",
+    modelName: "GPT Image 1.5",
+    modelType: "image" as const,
+    isActive: true,
+    pricingType: "fixed" as const,
+    creditCost: 35,
     factor: 1.3,
   },
   {
@@ -409,6 +426,7 @@ const DEFAULT_PRICING_MODELS = [
     modelType: "image" as const,
     isActive: true,
     pricingType: "formula" as const,
+    assignedFunction: "getTopazUpscale" as const,
     creditCost: 10,
     factor: 1.3,
     formulaJson: JSON.stringify({

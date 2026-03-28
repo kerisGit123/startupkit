@@ -487,6 +487,10 @@ interface ReferenceImageMetadata {
 - ✅ Real-time preview
 - ✅ Undo/redo functionality
 - ✅ Canvas state integration
+- ✅ **QUALITY-BASED PRICING**: Dynamic quality selection for Nano Banana 2 and Topaz Upscale
+- ✅ **FORMULA JSON CALCULATIONS**: Direct cost extraction from formulaJson with factor multiplication
+- ✅ **REAL-TIME CREDIT UPDATES**: Immediate credit recalculation on quality changes
+- ✅ **ACCURATE ALERT MESSAGING**: Quality-specific alerts showing correct model names and credits
 
 **ElementImageAIPanel.tsx**:
 - ✅ 10+ specialized AI models
@@ -607,6 +611,158 @@ const handleGenerateElement = async (prompt: string, model: string) => {
 - **Streaming AI**: Progressive AI result streaming
 - **Smart Caching**: Intelligent result and asset caching
 - **Background Processing**: Non-blocking AI operations
+
+---
+
+## 💰 **Quality-Based Pricing Implementation (March 2026)**
+
+### **Overview**
+Advanced pricing system for AI models with dynamic quality selection and real-time credit calculation integrated into the EditImageAIPanel.
+
+### **Implemented Models with Quality Pricing**
+
+#### **Nano Banana 2**
+- **Quality Options**: 1K, 2K, 4K
+- **Formula JSON**: Direct cost extraction with factor multiplication
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+
+#### **Topaz Upscale**
+- **Quality Options**: 1K, 2K, 4K
+- **Formula JSON**: Direct cost extraction with factor multiplication
+- **Pricing**:
+  - 1K: 10 × 1.3 = **13 credits**
+  - 2K: 18 × 1.3 = **24 credits**
+  - 4K: 30 × 1.3 = **39 credits**
+
+### **Technical Implementation**
+
+#### **Quality Dropdown UI**
+```typescript
+// Conditional rendering based on model selection
+{(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale") && (
+  <QualityDropdown
+    qualities={["1K", "2K", "4K"]}
+    selectedQuality={selectedQuality}
+    onQualityChange={(quality) => {
+      setSelectedQuality(quality);
+      alertModelCredits(currentModelId, quality);
+    }}
+  />
+)}
+```
+
+#### **Formula-Based Credit Calculation**
+```typescript
+const getModelCredits = (modelId: string, selectedQuality: string): number => {
+  const model = models.find(m => m.modelId === modelId);
+  
+  if (model.formulaJson) {
+    const formula = JSON.parse(model.formulaJson);
+    const quality = formula.pricing?.qualities?.find(q => q.name === selectedQuality);
+    if (quality) {
+      const factor = model.factor || 1;
+      return Math.ceil(quality.cost * factor);
+    }
+  }
+  
+  return Math.ceil((model.creditCost || 0) * (model.factor || 1));
+};
+```
+
+#### **Quality-Aware Alert System**
+```typescript
+const alertModelCredits = (selectedModelId: string, quality?: string) => {
+  // Direct formula calculation for immediate accuracy
+  const creditCharge = calculateFromFormula(modelId, quality);
+  const qualityInfo = ` (${quality})`;
+  
+  window.alert(`${modelLabel}${qualityInfo} will charge ${creditCharge} credits.`);
+};
+```
+
+### **Key Features**
+
+#### **✅ Dynamic Quality Selection**
+- Quality dropdown appears only for Nano Banana 2 and Topaz Upscale models
+- Hidden by default when other models are selected
+- Immediate UI updates when quality changes
+
+#### **✅ Real-Time Credit Calculation**
+- Credits update instantly when quality is selected
+- Formula-based pricing uses exact costs from formulaJson
+- Factor multiplication applied consistently (1.3 for both models)
+
+#### **✅ Accurate Alert Messaging**
+- Alerts show correct model name and selected quality
+- No state timing issues - quality passed directly to alert
+- Example: "Topaz Upscale (4K) will charge 39 credits."
+
+#### **✅ Formula JSON Integration**
+- Direct cost extraction from formula quality arrays
+- Eliminates hardcoded multiplier calculations
+- Consistent with admin pricing management formulas
+
+### **User Experience Flow**
+
+1. **Model Selection**: User selects Nano Banana 2 or Topaz Upscale
+2. **Quality Dropdown**: Appears automatically with 1K, 2K, 4K options
+3. **Quality Selection**: User clicks desired quality (e.g., "4K")
+4. **Immediate Update**: 
+   - UI shows new credit cost
+   - Alert displays correct pricing with quality
+   - State updates for future interactions
+
+### **Integration with Scene Editor**
+
+#### **Canvas State Integration**
+- Quality selection persists across canvas interactions
+- Credit calculations update in real-time during scene editing
+- Alert messaging integrated with canvas tool selection
+
+#### **Element Generation Support**
+- Quality-based pricing extends to element generation workflow
+- Consistent pricing across all AI panels in scene editor
+- Element saving maintains quality metadata
+
+### **Debugging & Monitoring**
+
+#### **Console Logging**
+```typescript
+console.log("[EditImageAIPanel] Quality-based pricing:", { 
+  modelId, 
+  selectedQuality, 
+  creditCharge, 
+  formulaSource: 'formulaJson'
+});
+```
+
+#### **Alert Debug Info**
+```typescript
+console.log("[EditImageAIPanel] Alert with quality:", { 
+  selectedModelId, 
+  qualityForCalculation, 
+  modelLabel, 
+  creditCharge 
+});
+```
+
+### **Implementation Files**
+
+- **`EditImageAIPanel.tsx`**: Quality dropdown UI and calculation logic
+- **`usePricingData.ts`**: Dynamic pricing data with formula support
+- **`PricingCalculator.tsx`**: Enhanced calculator with quality parameters
+- **`convex/storyboard/pricing.ts`**: Default models with assignedFunction field
+
+### **Benefits Achieved**
+
+- **✅ User-Friendly**: Clear quality selection with immediate feedback
+- **✅ Accurate Pricing**: Formula-based calculations match admin settings
+- **✅ Real-Time Updates**: No delays or stale data issues
+- **✅ Consistent Experience**: Alerts match UI calculations exactly
+- **✅ Maintainable**: Formula-driven pricing reduces hardcoded values
 
 ---
 

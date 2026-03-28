@@ -6,6 +6,100 @@
 
 ---
 
+## 💰 Quality-Based Pricing Integration (March 2026)
+
+### **Overview**
+Advanced pricing system for AI models with dynamic quality selection and real-time credit calculation integrated across the entire storyboard studio ecosystem.
+
+### **Implemented Models with Quality Pricing**
+
+#### **Nano Banana 2** (Canvas-Based Image Generation)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+#### **Topaz Upscale** (Canvas-Based Image Enhancement)
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**:
+  - 1K: 10 × 1.3 = **13 credits**
+  - 2K: 18 × 1.3 = **24 credits**
+  - 4K: 30 × 1.3 = **39 credits**
+- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+
+### **Orchestra-Level Quality Integration**
+
+#### **✅ Cross-Component Quality Support**
+The quality-based pricing system is now integrated across multiple components:
+
+**Image AI Panel** (`plan_imageAIPanel.md`):
+- Quality dropdown for Nano Banana 2 and Topaz Upscale
+- Real-time credit calculation with quality parameters
+- Accurate alert messaging with quality information
+
+**Canvas System** (`plan_canvas.md`):
+- Canvas-based generation with quality parameters
+- Quality-aware mask operations and AI editing
+- Quality metadata storage in canvas state
+
+**File Management** (`plan_file_final.md`):
+- Quality-based file storage with metadata tags
+- AI generation workflow with quality tracking
+- Temp-to-permanent storage with quality preservation
+
+**Build System** (`plan_storyboard_item_element.md`):
+- Quality-based frame generation
+- Element creation with quality metadata
+- AI integration with quality parameters
+
+#### **✅ System-Wide Quality Features**
+```typescript
+// Quality-based pricing calculation used across components
+const getModelCredits = (modelId: string, selectedQuality: string): number => {
+  const model = models.find(m => m.modelId === modelId);
+  
+  if (model.formulaJson) {
+    const formula = JSON.parse(model.formulaJson);
+    const quality = formula.pricing?.qualities?.find(q => q.name === selectedQuality);
+    if (quality) {
+      const factor = model.factor || 1;
+      return Math.ceil(quality.cost * factor);
+    }
+  }
+  
+  return Math.ceil((model.creditCost || 0) * (model.factor || 1));
+};
+```
+
+#### **✅ Quality Workflow Integration**
+```typescript
+// Orchestra-level quality workflow
+const qualityWorkflow = {
+  1: "User selects AI model (Nano Banana 2 / Topaz Upscale)",
+  2: "Quality dropdown appears with 1K, 2K, 4K options",
+  3: "Real-time credit calculation based on selection",
+  4: "Quality-specific alert with accurate cost",
+  5: "Generation with quality parameters",
+  6: "File storage with quality metadata",
+  7: "Credit logging with quality information"
+};
+```
+
+#### **✅ Quality Metadata Standards**
+```typescript
+// Quality metadata stored across components
+interface QualityMetadata {
+  model: string; // "nano-banana-2" or "topaz/image-upscale"
+  quality: string; // "1K", "2K", "4K"
+  creditCost: number; // Actual cost for generation
+  formulaUsed: boolean; // Whether formulaJson was applied
+  timestamp: string; // Generation timestamp
+}
+
+---
+
 ## 🎯 **Orchestra Overview**
 
 The Storyboard Studio is composed of 10 core planning components that work together harmoniously:

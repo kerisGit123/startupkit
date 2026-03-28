@@ -1,0 +1,212 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+import { uploadToR2, getR2PublicUrl } from '@/lib/r2';
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "@/convex/_generated/api";
+
+export async function POST(request: NextRequest) {
+  try {
+    // Get authenticated user
+    const authResult = await auth();
+    console.log('[Storyboard Upload] Full auth result:', {
+      hasUserId: !!authResult.userId,
+      hasOrgId: !!authResult.orgId,
+      userId: authResult.userId?.substring(0, 10) + '...',
+      orgId: authResult.orgId?.substring(0, 10) + '...',
+      hasToken: !!authResult.token,
+      tokenLength: authResult.token?.length || 0,
+      tokenStart: authResult.token?.substring(0, 20) + '...'
+    });
+
+    const { userId, orgId } = authResult;
+
+    // Initialize Convex client without auth (API route is already authenticated)
+    const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+    console.log('[Storyboard Upload] Convex client initialized without auth token (API route handles auth)');
+    if (!userId) {
+      console.log('[Storyboard Upload] No userId found in auth');
+      return NextResponse.json({ error: 'Unauthorized - no user ID' }, { status: 401 });
+    }
+
+    // Get company ID - use orgId if available (organization mode), otherwise use userId (personal mode)
+    let companyId: string;
+    if (orgId) {
+      // User is in organization mode
+      companyId = orgId;
+      console.log('[Storyboard Upload] Using organization ID:', companyId);
+    } else {
+      // User is in personal mode - use userId as companyId
+      companyId = userId;
+      console.log('[Storyboard Upload] Using personal account ID:', companyId);
+    }
+
+    if (!companyId) {
+      console.log('[Storyboard Upload] No companyId could be determined');
+      return NextResponse.json({ error: 'Unauthorized - no company ID' }, { status: 401 });
+    }
+
+    console.log('[Storyboard Upload] Authentication successful, companyId:', companyId);
+
+    const formData = await request.formData();
+    let file = formData.get('file') as File | null;
+    const useTemp = formData.get('useTemp') as string;
+    const projectId = formData.get('projectId') as string;
+    const categoryParam = formData.get('category') as string;
+    const providedCompanyId = formData.get('companyId') as string;
+    const sourceUrl = formData.get('sourceUrl') as string;
+    const sourceFilename = formData.get('sourceFilename') as string;
+    const sourceMimeType = formData.get('sourceMimeType') as string;
+
+    if (providedCompanyId && providedCompanyId !== 'undefined' && providedCompanyId !== 'null') {
+      companyId = providedCompanyId;
+      console.log('[Storyboard Upload] Using client-provided company ID:', companyId);
+    }
+    
+    if (!file && sourceUrl) {
+      console.log('[Storyboard Upload] Fetching source URL on server:', sourceUrl);
+      const sourceResponse = await fetch(sourceUrl);
+      if (!sourceResponse.ok) {
+        return NextResponse.json({ error: `Failed to fetch sourceUrl: ${sourceResponse.status} ${sourceResponse.statusText}` }, { status: 400 });
+      }
+
+      const sourceBlob = await sourceResponse.blob();
+      const derivedFilename = sourceFilename || sourceUrl.split('/').pop() || 'upload.png';
+      const derivedMimeType = sourceMimeType || sourceBlob.type || 'image/png';
+      file = new File([sourceBlob], derivedFilename, { type: derivedMimeType });
+    }
+
+    if (!file) {
+      return NextResponse.json({ error: 'No file or sourceUrl provided' }, { status: 400 });
+    }
+
+    console.log('[Storyboard Upload] Uploading file:', {
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      useTemp: useTemp === 'true',
+      category: categoryParam,
+      companyId: companyId
+    });
+
+    // Determine upload path based on category or useTemp flag
+    let uploadPath: string;
+    let category: string;
+    let isTemporary: boolean;
+    let expiresAt: Date | undefined;
+
+    if (useTemp === 'true') {
+      // Upload to temps folder with 30-day TTL as per plan_file.md
+      const timestamp = Date.now();
+      uploadPath = `temps/${timestamp}-${file.name}`;
+      category = 'temps';
+      isTemporary = true;
+      expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      console.log('[Storyboard Upload] Using temps folder with 30-day TTL:', uploadPath);
+    } else if (categoryParam && ['elements', 'generated', 'storyboard', 'videos'].includes(categoryParam)) {
+      // Category-specific upload to {companyId}/{category}/
+      const timestamp = Date.now();
+      uploadPath = `${companyId}/${categoryParam}/${timestamp}-${file.name}`;
+      category = categoryParam;
+      isTemporary = false;
+      console.log('[Storyboard Upload] Using category-specific path:', uploadPath);
+    } else {
+      // Default to uploads folder for permanent storage
+      const timestamp = Date.now();
+      uploadPath = `${companyId}/uploads/${timestamp}-${file.name}`;
+      category = 'uploads';
+      isTemporary = false;
+      console.log('[Storyboard Upload] Using default uploads folder:', uploadPath);
+    }
+
+    // Upload to R2
+    const r2Key = await uploadToR2(file, uploadPath);
+    const publicUrl = getR2PublicUrl(r2Key);
+
+    console.log('[Storyboard Upload] Upload successful:', {
+      r2Key,
+      publicUrl,
+      category,
+      isTemporary,
+      expiresAt: expiresAt?.toISOString()
+    });
+
+    // Log file to Convex database
+    try {
+      // Parse tags from FormData if provided
+      let tags = [];
+      const tagsString = formData.get('tags');
+      if (tagsString) {
+        try {
+          tags = JSON.parse(tagsString as string);
+          console.log('[Storyboard Upload] Parsed tags successfully:', tags);
+        } catch (e) {
+          console.warn('[Storyboard Upload] Failed to parse tags:', tagsString);
+        }
+      }
+
+      const logData: any = {
+        companyId, // Pass the calculated companyId
+        orgId: orgId || undefined, // Add orgId from auth
+        userId: userId, // Add userId from auth
+        r2Key,
+        filename: file.name,
+        fileType: file.type.startsWith('image/') ? 'image' : 
+                file.type.startsWith('video/') ? 'video' : 
+                file.type.startsWith('audio/') ? 'audio' : 'file',
+        mimeType: file.type,
+        size: file.size,
+        category,
+        tags: tags, // Use parsed tags
+        uploadedBy: userId,
+        status: isTemporary ? 'temporary' : 'active'
+      };
+      
+      // Add projectId if provided
+      if (projectId) {
+        logData.projectId = projectId;
+      }
+      
+      console.log('[Storyboard Upload] About to log to database with data:', logData);
+      
+      try {
+        const result = await convex.mutation(api.storyboard.storyboardFiles.logUpload, logData);
+        console.log('[Storyboard Upload] File logged to database successfully. Result:', result);
+        console.log('[Storyboard Upload] File ID:', result);
+      } catch (convexError) {
+        console.error('[Storyboard Upload] Convex mutation failed:', convexError);
+        console.error('[Storyboard Upload] Convex error details:', {
+          message: convexError.message,
+          stack: convexError.stack,
+          name: convexError.name
+        });
+        throw convexError;
+      }
+    } catch (dbError) {
+      console.error('[Storyboard Upload] Failed to log file to database:', dbError);
+      // Continue with response even if database logging fails
+    }
+
+    return NextResponse.json({
+      success: true,
+      r2Key,
+      publicUrl,
+      category,
+      isTemporary,
+      expiresAt: expiresAt?.toISOString(),
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type,
+      companyId // Include companyId for reference
+    });
+
+  } catch (error) {
+    console.error('[Storyboard Upload] Error:', error);
+    return NextResponse.json(
+      { 
+        success: false,
+        error: error instanceof Error ? error.message : 'Upload failed' 
+      },
+      { status: 500 }
+    );
+  }
+}

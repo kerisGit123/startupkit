@@ -198,7 +198,7 @@ export function CanvasArea({
         {activeAIPanel === 'element' && (
           <CanvasEditor
           panelId={panelId}
-          imageUrl={backgroundImage || activeShot?.imageUrl}
+          imageUrl={backgroundImage ?? activeShot?.imageUrl}
           activeTool={canvasActiveTool}
           state={canvasState}
           onStateChange={setCanvasState}
@@ -241,7 +241,7 @@ export function CanvasArea({
         {activeAIPanel === 'editimage' && (
           <CanvasEditor
           panelId={panelId}
-          imageUrl={backgroundImage || activeShot?.imageUrl}
+          imageUrl={backgroundImage ?? activeShot?.imageUrl}
           activeTool={canvasActiveTool}
           state={canvasState}
           onStateChange={setCanvasState}

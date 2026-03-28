@@ -1,166 +1,175 @@
-bytedance / seedance-1.5-pro
+# AI Model Pricing Documentation
 
-Commercial use
-Run with API
-Copy page
+## Updated Pricing Structure (March 2026)
 
-Seedance 1.5 Pro is ByteDance’s audio-video generation model that creates cinema-quality video, synchronized audio, and multilingual dialogue with cinematic camera control.
+### Seedance 1.5 Pro - Video Generation
 
-Pricing: 480P: 4s: 7 credits ($0.035) no audio / 14 credits ($0.07) with audio; 8s: 14 ($0.07) / 28 ($0.14); 12s: 19 ($0.095) / 38 ($0.19)
-720P: 4s: 14 ($0.07) / 28 ($0.14); 8s: 28 ($0.14) / 56 ($0.28); 12s: 42 ($0.21) / 84 ($0.42)
-1080P: 4s: 30 ($0.15) / 60 ($0.30); 8s: 60 ($0.30) / 120 ($0.60); 12s: 90 ($0.45) / 180 ($0.90)
+**Model Type**: Video Generation with Audio Support
 
+**Base Cost**: 7 credits
 
+**Pricing Formula**: `base × factor × resolutionMultiplier × audioMultiplier × durationMultiplier`
 
+**Resolution Multipliers**:
+- 480p: 1.0x
+- 720p: 2.0x  
+- 1080p: 4.0x
+- 4K: 5.0x
 
-bytedance / seedance-1.5-pro
+**Audio Multiplier**: 2.0x (when enabled)
 
-Commercial use
-Run with API
-Copy page
+**Duration Multipliers** (4-second intervals):
+- 0-4s: 1.0x
+- 5-8s: 2.0x
+- 9-12s: 4.0x
+- 13s+: Additional 4-second blocks
 
-Seedance 1.5 Pro is ByteDance’s audio-video generation model that creates cinema-quality video, synchronized audio, and multilingual dialogue with cinematic camera control.
+**Pricing Examples** (with 1.3 factor):
+- 480p, 4s, no audio: 7 × 1.3 × 1 × 1 = 9.1 → **10 credits**
+- 720p, 8s, with audio: 7 × 1.3 × 2 × 2 × 2 = 72.8 → **73 credits**
+- 1080p, 12s, with audio: 7 × 1.3 × 4 × 2 × 4 = 145.6 → **146 credits**
 
-Pricing: 480P: 4s: 7 credits ($0.035) no audio / 14 credits ($0.07) with audio; 8s: 14 ($0.07) / 28 ($0.14); 12s: 19 ($0.095) / 38 ($0.19)
-720P: 4s: 14 ($0.07) / 28 ($0.14); 8s: 28 ($0.14) / 56 ($0.28); 12s: 42 ($0.21) / 84 ($0.42)
-1080P: 4s: 30 ($0.15) / 60 ($0.30); 8s: 60 ($0.30) / 120 ($0.60); 12s: 90 ($0.45) / 180 ($0.90)
+**Implementation**: `getSeedance15(base, multiplier, resolution, audio, duration)`
 
+---
 
+### Nano Banana 2 - Image Generation
 
-flux-2 / pro-text-to-image
+**Model Type**: Image Generation
 
-Commercial use
-Run with API
-Copy page
+**Base Cost**: 8 credits
 
-Flux 2 is Black Forest Labs’ advanced image generation model that delivers photoreal detail, strong multi-reference consistency, and accurate text rendering with flexible control.
+**Pricing Formula**: `base × factor × qualityMultiplier`
 
-Model Type:
+**Quality Multipliers**:
+- 1K: 1.0x
+- 2K: 1.5x
+- 4K: 2.25x
 
-Pro Text To Image
+**Pricing Examples** (with 1.3 factor):
+- 1K quality: 8 × 1.3 × 1 = 10.4 → **11 credits**
+- 2K quality: 8 × 1.3 × 1.5 = 15.6 → **16 credits**
+- 4K quality: 8 × 1.3 × 2.25 = 23.4 → **24 credits**
 
-Pro Image To Image
+**Implementation**: `getNanoBananaPrice(base, multiplier, quality)`
 
-Flex Text To Image
+---
 
-Flex Image To Image
-Pricing: 5 credits (~$0.025) for 1K or 7 credits (~$0.035) for 2K—upload up to 8 reference images at no extra cost; you already save 40 %+ versus official pricing on a single image, and the advantage only grows with more uploads.
-High-tier top-ups (+10% bonus) bring effective pricing down to ~$0.0225 for 1K and ~$0.0315 for 2K.
+### Topaz Upscale - Image Upscaling
 
+**Model Type**: Image Upscaling
 
+**Base Cost**: 10 credits
 
+**Pricing Formula**: `base × factor × upscaleMultiplier`
 
-ideogram / character-edit
+**Quality to Upscale Mapping**:
+- 1K → 1x upscale
+- 2K → 2x upscale
+- 4K → 4x upscale
 
-Commercial use
-Run with API
-Copy page
+**Upscale Multipliers**:
+- 1x: 1.0x
+- 2x: 2.0x
+- 3x: 3.0x
+- 4x: 4.0x
 
-Ideogram Character is the latest feature released by Ideogram AI, ensuring characters retain core features such as facial traits, proportions, and hairstyles across different scenes, artistic styles, and contexts. Whether creating characters from a single reference image or fine-tuning existing ones, Kie.ai's Ideogram Character API offers flexibility and precision through its Base, Edit, and Remix operations.
+**Pricing Examples** (with 1.3 factor):
+- 1K (1x): 10 × 1.3 × 1 = 13 → **13 credits**
+- 2K (2x): 10 × 1.3 × 2 = 26 → **26 credits**
+- 4K (4x): 10 × 1.3 × 4 = 52 → **52 credits**
 
-Model Type:
+**Implementation**: `getTopazUpscale(base, multiplier, quality)`
 
-Character
+---
 
-Character Edit
+## Legacy Models (Fixed Pricing)
 
-Character Remix
-Pricing: Ideogram Character costs 12 credits ($0.06) Turbo, 18 credits ($0.09) Balanced, 24 credits ($0.12) Quality.
-High-tier top-ups (+10% bonus) bring effective pricing down to ~$0.055 (Turbo), ~$0.082 (Balanced), and ~$0.109 (Quality).
+### Flux 2 Pro - Image Generation
 
+**Model Types**: Pro Text To Image, Pro Image To Image, Flex Text To Image, Flex Image To Image
 
+**Pricing**: 
+- 1K: 5 credits (~$0.025)
+- 2K: 7 credits (~$0.035)
+- Up to 8 reference images at no extra cost
 
+**High-tier top-ups** (+10% bonus):
+- 1K: ~$0.0225
+- 2K: ~$0.0315
 
+---
 
-flux-2 / pro-text-to-image
+### Ideogram Character Edit
 
-Commercial use
-Run with API
-Copy page
+**Model Types**: Character, Character Edit, Character Remix
 
-Flux 2 is Black Forest Labs’ advanced image generation model that delivers photoreal detail, strong multi-reference consistency, and accurate text rendering with flexible control.
+**Pricing**:
+- Turbo: 12 credits ($0.06)
+- Balanced: 18 credits ($0.09)
+- Quality: 24 credits ($0.12)
 
-Model Type:
+**High-tier top-ups** (+10% bonus):
+- Turbo: ~$0.055
+- Balanced: ~$0.082
+- Quality: ~$0.109
 
-Pro Text To Image
+---
 
-Pro Image To Image
+### GPT Image 1.5
 
-Flex Text To Image
+**Model Types**: 1.5 Text To Image, 1.5 Image To Image
 
-Flex Image To Image
-Pricing: 5 credits (~$0.025) for 1K or 7 credits (~$0.035) for 2K—upload up to 8 reference images at no extra cost; you already save 40 %+ versus official pricing on a single image, and the advantage only grows with more uploads.
-High-tier top-ups (+10% bonus) bring effective pricing down to ~$0.0225 for 1K and ~$0.0315 for 2K.
+**Pricing**:
+- Medium quality: 4 credits ($0.02)
+- High quality: 22 credits ($0.11)
 
+**High-tier top-ups** (+10% bonus):
+- Medium: ~$0.018
+- High: ~$0.10
 
+---
 
-Pricing: 14 credits (~$0.07) for 1K or 24 credits (~$0.12) for 2K—upload up to 8 reference images at no extra cost; you already save 40 %+ versus official pricing on a single image, and the advantage only grows with more uploads.
-High-tier top-ups (+10% bonus) bring effective pricing down to~$0.063 for 1K  and ~$0.108 for 2K.
+### Nano Banana Edit
 
+**Model Types**: Nano Banana Edit, Nano Banana, Nano Banana Pro
 
+**Pricing**: 4 credits per image (~$0.02)
 
+**High-tier top-ups** (+10% bonus): ~$0.018
 
+---
 
-gpt-image / 1.5-text-to-image
+### Qwen Image to Image
 
-Commercial use
-Run with API
-Copy page
+**Model Types**: Text To Image, Image To Image
 
-GPT Image 1.5 is OpenAI’s flagship image generation model for high-quality image creation and precise image editing, with strong instruction following and improved text rendering.
+**Pricing**: 4 credits per image (= $0.02)
 
-Model Type:
+**High-tier top-ups** (+10% bonus): ~$0.018
 
-1.5 Text To Image
+---
 
-1.5 Image To Image
-Pricing: text-to-image or image-to-image: medium quality 4 credits ($0.02) per image, high quality 22 credits ($0.11) per image — ~35–45% cheaper than fal pricing.
-High-tier top-ups (+10% bonus) bring effective pricing down to ~$0.018 per image (medium quality) and ~$0.10 per image (high quality).
+## Pricing Management Implementation
 
+### Quality-Based Pricing System
+- **Dynamic Quality Selection**: Real-time quality dropdown for image models
+- **Formula JSON Integration**: Direct cost extraction from model configuration
+- **Factor Application**: Consistent 1.3x multiplier across formula-based models
+- **Real-time Updates**: Immediate credit recalculation on parameter changes
 
+### Testing Interface
+- **Tab-Based UI**: Separate Models and Testing tabs
+- **Model-Aware Parameters**: Dynamic parameter display based on model type
+- **Function-Based Calculations**: Uses assigned pricing functions for accuracy
+- **Real-time Validation**: Instant feedback on pricing calculations
 
+### Admin Features
+- **CRUD Operations**: Complete model management interface
+- **Multiple View Modes**: Table, grid, and card views
+- **Dark Theme**: Consistent LTX Studio styling
+- **Search and Filtering**: Advanced model discovery capabilities
 
+---
 
-
-
-google / nano-banana-edit
-
-Commercial use
-Run with API
-Copy page
-
-Gemini 3 Image Preview (aka Nano Banana) is an advanced AI model excelling in natural language-driven image generation and editing. It produces hyper-realistic, physics-aware visuals with seamless style transformations.
-
-Model Type:
-
-Nano Banana Edit
-
-Nano Banana
-
-Nano Banana Pro
-Pricing: Nano Banana API costs 4 credits per image (~$0.02).
-High-tier top-ups (+10% bonus) bring effective pricing down to ~$0.018 per image.
-
-
-
-
-
-
-
-
-
-qwen / image-to-image
-
-Commercial use
-Run with API
-Copy page
-
-The Qwen Image API empowers creators, developers, and businesses to generate and edit photorealistic images effortlessly. Whether you're crafting intricate designs or refining existing visuals, this powerful Qwen API integrates seamlessly into your workflow, delivering multilingual text rendering and advanced editing capabilities that rival top models.
-
-Model Type:
-
-Text To Image
-
-Image To Image
-Pricing: Qwen Image-to-Image costs 4 credits per image (= $0.02).
-High-tier top-ups (+10% bonus) bring effective pricing down to ~$0.018 per image.
+*Last Updated: March 28, 2026*

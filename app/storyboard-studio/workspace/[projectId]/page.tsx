@@ -1291,7 +1291,54 @@ export default function StoryboardWorkspacePage() {
             setElementLibraryDraft(null);
             setSelectedItemForElement(null);
           }}
-          onSelectElement={(urls, name) => {
+          onSelectElement={(urls, name, element) => {
+            if (selectedItemForElement) {
+              // Add element name to the appropriate category in the storyboard item
+              const currentItem = items?.find(item => item._id === selectedItemForElement);
+              const currentElementNames = currentItem?.elementNames || {
+                characters: [],
+                environments: [],
+                props: []
+              };
+              
+              let updatedElementNames = { ...currentElementNames };
+              
+              // Add element name to the correct category based on element type
+              switch (element.type) {
+                case 'character':
+                  if (!updatedElementNames.characters.includes(name)) {
+                    updatedElementNames.characters = [...updatedElementNames.characters, name];
+                  }
+                  break;
+                case 'environment':
+                  if (!updatedElementNames.environments.includes(name)) {
+                    updatedElementNames.environments = [...updatedElementNames.environments, name];
+                  }
+                  break;
+                case 'prop':
+                  if (!updatedElementNames.props.includes(name)) {
+                    updatedElementNames.props = [...updatedElementNames.props, name];
+                  }
+                  break;
+                default:
+                  // For other types, add to props as fallback
+                  if (!updatedElementNames.props.includes(name)) {
+                    updatedElementNames.props = [...updatedElementNames.props, name];
+                  }
+              }
+              
+              // Update the storyboard item with the new element names
+              updateItem({
+                id: selectedItemForElement as Id<"storyboard_items">,
+                elementNames: updatedElementNames
+              });
+              
+              console.log(`[Workspace] Added element "${name}" (${element.type}) to item ${selectedItemForElement}`, {
+                elementNames: updatedElementNames
+              });
+            }
+            
+            // Keep the existing characterRef behavior for compatibility
             setCharacterRef({ name, urls });
             // Don't close the library - let user select more elements
           }}
@@ -1367,6 +1414,13 @@ export default function StoryboardWorkspacePage() {
               type,
             });
             setShowElementLibrary(true);
+          }}
+          onSaveSelectedImageToItem={async (imageUrl, itemId) => {
+            await updateItem({
+              id: itemId as Id<"storyboard_items">,
+              imageUrl,
+            });
+            setSelectedSceneItem((prev: any) => prev ? { ...prev, imageUrl } : prev);
           }}
           onShotsChange={(shots) => {
             // Update the item if needed

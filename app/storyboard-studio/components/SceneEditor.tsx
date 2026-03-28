@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save,
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import { CanvasArea } from "./CanvasArea";
@@ -21,6 +21,8 @@ import { EditImageAIPanel, type AIEditMode } from "./EditImageAIPanel";
 import { VideoAIPanel, type VideoEditMode } from "./VideoAIPanel";
 import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/ElementImageAIPanel";
 import { Video, Image as ImageIcon, Box } from "lucide-react";
+import { uploadToR2 } from "@/lib/uploadToR2";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
 
 type CanvasTool = CanvasActiveTool;
 
@@ -50,6 +52,7 @@ interface SceneEditorProps {
   onClose: () => void;
   onShotsChange: (shots: Shot[]) => void;
   onSaveImageAsElement?: (draft: { imageUrl: string; name?: string; type?: string }) => void;
+  onSaveSelectedImageToItem?: (imageUrl: string, itemId: string) => Promise<void> | void;
   // New props for R2 and element library
   projectId?: Id<"storyboard_projects">;
   userId?: string;
@@ -57,7 +60,7 @@ interface SceneEditorProps {
   userCompanyId?: string;
 }
 
-export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, projectId, userId, user, userCompanyId }: SceneEditorProps) {
+export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, onSaveSelectedImageToItem, projectId, userId, user, userCompanyId }: SceneEditorProps) {
   // Mobile detection
   const { isMobile, isTablet, isDesktop } = useMobileDetection();
   
@@ -74,11 +77,298 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [zoom, setZoom] = useState(53);
   const [refImages, setRefImages] = useState<string[]>([]);
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [isCanvasImageRemoved, setIsCanvasImageRemoved] = useState(false);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const originalImageRef = useRef<string | null>(null);
   const [promptText, setPromptText] = useState("");
   const [isInpainting, setIsInpainting] = useState(false);
   const [inpaintError, setInpaintError] = useState<string | null>(null);
+  
+  // Get company ID for R2 uploads
+  const companyId = useCurrentCompanyId() || userCompanyId || userId;
+  
+  // Debug companyId values
+  console.log('[SceneEditor] Auth debug:', {
+    useCurrentCompanyId: useCurrentCompanyId(),
+    userCompanyId,
+    userId,
+    finalCompanyId: companyId,
+    companyIdType: companyId === userId ? 'personal' : 'organization'
+  });
+
+  const sanitizeCompanyId = useCallback((value?: string | null) => {
+    if (!value) {
+      return null;
+    }
+
+    const trimmedValue = value.trim();
+    if (!trimmedValue || trimmedValue === 'undefined' || trimmedValue === 'null') {
+      return null;
+    }
+
+    return trimmedValue;
+  }, []);
+
+  const getCanvasImageInfo = useCallback(() => {
+    const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement | null;
+    const img = container?.querySelector('img') as HTMLImageElement | null;
+    const imageSrc = img?.currentSrc || img?.src || null;
+
+    let companyIdFromImage: string | null = null;
+    if (imageSrc) {
+      try {
+        const url = new URL(imageSrc);
+        const segments = url.pathname.split('/').filter(Boolean);
+        if (segments.length >= 2) {
+          companyIdFromImage = sanitizeCompanyId(segments[0]);
+        }
+      } catch {
+        companyIdFromImage = null;
+      }
+    }
+
+    return {
+      container,
+      img,
+      imageSrc,
+      companyIdFromImage,
+      effectiveCompanyId:
+        sanitizeCompanyId(companyId) ||
+        companyIdFromImage ||
+        sanitizeCompanyId(userCompanyId) ||
+        sanitizeCompanyId(userId) ||
+        null,
+    };
+  }, [companyId, sanitizeCompanyId, userCompanyId, userId]);
+
+  const buildSnapshotCanvas = useCallback(async () => {
+    const { container, img, imageSrc, effectiveCompanyId } = getCanvasImageInfo();
+    if (!container) {
+      throw new Error('Canvas not found');
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Canvas context not available');
+    }
+
+    const rect = container.getBoundingClientRect();
+    canvas.width = Math.max(1, Math.round(rect.width));
+    canvas.height = Math.max(1, Math.round(rect.height));
+
+    ctx.fillStyle = '#13131a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (!img?.src) {
+      throw new Error('No image found to save');
+    }
+
+    const candidateSources = [
+      imageSrc,
+      imageSrc?.includes('/undefined/') && effectiveCompanyId
+        ? imageSrc.replace('/undefined/', `/${effectiveCompanyId}/`)
+        : null,
+      originalImage,
+      img.currentSrc,
+      img.src,
+    ].filter((source, index, array): source is string => Boolean(source) && array.indexOf(source) === index);
+
+    let imageLoaded = false;
+    for (const source of candidateSources) {
+      const loaded = await new Promise<boolean>((resolve) => {
+        const tempImg = document.createElement('img');
+        if (!source.startsWith('data:')) {
+          tempImg.crossOrigin = 'anonymous';
+        }
+        tempImg.onload = () => {
+          ctx.drawImage(tempImg, 0, 0, rect.width, rect.height);
+          resolve(true);
+        };
+        tempImg.onerror = () => {
+          console.log('[SceneEditor] Snapshot source failed, trying next fallback:', source);
+          resolve(false);
+        };
+        tempImg.src = source;
+      });
+
+      if (loaded) {
+        console.log('[SceneEditor] Snapshot source loaded successfully:', source);
+        imageLoaded = true;
+        break;
+      }
+    }
+
+    if (!imageLoaded) {
+      console.log('[SceneEditor] All snapshot sources failed; using background-only fallback');
+    }
+
+    return canvas;
+  }, [getCanvasImageInfo, originalImage]);
+
+  const buildUploadFile = useCallback(async () => {
+    const currentShot = shots.find((shot) => shot.id === activeShotId);
+    const screenNumber = String(((currentShot?.order || 0) + 1)).padStart(2, '0');
+    const filename = `frame-${screenNumber}.png`;
+    const { imageSrc, img } = getCanvasImageInfo();
+
+    const fetchableSource = imageSrc || img?.currentSrc || img?.src || null;
+
+    let shouldAttemptDirectFetch = false;
+    if (fetchableSource) {
+      try {
+        const sourceUrl = new URL(fetchableSource, window.location.href);
+        shouldAttemptDirectFetch =
+          sourceUrl.protocol === 'data:' ||
+          sourceUrl.protocol === 'blob:' ||
+          sourceUrl.origin === window.location.origin;
+      } catch {
+        shouldAttemptDirectFetch = false;
+      }
+    }
+
+    if (fetchableSource && shouldAttemptDirectFetch) {
+      try {
+        console.log('[SceneEditor] Attempting direct image fetch for save:', fetchableSource);
+        const response = await fetch(fetchableSource, { credentials: 'omit' });
+        if (response.ok) {
+          const fetchedBlob = await response.blob();
+          if (fetchedBlob.size > 0) {
+            const blobType = fetchedBlob.type || 'image/png';
+            return {
+              file: new File([fetchedBlob], filename, { type: blobType }),
+              screenNumber,
+              source: 'direct-image-fetch',
+            };
+          }
+        }
+      } catch (error) {
+        console.error('[SceneEditor] Direct image fetch failed, falling back to snapshot canvas:', error);
+      }
+    } else if (fetchableSource) {
+      console.log('[SceneEditor] Skipping direct fetch for save and using snapshot canvas fallback:', fetchableSource);
+    }
+
+    const canvas = await buildSnapshotCanvas();
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((nextBlob) => {
+        if (nextBlob) {
+          resolve(nextBlob);
+        } else {
+          reject(new Error('Failed to create image blob'));
+        }
+      }, 'image/png');
+    });
+
+    return {
+      file: new File([blob], filename, { type: 'image/png' }),
+      screenNumber,
+      source: 'snapshot-canvas',
+    };
+  }, [buildSnapshotCanvas, getCanvasImageInfo, activeShotId, shots]);
+  
+  // Save handler for R2 uploads
+  const handleSaveToR2 = async () => {
+    console.log('[SceneEditor] Save button clicked! Starting save process...');
+
+    const savingNotification = document.createElement('div');
+    savingNotification.className = 'fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+    savingNotification.textContent = 'Saving to R2...';
+    document.body.appendChild(savingNotification);
+
+    try {
+      const { file, screenNumber, source } = await buildUploadFile();
+      const currentUserId = user?.id || userId;
+      const { imageSrc, companyIdFromImage, effectiveCompanyId } = getCanvasImageInfo();
+      const sourceFilename = imageSrc ? imageSrc.split('/').pop()?.split('?')[0] || file.name : file.name;
+      const sourceMimeType = imageSrc?.match(/\.png(\?|$)/i)
+        ? 'image/png'
+        : imageSrc?.match(/\.jpe?g(\?|$)/i)
+          ? 'image/jpeg'
+          : imageSrc?.match(/\.webp(\?|$)/i)
+            ? 'image/webp'
+            : file.type;
+
+      console.log('[SceneEditor] Save-time auth check:', {
+        companyId,
+        companyIdFromImage,
+        effectiveCompanyId,
+        imageSrc,
+        uploadSource: source,
+        currentUserId,
+        companyIdType: companyId === userId ? 'personal' : 'organization'
+      });
+
+      if (!effectiveCompanyId) {
+        throw new Error('Company ID is required for upload - please check your authentication');
+      }
+
+      if (!currentUserId) {
+        throw new Error('User ID is required for upload - please log in again');
+      }
+
+      savingNotification.textContent = 'Uploading to R2...';
+
+      const result = await uploadToR2({
+        file: imageSrc ? undefined : file,
+        category: 'uploads',
+        companyId: effectiveCompanyId,
+        userId: currentUserId,
+        projectId: projectId || undefined,
+        sourceUrl: imageSrc || undefined,
+        sourceFilename,
+        sourceMimeType,
+        tags: ['storyboard', 'frame', `screen-${screenNumber}`],
+        onProgress: (progress) => {
+          console.log('[SceneEditor] Upload progress:', progress);
+          savingNotification.textContent = `Uploading to R2... ${progress}%`;
+        },
+        onSuccess: (uploadResult) => {
+          console.log('[SceneEditor] Upload successful:', uploadResult);
+        },
+        onError: (error) => {
+          console.error('[SceneEditor] Upload error:', error);
+        }
+      });
+
+      console.log('[SceneEditor] uploadToR2 completed successfully. Result:', result);
+
+      savingNotification.className = 'fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 max-w-md';
+      savingNotification.innerHTML = `
+        <div class="font-semibold">✅ Saved to Uploads!</div>
+        <div class="text-sm mt-1">File: ${result.filename}</div>
+        <div class="text-xs mt-2 opacity-75">Check Files tab → Uploads to view</div>
+      `;
+
+      alert(`✅ File saved successfully!\n\nFilename: ${result.filename}\nLocation: Uploads folder\n\nYou can find it in the Files tab under "Uploads" filter.`);
+
+      setTimeout(() => {
+        if (document.body.contains(savingNotification)) {
+          document.body.removeChild(savingNotification);
+        }
+      }, 4000);
+    } catch (error) {
+      console.error('[SceneEditor] Save error:', error);
+
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      savingNotification.className = 'fixed top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 max-w-md';
+      savingNotification.innerHTML = `
+        <div class="font-semibold">❌ Save Failed</div>
+        <div class="text-sm mt-1">${errorMessage}</div>
+        <div class="text-xs mt-2 opacity-75">Check browser console for details</div>
+      `;
+
+      setTimeout(() => {
+        if (document.body.contains(savingNotification)) {
+          document.body.removeChild(savingNotification);
+        }
+      }, 8000);
+    }
+  };
   
   // Mobile gesture handling
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -167,6 +457,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     name?: string;
     type?: string;
   } | null>(null);
+
+  useEffect(() => {
+    setIsCanvasImageRemoved(false);
+  }, [activeShotId]);
+
+  useEffect(() => {
+    if (backgroundImage) {
+      setIsCanvasImageRemoved(false);
+    }
+  }, [backgroundImage]);
   
   // Debug: Track generated images changes
   const [showGenPanel, setShowGenPanel] = useState(false);
@@ -213,6 +513,30 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [isSquareMode, setIsSquareMode] = useState(false); // Track if Add Square mode is active
   const [selectedAspectRatio, setSelectedAspectRatio] = useState("1:1"); // Track selected aspect ratio - default to 1:1
   const [rectangleMaskAspectRatio, setRectangleMaskAspectRatio] = useState("1:1"); // Track rectangle mask aspect ratio - independent from canvas
+
+  const handleDeleteCanvasImage = useCallback(() => {
+    setIsCanvasImageRemoved(true);
+    setBackgroundImage('');
+    setSelectedSceneImageUrl(null);
+    setSelectedGeneratedImageIndex(-1);
+    setRectangle(null);
+    setCanvasState((prev) => ({
+      ...prev,
+      mask: [],
+    }));
+  }, []);
+
+  const handleSaveSelectedImageToStoryboardItem = useCallback(async () => {
+    const activeItemId = activeShotId;
+    const currentShot = shots.find((shot) => shot.id === activeShotId);
+    const imageUrl = backgroundImage || selectedSceneImageUrl || getCanvasImageInfo().imageSrc || currentShot?.imageUrl || null;
+
+    if (!activeItemId || !imageUrl) {
+      throw new Error('No selected image available to save to storyboard item');
+    }
+
+    await onSaveSelectedImageToItem?.(imageUrl, activeItemId);
+  }, [activeShotId, backgroundImage, getCanvasImageInfo, onSaveSelectedImageToItem, selectedSceneImageUrl, shots]);
   
   // Debug: Log rectangleMaskAspectRatio changes
   useEffect(() => {
@@ -239,7 +563,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // ImageAI Panel state
   const [aiEditMode, setAiEditMode] = useState<AIEditMode>("area-edit");
-  const [aiModel, setAiModel] = useState("nano-banana-2");
+  const [aiModel, setAiModel] = useState("gpt-image");
   const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string; filename?: string }[]>([]);
 
   // Information dialog state
@@ -682,6 +1006,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           // Only update if the dimensions or position actually changed to prevent infinite loop
           const currentRect = rectangle;
           if (currentRect.width !== rectWidth || currentRect.height !== rectHeight || currentRect.x !== x || currentRect.y !== y) {
+            // Store original canvas display size when rectangle is first created (for consistent coordinate transformations)
+            if (!originalCanvasDisplaySize && containerRect) {
+              const canvasDisplaySize = { width: containerRect.width, height: containerRect.height };
+              console.log("[DEBUG] Storing original canvas display size when creating rectangle:", canvasDisplaySize);
+              setOriginalCanvasDisplaySize(canvasDisplaySize);
+            }
+            
             setRectangle({ x, y, width: rectWidth, height: rectHeight });
             setImageIsRectangleVisible(true);
           }
@@ -689,6 +1020,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       }
     }
   }, [rectangleMaskAspectRatio, canvasTool]);
+
+  // Store original canvas display size when rectangle is created
+  const [originalCanvasDisplaySize, setOriginalCanvasDisplaySize] = useState<{ width: number; height: number } | null>(null);
 
   const cropImageToRectangle = async (
     base64Image: string,
@@ -699,6 +1033,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       try {
         console.log("Starting cropImageToRectangle with:", rectangle);
         console.log("Canvas display size provided:", canvasDisplaySize);
+        console.log("Original canvas display size stored:", originalCanvasDisplaySize);
+        
+        // Use original canvas display size if available (prevents repositioning when background changes)
+        const effectiveCanvasSize = originalCanvasDisplaySize || canvasDisplaySize;
+        console.log("Using effective canvas size:", effectiveCanvasSize);
         
         const img = document.createElement('img');
         img.onload = () => {
@@ -709,9 +1048,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             // Scale rectangle from canvas display space to actual image pixel space,
             // accounting for object-contain letterboxing offset within the container.
             let scaledRect = { ...rectangle };
-            if (canvasDisplaySize && canvasDisplaySize.width > 0 && canvasDisplaySize.height > 0) {
-              const containerW = canvasDisplaySize.width;
-              const containerH = canvasDisplaySize.height;
+            if (effectiveCanvasSize && effectiveCanvasSize.width > 0 && effectiveCanvasSize.height > 0) {
+              const containerW = effectiveCanvasSize.width;
+              const containerH = effectiveCanvasSize.height;
 
               // Calculate how the image is rendered inside the container (object-contain logic)
               const imgAspect = img.width / img.height;
@@ -763,6 +1102,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               }
 
               console.log("Constrained rectangle (0px padding):", constrainedRect);
+              console.log("=== COORDINATE TRANSFORMATION DEBUG ===");
+              console.log("Canvas rectangle -> Image rectangle:");
+              console.log(`  Original: ${rectangle.x}, ${rectangle.y}, ${rectangle.width}x${rectangle.height}`);
+              console.log(`  Container: ${containerW}x${containerH}`);
+              console.log(`  Rendered: ${renderedW.toFixed(1)}x${renderedH.toFixed(1)} at (${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})`);
+              console.log(`  Scale: ${scaleX.toFixed(3)}x${scaleY.toFixed(3)}`);
+              console.log(`  Final: ${constrainedRect.x.toFixed(1)}, ${constrainedRect.y.toFixed(1)}, ${constrainedRect.width.toFixed(1)}x${constrainedRect.height.toFixed(1)}`);
+              console.log("=== END TRANSFORMATION DEBUG ===");
               rectangle = constrainedRect;
             } else {
               console.warn("No canvas display size provided, using rectangle as-is");
@@ -810,6 +1157,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             console.log("Final canvas dimensions:", canvas.width, "x", canvas.height);
 
             // Draw the cropped portion of the image (with resizing if needed)
+            console.log("=== CANVAS DRAWING DEBUG ===");
+            console.log("drawImage parameters:");
+            console.log(`  Source: ${rectangle.x}, ${rectangle.y}, ${rectangle.width}, ${rectangle.height}`);
+            console.log(`  Dest: 0, 0, ${canvasWidth}, ${canvasHeight}`);
+            console.log(`  Image original: ${img.width}x${img.height}`);
+            console.log(`  Canvas final: ${canvas.width}x${canvas.height}`);
+            console.log("=== END DRAWING DEBUG ===");
+            
             ctx.drawImage(
               img,
               rectangle.x, rectangle.y, rectangle.width, rectangle.height, // Source rectangle
@@ -819,6 +1174,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             // Convert to base64 (will be uploaded as URL)
             const croppedBase64 = canvas.toDataURL('image/png');
             console.log("Canvas converted to base64 (PNG), length:", croppedBase64.length);
+            console.log("=== CROP DEBUGGING SUMMARY ===");
+            console.log("Original rectangle (canvas):", {
+              x: rectangle.x,
+              y: rectangle.y, 
+              width: rectangle.width,
+              height: rectangle.height
+            });
+            console.log("Final canvas size:", canvas.width, "x", canvas.height);
+            console.log("Image original size:", img.width, "x", img.height);
+            console.log("=== END CROP DEBUGGING ===");
             resolve(croppedBase64);
           } catch (error) {
             console.error("Error in canvas processing:", error);
@@ -902,6 +1267,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       const canvasDisplaySize = canvasRect
         ? { width: canvasRect.width, height: canvasRect.height }
         : undefined;
+
+      // Store original canvas display size if not already stored (prevents repositioning issues)
+      if (canvasDisplaySize && !originalCanvasDisplaySize) {
+        console.log("[DEBUG] Storing original canvas display size:", canvasDisplaySize);
+        setOriginalCanvasDisplaySize(canvasDisplaySize);
+      }
 
       // Crop the image to the rectangle
       console.log("Cropping image to rectangle:", rectangle);
@@ -1061,22 +1432,33 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         }
       }
       
-      const combinedImage = await combineImages(canvasWithElements, generatedImage, rectangle, canvasDisplaySize);
-      console.log("Step 3: Images combined successfully");
-      console.log("DEBUG: Combined image URL length:", combinedImage.length);
-      console.log("DEBUG: Combined image URL starts with:", combinedImage.substring(0, 50));
+      // Check if we need to combine images or just use generated image directly
+      if (rectangle && (rectangle.width > 0 && rectangle.height > 0)) {
+        // Rectangle mask mode: combine original with generated in crop area
+        console.log("Rectangle mask detected - combining images");
+        const combinedImage = await combineImages(canvasWithElements, generatedImage, rectangle, canvasDisplaySize);
+        console.log("Step 3: Images combined successfully");
+        console.log("DEBUG: Combined image URL length:", combinedImage.length);
+        console.log("DEBUG: Combined image URL starts with:", combinedImage.substring(0, 50));
 
-      // Set the combined image as the new background
-      console.log("DEBUG: About to set backgroundImage to combinedImage");
-      setBackgroundImage(combinedImage);
-      console.log("DEBUG: setBackgroundImage called with combinedImage");
-      
-      // Add ONLY the combined image to generated images panel (slider)
-      setGeneratedImages(prev => [combinedImage, ...prev]);
-      setShowGenPanel(true);
+        // Set the combined image as the new background
+        console.log("DEBUG: About to set backgroundImage to combinedImage");
+        setBackgroundImage(combinedImage);
+        console.log("DEBUG: setBackgroundImage called with combinedImage");
+        
+        // Add ONLY the combined image to generated images panel (slider)
+        setGeneratedImages(prev => [combinedImage, ...prev]);
+        setShowGenPanel(true);
 
-      // Clear the crop rectangle after successful generation
-      setRectangle(null);
+        // Clear the crop rectangle after successful generation
+        setRectangle(null);
+      } else {
+        // No rectangle mask: work like text-to-image - directly use generated image
+        console.log("No rectangle mask - using generated image directly (like text-to-image)");
+        setBackgroundImage(generatedImage);
+        setGeneratedImages(prev => [generatedImage, ...prev]);
+        setShowGenPanel(true);
+      }
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
@@ -1127,25 +1509,38 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
           
-          // Set canvas size to match display size
-          const width = canvasDisplaySize?.width || 800;
-          const height = canvasDisplaySize?.height || 600;
+          // Set canvas size to match ORIGINAL image dimensions (not display size)
+          const width = img1.naturalWidth;
+          const height = img1.naturalHeight;
           canvas.width = width;
           canvas.height = height;
           
-          // Draw original image
+          console.log("=== COMBINE IMAGES DEBUG ===");
+          console.log("Original image size:", width, "x", height);
+          console.log("Generated image size:", img2.naturalWidth, "x", img2.naturalHeight);
+          console.log("Rectangle:", rectangle);
+          console.log("=== END COMBINE DEBUG ===");
+          
+          // Draw original image at full resolution (no scaling)
           if (ctx) ctx.drawImage(img1, 0, 0, width, height);
           
-          // Draw generated image in the cropped area
+          // Draw generated image in the cropped area (using original image coordinates)
           if (rectangle && ctx) {
-            const scaleX = width / (canvasDisplaySize?.width || 800);
-            const scaleY = height / (canvasDisplaySize?.height || 600);
+            console.log("=== PLACING GENERATED IMAGE DEBUG ===");
+            console.log("Rectangle coordinates (canvas space):", rectangle);
             
-            const drawX = rectangle.x * scaleX;
-            const drawY = rectangle.y * scaleY;
-            const drawWidth = rectangle.width * scaleX;
-            const drawHeight = rectangle.height * scaleY;
+            // The rectangle should already be in image coordinates from the cropping function
+            // Use the rectangle coordinates directly (no additional scaling needed)
+            const drawX = rectangle.x;
+            const drawY = rectangle.y;
+            const drawWidth = rectangle.width;
+            const drawHeight = rectangle.height;
             
+            console.log("Drawing generated image at:", drawX, drawY, drawWidth, drawHeight);
+            console.log("Generated image will be placed at 1:1 aspect ratio");
+            console.log("=== END PLACING DEBUG ===");
+            
+            // Draw the generated 1:1 image exactly in the crop area (no scaling)
             ctx.drawImage(img2, drawX, drawY, drawWidth, drawHeight);
           } else if (ctx) {
             // If no rectangle, overlay the generated image
@@ -1196,10 +1591,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       label: "Clothing & Accessories", 
       emoji: "👕", 
       refMode: "multi",  
-      bestModel: "flux-2-pro-image-to-image", 
-      bestModelLabel: "Flux 2 Pro", 
+      bestModel: "gpt-image", 
+      bestModelLabel: "GPT Image 1.5", 
       models: [
-        { value: "flux-2-pro-image-to-image", label: "Flux 2 Pro", sub: "High quality" }, 
         { value: "gpt-image", label: "GPT Image 1.5", sub: "Reliable" }
       ] 
     },
@@ -1207,12 +1601,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       label: "Environment & Products", 
       emoji: "🏞️", 
       refMode: "single", 
-      bestModel: "flux-2-flex-image-to-image", 
-      bestModelLabel: "Flux 2 Flex",     
+      bestModel: "gpt-image", 
+      bestModelLabel: "GPT Image 1.5",     
       models: [
-        { value: "flux-2-flex-image-to-image", label: "Flux 2 Flex", sub: "Specialist" },  
-        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, 
         { value: "gpt-image", label: "GPT Image 1.5", sub: "Reliable" },
+        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, 
         { value: "ideogram-reframe", label: "Ideogram Reframe", sub: "Resize expert" },
         { value: "character-remix", label: "Character Remix", sub: "Character expert" }
       ] 
@@ -2103,24 +2496,47 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       const imageUrl = backgroundImage || activeShot?.imageUrl;
       if (!imageUrl) throw new Error("No image available");
 
+      console.log("[runRectangleInpaint] Image URL format check:");
+      console.log("  imageUrl starts with 'data:':", imageUrl.startsWith("data:"));
+      console.log("  imageUrl starts with 'http':", imageUrl.startsWith("http"));
+      console.log("  imageUrl length:", imageUrl.length);
+      console.log("  imageUrl preview:", imageUrl.substring(0, 100));
+
       // 2. Convert to base64 if needed
       let imageBase64: string;
       if (imageUrl.startsWith("data:")) {
+        console.log("[runRectangleInpaint] Image is already data URL, using directly");
         imageBase64 = imageUrl;
       } else {
-        let validUrl = imageUrl;
-        if (!imageUrl.startsWith("http") && !imageUrl.startsWith("/")) {
-          validUrl = `${window.location.origin}/${imageUrl.startsWith("/") ? imageUrl.slice(1) : imageUrl}`;
+        console.log("[runRectangleInpaint] Image is external URL, converting via server");
+        // For R2 URLs or other external URLs, convert to data URL via server-side API
+        try {
+          const response = await fetch('/api/convert-image-url', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ imageUrl }),
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Server conversion failed: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          if (!result.success) {
+            throw new Error(result.error || 'Server conversion failed');
+          }
+          
+          imageBase64 = result.dataUrl;
+          
+          // Update the backgroundImage to the data URL for future use
+          setBackgroundImage(imageBase64);
+          console.log("[runRectangleInpaint] Converted to data URL via server and updated backgroundImage");
+        } catch (fetchError) {
+          console.error("[runRectangleInpaint] Failed to convert external URL to data URL:", fetchError);
+          throw new Error("Unable to process background image. Please re-upload the image.");
         }
-        const res = await fetch(validUrl, { method: 'GET', mode: 'cors', cache: 'no-cache' });
-        if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
-        const blob = await res.blob();
-        imageBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
       }
 
       // 3. Get canvas display size for coordinate scaling
@@ -2281,7 +2697,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           err = { error: errorText, message: errorText };
         }
         
-        throw new Error(err.error || err.message || err.suggestion || "Rectangle inpaint failed");
+        const errorMessage = err.error || err.message || err.suggestion || "Rectangle inpaint failed";
+        
+        // For any error, just show user-friendly message (no console logging)
+        return;
       }
 
       const result = await response.json();
@@ -2357,9 +2776,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
             // IMPORTANT: Use the same scaling logic as cropImageToRectangle to avoid distortion
             let destRect = { ...rectangle };
-            if (canvasDisplaySize && canvasDisplaySize.width > 0 && canvasDisplaySize.height > 0) {
-              const containerW = canvasDisplaySize.width;
-              const containerH = canvasDisplaySize.height;
+            // Use original canvas display size for consistent coordinates (prevents repositioning)
+            const effectiveCanvasSize = originalCanvasDisplaySize || canvasDisplaySize;
+            if (effectiveCanvasSize && effectiveCanvasSize.width > 0 && effectiveCanvasSize.height > 0) {
+              const containerW = effectiveCanvasSize.width;
+              const containerH = effectiveCanvasSize.height;
 
               // Calculate how the image is rendered inside the container (object-contain logic)
               const imgAspect = origImg.naturalWidth / origImg.naturalHeight;
@@ -2456,16 +2877,65 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
               // Calculate destination rectangle for the generated image
               let destRect = { ...rectangle };
-              if (canvasDisplaySize && canvasDisplaySize.width > 0 && canvasDisplaySize.height > 0) {
-                const scaleX = origImg.naturalWidth / canvasDisplaySize.width;
-                const scaleY = origImg.naturalHeight / canvasDisplaySize.height;
+              // Use original canvas display size for consistent coordinates (prevents repositioning)
+              const effectiveCanvasSize = originalCanvasDisplaySize || canvasDisplaySize;
+              
+              console.log("=== RECTANGLE COMPOSITING DEBUG ===");
+              console.log("Original rectangle (canvas space):", rectangle);
+              console.log("Original canvas display size:", originalCanvasDisplaySize);
+              console.log("Current canvas display size:", canvasDisplaySize);
+              console.log("Effective canvas size being used:", effectiveCanvasSize);
+              console.log("Original image dimensions:", origImg.naturalWidth, "x", origImg.naturalHeight);
+              console.log("Generated image dimensions:", genImg.naturalWidth, "x", genImg.naturalHeight);
+              
+              if (effectiveCanvasSize && effectiveCanvasSize.width > 0 && effectiveCanvasSize.height > 0) {
+                // Use the EXACT same scaling logic as cropImageToRectangle
+                const containerW = effectiveCanvasSize.width;
+                const containerH = effectiveCanvasSize.height;
+
+                // Calculate how the image is rendered inside the container (object-contain logic)
+                const imgAspect = origImg.naturalWidth / origImg.naturalHeight;
+                const containerAspect = containerW / containerH;
+
+                let renderedW: number, renderedH: number, offsetX: number, offsetY: number;
+                if (imgAspect > containerAspect) {
+                  // Image is wider relative to container → pillarbox (black bars top/bottom)
+                  renderedW = containerW;
+                  renderedH = containerW / imgAspect;
+                  offsetX = 0;
+                  offsetY = (containerH - renderedH) / 2;
+                } else {
+                  // Image is taller relative to container → letterbox (black bars left/right)
+                  renderedH = containerH;
+                  renderedW = containerH * imgAspect;
+                  offsetX = (containerW - renderedW) / 2;
+                  offsetY = 0;
+                }
+
+                const scaleX = origImg.naturalWidth / renderedW;
+                const scaleY = origImg.naturalHeight / renderedH;
+
+                console.log("=== EXACT SAME SCALING AS CROPPING ===");
+                console.log("Container: " + containerW + "x" + containerH + ", Image: " + origImg.naturalWidth + "x" + origImg.naturalHeight);
+                console.log("Rendered image in container: " + renderedW.toFixed(1) + "x" + renderedH.toFixed(1) + " at offset (" + offsetX.toFixed(1) + ", " + offsetY.toFixed(1) + ")");
+                console.log("Scale factors: scaleX=" + scaleX.toFixed(3) + ", scaleY=" + scaleY.toFixed(3));
+
+                // Apply the same transformation as cropImageToRectangle
                 destRect = {
-                  x: rectangle.x * scaleX,
-                  y: rectangle.y * scaleY,
+                  x: (rectangle.x - offsetX) * scaleX,
+                  y: (rectangle.y - offsetY) * scaleY,
                   width: rectangle.width * scaleX,
                   height: rectangle.height * scaleY,
                 };
+                
+                console.log("Destination rectangle (image space):", destRect);
+                console.log("=== END EXACT SCALING ===");
+              } else {
+                console.log("WARNING: No effective canvas size available, using rectangle as-is");
               }
+              
+              console.log("Final drawImage call: ctx.drawImage(genImg, destRect.x, destRect.y, destRect.width, destRect.height)");
+              console.log("=== END RECTANGLE COMPOSITING DEBUG ===");
 
               // Draw generated image into the rectangle area
               ctx.drawImage(genImg, destRect.x, destRect.y, destRect.width, destRect.height);
@@ -3101,56 +3571,36 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       {/* Top Right Controls */}
       <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
         <button 
+          onClick={(e) => {
+            console.log('[SceneEditor] Button clicked!', e);
+            handleSaveToR2().catch(err => {
+              console.error('[SceneEditor] Save error:', err);
+            });
+          }}
+          className="px-3 py-1.5 bg-green-600/80 hover:bg-green-700/80 text-white rounded-lg text-sm transition flex items-center gap-1.5 backdrop-blur-sm"
+          title="Save to R2 temps"
+        >
+          <Save className="w-4 h-4" />
+          Save
+        </button>
+        <button 
           onClick={() => {
             try {
-              const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
-              if (!container) {
-                alert('Canvas not found');
-                return;
-              }
-              
-              const canvas = document.createElement('canvas');
-              const ctx = canvas.getContext('2d');
-              if (!ctx) {
-                alert('Canvas context not available');
-                return;
-              }
-              
-              const rect = container.getBoundingClientRect();
-              canvas.width = rect.width;
-              canvas.height = rect.height;
-              
-              // Fill with background color
-              ctx.fillStyle = '#13131a';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              
-              // Try to find and draw the image
-              const img = container.querySelector('img');
-              if (img && img.src) {
-                const tempImg = document.createElement('img');
-                tempImg.crossOrigin = 'anonymous';
-                tempImg.onload = () => {
-                  ctx.drawImage(tempImg, 0, 0, rect.width, rect.height);
-                  downloadCanvas(canvas);
-                };
-                tempImg.onerror = () => {
-                  // If image fails, just download the canvas as-is
-                  downloadCanvas(canvas);
-                };
-                tempImg.src = img.src;
-              } else {
-                // No image, just download the canvas
+              buildSnapshotCanvas().then((canvas) => {
+                function downloadCanvas(c: HTMLCanvasElement) {
+                  const link = document.createElement('a');
+                  link.download = `frame-${String((activeShot.order || 0) + 1).padStart(2, "0")}.png`;
+                  link.href = c.toDataURL('image/png', 1.0);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }
+
                 downloadCanvas(canvas);
-              }
-              
-              function downloadCanvas(c: HTMLCanvasElement) {
-                const link = document.createElement('a');
-                link.download = `frame-${String((activeShot.order || 0) + 1).padStart(2, "0")}.png`;
-                link.href = c.toDataURL('image/png', 1.0);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-              }
+              }).catch((error) => {
+                console.error('Download failed:', error);
+                alert('Download failed. Please try again.');
+              });
             } catch (error) {
               console.error('Download failed:', error);
               alert('Download failed. Please try again.');
@@ -3232,7 +3682,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             goPrev={goPrev}
             goNext={goNext}
             panelId={panelId}
-            backgroundImage={backgroundImage || undefined}
+            backgroundImage={isCanvasImageRemoved ? '' : (backgroundImage || undefined)}
             activeShot={activeShot}
             canvasActiveTool={canvasActiveTool}
             canvasState={canvasState}
@@ -3266,6 +3716,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             }}
             selectedColor={selectedColor}
             mode={aiEditMode}
+            onDeleteSelected={handleDeleteCanvasImage}
             // Video AI Props
             activeAIPanel={activeAIPanel}
             videoState={videoState}
@@ -3280,10 +3731,15 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 console.log("[DEBUG] Setting originalImage for first time:", imageUrl);
                 originalImageRef.current = imageUrl;
                 setOriginalImage(imageUrl);
+                // Only clear mask and reset state when setting original image for the first time
+                setCanvasState(s => ({ ...s, mask: [] }));
+                fitScaleRef.current = 1;
+                setZoomLevel(100);
+              } else {
+                console.log("[DEBUG] Background update - preserving mask, rectangle, and state");
+                // IMPORTANT: Don't clear mask or reset state when background changes after generation
+                // The rectangle should stay in the same canvas coordinates regardless of image dimensions
               }
-              setCanvasState(s => ({ ...s, mask: [] }));
-              fitScaleRef.current = 1;
-              setZoomLevel(100);
             }}
           />
 
@@ -3468,6 +3924,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     <EditImageAIPanel
                   mode={aiEditMode}
                   onModeChange={setAiEditMode}
+                  projectId={projectId}
                   onGenerate={async () => {
                     console.log("=== NEW ONGENERATE FUNCTION CALLED ===");
                     console.log("Generate with mode:", aiEditMode, "model:", aiModel);
@@ -3491,7 +3948,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       
                       if (isSquareMaskActive || isRectangleMaskActive) {
                         console.log("=== Using rectangle mask logic for area-edit mode ===");
-                        await runRectangleInpaint();
+                        try {
+                          await runRectangleInpaint();
+                        } catch (error) {
+                          console.error("[onGenerate] AI generation failed:", error);
+                          // Show user-friendly message instead of technical error
+                          alert("AI generation failed. Please try a different prompt or use a different AI model.");
+                        }
                       } else {
                         console.log("=== Using faceshift logic for area-edit mode ===");
                         // This will be handled by the area-edit logic below
@@ -3513,8 +3976,29 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         source: 'upload' as const
                       }))}
                   onAddReferenceImage={(file) => {
-                    const url = URL.createObjectURL(file);
-                    setAiRefImages(prev => [...prev, { id: `ref-${Date.now()}`, url }]);
+                    // Check if file has R2 metadata (uploaded via EditImageAIPanel)
+                    const r2Url = (file as any).__r2Url;
+                    const r2Key = (file as any).__r2Key;
+                    const isTemporary = (file as any).__isTemporary;
+                    
+                    let url: string;
+                    if (r2Url) {
+                      // Use R2 public URL for stable access
+                      url = r2Url;
+                      console.log(`[SceneEditor] Using R2 URL for reference image: ${r2Key}`);
+                    } else {
+                      // Fallback to blob URL for local files
+                      url = URL.createObjectURL(file);
+                      console.log(`[SceneEditor] Using blob URL for reference image`);
+                    }
+                    
+                    setAiRefImages(prev => [...prev, { 
+                      id: `ref-${Date.now()}`, 
+                      url,
+                      r2Key, // Store R2 key for reference
+                      r2Url, // Store R2 URL for reference
+                      isTemporary // Store temporary flag
+                    }]);
                   }}
                   onRemoveReferenceImage={(id) => {
                     setAiRefImages(prev => prev.filter(img => img.id !== id));
@@ -3541,6 +4025,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   onAspectRatioChange={handleAspectRatioChange}
                   selectedAspectRatio={selectedAspectRatio}
                   onRectangleMaskAspectRatioChange={handleRectangleMaskAspectRatioChange}
+                  onDeleteSelected={handleDeleteCanvasImage}
+                  onSaveSelectedImage={handleSaveSelectedImageToStoryboardItem}
                   onToolSelect={(tool) => {
                     if (tool === "pen-brush" || tool === "brush" || tool === "eraser") {
                       setCanvasTool("inpaint");
@@ -3739,12 +4225,31 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         }
                         
                         console.log(`[SceneEditor] Adding new reference image: ${file.name}`);
-                        const url = URL.createObjectURL(file);
+                        
+                        // Check if file has R2 metadata (uploaded via EditImageAIPanel)
+                        const r2Url = (file as any).__r2Url;
+                        const r2Key = (file as any).__r2Key;
+                        const isTemporary = (file as any).__isTemporary;
+                        
+                        let url: string;
+                        if (r2Url) {
+                          // Use R2 public URL for stable access
+                          url = r2Url;
+                          console.log(`[SceneEditor] Using R2 URL for reference image: ${r2Key}`);
+                        } else {
+                          // Fallback to blob URL for local files
+                          url = URL.createObjectURL(file);
+                          console.log(`[SceneEditor] Using blob URL for reference image: ${file.name}`);
+                        }
+                        
                         setAiRefImages(prev => [...prev, { 
                           id: `ref-${Date.now()}`, 
                           url, 
                           source: 'upload' as const,
-                          filename: file.name // Store the original filename
+                          filename: file.name, // Store the original filename
+                          r2Key, // Store R2 key for reference
+                          r2Url, // Store R2 URL for reference
+                          isTemporary // Store temporary flag
                         }]);
                       }}
                       onRemoveReferenceImage={(id) => {

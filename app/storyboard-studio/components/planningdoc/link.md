@@ -242,3 +242,9 @@ i need to create a price calculator button beside nano banana2 . when click it s
 
 link tutorial for video making:
 https://www.youtube.com/watch?v=0doAdc9H6DM
+
+
+
+
+movie :
+https://www.youtube.com/watch?v=zorefRIWvw0

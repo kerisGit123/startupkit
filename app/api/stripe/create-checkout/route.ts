@@ -1,14 +1,57 @@
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { env } from "@/lib/env";
+import { auth } from "@clerk/nextjs/server";
+import { getServerCurrentCompanyId } from "@/lib/auth-utils-server";
 
 export async function POST(req: Request) {
   try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { planId, billingCycle, companyId, type, tokens, amount } = body;
 
     if (!companyId) {
       return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    }
+
+    // Server-side validation: Ensure companyId belongs to the authenticated user
+    const userCompanyId = getServerCurrentCompanyId({ userId });
+    
+    // For personal accounts, companyId must equal userId
+    // For organization accounts, we need to verify user is a member
+    if (companyId === userId) {
+      // Personal account - valid
+    } else if (companyId.startsWith("org_")) {
+      // Organization account - verify user is a member
+      const { clerkClient } = await auth();
+      try {
+        const membership = await clerkClient.organizations.getOrganizationMembershipList({
+          organizationId: companyId,
+          userId,
+        });
+        
+        if (membership.data.length === 0) {
+          return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
+        }
+        
+        // For credit purchases, check if user is admin
+        if (type === "credits") {
+          const userRole = membership.data[0].role;
+          if (userRole !== "org:admin") {
+            return NextResponse.json({ error: "Only organization admins can purchase credits" }, { status: 403 });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to verify organization membership:", error);
+        return NextResponse.json({ error: "Invalid organization" }, { status: 400 });
+      }
+    } else {
+      return NextResponse.json({ error: "Invalid companyId format" }, { status: 400 });
     }
 
     const successUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard?success=true`;

@@ -546,7 +546,8 @@ async function buildRequestFromConfig(config: KieModelConfig, params: {
   for (const field of config.requestTemplate.optional) {
     switch (field) {
       case 'callBackUrl':
-        request.callBackUrl = 'https://your-domain.com/api/callback';
+        // Skip callback URL - it's causing API rejections with placeholder URLs
+        // The KIE API doesn't require a callback URL for basic image generation
         break;
       case 'output_format':
         request.output_format = 'png';
@@ -657,84 +658,106 @@ async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Upload base64 to freeimage.host → public URL
+// Upload base64 to R2 temps folder → public URL
 async function uploadToTemp(base64DataUrl: string): Promise<string> {
   if (!base64DataUrl.startsWith("data:")) {
-    console.log("[img-proxy] Input is not base64 data, returning as-is:", base64DataUrl.substring(0, 50));
-    return base64DataUrl; // already a URL or not base64
+    console.log("[img-proxy] Input is not base64 data, downloading and uploading to temp:", base64DataUrl.substring(0, 50));
+    
+    // Download the image from the URL
+    try {
+      const response = await fetch(base64DataUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+      }
+      
+      const buffer = await response.arrayBuffer();
+      const mimeType = response.headers.get('content-type') || 'image/png';
+      
+      // Create File object with timestamp and random suffix
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const fileExtension = mimeType.split('/')[1] || 'png';
+      const fileName = `ai-gen-${timestamp}-${randomSuffix}.${fileExtension}`;
+      const file = new File([buffer], fileName, { type: mimeType });
+      
+      // Upload directly to R2 temps folder (bypass authentication)
+      const { uploadToR2, getR2PublicUrl } = await import("@/lib/r2");
+      const r2Key = `temps/${fileName}`;
+      
+      console.log("[img-proxy] Uploading external URL directly to R2:", r2Key);
+      await uploadToR2(file, r2Key);
+      
+      // Get public URL using the helper function
+      const publicUrl = getR2PublicUrl(r2Key);
+      
+      console.log("[img-proxy] Successfully downloaded and uploaded to temp:", publicUrl);
+      return publicUrl;
+      
+    } catch (error) {
+      console.error("[img-proxy] Failed to download and upload URL to temp:", error);
+      console.error("[img-proxy] External URL processing failed - this will cause external URL usage");
+      throw new Error(`Failed to process external URL: ${error instanceof Error ? error.message : 'Unknown error'}. External URLs cannot be used for AI generation.`);
+    }
   }
   
-  const base64 = base64DataUrl.split(",")[1];
-  return await uploadBase64ToFreeImage(base64);
+  try {
+    // Convert base64 to File
+    const base64Content = base64DataUrl.split(",")[1];
+    const mimeType = base64DataUrl.split(",")[0].split(":")[1].split(";")[0];
+    
+    // Convert base64 to blob
+    const byteCharacters = atob(base64Content);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: mimeType });
+    
+    // Create File object with timestamp and random suffix
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const fileName = `ai-gen-${timestamp}-${randomSuffix}.${mimeType.split('/')[1] || 'png'}`;
+    const file = new File([blob], fileName, { type: mimeType });
+    
+    // Upload directly to R2 temps folder (bypass authentication)
+      const { uploadToR2, getR2PublicUrl } = await import("@/lib/r2");
+      const r2Key = `temps/${fileName}`;
+      
+      console.log("[img-proxy] Uploading directly to R2:", r2Key);
+      await uploadToR2(file, r2Key);
+      
+      // Get public URL using the helper function
+      const publicUrl = getR2PublicUrl(r2Key);
+      
+      console.log("[img-proxy] Successfully uploaded to R2 temps:", publicUrl.substring(0, 80));
+      console.log("[img-proxy] File metadata:", {
+        r2Key,
+        category: 'temps',
+        isTemporary: true
+      });
+      
+      return publicUrl;
+  } catch (error) {
+    console.error("[img-proxy] R2 upload failed:", error);
+    console.error("[img-proxy] Upload error details:", {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      envUrl: process.env.NEXT_PUBLIC_APP_URL ? 'Set' : 'Missing'
+    });
+    
+    // IMPORTANT: Don't fallback to external URLs for AI generation
+    // We want to use temp files, not external hosting
+    console.error("[img-proxy] CRITICAL: Temp upload failed - this will cause external URL usage");
+    throw new Error(`Temp upload failed: ${error instanceof Error ? error.message : 'Unknown error'}. Check R2 configuration and NEXT_PUBLIC_APP_URL.`);
+  }
 }
 
-// Separate function for uploading base64 to freeimage.host
-async function uploadBase64ToFreeImage(base64: string): Promise<string> {
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const formData = new FormData();
-      formData.append("key", "6d207e02198a847aa98d0a2a901485a5");
-      formData.append("action", "upload");
-      formData.append("source", base64);
-      formData.append("format", "json");
-      const res = await fetch("https://freeimage.host/api/1/upload", {
-        method: "POST", body: formData, signal: AbortSignal.timeout(60000),
-      });
-      if (!res.ok) throw new Error(`Upload HTTP ${res.status}`);
-      const data = await res.json();
-      const url = data?.image?.url;
-      if (!url) throw new Error(`No URL: ${JSON.stringify(data)}`);
-      console.log("[img-proxy] Uploaded:", url.substring(0, 80));
-      return url;
-    } catch (err) {
-      console.warn(`[img-proxy] Upload attempt ${attempt} failed:`, err);
-      if (attempt === 3) throw new Error(`Image upload failed: ${err}`);
-      await sleep(2000 * attempt);
-    }
-  }
-  throw new Error("Upload failed");
-}
-
-// Upload base64 to imgbb.com → public URL (alternative host for mask images)
-async function uploadToImgbb(base64DataUrl: string): Promise<string> {
-  if (!base64DataUrl.startsWith("data:")) return base64DataUrl; // already a URL
-  const base64 = base64DataUrl.split(",")[1];
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const params = new URLSearchParams();
-      params.append("key", "2e49e8d80ccca60c62adb5ba8f2f0b37");
-      params.append("image", base64);
-      const res = await fetch("https://api.imgbb.com/1/upload", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: params.toString(),
-        signal: AbortSignal.timeout(60000),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`ImgBB upload HTTP ${res.status}: ${errText.substring(0, 200)}`);
-      }
-      const data = await res.json();
-      const url = data?.data?.url;
-      if (!url) throw new Error(`ImgBB no URL: ${JSON.stringify(data)}`);
-      console.log("[img-proxy] ImgBB Uploaded:", url.substring(0, 80));
-      return url;
-    } catch (err) {
-      console.warn(`[img-proxy] ImgBB upload attempt ${attempt} failed:`, err);
-      if (attempt === 3) {
-        // Fall back to freeimage.host
-        console.log("[img-proxy] ImgBB failed, falling back to freeimage.host...");
-        return uploadToTemp(base64DataUrl);
-      }
-      await sleep(2000 * attempt);
-    }
-  }
-  throw new Error("ImgBB upload failed");
-}
+// Unified upload system using R2 temps folder only
 
 // Poll /jobs/recordInfo — Market API models
-async function pollMarket(taskId: string): Promise<string> {
-  for (let i = 0; i < 60; i++) {
+async function pollMarket(taskId: string): Promise<string | NextResponse> {
+  for (let i = 0; i < 36; i++) { // 3 minutes instead of 1 minute (36 polls * 5 seconds)
     await sleep(5000);
     try {
       const res = await fetch(`${KIE_POLL_URL}?taskId=${taskId}`, {
@@ -764,7 +787,11 @@ async function pollMarket(taskId: string): Promise<string> {
         return url;
       }
       if (flag === 2 || flag === 3 || state === "fail") {
-        throw new Error(`KIE task failed: ${pd?.data?.failMsg ?? pd?.data?.errorMessage ?? "unknown"}`);
+        // Stop polling immediately and return simple error message
+        console.log("[img-proxy] AI generation failed, stopping polling");
+        return NextResponse.json({ 
+          error: "AI generation failed. Please try a different prompt or use a different AI model." 
+        }, { status: 400 });
       }
     } catch (err) {
       console.warn(`[img-proxy] poll ${i+1} error:`, err);
@@ -772,12 +799,12 @@ async function pollMarket(taskId: string): Promise<string> {
       if (err instanceof Error && (err.message.startsWith("KIE task") || err.message.startsWith("No result"))) throw err;
     }
   }
-  throw new Error("KIE timed out after 5 minutes");
+  throw new Error("AI generation is taking too long. Please try again or use a different AI model.");
 }
 
 // Poll /flux/kontext/record-info — Flux Kontext models
 async function pollFlux(taskId: string): Promise<string> {
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 36; i++) { // 3 minutes instead of 1 minute
     await sleep(5000);
     try {
       const res = await fetch(`${KIE_FLUX_POLL}?taskId=${taskId}`, {
@@ -904,12 +931,19 @@ async function callMarketModel(
     throw new Error(`KIE ${kieModel} error: ${data?.msg ?? JSON.stringify(data)}`);
   }
   const taskId = data?.data?.taskId ?? data?.data?.recordId;
-  return pollMarket(taskId);
+  const result = await pollMarket(taskId);
+  
+  // Check if result is an error response (string starting with error message)
+  if (result.startsWith("AI generation failed")) {
+    return NextResponse.json({ error: result }, { status: 400 });
+  }
+  
+  return result;
 }
 
 // Poll /api/v1/ideogram-character/record-info — Character Edit models
 async function pollCharacter(taskId: string): Promise<string> {
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 36; i++) { // 3 minutes instead of 1 minute
     await sleep(5000);
     let pollRes: Response;
     try {
@@ -994,9 +1028,9 @@ async function callFluxKontextPro(
   return pollFlux(data.data.taskId);
 }
 
-// GPT-4o API only supports size: "1:1" (based on inpaint route working implementation)
+// GPT-4o API - force 1:1 for image-to-image generation
 function gpt4oSize(aspectRatio?: string): string {
-  console.log("[img-proxy] GPT-4o aspectRatio input:", JSON.stringify(aspectRatio), "-> forcing to 1:1");
+  console.log("[img-proxy] GPT-4o aspectRatio input:", JSON.stringify(aspectRatio), "-> forcing to 1:1 for image-to-image");
   return "1:1";
 }
 
@@ -1060,10 +1094,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve frontend model key → KIE model ID
+    console.log(`[img-proxy] DEBUG: Frontend model received: "${frontendModel}"`);
+    console.log(`[img-proxy] DEBUG: Looking up in MODEL_MAP...`);
+    
     let kieModel = MODEL_MAP[frontendModel] ?? frontendModel;
     console.log(`[img-proxy] model: ${frontendModel} → ${kieModel}`);
     console.log(`[img-proxy] Available models:`, Object.keys(MODEL_MAP));
     console.log(`[img-proxy] MODEL_MAP contents:`, MODEL_MAP);
+    
+    // Debug: Show exact match attempts
+    console.log(`[img-proxy] DEBUG: Exact match found: ${!!MODEL_MAP[frontendModel]}`);
+    if (!MODEL_MAP[frontendModel]) {
+      console.log(`[img-proxy] DEBUG: No exact match found, trying partial matches...`);
+      const possibleMatches = Object.keys(MODEL_MAP).filter(key => key.includes(frontendModel) || frontendModel.includes(key));
+      console.log(`[img-proxy] DEBUG: Possible matches:`, possibleMatches);
+    }
     
     // Debug: Check if character-edit exists in MODEL_MAP
     if (frontendModel === 'character-edit') {
@@ -1098,7 +1143,7 @@ export async function POST(req: NextRequest) {
 
     if (kieModel === "flux-kontext-pro") {
       resultUrl = await callFluxKontextPro(prompt, imageUrl, refUrls, aspectRatio);
-    } else if (kieModel === "gpt-image" || kieModel === "gpt-image/1.5-image-to-image" || frontendModel === "gpt-image-1-1" || 
+    } else if (kieModel === "gpt-image" || kieModel === "gpt-image/1.5-image-to-image" || kieModel === "gpt-image/1.5-text-to-image" || frontendModel === "gpt-image-1-1" || 
                kieModel === "qwen/image-edit") {
       console.log("[img-proxy] Routing to GPT-4o for rectangle mask models");
       console.log("[img-proxy] kieModel:", kieModel);
@@ -1130,7 +1175,7 @@ export async function POST(req: NextRequest) {
             console.log("[img-proxy] Rectangle mask mode: processing cropped rectangle with reference images");
             
             if (!rectangle) {
-              throw new Error("Rectangle coordinates required for rectangle mask mode");
+              throw new Error("Rectangle coordinates required for rectangle mask");
             }
             
             // For rectangle mask mode, upload the cropped image and use URL like regular generation
@@ -1344,11 +1389,13 @@ export async function POST(req: NextRequest) {
       
       const requestBody = {
         model: "flux-2/flex-image-to-image",
+        callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/callback/flux-flex`,
         input: {
           input_urls: inputUrls,
           prompt,
           aspect_ratio: "1:1",
-          resolution: "1K"
+          resolution: "1K",
+          nsfw_checker: false
         }
       };
       
@@ -1543,6 +1590,12 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[img-proxy] Done:", resultUrl);
+    
+    // Check if resultUrl is a NextResponse (error case)
+    if (resultUrl && typeof resultUrl === 'object' && 'json' in resultUrl) {
+      return resultUrl;
+    }
+    
     return NextResponse.json({ image: resultUrl });
   } catch (error) {
     console.error("[img-proxy] Error:", error);

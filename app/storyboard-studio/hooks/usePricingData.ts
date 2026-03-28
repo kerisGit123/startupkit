@@ -38,8 +38,10 @@ export function usePricingData() {
       if (!res.ok) throw new Error("Failed to fetch pricing models");
       const data = await res.json();
       setModels(data);
+      return data as PricingModel[];
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch pricing data");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -50,7 +52,7 @@ export function usePricingData() {
       const res = await fetch("/api/storyboard/pricing/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ action: "resetDefaults" }),
       });
       if (!res.ok) throw new Error("Failed to reset pricing models");
       await fetchModels(); // Refresh list
@@ -62,33 +64,24 @@ export function usePricingData() {
   };
 
   // Placeholder functions for other operations (still use Convex directly)
-  const saveModel = async (data: Partial<PricingModel>) => {
+  const saveModel = async (data: Partial<PricingModel>, options?: { isEdit?: boolean }) => {
     try {
-      console.log("Saving pricing model with data:", data);
-      
       const response = await fetch("/api/storyboard/pricing/models", {
-        method: "PUT",
+        method: options?.isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      
-      console.log("API response status:", response.status);
-      console.log("API response ok:", response.ok);
-      
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("API error response:", errorText);
-        throw new Error(`Failed to save pricing model: ${response.status} - ${errorText}`);
+        const errorBody = await response.json().catch(async () => ({ details: await response.text() }));
+        throw new Error(errorBody.details || errorBody.error || `Failed to save pricing model: ${response.status}`);
       }
-      
-      const result = await response.json();
-      console.log("API response result:", result);
-      
-      await fetchModels(); // Refresh the list
-      return true;
+
+      const refreshedModels = await fetchModels();
+      return { success: true, models: refreshedModels };
     } catch (err) {
       console.error("Failed to save model:", err);
-      return false;
+      return { success: false, models: null };
     }
   };
 
