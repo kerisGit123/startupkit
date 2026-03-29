@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useQuery } from "convex/react";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
   Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save,
@@ -23,6 +24,7 @@ import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/ElementImageAIP
 import { Video, Image as ImageIcon, Box } from "lucide-react";
 import { uploadToR2 } from "@/lib/uploadToR2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
+import { api } from "@/convex/_generated/api";
 
 type CanvasTool = CanvasActiveTool;
 
@@ -80,6 +82,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [isCanvasImageRemoved, setIsCanvasImageRemoved] = useState(false);
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const originalImageRef = useRef<string | null>(null);
+  const imageMasksRef = useRef<Record<string, CanvasEditorState["mask"]>>({});
   const [promptText, setPromptText] = useState("");
   const [isInpainting, setIsInpainting] = useState(false);
   const [inpaintError, setInpaintError] = useState<string | null>(null);
@@ -473,6 +476,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const generatedImageRef = useRef<HTMLImageElement>(null);
   const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'video' | 'element'>('editimage');
+  const [showMask, setShowMask] = useState(true); // Add mask visibility state
   
   // Video AI state management
   const [videoState, setVideoState] = useState({
@@ -495,6 +499,25 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [zoomLevel, setZoomLevel] = useState(100);
   const fitScaleRef = useRef(1); // actual CSS scale that corresponds to display 100%
   const [originalCanvasSize, setOriginalCanvasSize] = useState({ width: 0, height: 0 });
+
+  const projectFiles = useQuery(
+    api.storyboard.storyboardFiles.listByProject,
+    projectId ? { projectId } : "skip"
+  );
+
+  const projectGeneratedImages = useMemo(() => {
+    if (!projectFiles) return [] as string[];
+
+    return projectFiles
+      .filter((file) => file.category === "generated" && file.status === "completed")
+      .map((file) => file.sourceUrl)
+      .filter((url): url is string => Boolean(url));
+  }, [projectFiles]);
+
+  const displayedGeneratedImages = useMemo(() => {
+    const merged = [...projectGeneratedImages, ...generatedImages];
+    return Array.from(new Set(merged.filter(Boolean)));
+  }, [projectGeneratedImages, generatedImages]);
   
   // Image tab independent state
   const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
@@ -736,25 +759,34 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     image.style.transition = '';
     image.style.transform = `translate(${tx}px, ${ty}px) scale(${newScale})`;
   };
-
-  // ── Canvas tool panel state ────────────────────────────────────────────────
+  const [selectedColor, setSelectedColor] = useState("#FF0000");
+  const [maskBrushSize, setMaskBrushSize] = useState(20);
+  const [maskOpacity, setMaskOpacity] = useState(0.65);
+  const [isEraser, setIsEraser] = useState(false);
   const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
+  const [canvasSelection, setCanvasSelection] = useState<CanvasSelection>({
+    selectedBubbleId: null,
+    selectedTextId: null,
+    selectedAssetId: null,
+    selectedShapeId: null,
+  });
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
   const [newBubbleText, setNewBubbleText] = useState("test...");
-  const [newBubbleType, setNewBubbleType] = useState<BubbleType>("speech");
+  const [newBubbleType, setNewBubbleType] = useState<BubbleType>("speechRough");
   const [newTextContent, setNewTextContent] = useState("test...");
   const [newTextSize, setNewTextSize] = useState(16);
-  const [newTextColor, setNewTextColor] = useState("#000000");
-  
-  // Collapsible property cards state
-  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
-  const [maskBrushSize, setMaskBrushSize] = useState(20);
-  const [maskOpacity, setMaskOpacity] = useState(0.45);
-  const [isEraser, setIsEraser] = useState(false);
-  const [inpaintPrompt, setInpaintPrompt] = useState("");
-  const [canvasSelection, setCanvasSelection] = useState<CanvasSelection>({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: null, selectedShapeId: null });
-  const [selectedColor, setSelectedColor] = useState("#FF0000");
+  const [newTextColor, setNewTextColor] = useState("#111827");
+
+  const switchCanvasImage = useCallback((nextImageUrl: string, nextGeneratedIndex: number) => {
+    // Keep the same shared mask across all images
+    setBackgroundImage(nextImageUrl);
+    setSelectedSceneImageUrl(nextImageUrl);
+    setSelectedGeneratedImageIndex(nextGeneratedIndex);
+    // Do NOT clear or change the mask—keep it shared
+  }, []);
+
   // Function to add image as canvas element (for ImageAIPanel uploads)
   const handleAddCanvasElement = (file: File) => {
     const reader = new FileReader();
@@ -817,12 +849,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // Computed canvas active tool - enable brush for all inpaint models
   const canvasActiveTool = useMemo(() => {
-    if (canvasTool === "inpaint") {
-      // Enable brush for all inpaint models
-      return "inpaint";
-    }
-    // Return the actual tool (text, canvas-objects, etc.)
-    return canvasTool;
+    const tool = canvasTool === "inpaint" ? "inpaint" : canvasTool;
+    console.log('[SceneEditor] canvasActiveTool computed:', { canvasTool, result: tool });
+    return tool;
   }, [canvasTool]);
 
   const getCanvasCenter = () => {
@@ -1767,6 +1796,101 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     }
   };
 
+  
+  // ── Helper to calculate credits based on AI model (similar to EditImageAIPanel)
+  const calculateModelCredits = useCallback((modelId: string): number => {
+    // Updated credit calculation based on your screenshot showing 7 credits
+    const modelCredits: Record<string, number> = {
+      'nano-banana-2': 7, // From your screenshot - matches the button
+      'gpt-image': 15,
+      'ideogram/character-edit': 10,
+      'flux-2': 5,
+      'seedream-5.0-lite-text': 3,
+      'google/nano-banana-edit': 7,
+      'qwen/image-to-image': 5,
+      'recraft/crisp-upscale': 8,
+      'topaz/image-upscale': 12,
+      // Add more models as needed
+    };
+    
+    console.log('[calculateModelCredits] Model:', modelId, 'Credits:', modelCredits[modelId] || 7);
+    return modelCredits[modelId] || 7; // Default to 7 to match your screenshot
+  }, []);
+
+  // ── Generate Image with Credit Tracking ───────────────────────────────────────────────────────
+  const generateImageWithCredits = async (
+    prompt: string, 
+    style: string = "realistic", 
+    quality: string = "standard",
+    aspectRatio: string = "9:16",
+    itemId?: string,
+    creditsUsed?: number, // Allow passing actual credit amount
+    model?: string, // Allow passing actual model
+    imageUrl?: string, // Allow passing canvas image URL for character-edit
+    referenceImageUrls?: string[], // Allow passing reference images for character-edit
+    maskUrl?: string, // Allow passing mask URL for character-edit
+    existingFileId?: string // Allow passing existing file ID to update instead of creating new
+  ): Promise<{ fileId: string; taskId: string; creditsUsed: number } | null> => {
+    try {
+      console.log('[generateImageWithCredits] Starting credit-based generation:', {
+        prompt: prompt.substring(0, 100) + '...',
+        style,
+        quality,
+        aspectRatio,
+        itemId,
+        companyId,
+        projectId
+      });
+
+      const response = await fetch('/api/storyboard/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sceneContent: prompt,
+          style,
+          quality,
+          aspectRatio,
+          itemId, // For EditImageAIPanel - links to storyboard item
+          companyId, // Credit tracking
+          userId: user?.id, // Credit tracking
+          projectId, // Credit tracking
+          creditsUsed, // Actual credit amount from AI panel
+          model: aiModel, // Pass the actual model from EditImageAIPanel
+          imageUrl, // Pass canvas image URL for character-edit models
+          referenceImageUrls, // Pass reference images for character-edit models
+          maskUrl, // Pass mask URL for character-edit models
+          existingFileId // Pass existing file ID to update instead of creating new
+        }),
+      });
+
+      const result = await response.json();
+      console.log('[generateImageWithCredits] API response:', result);
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('[generateImageWithCredits] API error:', error);
+        throw new Error(`Generation failed: ${error}`);
+      }
+
+      console.log('[generateImageWithCredits] Generation started:', {
+        fileId: result.fileId,
+        taskId: result.taskId,
+        creditsUsed: result.creditsUsed
+      });
+
+      return {
+        fileId: result.fileId,
+        taskId: result.taskId,
+        creditsUsed: result.creditsUsed
+      };
+
+    } catch (error) {
+      console.error('[generateImageWithCredits] Error:', error);
+      setInpaintError(error instanceof Error ? error.message : 'Generation failed');
+      return null;
+    }
+  };
+
   // ── Generate Image with Bubbles and Text ───────────────────────────────────────────────────────
   const generateImageWithElements = async (): Promise<string | null> => {
     const imageUrl = backgroundImage || activeShot?.imageUrl;
@@ -1786,14 +1910,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       // Check if square mask is being used
       const isSquareMaskActive = canvasTool === "rectInpaint" && isSquareMode;
       
-      // For faceshift (character-edit), require character-edit model for brush tools when in inpaint mode
-      const isBrushTool = canvasTool === "inpaint" && (aiEditMode === "area-edit");
+      // For general inpaint tools, allow any model (not just character-edit)
+      // Only restrict character-edit specific features to character-edit model
+      const isCharacterEditTool = canvasTool === "inpaint" && (aiEditMode === "area-edit") && aiModel === "ideogram/character-edit";
       
-      if (isBrushTool && aiModel !== "ideogram/character-edit") {
-        console.log("Brush tool detected but not using character-edit model");
-        setInpaintError("Please select 'Character-edit' model for faceshift functionality in area-edit mode");
-        return null;
-      }
+      // Remove the restrictive check - allow brush tool with any model for general inpainting
+      // The character-edit specific logic will be handled separately if needed
       
       if (isSquareMaskActive) {
         console.log("Area-edit mode with square mask detected, using square mask logic with model:", aiModel);
@@ -3693,11 +3815,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             maskBrushSize={maskBrushSize}
             isEraser={isEraser}
             maskOpacity={maskOpacity}
+            showMask={showMask}
             hiddenIds={hiddenIds}
             setCanvasSelection={setCanvasSelection}
             canvasSelection={canvasSelection}
             onToolSelect={(tool) => {
-              setCanvasTool(tool);
+              if (tool === "pen-brush" || tool === "brush" || tool === "eraser" || tool === "inpaint") {
+                setCanvasTool("inpaint");
+              } else {
+                setCanvasTool(tool);
+              }
             }}
             rectangle={rectangle}
             setRectangle={setRectangle}
@@ -3781,15 +3908,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                        console.log("DEBUG: activeShot?.imageUrl:", activeShot?.imageUrl);
                        
                        // Always select the original image when clicking Original section
-                       const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
-                       if (imageToSet) {
-                         console.log("DEBUG: Setting background to:", imageToSet.substring(0,50));
-                         setBackgroundImage(imageToSet);
-                         setSelectedSceneImageUrl(imageToSet);
-                         // Don't clear generated images - keep them in the panel
-                       } else {
-                         console.log("DEBUG: No images available to set as background");
-                       }
+                      const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
+                      if (imageToSet) {
+                        console.log("DEBUG: Setting background to:", imageToSet.substring(0,50));
+                        switchCanvasImage(imageToSet, -1);
+                        // Don't clear generated images - keep them in the panel
+                      } else {
+                        console.log("DEBUG: No images available to set as background");
+                      }
                      }}
                      onContextMenu={(event) => {
                        const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
@@ -3809,13 +3935,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               )}
               
               {/* Generated Images Section */}
-              {generatedImages.length > 0 && (
+              {displayedGeneratedImages.length > 0 && (
                 <div>
                   <h4 className="text-white text-sm font-medium mb-3">
-                    Generated ({generatedImages.length})
+                    Generated ({displayedGeneratedImages.length})
                   </h4>
                   <div className="space-y-3">
-                    {generatedImages.map((imgUrl, i) => (
+                    {displayedGeneratedImages.map((imgUrl, i) => (
                       <div key={i} className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition ${
                         selectedSceneImageUrl === imgUrl || backgroundImage === imgUrl
                           ? "border-blue-500/50"
@@ -3837,9 +3963,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                           alt={`Generated ${i + 1}`}
                           className="w-full h-32 object-cover cursor-pointer"
                           onClick={() => {
-                            setSelectedGeneratedImageIndex(i);
-                            setSelectedSceneImageUrl(imgUrl);
-                            setBackgroundImage(imgUrl);
+                            switchCanvasImage(imgUrl, i);
                           }}
                           onContextMenu={(event) => {
                             setSelectedGeneratedImageIndex(i);
@@ -3925,45 +4049,231 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   mode={aiEditMode}
                   onModeChange={setAiEditMode}
                   projectId={projectId}
-                  onGenerate={async () => {
-                    console.log("=== NEW ONGENERATE FUNCTION CALLED ===");
+                  onGenerate={async (creditsUsed: number) => {
+                    console.log("=== CREDIT-BASED GENERATION CALLED ===");
                     console.log("Generate with mode:", aiEditMode, "model:", aiModel);
-                    console.log("Available aiRefImages (ImageAI Panel):", aiRefImages);
-                    console.log("aiRefImages details:", aiRefImages.map(img => ({ id: img.id, urlLength: img.url.length, preview: img.url.substring(0, 50) + "..." })));
-                    console.log("Canvas mask length:", canvasState.mask.length);
-                    console.log("Inpaint prompt:", promptText);
-                    console.log("Background image:", backgroundImage || activeShot?.imageUrl ? "Available" : "None");
+                    console.log("Prompt:", promptText);
+                    console.log("Credits received from EditImageAIPanel:", creditsUsed);
                     
-                    // Route to correct generation function based on mode and tool
-                    if (aiEditMode === "area-edit") {
-                      // Check if we have rectangle mask or square mask
-                      const isSquareMaskActive = canvasTool === "rectInpaint" && isSquareMode;
-                      const isRectangleMaskActive = canvasTool === "rectInpaint" && !isSquareMode;
+                    try {
+                      // Get canvas image and reference images for character-edit models
+                      const canvasImageInfo = getCanvasImageInfo();
+                      const currentImageUrl = canvasImageInfo.imageSrc || backgroundImage || activeShot?.imageUrl;
                       
-                      console.log("=== MASK DETECTION ===");
-                      console.log("canvasTool:", canvasTool);
-                      console.log("isSquareMode:", isSquareMode);
-                      console.log("isSquareMaskActive:", isSquareMaskActive);
-                      console.log("isRectangleMaskActive:", isRectangleMaskActive);
+                      // Get reference images from AI panel (aiRefImages) and imageReferenceImages
+                      console.log('[onGenerate] Processing reference images:', { 
+                        aiRefImagesCount: aiRefImages.length, 
+                        imageReferenceImagesCount: imageReferenceImages.length,
+                        aiRefImages: aiRefImages.map(img => ({ id: img.id, urlStart: img.url?.substring(0, 20) }))
+                      });
                       
-                      if (isSquareMaskActive || isRectangleMaskActive) {
-                        console.log("=== Using rectangle mask logic for area-edit mode ===");
-                        try {
-                          await runRectangleInpaint();
-                        } catch (error) {
-                          console.error("[onGenerate] AI generation failed:", error);
-                          // Show user-friendly message instead of technical error
-                          alert("AI generation failed. Please try a different prompt or use a different AI model.");
+                      // Upload AI reference images to R2 storage if they're blob URLs
+                      const aiRefImageUrls = await Promise.all(
+                        aiRefImages.map(async (img) => {
+                          console.log('[onGenerate] Processing reference image:', { id: img.id, url: img.url?.substring(0, 50) });
+                          if (img.url.startsWith('blob:')) {
+                            console.log('[onGenerate] Uploading blob reference image to R2...');
+                            // Upload blob URL to R2 storage
+                            const blob = await (await fetch(img.url)).blob();
+                            const formData = new FormData();
+                            formData.append('file', blob, `ref-${img.id || Date.now()}.webp`);
+                            formData.append('category', 'temps');
+                            
+                            const uploadResponse = await fetch('/api/storyboard/upload', {
+                              method: 'POST',
+                              body: formData
+                            });
+                            
+                            if (uploadResponse.ok) {
+                              const result = await uploadResponse.json();
+                              console.log('[onGenerate] Reference image uploaded:', result.publicUrl?.substring(0, 50) + '...');
+                              return result.publicUrl;
+                            } else {
+                              console.warn('[onGenerate] Failed to upload reference image, using original URL');
+                              return img.url;
+                            }
+                          } else {
+                            console.log('[onGenerate] Reference image is not blob, using as-is:', img.url?.substring(0, 50));
+                            return img.url; // Already a URL, use as-is
+                          }
+                        })
+                      );
+                      
+                      const allReferenceImages = [...imageReferenceImages, ...aiRefImageUrls];
+                      
+                      let maskUrl: string | undefined;
+                      
+                      // For character-edit models, generate and upload mask
+                      if (aiModel === 'ideogram/character-edit') {
+                        console.log('[onGenerate] Generating mask for character-edit model...');
+                        
+                        // Create mask from canvas state (similar to runCharacterEditInpaint)
+                        const mask = canvasState.mask;
+                        console.log('[onGenerate] Canvas mask data:', { maskLength: mask.length, maskData: mask.slice(0, 5) });
+                        
+                        if (mask.length > 0) {
+                          // Create mask with same dimensions as the original image
+                          const maskCanvas = document.createElement("canvas");
+                          // Get the original image dimensions from the current image
+                          const originalImg = new window.Image();
+                          await new Promise<void>((resolve, reject) => {
+                            originalImg.onload = () => resolve();
+                            originalImg.onerror = () => {
+                              console.warn('[onGenerate] Failed to load image, using default size');
+                              resolve(); // Continue with default size
+                            };
+                            originalImg.src = currentImageUrl || '';
+                          });
+                          console.log('[onGenerate] Original image dimensions:', { width: originalImg.width, height: originalImg.height });
+                          maskCanvas.width = originalImg.width || 1024; // Match original image width or fallback
+                          maskCanvas.height = originalImg.height || 1024; // Match original image height or fallback
+                          const ctx = maskCanvas.getContext("2d", { willReadFrequently: true });
+                          
+                          if (ctx) {
+                            // Professional mask approach: Use canvas overlay like working examples
+                            console.log('[onGenerate] Creating professional mask from canvas overlay...');
+                            
+                            // Fill with black first (background)
+                            ctx.fillStyle = "black";
+                            ctx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+                            
+                            // Get the actual canvas element to read the blue mask overlay
+                            const canvasContainer = canvasContainerRef.current;
+                            const canvasEl = canvasContainer?.querySelector('canvas');
+                            console.log('[onGenerate] Canvas element found:', !!canvasEl, canvasEl?.width, canvasEl?.height);
+                            if (canvasEl) {
+                              // Draw the canvas content (which has blue mask overlay) onto our mask canvas
+                              // Scale the canvas to match our mask dimensions
+                              const scaleX = maskCanvas.width / canvasEl.width;
+                              const scaleY = maskCanvas.height / canvasEl.height;
+                              console.log('[onGenerate] Canvas scaling:', { scaleX, scaleY, maskSize: { width: maskCanvas.width, height: maskCanvas.height }, canvasSize: { width: canvasEl.width, height: canvasEl.height } });
+                              ctx.drawImage(canvasEl, 0, 0, maskCanvas.width, maskCanvas.height);
+                              
+                              // Get image data to detect blue mask and convert to pure black/white
+                              const imageData = ctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+                              const data = imageData.data;
+                              
+                              // Convert blue mask to pure white, everything else to pure black
+                              for (let i = 0; i < data.length; i += 4) {
+                                const r = data[i];
+                                const g = data[i + 1];
+                                const b = data[i + 2];
+                                const a = data[i + 3];
+                                
+                                // Detect blue mask (high blue, low red/green, with some alpha)
+                                if (b > 150 && r < 150 && g < 150 && a > 50) {
+                                  // Set to pure white for masked areas
+                                  data[i] = 255;     // R
+                                  data[i + 1] = 255; // G  
+                                  data[i + 2] = 255; // B
+                                  data[i + 3] = 255; // A
+                                } else {
+                                  // Set to pure black for non-masked areas
+                                  data[i] = 0;       // R
+                                  data[i + 1] = 0;   // G
+                                  data[i + 2] = 0;   // B
+                                  data[i + 3] = 255; // A
+                                }
+                              }
+                              
+                              ctx.putImageData(imageData, 0, 0);
+                              console.log('[onGenerate] Professional mask created from blue overlay');
+                            } else {
+                              console.warn('[onGenerate] Canvas element not found, falling back to dot method');
+                              // Fallback to dot method if canvas not found
+                              mask.forEach(({ x, y, r = 8 }) => {
+                                const scaledX = (x / 100) * 1024;
+                                const scaledY = (y / 100) * 1024;
+                                const scaledR = r * 2;
+                                
+                                ctx.fillStyle = "white";
+                                ctx.beginPath();
+                                ctx.arc(scaledX, scaledY, scaledR, 0, Math.PI * 2);
+                                ctx.fill();
+                              });
+                            }
+                            
+                            // Convert to WebP and save to temps folder for reuse, then use base64 for KIE AI
+                            const maskBase64 = maskCanvas.toDataURL("image/webp", 0.8);
+                            
+                            // Save mask to temps folder for reuse
+                            const maskBlob = await (await fetch(maskBase64)).blob();
+                            const maskFormData = new FormData();
+                            maskFormData.append('file', maskBlob, `mask-${Date.now()}.webp`);
+                            maskFormData.append('useTemp', 'true'); // Use temps folder
+                            
+                            const maskUploadResponse = await fetch('/api/storyboard/upload', {
+                              method: 'POST',
+                              body: maskFormData
+                            });
+                            
+                            if (maskUploadResponse.ok) {
+                              const maskResult = await maskUploadResponse.json();
+                              console.log('[onGenerate] Mask saved to temps:', maskResult);
+                              console.log('[onGenerate] Mask result URL:', maskResult.publicUrl);
+                              maskUrl = maskResult.publicUrl;
+                            } else {
+                              console.warn('[onGenerate] Failed to save mask to temps, response:', maskUploadResponse.status);
+                              const errorText = await maskUploadResponse.text();
+                              console.warn('[onGenerate] Error details:', errorText);
+                              maskUrl = maskBase64; // Fallback to base64
+                            }
+                            
+                            console.log('[onGenerate] Mask ready:', maskUrl?.substring(0, 50) + '...');
+                          }
                         }
-                      } else {
-                        console.log("=== Using faceshift logic for area-edit mode ===");
-                        // This will be handled by the area-edit logic below
-                        generateImageWithElements?.();
                       }
-                    } else {
-                      console.log("=== Using original function for non-area-edit mode ===");
-                      // Other modes use the original function
-                      generateImageWithElements?.();
+                      
+                      console.log('[onGenerate] Image data for character-edit:', {
+                        currentImageUrl: currentImageUrl?.substring(0, 50) + '...',
+                        maskUrl: maskUrl?.substring(0, 50) + '...',
+                        referenceImagesCount: allReferenceImages.length,
+                        aiModel
+                      });
+                      
+                      // Use the existing file ID from activeShot if available, otherwise create new one
+                      const existingFileId = activeShot?.imageUrl ? activeShot.id : undefined;
+                      
+                      console.log('[onGenerate] Using existing file ID:', existingFileId, 'for shot:', activeShot?.id);
+                      
+                      // Use the credits passed from EditImageAIPanel
+                      const result = await generateImageWithCredits(
+                        promptText || "Generate image", 
+                        "realistic", // Default style - this should be dynamic based on model
+                        "standard", // Default quality  
+                        "9:16", // Default aspect ratio
+                        existingFileId, // Use existing file ID or create new one
+                        creditsUsed, // Use credits from EditImageAIPanel
+                        aiModel, // Pass the actual model from EditImageAIPanel
+                        currentImageUrl, // Pass canvas image URL for character-edit
+                        allReferenceImages, // Pass reference images for character-edit
+                        maskUrl // Pass mask URL for character-edit
+                      );
+                      
+                      if (result) {
+                        console.log("✅ Generation started with credit tracking:", {
+                          fileId: result.fileId,
+                          taskId: result.taskId,
+                          creditsUsed: result.creditsUsed
+                        });
+                        
+                        // Task status will be updated automatically via Convex real-time subscriptions
+                        
+                        alert(`Generation started! ${result.creditsUsed} credits deducted. File ID: ${result.fileId}`);
+                      } else {
+                        console.error("❌ Generation failed");
+                        alert("Generation failed. Please check your credits and try again.");
+                      }
+                    } catch (error) {
+                      console.error("[onGenerate] Credit-based generation failed:", error);
+                      
+                      // Handle insufficient credits error specifically
+                      const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+                      if (errorMessage.includes('Insufficient credits')) {
+                        alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating images.`);
+                      } else {
+                        alert(`AI generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
+                      }
                     }
                   }}
                   credits={20}
@@ -4013,6 +4323,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   setMaskBrushSize={setMaskBrushSize}
                   maskOpacity={maskOpacity}
                   setMaskOpacity={setMaskOpacity}
+                  showMask={showMask}
+                  setShowMask={setShowMask}
                   canvasState={canvasState}
                   setCanvasState={setCanvasState}
                   selectedColor={selectedColor}
@@ -4028,7 +4340,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   onDeleteSelected={handleDeleteCanvasImage}
                   onSaveSelectedImage={handleSaveSelectedImageToStoryboardItem}
                   onToolSelect={(tool) => {
-                    if (tool === "pen-brush" || tool === "brush" || tool === "eraser") {
+                    if (tool === "pen-brush" || tool === "brush" || tool === "eraser" || tool === "inpaint") {
                       setCanvasTool("inpaint");
                     } else if (tool === "crop") {
                       setCanvasTool("crop");
@@ -4198,11 +4510,49 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
                       onGenerate={async () => {
-                        console.log("=== ELEMENT AI GENERATE CALLED ===");
+                        console.log("=== ELEMENT CREDIT-BASED GENERATION CALLED ===");
                         console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
-                        console.log("Available aiRefImages (ElementAI Panel):", aiRefImages);
-                        console.log("Element generation prompt:", promptText);
-                        // TODO: Implement element generation logic
+                        console.log("Prompt:", promptText);
+                        
+                        try {
+                          // Calculate actual credits based on the selected model
+                          const actualCredits = calculateModelCredits(aiModel);
+                          
+                          // Use the new credit-based generation for elements
+                          const result = await generateImageWithCredits(
+                            promptText || "Generate element", 
+                            "realistic", // Default style
+                            "standard", // Default quality  
+                            "1:1", // Default aspect ratio for elements
+                            undefined, // Elements don't link to specific items
+                            actualCredits // Use actual credit amount
+                          );
+                          
+                          if (result) {
+                            console.log("✅ Element generation started with credit tracking:", {
+                              fileId: result.fileId,
+                              taskId: result.taskId,
+                              creditsUsed: result.creditsUsed
+                            });
+                            
+                            // Task status will be updated automatically via Convex real-time subscriptions
+                            
+                            alert(`Element generation started! ${result.creditsUsed} credits deducted. File ID: ${result.fileId}`);
+                          } else {
+                            console.error("❌ Element generation failed");
+                            alert("Element generation failed. Please check your credits and try again.");
+                          }
+                        } catch (error) {
+                          console.error("[onGenerate] Element credit-based generation failed:", error);
+                          
+                          // Handle insufficient credits error specifically
+                          const errorMessage = error instanceof Error ? error.message : 'Element generation failed';
+                          if (errorMessage.includes('Insufficient credits')) {
+                            alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating elements.`);
+                          } else {
+                            alert(`Element generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
+                          }
+                        }
                       }}
                       credits={20}
                       model={aiModel}
@@ -4265,6 +4615,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       setMaskBrushSize={setMaskBrushSize}
                       maskOpacity={maskOpacity}
                       setMaskOpacity={setMaskOpacity}
+                      showMask={showMask}
+                      setShowMask={setShowMask}
                       canvasState={canvasState}
                       setCanvasState={setCanvasState}
                       selectedColor={selectedColor}

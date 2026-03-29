@@ -256,39 +256,20 @@ export function BubbleSVG({ b, isSelected }: { b: Bubble; isSelected: boolean })
 }
 
 // ── MaskCanvas ─────────────────────────────────────────────────────────────
-// Overlays the image directly by mirroring its CSS transform.
-// The canvas moves WITH the image when panned/zoomed — no clipping issues.
+// Sits fixed at absolute 0,0 covering the full container.
+// Dots are recorded in container-space so no transform adjustment is needed.
 export function MaskCanvas({
-  mask, opacity, width, height,
+  mask, opacity, width, height, showMask = true,
 }: {
-  mask: MaskDot[]; opacity: number; width: number; height: number;
+  mask: MaskDot[]; opacity: number; width: number; height: number; showMask?: boolean;
 }) {
+  // Don't render anything if mask is hidden
+  if (!showMask) return null;
+  
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [imageStyleKey, setImageStyleKey] = useState<string>('');
 
-  // Mirror the image's CSS transform onto the canvas element so they always overlap.
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const container = canvas.closest('[data-canvas-editor="true"]');
-    const image = container?.querySelector('img:not([class*="mask])') as HTMLImageElement;
-    
-    if (!image || !image.naturalWidth) return;
-
-    const update = () => {
-      // Copy image transform directly to canvas
-      canvas.style.transform = image.style.transform || '';
-      canvas.style.transformOrigin = image.style.transformOrigin || 'top left';
-      setImageStyleKey(image.getAttribute('style') ?? '');
-    };
-    const observer = new MutationObserver(update);
-    observer.observe(image, { attributes: true, attributeFilter: ['style'] });
-    update();
-    return () => observer.disconnect();
-  }, []);
-
-  // Draw dots in image-pixel space. No ctx.setTransform needed — canvas is already
-  // positioned and scaled by CSS transform to match the image exactly.
+  // Draw dots in container-space coordinates.
+  // Canvas is fixed at (0,0) and sized to the container — no CSS transform needed.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -296,13 +277,15 @@ export function MaskCanvas({
     if (!ctx) return;
 
     const container = canvas.closest('[data-canvas-editor="true"]') as HTMLElement;
-    const image = container?.querySelector('img:not([class*="mask])') as HTMLImageElement;
 
-    // Resize canvas to natural image dimensions so 1 canvas px = 1 image px
-    const natW = image?.naturalWidth  || width;
-    const natH = image?.naturalHeight || height;
-    if (canvas.width !== natW)  canvas.width  = natW;
-    if (canvas.height !== natH) canvas.height = natH;
+    // Resize canvas to container dimensions
+    const containerRect = container?.getBoundingClientRect();
+    if (!containerRect) return;
+
+    const canvasW = containerRect.width;
+    const canvasH = containerRect.height;
+    if (canvas.width !== canvasW)  canvas.width  = canvasW;
+    if (canvas.height !== canvasH) canvas.height = canvasH;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (mask.length === 0) return;
@@ -314,7 +297,7 @@ export function MaskCanvas({
       ctx.arc(dot.x, dot.y, dot.r / 2, 0, Math.PI * 2);
       ctx.fill();
     }
-  }, [mask, opacity, width, height, imageStyleKey]);
+  }, [mask, opacity, width, height]);
 
   return (
     <canvas
@@ -322,7 +305,7 @@ export function MaskCanvas({
       width={width}
       height={height}
       className="absolute pointer-events-none"
-      style={{ zIndex: 10, left: 0, top: 0, transformOrigin: 'top left' }}
+      style={{ zIndex: 10, left: 0, top: 0 }}
     />
   );
 }

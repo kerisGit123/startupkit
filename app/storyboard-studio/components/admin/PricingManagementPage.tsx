@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { UserButton } from "@clerk/nextjs";
 import PricingManagementDark from "./PricingManagementDark";
+import CreditBalanceDisplay from "./CreditBalanceDisplay";
 
 interface PricingManagementPageProps {
   sidebarOpen: boolean;
@@ -89,6 +90,17 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
       {/* Main Content - No overflow wrapper to let PricingManagementDark handle its own scrolling */}
       <div className="flex-1 min-h-0">
         <PricingManagementDark />
+        
+        {/* Credit Balance Section */}
+        <div className="p-8 pt-0">
+          <div className="max-w-7xl mx-auto">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-(--text-primary) mb-2">Company Credit Balance</h3>
+              <p className="text-(--text-tertiary) text-sm">Monitor your company's credit usage and balance</p>
+            </div>
+            <CreditBalanceDisplay className="max-w-md" />
+          </div>
+        </div>
       </div>
     </div>
   );

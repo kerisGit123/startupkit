@@ -30,7 +30,8 @@ interface CanvasAreaProps {
   // Brush Props
   maskBrushSize: number;
   isEraser: boolean;
-  maskOpacity: number;
+  maskOpacity?: number;
+  showMask?: boolean;
   
   // Canvas Selection
   hiddenIds: Set<string>;
@@ -96,6 +97,7 @@ export function CanvasArea({
   maskBrushSize,
   isEraser,
   maskOpacity,
+  showMask,
   hiddenIds,
   setCanvasSelection,
   activeAIPanel,
@@ -148,55 +150,8 @@ export function CanvasArea({
         ref={canvasContainerRef} 
         className="flex-1 overflow-hidden bg-[#0d0d12] relative"
       >
-        {/* Video AI Canvas - LTX Studio Inspired */}
-        {activeAIPanel === 'video' && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            {videoState?.status === 'empty' && (
-              <div className="flex flex-col items-center justify-center text-gray-600">
-                <div className="w-16 h-16 mb-4 rounded-full bg-gray-800 flex items-center justify-center">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <p className="text-sm">Generate video to preview</p>
-              </div>
-            )}
-            
-            {videoState?.status === 'processing' && (
-              <div className="flex flex-col items-center justify-center text-gray-400">
-                <div className="w-12 h-12 mb-4 border-4 border-gray-700 border-t-blue-500 rounded-full animate-spin"></div>
-                <p className="text-sm mb-2">Generating video...</p>
-                <div className="w-48 h-2 bg-gray-800 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-blue-500 transition-all duration-300"
-                    style={{ width: `${videoState?.processingProgress || 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            
-            {videoState?.status === 'ready' && videoState?.content && (
-              <div className="w-full h-full flex items-center justify-center">
-                <video
-                  src={videoState.content.videoUrl}
-                  poster={videoState.content.thumbnailUrl}
-                  controls
-                  loop
-                  autoPlay
-                  muted
-                  className="w-full h-full object-contain cursor-pointer"
-                  onClick={() => onVideoClick?.(videoState.content?.videoUrl ?? "")}
-                  style={{ maxHeight: '100%', maxWidth: '100%' }}
-                />
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* Element AI Canvas - Same as Image AI */}
-        {activeAIPanel === 'element' && (
-          <CanvasEditor
+        {/* Default CanvasEditor - works for all panels with brush support */}
+        <CanvasEditor
           panelId={panelId}
           imageUrl={backgroundImage ?? activeShot?.imageUrl}
           activeTool={canvasActiveTool}
@@ -206,6 +161,7 @@ export function CanvasArea({
           brushSize={maskBrushSize}
           isEraser={isEraser}
           maskOpacity={maskOpacity}
+          showMask={showMask}
           hiddenObjectIds={hiddenIds}
           onSelectionChange={setCanvasSelection}
           selection={canvasSelection}
@@ -235,50 +191,6 @@ export function CanvasArea({
             });
           }}
         />
-        )}
-        
-        {/* Image AI Canvas - Default CanvasEditor */}
-        {activeAIPanel === 'editimage' && (
-          <CanvasEditor
-          panelId={panelId}
-          imageUrl={backgroundImage ?? activeShot?.imageUrl}
-          activeTool={canvasActiveTool}
-          state={canvasState}
-          onStateChange={setCanvasState}
-          // Pass brush props for all inpaint models
-          brushSize={maskBrushSize}
-          isEraser={isEraser}
-          maskOpacity={maskOpacity}
-          hiddenObjectIds={hiddenIds}
-          onSelectionChange={setCanvasSelection}
-          selection={canvasSelection}
-          aspectRatio={activeShot?.aspectRatio || "16:9"}
-          rectangle={rectangle}
-          onRectangleChange={setRectangle}
-          rectangleVisible={imageIsRectangleVisible}
-          canvasTool={canvasTool}
-          isAspectRatioAnimating={isAspectRatioAnimating}
-          isSquareMode={isSquareMode}
-          onToolSelect={onToolSelect}
-          generateImageWithElements={generateImageWithElements}
-          onCropClick={runCrop}
-          onImageLoad={onImageLoad}
-          selectedColor={selectedColor}
-          onColorPickerClick={onColorPickerClick}
-          onDeleteSelected={onDeleteSelected}
-          mode={mode}
-          onSetOriginalImage={onSetOriginalImage}
-          zoomLevel={zoomLevel}
-          resetAllTransformations={() => {
-            setCanvasState({
-              ...canvasState,
-              bubbles: canvasState.bubbles.map(b => ({ ...b, rotation: 0, flipX: false, flipY: false })),
-              textElements: canvasState.textElements.map(t => ({ ...t, rotation: 0, flipX: false, flipY: false })),
-              assetElements: canvasState.assetElements.map(a => ({ ...a, rotation: 0, flipX: false, flipY: false })),
-            });
-          }}
-        />
-        )}
       </div>
     </div>
   );

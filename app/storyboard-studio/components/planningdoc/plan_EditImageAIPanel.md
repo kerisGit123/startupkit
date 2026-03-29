@@ -321,20 +321,69 @@ handleLeftImageUpload → FileReader → Base64 data URL
 - **AI Model Limitations**: AI APIs cannot access blob URLs reliably
 - **No Cleanup**: No automatic file management
 
-#### **Current AI Model Flow**
+#### **NEW: Callback-First KIE AI Integration**
 ```typescript
-// SceneEditor.tsx - onGenerate function
+// SceneEditor.tsx - Enhanced onGenerate function (REQUIRED UPDATE)
 onGenerate={async () => {
   console.log("Available aiRefImages:", aiRefImages);
-  // aiRefImages: [{ id: "ref-123", url: "blob:https://localhost:3000/..." }]
   
-  if (aiEditMode === "area-edit") {
-    await runRectangleInpaint(); // Sends blob URLs to AI API
+  // Step 1: Create placeholder record in storyboard_files
+  const fileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
+    companyId: userCompanyId,
+    userId: currentUserId,
+    projectId: currentProjectId,
+    category: "generated",
+    filename: `ai-edit-${Date.now()}`,
+    fileType: "image",
+    mimeType: "image/png",
+    size: 0,
+    status: "generating",
+    creditsUsed: getSelectedModelCredits(),
+    categoryId: elementId || itemId, // Link to element or item
+    sourceUrl: null, // Will be set by KIE AI callback
+  });
+  
+  // Step 2: Prepare reference images (R2 URLs only)
+  const referenceUrls = aiRefImages
+    .filter(img => img.url.startsWith('https://')) // Only R2 URLs
+    .map(img => img.url);
+  
+  // Step 3: Call KIE AI with callback URL
+  const response = await fetch('https://api.kie.ai/v1/createTask', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: selectedModel,
+      prompt: prompt,
+      referenceImages: referenceUrls,
+      callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+    }),
+  });
+  
+  // Step 4: Handle response
+  if (response.ok) {
+    const result = await response.json();
+    console.log('KIE AI task created:', result.taskId);
+    // Show generating status in UI
   } else {
-    generateImageWithElements?.(); // Sends blob URLs to AI API
+    // Update record with failed status
+    await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+      fileId,
+      status: 'failed',
+    });
   }
-}}
+}
 ```
+
+#### **Integration with plan_generatedImage_final.md**
+- **Placeholder Creation**: Create `storyboard_files` record before KIE AI call
+- **Callback URL**: Pass `fileId` to KIE AI for status updates
+- **Status Tracking**: Monitor `generating` → `completed`/`failed` states
+- **SourceUrl Handling**: KIE AI callback updates `sourceUrl` field
+- **Credit Tracking**: Credits deducted at placeholder creation
 
 ### **✅ Temps Folder Integration Solution**
 

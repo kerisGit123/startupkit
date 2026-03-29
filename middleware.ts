@@ -10,6 +10,8 @@ const isPublicRoute = createRouteMatcher([
   "/api/stripe/webhook(.*)",
   "/api/n8n/callback(.*)",
   "/api/n8n-webhook(.*)",
+  "/api/kie-callback(.*)",
+  "/api/storyboard/kie-callback(.*)",
   "/api/booking/(.*)",
   "/api/chat(.*)",
   "/api/inpaint(.*)",

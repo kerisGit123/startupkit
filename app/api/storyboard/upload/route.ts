@@ -102,13 +102,48 @@ export async function POST(request: NextRequest) {
       isTemporary = true;
       expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
       console.log('[Storyboard Upload] Using temps folder with 30-day TTL:', uploadPath);
-    } else if (categoryParam && ['elements', 'generated', 'storyboard', 'videos'].includes(categoryParam)) {
+    } else if (categoryParam && ['elements', 'storyboard', 'videos'].includes(categoryParam)) {
       // Category-specific upload to {companyId}/{category}/
       const timestamp = Date.now();
       uploadPath = `${companyId}/${categoryParam}/${timestamp}-${file.name}`;
       category = categoryParam;
       isTemporary = false;
       console.log('[Storyboard Upload] Using category-specific path:', uploadPath);
+    } else if (categoryParam === 'generated') {
+      // For AI-generated files, don't create R2 keys until actual file is generated
+      // We'll create the R2 key when the callback returns the actual file
+      // Still log to Convex database but without R2 key
+      // The R2 key will be created later when the actual file is available
+      const logData: any = {
+        companyId, // Pass the calculated companyId
+        orgId: orgId || undefined, // Add orgId from auth
+        uploadedAt: Date.now(),
+        createdAt: Date.now(),
+        filename: file.name,
+        fileType: file.type,
+        mimeType: file.type,
+        category: 'generated',
+        isFavorite: false,
+        // r2Key omitted for generated files until actual file is available
+        sourceUrl: null,
+        creditsUsed: 0, // Will be set when credits are deducted
+        taskId: null, // Will be set when taskId is available
+      };
+      
+      // Log to Convex database without R2 key
+      const { ConvexHttpClient } = await import("convex/browser");
+      const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+      const { api } = await import("@/convex/_generated/api");
+      
+      const result = await convex.mutation(api.storyboard.storyboardFiles.logUpload, logData);
+      console.log('[Storyboard Upload] Generated file record (no R2 key):', { fileId: result });
+      
+      return NextResponse.json({ 
+        fileId: result, 
+        url: null, // No URL until file is generated
+        category: 'generated',
+        isTemporary: false
+      });
     } else {
       // Default to uploads folder for permanent storage
       const timestamp = Date.now();

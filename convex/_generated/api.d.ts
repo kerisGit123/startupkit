@@ -80,6 +80,7 @@ import type * as migrations_migrateToContacts from "../migrations/migrateToConta
 import type * as migrations_migrateToFinancialLedger from "../migrations/migrateToFinancialLedger.js";
 import type * as migrations_populateCompanyId from "../migrations/populateCompanyId.js";
 import type * as migrations_syncTicketsToInbox from "../migrations/syncTicketsToInbox.js";
+import type * as organizations from "../organizations.js";
 import type * as platformConfig from "../platformConfig.js";
 import type * as poConfig from "../poConfig.js";
 import type * as promptTemplates from "../promptTemplates.js";
@@ -120,6 +121,7 @@ import type * as transactions_queries from "../transactions/queries.js";
 import type * as userActivity from "../userActivity.js";
 import type * as users from "../users.js";
 import type * as users_deleteUser from "../users/deleteUser.js";
+import type * as verify_schema from "../verify_schema.js";
 
 import type {
   ApiFromModules,
@@ -200,6 +202,7 @@ declare const fullApi: ApiFromModules<{
   "migrations/migrateToFinancialLedger": typeof migrations_migrateToFinancialLedger;
   "migrations/populateCompanyId": typeof migrations_populateCompanyId;
   "migrations/syncTicketsToInbox": typeof migrations_syncTicketsToInbox;
+  organizations: typeof organizations;
   platformConfig: typeof platformConfig;
   poConfig: typeof poConfig;
   promptTemplates: typeof promptTemplates;
@@ -240,6 +243,7 @@ declare const fullApi: ApiFromModules<{
   userActivity: typeof userActivity;
   users: typeof users;
   "users/deleteUser": typeof users_deleteUser;
+  verify_schema: typeof verify_schema;
 }>;
 
 /**

@@ -44,6 +44,7 @@ interface CanvasEditorProps {
   brushSize: number;
   isEraser: boolean;
   maskOpacity: number;
+  showMask?: boolean;
   hiddenObjectIds?: Set<string>;
   onSelectionChange?: (sel: CanvasSelection) => void;
   selection?: CanvasSelection;
@@ -95,7 +96,7 @@ type RotDragInfo = {
 // ── CanvasEditor ───────────────────────────────────────────────────────────
 export function CanvasEditor({
   panelId, imageUrl, activeTool, state, onStateChange,
-  brushSize, isEraser, maskOpacity, hiddenObjectIds = new Set(),
+  brushSize, isEraser, maskOpacity, showMask = true, hiddenObjectIds = new Set(),
   onSelectionChange, selection, aspectRatio, resetAllTransformations,
   rectangle, onRectangleChange, rectangleVisible = true, canvasTool, isAspectRatioAnimating = false, isSquareMode = false, onToolSelect, generateImageWithElements,
   onImageLoad, onCropClick, selectedColor = "#FF0000", onColorPickerClick, onDeleteSelected, onAspectRatioChange, mode, onSetOriginalImage, zoomLevel = 100,
@@ -111,7 +112,7 @@ export function CanvasEditor({
   // Update image transform when zoomLevel changes
   useEffect(() => {
     const container = containerRef.current;
-    const img = container?.querySelector('img') as HTMLImageElement;
+    const img = getMainCanvasImage();
     if (!container || !img || !img.naturalWidth || !img.naturalHeight) return;
     
     const cW = container.offsetWidth;
@@ -365,14 +366,19 @@ export function CanvasEditor({
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   };
 
+  const getMainCanvasImage = useCallback(() => {
+    return containerRef.current?.querySelector('[data-canvas-base-image="true"]') as HTMLImageElement | null;
+  }, []);
+
   // ── Mask painting ──
   const addMaskDot = useCallback((e: React.MouseEvent | MouseEvent) => {
+    console.log('[CanvasEditor] addMaskDot called'); // Test log
     const containerRect = containerRef.current?.getBoundingClientRect();
     if (!containerRect) return;
 
     // Use getBoundingClientRect to get the actual rendered image position
     // This correctly handles: CSS transforms, flexbox centering, any layout positioning
-    const image = containerRef.current?.querySelector('img:not([class*="mask])') as HTMLImageElement;
+    const image = getMainCanvasImage();
     
     if (!image || !image.naturalWidth || !image.complete) return;
 
@@ -383,23 +389,38 @@ export function CanvasEditor({
     const transform = computedStyle.transform;
     
     // Calculate scale from the actual rendered dimensions
-    const scale = imgRect.width / image.naturalWidth;
-    
-    // Use the actual visual position from getBoundingClientRect - this already includes all transforms
+    const scaleX = imgRect.width / image.naturalWidth;
+    const scaleY = imgRect.height / image.naturalHeight;
     const imgLeft = imgRect.left - containerRect.left;
     const imgTop = imgRect.top - containerRect.top;
-
-    // Mouse position relative to container
+    
     const mouseX = e.clientX - containerRect.left;
     const mouseY = e.clientY - containerRect.top;
 
-    // Convert to image-pixel space using the actual visual position
-    const x = (mouseX - imgLeft) / scale;
-    const y = (mouseY - imgTop) / scale;
+    // Store mask in canvas-space (container-relative) coordinates, not image-space
+    // This ensures Original and Generated panels share exactly the same mask
+    const x = mouseX;
+    const y = mouseY;
+
+    // Enhanced debug to compare Original vs Generated image coordinates
+    const imageType = image.currentSrc?.includes('generated') ? 'Generated' : 'Original';
+    console.log(`[CanvasEditor:addMaskDot] ${imageType} Image`, {
+      imageType,
+      imageUrl: image.currentSrc?.slice(0, 120),
+      naturalSize: { w: image.naturalWidth, h: image.naturalHeight },
+      renderedSize: { w: imgRect.width, h: imgRect.height },
+      containerSize: { w: containerRect.width, h: containerRect.height },
+      imageOffsetInCanvas: { x: imgLeft, y: imgTop },
+      mouseInContainer: { x: Math.round(mouseX), y: Math.round(mouseY) },
+      imageSpaceResult: { x: Math.round(x), y: Math.round(y) },
+      scaleFactors: { x: scaleX.toFixed(3), y: scaleY.toFixed(3) },
+      isEraser,
+      brushSize,
+    });
 
         
-    // Reject painting outside the image bounds — eraser still runs to clean up any stray dots
-    if (!isEraser && (x < 0 || x > image.naturalWidth || y < 0 || y > image.naturalHeight)) return;
+    // Bounds check: reject painting outside the canvas container
+    if (!isEraser && (x < 0 || x > containerRect.width || y < 0 || y > containerRect.height)) return;
 
     // Use brush size directly without problematic normalization
     // The CSS transform handling should handle scaling appropriately
@@ -409,7 +430,7 @@ export function CanvasEditor({
       ? state.mask.filter(d => Math.hypot(d.x - x, d.y - y) > r / 2)
       : [...state.mask, { x, y, r }];
     onStateChange({ ...state, mask: newMask });
-  }, [state, isEraser, brushSize, onStateChange]);
+  }, [state, isEraser, brushSize, onStateChange, getMainCanvasImage]);
 
   const commitMaskSnapshot = useCallback(() => {
     onStateChange({ ...state, undoStack: [...state.undoStack, state.mask], redoStack: [] });
@@ -417,6 +438,7 @@ export function CanvasEditor({
 
   // ── Mouse down ──
   const handleMouseDown = (e: React.MouseEvent) => {
+    console.log('[CanvasEditor] handleMouseDown', { activeTool, button: e.button });
     if (activeTool === "inpaint" && e.button === 0) {
       // Paint with left mouse button (button === 0) - only for brush inpaint
       e.preventDefault();
@@ -424,6 +446,7 @@ export function CanvasEditor({
       setIsMouseDown(true);
       setIsPainting(true);
       addMaskDot(e);
+      console.log('[CanvasEditor] Calling addMaskDot from handleMouseDown');
       return;
     }
     
@@ -434,7 +457,7 @@ export function CanvasEditor({
       const { x, y } = getPos(e);
       
       // Get current image position from its actual rendered rect
-      const image = containerRef.current?.querySelector('img:not([class*="mask"])') as HTMLImageElement | null;
+      const image = getMainCanvasImage();
       let currentX = 0, currentY = 0, currentScale = 1;
       if (image && containerRef.current) {
         const cRect = containerRef.current.getBoundingClientRect();
@@ -511,13 +534,11 @@ export function CanvasEditor({
         else onStateChange({ ...state, assetElements: assetElements.map(a => a.id === d.id ? { ...a, x: nx, y: ny } : a) });
       } else if (d.type === "move-canvas") {
         // Handle canvas image movement — use origScale captured at mousedown
-        const image = containerRef.current?.querySelector('img:not([class*="mask"])') as HTMLImageElement | null;
+        const image = containerRef.current?.querySelector('[data-canvas-base-image="true"]') as HTMLImageElement | null;
         if (image) {
           const newTransformX = d.origX + dx;
           const newTransformY = d.origY + dy;
-          const scale = d.origScale ?? 1;
-          image.style.transformOrigin = 'top left';
-          image.style.transform = `translate(${newTransformX}px, ${newTransformY}px) scale(${scale})`;
+          image.style.transform = `translate(${newTransformX}px, ${newTransformY}px) scale(${d.origScale})`;
         }
       } else if (d.type === "resize") {
         // Check if this is an endpoint resize for arrow/line
@@ -569,7 +590,7 @@ export function CanvasEditor({
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-  }, [isPainting, isMouseDown, activeTool, state, dragRef, rotDragRef]);
+  }, [isPainting, isMouseDown, activeTool, state, dragRef, rotDragRef, getMainCanvasImage]);
 
   // Listen for custom color application events from ImageAIPanel
   useEffect(() => {
@@ -976,6 +997,7 @@ export function CanvasEditor({
               key={imageUrl}
               src={imageUrl}
               alt=""
+              data-canvas-base-image="true"
               className="absolute pointer-events-none"
               style={{ left: 0, top: 0, transformOrigin: 'top left', maxWidth: 'none', maxHeight: 'none' }}
               onLoad={(e) => {
@@ -1003,7 +1025,7 @@ export function CanvasEditor({
             </div>
         }
         {/* Mask Canvas */}
-        {state.mask.length > 0 && <MaskCanvas mask={state.mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} />}
+        {state.mask.length > 0 && <MaskCanvas mask={state.mask} opacity={maskOpacity} width={containerSize.w} height={containerSize.h} showMask={showMask} />}
         {canvasTool === "rectInpaint" && rectangle && rectangleVisible && (
           <>
             <RectangleCanvas 

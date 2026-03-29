@@ -1828,7 +1828,7 @@ export default defineSchema({
     orgId: v.optional(v.string()),
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("storyboard_projects")),
-    r2Key: v.string(),
+    r2Key: v.optional(v.string()),
     filename: v.string(),
     fileType: v.string(),   // image | video | audio
     mimeType: v.string(),
@@ -1837,23 +1837,27 @@ export default defineSchema({
     tags: v.array(v.string()),
     uploadedBy: v.string(),
     uploadedAt: v.number(),
-    status: v.string(),     // uploading | ready | error
+    status: v.string(),     // uploading | ready | error | generating | completed | failed
     createdAt: v.number(),
     isFavorite: v.optional(v.boolean()), // For favoriting files (optional for existing data)
     categoryId: v.optional(v.union(
       v.id("storyboard_elements"),     // Parent element ID
       v.id("storyboard_items"),        // Parent storyboard item ID  
       v.id("storyboard_projects"),     // Parent project ID (for project-level files)
-      v.null()                         // No parent (orphaned/general files)
-    )), // Parent entity ID for easy cleanup
+      v.null()                         // No parent
+    )),
+    
+    // NEW: Enhanced fields for AI generation
+    creditsUsed: v.optional(v.number()),   // Credits consumed for this file
+    taskId: v.optional(v.string()),       // KIE AI task ID for generated files
+    sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
+    deletedAt: v.optional(v.number()),     // Soft delete timestamp
   })
-    .index("by_companyId", ["companyId"])
-    .index("by_org", ["orgId"])
-    .index("by_user", ["userId"])
     .index("by_project", ["projectId"])
     .index("by_category", ["projectId", "category"])
     .index("by_r2Key", ["r2Key"])
-    .index("by_categoryId", ["categoryId"]), // For efficient cleanup by parent entity
+    .index("by_categoryId", ["categoryId"]) // For efficient cleanup by parent entity
+    .index("by_companyId", ["companyId"]), // For company-wide file listing
 
   // ============================================
   // STORYBOARD STUDIO: Elements (LTX-style reusable assets)

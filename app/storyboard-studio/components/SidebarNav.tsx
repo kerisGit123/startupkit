@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { Project } from "../types";
 import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
+import CreditBalanceDisplay from "./admin/CreditBalanceDisplay";
 
 interface SidebarNavProps {
   open: boolean;
@@ -86,6 +87,11 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
             Storyboard Studio
           </span>
         </div>
+      </div>
+
+      {/* Credit Balance */}
+      <div className="px-4 py-3 border-b border-(--border-primary) shrink-0">
+        <CreditBalanceDisplay className="w-full" />
       </div>
 
       {/* Nav */}

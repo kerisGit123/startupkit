@@ -1,4 +1,4 @@
-import { mutation, query } from "../_generated/server";
+import { mutation, query, internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 
 export const logUpload = mutation({
@@ -7,7 +7,7 @@ export const logUpload = mutation({
     orgId: v.optional(v.string()),
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("storyboard_projects")),
-    r2Key: v.string(),
+    r2Key: v.optional(v.string()), // Optional for AI files
     filename: v.string(),
     fileType: v.string(),
     mimeType: v.string(),
@@ -22,6 +22,11 @@ export const logUpload = mutation({
       v.id("storyboard_projects"),     // Parent project ID
       v.null()                         // No parent
     )), // Parent entity ID for cleanup
+    
+    // NEW: Enhanced fields for AI generation
+    creditsUsed: v.optional(v.number()),   // Credits consumed for this file
+    taskId: v.optional(v.string()),       // KIE AI task ID (only for category="generated")
+    sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
   },
   handler: async (ctx, args) => {
     // Since we're calling from API route with auth, we can work without auth context
@@ -48,14 +53,30 @@ export const logUpload = mutation({
     
     console.log('[logUpload] Using provided companyId:', companyId);
     
-    return await ctx.db.insert("storyboard_files", {
+    const insertData: any = {
       ...restArgs,
       companyId: companyId, // Use provided companyId exactly as provided
       userId: userId, // Use provided userId exactly as provided
       uploadedAt: Date.now(),
       createdAt: Date.now(),
       isFavorite: false, // Default to not favorited
+      
+      // Handle r2Key - AI files don't have R2 keys initially
+      r2Key: restArgs.r2Key, // Keep undefined for AI files
+      
+      // Include new fields if provided
+      creditsUsed: restArgs.creditsUsed,
+      sourceUrl: restArgs.sourceUrl,
+    };
+    
+    // Remove undefined values to satisfy schema
+    Object.keys(insertData).forEach(key => {
+      if (insertData[key] === undefined) {
+        delete insertData[key];
+      }
     });
+    
+    return await ctx.db.insert("storyboard_files", insertData);
   },
 });
 
@@ -314,5 +335,70 @@ export const getByR2Key = query({
       .withIndex("by_r2Key", (q) => q.eq("r2Key", r2Key))
       .first();
   },
+});
+
+// Update file record from KIE AI callback
+export const updateFromCallback = mutation({
+  args: {
+    fileId: v.id("storyboard_files"),
+    sourceUrl: v.optional(v.string()),
+    taskId: v.optional(v.string()),
+    status: v.string(),
+    r2Key: v.optional(v.string()),
+  },
+  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key }) => {
+    const updateData: any = { status };
+    
+    if (sourceUrl) {
+      updateData.sourceUrl = sourceUrl;
+    }
+    
+    if (taskId) {
+      updateData.taskId = taskId;
+    }
+    
+    if (r2Key) {
+      updateData.r2Key = r2Key;
+    }
+    
+    await ctx.db.patch(fileId, updateData);
+    console.log('[updateFromCallback] Updated file:', { fileId, status, hasSourceUrl: !!sourceUrl, hasR2Key: !!r2Key });
+    return { success: true };
+  },
+});
+
+// Migration: Populate creditsUsed from existing credit_usage records
+export const migrateCreditUsage = internalMutation({
+  handler: async (ctx) => {
+    console.log('[migrateCreditUsage] Starting migration...');
+    
+    // Get all generated files
+    const files = await ctx.db
+      .query("storyboard_files")
+      .filter(q => q.eq(q.field("category"), "generated"))
+      .collect();
+    
+    // Get credit usage records
+    const creditRecords = await ctx.db
+      .query("storyboard_credit_usage")
+      .collect();
+    
+    let migratedCount = 0;
+    
+    // Map credits to files
+    for (const file of files) {
+      const credit = creditRecords.find(c => c.itemId === file.categoryId);
+      if (credit && credit.creditsUsed) {
+        await ctx.db.patch(file._id, {
+          creditsUsed: credit.creditsUsed
+        });
+        migratedCount++;
+        console.log(`[migrateCreditUsage] Migrated file ${file._id} with ${credit.creditsUsed} credits`);
+      }
+    }
+    
+    console.log(`[migrateCreditUsage] Migration complete. Migrated ${migratedCount} files.`);
+    return { migratedFiles: migratedCount, totalFiles: files.length };
+  }
 });
 

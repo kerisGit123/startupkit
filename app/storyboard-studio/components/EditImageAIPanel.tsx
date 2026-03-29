@@ -9,6 +9,7 @@ import {
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
+  Eye, EyeOff,
 } from "lucide-react";
 
 // Import Paintbrush separately to avoid conflicts
@@ -29,7 +30,7 @@ interface ReferenceImage {
 export interface EditImageAIPanelProps {
   mode: AIEditMode;
   onModeChange: (mode: AIEditMode) => void;
-  onGenerate: () => void;
+  onGenerate: (creditsUsed: number) => void;
   onSaveSelectedImage?: () => void;
   projectId?: Id<"storyboard_projects">;
   credits?: number;
@@ -38,20 +39,22 @@ export interface EditImageAIPanelProps {
   referenceImages?: ReferenceImage[];
   onAddReferenceImage?: (file: File) => void;
   onRemoveReferenceImage?: (id: string) => void;
-  isGenerating?: boolean;
   userPrompt?: string;
   onUserPromptChange?: (prompt: string) => void;
-  // Brush inpaint integration
+  isGenerating?: boolean;
+  // Canvas props for area-edit mode
   isEraser?: boolean;
-  setIsEraser?: (value: boolean) => void;
+  setIsEraser?: (isEraser: boolean) => void;
   maskBrushSize?: number;
-  setMaskBrushSize?: (value: number) => void;
+  setMaskBrushSize?: (size: number) => void;
   maskOpacity?: number;
-  setMaskOpacity?: (value: number) => void;
+  setMaskOpacity?: (opacity: number) => void;
+  showMask?: boolean;
+  setShowMask?: (show: boolean) => void;
   canvasState?: {
-    mask: Array<{ x: number; y: number }>;
+    mask: Array<{ x: number; y: number; }>;
   };
-  setCanvasState?: (value: any) => void;
+  setCanvasState?: (state: any) => void;
   onToolSelect?: (tool: string) => void;
   onCropRemove?: () => void;
   onCropExecute?: (aspectRatio: string) => void;
@@ -59,12 +62,12 @@ export interface EditImageAIPanelProps {
   onResetRectangle?: () => void;
   onSetOriginalImage?: (imageUrl: string) => void;
   onAddCanvasElement?: (file: File) => void; // New prop for adding canvas elements
-  backgroundImage?: string | null;
+  backgroundImage?: string;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onFitToScreen?: () => void;
   zoomLevel?: number;
-  onZoomChange?: (level: number) => void;
+  onZoomChange?: (zoom: number) => void;
   selectedColor?: string;
   setSelectedColor?: (color: string) => void;
   onColorPickerClick?: () => void; // Add handler for color picker click
@@ -147,6 +150,8 @@ export function EditImageAIPanel({
   setMaskBrushSize,
   maskOpacity,
   setMaskOpacity,
+  showMask,
+  setShowMask,
   canvasState,
   setCanvasState,
   onToolSelect,
@@ -836,6 +841,10 @@ export function EditImageAIPanel({
               <ToolBtn active={activeTool === "eraser"} onClick={() => pick("eraser")} title="Eraser">
                 <Eraser className={ic} />
               </ToolBtn>
+              {/* Show/Hide Mask Toggle */}
+              <ToolBtn active={showMask} onClick={() => setShowMask?.(!showMask)} title={showMask ? "Hide Mask" : "Show Mask"}>
+                {showMask ? <Eye className={ic} /> : <EyeOff className={ic} />}
+              </ToolBtn>
               {/* Pen size - shows actual brush size, independent button */}
               <button
                 onClick={() => setShowBrushSizeMenu(!showBrushSizeMenu)}
@@ -1288,8 +1297,11 @@ export function EditImageAIPanel({
             onClick={() => {
               // Ensure we're calling the n8n-image-proxy route
               if (mode === "area-edit" && onGenerate) {
-                console.log("[EditImageAIPanel] Generate button clicked - calling n8n-image-proxy");
-                onGenerate();
+                console.log("[EditImageAIPanel] Generate button clicked - calling credit-based generation");
+                // Calculate and pass the actual credits
+                const actualCredits = getModelCredits(model);
+                console.log("[EditImageAIPanel] Passing calculated credits:", actualCredits);
+                onGenerate(actualCredits);
               } else if (mode === "annotate") {
                 console.log("[EditImageAIPanel] Generate not available in annotate mode");
               }

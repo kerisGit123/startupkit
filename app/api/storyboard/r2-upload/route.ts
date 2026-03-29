@@ -102,6 +102,16 @@ export async function POST(req: NextRequest) {
         const ext = filename.split(".").pop() ?? "";
         // ✅ Use server-side companyId function
         const finalCompanyId = companyId || userCompanyId;
+        
+        // Don't create R2 keys for generated category - they'll be created when actual file is available
+        if (category === 'generated') {
+          console.log("[r2-upload] Skipping R2 key creation for generated category - waiting for actual file");
+          return NextResponse.json({ 
+            error: "Generated files should not use r2-upload route directly",
+            message: "Use the callback flow for generated files"
+          }, { status: 400 });
+        }
+        
         key = `${finalCompanyId}/${category ?? "uploads"}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
         
         console.log("[r2-upload] Project upload path:", { 
@@ -119,6 +129,16 @@ export async function POST(req: NextRequest) {
       // ✅ Use server-side companyId function
       const finalCompanyId = companyId || userCompanyId;
       const ext = filename.split(".").pop() ?? "";
+      
+      // Don't create R2 keys for generated category - they'll be created when actual file is available
+      if (category === 'generated') {
+        console.log("[r2-upload] Skipping R2 key creation for generated category - waiting for actual file");
+        return NextResponse.json({ 
+          error: "Generated files should not use r2-upload route directly",
+          message: "Use the callback flow for generated files"
+        }, { status: 400 });
+      }
+      
       key = `${finalCompanyId}/${category ?? "uploads"}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       
       console.log("[r2-upload] Direct upload path:", { 

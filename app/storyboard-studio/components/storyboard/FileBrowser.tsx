@@ -308,22 +308,9 @@ export function FileBrowser({
           filename: result.filename
         });
         
-        // Log upload to Convex database (matching ElementLibrary pattern)
-        await logUpload({
-          filename: result.filename,
-          fileType: result.fileType,
-          r2Key: result.r2Key,
-          size: result.size,
-          category: result.category,
-          mimeType: result.mimeType,
-          companyId: projectCompanyId || '', // Use same pattern as ElementLibrary
-          uploadedBy: userId || 'unknown',
-          status: 'ready',
-          tags: [],
-          categoryId: null, // FileBrowser uploads are not linked to specific elements
-        });
-        
-        console.log("[FileBrowser] Successfully logged upload to database");
+        // uploadToR2 already saves to database via API route
+        // No need to call logUpload again - this was causing double saves
+        console.log("[FileBrowser] File saved to database via uploadToR2");
       }
     } catch (err) {
       console.error("[FileBrowser] Upload failed:", err);
@@ -343,16 +330,34 @@ export function FileBrowser({
       fileId: file._id,
       r2Key: file.r2Key,
       fileIdLength: file._id?.length,
-      fileIdFormat: file._id?.match(/^[a-z0-9]{24,}$/) ? 'valid' : 'invalid'
+      fileIdFormat: file._id?.match(/^[a-z0-9]{24,}$/) ? 'valid' : 'invalid',
+      category: file.category,
+      status: file.status
     });
     
     setDeletingId(file._id);
     try {
-      await deleteFromR2({
-        r2Key:  file.r2Key,
-        fileId: file._id,
-      });
-      console.log('[FileBrowser] Successfully deleted file:', file.filename);
+      // Check if file has R2 storage - if not, just delete the database record
+      if (!file.r2Key) {
+        console.log('[FileBrowser] File has no R2 key, deleting only database record');
+        // For files without R2 storage (like uploads, generated files in progress, etc.)
+        // we should just delete the database record
+        const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+        const { api } = await import("@/convex/_generated/api");
+        
+        await convex.mutation(api.storyboard.storyboardFiles.remove, {
+          id: file._id
+        });
+        
+        console.log('[FileBrowser] Successfully deleted file from database only:', file.filename);
+      } else {
+        // File has R2 storage, delete both R2 and database record
+        await deleteFromR2({
+          r2Key: file.r2Key,
+          fileId: file._id,
+        });
+        console.log('[FileBrowser] Successfully deleted file from R2 and database:', file.filename);
+      }
     } catch (err) {
       console.error('[FileBrowser] Delete failed:', err);
       alert(err instanceof Error ? err.message : "Delete failed");

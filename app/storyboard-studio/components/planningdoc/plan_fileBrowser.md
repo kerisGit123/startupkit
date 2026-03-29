@@ -1,0 +1,275 @@
+# File Browser Implementation Plan
+## Storyboard Studio File Management
+
+> **Status**: ✅ **IMPLEMENTED**  
+> **Objective**: Create comprehensive file browser for managing uploaded files only
+
+---
+
+## 🎯 Overview
+
+File browser allows users to:
+- **Browse** uploaded files in project context
+- **Filter** by type, category, date
+- **Preview** images and videos
+- **Download** files
+- **Delete** files with credit tracking
+- **Search** file names and tags
+- **Upload** files to company storage
+
+> **Important**: File browser **only handles uploaded files**. Generated files without `r2Key` (KIE AI links) are **not displayed** and will show "No files found" when filtering for uploads.
+
+---
+
+## 🏗️ Architecture
+
+### **Data Flow**
+```
+File Browser UI → uploadToR2() → API Route → R2 Storage + Database
+                    ↓
+                 File Actions → Convex Mutations → R2 Operations
+                    ↓
+                 Credit Tracking → Update creditsUsed → Update UI
+```
+
+### **Key Components**
+- **FileBrowser.tsx** - Main browser component ✅ **IMPLEMENTED**
+- **FilePreview.tsx** - File preview modal (built into FileBrowser)
+- **FileFilters.tsx** - Filter and search controls (built into FileBrowser)
+- **FileActions.tsx** - Download/delete actions (built into FileBrowser)
+
+---
+
+## 📁 File Categories
+
+### **Category Types**
+```typescript
+export const FILE_CATEGORIES = {
+  uploads: {
+    label: "Uploaded Files",
+    icon: "📁",
+    description: "User uploaded images, videos, audio"
+  },
+  generated: {
+    label: "Generated Files", 
+    icon: "🎨",
+    description: "AI generated images and videos"
+  },
+  elements: {
+    label: "Elements",
+    icon: "🧩",
+    description: "Characters, props, logos"
+  },
+  storyboard: {
+    label: "Storyboard Assets",
+    icon: "📖",
+    description: "Storyboard-specific files"
+  },
+  videos: {
+    label: "Videos",
+    icon: "🎬",
+    description: "Generated video content"
+  }
+};
+```
+
+### **File Types**
+```typescript
+export const FILE_TYPES = {
+  image: {
+    extensions: ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
+    icon: "🖼️",
+    previewable: true
+  },
+  video: {
+    extensions: ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv', '.wmv'],
+    icon: "🎥",
+    previewable: true
+  },
+  audio: {
+    extensions: ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac'],
+    icon: "🎵",
+    previewable: false
+  },
+  document: {
+    extensions: ['.pdf', '.doc', '.docx', '.txt'],
+    icon: "📄",
+    previewable: false
+  }
+};
+```
+
+---
+
+## 🔍 Filter & Search System
+
+### **Filter Options**
+```typescript
+interface FileFilters {
+  category: string[];          // File categories (uploads, elements, etc.)
+  fileType: string[];          // Image, video, audio
+  dateRange: {
+    from: Date | null;
+    to: Date | null;
+  };
+  sizeRange: {
+    min: number | null;
+    max: number | null;
+  };
+  tags: string[];              // File tags
+  creditsUsed: {
+    hasCredits: boolean | null; // Filter by credit usage
+    minCredits: number | null;
+    maxCredits: number | null;
+  };
+  searchQuery: string;         // Text search in filename/tags
+  hasR2Key: boolean | null;    // Filter by files with R2 storage (uploaded files)
+}
+
+// Query Logic - Only show files with R2 storage (uploaded files)
+const useFilesQuery = (projectId: string, filters: FileFilters) => {
+  return useQuery(api.storyboard.storyboardFiles.listByProject, {
+    projectId,
+    filters: {
+      ...filters,
+      hasR2Key: true, // IMPORTANT: Only show files with R2 storage
+    }
+  });
+};
+
+// Thumbnail loading for uploaded files only
+  useEffect(() => {
+    if (file.r2Key && file.fileType === "image") {
+      setLoading(true);
+      const getThumbnail = async () => {
+        try {
+          const response = await fetch(`/api/storyboard/thumbnail/${file.r2Key}`);
+          const { url } = await response.json();
+          setThumbnailUrl(url);
+        } catch (error) {
+          console.error("Failed to get thumbnail:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      getThumbnail();
+    } else {
+      setLoading(false);
+    }
+  }, [file.r2Key, file.fileType]);
+  
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+      {/* Thumbnail/Icon */}
+      <div className="aspect-square bg-gray-100 flex items-center justify-center relative">
+        {loading ? (
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+        ) : file.fileType === "image" && thumbnailUrl ? (
+          <img 
+            src={thumbnailUrl} 
+            alt={file.filename}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="text-4xl">
+            {FILE_TYPES[file.fileType]?.icon || "📄"}
+          </div>
+        )}
+        
+        {/* Credits badge for generated files */}
+        {file.creditsUsed > 0 && (
+          <div className="absolute top-2 right-2 bg-emerald-600 text-white text-xs px-2 py-1 rounded">
+            {file.creditsUsed} credits
+          </div>
+        )}
+      </div>
+      
+      {/* File Info */}
+      <div className="p-3">
+        <div className="text-sm font-medium truncate" title={file.filename}>
+          {file.filename}
+        </div>
+        <div className="text-xs text-gray-500 mt-1">
+          {formatFileSize(file.size)}
+        </div>
+        <div className="text-xs text-gray-400">
+          {formatDate(file.createdAt)}
+        </div>
+        
+        {/* Tags */}
+        {file.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {file.tags.slice(0, 2).map((tag) => (
+              <span key={tag} className="text-xs bg-gray-100 px-2 py-1 rounded">
+                {tag}
+              </span>
+            ))}
+            {file.tags.length > 2 && (
+              <span className="text-xs text-gray-400">+{file.tags.length - 2}</span>
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Actions */}
+      <div className="p-3 pt-0 flex gap-2">
+        <button
+          onClick={onPreview}
+          className="flex-1 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded"
+        >
+          Preview
+        </button>
+        <button
+          onClick={onDownload}
+          className="flex-1 text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded"
+        >
+          Download
+        </button>
+        <button
+          onClick={onDelete}
+          className="flex-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## 🔧 Implementation Steps
+
+### Phase 1: Core Infrastructure
+1. **Convex queries** for file search and filtering
+2. **R2 signed URLs** for preview and download
+3. **File deletion** with credit preservation
+
+### Phase 2: UI Components
+1. **FileBrowser** main component
+2. **FileCard** grid item component
+3. **FileFilters** filter controls
+4. **FilePreview** modal components
+
+### Phase 3: Advanced Features
+1. **Thumbnail generation** for images/videos
+2. **Batch operations** (select multiple files)
+3. **File upload** integration
+4. **Credit usage** display and tracking
+
+---
+
+## 📈 Success Metrics
+
+- **Search performance** - Fast filtering and pagination
+- **Preview quality** - Quick image/video loading
+- **User experience** - Intuitive file management
+- **Credit tracking** - Accurate usage display
+- **Storage efficiency** - Proper cleanup integration
+
+---
+
+## 🔄 Status: Planning Phase
+⏳ **Next**: Implement Phase 1 (Core Infrastructure)
