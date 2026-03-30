@@ -1264,34 +1264,6 @@ export function EditImageAIPanel({
             </div>
           )}
 
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-1 bg-[#1a1a24] rounded-lg p-1 border border-white/10">
-            <button
-              onClick={() => onZoomChange?.(Math.max(25, (zoomLevel || 100) - 25))}
-              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <div className="min-w-[50px] text-center">
-              <span className="text-xs font-medium text-white">{(zoomLevel || 100)}%</span>
-            </div>
-            <button
-              onClick={() => onZoomChange?.(Math.min(200, (zoomLevel || 100) + 25))}
-              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => onZoomChange?.(100)}
-              className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-all"
-              title="Fit to Screen"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-          
           {/* Generate Button */}
           <button
             onClick={() => {
@@ -1306,13 +1278,19 @@ export function EditImageAIPanel({
                 console.log("[EditImageAIPanel] Generate not available in annotate mode");
               }
             }}
-            disabled={isGenerating || mode === "annotate"}
+            disabled={isGenerating || mode === "annotate" || !currentPrompt.trim()}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
-              mode === "annotate" 
+              mode === "annotate" || !currentPrompt.trim()
                 ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
                 : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
             }`}
-            title={mode === "annotate" ? "Generate not available in annotate mode. Use area-edit mode for AI generation." : undefined}
+            title={
+              mode === "annotate" 
+                ? "Generate not available in annotate mode. Use area-edit mode for AI generation."
+                : !currentPrompt.trim()
+                ? "Please enter a prompt to generate an image."
+                : undefined
+            }
           >
             {isGenerating ? (
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
