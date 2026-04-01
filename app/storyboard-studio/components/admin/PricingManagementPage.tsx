@@ -10,7 +10,7 @@ import {
   ChevronDown,
   MoreHorizontal
 } from "lucide-react";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import PricingManagementDark from "./PricingManagementDark";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
 
@@ -52,12 +52,26 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
 
           {/* User Button */}
           <div className="hidden items-center self-end md:flex lg:self-auto">
+            <OrganizationSwitcher
+              appearance={{
+                elements: {
+                  rootBox: "flex items-center",
+                  organizationSwitcherTrigger: "px-3 py-2 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-2 text-sm mr-3",
+                  organizationSwitcherTriggerIcon: "w-4 h-4",
+                  organizationSwitcherTriggerText: "font-medium text-white",
+                  organizationPreviewText: "text-white",
+                  organizationPreviewMainIdentifier: "text-white",
+                },
+              }}
+              afterSelectOrganizationUrl="/storyboard-studio/admin/pricing"
+              afterCreateOrganizationUrl="/storyboard-studio/admin/pricing"
+            />
             <UserButton
               appearance={{
                 elements: {
                   avatarBox: "w-8 h-8",
                   userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
-                  userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
+                  userButtonPopoverActionButton: "text-white hover:bg-white/5 hover:text-gray-200",
                   userButtonPopoverActionButtonText: "text-sm",
                   userButtonPopoverFooter: "border-t border-(--border-primary)",
                 },
@@ -68,12 +82,24 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
 
           {/* Mobile menu */}
           <div className="flex items-center md:hidden">
+            <OrganizationSwitcher
+              appearance={{
+                elements: {
+                  rootBox: "flex items-center",
+                  organizationSwitcherTrigger: "px-2 py-1.5 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-1.5 text-xs",
+                  organizationSwitcherTriggerIcon: "w-3.5 h-3.5",
+                  organizationSwitcherTriggerText: "font-medium text-xs text-white",
+                },
+              }}
+              afterSelectOrganizationUrl="/storyboard-studio/admin/pricing"
+              afterCreateOrganizationUrl="/storyboard-studio/admin/pricing"
+            />
             <UserButton
               appearance={{
                 elements: {
                   avatarBox: "w-8 h-8",
                   userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
-                  userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
+                  userButtonPopoverActionButton: "text-white hover:bg-white/5 hover:text-gray-200",
                   userButtonPopoverActionButtonText: "text-sm",
                   userButtonPopoverFooter: "border-t border-(--border-primary)",
                 },

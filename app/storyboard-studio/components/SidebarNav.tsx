@@ -5,7 +5,7 @@ import Link from "next/link";
 import {
   Film, FolderOpen, Users, Star, Clock, Tag, Check,
   ChevronDown, ChevronUp, Sparkles, BarChart2, LayoutGrid, Settings,
-  LogOut, DollarSign,
+  LogOut, DollarSign, CreditCard, Trash2,
 } from "lucide-react";
 import type { Project } from "../types";
 import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
@@ -33,6 +33,8 @@ const ORGANIZE_ITEMS = [
 const UNIVERSE_NAV_ITEMS = [
   { key: "asset-generator", icon: Sparkles, label: "Element Generator"  },
   { key: "price-management", icon: DollarSign, label: "Price Management" },
+  { key: "billing", icon: CreditCard, label: "Billing & Subscription" },
+  { key: "cleaning", icon: Trash2, label: "Cleaning" },
 ];
 
 const EXTERNAL_LINK_ITEMS = [
@@ -60,7 +62,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
       key={key}
       onClick={() => handleNavChange(key)}
       className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all duration-200 ${
-        activeNav === key ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)"
+        activeNav === key ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-white hover:text-gray-200 hover:bg-(--bg-tertiary)"
       }`}
     >
       <Icon className="w-4 h-4 shrink-0" />
@@ -100,20 +102,20 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
         {TOP_ITEMS.map(item => navBtn(item.key, item.icon, item.label))}
         {/* Organize section */}
         <div className="pt-3 pb-1 px-3">
-          <span className="text-[10px] text-(--text-tertiary) uppercase tracking-widest font-semibold">Organize</span>
+          <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">Organize</span>
         </div>
 
         {ORGANIZE_ITEMS.map(item => (
           <div key={item.key}>
             <button
               onClick={() => toggle(item.key)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary) transition-all duration-200 whitespace-nowrap"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-white hover:text-gray-200 hover:bg-(--bg-tertiary) transition-all duration-200 whitespace-nowrap"
             >
               <item.icon className="w-4 h-4 shrink-0" />
               <span className="flex-1 text-left">{item.label}</span>
               {expanded[item.key]
-                ? <ChevronUp className="w-3 h-3 text-(--text-tertiary)" />
-                : <ChevronDown className="w-3 h-3 text-(--text-tertiary)" />}
+                ? <ChevronUp className="w-3 h-3 text-gray-400" />
+                : <ChevronDown className="w-3 h-3 text-gray-400" />}
             </button>
             {expanded[item.key] && (
               <div className="ml-9 py-1">
@@ -134,7 +136,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
                             }
                           }}
                           className={`w-full text-left px-2 py-1 rounded-xl text-xs transition-all duration-200 ${
-                            activeNav === `tag:${tag}` ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)"
+                            activeNav === `tag:${tag}` ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-gray-300 hover:text-white hover:bg-(--bg-tertiary)"
                           }`}
                         >
                           <Tag className="w-2.5 h-2.5 inline mr-1.5 text-(--accent-purple)" />
@@ -146,7 +148,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
                       const allTags = new Set<string>();
                       projects.forEach(p => p.tags.forEach(t => allTags.add(t)));
                       return allTags.size === 0 && (
-                        <div className="text-xs text-(--text-tertiary)">No tags yet</div>
+                        <div className="text-xs text-gray-400">No tags yet</div>
                       );
                     })()}
                   </>
@@ -165,14 +167,14 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
                           }
                         }}
                         className={`w-full text-left px-2 py-1 rounded-xl text-xs transition-all duration-200 ${
-                          activeNav === `project:${p.id}` ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)"
+                          activeNav === `project:${p.id}` ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-gray-300 hover:text-white hover:bg-(--bg-tertiary)"
                         }`}
                       >
                         {p.name}
                       </button>
                     ))}
                     {projects.length === 0 && (
-                      <div className="text-xs text-(--text-tertiary)">No recent items</div>
+                      <div className="text-xs text-gray-400">No recent items</div>
                     )}
                   </>
                 )}
@@ -183,7 +185,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
 
         {/* Assets section */}
         <div className="pt-3 pb-1 px-3">
-          <span className="text-[10px] text-(--text-tertiary) uppercase tracking-widest font-semibold">Assets</span>
+          <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">Assets</span>
         </div>
 
         {UNIVERSE_NAV_ITEMS.map(item => navBtn(item.key, item.icon, item.label))}
@@ -196,7 +198,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
           <button
             onClick={() => handleNavChange("projects")}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all duration-200 ${
-              activeNav === "projects" ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)"
+              activeNav === "projects" ? "bg-(--accent-purple) text-(--text-primary) shadow-sm" : "text-white hover:text-gray-200 hover:bg-(--bg-tertiary)"
             }`}
           >
             <LogOut className="w-4 h-4 shrink-0" />
@@ -210,7 +212,7 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
                 setSidebarOpen(false);
               }
             }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all duration-200 text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all duration-200 text-white hover:text-gray-200 hover:bg-(--bg-tertiary)"
           >
             <Settings className="w-4 h-4 shrink-0" />
             Setting

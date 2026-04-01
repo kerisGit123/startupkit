@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 export const create = mutation({
   args: {
@@ -98,5 +99,58 @@ export const incrementUsage = mutation({
     });
 
     return args.id;
+  },
+});
+
+export const resetDefaults = mutation({
+  args: {
+    companyId: v.string(),
+    prompts: v.array(
+      v.object({
+        name: v.string(),
+        type: v.union(
+          v.literal("character"),
+          v.literal("environment"),
+          v.literal("prop"),
+          v.literal("style"),
+          v.literal("custom")
+        ),
+        prompt: v.string(),
+        isPublic: v.boolean(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const promptNames = new Set(args.prompts.map((prompt) => prompt.name));
+    const companyTemplates = await ctx.db
+      .query("promptTemplates")
+      .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
+      .collect();
+
+    for (const template of companyTemplates) {
+      if (promptNames.has(template.name)) {
+        await ctx.db.delete(template._id);
+      }
+    }
+
+    const createdIds: Id<"promptTemplates">[] = [];
+
+    for (const prompt of args.prompts) {
+      const templateId = await ctx.db.insert("promptTemplates", {
+        name: prompt.name,
+        type: prompt.type,
+        prompt: prompt.prompt,
+        companyId: args.companyId,
+        isPublic: prompt.isPublic,
+        usageCount: 0,
+        createdAt: Date.now(),
+      });
+      createdIds.push(templateId);
+    }
+
+    return createdIds;
   },
 });

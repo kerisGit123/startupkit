@@ -5,7 +5,7 @@ export const logUpload = mutation({
   args: {
     companyId: v.optional(v.string()), // Accept companyId from caller (optional to match schema)
     orgId: v.optional(v.string()),
-    userId: v.optional(v.string()),
+    userId: v.optional(v.string()), // Make userId optional - companyId should be sufficient
     projectId: v.optional(v.id("storyboard_projects")),
     r2Key: v.optional(v.string()), // Optional for AI files
     filename: v.string(),
@@ -14,7 +14,7 @@ export const logUpload = mutation({
     size: v.number(),
     category: v.string(),
     tags: v.array(v.string()),
-    uploadedBy: v.string(),
+    uploadedBy: v.optional(v.string()), // Make uploadedBy optional too
     status: v.string(),
     categoryId: v.optional(v.union(
       v.id("storyboard_elements"),     // Parent element ID
@@ -27,6 +27,7 @@ export const logUpload = mutation({
     creditsUsed: v.optional(v.number()),   // Credits consumed for this file
     taskId: v.optional(v.string()),       // KIE AI task ID (only for category="generated")
     sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
+    metadata: v.optional(v.any()),         // Generation metadata for compositing
   },
   handler: async (ctx, args) => {
     // Since we're calling from API route with auth, we can work without auth context
@@ -46,9 +47,9 @@ export const logUpload = mutation({
       throw new Error("Company ID is required");
     }
     
+    // userId is now optional - log if missing but don't throw error
     if (!userId) {
-      console.error('[logUpload] No userId provided');
-      throw new Error("User ID is required");
+      console.warn('[logUpload] No userId provided, but continuing with companyId:', companyId);
     }
     
     console.log('[logUpload] Using provided companyId:', companyId);
@@ -56,7 +57,7 @@ export const logUpload = mutation({
     const insertData: any = {
       ...restArgs,
       companyId: companyId, // Use provided companyId exactly as provided
-      userId: userId, // Use provided userId exactly as provided
+      userId: userId || companyId, // Use userId or fallback to companyId
       uploadedAt: Date.now(),
       createdAt: Date.now(),
       isFavorite: false, // Default to not favorited
@@ -67,6 +68,7 @@ export const logUpload = mutation({
       // Include new fields if provided
       creditsUsed: restArgs.creditsUsed,
       sourceUrl: restArgs.sourceUrl,
+      metadata: restArgs.metadata,
     };
     
     // Remove undefined values to satisfy schema
@@ -134,8 +136,9 @@ export const update = mutation({
   args: { 
     id: v.id("storyboard_files"),
     category: v.optional(v.string()),
+    status: v.optional(v.string()),
   },
-  handler: async (ctx, { id, category }) => {
+  handler: async (ctx, { id, category, status }) => {
     const file = await ctx.db.get(id);
     if (!file) {
       throw new Error("File not found");
@@ -144,6 +147,9 @@ export const update = mutation({
     const updateData: any = {};
     if (category !== undefined) {
       updateData.category = category;
+    }
+    if (status !== undefined) {
+      updateData.status = status;
     }
     
     await ctx.db.patch(id, updateData);
@@ -269,7 +275,7 @@ export const listByOrg = query({
   handler: async (ctx, { orgId }) => {
     return await ctx.db
       .query("storyboard_files")
-      .withIndex("by_org", (q) => q.eq("orgId", orgId))
+      .filter((q) => q.eq(q.field("orgId"), orgId))
       .order("desc")
       .collect();
   },
@@ -280,7 +286,7 @@ export const listByUser = query({
   handler: async (ctx, { userId }) => {
     return await ctx.db
       .query("storyboard_files")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .filter((q) => q.eq(q.field("userId"), userId))
       .order("desc")
       .collect();
   },
@@ -345,8 +351,10 @@ export const updateFromCallback = mutation({
     taskId: v.optional(v.string()),
     status: v.string(),
     r2Key: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    size: v.optional(v.number()), // Add size field for file size in bytes
   },
-  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key }) => {
+  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size }) => {
     const updateData: any = { status };
     
     if (sourceUrl) {
@@ -360,9 +368,17 @@ export const updateFromCallback = mutation({
     if (r2Key) {
       updateData.r2Key = r2Key;
     }
+
+    if (metadata !== undefined) {
+      updateData.metadata = metadata;
+    }
+    
+    if (size !== undefined) {
+      updateData.size = size;
+    }
     
     await ctx.db.patch(fileId, updateData);
-    console.log('[updateFromCallback] Updated file:', { fileId, status, hasSourceUrl: !!sourceUrl, hasR2Key: !!r2Key });
+    console.log('[updateFromCallback] Updated file:', { fileId, status, hasSourceUrl: !!sourceUrl, hasR2Key: !!r2Key, hasMetadata: metadata !== undefined, hasSize: size !== undefined });
     return { success: true };
   },
 });

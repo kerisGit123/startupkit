@@ -68,6 +68,44 @@ export const addCredits = mutation({
   },
 });
 
+export const refundCredits = mutation({
+  args: {
+    companyId: v.string(),
+    tokens: v.number(),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    await ctx.db.insert("credits_ledger", {
+      companyId: args.companyId,
+      tokens: args.tokens,
+      reason: args.reason,
+      createdAt: now,
+    });
+
+    const balance = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .first();
+
+    if (balance) {
+      await ctx.db.patch(balance._id, {
+        balance: balance.balance + args.tokens,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.insert("credits_balance", {
+        companyId: args.companyId,
+        balance: args.tokens,
+        updatedAt: now,
+      });
+    }
+
+    return true;
+  },
+});
+
 export const deductCredits = mutation({
   args: {
     companyId: v.string(),
@@ -111,6 +149,20 @@ export const getBalance = query({
       .first();
     
     return balance?.balance ?? 0;
+  },
+});
+
+export const getCompanyBalance = query({
+  args: { companyId: v.string() },
+  handler: async (ctx, { companyId }) => {
+    const balance = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .first();
+
+    return {
+      balance: balance?.balance ?? 0,
+    };
   },
 });
 

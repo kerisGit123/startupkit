@@ -1,4 +1,4 @@
-export type Step = "dashboard" | "script" | "breakdown" | "style" | "cast" | "storyboard" | "scene-editor" | "element-generator" | "image-maker" | "members" | "usage";
+export type Step = "dashboard" | "script" | "breakdown" | "style" | "cast" | "storyboard" | "scene-editor" | "element-generator" | "image-maker" | "members" | "usage" | "price-management" | "billing" | "cleaning";
 
 export interface Project {
   id: string;
@@ -41,6 +41,8 @@ export interface Shot {
   action: string;
   imageUrl?: string;
   videoUrl?: string;
+  imagePrompt?: string; // NEW: Image generation prompt
+  videoPrompt?: string; // NEW: Video generation prompt
   tags: Tag[];
   notes: string;
   comments: CommentItem[];

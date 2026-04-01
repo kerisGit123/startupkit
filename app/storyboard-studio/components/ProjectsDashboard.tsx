@@ -7,7 +7,7 @@ import {
   PanelLeftClose, PanelLeftOpen, List, Share2, Pencil, Eye, Copy,
   Trash2, Tag, Hash, Grid3x3, Table2, Edit3, ChevronRight, Loader2, FolderOpen, X,
 } from "lucide-react";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import { VISUAL_STYLES, SIMPLE_TAGS, TAG_COLORS } from "../constants";
 import type { Project, Step } from "../types";
 import { TagEditor } from "./storyboard/TagEditor";
@@ -303,12 +303,24 @@ export function ProjectsDashboard({
               <MoreHorizontal className="hidden w-4 h-4 shrink-0 cursor-pointer text-gray-500 transition hover:text-white md:block" />
             </div>
             <div className="flex items-center md:hidden">
+              <OrganizationSwitcher
+                appearance={{
+                  elements: {
+                    rootBox: "flex items-center",
+                    organizationSwitcherTrigger: "px-2 py-1.5 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-1.5 text-xs",
+                    organizationSwitcherTriggerIcon: "w-3.5 h-3.5",
+                    organizationSwitcherTriggerText: "font-medium text-xs text-white",
+                  },
+                }}
+                afterSelectOrganizationUrl="/storyboard-studio"
+                afterCreateOrganizationUrl="/storyboard-studio"
+              />
               <UserButton
                 appearance={{
                   elements: {
                     avatarBox: "w-8 h-8",
                     userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
-                    userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
+                    userButtonPopoverActionButton: "text-white hover:bg-white/5 hover:text-gray-200",
                     userButtonPopoverActionButtonText: "text-sm",
                     userButtonPopoverFooter: "border-t border-(--border-primary)",
                   },
@@ -373,12 +385,26 @@ export function ProjectsDashboard({
                 <Settings className="w-4 h-4" />
               </button>
               <div className="hidden items-center self-end md:flex lg:self-auto">
+                <OrganizationSwitcher
+                  appearance={{
+                    elements: {
+                      rootBox: "flex items-center",
+                      organizationSwitcherTrigger: "px-3 py-2 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-2 text-sm mr-3",
+                      organizationSwitcherTriggerIcon: "w-4 h-4",
+                      organizationSwitcherTriggerText: "font-medium text-white",
+                      organizationPreviewText: "text-white",
+                      organizationPreviewMainIdentifier: "text-white",
+                    },
+                  }}
+                  afterSelectOrganizationUrl="/storyboard-studio"
+                  afterCreateOrganizationUrl="/storyboard-studio"
+                />
                 <UserButton
                   appearance={{
                     elements: {
                       avatarBox: "w-8 h-8",
                       userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
-                      userButtonPopoverActionButton: "text-gray-300 hover:bg-white/5 hover:text-white",
+                      userButtonPopoverActionButton: "text-white hover:bg-white/5 hover:text-gray-200",
                       userButtonPopoverActionButtonText: "text-sm",
                       userButtonPopoverFooter: "border-t border-white/10",
                     },

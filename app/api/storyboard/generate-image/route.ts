@@ -26,8 +26,26 @@ export async function POST(req: NextRequest) {
       imageUrl,     // NEW - canvas image URL for character-edit models
       referenceImageUrls, // NEW - reference images for character-edit models
       maskUrl,       // NEW - mask URL for character-edit models
-      existingFileId  // NEW - existing file ID to update instead of creating new
+      existingFileId,  // NEW - existing file ID to update instead of creating new
+      cropX,          // NEW - crop X coordinate
+      cropY,          // NEW - crop Y coordinate
+      cropWidth,      // NEW - crop width
+      cropHeight,     // NEW - crop height
+      originalImageUrl, // NEW - original image URL for compositing
+      outputFormat    // NEW - output format from VideoImageAIPanel
     } = await req.json();
+
+    console.log('[generate-image] API route received parameters:', {
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      originalImageUrl,
+      imageUrl,
+      referenceImageUrls,
+      maskUrl,
+      existingFileId
+    });
 
     if (!prompt) {
       return NextResponse.json({ error: "sceneContent required" }, { status: 400 });
@@ -37,9 +55,7 @@ export async function POST(req: NextRequest) {
     const basePrompt = enhance !== false
       ? await enhancePromptForImage(prompt, null, style ?? "realistic")
       : prompt;
-    const finalPrompt = null
-      ? `${null}. ${basePrompt}`
-      : basePrompt;
+    const finalPrompt = basePrompt;
 
     console.log('[generate-image] API route called with:', {
       finalPrompt,
@@ -55,7 +71,12 @@ export async function POST(req: NextRequest) {
       imageUrl,
       maskUrl,
       referenceImageUrls,
-      existingFileId
+      existingFileId,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      originalImageUrl
     });
 
     const result = await triggerImageGeneration({
@@ -72,7 +93,13 @@ export async function POST(req: NextRequest) {
       imageUrl, // NEW - pass canvas image URL for character-edit models
       referenceImageUrls, // NEW - pass reference images for character-edit models
       maskUrl, // NEW - pass mask URL for character-edit models
-      existingFileId // NEW - pass existing file ID to update instead of creating new
+      existingFileId, // NEW - pass existing file ID to update instead of creating new
+      cropX,          // NEW - pass crop X coordinate
+      cropY,          // NEW - pass crop Y coordinate
+      cropWidth,      // NEW - pass crop width
+      cropHeight,     // NEW - pass crop height
+      originalImageUrl, // NEW - pass original image URL for compositing
+      outputFormat    // NEW - pass output format from VideoImageAIPanel
     });
 
     console.log('[generate-image] triggerImageGeneration result:', result);

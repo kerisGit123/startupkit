@@ -20,9 +20,18 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("POST request received with body:", body);
+    
     if (body?.action === "resetDefaults") {
-      const result = await convex.mutation(api.storyboard.pricing.resetToDefaults, {});
-      return NextResponse.json(result);
+      console.log("Attempting to reset to defaults...");
+      try {
+        const result = await convex.mutation(api.storyboard.pricing.resetToDefaults, {});
+        console.log("Reset successful:", result);
+        return NextResponse.json(result);
+      } catch (convexError) {
+        console.error("Convex mutation failed:", convexError);
+        throw convexError;
+      }
     }
 
     const result = await convex.mutation(api.storyboard.pricing.createPricingModel, {
@@ -33,6 +42,7 @@ export async function POST(req: NextRequest) {
       creditCost: body.creditCost,
       factor: body.factor,
       formulaJson: body.formulaJson,
+      assignedFunction: body.assignedFunction,
     });
 
     return NextResponse.json(result);

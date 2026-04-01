@@ -51,57 +51,112 @@ async function createPlaceholderRecord(params: {
 export const STYLE_PRESETS = {
   realistic: {
     label: "Photorealistic",
-    model: "kie-image-pro-v2",
-    promptSuffix: "professional photography, cinematic lighting, high detail, 4K",
+    model: "gpt-image/1.5-image-to-image",
+    promptSuffix: "professional photography, cinematic lighting, high detail",
   },
   cartoon: {
     label: "Cartoon",
-    model: "kie-image-v2",
+    model: "gpt-image/1.5-image-to-image",
     promptSuffix: "colorful cartoon style, bold outlines, vibrant colors",
   },
   anime: {
     label: "Anime",
-    model: "kie-image-v2",
+    model: "gpt-image/1.5-image-to-image",
     promptSuffix: "anime style, clean lines, expressive eyes, vibrant palette",
   },
   cinematic: {
     label: "Cinematic",
-    model: "kie-image-pro-v2",
+    model: "gpt-image/1.5-image-to-image",
     promptSuffix: "cinematic film still, dramatic lighting, shallow depth of field, moody atmosphere",
   },
 } as const;
 
 export type ImageStyle = keyof typeof STYLE_PRESETS;
-export type ImageQuality = "standard" | "high";
+export type ImageQuality = "standard" | "high" | "medium" | "1K" | "2K" | "4K";
 
-export const IMAGE_CREDITS: Record<ImageQuality, number> = {
+export const IMAGE_CREDITS: Partial<Record<ImageQuality, number>> = {
   standard: 5,
   high: 10,
+  medium: 8,
+  "1K": 5,
+  "2K": 10,
+  "4K": 15,
 };
 
-export async function triggerImageGeneration(params: {
+export interface TriggerImageGenerationParams {
   prompt: string;
-  style: ImageStyle;
-  aspectRatio: string;
-  quality: ImageQuality;
-  callbackUrl?: string;
+  style?: ImageStyle;
+  aspectRatio?: string;
+  quality?: ImageQuality;
   companyId?: string;
   userId?: string;
   projectId?: string;
   categoryId?: string;
-  creditsUsed?: number; // Add actual credit amount from AI panel
-  model?: string; // Add actual model from EditImageAIPanel
-  imageUrl?: string; // Add current canvas image URL for character-edit models
-  referenceImageUrls?: string[]; // Add reference images for character-edit models
-  maskUrl?: string; // Add mask URL for character-edit inpainting
-  existingFileId?: string; // Add existing file ID to update instead of creating new
-}) {
+  creditsUsed?: number;
+  model?: string;
+  imageUrl?: string;
+  referenceImageUrls?: string[];
+  maskUrl?: string;
+  existingFileId?: string;
+  cropX?: number;
+  cropY?: number;
+  cropWidth?: number;
+  cropHeight?: number;
+  originalImageUrl?: string;
+  outputFormat?: string;
+}
+
+export async function triggerImageGeneration(params: TriggerImageGenerationParams) {
+  console.log('[triggerImageGeneration] Called with params:', {
+    ...params,
+    cropX: params.cropX,
+    cropY: params.cropY,
+    cropWidth: params.cropWidth,
+    cropHeight: params.cropHeight,
+    originalImageUrl: params.originalImageUrl,
+    shouldComposite: !!params.originalImageUrl && 
+                    params.cropX !== undefined && 
+                    params.cropY !== undefined && 
+                    params.cropWidth !== undefined && 
+                    params.cropHeight !== undefined
+  });
+
   // Use the provided model or fall back to STYLE_PRESETS
   const actualModel = params.model || STYLE_PRESETS[params.style]?.model;
   const { promptSuffix } = STYLE_PRESETS[params.style];
   const fullPrompt = `${params.prompt}, ${promptSuffix}`;
   
-  console.log('[triggerImageGeneration] Using model:', actualModel, 'instead of STYLE_PRESETS');
+  // Convert pricing model ID to KIE AI model name
+  let kieModel = actualModel;
+  if (actualModel === 'gpt-image') {
+    kieModel = 'gpt-image/1.5-image-to-image';
+  }
+  
+  console.log('[triggerImageGeneration] Model details:', {
+    providedModel: params.model,
+    style: params.style,
+    actualModel,
+    kieModel,
+    fullPrompt: fullPrompt.substring(0, 100) + '...'
+  });
+  const resolution = actualModel === 'nano-banana-2'
+    ? (params.quality === "1K" || params.quality === "2K" || params.quality === "4K"
+        ? params.quality
+        : "1K") // Default to 1K for nano-banana-2
+    : (params.quality === "1K" || params.quality === "2K" || params.quality === "4K"
+        ? params.quality
+        : params.quality === "high"
+          ? "2K"
+          : "1K");
+  const defaultQuality = params.quality === "high" ? "high" : "standard";
+  const isImageToImageModel = !!params.imageUrl;
+  
+  console.log('[triggerImageGeneration] Model details:', {
+    providedModel: params.model,
+    style: params.style,
+    actualModel,
+    fullPrompt: fullPrompt.substring(0, 100) + '...'
+  });
   console.log('[triggerImageGeneration] Image URLs:', { 
     imageUrl: params.imageUrl?.substring(0, 50) + '...', 
     maskUrl: params.maskUrl?.substring(0, 50) + '...',
@@ -122,34 +177,13 @@ export async function triggerImageGeneration(params: {
   // Initialize Convex client for server-side operations
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
   const { api } = await import("../../convex/_generated/api");
-  
-  // First create the file record
-  const createdFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
-    companyId: params.companyId,
-    userId: params.userId,
-    projectId: params.projectId, // Project ID is correct for generated files
-    categoryId: params.categoryId, // This links to the storyboard shot
-    creditsUsed: params.creditsUsed || IMAGE_CREDITS[params.quality],
-    // sourceUrl omitted - will be set when KIE AI returns the actual file
-    // r2Key omitted - will be set when actual file is downloaded (not for generated category)
-    category: "generated",
-    status: "processing",
-    // taskId omitted temporarily due to schema mismatch - will be set via updateFromCallback
-    // Add required fields for logUpload
-    filename: `ai-generated-${Date.now()}.png`,
-    fileType: "image",
-    mimeType: "image/png",
-    size: 0, // Will be updated when actual file is downloaded
-    tags: [],
-    uploadedBy: params.userId
-    // uploadedAt, createdAt and isFavorite are handled automatically by the logUpload function
-  });
-  
-  // Step 2: Check if company has sufficient credits before proceeding
-  if (params.companyId && params.creditsUsed) {
+  const requiredCredits = params.creditsUsed || IMAGE_CREDITS[params.quality] || IMAGE_CREDITS.standard || 5;
+
+  // Step 1: Check if company has sufficient credits before proceeding
+  if (params.companyId && requiredCredits) {
     console.log('[triggerImageGeneration] Checking credit balance:', {
       companyId: params.companyId,
-      creditsUsed: params.creditsUsed
+      creditsUsed: requiredCredits
     });
     
     // Get current company credit balance
@@ -157,34 +191,66 @@ export async function triggerImageGeneration(params: {
       companyId: params.companyId
     });
     
-    console.log('[triggerImageGeneration] Current balance:', currentBalance, 'Credits needed:', params.creditsUsed);
+    console.log('[triggerImageGeneration] Current balance:', currentBalance, 'Credits needed:', requiredCredits);
     
-    if (currentBalance < params.creditsUsed) {
+    if (currentBalance < requiredCredits) {
       console.warn('[triggerImageGeneration] Insufficient credits:', {
         currentBalance,
-        creditsNeeded: params.creditsUsed,
-        shortfall: params.creditsUsed - currentBalance
+        creditsNeeded: requiredCredits,
+        shortfall: requiredCredits - currentBalance
       });
       
-      throw new Error(`Insufficient credits. You have ${currentBalance} credits but need ${params.creditsUsed} credits. Please purchase more credits to continue.`);
+      throw new Error(`Insufficient credits. You have ${currentBalance} credits but need ${requiredCredits} credits. Please purchase more credits to continue.`);
     }
     
     console.log('[triggerImageGeneration] Sufficient credits available, proceeding with generation');
   } else {
     console.warn('[triggerImageGeneration] Missing companyId or creditsUsed, cannot check balance');
   }
+
+  // Step 2: Create placeholder record
+  const createdFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
+    companyId: params.companyId,
+    userId: params.userId,
+    projectId: params.projectId,
+    categoryId: params.categoryId,
+    creditsUsed: requiredCredits,
+    category: "generated",
+    status: "generating",
+    filename: `ai-generated-${Date.now()}.${params.outputFormat || 'png'}`,
+    fileType: "image",
+    mimeType: `image/${params.outputFormat || 'png'}`,
+    size: 0,
+    tags: [],
+    uploadedBy: params.userId,
+    metadata: {
+      model: actualModel,
+      style: params.style,
+      quality: params.quality,
+      aspectRatio: params.aspectRatio,
+      originalImageUrl: params.originalImageUrl,
+      maskUrl: params.maskUrl,
+      referenceImageUrls: params.referenceImageUrls || [],
+      outputFormat: params.outputFormat,
+      // Store crop info for server-side compositing in kie-callback
+      cropX: params.cropX,
+      cropY: params.cropY,
+      cropWidth: params.cropWidth,
+      cropHeight: params.cropHeight,
+    },
+  });
   
   // Step 3: Deduct credits from COMPANY credit balance
-  if (params.companyId && params.creditsUsed) {
+  if (params.companyId && requiredCredits) {
     console.log('[triggerImageGeneration] Deducting credits:', {
       companyId: params.companyId,
-      creditsUsed: params.creditsUsed,
+      creditsUsed: requiredCredits,
       reason: `AI Image Generation - ${params.categoryId || 'General'}`
     });
     
     await convex.mutation(api.credits.deductCredits, {
       companyId: params.companyId,
-      tokens: params.creditsUsed,
+      tokens: requiredCredits,
       reason: `AI Image Generation - ${params.categoryId || 'General'}`,
     });
     
@@ -205,40 +271,133 @@ export async function triggerImageGeneration(params: {
   const callbackUrl = params.callbackUrl ?? `${baseUrl}/api/kie-callback?fileId=${createdFileId}`;
   console.log('[triggerImageGeneration] Using callback URL:', callbackUrl);
   
-  const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.KIE_AI_API_KEY}`,
+  // Debug: Log the exact request being sent to KIE AI
+  const requestBody = {
+    model: kieModel,
+    callBackUrl: callbackUrl,
+    input: actualModel === 'ideogram/character-edit' ? {
+      prompt: fullPrompt,
+      image_url: params.imageUrl,
+      mask_url: params.maskUrl,
+      reference_image_urls: params.referenceImageUrls || [],
+      rendering_speed: "BALANCED",
+      style: "AUTO",
+      expand_prompt: true,
+      num_images: "1"
+    } : actualModel === 'nano-banana-2' ? {
+      prompt: fullPrompt,
+      image_input: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      aspect_ratio: params.aspectRatio || 'auto',
+      google_search: false,
+      resolution,
+      output_format: 'jpg'
+    } : actualModel === 'nano-banana-pro' ? {
+      prompt: fullPrompt,
+      image_input: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      aspect_ratio: params.aspectRatio || '1:1',
+      resolution,
+      output_format: 'png'
+    } : actualModel === 'google/nano-banana-edit' ? {
+      prompt: fullPrompt,
+      image_urls: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      output_format: 'png',
+      image_size: '1:1'
+    } : actualModel === 'topaz/image-upscale' ? {
+      prompt: fullPrompt,
+      image_url: params.originalImageUrl || params.imageUrl,
+      upscale_factor: params.quality || "1"
+    } : actualModel === 'recraft/crisp-upscale' ? {
+      prompt: fullPrompt,
+      image: params.originalImageUrl || params.imageUrl
+    } : actualModel === 'gpt-image' ? {
+      prompt: fullPrompt,
+      input_urls: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      aspect_ratio: "1:1",
+      quality: params.quality || "high"
+    } : actualModel?.startsWith('gpt-image') ? {
+      prompt: fullPrompt,
+      input_urls: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      aspect_ratio: "1:1",
+      quality: params.quality || "high"
+    } : isImageToImageModel ? {
+      prompt: fullPrompt,
+      image_input: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      aspect_ratio: params.aspectRatio,
+      resolution,
+    } : {
+      prompt: fullPrompt,
+      aspect_ratio: params.aspectRatio,
+      quality: defaultQuality,
+      image_url: params.imageUrl,
+      reference_image_urls: params.referenceImageUrls || [],
     },
-    body: JSON.stringify({
-      model: actualModel, // Use the actual model
-      callBackUrl: callbackUrl,
-      input: actualModel === 'ideogram/character-edit' ? {
-        prompt: fullPrompt,
-        image_url: params.imageUrl,
-        mask_url: params.maskUrl,
-        reference_image_urls: params.referenceImageUrls || [],
-        rendering_speed: "BALANCED",
-        style: "AUTO",
-        expand_prompt: true,
-        num_images: "1"
-      } : {
-        prompt: fullPrompt,
-        aspect_ratio: params.aspectRatio,
-        quality: params.quality,
+  };
+  
+  console.log('[triggerImageGeneration] Sending to KIE AI:', JSON.stringify(requestBody, null, 2));
+
+  let res: Response;
+
+  try {
+    res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.KIE_AI_API_KEY}`,
       },
-    }),
-  });
+      body: JSON.stringify(requestBody),
+    });
+  } catch (error) {
+    if (params.companyId && requiredCredits) {
+      await convex.mutation(api.credits.refundCredits, {
+        companyId: params.companyId,
+        tokens: requiredCredits,
+        reason: `AI Image Generation Request Failed - ${params.categoryId || 'General'}`,
+      });
+    }
+
+    await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+      fileId: createdFileId,
+      status: 'failed',
+    });
+
+    throw error;
+  }
 
   if (!res.ok) {
+    if (params.companyId && requiredCredits) {
+      await convex.mutation(api.credits.refundCredits, {
+        companyId: params.companyId,
+        tokens: requiredCredits,
+        reason: `AI Image Generation Failed to Start - ${params.categoryId || 'General'}`,
+      });
+    }
+
+    await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+      fileId: createdFileId,
+      status: 'failed',
+    });
+
     throw new Error(`Failed to create KIE AI task: ${res.statusText}`);
   }
 
   const data = await res.json();
-  const taskId = data.data?.taskId || data.data?.recordId;
+  console.log('[triggerImageGeneration] Raw KIE AI response:', JSON.stringify(data, null, 2));
+  
+  // Check if there's an error in the response
+  if (data.code && data.code !== 200) {
+    console.error('[triggerImageGeneration] KIE AI returned error:', { code: data.code, msg: data.msg });
+    throw new Error(`KIE AI Error (${data.code}): ${data.msg}`);
+  }
+  
+  // Extract taskId from various possible locations
+  const taskId = data.data?.taskId || data.data?.recordId || data.taskId || data.recordId || data.data?.id;
+  
+  console.log('[triggerImageGeneration] Extracted taskId:', taskId);
+  console.log('[triggerImageGeneration] data field contents:', JSON.stringify(data.data, null, 2));
   
   if (!taskId) {
+    console.error('[triggerImageGeneration] No taskId found in response. Available fields:', Object.keys(data));
+    console.error('[triggerImageGeneration] Full data structure:', JSON.stringify(data, null, 2));
     throw new Error("No taskId received from KIE AI");
   }
 

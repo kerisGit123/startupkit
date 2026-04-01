@@ -45,6 +45,16 @@ export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled
           const formula = JSON.parse(model.formulaJson);
           
           switch (model.assignedFunction) {
+            case 'getGptImagePrice':
+              if (requiresQuality) {
+                const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === quality);
+                if (qualityData) {
+                  const factor = model.factor || 1;
+                  calculatedCost = Math.ceil(qualityData.cost * factor);
+                }
+              }
+              break;
+              
             case 'getNanoBananaPrice':
               if (requiresQuality) {
                 const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === quality);
@@ -69,7 +79,7 @@ export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled
               if (requiresVideoParams) {
                 const base = model.creditCost || 0;
                 const factor = model.factor || 1;
-                const resolutionMultipliers = { "480P": 1, "720P": 1.5, "1080P": 2.5, "4K": 5 };
+                const resolutionMultipliers = { "480p": 1, "720p": 2, "1080p": 4 };
                 const resolutionMultiplier = resolutionMultipliers[resolution as keyof typeof resolutionMultipliers] || 1;
                 const audioMultiplier = hasAudio ? 1.5 : 1;
                 const durationValue = parseInt(duration) || 8;
@@ -159,9 +169,9 @@ export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled
               disabled={disabled}
               className="flex-1 px-2 py-1 bg-[#13131a] border border-white/8 rounded text-white text-xs focus:outline-none focus:border-emerald-500/40 disabled:opacity-50"
             >
-              <option value="480P">480P</option>
-              <option value="720P">720P</option>
-              <option value="1080P">1080P</option>
+              <option value="480p">480p</option>
+              <option value="720p">720p</option>
+              <option value="1080p">1080p</option>
               <option value="4K">4K</option>
             </select>
           </div>

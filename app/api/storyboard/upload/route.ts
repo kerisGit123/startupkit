@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
     const useTemp = formData.get('useTemp') as string;
     const projectId = formData.get('projectId') as string;
     const categoryParam = formData.get('category') as string;
+    const explicitPath = formData.get('path') as string;
     const providedCompanyId = formData.get('companyId') as string;
     const sourceUrl = formData.get('sourceUrl') as string;
     const sourceFilename = formData.get('sourceFilename') as string;
@@ -94,7 +95,17 @@ export async function POST(request: NextRequest) {
     let isTemporary: boolean;
     let expiresAt: Date | undefined;
 
-    if (useTemp === 'true') {
+    if (explicitPath && explicitPath !== 'undefined' && explicitPath !== 'null') {
+      uploadPath = explicitPath.includes('/')
+        ? `${explicitPath}/${file.name}`
+        : `${explicitPath}/${Date.now()}-${file.name}`;
+      category = explicitPath.startsWith('temps') ? 'temps' : explicitPath.split('/').pop() || 'uploads';
+      isTemporary = explicitPath.startsWith('temps');
+      expiresAt = isTemporary
+        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        : undefined;
+      console.log('[Storyboard Upload] Using explicit path override:', uploadPath);
+    } else if (useTemp === 'true') {
       // Upload to temps folder with 30-day TTL as per plan_file.md
       const timestamp = Date.now();
       uploadPath = `temps/${timestamp}-${file.name}`;

@@ -29,3 +29,8 @@ Additional required fields like usageCount and status for elements
 
 
  visual limitation that should be 14-image cap
+
+
+
+
+ now check on @plan_generatedImage_final02.md , you know how my actual workflow now . lets modified the code in @plan_EditImageAIPanel.md , for image to image (nano banana 2 , GPT Image ) ,  text to image ( GPT Image 1.5, Nano Banana Edit , Qwen Image Edit )

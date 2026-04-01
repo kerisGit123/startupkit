@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
+import { ConvexHttpClient } from "convex/browser";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save, Video,
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
+import { FrameInfoDialog } from "./FrameInfoDialog";
 import { CanvasArea } from "./CanvasArea";
+import { GeneratedImagesPanel } from "./GeneratedImagesPanel/index";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
 import type { Id } from "@/convex/_generated/dataModel";
 import { TAG_COLORS } from "../constants";
@@ -18,10 +21,9 @@ import {
 import { makeId, bubbleEllipse, cloudPath, tailPath, rectTailPath, rectOutlinePathWithGap, burstPoints, roughEllipsePath, estimateFontSize } from "../shared/canvas-helpers";
 import type { BubbleType, TailDir, FontFamily } from "../shared/canvas-types";
 import { AIGeneratorModal } from "./storyboard/AIGeneratorModal";
-import { EditImageAIPanel, type AIEditMode } from "./EditImageAIPanel";
-import { VideoAIPanel, type VideoEditMode } from "./VideoAIPanel";
-import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/ElementImageAIPanel";
-import { Video, Image as ImageIcon, Box } from "lucide-react";
+import EditImageAIPanel, { type AIEditMode } from "./EditImageAIPanel";
+import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/VideoImageAIPanel";
+import { Image as ImageIcon, Box } from "lucide-react";
 import { uploadToR2 } from "@/lib/uploadToR2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { api } from "@/convex/_generated/api";
@@ -394,17 +396,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY)) {
         // Horizontal swipe - switch AI panels
         if (deltaX > 0) {
-          // Swipe right - previous panel
           setActiveAIPanel(prev => {
-            if (prev === 'element') return 'video';
-            if (prev === 'video') return 'editimage';
+            if (prev === 'element') return 'editimage';
             return prev;
           });
         } else {
-          // Swipe left - next panel
           setActiveAIPanel(prev => {
-            if (prev === 'editimage') return 'video';
-            if (prev === 'video') return 'element';
+            if (prev === 'editimage') return 'element';
             return prev;
           });
         }
@@ -475,7 +473,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const generatedImageRef = useRef<HTMLImageElement>(null);
-  const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'video' | 'element'>('editimage');
+  const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'element'>('editimage');
   const [showMask, setShowMask] = useState(true); // Add mask visibility state
   
   // Video AI state management
@@ -504,12 +502,20 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     api.storyboard.storyboardFiles.listByProject,
     projectId ? { projectId } : "skip"
   );
+  const updateStoryboardFile = useMutation(api.storyboard.storyboardFiles.update);
 
   const projectGeneratedImages = useMemo(() => {
     if (!projectFiles) return [] as string[];
 
     return projectFiles
-      .filter((file) => file.category === "generated" && file.status === "completed")
+      .filter((file) => file.category === "generated" && (
+        file.status === "completed" || 
+        file.status === "ready" || 
+        file.status === "processing" || 
+        file.status === "generating" ||
+        file.status === "error" ||
+        file.status === "failed"
+      ))
       .map((file) => file.sourceUrl)
       .filter((url): url is string => Boolean(url));
   }, [projectFiles]);
@@ -588,6 +594,17 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [aiEditMode, setAiEditMode] = useState<AIEditMode>("area-edit");
   const [aiModel, setAiModel] = useState("gpt-image");
   const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string; filename?: string }[]>([]);
+  const [selectedQuality, setSelectedQuality] = useState("standard"); // Store selected quality from EditImageAIPanel
+
+  useEffect(() => {
+    const maxReferenceImages = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
+    setAiRefImages((prev) => {
+      if (prev.length <= maxReferenceImages) {
+        return prev;
+      }
+      return prev.slice(0, maxReferenceImages);
+    });
+  }, [aiModel]);
 
   // Information dialog state
   const [showInfoDialog, setShowInfoDialog] = useState(false);
@@ -662,8 +679,21 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   
   // Re-centers the active rectangle to the image center without needing stale state
   const recenterRectangleIfActive = useCallback(() => {
+    console.log("[DEBUG] recenterRectangleIfActive called:", {
+      isSquareMode,
+      isLocked: rectangleIsLockedRef.current,
+      hasRectangle: !!rectangle
+    });
+    
     // Skip recentering if we're in square mask mode for debugging
     if (isSquareMode) {
+      console.log("[DEBUG] Skipping recenter - isSquareMode is true");
+      return;
+    }
+    
+    // Skip recentering if rectangle is locked (prevents repositioning when switching images)
+    if (rectangleIsLockedRef.current) {
+      console.log("[DEBUG] Skipping recenter - rectangle is locked");
       return;
     }
     
@@ -725,6 +755,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   const handleRectangleMaskAspectRatioChange = useCallback((aspectRatio: string) => {
     setRectangleMaskAspectRatio(aspectRatio);
+    // Unlock the rectangle to allow repositioning for the new aspect ratio
+    rectangleIsLockedRef.current = false;
+    console.log("[DEBUG] Rectangle unlocked for aspect ratio change to:", aspectRatio);
   }, []);
 
   const applyZoomToImage = (displayPercent: number) => {
@@ -953,6 +986,20 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const activeIdx = shots.findIndex(s => s.id === activeShotId);
   const activeShot = shots[activeIdx];
 
+  // Debug: Log activeShot data for Load Description buttons
+  console.log("ActiveShot data:", { 
+    activeShotId, 
+    activeShot, 
+    description: activeShot?.description,
+    imagePrompt: activeShot?.imagePrompt,
+    videoPrompt: activeShot?.videoPrompt,
+    hasDescription: !!activeShot?.description,
+    hasImagePrompt: !!activeShot?.imagePrompt,
+    hasVideoPrompt: !!activeShot?.videoPrompt,
+    activeShotKeys: activeShot ? Object.keys(activeShot) : 'null',
+    activeShotFull: activeShot // Log the full object to see all available fields
+  });
+
   // Update crop rectangle when activeShot.aspectRatio changes and crop tool is active
   useEffect(() => {
     if (canvasTool === "crop" && activeShot?.aspectRatio) {
@@ -993,7 +1040,15 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // Update image mask when rectangleMaskAspectRatio changes and rectInpaint tool is active
   useEffect(() => {
-    if (canvasTool === "rectInpaint" && rectangleMaskAspectRatio && rectangle) {
+    console.log("[DEBUG] Rectangle repositioning effect running:", {
+      canvasTool,
+      rectangleMaskAspectRatio,
+      hasRectangle: !!rectangle,
+      isLocked: rectangleIsLockedRef.current,
+      shouldRun: canvasTool === "rectInpaint" && rectangleMaskAspectRatio && rectangle && !rectangleIsLockedRef.current
+    });
+    
+    if (canvasTool === "rectInpaint" && rectangleMaskAspectRatio && rectangle && !rectangleIsLockedRef.current) {
       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
       if (container) {
         const img = container.querySelector('img:not([class*="mask"])') as HTMLImageElement;
@@ -1044,6 +1099,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             
             setRectangle({ x, y, width: rectWidth, height: rectHeight });
             setImageIsRectangleVisible(true);
+            // Lock the rectangle after positioning to prevent repositioning when switching images
+            rectangleIsLockedRef.current = true;
+            console.log("[DEBUG] Rectangle locked after positioning at:", { x, y, width: rectWidth, height: rectHeight });
           }
         }
       }
@@ -1052,6 +1110,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // Store original canvas display size when rectangle is created
   const [originalCanvasDisplaySize, setOriginalCanvasDisplaySize] = useState<{ width: number; height: number } | null>(null);
+  // Store image crop coordinates for compositing (ref for sync access in same event handler)
+  const [imageCropCoords, setImageCropCoords] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const imageCropCoordsRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  // Flag to prevent rectangle repositioning when switching images
+  const rectangleIsLockedRef = useRef(false);
 
   const cropImageToRectangle = async (
     base64Image: string,
@@ -1139,6 +1202,18 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               console.log(`  Scale: ${scaleX.toFixed(3)}x${scaleY.toFixed(3)}`);
               console.log(`  Final: ${constrainedRect.x.toFixed(1)}, ${constrainedRect.y.toFixed(1)}, ${constrainedRect.width.toFixed(1)}x${constrainedRect.height.toFixed(1)}`);
               console.log("=== END TRANSFORMATION DEBUG ===");
+              
+              // Store the original image coordinates for compositing
+              const imageCropCoordsForCompositing = {
+                x: constrainedRect.x,
+                y: constrainedRect.y,
+                width: constrainedRect.width,
+                height: constrainedRect.height
+              };
+              console.log('[DEBUG] Image crop coordinates for compositing:', imageCropCoordsForCompositing);
+              imageCropCoordsRef.current = imageCropCoordsForCompositing;
+              setImageCropCoords(imageCropCoordsForCompositing);
+              
               rectangle = constrainedRect;
             } else {
               console.warn("No canvas display size provided, using rectangle as-is");
@@ -1719,9 +1794,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       if (!proxyData.image) throw new Error("No image returned from generation");
 
       setImageGeneratedImages((prev) => [proxyData.image, ...prev]);
-      // Also push to left Generated panel so it appears below the original thumbnail
       setGeneratedImages((prev) => [proxyData.image, ...prev]);
-      // Auto-apply to canvas so the user immediately sees the generated result
       setBackgroundImage(proxyData.image);
       setShowGenPanel(true);
     } catch (err: unknown) {
@@ -1784,25 +1857,20 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   };
 
   // Reset video state when switching between Image, Video, and Element AI
-  const handleAIPanelSwitch = (panel: 'editimage' | 'video' | 'element') => {
+  const handleAIPanelSwitch = (panel: 'editimage' | 'element') => {
     setActiveAIPanel(panel);
-    if (panel === 'editimage') {
-      // Reset video state when switching to image
-      setVideoState({
-        status: 'empty',
-        content: null,
-        processingProgress: 0
-      });
-    }
+    // Reset video state when switching to image (no longer needed but kept for safety)
+    setVideoState({
+      status: 'empty',
+      content: null,
+      processingProgress: 0
+    });
   };
 
-  
-  // ── Helper to calculate credits based on AI model (similar to EditImageAIPanel)
+  // ── Helper to calculate credits based on AI model (similar to EditImageAIPanel) ────────────────────────
   const calculateModelCredits = useCallback((modelId: string): number => {
     // Updated credit calculation based on your screenshot showing 7 credits
     const modelCredits: Record<string, number> = {
-      'nano-banana-2': 7, // From your screenshot - matches the button
-      'gpt-image': 15,
       'ideogram/character-edit': 10,
       'flux-2': 5,
       'seedream-5.0-lite-text': 3,
@@ -1819,29 +1887,52 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // ── Generate Image with Credit Tracking ───────────────────────────────────────────────────────
   const generateImageWithCredits = async (
-    prompt: string, 
-    style: string = "realistic", 
-    quality: string = "standard",
-    aspectRatio: string = "9:16",
-    itemId?: string,
-    creditsUsed?: number, // Allow passing actual credit amount
-    model?: string, // Allow passing actual model
-    imageUrl?: string, // Allow passing canvas image URL for character-edit
-    referenceImageUrls?: string[], // Allow passing reference images for character-edit
-    maskUrl?: string, // Allow passing mask URL for character-edit
-    existingFileId?: string // Allow passing existing file ID to update instead of creating new
+    prompt: string,
+    style: string,
+    quality: string,
+    aspectRatio: string,
+    itemId: string,
+    creditsUsed: number,
+    model: string,
+    imageUrl?: string,
+    referenceImageUrls?: string[],
+    maskUrl?: string,
+    existingFileId?: string,
+    cropX?: number,
+    cropY?: number,
+    cropWidth?: number,
+    cropHeight?: number,
+    originalImageUrl?: string
   ): Promise<{ fileId: string; taskId: string; creditsUsed: number } | null> => {
     try {
-      console.log('[generateImageWithCredits] Starting credit-based generation:', {
-        prompt: prompt.substring(0, 100) + '...',
+      console.log('[generateImageWithCredits] Calling API with:', {
+        prompt,
         style,
         quality,
         aspectRatio,
         itemId,
+        creditsUsed,
+        model,
+        imageUrl,
+        referenceImageUrls,
+        maskUrl,
+        existingFileId,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        originalImageUrl,
         companyId,
+        userId: user?.id,
         projectId
       });
-
+      
+      console.log('[generateImageWithCredits] Original image URL check:', {
+        backgroundImage,
+        activeShotImageUrl: activeShot?.imageUrl,
+        finalOriginalImageUrl: backgroundImage || activeShot?.imageUrl
+      });
+      
       const response = await fetch('/api/storyboard/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1855,11 +1946,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           userId: user?.id, // Credit tracking
           projectId, // Credit tracking
           creditsUsed, // Actual credit amount from AI panel
-          model: aiModel, // Pass the actual model from EditImageAIPanel
+          model: model || aiModel, // Pass the actual selected model from EditImageAIPanel
           imageUrl, // Pass canvas image URL for character-edit models
           referenceImageUrls, // Pass reference images for character-edit models
           maskUrl, // Pass mask URL for character-edit models
-          existingFileId // Pass existing file ID to update instead of creating new
+          existingFileId, // Pass existing file ID to update instead of creating new
+          cropX,          // Pass crop X coordinate
+          cropY,          // Pass crop Y coordinate
+          cropWidth,      // Pass crop width
+          cropHeight,     // Pass crop height
+          originalImageUrl // Pass original image URL for compositing
         }),
       });
 
@@ -1867,9 +1963,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       console.log('[generateImageWithCredits] API response:', result);
 
       if (!response.ok) {
-        const error = await response.text();
-        console.error('[generateImageWithCredits] API error:', error);
-        throw new Error(`Generation failed: ${error}`);
+        console.error('[generateImageWithCredits] API error status:', response.status, response.statusText);
+        // result already contains the error from the 500 response
+        throw new Error(result?.error || `Generation failed: ${response.status} ${response.statusText}`);
       }
 
       console.log('[generateImageWithCredits] Generation started:', {
@@ -3763,35 +3859,27 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             <button
               onClick={() => {
                 if (activeAIPanel === 'editimage') {
-                  setActiveAIPanel('video');
-                } else if (activeAIPanel === 'video') {
                   setActiveAIPanel('element');
                 } else {
                   setActiveAIPanel('editimage');
                 }
               }}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
-                activeAIPanel === 'video' ? 'bg-purple-600/80' : 
                 activeAIPanel === 'element' ? 'bg-green-600/80' : 
                 'bg-black/50 hover:bg-black/80'
               }`}
-              title={`Switch to ${activeAIPanel === 'editimage' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
-              aria-label={`Switch to ${activeAIPanel === 'editimage' ? 'Video' : activeAIPanel === 'video' ? 'Element' : 'Image'} AI`}
+              title={`Switch to ${activeAIPanel === 'editimage' ? 'Edit Image' : 'Image Video'} AI`}
+              aria-label={`Switch to ${activeAIPanel === 'editimage' ? 'Edit Image' : 'Image Video'} AI`}
             >
               {activeAIPanel === 'editimage' ? (
                 <>
-                  <Video className="w-4 h-4 text-purple-400" />
-                  <span>Video AI</span>
-                </>
-              ) : activeAIPanel === 'video' ? (
-                <>
                   <Box className="w-4 h-4 text-green-400" />
-                  <span>Element AI</span>
+                  <span>Image Video AI</span>
                 </>
               ) : (
                 <>
                   <ImageIcon className="w-4 h-4 text-cyan-400" />
-                  <span>Image AI</span>
+                  <span>Edit Image AI</span>
                 </>
               )}
             </button>
@@ -3836,10 +3924,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             onCropExecute={runCrop}
             runCrop={runCrop}
             onImageLoad={(scale) => {
+              console.log("[DEBUG] onImageLoad called with scale:", scale, "rectangle locked:", rectangleIsLockedRef.current);
               fitScaleRef.current = scale;
               setZoomLevel(100);
               // Recenter any active rectangle to the newly-fitted image
-              requestAnimationFrame(recenterRectangleIfActive);
+              requestAnimationFrame(() => {
+                console.log("[DEBUG] About to call recenterRectangleIfActive, locked:", rectangleIsLockedRef.current);
+                recenterRectangleIfActive();
+              });
             }}
             selectedColor={selectedColor}
             mode={aiEditMode}
@@ -3881,131 +3973,44 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             />
           )}
           
-          {/* Generated Images Panel */}
-          <div className={`absolute top-0 left-0 h-full w-80 bg-[#111118] border-r border-white/6 transform transition-transform duration-300 ease-in-out z-30 ${
-            generatedImagesPanelOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}>
-            <div className="p-4 border-b border-white/6 flex items-center justify-between">
-              <h3 className="text-white font-medium">Generated Images</h3>
-              <button
-                onClick={() => setGeneratedImagesPanelOpen(false)}
-                className="text-gray-400 hover:text-white transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto h-full">
-              {/* Original Image Section */}
-              {(originalImage || backgroundImage || activeShot?.imageUrl) && (
-                <div className="mb-6">
-                  <h4 className="text-white text-sm font-medium mb-3">Original</h4>
-                  <div className="relative group cursor-pointer rounded-lg overflow-hidden border-2 border-gray-700 hover:border-gray-600 transition"
-                     onClick={(e) => {
-                       e.preventDefault();
-                       e.stopPropagation();
-                       console.log("DEBUG: Original image clicked");
-                       console.log("DEBUG: backgroundImage:", backgroundImage?.substring(0,50));
-                       console.log("DEBUG: activeShot?.imageUrl:", activeShot?.imageUrl);
-                       
-                       // Always select the original image when clicking Original section
-                      const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
-                      if (imageToSet) {
-                        console.log("DEBUG: Setting background to:", imageToSet.substring(0,50));
-                        switchCanvasImage(imageToSet, -1);
-                        // Don't clear generated images - keep them in the panel
-                      } else {
-                        console.log("DEBUG: No images available to set as background");
-                      }
-                     }}
-                     onContextMenu={(event) => {
-                       const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
-                       if (!imageToSet) return;
-                       openSceneImageContextMenu(event, imageToSet, `${activeShot?.title || "Scene"} reference`, "environment");
-                     }}>
-                    <img
-                      src={originalImage || backgroundImage || activeShot?.imageUrl}
-                      alt="Original"
-                      className="w-full h-32 object-cover pointer-events-none"
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition flex items-center justify-center">
-                      <Eye className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition" />
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Generated Images Section */}
-              {displayedGeneratedImages.length > 0 && (
-                <div>
-                  <h4 className="text-white text-sm font-medium mb-3">
-                    Generated ({displayedGeneratedImages.length})
-                  </h4>
-                  <div className="space-y-3">
-                    {displayedGeneratedImages.map((imgUrl, i) => (
-                      <div key={i} className={`relative group cursor-pointer rounded-lg overflow-hidden border-2 transition ${
-                        selectedSceneImageUrl === imgUrl || backgroundImage === imgUrl
-                          ? "border-blue-500/50"
-                          : selectedGeneratedImageIndex === i
-                          ? "border-emerald-500/50"
-                          : "border-gray-700 hover:border-gray-600"
-                      }`}>
-                        {/* Selection indicator */}
-                        {selectedGeneratedImageIndex === i && (
-                          <div className="absolute top-2 left-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center z-20">
-                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        )}
-                        <img
-                          ref={i === 0 ? generatedImageRef : undefined}
-                          src={imgUrl}
-                          alt={`Generated ${i + 1}`}
-                          className="w-full h-32 object-cover cursor-pointer"
-                          onClick={() => {
-                            switchCanvasImage(imgUrl, i);
-                          }}
-                          onContextMenu={(event) => {
-                            setSelectedGeneratedImageIndex(i);
-                            openSceneImageContextMenu(event, imgUrl, `${activeShot?.title || "Scene"} generated ${i + 1}`, "character");
-                          }}
-                          tabIndex={i === 0 ? 0 : -1}
-                        />
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setGeneratedImages(prev => {
-                              const newImages = prev.filter((_, index) => index !== i);
-                              // Adjust selected index if necessary
-                              if (selectedGeneratedImageIndex === i) {
-                                setSelectedGeneratedImageIndex(-1);
-                              } else if (selectedGeneratedImageIndex > i) {
-                                setSelectedGeneratedImageIndex(selectedGeneratedImageIndex - 1);
-                              }
-                              return newImages;
-                            });
-                          }}
-                          className="absolute top-1 right-1 w-5 h-5 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-lg z-10"
-                          title="Delete image"
-                        >
-                          <X className="w-3 h-3 text-white" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {/* Empty State */}
-              {generatedImages.length === 0 && (!backgroundImage && !originalImage && !activeShot?.imageUrl) && (
-                <div className="text-gray-400 text-sm text-center py-8">
-                  <Image className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No images yet</p>
-                  <p className="text-xs mt-1">Generate images to see them here</p>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Enhanced Generated Images Panel */}
+          <GeneratedImagesPanel
+            isOpen={generatedImagesPanelOpen}
+            onClose={() => setGeneratedImagesPanelOpen(false)}
+            originalImage={originalImage}
+            backgroundImage={backgroundImage}
+            activeShot={activeShot}
+            generatedImages={generatedImages}
+            projectGeneratedImages={projectGeneratedImages}
+            projectFiles={projectFiles}
+            onImageSelect={switchCanvasImage}
+            onImageDelete={async (image) => {
+              try {
+                await updateStoryboardFile({
+                  id: image.id as Id<"storyboard_files">,
+                  status: image.status === "completed" ? "deleted" : "failed",
+                });
+              } catch (error) {
+                console.error("Failed to mark generated file as failed:", error);
+              }
+            }}
+            onImageRetry={(image) => {
+              // Handle image retry
+              console.log("Retry image:", image.id);
+              // Implementation would go here
+            }}
+            onImageFavorite={(image) => {
+              // Handle favorite toggle
+              console.log("Toggle favorite:", image.id, image.isFavorite);
+              // Implementation would go here
+            }}
+            onImageCompare={(image) => {
+              // Handle image comparison
+              console.log("Compare image:", image.id);
+              // Implementation would go here
+            }}
+            openSceneImageContextMenu={openSceneImageContextMenu}
+          />
 
           {sceneImageContextMenu && (
             <div
@@ -4049,16 +4054,20 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   mode={aiEditMode}
                   onModeChange={setAiEditMode}
                   projectId={projectId}
-                  onGenerate={async (creditsUsed: number) => {
+                  onGenerateQuality={setSelectedQuality}
+                  onGenerate={async (creditsUsed: number, quality?: string) => {
                     console.log("=== CREDIT-BASED GENERATION CALLED ===");
                     console.log("Generate with mode:", aiEditMode, "model:", aiModel);
                     console.log("Prompt:", promptText);
                     console.log("Credits received from EditImageAIPanel:", creditsUsed);
                     
+                    const qualityToUse = quality || selectedQuality || "1K";
+                    console.log("Quality received from EditImageAIPanel:", qualityToUse);
+                    
                     try {
                       // Get canvas image and reference images for character-edit models
                       const canvasImageInfo = getCanvasImageInfo();
-                      const currentImageUrl = canvasImageInfo.imageSrc || backgroundImage || activeShot?.imageUrl;
+                      const currentImageUrl = backgroundImage || canvasImageInfo.imageSrc || activeShot?.imageUrl;
                       
                       // Get reference images from AI panel (aiRefImages) and imageReferenceImages
                       console.log('[onGenerate] Processing reference images:', { 
@@ -4236,18 +4245,153 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       
                       console.log('[onGenerate] Using existing file ID:', existingFileId, 'for shot:', activeShot?.id);
                       
+                      // Fast credit balance check before any expensive operations
+                      if (!companyId) {
+                        alert('No company ID available for credit check.');
+                        return;
+                      }
+
+                      console.log('[onGenerate] Checking credit balance before generation...');
+                      const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+                      const { api } = await import("../../../convex/_generated/api");
+                      const currentBalance = await convex.query(api.credits.getBalance, { companyId });
+                      const requiredCredits = creditsUsed;
+                      
+                      console.log('[onGenerate] Credit check:', { currentBalance, requiredCredits });
+                      
+                      if (currentBalance < requiredCredits) {
+                        alert(`❌ Insufficient credits\n\nRequired: ${requiredCredits} credits\nAvailable: ${currentBalance} credits\n\nPlease purchase more credits to continue generating images.`);
+                        return;
+                      }
+                      
+                      console.log('[onGenerate] Credits sufficient, proceeding with crop and generation...');
+                      
+                      // For image-to-image mode, extract and upload cropped area to temps (only after credit check passes)
+                      // Apply to nano-banana-2 and all GPT Image models (kie-image-v2, kie-image-pro-v2)
+                      const shouldCropForImageToImage = aiEditMode === "area-edit" && 
+                        (aiModel !== "ideogram/character-edit") && 
+                        (aiModel === "nano-banana-2" || aiModel === "nano-banana-pro" || aiModel === "google/nano-banana-edit" || aiModel?.startsWith("kie-image") || aiModel?.startsWith("gpt-image")) && 
+                        currentImageUrl;
+                      
+                      let croppedImageUrl = currentImageUrl;
+                      console.log('[onGenerate] Initial croppedImageUrl:', croppedImageUrl);
+                      console.log('[onGenerate] aiEditMode:', aiEditMode, 'aiModel:', aiModel, 'currentImageUrl:', currentImageUrl);
+                      console.log('[onGenerate] Should crop for image-to-image:', shouldCropForImageToImage);
+                      
+                      if (shouldCropForImageToImage) {
+                        try {
+                          console.log('[onGenerate] Extracting cropped area for image-to-image mode');
+                          let imageBase64: string;
+                          if (currentImageUrl.startsWith('data:')) {
+                            imageBase64 = currentImageUrl;
+                            console.log('[onGenerate] Using data URL directly');
+                          } else if (currentImageUrl.startsWith('blob:')) {
+                            const blob = await (await fetch(currentImageUrl)).blob();
+                            imageBase64 = await new Promise<string>((resolve, reject) => {
+                              const reader = new FileReader();
+                              reader.onloadend = () => resolve(reader.result as string);
+                              reader.onerror = reject;
+                              reader.readAsDataURL(blob);
+                            });
+                            console.log('[onGenerate] Converted blob URL to data URL');
+                          } else {
+                            const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(currentImageUrl)}`;
+                            const imageResponse = await fetch(proxyUrl);
+                            if (!imageResponse.ok) {
+                              throw new Error(`Failed to fetch source image via proxy: ${imageResponse.status} ${imageResponse.statusText}`);
+                            }
+                            const imageBlob = await imageResponse.blob();
+                            imageBase64 = await new Promise<string>((resolve, reject) => {
+                              const reader = new FileReader();
+                              reader.onloadend = () => resolve(reader.result as string);
+                              reader.onerror = reject;
+                              reader.readAsDataURL(imageBlob);
+                            });
+                            console.log('[onGenerate] Fetched HTTP URL via proxy and converted to data URL');
+                          }
+
+                          const canvasEl = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]');
+                          const canvasRect = canvasEl?.getBoundingClientRect();
+                          const canvasDisplaySize = canvasRect
+                            ? { width: canvasRect.width, height: canvasRect.height }
+                            : undefined;
+
+                          const cropRect = rectangle;
+                          if (cropRect && cropRect.width > 0 && cropRect.height > 0) {
+                            const croppedBase64 = await cropImageToRectangle(imageBase64, cropRect, canvasDisplaySize);
+                            const croppedBlob = await (await fetch(croppedBase64)).blob();
+                            const formData = new FormData();
+                            formData.append('file', croppedBlob, `crop-${Date.now()}.png`);
+                            formData.append('useTemp', 'true');
+
+                            const cropResponse = await fetch('/api/storyboard/upload', {
+                              method: 'POST',
+                              body: formData
+                            });
+
+                            if (cropResponse.ok) {
+                              const cropResult = await cropResponse.json();
+                              croppedImageUrl = cropResult.publicUrl;
+                              console.log('[onGenerate] Cropped image uploaded to temps:', croppedImageUrl);
+                            } else {
+                              console.warn('[onGenerate] Failed to upload cropped image, using full image');
+                              console.log('[onGenerate] Crop response status:', cropResponse.status);
+                            }
+                          } else {
+                            console.warn('[onGenerate] No crop area selected, using full image');
+                          }
+                        } catch (error) {
+                          console.error('[onGenerate] Error extracting cropped area:', error);
+                        }
+                      } else {
+                        console.log('[onGenerate] Not cropping - conditions not met:', {
+                          aiEditMode,
+                          aiModel,
+                          hasCurrentImageUrl: !!currentImageUrl,
+                          isAreaEdit: aiEditMode === "area-edit",
+                          isNotCharacterEdit: aiModel !== "ideogram/character-edit",
+                          isSupportedModel: aiModel === "nano-banana-2" || aiModel?.startsWith("kie-image"),
+                          shouldCropForImageToImage
+                        });
+                      }
+                      
+                      console.log('[onGenerate] Final croppedImageUrl to be used:', croppedImageUrl);
+                      
                       // Use the credits passed from EditImageAIPanel
-                      const result = await generateImageWithCredits(
-                        promptText || "Generate image", 
-                        "realistic", // Default style - this should be dynamic based on model
-                        "standard", // Default quality  
-                        "9:16", // Default aspect ratio
-                        existingFileId, // Use existing file ID or create new one
-                        creditsUsed, // Use credits from EditImageAIPanel
-                        aiModel, // Pass the actual model from EditImageAIPanel
-                        currentImageUrl, // Pass canvas image URL for character-edit
-                        allReferenceImages, // Pass reference images for character-edit
-                        maskUrl // Pass mask URL for character-edit
+                        // Improve prompt for nano-banana-2 image-to-image generation
+                        let improvedPrompt = promptText || "Generate image";
+                        
+                        // If using nano-banana-2 with reference images, improve prompt structure
+                        if (aiModel === 'nano-banana-2' && allReferenceImages.length > 0) {
+                          // Convert simple prompts like "image 1 wear hat image 2" to descriptive prompts
+                          if (improvedPrompt.includes('image 1') && improvedPrompt.includes('image 2')) {
+                            improvedPrompt = improvedPrompt
+                              .replace(/image 1/gi, 'the person')
+                              .replace(/image 2/gi, 'the hat')
+                              + ', wearing the hat, professional photography, cinematic lighting, high detail';
+                          }
+                          
+                          console.log('[onGenerate] Improved prompt for nano-banana-2:', improvedPrompt);
+                        }
+                        
+                        const result = await generateImageWithCredits(
+                          improvedPrompt, 
+                        "realistic", // style
+                        qualityToUse, // quality
+                        "1:1", // aspectRatio
+                        activeShot?.id || "", // itemId (pos 5)
+                        creditsUsed, // creditsUsed (pos 6)
+                        aiModel, // model (pos 7)
+                        croppedImageUrl, // imageUrl (pos 8)
+                        allReferenceImages, // referenceImageUrls (pos 9)
+                        maskUrl, // maskUrl (pos 10)
+                        existingFileId, // existingFileId (pos 11)
+                        imageCropCoordsRef.current?.x, // cropX (pos 12) - use ref for sync access
+                        imageCropCoordsRef.current?.y, // cropY (pos 13)
+                        imageCropCoordsRef.current?.width, // cropWidth (pos 14)
+                        imageCropCoordsRef.current?.height, // cropHeight (pos 15)
+                        // Prefer R2 URL over data URL for originalImageUrl (server needs to fetch it)
+                        (backgroundImage && !backgroundImage.startsWith('data:') ? backgroundImage : activeShot?.imageUrl) || backgroundImage // originalImageUrl (pos 16)
                       );
                       
                       if (result) {
@@ -4286,6 +4430,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         source: 'upload' as const
                       }))}
                   onAddReferenceImage={(file) => {
+                    const maxReferenceImages = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
+                    if (aiRefImages.length >= maxReferenceImages) {
+                      alert(`Maximum of ${maxReferenceImages} reference images allowed for ${aiModel}.`);
+                      return;
+                    }
+
                     // Check if file has R2 metadata (uploaded via EditImageAIPanel)
                     const r2Url = (file as any).__r2Url;
                     const r2Key = (file as any).__r2Key;
@@ -4379,6 +4529,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       }
                     } else if (tool === "rectInpaint") {
                       setCanvasTool("rectInpaint");
+                      // Unlock rectangle to allow initial positioning
+                      rectangleIsLockedRef.current = false;
+                      console.log("[DEBUG] Rectangle unlocked for rectInpaint tool activation");
                       // Create rectangle with 1:1 aspect ratio (200x200) when selecting rectangle mask tool
                       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
                       if (container) {
@@ -4486,46 +4639,101 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 zoomLevel={zoomLevel}
                 onZoomChange={setZoomLevel}
                 />
-                  ) : activeAIPanel === 'video' ? (
-                    <VideoAIPanel
-                      mode="describe"
-                      onModeChange={() => {}}
-                      onGenerate={async () => {
-                        console.log("=== VIDEO AI GENERATE CALLED ===");
-                        console.log("Video generation with prompt:", promptText);
-                        // TODO: Implement video generation logic
-                      }}
-                      userPrompt={promptText}
-                      onUserPromptChange={setPromptText}
-                      duration={5}
-                      onDurationChange={(duration) => console.log("Duration changed:", duration)}
-                      resolution="1080p"
-                      onResolutionChange={(resolution) => console.log("Resolution changed:", resolution)}
-                      style="cinematic"
-                      onStyleChange={(style) => console.log("Style changed:", style)}
-                      isGenerating={false}
-                    />
                   ) : (
                     <ImageAIPanel
                       mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
-                      onGenerate={async () => {
+                      onGenerate={async (creditsUsed?: number, quality?: string, aspectRatio?: string, outputFormat?: string, extractedPrompt?: string) => {
                         console.log("=== ELEMENT CREDIT-BASED GENERATION CALLED ===");
                         console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
-                        console.log("Prompt:", promptText);
+                        console.log("Prompt:", extractedPrompt || promptText);
+                        console.log("Credits received from VideoImageAIPanel:", creditsUsed);
+                        console.log("Quality received from VideoImageAIPanel:", quality);
+                        console.log("AspectRatio received from VideoImageAIPanel:", aspectRatio);
+                        console.log("OutputFormat received from VideoImageAIPanel:", outputFormat);
+                        console.log("Reference images (aiRefImages):", aiRefImages);
+                        
+                        // Map aspect ratio to KIE AI supported options (simplified since we only use supported ratios)
+                        const mapAspectRatioToKieAI = (userAspectRatio: string | undefined): string => {
+                          const aspectRatioMap: Record<string, string> = {
+                            '1:1': '1:1',
+                            '9:16': '9:16',
+                            '16:9': '16:9'
+                          };
+                          
+                          const mappedRatio = aspectRatioMap[userAspectRatio || ''] || 'auto';
+                          console.log(`[VideoImageAIPanel] Aspect ratio mapping: ${userAspectRatio} → ${mappedRatio}`);
+                          return mappedRatio;
+                        };
+                        
+                        const kieAIAspectRatio = mapAspectRatioToKieAI(aspectRatio);
+                        
+                        // Upload AI reference images to R2 storage if they're blob URLs (same as EditImageAIPanel)
+                        const processedReferenceImages = await Promise.all(
+                          aiRefImages.map(async (img) => {
+                            console.log('[VideoImageAIPanel] Processing reference image:', { id: img.id, url: img.url?.substring(0, 50) });
+                            if (img.url.startsWith('blob:')) {
+                              console.log('[VideoImageAIPanel] Uploading blob reference image to R2...');
+                              // Upload blob URL to R2 storage
+                              const blob = await (await fetch(img.url)).blob();
+                              const formData = new FormData();
+                              formData.append('file', blob, `ref-${img.id || Date.now()}.webp`);
+                              formData.append('category', 'temps');
+                              
+                              const uploadResponse = await fetch('/api/storyboard/upload', {
+                                method: 'POST',
+                                body: formData
+                              });
+                              
+                              if (uploadResponse.ok) {
+                                const result = await uploadResponse.json();
+                                console.log('[VideoImageAIPanel] Reference image uploaded:', result.publicUrl?.substring(0, 50) + '...');
+                                return result.publicUrl;
+                              } else {
+                                console.warn('[VideoImageAIPanel] Failed to upload reference image, using original URL');
+                                return img.url;
+                              }
+                            } else {
+                              console.log('[VideoImageAIPanel] Reference image is not blob, using as-is:', img.url?.substring(0, 50));
+                              return img.url; // Already a URL, use as-is
+                            }
+                          })
+                        );
+                        
+                        console.log("Processed reference image URLs:", processedReferenceImages);
                         
                         try {
-                          // Calculate actual credits based on the selected model
-                          const actualCredits = calculateModelCredits(aiModel);
+                          // Use credits from VideoImageAIPanel if provided, otherwise calculate
+                          const actualCredits = creditsUsed || calculateModelCredits(aiModel);
+                          const qualityToUse = quality || "standard";
+                          const aspectRatioToUse = aspectRatio || "1:1";
+                          const outputFormatToUse = outputFormat || "png";
+                          const promptToUse = extractedPrompt || promptText || "Generate element";
+                          
+                          console.log("Final credits used:", actualCredits);
+                          console.log("Final quality:", qualityToUse);
+                          console.log("Final aspect ratio:", aspectRatioToUse);
+                          console.log("Final output format:", outputFormatToUse);
+                          console.log("Final prompt:", promptToUse);
                           
                           // Use the new credit-based generation for elements
                           const result = await generateImageWithCredits(
-                            promptText || "Generate element", 
+                            promptToUse, // Use extracted prompt with badges
                             "realistic", // Default style
-                            "standard", // Default quality  
-                            "1:1", // Default aspect ratio for elements
-                            undefined, // Elements don't link to specific items
-                            actualCredits // Use actual credit amount
+                            qualityToUse, // Use quality from VideoImageAIPanel
+                            kieAIAspectRatio, // Use mapped KIE AI aspect ratio
+                            activeShot?.id || "", // Link to current storyboard item like EditImageAIPanel
+                            actualCredits, // Use actual credit amount from VideoImageAIPanel
+                            aiModel, // Pass the model
+                            undefined, // imageUrl
+                            processedReferenceImages, // Pass processed reference image URLs to KIE AI
+                            undefined, // maskUrl
+                            undefined, // existingFileId
+                            undefined, // cropX
+                            undefined, // cropY
+                            undefined, // cropWidth
+                            undefined, // cropHeight
+                            undefined  // originalImageUrl
                           );
                           
                           if (result) {
@@ -4564,6 +4772,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         source: 'upload' as const
                       }))}
                       onAddReferenceImage={(file) => {
+                        const maxReferenceImages = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
+                        if (aiRefImages.length >= maxReferenceImages) {
+                          alert(`Maximum of ${maxReferenceImages} reference images allowed for ${aiModel}.`);
+                          return;
+                        }
+
                         // Check for duplicate by filename
                         const existingFilenames = aiRefImages.map(img => img.filename || '').filter(Boolean);
                         console.log(`[SceneEditor] Checking for duplicate: ${file.name}`);
@@ -4607,6 +4821,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       }}
                       userPrompt={promptText}
                       onUserPromptChange={setPromptText}
+                      activeShotDescription={activeShot?.description}
+                      activeShotImagePrompt={activeShot?.imagePrompt}
+                      activeShotVideoPrompt={activeShot?.videoPrompt}
                       onAddCanvasElement={handleAddCanvasElement}
                       // Brush inpaint props
                       isEraser={isEraser}
@@ -4639,6 +4856,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                           setCanvasTool("crop");
                         } else if (tool === "rectInpaint") {
                           setCanvasTool("rectInpaint");
+                          // Unlock rectangle to allow initial positioning
+                          rectangleIsLockedRef.current = false;
+                          console.log("[DEBUG] Rectangle unlocked for rectInpaint tool activation (2nd location)");
                         } else if (tool === "move") {
                           setCanvasTool("move");
                         } else if (tool === "text") {
@@ -4836,162 +5056,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       )}
 
       {/* Frame Information Modal */}
-      {showInfoDialog && activeShot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg shadow-xl max-w-4xl w-full mx-4">
-            {/* Header */}
-            <div className="bg-[#2a2a2a] px-6 py-4 border-b border-gray-700">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-white">Frame Information</h3>
-                <button 
-                  onClick={() => setShowInfoDialog(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            
-            {/* Content */}
-            <div className="p-6">
-              <div className="grid grid-cols-12 gap-6">
-                {/* Left Sidebar - Basic Info */}
-                <div className="col-span-4 space-y-4">
-                  <div className="bg-[#2a2a2a] rounded p-3 border border-gray-700">
-                    <div className="text-xs text-gray-400 uppercase mb-1">Title</div>
-                    <div className="text-white text-sm">{activeShot.title || 'Untitled'}</div>
-                  </div>
-                  
-                  <div className="bg-[#2a2a2a] rounded p-3 border border-gray-700">
-                    <div className="text-xs text-gray-400 uppercase mb-1">Screen</div>
-                    <div className="text-xl font-medium text-white">#{String((activeShot.order || 0) + 1).padStart(2, "0")}</div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-[#2a2a2a] rounded p-3 border border-gray-700">
-                      <div className="text-xs text-gray-400 uppercase mb-1">Duration</div>
-                      <div className="text-white text-sm">{activeShot.duration || 3}s</div>
-                    </div>
-                    <div className="bg-[#2a2a2a] rounded p-3 border border-gray-700">
-                      <div className="text-xs text-gray-400 uppercase mb-1">Aspect</div>
-                      <div className="text-white text-sm">{activeShot.aspectRatio || '16:9'}</div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-[#2a2a2a] rounded p-3 border border-gray-700">
-                    <div className="text-xs text-gray-400 uppercase mb-1">Location</div>
-                    <div className="text-white text-sm">{activeShot.location || 'Not specified'}</div>
-                  </div>
-                  
-                  <div className="bg-[#2a2a2a] rounded p-3 border border-gray-700">
-                    <div className="text-xs text-gray-400 uppercase mb-1">Camera</div>
-                    <div className="text-white text-sm">{activeShot.camera?.length ? activeShot.camera.join(', ') : 'Not specified'}</div>
-                  </div>
-                  
-                  <div className="bg-[#2a2a2a] rounded p-3 border border-gray-700">
-                    <div className="text-xs text-gray-400 uppercase mb-1">Media</div>
-                    <div className="text-white text-sm">
-                      {activeShot.imageUrl ? 'Image' : activeShot.videoUrl ? 'Video' : 'None'}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Right Content - Editable Fields */}
-                <div className="col-span-8 space-y-4">
-                  {/* Script Section */}
-                  <div className="bg-[#2a2a2a] rounded border border-gray-700">
-                    <div className="px-4 py-3 border-b border-gray-700">
-                      <h4 className="text-sm font-medium text-white">Script & Action</h4>
-                    </div>
-                    <div className="p-3">
-                      <textarea
-                        className="w-full bg-[#1a1a1a] border border-gray-600 rounded text-white text-sm p-2 resize-none focus:outline-none focus:border-gray-500"
-                        rows={6}
-                        defaultValue={activeShot.bgDescription || activeShot.description || activeShot.action || ''}
-                        placeholder="Enter script or action description..."
-                        onChange={(e) => {
-                          onShotsChange(shots.map(s => 
-                            s.id === activeShotId 
-                              ? { ...s, action: e.target.value, bgDescription: e.target.value }
-                              : s
-                          ));
-                        }}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Dialogue Section */}
-                  <div className="bg-[#2a2a2a] rounded border border-gray-700">
-                    <div className="px-4 py-3 border-b border-gray-700">
-                      <h4 className="text-sm font-medium text-white">Dialogue</h4>
-                    </div>
-                    <div className="p-3">
-                      <textarea
-                        className="w-full bg-[#1a1a1a] border border-gray-600 rounded text-white text-sm p-2 resize-none focus:outline-none focus:border-gray-500"
-                        rows={4}
-                        defaultValue={activeShot.voiceOver || ''}
-                        placeholder="Enter dialogue or voice-over..."
-                        onChange={(e) => {
-                          onShotsChange(shots.map(s => 
-                            s.id === activeShotId 
-                              ? { ...s, voiceOver: e.target.value }
-                              : s
-                          ));
-                        }}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Tags & Notes Grid */}
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Tags */}
-                    <div className="bg-[#2a2a2a] rounded border border-gray-700">
-                      <div className="px-4 py-3 border-b border-gray-700">
-                        <h4 className="text-sm font-medium text-white">Tags</h4>
-                      </div>
-                      <div className="p-3">
-                        <div className="flex flex-wrap gap-2">
-                          {activeShot.tags?.length > 0 ? (
-                            activeShot.tags.map(tag => (
-                              <span key={tag.id} className="px-2 py-0.5 rounded text-[10px] font-semibold text-white" style={{ backgroundColor: tag.color + "cc" }}>
-                                {tag.name}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-gray-500 text-xs">No tags</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Notes */}
-                    <div className="bg-[#2a2a2a] rounded border border-gray-700">
-                      <div className="px-4 py-3 border-b border-gray-700">
-                        <h4 className="text-sm font-medium text-white">Notes</h4>
-                      </div>
-                      <div className="p-3">
-                        <textarea
-                          className="w-full bg-[#1a1a1a] border border-gray-600 rounded text-white text-sm p-2 resize-none focus:outline-none focus:border-gray-500"
-                          rows={4}
-                          defaultValue={activeShot.notes || ''}
-                          placeholder="Add notes..."
-                          onChange={(e) => {
-                            onShotsChange(shots.map(s => 
-                              s.id === activeShotId 
-                                ? { ...s, notes: e.target.value }
-                                : s
-                            ));
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <FrameInfoDialog
+        isOpen={showInfoDialog}
+        onClose={() => setShowInfoDialog(false)}
+        activeShot={activeShot}
+        onShotsChange={onShotsChange}
+        shots={shots}
+        activeShotId={activeShotId}
+      />
 
       {/* Use Case Info Modal */}
       <UseCaseInfoModal

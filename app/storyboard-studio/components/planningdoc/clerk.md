@@ -1,168 +1,173 @@
-# Clerk Multi-Tenant Organization Plan
+# Storyboard Studio — Hybrid Billing Model
 
-## 🎯 Objective
-Move organization features to Storyboard Studio - users consume credits for AI image/video generation instead of traditional SaaS features.
+## Strategy: Free + Credits (Stripe) vs Paid Org Plans (Clerk)
 
-## 📊 Current State Analysis
-
-### ✅ What Works (Keep)
-- `companyId` pattern for tenant isolation
-- Credit system (balance, ledger, deduction)
-- Stripe integration for purchases
-- Organization switching UI
-
-### 🔄 What to Transform
-- Traditional SaaS features → AI generation features
-- Individual-focused → Team-focused organization management
-- Feature limits → Generation quotas + team limits
-
-## 🏗️ Implementation Plan
-
-### Phase 1: Subscription-Based Organization Management
-**Goal**: Users subscribe to create and manage organizations
-
-```typescript
-// Revised subscription model for organizations
-export const ORG_SUBSCRIPTION_COSTS = {
-  starter: { 
-    monthly: 29, 
-    creditsIncluded: 500, 
-    maxOrgs: 1, 
-    maxMembers: 5,
-    orgCreation: "free" 
-  },
-  pro: { 
-    monthly: 99, 
-    creditsIncluded: 2000, 
-    maxOrgs: 3, 
-    maxMembers: 15,
-    orgCreation: "free" 
-  },
-  enterprise: { 
-    monthly: 299, 
-    creditsIncluded: 5000, 
-    maxOrgs: 10, 
-    maxMembers: 50,
-    orgCreation: "free" 
-  }
-};
-
-// Additional credit packs for heavy users
-export const ADDITIONAL_CREDITS = {
-  1000: { price: 10 },   // $10 for 1000 credits
-  5000: { price: 40 },   // $40 for 5000 credits  
-  10000: { price: 70 },   // $70 for 10000 credits
-};
+### User Journey
+```
+Free Plan → Buy Credits as Needed → Need Team? → Subscribe → Create Organizations
 ```
 
-### Phase 2: AI Generation Quotas per Organization
-**Goal**: Organizations get monthly AI generation quotas based on subscription
+## Already Built
 
+| Feature | File | Status |
+|---|---|---|
+| Clerk dark theme | app/layout.tsx, app/storyboard-studio/layout.tsx | Done |
+| AI model credit pricing (per-gen cost) | convex/storyboard/pricing.ts + PricingManagementPage.tsx | Done |
+| Billing & Subscription UI | components/admin/BillingSubscriptionPage.tsx | Done |
+| Credit balance / ledger | convex/credits.ts | Done |
+| Stripe credit purchases | app/api/stripe/create-checkout + webhook | Done |
+| Sidebar nav item | SidebarNav.tsx — "Billing & Subscription" below Price Management | Done |
+
+## Hybrid Model Architecture
+
+### Free Plan (Stripe Credits Only)
+- **Cost**: MYR 0 (no subscription)
+- **AI Generation**: Buy credits as needed (Stripe)
+- **Organizations**: ❌ Cannot create orgs
+- **Target**: Individual users, occasional use
+
+### Paid Plans (Clerk Subscriptions)
+- **Cost**: Starter (MYR 19.90), Pro (MYR 29.00)
+- **AI Generation**: Monthly credits + option to buy more
+- **Organizations**: ✅ Create orgs (1 for Starter, 3 for Pro)
+- **Target**: Teams, businesses, power users
+
+## Plan Structure
+
+| Plan | Price | Credits/Month | Organizations | Payment System |
+|---|---|---|---|---|
+| **Free** | MYR 0 | 0 (buy as needed) | 0 | Stripe (credits only) |
+| **Starter** | MYR 19.90 | 50 | 1 | Clerk (subscription) |
+| **Pro** | MYR 29.00 | 200 | 3 | Clerk (subscription) |
+
+## Payment Systems Split
+
+### Stripe (Credit Purchases) 
 ```typescript
-// Per-org generation quotas (included in subscription)
-export const ORG_GENERATION_LIMITS = {
-  starter: { images: 50, videos: 10, scripts: 20 },
-  pro: { images: 200, videos: 50, scripts: 100 },
-  enterprise: { images: 1000, videos: 200, scripts: 500 }
+// Credit packages - keep existing implementation
+const creditPackages = getCreditPackages(); // 100/500/1000 credits
+
+const handleBuyCredits = async (tokens, amount) => {
+  // Calls /api/stripe/create-checkout (already working)
+  // Webhook credits balance (already implemented)
 };
+
+// Webhook: /api/stripe/webhook/route.ts 
 ```
 
-### Phase 3: Team Credit Pool Management
-**Goal**: Organizations can buy and pool additional credits
-
+### Clerk (Organization Subscriptions) 
 ```typescript
-// Org credit pool for additional purchases
-export interface OrgCreditPool {
-  orgId: string;
-  totalCredits: number;  // Additional credits beyond subscription
-  usedCredits: {
-    images: number;
-    videos: number;
-    scripts: number;
+// Subscription plans - new Clerk setup
+const subscriptionPlans = {
+  starter: { orgs: 1, monthlyCredits: 50 },
+  pro: { orgs: 3, monthlyCredits: 200 }
+};
+
+const handleSubscribe = async (plan) => {
+  // Redirect to Clerk subscription portal
+  window.location.href = `https://your-clerk-instance.com/subscribe?plan=${plan}`;
+};
+
+// Check subscription status
+const { user } = useUser();
+const userPlan = user?.publicMetadata?.subscriptionPlan;
+```
+
+## Organization Access Control
+
+### User-Based Subscription Logic
+```typescript
+// lib/storyboard/subscription-check.ts
+export function getOrgLimits(subscriptionPlan: string) {
+  const limits = {
+    free: { maxOrgs: 0, maxMembers: 0 },
+    starter: { maxOrgs: 1, maxMembers: 5 },
+    pro: { maxOrgs: 3, maxMembers: 15 },
   };
-  lastReset: timestamp;
-  subscriptionCreditsUsed: number; // Track subscription credits usage
+  return limits[subscriptionPlan] || { maxOrgs: 0, maxMembers: 0 };
 }
+
+// Organization creation gate
+const plan = user?.publicMetadata?.subscriptionPlan ?? "free";
+const maxOrgs = getOrgLimits(plan).maxOrgs;
+const currentOrgs = await getUserOrganizationCount(user.id);
+if (currentOrgs >= maxOrgs) showUpgradeModal();
 ```
 
-## 📁 Files to Create
+### Multi-Org Benefits
+- **User subscribes once** → Access across all organizations
+- **Consistent experience** when switching orgs
+- **Simple limits** based on user's plan, not org-specific
 
-### Core Logic
-- `lib/org-subscription.ts` - Org subscription management
-- `lib/org-quotas.ts` - Per-org generation limits
-- `lib/credit-pool.ts` - Organization credit management
+## Why This Hybrid Model Works
 
-### API Routes
-- `api/orgs/create-org` - Create org (requires subscription)
-- `api/orgs/buy-credits` - Bulk credit purchase for org
-- `api/orgs/usage-stats` - Track generation usage
+### For Free Users
+- ✅ No upfront cost, low barrier to entry
+- ✅ Pay-as-you-go credits for occasional use
+- ✅ Full AI generation access
+- ✅ Clear upgrade path when teams needed
 
-### UI Components
-- `components/OrgCreationModal.tsx` - Subscribe-to-create org flow
-- `components/OrgCreditPool.tsx` - Show org credit balance
-- `components/GenerationQuotas.tsx` - Display usage limits
+### For Paid Users  
+- ✅ Predictable monthly cost
+- ✅ Included monthly credits
+- ✅ Organization creation and management
+- ✅ Team collaboration features
 
-## 🔄 Files to Modify
+### For Business
+- ✅ Multiple revenue streams (one-time + recurring)
+- ✅ Easy user acquisition (free tier)
+- ✅ Clear monetization path
+- ✅ Simple pricing model
 
-### Existing Components
-- `components/OrganizationSwitcherWithLimits.tsx` → Subscription-based creation
-- `app/dashboard/billing/page.tsx` → Add org subscription UI
-- `workspace/[projectId]/page.tsx` → Check org quotas before generation
+## Implementation Checklist
 
-### Convex Functions
-- `convex/credits.ts` → Add org credit pool functions
-- `convex/storyboard/creditUsage.ts` → Track per-org usage
+### Phase 1: Keep Current System 
+- [x] Stripe credit purchases working
+- [x] Stripe webhook for credit balance
+- [x] BillingSubscriptionPage UI
+- [x] Credit packages (100/500/1000 at MYR 10/40/70)
 
-## 🎛️ UI Flow Changes
+### Phase 2: Add Clerk Subscriptions
+- [ ] Clerk Dashboard → Connect Stripe account
+- [ ] Create subscription plans (Starter: MYR 19.90, Pro: MYR 29.00)
+- [ ] Create lib/storyboard/subscription-check.ts helper
+- [ ] Update BillingSubscriptionPage subscribe buttons → Clerk URLs
 
-### Organization Creation
-1. User clicks "Create Organization"
-2. Shows modal: "Subscribe to manage team (from $29/mo)"
-3. Choose plan → Subscribe → Create org
-4. Success: "Organization created! Start managing your team"
+### Phase 3: Organization Integration
+- [ ] Add org creation gate in MembersPage
+- [ ] Check user.publicMetadata.subscriptionPlan for limits
+- [ ] Update plan descriptions to focus on organization benefits
+- [ ] Test both flows (free+credits vs paid+orgs)
 
-### Generation Process
-1. User in org context wants to generate image/video
-2. Check org's monthly quota (included in subscription)
-3. If quota available → Generate from subscription credits
-4. If quota exceeded → "Upgrade plan or buy more credits"
+### Phase 4: User Experience Polish
+- [ ] Read user.publicMetadata.subscriptionPlan for live plan display
+- [ ] Replace mock invoices with real data (Stripe credits + Clerk subs)
+- [ ] Add upgrade prompts when free users try to create orgs
 
-### Credit Management
-1. Org admin sees credit pool balance
-2. "Buy 5000 credits for team" → Stripe checkout
-3. Credits added to org pool
-4. All members can use pooled credits
+## User Flow Examples
 
-## 📋 Business Rules
+### Free User Journey
+1. Sign up → Free plan (MYR 0)
+2. Generate AI content → Need credits
+3. Click "Buy Credits" → Stripe checkout
+4. Purchase 500 credits (MYR 40)
+5. Use credits for AI generation
+6. Need team features → Click "Subscribe" → Clerk checkout
 
-1. **Subscription required** - Must subscribe to create/manage organizations
-2. **Free org creation** - No additional cost for subscribers
-3. **Credits included** - Based on subscription tier
-4. **Additional credits** - Available for purchase as needed
-5. **Team limits enforced** - Max members by subscription level
-6. **Usage tracking** - Per-member and per-org statistics
+### Paid User Journey  
+1. Sign up → Subscribe to Starter (MYR 19.90)
+2. Get 50 monthly credits + 1 organization
+3. Create organization → Invite team members
+4. Need more credits → Buy via Stripe (pay-as-you-go)
+5. Upgrade to Pro → 3 organizations, 200 monthly credits
 
-## 🧪 Testing Checklist
+## Result
 
-- [ ] User can create org with active subscription
-- [ ] Free users cannot create organizations
-- [ ] Org creation fails without subscription
-- [ ] Monthly quotas reset correctly
-- [ ] Credit pool sharing works for all members
-- [ ] Admin can buy credits for org
-- [ ] Generation respects org quotas
-- [ ] Member limits enforced by subscription
-- [ ] Usage stats track correctly
+**Best of Both Worlds:**
+- ✅ **Stripe Credits**: Proven, flexible pay-as-you-go system
+- ✅ **Clerk Subscriptions**: Elegant organization management
+- ✅ **User-Friendly**: Clear free vs paid distinction
+- ✅ **Business-Friendly**: Multiple revenue streams
+- ✅ **Scalable**: Easy to add more plans/features
 
-## 📈 Success Metrics
-
-- **Subscription revenue** - Track MRR from org subscriptions
-- **Credit consumption** - AI generation usage
-- **Quota utilization** - % of monthly limits used
-- **Pool purchases** - Credit buy-ins by orgs
-- **Team adoption** - Organizations created and member growth
-
----
-
-## 🔄 Status: Planning Phase
-⏳ **Next**: Implement Phase 1 (Subscription-Based Organization Management)
+This hybrid model gives users flexibility while providing clear monetization paths for the business! 

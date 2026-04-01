@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
-import { useOrganization, useUser } from "@clerk/nextjs";
+import { useOrganization, useUser, ClerkProvider } from "@clerk/nextjs";
+import { dark } from "@clerk/ui/themes";
 import { api } from "@/convex/_generated/api";
 import { SidebarNav } from "./components/SidebarNav";
 import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
@@ -54,32 +55,39 @@ export default function StoryboardStudioLayout({
   })) ?? [];
 
   return (
-    <div className="flex h-screen bg-(--bg-primary) overflow-hidden">
-      <StoryboardStudioUIProvider
-        value={{
-          activeNav,
-          setActiveNav,
-          sidebarOpen,
-          setSidebarOpen,
-          sidebarProjects,
-          openNewEpisode: () => {},
-          openStoryManager: () => {},
-        }}
-      >
-        {!hideStudioSidebar && (
-          <SidebarNav
-            open={sidebarOpen}
-            activeNav={activeNav}
-            onNavChange={setActiveNav}
-            projects={sidebarProjects}
-            onOpenSettings={() => setShowSettings(true)}
-          />
-        )}
+    <ClerkProvider 
+      dynamic
+      appearance={{
+        theme: dark,
+      }}
+    >
+      <div className="flex h-screen bg-(--bg-primary) overflow-hidden">
+        <StoryboardStudioUIProvider
+          value={{
+            activeNav,
+            setActiveNav,
+            sidebarOpen,
+            setSidebarOpen,
+            sidebarProjects,
+            openNewEpisode: () => {},
+            openStoryManager: () => {},
+          }}
+        >
+          {!hideStudioSidebar && (
+            <SidebarNav
+              open={sidebarOpen}
+              activeNav={activeNav}
+              onNavChange={setActiveNav}
+              projects={sidebarProjects}
+              onOpenSettings={() => setShowSettings(true)}
+            />
+          )}
 
-        <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
+          <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
 
-        <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
-      </StoryboardStudioUIProvider>
-    </div>
+          <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+        </StoryboardStudioUIProvider>
+      </div>
+    </ClerkProvider>
   );
 }

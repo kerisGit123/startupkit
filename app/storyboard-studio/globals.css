@@ -29,5 +29,45 @@
     --color-success: #52C41A;       /* Success messages, confirmation */
     --color-warning: #FAAD14;       /* Warnings, alerts */
     --color-error: #FF4D4F;         /* Error messages, destructive actions */
+
+    /* Clerk CSS Variables - Light Mode (LTX Theme) */
+    --clerk-color-primary: #4A90E2;                    /* LTX Accent Blue */
+    --clerk-color-primary-foreground: #FFFFFF;         /* White text on blue */
+    --clerk-color-danger: #FF4D4F;                     /* LTX Error Red */
+    --clerk-color-success: #52C41A;                    /* LTX Success Green */
+    --clerk-color-warning: #FAAD14;                    /* LTX Warning Yellow */
+    --clerk-color-neutral: #2C2C2C;                   /* LTX Secondary Background */
+    --clerk-color-foreground: #0A0A0A;                 /* Dark text for light mode */
+    --clerk-color-muted-foreground: #6E6E6E;           /* LTX Tertiary Text */
+    --clerk-color-background: #FFFFFF;                 /* White background */
+    --clerk-color-input: #F5F5F5;                     /* Light input background */
+    --clerk-color-input-foreground: #0A0A0A;           /* Dark input text */
+    --clerk-color-ring: #4A90E2;                      /* LTX Accent Blue for focus rings */
+    --clerk-color-shimmer: #FFFFFF;                   /* White shimmer */
+    --clerk-color-modal-backdrop: rgba(0, 0, 0, 0.5); /* Semi-transparent backdrop */
+    --clerk-border-radius: 0.5rem;                    /* Slightly rounded corners */
+    --clerk-spacing: 1rem;                            /* Consistent spacing */
+    --clerk-color-muted: #F5F5F5;                     /* Light muted background */
+  }
+
+  .dark {
+    /* Clerk CSS Variables - Dark Mode (LTX Theme) */
+    --clerk-color-primary: #4A90E2;                    /* LTX Accent Blue */
+    --clerk-color-primary-foreground: #FFFFFF;         /* White text on blue */
+    --clerk-color-danger: #FF4D4F;                     /* LTX Error Red */
+    --clerk-color-success: #52C41A;                    /* LTX Success Green */
+    --clerk-color-warning: #FAAD14;                    /* LTX Warning Yellow */
+    --clerk-color-neutral: #FAFAFA;                   /* Light neutral for dark mode */
+    --clerk-color-foreground: #FFFFFF;                 /* Primary text - white */
+    --clerk-color-muted-foreground: #A0A0A0;           /* LTX Secondary Text */
+    --clerk-color-background: #1A1A1A;                 /* LTX Primary Background */
+    --clerk-color-input: #2C2C2C;                     /* LTX Secondary Background for inputs */
+    --clerk-color-input-foreground: #FFFFFF;            /* White input text */
+    --clerk-color-ring: #4A90E2;                      /* LTX Accent Blue for focus rings */
+    --clerk-color-shimmer: #FFFFFF;                   /* White shimmer */
+    --clerk-color-modal-backdrop: rgba(0, 0, 0, 0.8); /* Darker backdrop for contrast */
+    --clerk-border-radius: 0.5rem;                    /* Slightly rounded corners */
+    --clerk-spacing: 1rem;                            /* Consistent spacing */
+    --clerk-color-muted: #262626;                     /* LTX Tertiary Background */
   }
 }

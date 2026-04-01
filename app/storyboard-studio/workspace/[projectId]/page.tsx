@@ -3,13 +3,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import { useUser, UserButton } from "@clerk/nextjs";
+import { useUser, UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { getCurrentCompanyId } from "@/lib/auth-utils";
 import { FrameFavoriteButton } from "../../components/FrameFavoriteButton";
 import { FramePrimaryImageButton } from "../../components/FramePrimaryImageButton";
-import { VideoAIPanel } from "../../components/storyboard/VideoAIPanel";
 import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExportModal";
 import { FileBrowser } from "../../components/storyboard/FileBrowser";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
@@ -489,7 +488,6 @@ export default function StoryboardWorkspacePage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [showAiInput, setShowAiInput] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-  const [showVideoPanel, setShowVideoPanel] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showElementLibrary, setShowElementLibrary] = useState(false);
@@ -1022,13 +1020,29 @@ export default function StoryboardWorkspacePage() {
             </>
           )}
 
+          {/* Organization Switcher */}
+          <OrganizationSwitcher
+            appearance={{
+              elements: {
+                rootBox: "flex items-center",
+                organizationSwitcherTrigger: "px-3 py-2 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-2 text-sm",
+                organizationSwitcherTriggerIcon: "w-4 h-4",
+                organizationSwitcherTriggerText: "font-medium text-white",
+                organizationPreviewText: "text-white",
+                organizationPreviewMainIdentifier: "text-white",
+              },
+            }}
+            afterSelectOrganizationUrl="/workspace"
+            afterCreateOrganizationUrl="/workspace"
+          />
+
           {/* User Account - Top Right Corner */}
           <UserButton
             appearance={{
               elements: {
                 avatarBox: "w-8 h-8",
                 userButtonPopoverCard: "bg-(--bg-secondary) border border-(--border-primary) shadow-xl",
-                userButtonPopoverActionButton: "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)",
+                userButtonPopoverActionButton: "text-white hover:bg-white/5 hover:text-gray-200",
                 userButtonPopoverActionButtonText: "text-sm",
                 userButtonPopoverFooter: "border-t border-(--border-primary)",
               },
@@ -1139,13 +1153,6 @@ export default function StoryboardWorkspacePage() {
                       <Trash2 className="w-3.5 h-3.5" />
                       Remove Duplicates
                     </button>
-                    <button onClick={() => { setShowVideoPanel(!showVideoPanel); }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${
-                        showVideoPanel ? "bg-[#4A90E2] text-white" : "bg-[#3D3D3D] hover:bg-[#2C2C2C] text-[#A0A0A0]"
-                      }`}>
-                      <Play className="w-3.5 h-3.5" />
-                      AI Video
-                    </button>
                     <button onClick={() => setShowFileBrowser(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition">
                       <FolderOpen className="w-3.5 h-3.5" />
@@ -1255,20 +1262,6 @@ export default function StoryboardWorkspacePage() {
               </>
             )}
             </div>
-            {showVideoPanel && items && items.length > 0 && (
-              <div className="w-72 shrink-0">
-                <VideoAIPanel
-                  projectId={pid}
-                  items={items}
-                  selectedItemIds={selectedItemIds}
-                  frameRatio={project.settings.frameRatio}
-                  userId={user?.id ?? "unknown"}
-                  orgId={project.orgId}
-                  user={user}
-                  onClose={() => setShowVideoPanel(false)}
-                />
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -1376,6 +1369,8 @@ export default function StoryboardWorkspacePage() {
               focalLength: "",
               imageUrl: selectedSceneItem.imageUrl,
               videoUrl: selectedSceneItem.videoUrl,
+              imagePrompt: selectedSceneItem.imagePrompt,
+              videoPrompt: selectedSceneItem.videoPrompt,
               duration: selectedSceneItem.duration,
               aspectRatio: project.settings.frameRatio,
               order: selectedSceneItem.order,

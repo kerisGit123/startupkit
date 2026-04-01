@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@/convex/_generated/api';
-import { Search, Plus, Edit, Trash2, Copy, Star, Grid, List, X, Zap, Clock, ChevronRight, Save, Eye } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Copy, Star, Grid, List, X, Zap, Clock, Save, Eye, RotateCcw } from 'lucide-react';
 
 interface Prompt {
   _id: string;
@@ -22,11 +22,371 @@ interface PromptLibraryProps {
   userCompanyId: string;
 }
 
+const DEFAULT_PROMPT_TEMPLATES = [
+  {
+    name: 'Photorealistic Character Identity Sheet',
+    type: 'character' as const,
+    isPublic: false,
+    prompt: `1. Photorealistic character identity sheet (using a reference image )
+Prompt
+Create a photorealistic multi-angle photographic identify sheet
+based strickly on the uploaded reference image.
+
+
+
+• Match the exact real-world appearance of the person: facial structure, proportions, skin texture, age, asymmetry, and natural imperfections.
+The result must look like real photography of a real human, not a digital character or 3D asset.
+Use a simple, neutral background, similar to a studio or indoor wall.
+The overall feeling should be documentary and natural, not stylized or cinematic.
+Layout
+• Two horizontal rows, presented as a clean photo contact sheet
+• Top row: four full-body photographs of the same person:
+1. Facing the camera
+2. Left-facing profile
+3. Right-facing profile
+4. Facing away from the camera
+• Bottom row: three close-up photographic portraits:
+1. Facing the camera
+2. Left-facing profile
+3. Right-facing profile
+Pose & Body Language
+• The subject stands naturally and casually, as a real person would when asked to stand still.
+• No exaggerated stance, no rigid pose, no symmetry.
+• Subtle, natural weight distribution and relaxed posture.
+• Shoulders relaxed, arms resting naturally at the sides.
+Consistency & Accuracy
+• Maintain strong identity consistency across all images.
+• Preserve natural human asymmetry.
+• Proportions must remain realistic and consistent without looking mechanically aligned.
+• The subject should feel like the same person photographed multiple times, not a replicated model.
+
+
+Lighting & Camera
+• Soft, neutral, real-world lighting (similar to window light or soft studio light).
+⚫ No dramatic, cinematic, or stylized lighting.
+• Natural shadows with gentle falloff.
+Realistic camera perspective and lens behavior.
+Critical constraints
+• Not a 3D render
+• Not CGI
+• Not a game character
+• Not stylized
+Not a model turnaround`,
+  },
+  {
+    name: 'Photorealistic Environment Identity Sheet',
+    type: 'environment' as const,
+    isPublic: false,
+    prompt: `# Photorealistic Environment Identity Sheet
+
+### Prompt
+
+Create a **photorealistic environment identity sheet** representing the same real-world location photographed from multiple angles.
+
+The result must look like **real location photography captured during a single scouting session**, not a CGI environment, concept art, or game map.
+
+The environment must maintain consistent:
+
+* spatial layout
+* architectural structures
+* terrain and ground surfaces
+* materials and textures
+* scale and distance relationships
+* lighting direction and shadow behavior
+
+The images should resemble **documentary-style location reference photography used in film production**.
+
+Use natural lighting and realistic camera behavior.
+
+---
+
+# Layout
+
+Two horizontal rows presented as a **clean location reference contact sheet**.
+
+All images must depict **the same location at the same time of day with consistent lighting**.
+
+---
+
+# Top Row — Spatial Orientation (4 images)
+
+1. **Primary establishing view**
+   Wide-angle view showing the main structure or area.
+
+2. **Left perspective view**
+   Camera moved slightly left to reveal spatial depth and surrounding structures.
+
+3. **Right perspective view**
+   Camera moved slightly right to show additional environmental context.
+
+4. **Reverse view**
+   Looking back toward the original direction to reveal what exists behind the main viewpoint.
+
+Purpose:
+These views establish **environment geometry and layout consistency**.
+
+---
+
+# Bottom Row — Detail & Material References (3 images)
+
+1. **Key focal area**
+   A closer view of the most recognizable part of the environment
+   (e.g., building entrance, central landmark, important area).
+
+2. **Material and surface detail**
+   Close-up view of ground texture, wall material, vegetation, or structural surface.
+
+3. **Lighting interaction view**
+   A shot emphasizing natural light interaction with the environment
+   (shadows, reflections, light falloff).
+
+Purpose:
+These images help models learn **material realism and lighting behavior**.
+
+---
+
+# Environment Composition Rules
+
+Preserve the **true spatial structure of the location**.
+
+Maintain consistent:
+
+* building positions
+* object placement
+* terrain shape
+* scale relationships
+
+Avoid introducing new structures or moving objects between frames.
+
+The images must feel like **multiple photographs of the same place taken from different positions**.
+
+---
+
+# Lighting & Camera
+
+Use realistic photographic conditions:
+
+* natural daylight or natural indoor lighting
+* soft shadows with gentle falloff
+* realistic camera perspective
+* natural depth of field
+
+Avoid:
+
+* cinematic lighting
+* stylized color grading
+* fantasy lighting effects
+
+---
+
+# Consistency Constraints
+
+The environment must remain identical across all images.
+
+Maintain consistency in:
+
+* architecture
+* materials
+* environmental objects
+* lighting direction
+* atmosphere
+
+The location should appear like **a real place photographed from several camera positions during one moment in time**.
+
+---
+
+# Critical Restrictions
+
+The output must **not resemble**:
+
+* a 3D render
+* CGI environment
+* video game level
+* stylized concept art
+* architectural blueprint
+
+The final result should look like **real photographic documentation of a real environment**.
+.`,
+  },
+  {
+    name: 'Photorealistic Prop / Object Identity Sheet',
+    type: 'prop' as const,
+    isPublic: false,
+    prompt: `# Photorealistic Prop / Object Identity Sheet
+
+### Prompt
+
+Create a **photorealistic prop identity sheet** representing the same real-world object photographed from multiple angles.
+
+The result must look like **real product-style photography captured during a single reference session**, not a CGI model, 3D render, or stylized illustration.
+
+The object must maintain consistent:
+
+* shape and proportions
+* materials and surface textures
+* color and finish
+* scale and thickness
+* wear, scratches, and natural imperfections
+
+The images should resemble **real photographic documentation of a physical object used as a film prop reference**.
+
+Use neutral lighting and realistic camera behavior.
+
+---
+
+# Layout
+
+Two horizontal rows presented as a **clean prop reference contact sheet**.
+
+All images must depict **the exact same object photographed under identical lighting conditions**.
+
+---
+
+# Top Row — Structural Orientation (4 images)
+
+1. **Front view**
+   The object facing directly toward the camera.
+
+2. **Left perspective view**
+   Slightly angled to reveal depth and side structure.
+
+3. **Right perspective view**
+   Opposite angle showing the other side.
+
+4. **Rear view**
+   Back side of the object.
+
+Purpose:
+These views establish **overall geometry, structure, and silhouette**.
+
+---
+
+# Bottom Row — Detail & Material References (3 images)
+
+1. **Top or functional view**
+   The most important functional or recognizable surface of the object.
+
+2. **Material / texture close-up**
+   A close-up showing surface material, texture, or wear.
+
+3. **Lighting interaction view**
+   A view showing how light interacts with the object’s material
+   (reflections, matte surfaces, gloss, metal shine, etc.).
+
+Purpose:
+These images help models understand **material realism and small details**.
+
+---
+
+# Object Composition Rules
+
+Preserve the **true structure and proportions** of the object.
+
+Maintain consistency in:
+
+* shape and geometry
+* material appearance
+* surface imperfections
+* object scale
+
+Avoid altering or redesigning the object between images.
+
+The images must feel like **multiple photographs of the same physical object placed on a table and photographed from different angles**.
+
+---
+
+# Background
+
+Use a **simple neutral background** similar to product photography:
+
+* neutral studio backdrop
+* simple tabletop surface
+* minimal visual distractions
+
+The background should not dominate the image.
+
+---
+
+# Lighting & Camera
+
+Use realistic photography conditions:
+
+* soft neutral studio lighting
+* gentle shadows
+* natural reflections
+* realistic camera perspective
+
+Avoid:
+
+* dramatic cinematic lighting
+* stylized lighting effects
+* exaggerated reflections
+
+---
+
+# Consistency Constraints
+
+The object must remain identical across all images.
+
+Maintain consistent:
+
+* size
+* shape
+* materials
+* color tone
+* surface wear
+
+All photographs should appear as if they were taken **during the same photography session of the same physical object**.
+
+---
+
+# Critical Restrictions
+
+The output must **not resemble**:
+
+* a 3D render
+* CGI model
+* game asset
+* stylized illustration
+* concept art
+
+The result must resemble **real photographic documentation of a physical object**.
+
+---
+
+# How This Fits Your Full Pipeline
+
+Your generation pipeline becomes very stable when you anchor **three identity layers**.
+
+**1. Character Identity Sheet**
+Defines people.
+
+**2. Environment Identity Sheet**
+Defines locations.
+
+**3. Prop / Object Identity Sheet**
+Defines objects that appear repeatedly.
+
+Scene generation then references these anchors.
+
+Example scene prompt:
+
+Character: little boy Jerry
+Environment: Paris street café environment sheet
+Prop: small red backpack prop identity sheet
+Action: Jerry walking along the street holding the backpack
+
+This structure significantly reduces **visual drift in long image → video sequences**.
+`,
+  },
+];
+
 const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: PromptLibraryProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'usage'>('usage');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isResettingDefaults, setIsResettingDefaults] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Prompt | null>(null);
   // Fetch templates from Convex
   const userTemplates = useQuery(api.promptTemplates.getByCompany, { 
@@ -39,8 +399,12 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
   const updateTemplate = useMutation(api.promptTemplates.update);
   const deleteTemplate = useMutation(api.promptTemplates.remove);
   const incrementUsage = useMutation(api.promptTemplates.incrementUsage);
+  const resetDefaultTemplates = useMutation(api.promptTemplates.resetDefaults);
 
-  const allTemplates = [...(userTemplates || []), ...(publicTemplates || [])];
+  const allTemplates = useMemo(() => {
+    const mergedTemplates = [...(userTemplates || []), ...(publicTemplates || [])];
+    return Array.from(new Map(mergedTemplates.map((template) => [template._id, template])).values());
+  }, [publicTemplates, userTemplates]);
 
   // Filter and sort templates
   const filteredTemplates = allTemplates
@@ -70,8 +434,23 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
         companyId: userCompanyId
       });
       setIsCreateModalOpen(false);
+      setEditingTemplate(null);
     } catch (error) {
       console.error('Failed to create template:', error);
+    }
+  };
+
+  const handleDuplicateTemplate = async (template: Prompt) => {
+    try {
+      await createTemplate({
+        name: `${template.name} Copy`,
+        prompt: template.prompt,
+        type: template.type,
+        companyId: userCompanyId,
+        isPublic: false,
+      });
+    } catch (error) {
+      console.error('Failed to duplicate template:', error);
     }
   };
 
@@ -95,6 +474,25 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
       } catch (error) {
         console.error('Failed to delete template:', error);
       }
+    }
+  };
+
+  const handleResetDefaultPrompts = async () => {
+    if (!userCompanyId) return;
+    if (!confirm('Reset the default prompts? Existing prompts with the same default names will be replaced.')) {
+      return;
+    }
+
+    setIsResettingDefaults(true);
+    try {
+      await resetDefaultTemplates({
+        companyId: userCompanyId,
+        prompts: DEFAULT_PROMPT_TEMPLATES,
+      });
+    } catch (error) {
+      console.error('Failed to reset default prompts:', error);
+    } finally {
+      setIsResettingDefaults(false);
     }
   };
 
@@ -161,6 +559,14 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
                     <List className="w-4 h-4" />
                   </button>
                 </div>
+                <button 
+                  onClick={handleResetDefaultPrompts}
+                  disabled={isResettingDefaults}
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RotateCcw className={`w-4 h-4 ${isResettingDefaults ? 'animate-spin' : ''}`} />
+                  {isResettingDefaults ? 'Resetting...' : 'Reset Prompt'}
+                </button>
                 
                 <button 
                   onClick={() => setIsCreateModalOpen(true)}
@@ -186,7 +592,7 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
                       setIsCreateModalOpen(true);
                     }}
                     onDelete={() => handleDeleteTemplate(template._id)}
-                    onCopy={() => navigator.clipboard.writeText(template.prompt)}
+                    onDuplicate={() => handleDuplicateTemplate(template)}
                   />
                 ))}
               </div>
@@ -202,7 +608,7 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
                       setIsCreateModalOpen(true);
                     }}
                     onDelete={() => handleDeleteTemplate(template._id)}
-                    onCopy={() => navigator.clipboard.writeText(template.prompt)}
+                    onDuplicate={() => handleDuplicateTemplate(template)}
                   />
                 ))}
               </div>
@@ -236,7 +642,7 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
 };
 
 // Prompt Card Component
-const PromptCard = ({ template, onSelect, onEdit, onDelete, onCopy }: any) => {
+const PromptCard = ({ template, onSelect, onEdit, onDelete, onDuplicate }: any) => {
   return (
     <div className="rounded-xl border border-white/10 bg-[#1A1A1A] p-4 transition-colors hover:border-white/20 hover:bg-[#202020]">
       <div className="flex items-start justify-between mb-3">
@@ -280,9 +686,9 @@ const PromptCard = ({ template, onSelect, onEdit, onDelete, onCopy }: any) => {
           Use Prompt
         </button>
         <button
-          onClick={onCopy}
+          onClick={onDuplicate}
           className="rounded-lg border border-white/10 p-2 text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-          title="Copy to clipboard"
+          title="Duplicate prompt"
         >
           <Copy className="w-4 h-4" />
         </button>
@@ -306,7 +712,7 @@ const PromptCard = ({ template, onSelect, onEdit, onDelete, onCopy }: any) => {
 };
 
 // Prompt List Item Component
-const PromptListItem = ({ template, onSelect, onEdit, onDelete, onCopy }: any) => {
+const PromptListItem = ({ template, onSelect, onEdit, onDelete, onDuplicate }: any) => {
   return (
     <div className="rounded-xl border border-white/10 bg-[#1A1A1A] p-4 transition-colors hover:border-white/20 hover:bg-[#202020]">
       <div className="flex items-start justify-between mb-3">
@@ -350,9 +756,9 @@ const PromptListItem = ({ template, onSelect, onEdit, onDelete, onCopy }: any) =
           Use Prompt
         </button>
         <button
-          onClick={onCopy}
+          onClick={onDuplicate}
           className="rounded-lg border border-white/10 p-2 text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-          title="Copy to clipboard"
+          title="Duplicate prompt"
         >
           <Copy className="w-4 h-4" />
         </button>
@@ -382,6 +788,15 @@ const PromptEditorModal = ({ template, isOpen, onClose, onSave }: any) => {
     prompt: template?.prompt || '',
     isPublic: template?.isPublic || false
   });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setFormData({
+      name: template?.name || '',
+      prompt: template?.prompt || '',
+      isPublic: template?.isPublic || false,
+    });
+  }, [isOpen, template]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

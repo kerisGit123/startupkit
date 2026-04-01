@@ -1758,6 +1758,7 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     primaryImage: v.optional(v.string()), // NEW: Primary image for storyboard cards
     imagePrompt: v.optional(v.string()),
+    videoPrompt: v.optional(v.string()), // NEW: Video generation prompt
     videoUrl: v.optional(v.string()),
     audioUrl: v.optional(v.string()),
     tags: v.optional(v.array(v.object({
@@ -1851,6 +1852,7 @@ export default defineSchema({
     creditsUsed: v.optional(v.number()),   // Credits consumed for this file
     taskId: v.optional(v.string()),       // KIE AI task ID for generated files
     sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
+    metadata: v.optional(v.any()),
     deletedAt: v.optional(v.number()),     // Soft delete timestamp
   })
     .index("by_project", ["projectId"])
@@ -1999,7 +2001,8 @@ export default defineSchema({
     assignedFunction: v.optional(v.union(    // Function mapping for formula types
       v.literal("getTopazUpscale"),
       v.literal("getSeedance15"),
-      v.literal("getNanoBananaPrice")
+      v.literal("getNanoBananaPrice"),
+      v.literal("getGptImagePrice")
     )),
     
     createdAt: v.number(),

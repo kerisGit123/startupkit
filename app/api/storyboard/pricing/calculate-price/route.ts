@@ -72,8 +72,8 @@ export async function POST(req: NextRequest) {
           // getSeedance15(base, multiplier, resolution, audio, duration)
           const resolutionMultipliers = {
             '480p': 1,
-            '720p': 1.5,
-            '1080p': 2.5,
+            '720p': 2,
+            '1080p': 4,
             '4K': 5
           };
           const audioMultiplier = audio ? 1.5 : 1;

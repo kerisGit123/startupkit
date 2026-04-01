@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
+import { useOrganization, useUser, UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Step, Orientation, ViewMode, Shot, Tag, CommentItem, CastMember, LocationAsset, BoardSettings, Project } from "./types";
+import type { Id } from "@/convex/_generated/dataModel";
 import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS, SIMPLE_TAGS, TAG_COLORS } from "./constants";
 import { getCurrentCompanyId } from "@/lib/auth-utils";
 
@@ -20,6 +21,8 @@ import { UsageDashboard }     from "./components/UsageDashboard";
 import { FileBrowser } from "./components/storyboard/FileBrowser";
 import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
 import PricingManagementPage from "./components/admin/PricingManagementPage";
+import BillingSubscriptionPage from "./components/admin/BillingSubscriptionPage";
+import AdminPage from "./components/admin/AdminPage";
 
 export default function StoryboardPage() {
   const router = useRouter();
@@ -57,9 +60,76 @@ export default function StoryboardPage() {
   const [setting,       setSetting]       = useState("Modern city, abandoned industrial district");
 
   // ── Storyboard data ────────────────────────────────────────────────────────
-  const [shots,     setShots]     = useState<Shot[]>(SAMPLE_SHOTS);
-  const [cast,      setCast]      = useState<CastMember[]>(SAMPLE_CAST);
+  const [shots, setShots] = useState<Shot[]>([]);
+  const [cast,  setCast]  = useState<CastMember[]>(SAMPLE_CAST);
   const [locations, setLocations] = useState<LocationAsset[]>(SAMPLE_LOCATIONS);
+  
+  // Load actual storyboard items from Convex
+  // Get project ID from URL or use a default
+  const projectId = "sh79bmjmw8zpbmppen27v9d7wd839v7z"; // Actual project ID from URL
+  const storyboardItems = useQuery(api.storyboard.moveItems.getStoryboardItemsOrdered, { 
+    projectId: projectId as Id<"storyboard_projects">
+  });
+  
+  // Update shots when Convex data loads
+  useEffect(() => {
+    if (storyboardItems) {
+      console.log("Convex raw data:", storyboardItems);
+      console.log("First item fields:", storyboardItems[0] ? Object.keys(storyboardItems[0]) : 'no items');
+      
+      setShots(storyboardItems.map(item => {
+        console.log("Mapping item:", item);
+        console.log("Item fields:", Object.keys(item));
+        console.log("imagePrompt:", item.imagePrompt);
+        console.log("videoPrompt:", item.videoPrompt);
+        
+        return {
+          id: item._id,
+          scene: item.scene || 1,
+          shot: item.order || 1,
+          description: item.description || "",
+          ert: item.ert || "5 sec",
+          shotSize: item.shotSize || "Medium shot",
+          perspective: item.perspective || "Eye-level shot",
+          movement: item.movement || "Static",
+          equipment: item.equipment || "Handheld camera",
+          focalLength: item.focalLength || "35mm",
+          aspectRatio: item.aspectRatio || "16:9",
+          cast: item.cast || [],
+          location: item.location || "",
+          voiceOver: item.voiceOver || "",
+          action: item.action || "",
+          imageUrl: item.imageUrl,
+          videoUrl: item.videoUrl,
+          imagePrompt: item.imagePrompt,
+          videoPrompt: item.videoPrompt,
+          tags: item.tags || [],
+          notes: item.notes || "",
+          comments: item.comments || [],
+          order: item.order,
+          title: item.title,
+          duration: item.duration,
+          dialogue: item.dialogue,
+          camera: item.camera,
+          sound: item.sound,
+          props: item.props,
+          wardrobe: item.wardrobe,
+          makeup: item.makeup,
+          editing: item.editing,
+          vfx: item.vfx,
+          colorGrade: item.colorGrade,
+          music: item.music,
+          sfx: item.sfx,
+          transition: item.transition,
+          specialInstructions: item.specialInstructions,
+          mood: item.mood,
+          lighting: item.lighting,
+          bgDescription: item.bgDescription,
+          characters: item.characters,
+        };
+      }));
+    }
+  }, [storyboardItems]);
 
   // ── Board view state ───────────────────────────────────────────────────────
   const [viewMode,          setViewMode]          = useState<ViewMode>("grid");
@@ -214,6 +284,8 @@ export default function StoryboardPage() {
     if (activeNav === "asset-generator") setCurrentStep("element-generator");
     if (activeNav === "image-maker") setCurrentStep("image-maker");
     if (activeNav === "price-management") setCurrentStep("price-management");
+    if (activeNav === "billing") setCurrentStep("billing");
+    if (activeNav === "cleaning") setCurrentStep("cleaning");
     if (activeNav === "members") setCurrentStep("members");
     if (activeNav === "usage") setCurrentStep("usage");
 
@@ -333,7 +405,9 @@ export default function StoryboardPage() {
       currentStep === "image-maker" ||
       currentStep === "members" ||
       currentStep === "usage" ||
-      currentStep === "price-management"
+      currentStep === "price-management" ||
+      currentStep === "billing" ||
+      currentStep === "cleaning"
     ) return null;
     const crumbs: { label: string; step: Step }[] = [
       { label: "Projects", step: "dashboard" },
@@ -525,6 +599,20 @@ export default function StoryboardPage() {
 
         {currentStep === "price-management" && (
           <PricingManagementPage 
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "billing" && (
+          <BillingSubscriptionPage
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "cleaning" && (
+          <AdminPage
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />

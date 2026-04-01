@@ -27,7 +27,7 @@ import {
   Check,
   Circle
 } from "lucide-react";
-import { usePricingData } from "../../hooks/usePricingData";
+import { usePricingData } from "../usePricingData";
 
 // Types
 interface PricingModel {
@@ -40,7 +40,7 @@ interface PricingModel {
   creditCost?: number;
   factor?: number;
   formulaJson?: string;
-  assignedFunction?: "getTopazUpscale" | "getSeedance15" | "getNanoBananaPrice";
+  assignedFunction?: "getTopazUpscale" | "getSeedance15" | "getNanoBananaPrice" | "getGptImagePrice" | "getVeo31";
   createdAt: number;
   updatedAt: number;
 }
@@ -58,19 +58,43 @@ function getFixedPrice(base: number, multiplier: number): number {
   return Math.ceil(base * multiplier);
 }
 
+// GPT Image pricing function (Updated from plan_price_management.md)
+// getGptImagePrice(4, 1.3, 'medium')  // → 6 credits (4 × 1.3 = 5.2 → 6)
+// getGptImagePrice(4, 1.3, 'high')    // → 29 credits (22 × 1.3 = 28.6 → 29)
+function getGptImagePrice(base: number, multiplier: number, quality: string): number {
+  const qualityCosts: Record<string, number> = {
+    'medium': base,
+    'high': 22,
+  };
+  
+  const qualityCost = qualityCosts[quality] || base;
+  return Math.ceil(qualityCost * multiplier);
+}
+
+function getFormulaQualityPrice(formulaJson: string | undefined, multiplier: number, quality: string, fallbackBase: number): number {
+  if (!formulaJson) {
+    return Math.ceil(fallbackBase * multiplier);
+  }
+
+  try {
+    const formula = JSON.parse(formulaJson);
+    const qualityData = formula.pricing?.qualities?.find((q: { name: string; cost: number }) => q.name === quality);
+    if (qualityData) {
+      return Math.ceil(qualityData.cost * multiplier);
+    }
+  } catch (error) {
+    console.error("Failed to parse formulaJson for pricing test:", error);
+  }
+
+  return Math.ceil(fallbackBase * multiplier);
+}
+
 // Custom Nano Banana pricing function (Updated from plan_price_management.md)
 // getNanoBananaPrice(8, 1.3, '1K')  // → 11 credits (8 × 1.3 = 10.4 → 11)
 // getNanoBananaPrice(8, 1.3, '2K')  // → 16 credits (12 × 1.3 = 15.6 → 16)  
 // getNanoBananaPrice(8, 1.3, '4K')  // → 24 credits (18 × 1.3 = 23.4 → 24)
 function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
-  const qualityMultipliers: Record<string, number> = {
-    '1K': 1,
-    '2K': 1.5,
-    '4K': 2.25
-  };
-  
-  const qualityMultiplier = qualityMultipliers[quality] || 1;
-  return Math.ceil(base * multiplier * qualityMultiplier);
+  return getFormulaQualityPrice(undefined, multiplier, quality, base);
 }
 
 // Topaz AI upscaling pricing function (Updated from plan_price_management.md)
@@ -79,24 +103,7 @@ function getNanoBananaPrice(base: number, multiplier: number, quality: string): 
 // getTopazUpscale(10, 1.3, '4x')  // → 52 credits (30 × 1.3 = 39 → 52)
 // Note: Updated to use quality-based costs from formulaJson
 function getTopazUpscale(base: number, multiplier: number, quality: string): number {
-  // Map quality to upscale factors for Topaz Upscale
-  const qualityToUpscale: Record<string, string> = {
-    '1K': '1x',
-    '2K': '2x', 
-    '4K': '4x'
-  };
-  
-  const upscaleFactors: Record<string, number> = {
-    '1x': 1,
-    '2x': 2,
-    '3x': 3,
-    '4x': 4
-  };
-  
-  const upscaleKey = qualityToUpscale[quality] || '2x';
-  const upscaleMultiplier = upscaleFactors[upscaleKey] || 1;
-  
-  return Math.ceil(base * multiplier * upscaleMultiplier);
+  return getFormulaQualityPrice(undefined, multiplier, quality, base);
 }
 
 // Seedance 1.5 video generation pricing function (Updated for correct calculation)
@@ -154,7 +161,6 @@ export default function PricingManagementDark() {
   });
   
   const { models, analytics, loading, error, saveModel, toggleModelActive, deleteModel, resetToDefaults, refetch: fetchModels } = usePricingData();
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   
   // Testing state - Updated to be model-focused
@@ -174,7 +180,6 @@ export default function PricingManagementDark() {
     setIsResetting(true);
     await resetToDefaults();
     setIsResetting(false);
-    setShowResetConfirm(false);
   };
 
   const handleSave = (data: Partial<PricingModel>) => {
@@ -223,13 +228,13 @@ export default function PricingManagementDark() {
       // Use the model's actual base cost and factor from database
       const baseCost = model.creditCost || 0;
       const factor = model.factor || 1.3;
+      const formulaPrice = getFormulaQualityPrice(model.formulaJson, factor, testParams.quality, baseCost);
       
       // Check if model has assignedFunction (from database schema)
       const assignedFunction = (model as any).assignedFunction;
       
       if (assignedFunction === 'getTopazUpscale') {
-        // Updated to use quality parameter instead of upscaleFactor
-        result = getTopazUpscale(baseCost, factor, testParams.quality);
+        result = formulaPrice;
       } else if (assignedFunction === 'getSeedance15') {
         result = getSeedance15(
           baseCost, 
@@ -239,7 +244,11 @@ export default function PricingManagementDark() {
           testParams.duration
         );
       } else if (assignedFunction === 'getNanoBananaPrice') {
-        result = getNanoBananaPrice(baseCost, factor, testParams.quality);
+        result = formulaPrice;
+      } else if (assignedFunction === 'getGptImagePrice') {
+        result = formulaPrice;
+      } else if (assignedFunction === 'getVeo31') {
+        result = formulaPrice;
       } else {
         // Fallback to model type detection
         if (model.modelType === 'video') {
@@ -251,7 +260,7 @@ export default function PricingManagementDark() {
             testParams.duration
           );
         } else {
-          result = getNanoBananaPrice(baseCost, factor, testParams.quality);
+          result = formulaPrice;
         }
       }
       
@@ -436,12 +445,17 @@ export default function PricingManagementDark() {
             </button>
           </div>
           <button
-            onClick={() => setShowResetConfirm(true)}
-            className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--accent-orange) hover:text-(--accent-orange-hover) font-medium py-3 px-4 rounded-xl flex items-center gap-2 transition-all duration-200 border border-(--accent-orange)/30"
+            onClick={() => {
+              if (window.confirm('Reset all pricing models to factory defaults? This will overwrite current pricing data.')) {
+                handleReset();
+              }
+            }}
+            disabled={isResetting}
+            className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--text-secondary) font-medium py-3 px-4 rounded-xl flex items-center gap-2 transition-all duration-200 border border-(--accent-orange)/30"
             title="Reset all pricing models to factory defaults"
           >
             <RotateCcw className="w-4 h-4" />
-            Reset to Default
+            {isResetting ? 'Resetting...' : 'Reset to Default'}
           </button>
           <button 
             onClick={() => {
@@ -605,8 +619,8 @@ export default function PricingManagementDark() {
             </tr>
           </thead>
           <tbody className="divide-y divide-(--border-primary)">
-            {filteredModels.map((model) => (
-              <tr key={model._id} className="hover:bg-(--bg-tertiary) transition-all duration-200">
+            {filteredModels.map((model, index) => (
+              <tr key={`${model.modelId}-${model._id || index}`} className="hover:bg-(--bg-tertiary) transition-all duration-200">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     <div className="w-8 h-8 bg-(--accent-blue)/20 rounded-xl flex items-center justify-center mr-3">
@@ -629,7 +643,7 @@ export default function PricingManagementDark() {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
                     model.modelType === 'image' 
                       ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
                       : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
@@ -722,8 +736,8 @@ export default function PricingManagementDark() {
       {viewMode === 'grid' && (
         <div className="max-h-[600px] overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredModels.map((model) => (
-            <div key={model._id} className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) p-6 hover:border-(--accent-blue) transition-all duration-200">
+          {filteredModels.map((model, index) => (
+            <div key={`${model.modelId}-${model._id || index}`} className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) p-6 hover:border-(--accent-blue) transition-all duration-200">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-2">
                   {favoriteModels.has(model.modelId) && (
@@ -751,8 +765,8 @@ export default function PricingManagementDark() {
                       ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
                       : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
                   }`}>
-                    {model.modelType === 'image' ? <Image className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
-                    <span>{model.modelType}</span>
+                    {model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
+                    <span className="font-medium">{model.modelType}</span>
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -825,8 +839,8 @@ export default function PricingManagementDark() {
       {viewMode === 'card' && (
         <div className="max-h-[600px] overflow-y-auto">
           <div className="space-y-4">
-          {filteredModels.map((model) => (
-            <div key={model._id} className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) p-6 hover:border-(--accent-blue) transition-all duration-200">
+          {filteredModels.map((model, index) => (
+            <div key={`${model.modelId}-${model._id || index}`} className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) p-6 hover:border-(--accent-blue) transition-all duration-200">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   {favoriteModels.has(model.modelId) && (
@@ -838,36 +852,11 @@ export default function PricingManagementDark() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-4 text-sm">
-                    <button
-                      onClick={() => {
-                        toggleModelActive(model.modelId);
-                      }}
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border transition-all duration-200 cursor-pointer hover:scale-105 ${
-                        model.isActive 
-                          ? 'bg-(--color-success)/20 text-(--color-success) border-(--color-success)/40 hover:bg-(--color-success)/30' 
-                          : 'bg-(--bg-tertiary) text-(--text-tertiary) border-(--border-primary) hover:bg-(--bg-primary) hover:text-(--text-secondary)'
-                      }`}
-                      title={`Click to ${model.isActive ? 'deactivate' : 'activate'} model`}
-                    >
-                      {model.isActive ? <Check className="w-3 h-3 mr-1" /> : <Circle className="w-3 h-3 mr-1" />}
-                      <span className="font-medium">{model.isActive ? 'Active' : 'Inactive'}</span>
-                    </button>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
-                      model.modelType === 'image' 
-                        ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
-                        : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
-                    }`}>
-                      {model.modelType === 'image' ? <Image className="w-3 h-3 mr-1" /> : <Film className="w-3 h-3 mr-1" />}
-                      <span>{model.modelType}</span>
-                    </span>
-                    <span className="text-white">{model.pricingType}</span>
-                    <span className="text-white">
+                  <div className="text-xs text-(--text-tertiary)">
                     {model.pricingType === 'fixed' 
-                      ? `${model.creditCost} credits`
+                      ? `${model.creditCost} credits` 
                       : 'Formula'
                     }
-                  </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -959,7 +948,7 @@ export default function PricingManagementDark() {
             <DollarSign className="w-8 h-8 text-(--text-tertiary)" />
           </div>
           <h3 className="text-lg font-medium text-(--text-primary) mb-2">No models found</h3>
-          <p className="text-gray-400 mb-4">Get started by creating your first pricing model</p>
+          <p className="text-gray-400 text-sm mb-4">Get started by creating your first pricing model</p>
           <button 
             onClick={() => {
               setSelectedModel(null);
@@ -995,8 +984,8 @@ export default function PricingManagementDark() {
                 onChange={(e) => setTestParams({...testParams, modelId: e.target.value})}
                 className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               >
-                {models?.map(model => (
-                  <option key={model.modelId} value={model.modelId}>
+                {models?.map((model, index) => (
+                  <option key={`${model.modelId}-${index}`} value={model.modelId}>
                     {model.modelName} ({model.modelId})
                   </option>
                 ))}
@@ -1012,9 +1001,26 @@ export default function PricingManagementDark() {
                   onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
                   className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                 >
-                  <option value="1K">1K</option>
-                  <option value="2K">2K</option>
-                  <option value="4K">4K</option>
+                  {(() => {
+                    const selectedTestingModel = models?.find(m => m.modelId === testParams.modelId);
+                    if (!selectedTestingModel?.formulaJson) {
+                      return (
+                        <></>
+                      );
+                    }
+
+                    try {
+                      const formula = JSON.parse(selectedTestingModel.formulaJson);
+                      const qualities = formula.pricing?.qualities ?? [];
+                      return qualities.map((quality: { name: string }) => (
+                        <option key={quality.name} value={quality.name}>{quality.name}</option>
+                      ));
+                    } catch {
+                      return (
+                        <></>
+                      );
+                    }
+                  })()}
                 </select>
               </div>
             )}
@@ -1022,44 +1028,67 @@ export default function PricingManagementDark() {
             {/* Show Resolution for video models */}
             {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
-                  <select 
-                    value={testParams.resolution}
-                    onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
-                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-                  >
-                    <option value="480p">480p</option>
-                    <option value="720p">720p</option>
-                    <option value="1080p">1080p</option>
-                    <option value="4K">4K</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
-                  <select 
-                    value={testParams.duration}
-                    onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
-                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-                  >
-                    <option value="4">4 seconds</option>
-                    <option value="8">8 seconds</option>
-                    <option value="12">12 seconds</option>
-                    <option value="16">16 seconds</option>
-                    <option value="20">20 seconds</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="flex items-center text-sm text-(--text-secondary) mb-1">
-                    <input 
-                      type="checkbox" 
-                      checked={testParams.audio}
-                      onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
-                      className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-                    />
-                    Include Audio
-                  </label>
-                </div>
+                {/* Check if it's Veo 3.1 model */}
+                {models?.find(m => m.modelId === testParams.modelId)?.assignedFunction === 'getVeo31' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
+                    <select 
+                      value={testParams.quality}
+                      onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
+                      className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                    >
+                      <option value="fast">Fast</option>
+                      <option value="quality">Quality</option>
+                    </select>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
+                      <select 
+                        value={testParams.resolution}
+                        onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
+                        className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                      >
+                        <option value="480p">480p</option>
+                        <option value="720p">720p</option>
+                        <option value="1080p">1080p</option>
+                        <option value="4K">4K</option>
+                      </select>
+                    </div>
+                    {/* Show Duration for video models only */}
+                    {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
+                      <div>
+                        <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
+                        <select 
+                          value={testParams.duration}
+                          onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
+                          className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                        >
+                          <option value="4">4 seconds</option>
+                          <option value="8">8 seconds</option>
+                          <option value="12">12 seconds</option>
+                          <option value="16">16 seconds</option>
+                          <option value="20">20 seconds</option>
+                        </select>
+                      </div>
+                    )}
+                    {/* Show Audio for video models only */}
+                    {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
+                      <div>
+                      <label className="flex items-center text-sm text-(--text-secondary) mb-1">
+                        <input 
+                          type="checkbox" 
+                          checked={testParams.audio}
+                          onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
+                          className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                        />
+                        Include Audio
+                      </label>
+                    </div>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -1096,67 +1125,13 @@ export default function PricingManagementDark() {
               disabled={isTesting}
             >
               {isTesting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-(--accent-purple) border-t-transparent rounded-full animate-spin" />
-                  Calculating...
-                </>
+                <><div className="w-4 h-4 border-2 border-(--accent-purple) border-t-transparent rounded-full animate-spin" /> Calculating...</>
               ) : (
-                <>
-                  <Calculator className="w-5 h-5" />
-                  Calculate Credits
-                </>
+                <><Calculator className="w-5 h-5" /> Calculate Credits</>
               )}
             </button>
             <div className="text-xs text-(--text-tertiary)">
               Click to calculate credits for selected model with current parameters
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Reset to Defaults Confirmation Modal */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowResetConfirm(false)} />
-          <div className="relative bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-(--accent-orange)/20 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-(--accent-orange)" />
-              </div>
-              <div>
-                <h3 className="text-white font-semibold text-lg">Reset to Factory Defaults</h3>
-                <p className="text-gray-400 text-sm">This action cannot be undone</p>
-              </div>
-            </div>
-            <p className="text-gray-300 text-sm mb-2">
-              This will <span className="text-orange-400 font-medium">delete all current pricing models</span> and restore the 10 default models:
-            </p>
-            <ul className="text-xs text-gray-400 space-y-1 mb-5 ml-4 list-disc">
-              <li>Nano Banana 2 (formula)</li>
-              <li>Seedance 1.5 Pro (formula)</li>
-              <li>Flux 2 Pro, Character Edit, 1.5 Text to Image (fixed)</li>
-              <li>Nano Banana Edit, Image to Image, Flex Text to Image (fixed)</li>
-              <li>Crisp Upscale (fixed), Image Upscale (formula)</li>
-            </ul>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setShowResetConfirm(false)}
-                disabled={isResetting}
-                className="px-4 py-2 text-(--text-secondary) border border-(--border-primary) rounded-xl hover:bg-(--bg-tertiary) transition-all duration-200 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReset}
-                disabled={isResetting}
-                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-60"
-              >
-                {isResetting ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Resetting...</>
-                ) : (
-                  <><RotateCcw className="w-4 h-4" /> Yes, Reset</>
-                )}
-              </button>
             </div>
           </div>
         </div>
@@ -1178,10 +1153,10 @@ export default function PricingManagementDark() {
             <div className="text-2xl font-bold text-(--accent-blue) mb-1">{testResult} credits</div>
             <div className="text-xs text-(--text-tertiary)">
               Model: {testParams.modelId}
-              {testParams.quality && ` × Quality: ${testParams.quality}`}
-              {testParams.resolution && ` × Resolution: ${testParams.resolution}`}
-              {testParams.audio && ` × Audio: ${testParams.audio ? 'Yes' : 'No'}`}
-              {testParams.duration && ` × Duration: ${testParams.duration}s`}
+              {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'image' && testParams.quality && ` × Quality: ${testParams.quality}`}
+              {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && testParams.resolution && ` × Resolution: ${testParams.resolution}`}
+              {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && testParams.audio && ` × Audio: ${testParams.audio ? 'Yes' : 'No'}`}
+              {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && testParams.duration && ` × Duration: ${testParams.duration}s`}
             </div>
             <div className="text-xs text-(--accent-purple) mt-2">
               Using model's configured base cost and factor
@@ -1211,60 +1186,87 @@ export default function PricingManagementDark() {
               onChange={(e) => setTestParams({...testParams, modelId: e.target.value})}
               className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
             >
-              {models?.map(model => (
-                <option key={model.modelId} value={model.modelId}>
+              {models?.map((model, index) => (
+                <option key={`${model.modelId}-${index}`} value={model.modelId}>
                   {model.modelName} ({model.modelId})
                 </option>
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
-            <select 
-              value={testParams.quality}
-              onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
-              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-            >
-              <option value="1K">1K</option>
-              <option value="2K">2K</option>
-              <option value="4K">4K</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
-            <select 
-              value={testParams.resolution}
-              onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
-              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-            >
-              <option value="480p">480p</option>
-              <option value="720p">720p</option>
-              <option value="1080p">1080p</option>
-              <option value="4K">4K</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
-            <input 
-              type="number" 
-              value={testParams.duration}
-              onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
-              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-              min="1"
-              step="1"
-            />
-          </div>
-          <div>
-            <label className="flex items-center text-sm text-(--text-secondary) mb-1">
+          {/* Show Quality for image models, Resolution for video models */}
+          {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'image' ? (
+            <div>
+              <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
+              <select 
+                value={testParams.quality}
+                onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+              >
+                {(() => {
+                  const selectedTestingModel = models?.find(m => m.modelId === testParams.modelId);
+                  if (!selectedTestingModel?.formulaJson) {
+                    return (
+                      <></>
+                    );
+                  }
+
+                  try {
+                    const formula = JSON.parse(selectedTestingModel.formulaJson);
+                    const qualities = formula.pricing?.qualities ?? [];
+                    return qualities.map((quality: { name: string }) => (
+                      <option key={quality.name} value={quality.name}>{quality.name}</option>
+                    ));
+                  } catch {
+                    return (
+                      <></>
+                    );
+                  }
+                })()}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
+              <select 
+                value={testParams.resolution}
+                onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+              >
+                <option value="480p">480p</option>
+                <option value="720p">720p</option>
+                <option value="1080p">1080p</option>
+                <option value="4K">4K</option>
+              </select>
+            </div>
+          )}
+          {/* Show Duration for video models only */}
+          {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
+            <div>
+              <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
               <input 
-                type="checkbox" 
-                checked={testParams.audio}
-                onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
-                className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                type="number" 
+                value={testParams.duration}
+                onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
+                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                min="1"
+                step="1"
               />
-              Include Audio
-            </label>
-          </div>
+            </div>
+          )}
+          {/* Show Audio for video models only */}
+          {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
+            <div>
+              <label className="flex items-center text-sm text-(--text-secondary) mb-1">
+                <input 
+                  type="checkbox" 
+                  checked={testParams.audio}
+                  onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
+                  className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                />
+                Include Audio
+              </label>
+            </div>
+          )}
         </div>
         
         {/* Model Information Display */}
@@ -1487,8 +1489,10 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                   className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-lg px-4 py-3 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                 >
                   <option value="">Select Function (Optional)</option>
+                  <option value="getGptImagePrice">getGptImagePrice - Image Generation</option>
                   <option value="getNanoBananaPrice">getNanoBananaPrice - Image Generation</option>
                   <option value="getSeedance15">getSeedance15 - Video Generation</option>
+                  <option value="getVeo31">getVeo31 - Video Generation</option>
                   <option value="getTopazUpscale">getTopazUpscale - AI Upscaling</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-2">Assign a specific pricing function. If not set, will auto-detect based on model type.</p>

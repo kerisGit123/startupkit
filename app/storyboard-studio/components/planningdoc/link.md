@@ -248,3 +248,82 @@ https://www.youtube.com/watch?v=0doAdc9H6DM
 
 movie :
 https://www.youtube.com/watch?v=zorefRIWvw0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  {
+    modelId: "bytedance/seedance-1.5-pro",
+    modelName: "Seedance 1.5 Pro",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getSeedance15",
+    creditCost: 7,
+    factor: 1.3,
+    formulaJson: JSON.stringify({
+      pricing: {
+        base_cost: 7,
+        resolution_multipliers: { "480P": 1, "720P": 2, "1080P": 4 },
+        audio_multiplier: 2,
+        duration_multipliers: { "4s": 1, "8s": 2, "12s": 4 },
+      },
+    }),
+  },
+
+
+i want add veo-3-1
+model 
+with following  pricing 
+
+  Pricing: Fast mode (text-to-video / image-to-video / reference-to-video): 60 credits per video (≈ $0.30) ·
+Quality mode (text-to-video / image-to-video): 250 credits per video (≈ $1.25)
+
+
+formulate my json
+e.g. {
+      pricing: {
+        base_cost: 7,
+        resolution_multipliers: { "480P": 1, "720P": 2, "1080P": 4 },
+        audio_multiplier: 2,
+        duration_multipliers: { "4s": 1, "8s": 2, "12s": 4 },
+      },
+    } with the veo 3.1 pricing
+
+    getVeo31
+
+
+    build the json 
+
+
+
+
+
+    {
+  "modelId": "google/veo-3.1",
+  "modelName": "Veo 3.1",
+  "modelType": "video",
+  "isActive": true,
+  "pricingType": "formula",
+  "assignedFunction": "getVeo31",
+  "creditCost": 60,
+  "factor": 1.3,
+  "formulaJson": "{\"pricing\":{\"mode_costs\":{\"fast\":60,\"quality\":250},\"supported_inputs\":[\"text-to-video\",\"image-to-video\",\"reference-to-video\"]}}"
+}
+
+
+
+{"pricing":{"base_cost":60,"qualities":[{"name":"fast","cost":60},{"name":"quality","cost":250}]}}

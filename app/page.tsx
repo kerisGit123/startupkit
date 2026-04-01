@@ -1,12 +1,14 @@
 "use client";
 
-import { SignInButton, SignUpButton, SignedIn, SignedOut } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import { Zap, Database, ArrowRight, Check, Sparkles, Lock } from "lucide-react";
 import Link from "next/link";
 import { PLANS } from "@/lib/plans";
 import { ChatWidget } from "@/components/ChatWidget";
 
 export default function Home() {
+  const { isLoaded } = useAuth();
+  
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Hero Section */}
@@ -48,12 +50,14 @@ export default function Home() {
               {/* CTA Buttons */}
               <div className="flex items-center justify-center gap-4 flex-wrap mb-10">
                 <SignedOut>
-                  <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
-                    <button className="group px-8 py-4 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black rounded-xl hover:from-yellow-500 hover:to-yellow-600 font-bold text-lg transition-all duration-300 flex items-center gap-2 shadow-2xl shadow-yellow-400/50 hover:shadow-yellow-400/70 hover:scale-105">
-                      Get Started Free
-                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                  </SignUpButton>
+                  {isLoaded && (
+                    <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+                      <button className="group px-8 py-4 bg-gradient-to-r from-yellow-400 to-yellow-500 text-black rounded-xl hover:from-yellow-500 hover:to-yellow-600 font-bold text-lg transition-all duration-300 flex items-center gap-2 shadow-2xl shadow-yellow-400/50 hover:shadow-yellow-400/70 hover:scale-105">
+                        Get Started Free
+                        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                    </SignUpButton>
+                  )}
                 </SignedOut>
                 <SignedIn>
                   <Link href="/dashboard">
@@ -224,11 +228,13 @@ export default function Home() {
               ))}
             </ul>
             <SignedOut>
-              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
-                <button className="w-full px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-700 font-semibold transition">
-                  Get Started
-                </button>
-              </SignUpButton>
+              {isLoaded && (
+                <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+                  <button className="w-full px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-700 font-semibold transition">
+                    Get Started
+                  </button>
+                </SignUpButton>
+              )}
             </SignedOut>
             <SignedIn>
               <Link href="/pricing">
@@ -260,11 +266,13 @@ export default function Home() {
               ))}
             </ul>
             <SignedOut>
-              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
-                <button className="w-full px-6 py-3 bg-yellow-400 text-black rounded-xl hover:bg-yellow-500 font-bold transition shadow-lg">
-                  Get Started
-                </button>
-              </SignUpButton>
+              {isLoaded && (
+                <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+                  <button className="w-full px-6 py-3 bg-yellow-400 text-black rounded-xl hover:bg-yellow-500 font-bold transition shadow-lg">
+                    Get Started
+                  </button>
+                </SignUpButton>
+              )}
             </SignedOut>
             <SignedIn>
               <Link href="/pricing">
@@ -293,11 +301,13 @@ export default function Home() {
               ))}
             </ul>
             <SignedOut>
-              <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
-                <button className="w-full px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-700 font-semibold transition">
-                  Get Started
-                </button>
-              </SignUpButton>
+              {isLoaded && (
+                <SignUpButton mode="modal" forceRedirectUrl="/dashboard">
+                  <button className="w-full px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-700 font-semibold transition">
+                    Get Started
+                  </button>
+                </SignUpButton>
+              )}
             </SignedOut>
             <SignedIn>
               <Link href="/pricing">

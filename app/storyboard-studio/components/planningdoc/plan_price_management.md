@@ -451,7 +451,7 @@ const DEFAULT_PRICING_MODELS = [
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 7,
-        resolution_multipliers: { "480p": 1, "720p": 1.5, "1080p": 2.5, "4K": 5 },
+        resolution_multipliers: { "480p": 1, "720p": 2, "1080p": 4 },
         audio_multiplier: 1.5,
         duration_multiplier: 5,
       },

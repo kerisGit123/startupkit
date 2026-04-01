@@ -1,8 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { usePricingData } from "../hooks/usePricingData";
+import { usePricingData } from "./usePricingData";
 import type { Id } from "@/convex/_generated/dataModel";
+import { useMutation, useQuery } from "convex/react";
+import { useUser, useOrganization } from "@clerk/nextjs";
+import { api } from "@/convex/_generated/api";
 import { FileBrowser } from "./storyboard/FileBrowser";
 import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
@@ -30,7 +33,8 @@ interface ReferenceImage {
 export interface EditImageAIPanelProps {
   mode: AIEditMode;
   onModeChange: (mode: AIEditMode) => void;
-  onGenerate: (creditsUsed: number) => void;
+  onGenerate: (creditsUsed: number, quality?: string) => void;
+  onGenerateQuality?: (quality: string) => void;
   onSaveSelectedImage?: () => void;
   projectId?: Id<"storyboard_projects">;
   credits?: number;
@@ -61,7 +65,7 @@ export interface EditImageAIPanelProps {
   onSetSquareMode?: (isSquare: boolean) => void;
   onResetRectangle?: () => void;
   onSetOriginalImage?: (imageUrl: string) => void;
-  onAddCanvasElement?: (file: File) => void; // New prop for adding canvas elements
+  onAddCanvasElement?: (file: File) => void;
   backgroundImage?: string;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -80,13 +84,15 @@ export interface EditImageAIPanelProps {
 // ── Available Models ─────────────────────────────────────────────────
 const MODELS = [
   { id: "nano-banana-2", label: "Nano Banana 2", icon: "G" },
+  { id: "nano-banana-pro", label: "Nano Banana Pro", icon: "G" },
   { id: "nano-banana-1", label: "Nano Banana 1", icon: "G" },
   { id: "stable-diffusion", label: "Stable Diffusion", icon: "S" },
-  { id: "gpt-image/1.5-text-to-image", label: "GPT Image 1.5 Text", icon: "🟦" },
-  { id: "google/nano-banana-edit", label: "Nano Banana Edit", icon: "🟩" },
-  { id: "character-remix", label: "Character Remix", icon: "🟣" },
-  { id: "qwen/image-to-image", label: "Qwen Image Edit", icon: "🟠" },
-  { id: "ideogram/character-edit", label: "Character Edit", icon: "🔵" },
+  { id: "google/nano-banana-edit", label: "Nano Banana Edit", icon: "" },
+  { id: "character-remix", label: "Character Remix", icon: "" },
+  { id: "gpt-image/1.5-image-to-image", label: "GPT 1.5 Image to Image", icon: "" },
+  { id: "ideogram/character-edit", label: "Character Edit", icon: "" },
+  { id: "recraft/crisp-upscale", label: "Recraft Crisp", icon: "" },
+  { id: "topaz/image-upscale", label: "Topaz Upscale", icon: "" },
 ];
 
 // ── Content Type Tabs ────────────────────────────────────────────────
@@ -128,22 +134,22 @@ function ToolBtn({
 }
 
 // ── Component ─────────────────────────────────────────────────────────
-export function EditImageAIPanel({
+export default function EditImageAIPanel({
   mode,
   onModeChange,
   onGenerate,
+  onGenerateQuality,
   onSaveSelectedImage,
   projectId,
-  credits = 20,
-  model = "gpt-image",
+  credits,
+  model,
   onModelChange,
   referenceImages,
   onAddReferenceImage,
   onRemoveReferenceImage,
-  isGenerating,
   userPrompt,
   onUserPromptChange,
-  // Brush inpaint integration
+  isGenerating = false,
   isEraser,
   setIsEraser,
   maskBrushSize,
@@ -180,15 +186,81 @@ export function EditImageAIPanel({
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [contentType, setContentType] = useState("image");
   const { models, loading: pricingLoading, error: pricingError } = usePricingData();
-  const [selectedQuality, setSelectedQuality] = useState("2K"); // Default quality
+  const [selectedQuality, setSelectedQuality] = useState("1K"); // Default quality for Nano Banana/Topaz
+  const [gptImageQuality, setGptImageQuality] = useState("medium"); // Default quality for GPT Image
+
+  // Use exact same pattern as working CreditBalanceDisplay (avoid naming conflicts)
+  const { user: clerkUser } = useUser();
+  const { organization } = useOrganization();
+  const companyId = organization?.id ?? clerkUser?.id ?? "personal";
+  
+  const getBalance = useQuery(api.credits.getBalance, {
+    companyId: companyId
+  });
+
+  // Debug: Log when company ID changes and getBalance result
+  useEffect(() => {
+    console.log('[EditImageAIPanel] clerkUser:', clerkUser?.id);
+    console.log('[EditImageAIPanel] organization:', organization?.id);
+    console.log('[EditImageAIPanel] final companyId:', companyId);
+    console.log('[EditImageAIPanel] getBalance result:', getBalance);
+    console.log('[EditImageAIPanel] getBalance type:', typeof getBalance);
+    console.log('[EditImageAIPanel] getBalance loading state:', getBalance === undefined ? 'loading' : 'loaded');
+  }, [companyId, clerkUser?.id, organization?.id, getBalance]);
+
+  // Get quality options from model's formulaJson
+  const getQualityOptions = useCallback((modelId: string): string[] => {
+    const model = models.find(m => m.modelId === modelId);
+    if (!model || !model.formulaJson) {
+      // Default fallback
+      if (modelId.includes('gpt-image')) return ["high", "medium"];
+      return ["1K", "2K", "4K"];
+    }
+    
+    try {
+      const formula = JSON.parse(model.formulaJson);
+      if (formula.pricing && formula.pricing.qualities) {
+        return formula.pricing.qualities.map((q: any) => q.name);
+      }
+    } catch (e) {
+      console.error('[EditImageAIPanel] Failed to parse formulaJson:', e);
+    }
+    
+    // Default fallback
+    if (modelId.includes('gpt-image')) return ["high", "medium"];
+    return ["1K", "2K", "4K"];
+  }, [models]);
 
   // Local helper to match the old usePricingModels API
   const getModelCredits = useCallback((modelId: string): number => {
-    const model = models.find(m => m.modelId === modelId);
+    console.log('[EditImageAIPanel] getModelCredits called with modelId:', modelId);
+    console.log('[EditImageAIPanel] Available models in pricing:', models.map(m => ({ 
+      modelId: m.modelId, 
+      creditCost: m.creditCost, 
+      pricingType: m.pricingType,
+      factor: m.factor,
+      assignedFunction: m.assignedFunction
+    })));
+    console.log('[EditImageAIPanel] Full model objects:', JSON.stringify(models, null, 2));
+    
+    // Try to find exact match first
+    let model = models.find(m => m.modelId === modelId);
+    
+    // If not found, try to find partial match (for GPT Image variations)
+    if (!model && modelId.includes('gpt-image')) {
+      console.log('[EditImageAIPanel] Exact match not found, searching for GPT Image models...');
+      model = models.find(m => m.modelId.includes('gpt-image'));
+      if (model) {
+        console.log('[EditImageAIPanel] Found GPT Image model with partial match:', model.modelId);
+      }
+    }
+    
     if (!model) {
       console.log("[EditImageAIPanel] Model not found:", modelId);
       return 0;
     }
+    
+    console.log("[EditImageAIPanel] Using model:", { modelId: model.modelId, creditCost: model.creditCost, pricingType: model.pricingType });
     
     console.log("[EditImageAIPanel] Calculating credits for:", modelId, {
       pricingType: model.pricingType,
@@ -198,59 +270,7 @@ export function EditImageAIPanel({
       selectedQuality
     });
     
-    // Direct test for Nano Banana 2 and Topaz Upscale
-    if (modelId === "nano-banana-2") {
-      if (model.formulaJson) {
-        try {
-          const formula = JSON.parse(model.formulaJson);
-          const quality = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-          if (quality) {
-            const factor = model.factor || 1;
-            const result = Math.ceil(quality.cost * factor);
-            console.log("[EditImageAIPanel] Nano Banana from formula:", { selectedQuality, cost: quality.cost, factor, result });
-            return result;
-          }
-        } catch (e) {
-          console.error("[EditImageAIPanel] Error parsing Nano Banana formula:", e);
-        }
-      }
-      // Fallback to direct calculation
-      const base = 8;
-      const factor = 1.3;
-      const qualityMultipliers = { '1K': 1, '2K': 1.5, '4K': 2.25 };
-      const qualityMultiplier = qualityMultipliers[selectedQuality as keyof typeof qualityMultipliers] || 1;
-      const result = Math.ceil(base * factor * qualityMultiplier);
-      console.log("[EditImageAIPanel] Nano Banana fallback calculation:", { base, factor, qualityMultiplier, selectedQuality, result });
-      return result;
-    }
-    
-    if (modelId === "topaz/image-upscale") {
-      if (model.formulaJson) {
-        try {
-          const formula = JSON.parse(model.formulaJson);
-          const quality = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-          if (quality) {
-            const factor = model.factor || 1;
-            const result = Math.ceil(quality.cost * factor);
-            console.log("[EditImageAIPanel] Topaz Upscale from formula:", { selectedQuality, cost: quality.cost, factor, result });
-            return result;
-          }
-        } catch (e) {
-          console.error("[EditImageAIPanel] Error parsing Topaz formula:", e);
-        }
-      }
-      // Fallback to direct calculation
-      const base = 10;
-      const factor = 1.3;
-      const upscaleMultipliers = { '1x': 1, '2x': 2, '3x': 3, '4x': 4 };
-      const qualityToUpscale = { '1K': '1x', '2K': '2x', '4K': '4x' };
-      const upscaleKey = qualityToUpscale[selectedQuality as keyof typeof qualityToUpscale] || '2x';
-      const upscaleMultiplier = upscaleMultipliers[upscaleKey as keyof typeof upscaleMultipliers] || 1;
-      const result = Math.ceil(base * factor * upscaleMultiplier);
-      console.log("[EditImageAIPanel] Topaz fallback calculation:", { base, factor, upscaleKey, upscaleMultiplier, selectedQuality, result });
-      return result;
-    }
-    
+        
     if (model.pricingType === 'fixed') {
       const result = Math.ceil((model.creditCost || 0) * (model.factor || 1));
       console.log("[EditImageAIPanel] Fixed pricing result:", result);
@@ -264,10 +284,37 @@ export function EditImageAIPanel({
       
       switch (model.assignedFunction) {
         case 'getNanoBananaPrice':
+          // Use formulaJson for Nano Banana pricing (same as other formula-based models)
+          console.log("[EditImageAIPanel] getNanoBananaPrice called for:", { modelId, selectedQuality, model });
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              console.log("[EditImageAIPanel] Parsed formula:", formula);
+              const quality = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
+              console.log("[EditImageAIPanel] Found quality:", quality, "for selectedQuality:", selectedQuality);
+              if (quality) {
+                const factor = model.factor || 1;
+                const result = Math.ceil(quality.cost * factor);
+                console.log("[EditImageAIPanel] Nano Banana from formula:", { 
+                  modelId, 
+                  selectedQuality, 
+                  cost: quality.cost, 
+                  factor, 
+                  result 
+                });
+                return result;
+              } else {
+                console.log("[EditImageAIPanel] Quality not found, available qualities:", formula.pricing?.qualities);
+              }
+            } catch (e) {
+              console.error("[EditImageAIPanel] Error parsing Nano Banana formula:", e);
+            }
+          }
+          // Fallback to hardcoded multipliers if formula parsing fails
           const qualityMultipliers = { '1K': 1, '2K': 1.5, '4K': 2.25 };
           const qualityMultiplier = qualityMultipliers[selectedQuality as keyof typeof qualityMultipliers] || 1;
           const nanoResult = Math.ceil(base * factor * qualityMultiplier);
-          console.log("[EditImageAIPanel] Nano Banana pricing:", { 
+          console.log("[EditImageAIPanel] Nano Banana fallback pricing:", { 
             modelId, 
             base, 
             factor, 
@@ -278,19 +325,41 @@ export function EditImageAIPanel({
           });
           return nanoResult;
         case 'getSeedance15':
-          const resolutionMultipliers = { '480p': 1, '720p': 1.5, '1080p': 2.5, '4K': 5 };
+          const resolutionMultipliers = { '480p': 1, '720p': 2, '1080p': 4, '4K': 5 };
           const resolutionMultiplier = resolutionMultipliers['720p'] || 1;
           const audioMultiplier = 1;
           const durationMultiplier = 1;
           return Math.ceil(base * factor * resolutionMultiplier * audioMultiplier * durationMultiplier);
         case 'getTopazUpscale':
+          // Use formulaJson for Topaz Upscale pricing (same as other formula-based models)
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const quality = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
+              if (quality) {
+                const factor = model.factor || 1;
+                const result = Math.ceil(quality.cost * factor);
+                console.log("[EditImageAIPanel] Topaz Upscale from formula:", { 
+                  modelId, 
+                  selectedQuality, 
+                  cost: quality.cost, 
+                  factor, 
+                  result 
+                });
+                return result;
+              }
+            } catch (e) {
+              console.error("[EditImageAIPanel] Error parsing Topaz Upscale formula:", e);
+            }
+          }
+          // Fallback to hardcoded multipliers if formula parsing fails
           const upscaleMultipliers = { '1x': 1, '2x': 2, '3x': 3, '4x': 4 };
           // Map quality to upscale multiplier
           const qualityToUpscale = { '1K': '1x', '2K': '2x', '4K': '4x' };
           const upscaleKey = qualityToUpscale[selectedQuality as keyof typeof qualityToUpscale] || '2x';
           const upscaleMultiplier = upscaleMultipliers[upscaleKey as keyof typeof upscaleMultipliers] || 1;
           const topazResult = Math.ceil(base * factor * upscaleMultiplier);
-          console.log("[EditImageAIPanel] Topaz Upscale pricing:", { 
+          console.log("[EditImageAIPanel] Topaz Upscale fallback pricing:", { 
             modelId, 
             base, 
             factor, 
@@ -316,6 +385,8 @@ export function EditImageAIPanel({
   const handlePromptChange = (value: string) => {
     onUserPromptChange?.(value);
   };
+  const requiresPrompt = activeTool === "text-to-image";
+  const canGenerate = mode === "area-edit" && !isGenerating && (!requiresPrompt || !!currentPrompt.trim());
   
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
@@ -328,12 +399,11 @@ export function EditImageAIPanel({
   // Model options for area-edit mode (filtered by mask type)
   const inpaintModelOptions = useMemo(() => {
     return activeTool === "text-to-image" ? [
-      { value: "gpt-image/1.5-text-to-image", label: "GPT Image 1.5", sub: "Text Mode", credits: getModelCredits("gpt-image/1.5-text-to-image"), maxReferenceImages: 0 },
-      { value: "google/nano-banana-edit", label: "Nano Banana Edit", sub: "Text Mode", credits: getModelCredits("google/nano-banana-edit"), maxReferenceImages: 0 },
-      { value: "qwen/image-to-image", label: "Qwen Image Edit", sub: "Text Mode", credits: getModelCredits("qwen/image-to-image"), maxReferenceImages: 0 },
     ] : activeTool === "image-to-image" ? [
       { value: "nano-banana-2", label: "Nano Banana 2", sub: `${selectedQuality} • 7 refs`, credits: getModelCredits("nano-banana-2"), maxReferenceImages: 7 },
-      { value: "gpt-image", label: "GPT Image", sub: "1:1 • 15 refs", credits: getModelCredits("gpt-image"), maxReferenceImages: 15 },
+      { value: "nano-banana-pro", label: "Nano Banana Pro", sub: `${selectedQuality} • 7 refs`, credits: getModelCredits("nano-banana-pro"), maxReferenceImages: 7 },
+      { value: "google/nano-banana-edit", label: "Nano Banana Edit", sub: "1 ref edit", credits: getModelCredits("google/nano-banana-edit"), maxReferenceImages: 1 },
+      { value: "gpt-image/1.5-image-to-image", label: "GPT 1.5 Image to Image", sub: `${gptImageQuality} • 1:1 • 15 refs`, credits: getModelCredits("gpt-image/1.5-image-to-image"), maxReferenceImages: 15 },
     ] : activeTool === "upscale" ? [
       { value: "recraft/crisp-upscale", label: "Recraft Crisp", sub: "AI Upscale", credits: getModelCredits("recraft/crisp-upscale"), maxReferenceImages: 0 },
       { value: "topaz/image-upscale", label: "Topaz Upscale", sub: `${selectedQuality} Upscale`, credits: getModelCredits("topaz/image-upscale"), maxReferenceImages: 0 },
@@ -341,7 +411,7 @@ export function EditImageAIPanel({
       // Default: include character-edit for any other tools in area-edit mode
       { value: "ideogram/character-edit", label: "Character Edit", sub: "Faceshift", credits: getModelCredits("ideogram/character-edit"), maxReferenceImages: 0 },
     ];
-  }, [activeTool, selectedQuality, getModelCredits]);
+  }, [activeTool, selectedQuality, gptImageQuality, getModelCredits]);
 
   const selectedModel = MODELS.find((m) => m.id === model) || MODELS[0];
   
@@ -359,14 +429,14 @@ export function EditImageAIPanel({
       return "gpt-image/1.5-text-to-image";
     }
     
-    // Handle GPT Image 1.5 model selection  
-    if (model === "gpt-image") {
+    // Handle GPT Image 1.5 Image to Image model selection  
+    if (model === "gpt-image/1.5-image-to-image") {
       // Only set tool to image-to-image if user hasn't explicitly selected a different tool
       // Don't override if user selected text-to-image tool
       if (activeTool !== "image-to-image" && activeTool !== "text-to-image") {
         setActiveTool("image-to-image");
       }
-      return "gpt-image";
+      return "gpt-image/1.5-image-to-image";
     }
     
     // Handle Nano Banana 2 and Topaz Upscale (return as-is for quality dropdown)
@@ -375,6 +445,22 @@ export function EditImageAIPanel({
     
     return model;
   })();
+
+  // Auto-set quality when model changes to first available option
+  useEffect(() => {
+    if (normalizedModel && (normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image")) {
+      // For GPT Image models, set to medium if not already set
+      if (!gptImageQuality || !["high", "medium"].includes(gptImageQuality)) {
+        setGptImageQuality("medium");
+      }
+    } else if (normalizedModel) {
+      // For other models, set to first available quality
+      const availableQualities = getQualityOptions(normalizedModel);
+      if (availableQualities.length > 0 && !availableQualities.includes(selectedQuality)) {
+        setSelectedQuality(availableQualities[0]);
+      }
+    }
+  }, [normalizedModel, selectedQuality, gptImageQuality, getQualityOptions]);
 
   // Get current selected model display name
   const getSelectedModelDisplay = () => {
@@ -566,26 +652,20 @@ export function EditImageAIPanel({
           console.log("[EditImageAIPanel] Reference image uploaded to temps:", {
             r2Key: result.r2Key,
             publicUrl: result.publicUrl,
+            fileSize: result.fileSize,
             isTemporary: result.isTemporary,
             expiresAt: result.expiresAt
           });
           
-          // Create a File object with the original file data for display
-          // No need to fetch from R2 since we have the original file
-          try {
-            // Store R2 metadata on the original file
-            (file as any).__r2Url = result.publicUrl;
-            (file as any).__r2Key = result.r2Key;
-            (file as any).__isTemporary = result.isTemporary;
-            (file as any).__expiresAt = result.expiresAt;
-            
-            onAddReferenceImage(file);
-          } catch (error) {
-            console.error("[EditImageAIPanel] Failed to process reference image:", error);
-            // Fallback: create a File object with original data
-            const tempFile = new File([file], file.name, { type: file.type });
-            onAddReferenceImage(tempFile);
-          }
+          // Create a File object with R2 metadata for the reference image
+          const uploadedFile = new File([file], file.name, { type: file.type });
+          (uploadedFile as any).__r2Url = result.publicUrl;
+          (uploadedFile as any).__r2Key = result.r2Key;
+          (uploadedFile as any).__isTemporary = result.isTemporary;
+          (uploadedFile as any).__expiresAt = result.expiresAt;
+          (uploadedFile as any).__size = result.fileSize; // Store file size
+          
+          onAddReferenceImage(uploadedFile);
         } else {
           throw new Error(result.error || 'Upload failed');
         }
@@ -719,6 +799,8 @@ export function EditImageAIPanel({
       // Select upscale tool
       setActiveTool(id);
       setShowBrushSizeMenu(false);
+      // Auto-set Topaz Upscale model for upscale tool
+      onModelChange?.("topaz/image-upscale");
       onToolSelect?.("upscale");
     } else if (id === "image-to-image") {
       // Select image to image tool
@@ -727,6 +809,8 @@ export function EditImageAIPanel({
       // Set square mode to false for image to image
       onSetSquareMode?.(false);
       onToolSelect?.("rectInpaint");
+      // Default to nano-banana-2 for image-to-image
+      onModelChange?.("nano-banana-2");
     } else if (id === "text-to-image") {
       // Select text to image tool
       setActiveTool("text-to-image");
@@ -873,13 +957,6 @@ export function EditImageAIPanel({
                 className="image-to-image-button"
               >
                 <Image className={`${ic} ${activeTool === "image-to-image" ? "text-cyan-400" : ""}`} />
-              </ToolBtn>
-              <ToolBtn 
-                active={activeTool === "text-to-image"} 
-                onClick={() => pick("text-to-image")} 
-                title="Text to Image"
-              >
-                <Square className={`${ic} ${activeTool === "text-to-image" ? "text-purple-400" : ""}`} />
               </ToolBtn>
               <ToolBtn active={activeTool === "crop"} onClick={() => pick("crop")} title="Crop">
                 <Scissors className={ic} />
@@ -1113,7 +1190,7 @@ export function EditImageAIPanel({
           <textarea
             value={currentPrompt || ""}
             onChange={(e) => handlePromptChange(e.target.value)}
-            placeholder="Describe what you want to create..."
+            placeholder="Character [action] image, need to preserve the surrounding, maintain the background..."
             className="flex-1 min-h-[40px] px-4 py-2 bg-transparent border border-white/[0.08] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-white/[0.15] transition-all text-sm overflow-hidden resize-none"
             style={{ 
               caretColor: 'white',
@@ -1208,7 +1285,6 @@ export function EditImageAIPanel({
                           key={modelOption.value}
                           onClick={() => {
                             onModelChange?.(modelOption.value);
-                            alertModelCredits(modelOption.value);
                             setShowInpaintModelDropdown(false);
                           }}
                           className="w-full px-2 py-2 text-left hover:bg-white/5 rounded-lg transition"
@@ -1222,34 +1298,36 @@ export function EditImageAIPanel({
                 )}
               </div>
 
-              {/* Quality Dropdown for Nano Banana 2 and Topaz Upscale */}
-              {(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale") && (
+              {/* Quality Dropdown for Nano Banana, Topaz Upscale, and GPT Image 1.5 */}
+              {(normalizedModel === "nano-banana-2" || normalizedModel === "nano-banana-pro" || normalizedModel === "topaz/image-upscale" || normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") && (
                 <div className="relative" style={{ width: "80px" }}>
                   <button
                     onClick={() => setShowQualityDropdown(!showQualityDropdown)}
                     className="w-full flex items-center justify-between px-2 py-2 bg-[#1a1a24] text-white rounded-lg text-xs font-semibold hover:bg-[#1f1f2a] transition-all duration-200 border border-white/10 hover:border-blue-500/30 group"
                   >
-                    <span className="text-xs">{selectedQuality}</span>
+                    <span className="text-xs">
+                      {(normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality}
+                    </span>
                     <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-blue-400 transition flex-shrink-0" />
                   </button>
                   {showQualityDropdown && (
                     <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
                       <div className="p-1">
-                        {["1K", "2K", "4K"].map((quality) => (
+                        {getQualityOptions(normalizedModel).map((quality) => (
                           <button
                             key={quality}
                             onClick={() => {
-                              setSelectedQuality(quality);
-                              setShowQualityDropdown(false);
-                              // Re-calculate credits with new quality - use correct model based on active tool
-                              let currentModelId = "";
-                              if (activeTool === "image-to-image") {
-                                currentModelId = "nano-banana-2";
-                              } else if (activeTool === "upscale") {
-                                currentModelId = "topaz/image-upscale";
+                              if (normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") {
+                                setGptImageQuality(quality);
+                              } else {
+                                setSelectedQuality(quality);
+                                // Set default quality to first available option if current quality is not in options
+                                const availableQualities = getQualityOptions(normalizedModel);
+                                if (!availableQualities.includes(selectedQuality)) {
+                                  setSelectedQuality(availableQualities[0]);
+                                }
                               }
-                              // Pass the new quality directly to avoid state timing issues
-                              alertModelCredits(currentModelId, quality);
+                              setShowQualityDropdown(false);
                             }}
                             className="w-full px-2 py-1 text-left hover:bg-white/5 rounded transition text-xs"
                           >
@@ -1269,25 +1347,38 @@ export function EditImageAIPanel({
             onClick={() => {
               // Ensure we're calling the n8n-image-proxy route
               if (mode === "area-edit" && onGenerate) {
-                console.log("[EditImageAIPanel] Generate button clicked - calling credit-based generation");
-                // Calculate and pass the actual credits
-                const actualCredits = getModelCredits(model);
-                console.log("[EditImageAIPanel] Passing calculated credits:", actualCredits);
-                onGenerate(actualCredits);
+                const modelId: string = typeof model === "string" && model.length > 0
+                  ? model
+                  : normalizedModel || "";
+                const qualityToPass = (normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality;
+                const creditsNeeded = getModelCredits(modelId);
+                
+                console.log('[EditImageAIPanel] Generate clicked with credits:', creditsNeeded, 'quality:', qualityToPass);
+                console.log('[EditImageAIPanel] Current balance:', getBalance);
+                
+                // Check if user has sufficient credits before proceeding
+                if (getBalance !== undefined && getBalance < creditsNeeded) {
+                  alert(`❌ Insufficient credits. You have ${getBalance} credits but need ${creditsNeeded} credits. Please purchase more credits to continue.`);
+                  return;
+                }
+                
+                // Forward both credits and quality to SceneEditor
+                onGenerate?.(creditsNeeded, qualityToPass);
+                onGenerateQuality?.(qualityToPass);
               } else if (mode === "annotate") {
                 console.log("[EditImageAIPanel] Generate not available in annotate mode");
               }
             }}
-            disabled={isGenerating || mode === "annotate" || !currentPrompt.trim()}
+            disabled={!canGenerate}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
-              mode === "annotate" || !currentPrompt.trim()
+              !canGenerate
                 ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
                 : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
             }`}
             title={
               mode === "annotate" 
                 ? "Generate not available in annotate mode. Use area-edit mode for AI generation."
-                : !currentPrompt.trim()
+                : requiresPrompt && !currentPrompt.trim()
                 ? "Please enter a prompt to generate an image."
                 : undefined
             }
@@ -1326,8 +1417,6 @@ export function EditImageAIPanel({
             projectId={projectId}
             onClose={() => setShowFileBrowser(false)}
             imageSelectionMode={true}
-            filterTypes={["image"]}
-            initialSourceFilter="uploads"
             onSelectImage={(imageUrl) => {
               onSetOriginalImage?.(imageUrl);
               setShowFileBrowser(false);

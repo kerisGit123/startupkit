@@ -18,7 +18,8 @@ export const pricingModels = {
   assignedFunction: v.optional(v.union(    // Function mapping for formula types
     v.literal("getTopazUpscale"),
     v.literal("getSeedance15"),
-    v.literal("getNanoBananaPrice")
+    v.literal("getNanoBananaPrice"),
+    v.literal("getGptImagePrice")
   )),
   
   createdAt: v.number(),
@@ -35,6 +36,12 @@ export const createPricingModel = mutation({
     creditCost: v.optional(v.number()),
     factor: v.optional(v.number()),
     formulaJson: v.optional(v.string()),
+    assignedFunction: v.optional(v.union(
+      v.literal("getTopazUpscale"),
+      v.literal("getSeedance15"),
+      v.literal("getNanoBananaPrice"),
+      v.literal("getGptImagePrice")
+    )),
   },
   handler: async (ctx, args) => {
     const timestamp = Date.now();
@@ -57,6 +64,7 @@ export const createPricingModel = mutation({
       creditCost: args.creditCost,
       factor: args.factor,
       formulaJson: args.formulaJson,
+      assignedFunction: args.assignedFunction,
       createdAt: timestamp,
       updatedAt: timestamp,
     });
@@ -79,7 +87,8 @@ export const updatePricingModel = mutation({
     assignedFunction: v.optional(v.union(
       v.literal("getTopazUpscale"),
       v.literal("getSeedance15"),
-      v.literal("getNanoBananaPrice")
+      v.literal("getNanoBananaPrice"),
+      v.literal("getGptImagePrice")
     )),
   },
   handler: async (ctx, args) => {
@@ -272,7 +281,7 @@ export const seedPricingModels = mutation({
         pricingType: "formula" as const,
         formulaJson: JSON.stringify({
           base_cost: 7,
-          resolution_multipliers: { "480P": 1, "720P": 2, "1080P": 4 },
+          resolution_multipliers: { "480p": 1, "720p": 2, "1080p": 4 },
           audio_multiplier: 2,
           duration_multipliers: { "4s": 1, "8s": 2, "12s": 4 }
         }),
@@ -332,6 +341,26 @@ const DEFAULT_PRICING_MODELS = [
     }),
   },
   {
+    modelId: "nano-banana-pro",
+    modelName: "Nano Banana Pro",
+    modelType: "image" as const,
+    isActive: true,
+    pricingType: "formula" as const,
+    assignedFunction: "getNanoBananaPrice" as const,
+    creditCost: 18,
+    factor: 1.3,
+    formulaJson: JSON.stringify({
+      pricing: {
+        base_cost: 18,
+        qualities: [
+          { name: "1K", cost: 18 },
+          { name: "2K", cost: 18 },
+          { name: "4K", cost: 24 },
+        ],
+      },
+    }),
+  },
+  {
     modelId: "bytedance/seedance-1.5-pro",
     modelName: "Seedance 1.5 Pro",
     modelType: "video" as const,
@@ -342,7 +371,7 @@ const DEFAULT_PRICING_MODELS = [
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 7,
-        resolution_multipliers: { "480P": 1, "720P": 2, "1080P": 4 },
+        resolution_multipliers: { "480p": 1, "720p": 2, "1080p": 4 },
         audio_multiplier: 2,
         duration_multipliers: { "4s": 1, "8s": 2, "12s": 4 },
       },
@@ -367,35 +396,27 @@ const DEFAULT_PRICING_MODELS = [
     factor: 1.3,
   },
   {
-    modelId: "gpt-image",
-    modelName: "GPT Image 1.5",
+    modelId: "gpt-image/1.5-image-to-image",
+    modelName: "GPT 1.5 Image to Image",
     modelType: "image" as const,
     isActive: true,
-    pricingType: "fixed" as const,
-    creditCost: 35,
-    factor: 1.3,
-  },
-  {
-    modelId: "gpt-image/1.5-text-to-image",
-    modelName: "1.5 Text to Image",
-    modelType: "image" as const,
-    isActive: true,
-    pricingType: "fixed" as const,
+    pricingType: "formula" as const,
     creditCost: 4,
     factor: 1.3,
+    assignedFunction: "getGptImagePrice" as const,
+    formulaJson: JSON.stringify({
+      pricing: {
+        base_cost: 4,
+        qualities: [
+          { name: "medium", cost: 4 },
+          { name: "high", cost: 22 }
+        ]
+      }
+    }),
   },
   {
     modelId: "google/nano-banana-edit",
     modelName: "Nano Banana Edit",
-    modelType: "image" as const,
-    isActive: true,
-    pricingType: "fixed" as const,
-    creditCost: 4,
-    factor: 1.3,
-  },
-  {
-    modelId: "qwen/image-to-image",
-    modelName: "Image to Image",
     modelType: "image" as const,
     isActive: true,
     pricingType: "fixed" as const,
@@ -433,9 +454,9 @@ const DEFAULT_PRICING_MODELS = [
       pricing: {
         base_cost: 10,
         qualities: [
-          { name: "1K", cost: 10 },
-          { name: "2K", cost: 18 },
-          { name: "4K", cost: 30 },
+          { name: "1", cost: 10 },
+          { name: "2", cost: 20 },
+          { name: "4", cost: 40 },
         ],
       },
     }),

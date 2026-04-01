@@ -81,7 +81,7 @@ export class PricingCalculator {
           pricingType: 'formula',
           formula: {
             base_cost: 7,
-            resolution_multipliers: { '480P': 1, '720P': 2, '1080P': 4 },
+            resolution_multipliers: { '480p': 1, '720p': 2, '1080p': 4 },
             audio_multiplier: 2,
             duration_multipliers: { '4s': 1, '8s': 2, '12s': 4 }
           }
