@@ -2,16 +2,16 @@
 
 > **Purpose**: Comprehensive planning for scene-based image editing and AI generation system
 > **Scope**: SceneEditor integration with AI panels for image editing, element generation, and video creation
-> **Phase**: Production-ready implementation with advanced AI capabilities
+> **Phase**: Production-ready implementation with advanced AI capabilities and dynamic pricing
 
 ---
 
 ## 🎯 **System Overview**
 
-The Scene Edit Image System integrates three core components to provide a complete scene-based content creation workflow:
+The Scene Edit Image System integrates three core components to provide a complete scene-based content creation workflow with dynamic pricing integration:
 
 1. **SceneEditor.tsx** - Main scene editing interface with canvas and AI integration
-2. **EditImageAIPanel.tsx** - AI-powered image editing and inpainting panel
+2. **EditImageAIPanel.tsx** - AI-powered image editing and inpainting panel with dynamic pricing
 3. **ElementImageAIPanel.tsx** - Element generation and AI image creation panel
 
 ---
@@ -30,6 +30,8 @@ The Scene Edit Image System integrates three core components to provide a comple
 - **Real-time Collaboration**: Comments, tags, and annotations
 - **Zoom & Pan**: Advanced viewport controls
 - **Element Integration**: Save generated content as reusable elements
+- **Dynamic Pricing Integration**: Real-time credit calculation and display
+- **Model Behavior Handling**: Proper cropping logic for different AI models
 
 **Technical Implementation**:
 ```typescript
@@ -48,11 +50,10 @@ interface SceneEditorProps {
 
 **State Management**:
 - Active shot tracking and navigation
-- AI panel state (edit/video/element modes)
-- Generated images and reference management
+- AI panel mode switching (edit/element/video)
+- Reference image management
 - Canvas state and tool selection
-- Video generation state
-- Zoom and viewport controls
+- Dynamic pricing state integration
 
 ### **2. EditImageAIPanel.tsx - Image Editing AI**
 

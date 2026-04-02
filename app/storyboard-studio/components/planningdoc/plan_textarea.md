@@ -1,8 +1,8 @@
-# ContentEditable Inline Badge System
+# ContentEditable Inline Badge System with Dynamic Pricing Integration
 
 ## Overview
 
-Implementation of drag-and-drop functionality for reference images into a rich-text editor area with native inline badge representation. Uses a `contentEditable` div so the browser handles cursor positioning natively — eliminating the caret drift that affected the previous textarea+overlay approach.
+Implementation of drag-and-drop functionality for reference images into a rich-text editor area with native inline badge representation and dynamic pricing integration. Uses a `contentEditable` div so the browser handles cursor positioning natively — eliminating the caret drift that affected the previous textarea+overlay approach.
 
 ## Why ContentEditable (not textarea+overlay)
 
@@ -12,6 +12,44 @@ With `contentEditable`:
 - Badge spans are actual DOM elements (`contentEditable={false}`)
 - The browser places the cursor natively, so alignment is always pixel-perfect
 - No overlay, no hidden markers, no width-matching math needed
+- **Dynamic Pricing Integration**: Real-time credit calculation and display for AI models
+
+---
+
+## 🎯 **Dynamic Pricing Integration (April 2026)**
+
+### **AI Model Credit Display**
+The textarea system now integrates with the dynamic pricing system to show real-time credit costs for AI models:
+
+```typescript
+// EditImageAIPanel.tsx - Enhanced textarea with pricing integration
+const [currentPrompt, setCurrentPrompt] = useState(userPrompt ?? "");
+const [editorIsEmpty, setEditorIsEmpty] = useState(!userPrompt);
+const [selectedModel, setSelectedModel] = useState(model);
+const [creditsNeeded, setCreditsNeeded] = useState(getModelCredits(model));
+
+// Real-time credit updates when model changes
+useEffect(() => {
+  if (selectedModel) {
+    const credits = getModelCredits(selectedModel);
+    setCreditsNeeded(credits);
+  }
+}, [selectedModel, getModelCredits]);
+```
+
+### **Credit-Aware Placeholder Text**
+```typescript
+// Dynamic placeholder based on selected model and credits
+const getPlaceholderText = () => {
+  if (editorIsEmpty && selectedModel) {
+    const modelName = models.find(m => m.modelId === selectedModel)?.modelName || selectedModel;
+    return `Describe what you want to generate with ${modelName} (${creditsNeeded} credits)...`;
+  }
+  return "Describe what you want to generate...";
+};
+```
+
+---
 
 ## Key Features
 
@@ -19,6 +57,7 @@ With `contentEditable`:
 - Reference images are draggable with `cursor-move` styling
 - Editor accepts drops; drop position is calculated using `document.caretRangeFromPoint()`
 - The browser sets the exact caret position at the drop coordinates
+- **Credit Integration**: Shows credit cost when dropping reference images
 
 ### 2. Visual Badge System
 - **Small image thumbnail** (16x16px) showing the actual reference image
@@ -26,10 +65,31 @@ With `contentEditable`:
 - **Inline display** that flows with text content
 - **`contentEditable={false}`** on each badge span — treated as a single atomic unit
 - **× remove button** on the right side of each badge; clicking removes the badge and updates the plain-text state
+- **Credit Badge**: Shows credits needed for current model selection
 
 ### 3. Auto-Growing Editor
 - CSS `min-height` / `max-height` handles grow automatically — no JS needed
 - Scrollbar appears only after content exceeds `200px`
+- **Dynamic Height**: Adjusts based on content and credit display
+
+### 4. Real-Time Credit Calculation
+```typescript
+// Credit calculation integration
+const calculateCredits = useCallback(() => {
+  if (selectedModel) {
+    const credits = getModelCredits(selectedModel);
+    setCreditsNeeded(credits);
+    
+    // Update placeholder with credit info
+    if (editorIsEmpty) {
+      const modelName = models.find(m => m.modelId === selectedModel)?.modelName;
+      setPlaceholderText(`Generate with ${modelName} (${credits} credits)...`);
+    }
+  }
+}, [selectedModel, getModelCredits, editorIsEmpty, models]);
+```
+
+---
 
 ## Implementation Details
 
@@ -49,10 +109,9 @@ const savedSelectionRef = useRef<{ container: Node; offset: number } | null>(nul
 // State
 const [currentPrompt, setCurrentPrompt] = useState(userPrompt ?? "");
 const [editorIsEmpty, setEditorIsEmpty] = useState(!userPrompt);
-
-// Model options for describe mode
-const inpaintModelOptions = [
-  { value: "nano-banana-2", label: "🟩 Nano Banana 2", sub: "General purpose • 40 credits", credits: 40, maxReferenceImages: 13 },
+const [selectedModel, setSelectedModel] = useState(model);
+const [creditsNeeded, setCreditsNeeded] = useState(getModelCredits(model));
+const [placeholderText, setPlaceholderText] = useState(getPlaceholderText());
 ];
 
 // Aspect ratio options

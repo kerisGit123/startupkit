@@ -106,6 +106,75 @@ export interface TriggerImageGenerationParams {
   outputFormat?: string;
 }
 
+// Video generation interface for Seedance 1.5 Pro
+export interface TriggerVideoGenerationParams {
+  prompt: string;
+  model: string;
+  fileId: string;
+  callBackUrl: string;
+  companyId?: string;
+  userId?: string;
+  projectId?: string;
+  referenceImages?: string[];
+  aspectRatio?: string;
+  resolution?: string;
+  duration?: string;
+  audio?: boolean;
+}
+
+export async function triggerVideoGeneration(params: TriggerVideoGenerationParams) {
+  console.log('[triggerVideoGeneration] Called with params:', {
+    model: params.model,
+    aspectRatio: params.aspectRatio,
+    resolution: params.resolution,
+    duration: params.duration,
+    audio: params.audio,
+    referenceImagesCount: params.referenceImages?.length || 0,
+  });
+
+  // Prepare the request body for Seedance 1.5 Pro API
+  const requestBody = {
+    model: params.model,
+    callBackUrl: params.callBackUrl,
+    input: {
+      prompt: params.prompt,
+      input_urls: params.referenceImages || [],
+      aspect_ratio: params.aspectRatio || "1:1",
+      resolution: params.resolution || "720p",
+      duration: parseInt(params.duration?.replace('s', '') || "8"),
+      fixed_lens: false,
+      generate_audio: params.audio || false,
+      nsfw_checker: false,
+    },
+  };
+
+  console.log('[triggerVideoGeneration] Request body:', JSON.stringify(requestBody, null, 2));
+
+  try {
+    const response = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`KIE AI API error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log('[triggerVideoGeneration] KIE AI response:', result);
+
+    return result;
+  } catch (error) {
+    console.error('[triggerVideoGeneration] Error calling KIE AI:', error);
+    throw error;
+  }
+}
+
 export async function triggerImageGeneration(params: TriggerImageGenerationParams) {
   console.log('[triggerImageGeneration] Called with params:', {
     ...params,

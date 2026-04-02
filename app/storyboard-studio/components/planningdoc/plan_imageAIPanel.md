@@ -502,43 +502,59 @@ The Image AI Panel is now **100% complete** and production-ready with:
 
 ---
 
-## Credit Calculation Integration Plan
+## 🎯 Dynamic Pricing System Integration (April 2026)
 
-### Overview
-Integrate the Nano Banana 2 pricing calculation from the pricing management system into the EditImageAIPanel's Generate button. When users click Generate, show a popup alert with the calculated credit cost based on resolution (1K, 2K, 4K).
+### **Overview**
+Advanced pricing system for AI models with dynamic database-driven pricing, real-time credit calculation, and proper model behavior handling integrated into the EditImageAIPanel.
 
-### Credit Calculation Logic
-Based on `plan_price_management.md`, the `getNanoBananaPrice` function:
+### **Implemented Models with Dynamic Pricing**
 
+#### **Recraft Crisp Upscale** (AI Enhancement)
+- **Pricing Type**: Fixed pricing with database-driven values
+- **Base Cost**: 0.5 credits
+- **Factor**: 1.3
+- **Final Cost**: 0.5 × 1.3 = **1 credit** (rounded up)
+- **Behavior**: No cropping, no combining - processes full image
+- **Special Handling**: Fixed pricing with fallback to correct values when database has wrong data
+
+#### **Topaz Upscale** (Traditional Enhancement)
+- **Pricing Type**: Formula-based pricing with dynamic quality selection
+- **Quality Options**: 1x, 2x, 4x upscaling
+- **Pricing**:
+  - 1x: 8 × 1.3 = **11 credits**
+  - 2x: 12 × 1.3 = **16 credits**
+  - 4x: 15 × 1.3 = **20 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: No cropping, no combining - processes full image
+
+#### **Nano Banana 2** (Image Generation)
+- **Pricing Type**: Formula-based pricing with quality selection
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
+
+#### **GPT 1.5 Image to Image** (AI Generation)
+- **Pricing Type**: Formula-based pricing with quality selection
+- **Quality Options**: medium, high
+- **Pricing**:
+  - Medium: 4 × 1.3 = **6 credits**
+  - High: 22 × 1.3 = **29 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
+
+### **Technical Implementation**
+
+#### **Dynamic Credit Calculation System**
 ```typescript
-function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
-  const qualityMultipliers = {
-    '1K': 1,
-    '2K': 1.5,
-    '4K': 2.25
-  };
-  
-  const qualityMultiplier = qualityMultipliers[quality] || 1;
-  return Math.ceil(base * multiplier * qualityMultiplier);
-}
-```
-
-**Default Parameters for Nano Banana 2:**
-- Base: 8 credits
-- Multiplier: 1.3
-- Quality: User-selected resolution
-
-**Credit Examples:**
-- 1K: `Math.ceil(8 * 1.3 * 1)` = **11 credits**
-- 2K: `Math.ceil(8 * 1.3 * 1.5)` = **16 credits** 
-- 4K: `Math.ceil(8 * 1.3 * 2.25)` = **24 credits**
-
-### Implementation Plan
-
-#### 1. Add Credit Calculation Utility
-Create a shared utility function for credit calculations:
-
-```typescript
+// EditImageAIPanel.tsx - Enhanced getModelCredits function
+const getModelCredits = useCallback((modelId: string): number => {
+  const model = models.find(m => m.modelId === modelId);
+  const base = model.creditCost || 0;
+  const factor = model.factor || 1;
 // utils/creditCalculations.ts
 export function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
   const qualityMultipliers = {

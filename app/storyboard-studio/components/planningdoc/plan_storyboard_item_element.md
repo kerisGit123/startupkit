@@ -33,12 +33,30 @@ Integrate n8n workflow "storyboard - Script Extractor" into the existing storybo
 
 ---
 
-## 💰 Quality-Based Pricing Integration (March 2026)
+## 💰 Dynamic Pricing System Integration (April 2026)
 
 ### **Overview**
-Advanced pricing system for AI models with dynamic quality selection and real-time credit calculation integrated into the storyboard studio.
+Advanced pricing system for AI models with dynamic database-driven pricing, real-time credit calculation, and proper model behavior handling integrated into the storyboard studio.
 
-### **Implemented Models with Quality Pricing**
+### **Implemented Models with Dynamic Pricing**
+
+#### **Recraft Crisp Upscale** (AI Enhancement)
+- **Pricing Type**: Fixed pricing with database-driven values
+- **Base Cost**: 0.5 credits
+- **Factor**: 1.3
+- **Final Cost**: 0.5 × 1.3 = **1 credit** (rounded up)
+- **Behavior**: No cropping, no combining - processes full image
+- **Special Handling**: Fixed pricing with fallback to correct values when database has wrong data
+
+#### **Topaz Upscale** (Traditional Enhancement)
+- **Pricing Type**: Formula-based pricing with dynamic quality selection
+- **Quality Options**: 1x, 2x, 4x upscaling
+- **Pricing**:
+  - 1x: 8 × 1.3 = **11 credits**
+  - 2x: 12 × 1.3 = **16 credits**
+  - 4x: 15 × 1.3 = **20 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: No cropping, no combining - processes full image
 
 #### **Nano Banana 2** (Image Generation)
 - **Quality Options**: 1K, 2K, 4K
@@ -47,14 +65,16 @@ Advanced pricing system for AI models with dynamic quality selection and real-ti
   - 2K: 12 × 1.3 = **16 credits**  
   - 4K: 18 × 1.3 = **24 credits**
 - **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
 
-#### **Topaz Upscale** (Image Enhancement)
-- **Quality Options**: 1K, 2K, 4K
+#### **GPT 1.5 Image to Image** (AI Generation)
+- **Pricing Type**: Formula-based pricing with quality selection
+- **Quality Options**: medium, high
 - **Pricing**:
-  - 1K: 10 × 1.3 = **13 credits**
-  - 2K: 18 × 1.3 = **24 credits**
-  - 4K: 30 × 1.3 = **39 credits**
-- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+  - Medium: 4 × 1.3 = **6 credits**
+  - High: 22 × 1.3 = **29 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
 
 ### **Technical Implementation**
 

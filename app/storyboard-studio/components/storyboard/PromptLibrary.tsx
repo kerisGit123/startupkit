@@ -382,6 +382,9 @@ This structure significantly reduces **visual drift in long image → video sequ
 ];
 
 const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: PromptLibraryProps) => {
+  // Show the current companyId for debugging
+  console.log('🏢 PromptLibrary - Current companyId:', userCompanyId);
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'usage'>('usage');
@@ -400,6 +403,19 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
   const deleteTemplate = useMutation(api.promptTemplates.remove);
   const incrementUsage = useMutation(api.promptTemplates.incrementUsage);
   const resetDefaultTemplates = useMutation(api.promptTemplates.resetDefaults);
+
+  // Auto-create default prompts if none exist for this company
+  useEffect(() => {
+    if (userCompanyId && userTemplates && userTemplates.length === 0 && publicTemplates && publicTemplates.length === 0) {
+      console.log('No prompts found for company, creating default prompts...');
+      resetDefaultTemplates({
+        companyId: userCompanyId,
+        prompts: DEFAULT_PROMPT_TEMPLATES,
+      }).catch(error => {
+        console.error('Failed to create default prompts:', error);
+      });
+    }
+  }, [userCompanyId, userTemplates, publicTemplates, resetDefaultTemplates]);
 
   const allTemplates = useMemo(() => {
     const mergedTemplates = [...(userTemplates || []), ...(publicTemplates || [])];

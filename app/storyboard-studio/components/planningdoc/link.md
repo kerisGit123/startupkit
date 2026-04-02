@@ -327,3 +327,11 @@ e.g. {
 
 
 {"pricing":{"base_cost":60,"qualities":[{"name":"fast","cost":60},{"name":"quality","cost":250}]}}
+
+
+
+
+
+
+
+help me conect to Veo 3.1 when user click on the generate button . its has to send the aspect ratio , quality ( fast ,quality) and the 

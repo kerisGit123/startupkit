@@ -5,13 +5,119 @@ import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import sharp from "sharp";
 
 function getResultUrl(data: any): string | undefined {
+  console.log('[kie-callback] getResultUrl - checking response structure:', {
+    'response array': Array.isArray(data) ? data.length + ' items' : 'not array',
+    'data.data?.resultUrl': data?.data?.resultUrl,
+    'data.data?.videoUrl': data?.data?.videoUrl,
+    'data.data?.sourceUrl': data?.data?.sourceUrl,
+    'data.data?.result?.videoUrl': data?.data?.result?.videoUrl,
+    'data.data?.result?.resultUrl': data?.data?.result?.resultUrl,
+    'data.data?.result?.sourceUrl': data?.data?.result?.sourceUrl,
+    'data.data?.resultUrls': data?.data?.resultUrls,
+    'data.data?.resultJson': data?.data?.resultJson ? 'exists' : 'missing',
+    'data.data?.info': data?.data?.info ? 'exists' : 'missing'
+  });
+  
+  // Check if the video URL is in the top-level response array (Veo 3.1 specific)
+  if (Array.isArray(data) && data.length > 0) {
+    console.log('[kie-callback] Checking response array for video URL:', data);
+    // Look for URL patterns in the response array
+    for (const item of data) {
+      if (typeof item === 'string' && item.includes('.mp4')) {
+        console.log('[kie-callback] Found video URL in response array:', item);
+        return item;
+      }
+      // Check if item is an object with URL property
+      if (typeof item === 'object' && item !== null) {
+        const possibleUrl = item.url || item.videoUrl || item.sourceUrl || item.resultUrl;
+        if (possibleUrl && typeof possibleUrl === 'string' && possibleUrl.includes('.mp4')) {
+          console.log('[kie-callback] Found video URL in response object:', possibleUrl);
+          return possibleUrl;
+        }
+      }
+    }
+  }
+  
+  // Check if the video URL is in the info field (Veo 3.1 specific)
+  if (data?.data?.info && Array.isArray(data.data.info) && data.data.info.length > 0) {
+    console.log('[kie-callback] Checking info field for video URL:', data.data.info);
+    // Look for URL patterns in the info array
+    for (const infoItem of data.data.info) {
+      if (typeof infoItem === 'string' && infoItem.includes('.mp4')) {
+        console.log('[kie-callback] Found video URL in info field:', infoItem);
+        return infoItem;
+      }
+      // Check if infoItem is an object with URL property
+      if (typeof infoItem === 'object' && infoItem !== null) {
+        const possibleUrl = infoItem.url || infoItem.videoUrl || infoItem.sourceUrl;
+        if (possibleUrl && typeof possibleUrl === 'string' && possibleUrl.includes('.mp4')) {
+          console.log('[kie-callback] Found video URL in info object:', possibleUrl);
+          return possibleUrl;
+        }
+      }
+    }
+  }
+  
+  // Handle Veo 3.1 response structure - check for sourceUrl first
+  if (data?.data?.sourceUrl) {
+    console.log('[kie-callback] Found sourceUrl in data.data.sourceUrl');
+    return data.data.sourceUrl;
+  }
+  
+  // Handle Veo 3.1 response structure
+  if (data?.data?.resultUrl) {
+    console.log('[kie-callback] Found resultUrl in data.data.resultUrl');
+    return data.data.resultUrl;
+  }
+  
+  // Handle Veo 3.1 alternative response structure
+  if (data?.data?.videoUrl) {
+    console.log('[kie-callback] Found videoUrl in data.data.videoUrl');
+    return data.data.videoUrl;
+  }
+  
+  // Handle Veo 3.1 nested result structure
+  if (data?.data?.result?.sourceUrl) {
+    console.log('[kie-callback] Found sourceUrl in data.data.result.sourceUrl');
+    return data.data.result.sourceUrl;
+  }
+  
+  if (data?.data?.result?.videoUrl) {
+    console.log('[kie-callback] Found videoUrl in data.data.result.videoUrl');
+    return data.data.result.videoUrl;
+  }
+  
+  if (data?.data?.result?.resultUrl) {
+    console.log('[kie-callback] Found resultUrl in data.data.result.resultUrl');
+    return data.data.result.resultUrl;
+  }
+
   const resultJsonRaw = data?.data?.resultJson;
 
   if (typeof resultJsonRaw === 'string') {
     try {
       const parsedResultJson = JSON.parse(resultJsonRaw);
+      console.log('[kie-callback] Parsed resultJson keys:', Object.keys(parsedResultJson));
+      
       if (Array.isArray(parsedResultJson?.resultUrls) && parsedResultJson.resultUrls.length > 0) {
+        console.log('[kie-callback] Found resultUrls in parsed resultJson');
         return parsedResultJson.resultUrls[0];
+      }
+      
+      // Check for Veo 3.1 URLs in parsed resultJson - prioritize sourceUrl
+      if (parsedResultJson?.sourceUrl) {
+        console.log('[kie-callback] Found sourceUrl in parsed resultJson');
+        return parsedResultJson.sourceUrl;
+      }
+      
+      if (parsedResultJson?.videoUrl) {
+        console.log('[kie-callback] Found videoUrl in parsed resultJson');
+        return parsedResultJson.videoUrl;
+      }
+      
+      if (parsedResultJson?.resultUrl) {
+        console.log('[kie-callback] Found resultUrl in parsed resultJson');
+        return parsedResultJson.resultUrl;
       }
     } catch (parseError) {
       console.warn('[kie-callback] Failed to parse resultJson:', parseError);
@@ -19,9 +125,11 @@ function getResultUrl(data: any): string | undefined {
   }
 
   if (Array.isArray(data?.data?.resultUrls) && data.data.resultUrls.length > 0) {
+    console.log('[kie-callback] Found resultUrls in data.data');
     return data.data.resultUrls[0];
   }
 
+  console.log('[kie-callback] No video URL found in any location');
   return undefined;
 }
 
@@ -130,6 +238,13 @@ export async function POST(request: NextRequest) {
     
     console.log('[kie-callback] Received:', { fileId, data });
     
+    // Debug: Log the full response structure for Veo 3.1
+    if (data.data?.taskId && !data.data?.resultUrl) {
+      console.log('[kie-callback] Veo 3.1 response structure - full data:', JSON.stringify(data, null, 2));
+      console.log('[kie-callback] Veo 3.1 data.data keys:', Object.keys(data.data || {}));
+      console.log('[kie-callback] Veo 3.1 looking for video URL in various locations...');
+    }
+    
     if (!fileId) {
       return NextResponse.json({ error: 'Missing fileId' }, { status: 400 });
     }
@@ -137,8 +252,8 @@ export async function POST(request: NextRequest) {
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
     const taskId = data.data?.taskId;
-    const state = data.data?.state;
-    const resultUrl = getResultUrl(data);
+    let state = data.data?.state;
+    let resultUrl = getResultUrl(data);
 
     if (taskId) {
       await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
@@ -153,6 +268,77 @@ export async function POST(request: NextRequest) {
       taskId,
       resultUrl,
     });
+
+    // Special handling for Veo 3.1: if we have taskId but no resultUrl, query the API
+    if (taskId && !resultUrl) {
+      console.log('[kie-callback] Veo 3.1 detected - querying API for video URL using taskId:', taskId);
+      
+      try {
+        // Use the Veo 3.1 specific endpoint
+        const endpoint = `https://api.kie.ai/api/v1/veo/record-info?taskId=${taskId}`;
+        console.log(`[kie-callback] Trying Veo 3.1 specific endpoint: ${endpoint}`);
+        
+        const kieResponse = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+          },
+        });
+
+        if (kieResponse.ok) {
+          const kieData = await kieResponse.json();
+          console.log('[kie-callback] Veo 3.1 API response:', kieData);
+          
+          // Extract video URL from Veo 3.1 response structure
+          let videoUrl = null;
+          
+          // Based on your example: data.response.resultUrls array
+          if (kieData?.data?.response?.resultUrls && Array.isArray(kieData.data.response.resultUrls)) {
+            videoUrl = kieData.data.response.resultUrls[0];
+          } else if (kieData?.data?.resultUrls && Array.isArray(kieData.data.resultUrls)) {
+            videoUrl = kieData.data.resultUrls[0];
+          } else if (kieData?.data?.resultUrl) {
+            videoUrl = kieData.data.resultUrl;
+          } else if (kieData?.data?.videoUrl) {
+            videoUrl = kieData.data.videoUrl;
+          } else if (kieData?.data?.sourceUrl) {
+            videoUrl = kieData.data.sourceUrl;
+          }
+          
+          if (videoUrl) {
+            console.log('[kie-callback] Found Veo 3.1 video URL:', videoUrl);
+            resultUrl = videoUrl;
+            state = 'success'; // Override state since we have the video
+          } else {
+            console.log('[kie-callback] No video URL found in Veo 3.1 API response');
+            console.log('[kie-callback] Full response structure:', JSON.stringify(kieData, null, 2));
+            
+            // Check if task is still processing
+            if (kieData?.code === 422 || kieData?.msg?.includes('recordInfo is null')) {
+              console.log('[kie-callback] Veo 3.1 task still processing, keeping status as processing');
+              // Don't override state, keep it as 'processing' so it can be retried
+            }
+          }
+        } else {
+          console.error('[kie-callback] Failed to query Veo 3.1 API:', kieResponse.status);
+          const errorText = await kieResponse.text();
+          console.error('[kie-callback] Error response:', errorText);
+          
+          // If we get a 422 with "recordInfo is null", the task is still processing
+          if (kieResponse.status === 422 && errorText?.includes('recordInfo is null')) {
+            console.log('[kie-callback] Veo 3.1 task still processing, keeping status as processing');
+            // Don't override state, keep it as 'processing' so it can be retried
+          } else {
+            // For other errors, mark as failed
+            state = 'failed';
+          }
+        }
+        
+      } catch (error) {
+        console.error('[kie-callback] Error querying Veo 3.1 API:', error);
+        state = 'failed';
+      }
+    }
 
     if (state === 'failed' || state === 'error') {
       const fileRecord = await convex.query(api.storyboard.storyboardFiles.getById, {

@@ -11,7 +11,7 @@ export interface PricingModel {
   creditCost?: number;
   factor?: number;
   formulaJson?: string;
-  assignedFunction?: 'getTopazUpscale' | 'getSeedance15' | 'getNanoBananaPrice' | 'getGptImagePrice' | 'getVeo31';
+  assignedFunction?: 'getTopazUpscale' | 'getSeedance15' | 'getNanoBananaPrice' | 'getGptImagePrice' | 'getVeo31' ;
   createdAt?: number;
   updatedAt?: number;
 }
@@ -116,9 +116,9 @@ const DEFAULT_PRICING_MODELS: PricingModel[] = [
       pricing: {
         base_cost: 10,
         qualities: [
-          { name: "1", cost: 10 },
-          { name: "2", cost: 20 },
-          { name: "4", cost: 40 },
+          { name: "1", cost: 8 },
+          { name: "2", cost: 12 },
+          { name: "4", cost: 15 },
         ],
       },
     }),
@@ -169,35 +169,17 @@ const DEFAULT_PRICING_MODELS: PricingModel[] = [
     creditCost: 10,
     factor: 1.3,
   },
-  {
-    modelId: "topaz/image-upscale",
-    modelName: "Topaz Upscale",
-    modelType: "image",
-    isActive: true,
-    pricingType: "formula",
-    assignedFunction: "getTopazUpscale",
-    creditCost: 10,
-    factor: 1.3,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 10,
-        qualities: [
-          { name: "1", cost: 10 },
-          { name: "2", cost: 18 },
-          { name: "4", cost: 30 },
-        ],
-      },
-    }),
-  },
+
   {
     modelId: "recraft/crisp-upscale",
     modelName: "Crisp Upscale",
-    modelType: "image",
+   modelType: "image",
     isActive: true,
     pricingType: "fixed",
-    creditCost: 8,
+    creditCost: 0.5,
     factor: 1.3,
   },
+
 ];
 
 // Export DEFAULT_PRICING_MODELS for use in reset function

@@ -115,6 +115,7 @@ export function GeneratedImagesPanel({
           id: String(file._id),
           url: file.sourceUrl || "",
           thumbnail: file.sourceUrl || "",
+          fileType: file.fileType as 'image' | 'video', // Pass fileType from storyboard_files
           metadata: {
             timestamp: new Date(file.createdAt ?? Date.now()),
             model: file.metadata?.model || file.filename || 'Unknown',

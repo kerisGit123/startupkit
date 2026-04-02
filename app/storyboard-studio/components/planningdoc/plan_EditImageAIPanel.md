@@ -1,12 +1,12 @@
 # Edit Image AI Panel — Production Ready Implementation
 
 > **Component**: `EditImageAIPanel.tsx`
-> **Purpose**: Advanced image editing interface with AI-powered area editing, annotation tools, and multi-model support
-> **Status**: ✅ **PRODUCTION READY** - Fully deployed with credit integration and upscale tool fix
+> **Purpose**: Advanced image editing interface with AI-powered area editing, annotation tools, and dynamic pricing system
+> **Status**: ✅ **PRODUCTION READY** - Fully deployed with dynamic pricing integration and Recraft Crisp fix
 
 ---
 
-## ✅ **Final Phase Status**
+## ✅ **Final Phase Status (April 2026 Update)**
 
 - **Phase 1** - Completed
   - Component/model wiring cleanup finished
@@ -35,10 +35,63 @@
   - Real backend image compositing implemented with `sharp`
   - Crop/mask reintegration now happens on the server when original image + mask metadata are available
 
+- **Phase 7** - **NEW COMPLETED** 
+  - **Dynamic Pricing System Integration** - Database-driven pricing for all AI models
+  - **Recraft Crisp Credit Fix** - Fixed 11 credit display to show correct 1 credit
+  - **Model Behavior Handling** - Proper cropping logic for different model types
+  - **Real-Time Credit Updates** - Credits update instantly when model/quality changes
+
 ### **Remaining Work**
 
 - **Implementation phases remaining** - None
 - **Optional follow-up** - Markdown formatting cleanup only
+
+---
+
+## 🎯 **Dynamic Pricing System Integration (April 2026)**
+
+### **Overview**
+Advanced pricing system for AI models with dynamic database-driven pricing, real-time credit calculation, and proper model behavior handling integrated into the EditImageAIPanel.
+
+### **Implemented Models with Dynamic Pricing**
+
+#### **Recraft Crisp Upscale** (AI Enhancement) 
+- **Pricing Type**: Fixed pricing with database-driven values
+- **Base Cost**: 0.5 credits
+- **Factor**: 1.3
+- **Final Cost**: 0.5 × 1.3 = **1 credit** (rounded up)
+- **Behavior**: No cropping, no combining - processes full image
+- **Special Handling**: Fixed pricing with fallback to correct values when database has wrong data
+- **Status**:  **FIXED** - Now shows correct 1 credit instead of 11
+
+#### **Topaz Upscale** (Traditional Enhancement)
+- **Pricing Type**: Formula-based pricing with dynamic quality selection
+- **Quality Options**: 1x, 2x, 4x upscaling
+- **Pricing**:
+  - 1x: 8 × 1.3 = **11 credits**
+  - 2x: 12 × 1.3 = **16 credits**
+  - 4x: 15 × 1.3 = **20 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: No cropping, no combining - processes full image
+
+#### **Nano Banana 2** (Image Generation)
+- **Pricing Type**: Formula-based pricing with quality selection
+- **Quality Options**: 1K, 2K, 4K
+- **Pricing**: 
+  - 1K: 8 × 1.3 = **11 credits**
+  - 2K: 12 × 1.3 = **16 credits**  
+  - 4K: 18 × 1.3 = **24 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
+
+#### **GPT 1.5 Image to Image** (AI Generation)
+- **Pricing Type**: Formula-based pricing with quality selection
+- **Quality Options**: medium, high
+- **Pricing**:
+  - Medium: 4 × 1.3 = **6 credits**
+  - High: 22 × 1.3 = **29 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
 
 ---
 
@@ -47,7 +100,11 @@
 ### **✅ Fully Implemented Features:**
 - **Dual Mode Interface** - Area Edit (AI generation) and Annotate (manual editing)
 - **Advanced Toolbar System** - Left and right toolbars with comprehensive tool sets
-- **Multi-Model AI Integration** - 10 AI models with quality-based pricing
+- **Multi-Model AI Integration** - AI models with dynamic database-driven pricing
+- **Dynamic Pricing System** - Real-time credit calculation from database values
+- **Model-Specific Behavior** - Proper cropping logic for different model types
+- **Credit Calculation Fix** - Recraft Crisp now shows correct 1 credit
+- **Real-Time Updates** - Credits update instantly when model/quality changes
 - **Upscale Tool Fixed** - Fully functional upscale with automatic model selection
 - **Canvas Integration** - Full canvas editor with zoom, pan, and element manipulation
 - **Reference Image Management** - R2 storage with temps folder integration

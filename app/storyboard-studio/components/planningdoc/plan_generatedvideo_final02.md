@@ -1,8 +1,9 @@
-# Image Generation Enhancement Plan
-## Credit Usage Tracking + KIE AI Callback Integration
+# Generated Video & Image Enhancement Plan
+## Dynamic Pricing Integration + KIE AI Callback System
 
-> **Status**: ✅ **IMPLEMENTATION COMPLETE**  
-> **Objective**: Simplify credit usage tracking + KIE AI callback workflow with `storyboard_files`
+> **Status**: ✅ **IMPLEMENTED WITH DYNAMIC PRICING**  
+> **Objective**: Complete credit usage tracking + KIE AI callback workflow with `storyboard_files` and dynamic AI model pricing
+> **Last Updated**: April 2026
 
 ---
 
@@ -12,25 +13,52 @@ Current system uses separate `storyboard_credit_usage` table for tracking credit
 - **Complex queries** requiring JOINs
 - **Data duplication** between file records and credit records
 - **Maintenance overhead** managing two tables
+- **No dynamic pricing** for AI models
 - **No KIE AI integration** for link-based generations
 
 ---
 
-## 💡 Solution: Simplified Callback-First Approach
+## 💡 Solution: Dynamic Pricing + Callback-First Approach
 
 ### **🔑 Core Concept**
 1. **Create `storyboard_files` record first** → Get `_id`
-2. **Send `_id` to KIE AI** as callback parameter
-3. **KIE AI calls back** with `_id` + `sourceUrl`
-4. **Callback downloads file to R2** and updates record with `r2Key`, permanent `sourceUrl`, `taskId`, and `status`
+2. **Calculate credits dynamically** based on AI model and quality
+3. **Send `_id` to KIE AI** as callback parameter
+4. **KIE AI calls back** with `_id` + `sourceUrl`
+5. **Callback downloads file to R2** and updates record with `r2Key`, permanent `sourceUrl`, `taskId`, and `status`
+6. **Store AI metadata** including model, pricing, and behavior information
 
-### **Enhanced `storyboard_files` Schema**
+### **Enhanced `storyboard_files` Schema with AI Metadata**
 
 ```typescript
-// Enhanced storyboard_files table
+// Enhanced storyboard_files table with AI pricing integration
 storyboard_files: defineTable({
   // ... existing fields ...
   creditsUsed: v.optional(v.number()),   // Credits consumed for this file
+  
+  // AI Generation Metadata
+  aiMetadata: v.optional(v.object({
+    modelId: v.string(),              // AI model used
+    modelName: v.string(),            // Human-readable model name
+    pricingType: v.string(),          // 'fixed' | 'formula'
+    quality: v.string(),              // Quality setting (1K/2K/4K, medium/high, etc.)
+    creditsConsumed: v.number(),       // Actual credits consumed
+    generationTimestamp: v.number(),  // When generation started
+    
+    // Model behavior metadata
+    behavior: v.object({
+      cropped: v.boolean(),           // Was image cropped
+      combined: v.boolean(),          // Was image combined
+      referenceImagesUsed: v.number(), // Number of reference images
+    }),
+    
+    // Processing metadata
+    processingTime: v.number(),       // Time to generate
+    success: v.boolean(),             // Generation success
+    errorMessage: v.optional(v.string()), // Error message if failed
+  })),
+  
+  // Callback metadata
   deletedAt: v.optional(v.number()),     // Track when file was deleted
   sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
   taskId: v.optional(v.string()),        // KIE AI task ID
@@ -43,15 +71,16 @@ storyboard_files: defineTable({
   )),
   status: v.string(), // 'generating' | 'completed' | 'failed'
 })
-  .index("by_project", ["projectId"])        // ✅ ADDED
+  .index("by_project", ["projectId"])        // 
   .index("by_category", ["projectId", "category"])
   .index("by_r2Key", ["r2Key"])
   .index("by_categoryId", ["categoryId"])
+  .index("by_aiModel", ["projectId", "aiMetadata.modelId"]) // 
 ```
 
 ---
 
-## 🔄 Simple Generate Workflow
+## **Dynamic Pricing Integration (April 2026)**
 
 ### **🎯 Direct Image Processing**
 

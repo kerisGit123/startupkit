@@ -3,10 +3,10 @@
 
 ## Overview
 
-A comprehensive pricing management system for AI models that supports both fixed price and formula-based calculations. The system provides a complete admin interface for managing pricing models, real-time testing, and instant price calculators.
+A comprehensive pricing management system for AI models that supports both fixed price and formula-based calculations. The system provides a complete admin interface for managing pricing models, real-time testing, and instant price calculators with database-driven dynamic pricing integration.
 
 
-## Current Implementation Status: ✅ **IMPLEMENTED AND ALIGNED WITH CURRENT CODE**
+## Current Implementation Status: ✅ **IMPLEMENTED WITH DYNAMIC PRICING INTEGRATION (April 2026)**
 
 
 ### ✅ **Core Features Implemented**
@@ -19,6 +19,9 @@ A comprehensive pricing management system for AI models that supports both fixed
 - **Fixed and Formula Pricing**: Supports both pricing strategies
 - **Image / Video Support**: Model type specific pricing rules
 - **Resolution / Quality / Duration Inputs**: Used in formula testing
+- **Dynamic Pricing Integration**: Real-time pricing from database values
+- **Model-Specific Behavior**: Proper handling of different model types
+- **Credit Calculation Fixes**: Recraft Crisp and other model pricing corrections
 
 
 ### ✅ **Important Current Behavior**
@@ -28,6 +31,8 @@ A comprehensive pricing management system for AI models that supports both fixed
 - **Reset to Default is explicit**: Reset uses a dedicated `action: "resetDefaults"` POST payload
 - **Fresh form state after save**: The edit modal is repopulated from freshly fetched saved data, not stale component state
 - **Duplicate create protection**: Creating a model with an existing `modelId` throws an error
+- **Database as Source of Truth**: All pricing calculations use database values with fallback handling
+- **Real-time Updates**: Credit calculations update instantly when model/quality changes
 
 
 ### ✅ **Technical Implementation**
@@ -39,20 +44,20 @@ A comprehensive pricing management system for AI models that supports both fixed
   - `POST` = create new model or reset defaults when explicitly requested
   - `PUT` = update existing model only
 - **Fresh Data Sync After Save**: UI uses refreshed models returned after save
+- **Dynamic Credit Calculation**: `getModelCredits` function with database integration
+- **Model Behavior Handling**: Proper cropping logic for different model types
+- **Fallback Pricing**: Handles database inconsistencies with correct defaults
 
 
-### ✅ **Recent Updates (2026)**
+### ✅ **Recent Updates (April 2026)**
 
-- **Strict edit/update flow**: Prevents edit from accidentally creating duplicates
-- **Separated create vs update API flow**
-- **Reset defaults moved behind explicit action payload**
-- **Stale edit modal fix**: Saved values remain visible after save
-- **Current admin list aligned with actual pricing model IDs used by the UI**
-- **✅ QUALITY-BASED PRICING IMPLEMENTED**: Dynamic quality selection for Nano Banana 2 and Topaz Upscale models
-- **✅ FORMULA JSON PRICING**: Direct cost extraction from formulaJson with factor multiplication
-- **✅ REAL-TIME QUALITY UPDATES**: Quality dropdown with immediate credit recalculation
-- **✅ ACCURATE ALERT MESSAGES**: Quality-specific alerts showing correct model names and credits
-- **✅ TAB-BASED TESTING INTERFACE**: Separate Models and Testing tabs with model-aware parameters
+- **Recraft Crisp Credit Fix**: Fixed database value mismatch (8 → 0.5 credits) with special case handling
+- **Dynamic Pricing System**: Complete integration of database-driven pricing for all models
+- **Model Behavior Matrix**: Added proper cropping logic for upscale vs generation models
+- **Real-Time Credit Updates**: Enhanced `useMemo` dependencies for instant credit recalculation
+- **GPT Model Integration**: Added quality-based pricing for GPT 1.5 Image to Image
+- **Topaz Upscale Enhancement**: Updated pricing structure with 1x/2x/4x scaling factors
+- **Nano Banana Pricing**: Refined quality-based pricing with proper formula extraction
 - **✅ UPDATED SEEDANCE PRICING**: Corrected 4-second duration intervals and proper multipliers
 - **✅ FUNCTION-BASED CALCULATIONS**: Testing panel uses assigned pricing functions for accuracy
 

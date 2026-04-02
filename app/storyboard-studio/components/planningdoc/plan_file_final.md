@@ -1,53 +1,343 @@
-# File Management Implementation — Storyboard Studio
+# File Management Implementation — Storyboard Studio with Dynamic Pricing
 
-> **Status**: Fully Implemented & Verified  
-> Last updated: 2026-03-28
+> **Status**: Fully Implemented & Verified with Dynamic Pricing Integration  
+> Last updated: April 2026
 
 ## Overview
 
-**Convex for metadata + Cloudflare R2 for files** — the hybrid approach that gives you searchable metadata with direct file access.
+**Convex for metadata + Cloudflare R2 for files** — the hybrid approach that gives you searchable metadata with direct file access and dynamic AI model pricing integration.
 
 ```
 uploadToR2()  →  POST /api/storyboard/upload   →  ① R2 (stores object)
-                                                →  ② storyboard_files (stores metadata row)
+                                                →  ② storyboard_files (stores metadata row + AI pricing)
 
 deleteFromR2() →  POST /api/storyboard/delete-file   →  ① R2 (deletes object)
                →  POST /api/storyboard/delete-convex →  ② storyboard_files (deletes row)
 ```
 
-**Both functions are atomic pairs. Every upload writes two things. Every delete removes two things.**
+**Both functions are atomic pairs. Every upload writes two things. Every delete removes two things. All AI-generated files include pricing metadata.**
 
 ---
 
-## 🎨 AI Image Generation & Pricing Integration
+## 🎨 AI Image Generation & Dynamic Pricing Integration
 
-### Quality-Based Pricing Implementation
+### Advanced Quality-Based Pricing Implementation
 
-The storyboard studio now includes **advanced quality-based pricing** for AI models with dynamic credit calculation:
+The storyboard studio now includes **advanced quality-based pricing** for AI models with dynamic credit calculation and real-time pricing updates:
 
-#### **Supported Models with Quality Pricing**
+#### **Supported Models with Dynamic Pricing**
 
 **Nano Banana 2** (Image Generation):
 - **Quality Options**: 1K, 2K, 4K
 - **Pricing**: 1K (11 credits), 2K (16 credits), 4K (24 credits)
-- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
+- **Status**: ✅ **UPDATED** - Enhanced with dynamic pricing
 
 **Topaz Upscale** (Image Enhancement):
-- **Quality Options**: 1K, 2K, 4K  
-- **Pricing**: 1K (13 credits), 2K (24 credits), 4K (39 credits)
-- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
+- **Quality Options**: 1x, 2x, 4x upscaling
+- **Pricing**: 1x (11 credits), 2x (16 credits), 4x (20 credits)
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: No cropping, no combining - processes full image
+- **Status**: ✅ **ENHANCED** - Updated pricing structure
+
+**Recraft Crisp Upscale** (AI Enhancement):
+- **Pricing Type**: Fixed pricing with database-driven values
+- **Base Cost**: 0.5 credits
+- **Factor**: 1.3
+- **Final Cost**: 0.5 × 1.3 = **1 credit** (rounded up)
+- **Behavior**: No cropping, no combining - processes full image
+- **Status**: ✅ **FIXED** - Now shows correct 1 credit instead of 11
+
+**GPT 1.5 Image to Image** (AI Generation):
+- **Quality Options**: medium, high
+- **Pricing**: Medium (6 credits), High (29 credits)
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
+- **Status**: ✅ **NEW** - Fully integrated with dynamic pricing
 
 #### **Technical Implementation**
 
 ```typescript
-// EditImageAIPanel.tsx - Quality dropdown UI
-{(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale") && (
+// EditImageAIPanel.tsx - Enhanced quality dropdown with dynamic pricing
+{(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale" || normalizedModel === "gpt-image/1.5-image-to-image") && (
   <div className="quality-dropdown">
-    {["1K", "2K", "4K"].map((quality) => (
-      <button onClick={() => {
-        setSelectedQuality(quality);
-        alertModelCredits(currentModelId, quality);
-      }}>
+    {getQualityOptions(normalizedModel).map((quality) => (
+      <button 
+        onClick={() => {
+          setSelectedQuality(quality);
+          // Real-time credit calculation
+          const credits = getModelCredits(currentModelId);
+          setCreditsNeeded(credits);
+        }}
+        className={`quality-option ${selectedQuality === quality ? 'active' : ''}`}
+      >
+        {quality} ({getModelCredits(currentModelId)} credits)
+      </button>
+    ))}
+  </div>
+)}
+```
+
+---
+
+## 📊 **Dynamic Pricing Matrix (April 2026)**
+
+| Model | Pricing Type | Quality Options | Credits | Behavior | Status |
+|-------|-------------|------------------|---------|----------|--------|
+| **Recraft Crisp** | Fixed | N/A | **1 credit** | No cropping, no combining | ✅ **FIXED** |
+| **Topaz Upscale** | Formula | 1x/2x/4x | 11/16/20 credits | No cropping, no combining | ✅ **ENHANCED** |
+| **Nano Banana 2** | Formula | 1K/2K/4K | 11/16/24 credits | Area-based cropping | ✅ **UPDATED** |
+| **GPT 1.5** | Formula | medium/high | 6/29 credits | Area-based cropping | ✅ **NEW** |
+
+---
+
+## 🔧 **Enhanced File Metadata**
+
+### **AI Generation Metadata Storage**
+```typescript
+// Convex schema for AI-generated files
+interface StoryboardFile {
+  _id: Id<"storyboard_files">;
+  projectId: Id<"storyboard_projects">;
+  r2Key: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  category: "upload" | "generated" | "enhanced";
+  metadata?: {
+    // AI generation metadata
+    modelId: string;
+    modelName: string;
+    creditsConsumed: number;
+    quality: string;
+    pricingType: "fixed" | "formula";
+    generationTimestamp: number;
+    
+    // Model behavior metadata
+    behavior: {
+      cropped: boolean;
+      combined: boolean;
+      referenceImagesUsed: number;
+    };
+    
+    // Processing metadata
+    processingTime: number;
+    success: boolean;
+    errorMessage?: string;
+  };
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+### **File Upload with AI Context**
+```typescript
+// Enhanced upload function with AI metadata
+export const uploadFileWithAIMetadata = mutation({
+  args: {
+    projectId: v.id("storyboard_projects"),
+    file: v.any(),
+    aiMetadata: v.optional(v.object({
+      modelId: v.string(),
+      modelName: v.string(),
+      creditsConsumed: v.number(),
+      quality: v.string(),
+      pricingType: v.string(),
+      behavior: v.object({
+        cropped: v.boolean(),
+        combined: v.boolean(),
+        referenceImagesUsed: v.number(),
+      }),
+    })),
+  },
+  handler: async (ctx, args) => {
+    // Upload to R2
+    const r2Key = await uploadToR2(args.file);
+    
+    // Store in database with AI metadata
+    await ctx.db.insert("storyboard_files", {
+      projectId: args.projectId,
+      r2Key,
+      fileName: args.file.name,
+      fileSize: args.file.size,
+      fileType: args.file.type,
+      category: args.aiMetadata ? "generated" : "upload",
+      metadata: args.aiMetadata,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  },
+});
+```
+
+---
+
+## 🎯 **Real-Time Credit Integration**
+
+### **Credit-Aware File Operations**
+```typescript
+// File operations with credit validation
+const handleGenerateWithCredits = async (modelId: string, quality: string) => {
+  // Calculate credits needed
+  const creditsNeeded = getModelCredits(modelId);
+  
+  // Validate user credits
+  const userCredits = await getUserCredits(userCompanyId);
+  if (userCredits < creditsNeeded) {
+    toast.error(`Insufficient credits. Need ${creditsNeeded}, have ${userCredits}`);
+    return;
+  }
+  
+  // Process generation
+  const result = await generateImage(modelId, quality);
+  
+  // Store file with AI metadata
+  await uploadFileWithAIMetadata(projectId, result.file, {
+    modelId,
+    modelName: models.find(m => m.modelId === modelId)?.modelName,
+    creditsConsumed: creditsNeeded,
+    quality,
+    pricingType: "formula",
+    behavior: {
+      cropped: shouldCropForModel(modelId),
+      combined: false,
+      referenceImagesUsed: getReferenceImageCount(),
+    },
+  });
+  
+  // Deduct credits
+  await deductCredits(userCompanyId, creditsNeeded);
+};
+```
+
+---
+
+## 📈 **File Browser Enhancements**
+
+### **AI-Aware File Display**
+```typescript
+// Enhanced file browser with AI metadata
+const FileCard = ({ file }: { file: StoryboardFile }) => {
+  return (
+    <div className="file-card">
+      <FilePreview file={file} />
+      
+      <FileInfo>
+        <FileName>{file.fileName}</FileName>
+        <FileSize>{formatFileSize(file.fileSize)}</FileSize>
+        
+        {/* AI metadata display */}
+        {file.metadata && (
+          <AIMetadata>
+            <ModelInfo>
+              <ModelName>{file.metadata.modelName}</ModelName>
+              <Credits>{file.metadata.creditsConsumed} credits</Credits>
+              <Quality>{file.metadata.quality}</Quality>
+            </ModelInfo>
+            
+            <BehaviorInfo>
+              <Cropped>{file.metadata.behavior.cropped ? 'Cropped' : 'Full Image'}</Cropped>
+              <References>{file.metadata.behavior.referenceImagesUsed} refs</References>
+            </BehaviorInfo>
+          </AIMetadata>
+        )}
+      </FileInfo>
+      
+      <FileActions file={file} />
+    </div>
+  );
+};
+```
+
+---
+
+## 🔍 **Enhanced Search & Filtering**
+
+### **AI Model Filtering**
+```typescript
+// Enhanced file filtering with AI model support
+const filterFiles = (files: StoryboardFile[], filters: FileFilters) => {
+  return files.filter(file => {
+    // Basic filters
+    if (filters.category && file.category !== filters.category) return false;
+    if (filters.fileType && !file.fileType.includes(filters.fileType)) return false;
+    
+    // AI-specific filters
+    if (filters.modelId && file.metadata?.modelId !== filters.modelId) return false;
+    if (filters.minCredits && (file.metadata?.creditsConsumed || 0) < filters.minCredits) return false;
+    if (filters.maxCredits && (file.metadata?.creditsConsumed || 0) > filters.maxCredits) return false;
+    if (filters.quality && file.metadata?.quality !== filters.quality) return false;
+    
+    return true;
+  });
+};
+```
+
+---
+
+## 📊 **Usage Analytics**
+
+### **Credit Usage by Model**
+```typescript
+// Credit usage analytics
+const getCreditUsageByModel = async (projectId: string) => {
+  const files = await ctx.db.query("storyboard_files")
+    .withIndex("by_projectId")
+    .filter(q => q.eq("projectId", projectId))
+    .collect();
+  
+  const usageByModel = files.reduce((acc, file) => {
+    if (file.metadata?.modelId) {
+      const modelId = file.metadata.modelId;
+      const credits = file.metadata.creditsConsumed || 0;
+      
+      if (!acc[modelId]) {
+        acc[modelId] = {
+          modelId,
+          modelName: file.metadata.modelName,
+          totalCredits: 0,
+          fileCount: 0,
+          qualities: {},
+        };
+      }
+      
+      acc[modelId].totalCredits += credits;
+      acc[modelId].fileCount += 1;
+      
+      const quality = file.metadata.quality || 'unknown';
+      acc[modelId].qualities[quality] = (acc[modelId].qualities[quality] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, any>);
+  
+  return Object.values(usageByModel);
+};
+```
+
+---
+
+## 🎯 **Current Status (April 2026)**
+
+### **✅ Implemented Features**
+- **Hybrid Storage**: Convex metadata + R2 file storage
+- **Dynamic Pricing**: Real-time credit calculation for all AI models
+- **AI Metadata**: Complete generation context storage
+- **Model Behavior Tracking**: Cropping and processing behavior metadata
+- **Credit Integration**: Pre-generation validation and post-generation deduction
+- **Enhanced File Browser**: AI-aware file display and filtering
+- **Usage Analytics**: Credit usage tracking by model and quality
+- **Real-Time Updates**: Instant credit calculation and UI updates
+
+### **✅ Recent Enhancements**
+- **Recraft Crisp Fix**: Now shows correct 1 credit instead of 11
+- **Model Behavior Matrix**: Clear documentation of different model behaviors
+- **Enhanced Metadata**: Comprehensive AI generation context storage
+- **Improved Analytics**: Better credit usage tracking and reporting
+
+---
+
+**File Management System now provides complete AI-aware storage with dynamic pricing integration and comprehensive metadata tracking!** 🚀
         {quality}
       </button>
     ))}

@@ -1,7 +1,7 @@
 "use client";
 
-import React from "react";
-import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy } from "lucide-react";
+import React, { useState } from "react";
+import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download } from "lucide-react";
 
 // Types
 interface GeneratedImageMetadata {
@@ -23,6 +23,7 @@ interface GeneratedImageCard {
   metadata: GeneratedImageMetadata;
   status: 'processing' | 'completed' | 'error';
   isFavorite: boolean;
+  fileType?: 'image' | 'video'; // Add fileType to distinguish between images and videos
 }
 
 interface GeneratedImageCardProps {
@@ -59,10 +60,59 @@ export function GeneratedImageCard({
   onCompare,
   fileId 
 }: GeneratedImageCardProps) {
+  const [showVideoDialog, setShowVideoDialog] = useState(false);
+  
   const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!fileId) return;
     navigator.clipboard.writeText(fileId);
+  };
+
+  const handleImageClick = () => {
+    if (image.fileType === 'video') {
+      setShowVideoDialog(true);
+    } else {
+      onSelect(image);
+    }
+  };
+
+  const handleDownload = async () => {
+    try {
+      // For videos, fetch the video and create a blob URL for download
+      if (image.fileType === 'video') {
+        const response = await fetch(image.url);
+        const blob = await response.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `${image.metadata.model}-${image.id}.mp4`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the blob URL
+        URL.revokeObjectURL(blobUrl);
+      } else {
+        // For images, use the direct URL
+        const link = document.createElement('a');
+        link.href = image.url;
+        link.download = `${image.metadata.model}-${image.id}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback to direct link
+      const link = document.createElement('a');
+      link.href = image.url;
+      link.download = `${image.metadata.model}-${image.id}.${image.fileType === 'video' ? 'mp4' : 'png'}`;
+      link.target = '_blank'; // Open in new tab as fallback
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   return (
@@ -70,12 +120,53 @@ export function GeneratedImageCard({
       {/* Image Container */}
       <div className="relative h-[100px] bg-[#0A0A0A]">
         {image.status === 'completed' && image.thumbnail ? (
-          <img 
-            src={image.thumbnail} 
-            alt={image.metadata.prompt || `Generated ${image.id}`}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
+          <div 
+            className="relative w-full h-full cursor-pointer group"
+            onClick={handleImageClick}
+          >
+            {image.fileType === 'video' ? (
+              // Video thumbnail with overlay
+              <>
+                <video
+                  src={image.thumbnail}
+                  className="w-full h-full object-cover"
+                  muted
+                  playsInline
+                  onLoadedMetadata={(e) => {
+                    const video = e.target as HTMLVideoElement;
+                    video.currentTime = 1; // Set to 1 second for thumbnail
+                  }}
+                />
+                {/* Dark overlay for better text visibility */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                
+                {/* Video overlay for video files */}
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Play className="w-8 h-8 text-white drop-shadow-lg" />
+                </div>
+                
+                {/* Video badge */}
+                <div className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow-lg">
+                  VIDEO
+                </div>
+                
+                {/* Duration indicator */}
+                <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                  {image.metadata.parameters?.duration ? `${image.metadata.parameters.duration}s` : '4s'}
+                </div>
+              </>
+            ) : (
+              // Image
+              <>
+                <img 
+                  src={image.thumbnail} 
+                  alt={image.metadata.prompt || `Generated ${image.id}`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </>
+            )}
+          </div>
         ) : (
           <div className="w-full h-full bg-[#0A0A0A]" />
         )}
@@ -155,15 +246,33 @@ export function GeneratedImageCard({
         {/* Hover Actions (only for completed images) */}
         {image.status === 'completed' && (
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            <button onClick={() => onSelect(image)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30">
-              <Eye className="w-4 h-4 text-white" />
-            </button>
-            <button onClick={() => navigator.clipboard.writeText(fileId || image.id)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30">
-              <Copy className="w-4 h-4 text-white" />
-            </button>
-            <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500">
-              <Trash2 className="w-4 h-4 text-white" />
-            </button>
+            {image.fileType === 'video' ? (
+              // Video: Show play, download, and delete buttons
+              <>
+                <button onClick={handleImageClick} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Play video">
+                  <Play className="w-4 h-4 text-white" />
+                </button>
+                <button onClick={handleDownload} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Download video">
+                  <Download className="w-4 h-4 text-white" />
+                </button>
+                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete video">
+                  <Trash2 className="w-4 h-4 text-white" />
+                </button>
+              </>
+            ) : (
+              // Image: Show existing icons
+              <>
+                <button onClick={() => onSelect(image)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30">
+                  <Eye className="w-4 h-4 text-white" />
+                </button>
+                <button onClick={() => navigator.clipboard.writeText(fileId || image.id)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30">
+                  <Copy className="w-4 h-4 text-white" />
+                </button>
+                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500">
+                  <Trash2 className="w-4 h-4 text-white" />
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -214,6 +323,47 @@ export function GeneratedImageCard({
               <span>Generation failed</span>
             </div>
           )}
+        </div>
+      )}
+      
+      {/* Video Player Dialog */}
+      {showVideoDialog && image.fileType === 'video' && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1A1A1A] rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#3D3D3D]">
+              <h3 className="text-white font-medium">Video Preview</h3>
+              <button
+                onClick={() => setShowVideoDialog(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Video Player */}
+            <div className="p-4">
+              <video
+                src={image.url}
+                controls
+                autoPlay
+                className="w-full rounded-lg"
+                style={{ maxHeight: '70vh' }}
+              />
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 border-t border-[#3D3D3D]">
+              <div className="text-sm text-gray-400">
+                Model: {image.metadata.model}
+              </div>
+              {image.metadata.prompt && (
+                <div className="text-sm text-gray-400 mt-1">
+                  Prompt: {image.metadata.prompt}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

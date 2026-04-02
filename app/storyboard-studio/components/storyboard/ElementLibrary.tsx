@@ -128,18 +128,20 @@ function normalizeAssetUrl(url?: string | null) {
 function sanitizeName(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "element";
 }
-
 // Optimized image card component
 const ImageCard = memo(({ 
   url, 
   index, 
   elementName, 
-  onSelect 
+  onSelect,
+  onAddAsReference,
+  ...props 
 }: {
   url: string;
   index: number;
   elementName: string;
-  onSelect: () => void;
+  onSelect?: (url: string, index: number) => void;
+  onAddAsReference?: (url: string, index: number, elementName: string) => void;
 }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -201,7 +203,23 @@ const ImageCard = memo(({
       
       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
         <button
-          onClick={onSelect}
+          onClick={() => {
+            console.log('🔥 PLUS BUTTON CLICKED in ElementLibrary! 🔥');
+            console.log('🔥 URL:', url);
+            console.log('🔥 Index:', index);
+            console.log('🔥 ElementName:', elementName);
+            
+            // Use the onAddAsReference callback if available
+            if (onAddAsReference) {
+              console.log('🎯 Calling onAddAsReference with:', url, index, elementName);
+              onAddAsReference(url, index, elementName);
+            } else if (onSelect) {
+              console.log('🎯 Using fallback onSelect');
+              onSelect?.(url, index);
+            } else {
+              console.log('❌ No callback available');
+            }
+          }}
           className="rounded-full bg-indigo-500 p-2 text-white hover:bg-indigo-600 transition-colors"
           title="Add this image to references"
           aria-label={`Add image ${index + 1} to references`}
@@ -1436,6 +1454,24 @@ export function ElementLibrary({
                                 index={index}
                                 elementName={editingElement?.name || 'Element'}
                                 onSelect={() => {}} // No select action in reference images
+                                onAddAsReference={(url, index, elementName) => {
+                                  console.log('🎯 Adding image as reference:', { url, index, elementName });
+                                  if (onSelectImage) {
+                                    const mockElement = {
+                                      _id: `image-${Date.now()}`,
+                                      name: elementName,
+                                      type: 'image',
+                                      thumbnailUrl: url,
+                                      referenceUrls: [url]
+                                    };
+                                    onSelectImage(url, `${elementName} - Image ${index + 1}`, mockElement);
+                                    
+                                    // Show success notification to user
+                                    setTimeout(() => {
+                                      alert(`✅ "${elementName} - Image ${index + 1}" has been added to reference images!`);
+                                    }, 100);
+                                  }
+                                }}
                               />
                               
                               {/* Thumbnail indicator */}

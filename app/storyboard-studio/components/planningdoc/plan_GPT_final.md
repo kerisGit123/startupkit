@@ -1,14 +1,53 @@
-# GPT Image Generation — Crop & Composite Technique
+# GPT Image Generation — Dynamic Pricing Integration
 
 ## Overview
 
-When a user selects a crop area on the canvas and triggers AI image generation (e.g. "wear hat"), the system must:
+When a user selects a crop area on the canvas and triggers AI image generation (e.g., "wear hat"), the system must:
 
 1. **Crop** the selected area from the original image
 2. **Send** the cropped area to KIE AI for generation
 3. **Receive** the generated image back
 4. **Scale & fit** the generated image into the exact crop rectangle
 5. **Composite** it onto the original image to produce a seamless final result
+6. **Calculate Credits** based on GPT model pricing and quality settings
+
+---
+
+## 🎯 Dynamic Pricing Integration (April 2026)
+
+### **GPT 1.5 Image to Image Pricing**
+- **Pricing Type**: Formula-based pricing with dynamic quality selection
+- **Quality Options**: medium, high
+- **Pricing**:
+  - Medium: 4 × 1.3 = **6 credits**
+  - High: 22 × 1.3 = **29 credits**
+- **Formula**: Dynamic cost extraction from formulaJson × factor (1.3)
+- **Behavior**: Area-based cropping with reference images
+- **Status**: ✅ **IMPLEMENTED** - Fully integrated with dynamic pricing system
+
+### **Credit Calculation Flow**
+```typescript
+// EditImageAIPanel.tsx - GPT pricing integration
+const getModelCredits = useCallback((modelId: string): number => {
+  const model = models.find(m => m.modelId === modelId);
+  
+  if (model.assignedFunction === 'getGptImagePrice') {
+    // GPT Image pricing: use formula from database dynamically
+    if (model.formulaJson) {
+      try {
+        const formula = JSON.parse(model.formulaJson);
+        const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === gptImageQuality);
+        if (qualityData) {
+          return Math.ceil(qualityData.cost * (model.factor || 1.3));
+        }
+      } catch (e) {
+        console.error("Error parsing GPT Image formula:", e);
+      }
+    }
+    return Math.ceil((model.creditCost || 0) * (model.factor || 1));
+  }
+}, [models, selectedQuality, gptImageQuality]);
+```
 
 ---
 
@@ -25,6 +64,8 @@ When a user selects a crop area on the canvas and triggers AI image generation (
 │     - cropped image URL                                     │
 │     - crop coords (image space, via ref)                    │
 │     - original image URL (R2, not data URL)                 │
+│     - GPT model and quality settings                        │
+│  5. Shows calculated credits before generation              │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -32,6 +73,7 @@ When a user selects a crop area on the canvas and triggers AI image generation (
 │  API ROUTE (generate-image/route.ts)                        │
 │                                                             │
 │  Passes all params to triggerImageGeneration()              │
+│  Validates credits before processing                       │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
@@ -40,7 +82,7 @@ When a user selects a crop area on the canvas and triggers AI image generation (
 │                                                             │
 │  1. Creates placeholder file record in Convex               │
 │  2. Stores metadata: cropX, cropY, cropWidth, cropHeight,   │
-│     originalImageUrl                                        │
+│     originalImageUrl, modelId, quality, creditsUsed       │
 │  3. Sends cropped image + prompt to KIE AI API              │
 │  4. KIE AI processes asynchronously, calls back when done   │
 └──────────────────────┬──────────────────────────────────────┘

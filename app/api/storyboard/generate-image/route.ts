@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   triggerImageGeneration,
+  triggerVideoGeneration,
   enhancePromptForImage,
   IMAGE_CREDITS,
   type ImageStyle,
@@ -32,7 +33,9 @@ export async function POST(req: NextRequest) {
       cropWidth,      // NEW - crop width
       cropHeight,     // NEW - crop height
       originalImageUrl, // NEW - original image URL for compositing
-      outputFormat    // NEW - output format from VideoImageAIPanel
+      outputFormat,   // NEW - output format from VideoImageAIPanel
+      duration,       // NEW - video duration for Seedance 1.5 Pro
+      audioEnabled    // NEW - audio enabled for Seedance 1.5 Pro
     } = await req.json();
 
     console.log('[generate-image] API route received parameters:', {
@@ -57,6 +60,9 @@ export async function POST(req: NextRequest) {
       : prompt;
     const finalPrompt = basePrompt;
 
+    // Check if this is a video generation model (Seedance 1.5 Pro)
+    const isVideoModel = model === "bytedance/seedance-1.5-pro";
+    
     console.log('[generate-image] API route called with:', {
       finalPrompt,
       style,
@@ -68,6 +74,7 @@ export async function POST(req: NextRequest) {
       itemId,
       creditsUsed,
       model,
+      isVideoModel,
       imageUrl,
       maskUrl,
       referenceImageUrls,
@@ -76,31 +83,54 @@ export async function POST(req: NextRequest) {
       cropY,
       cropWidth,
       cropHeight,
-      originalImageUrl
+      originalImageUrl,
+      duration,
+      audioEnabled
     });
 
-    const result = await triggerImageGeneration({
-      prompt: finalPrompt,
-      style: (style ?? "realistic") as ImageStyle,
-      aspectRatio: aspectRatio ?? "9:16",
-      quality: (quality ?? "standard") as ImageQuality,
-      companyId,    // NEW
-      userId,       // NEW
-      projectId,    // NEW
-      categoryId: itemId, // NEW - link to storyboard item
-      creditsUsed,  // NEW - actual credit amount from AI panel
-      model, // NEW - pass the actual model from EditImageAIPanel
-      imageUrl, // NEW - pass canvas image URL for character-edit models
-      referenceImageUrls, // NEW - pass reference images for character-edit models
-      maskUrl, // NEW - pass mask URL for character-edit models
-      existingFileId, // NEW - pass existing file ID to update instead of creating new
-      cropX,          // NEW - pass crop X coordinate
-      cropY,          // NEW - pass crop Y coordinate
-      cropWidth,      // NEW - pass crop width
-      cropHeight,     // NEW - pass crop height
-      originalImageUrl, // NEW - pass original image URL for compositing
-      outputFormat    // NEW - pass output format from VideoImageAIPanel
-    });
+    let result;
+    
+    if (isVideoModel) {
+      // Use video generation for Seedance 1.5 Pro
+      result = await triggerVideoGeneration({
+        prompt: finalPrompt,
+        model: model,
+        fileId: existingFileId || '', // Will be created by triggerVideoGeneration
+        callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback`, // Will be updated in the function
+        companyId,
+        userId,
+        projectId,
+        referenceImages: referenceImageUrls || [],
+        aspectRatio: aspectRatio === "auto" ? "1:1" : aspectRatio, // Fix "auto" to valid value
+        resolution: quality === "standard" ? "720p" : quality === "high" ? "1080p" : "480p", // Map quality to resolution
+        duration: duration || "8s",
+        audio: audioEnabled || false,
+      });
+    } else {
+      // Use image generation for other models
+      result = await triggerImageGeneration({
+        prompt: finalPrompt,
+        style: (style ?? "realistic") as ImageStyle,
+        aspectRatio: aspectRatio ?? "9:16",
+        quality: (quality ?? "standard") as ImageQuality,
+        companyId,    // NEW
+        userId,       // NEW
+        projectId,    // NEW
+        categoryId: itemId, // NEW - link to storyboard item
+        creditsUsed,  // NEW - actual credit amount from AI panel
+        model, // NEW - pass the actual model from EditImageAIPanel
+        imageUrl, // NEW - pass canvas image URL for character-edit models
+        referenceImageUrls, // NEW - pass reference images for character-edit models
+        maskUrl, // NEW - pass mask URL for character-edit models
+        existingFileId, // NEW - pass existing file ID to update instead of creating new
+        cropX,          // NEW - pass crop X coordinate
+        cropY,          // NEW - pass crop Y coordinate
+        cropWidth,      // NEW - pass crop width
+        cropHeight,     // NEW - pass crop height
+        originalImageUrl, // NEW - pass original image URL for compositing
+        outputFormat    // NEW - pass output format from VideoImageAIPanel
+      });
+    }
 
     console.log('[generate-image] triggerImageGeneration result:', result);
 

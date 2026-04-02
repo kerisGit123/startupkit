@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { 
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
@@ -16,6 +16,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { usePricingData } from "@/app/storyboard-studio/components/usePricingData";
 import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
 import PromptLibrary from "./PromptLibrary";
 import { FileBrowser } from "./FileBrowser";
 import { ElementLibrary } from "./ElementLibrary";
@@ -47,7 +48,7 @@ interface ReferenceImage {
 export interface ImageAIPanelProps {
   mode: ImageAIEditMode;
   onModeChange: (mode: ImageAIEditMode) => void;
-  onGenerate: () => void;
+  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string) => void;
   credits?: number;
   model?: string;
   onModelChange?: (model: string) => void;
@@ -198,6 +199,9 @@ export function ImageAIPanel({
   userId,
   user,
 }: ImageAIPanelProps) {
+  // Get the proper companyId using the auth hook
+  const currentCompanyId = useCurrentCompanyId();
+  
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -273,11 +277,13 @@ export function ImageAIPanel({
     const newMode = outputMode === "image" ? "video" : "image";
     setOutputMode(newMode);
     
-    // Reset resolution to appropriate default when switching modes
+    // Reset resolution and aspect ratio to appropriate defaults when switching modes
     if (newMode === "video") {
       setResolution("480P");
+      setAspectRatio("16:9"); // ✅ Set to 16:9 for video mode
     } else {
       setResolution("1K");
+      setAspectRatio("1:1"); // ✅ Set to 1:1 for image mode
     }
     
     // Auto-switch to Seedance 1.5 Pro when switching to video mode
@@ -330,7 +336,7 @@ export function ImageAIPanel({
   ];
 
   // State for new dropdowns
-  const [aspectRatio, setAspectRatio] = useState("1:1");
+  const [aspectRatio, setAspectRatio] = useState(outputMode === "video" ? "16:9" : "1:1");
   const [resolution, setResolution] = useState(outputMode === "video" ? "480P" : "1K");
   const [outputFormat, setOutputFormat] = useState("png");
   const [videoDuration, setVideoDuration] = useState("8s");
@@ -443,7 +449,7 @@ export function ImageAIPanel({
 
   // ── ContentEditable editor helpers ──────────────────────────────────
 
-  // Extract plain text from the editor DOM (include badge mentions as @Image text)
+  // Extract plain text from contentEditable for prompt generation (excluding badges)
   const extractPlainText = (): string => {
     const el = editorRef.current;
     if (!el) return "";
@@ -452,11 +458,36 @@ export function ImageAIPanel({
       const htmlEl = node as HTMLElement;
       if (htmlEl.nodeName === "BR") return "\n";
       
-      // Include badge mentions as @Image text with spaces around them
+      // Exclude badge mentions from prompt text - they should not affect the prompt
       if (htmlEl.dataset?.type === "mention") {
+        return ""; // Don't include badge content in prompt
+      }
+      
+      let result = "";
+      node.childNodes.forEach((child) => { result += collect(child); });
+      if (htmlEl.tagName === "DIV" && node !== el) result += "\n";
+      return result;
+    };
+    return collect(el).replace(/\n$/, "");
+  };
+
+  // Extract text WITH badges for test button display
+  const extractTextWithBadges = (): string => {
+    const el = editorRef.current;
+    if (!el) return "";
+    const collect = (node: Node): string => {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+      const htmlEl = node as HTMLElement;
+      if (htmlEl.nodeName === "BR") return "\n";
+      
+      // Include badge mentions for test display
+      if (htmlEl.dataset?.type === "mention") {
+        // Extract the badge text from the label element
         const label = htmlEl.querySelector('span[class*="text-cyan-300"]');
-        const mentionText = label?.textContent ?? "";
-        return ` ${mentionText} `; // Add spaces before and after
+        if (label) {
+          return label.textContent || "";
+        }
+        return "";
       }
       
       let result = "";
@@ -517,6 +548,41 @@ export function ImageAIPanel({
     return span;
   };
 
+  // Add image as a new reference image (duplicate functionality)
+  const addImageAsReference = (img: any, index: number) => {
+    console.log('🎯 Plus icon clicked - adding as reference image!', { img, index });
+    console.log('🎯 Current reference images count:', referenceImages?.length || 0);
+    
+    try {
+      // Create a mock element object like ElementLibrary does
+      const mockElement = {
+        _id: `duplicate-${img.id}-${Date.now()}`,
+        name: `Duplicate ${img.source || 'Image'} ${index + 1}`,
+        type: 'image',
+        thumbnailUrl: img.url,
+        referenceUrls: [img.url]
+      };
+      
+      console.log('🎯 Calling handleImageSelect like ElementLibrary...');
+      // Call the same handleImageSelect function that ElementLibrary uses
+      handleImageSelect('element', {
+        url: img.url,
+        name: mockElement.name,
+        source: 'duplicate',
+        metadata: {
+          originalId: img.id,
+          originalSource: img.source,
+          element: mockElement
+        }
+      });
+      
+      console.log('✅ Reference image added successfully!');
+      
+    } catch (error) {
+      console.error('❌ Error adding reference image:', error);
+    }
+  };
+
   // Insert a badge at current caret position (or restore saved position)
   const insertBadgeAtCaret = (entry: { id: string; imageUrl: string; imageNumber: number; source?: string }) => {
     const el = editorRef.current;
@@ -548,13 +614,30 @@ export function ImageAIPanel({
       selection.addRange(range);
       range = selection.getRangeAt(0);
     }
+    
+    // Create a space element with non-breaking space to ensure spacing
+    const spaceBefore = document.createTextNode('\u00A0'); // Non-breaking space
+    range.insertNode(spaceBefore);
+    
+    // Insert the badge
     const badge = createBadgeElement(entry);
     range.insertNode(badge);
+    
+    // Create a space element with non-breaking space after the badge
+    const spaceAfter = document.createTextNode('\u00A0'); // Non-breaking space
+    range.insertNode(spaceAfter);
+    
+    // Add a regular space as well for better text flow
+    const regularSpace = document.createTextNode(' ');
+    range.insertNode(regularSpace);
+    
+    // Set cursor position after the badge and spaces
     const newRange = document.createRange();
-    newRange.setStartAfter(badge);
+    newRange.setStartAfter(regularSpace);
     newRange.collapse(true);
     selection.removeAllRanges();
     selection.addRange(newRange);
+    
     setEditorIsEmpty(false);
     setTimeout(() => {
       const plainText = extractPlainText();
@@ -711,67 +794,146 @@ export function ImageAIPanel({
     
     // Reference current image as reference image (no download needed)
     try {
-      console.log('🔍 Starting image reference process...');
+      console.log('🔍 Starting CanvasEditor-specific search...');
       let targetElement = null;
       let imageUrl = null;
       
-      // Method 1: Look for the main canvas in SceneEditor area
-      const sceneEditorCanvases = document.querySelectorAll('.scene-editor canvas, .canvas-container canvas, canvas');
-      console.log(`📊 Found ${sceneEditorCanvases.length} canvas elements`);
+      // Method 1: Look for the CanvasEditor container with data-canvas-editor="true"
+      const canvasEditorContainer = document.querySelector('[data-canvas-editor="true"]');
+      console.log('📊 Found CanvasEditor container:', !!canvasEditorContainer);
       
-      // Method 2: Find the canvas with actual content (not just small UI canvases)
-      for (let i = 0; i < sceneEditorCanvases.length; i++) {
-        const canvas = sceneEditorCanvases[i];
-        console.log(`🖼️ Canvas ${i}: ${canvas.width}x${canvas.height}`);
-        // Check if canvas has reasonable size (likely the main canvas)
-        if (canvas.width > 100 && canvas.height > 100) {
-          targetElement = canvas;
-          console.log('✅ Selected large canvas:', canvas);
-          break;
-        }
-      }
-      
-      // Method 3: Fallback to any canvas if no large one found
-      if (!targetElement && sceneEditorCanvases.length > 0) {
-        targetElement = sceneEditorCanvases[0];
-        console.log('🔄 Using fallback canvas:', targetElement);
-      }
-      
-      // Method 4: If no canvas found, try to find the main image element
-      if (!targetElement) {
-        const mainImages = document.querySelectorAll('.scene-editor img, .canvas-container img, .main-image img, img[src*="storyboard"], img[src*="generated"]');
-        console.log(`📸 Found ${mainImages.length} image elements`);
+      if (canvasEditorContainer) {
+        // Method 2: Look for the main image inside the CanvasEditor
+        // This is the currently displayed image that the user sees
+        const mainImage = canvasEditorContainer.querySelector('img[data-canvas-base-image="true"], img');
+        console.log('📸 Found main image in CanvasEditor:', !!mainImage);
         
-        for (let i = 0; i < mainImages.length; i++) {
-          const img = mainImages[i];
-          console.log(`🖼️ Image ${i}: ${img.naturalWidth}x${img.naturalHeight}, src: ${img.src.substring(0, 100)}...`);
-          // Check if image has reasonable size and is not a thumbnail
-          if (img.naturalWidth > 100 && img.naturalHeight > 100 && !img.src.includes('thumb')) {
-            targetElement = img;
-            imageUrl = img.src;
-            console.log('✅ Selected large image:', img);
-            break;
+        if (mainImage) {
+          const rect = mainImage.getBoundingClientRect();
+          const isVisible = rect.width > 0 && rect.height > 0 && 
+                           window.getComputedStyle(mainImage).display !== 'none' &&
+                           window.getComputedStyle(mainImage).visibility !== 'hidden';
+          
+          console.log('🖼️ Main image details:', {
+            dimensions: `${mainImage.naturalWidth}x${mainImage.naturalHeight}`,
+            visual: `${rect.width}x${rect.height}`,
+            area: rect.width * rect.height,
+            visible: isVisible,
+            display: window.getComputedStyle(mainImage).display,
+            visibility: window.getComputedStyle(mainImage).visibility,
+            src: mainImage.src.substring(0, 100) + '...',
+            classes: mainImage.className,
+            'data-canvas-base-image': mainImage.getAttribute('data-canvas-base-image')
+          });
+          
+          if (isVisible && mainImage.naturalWidth > 100 && mainImage.naturalHeight > 100) {
+            targetElement = mainImage;
+            imageUrl = mainImage.src;
+            console.log('✅ Selected main image from CanvasEditor');
+          }
+        }
+        
+        // Method 3: If no main image found, look for any canvas elements in the CanvasEditor
+        if (!targetElement) {
+          const canvases = canvasEditorContainer.querySelectorAll('canvas');
+          console.log(`📊 Found ${canvases.length} canvas elements in CanvasEditor`);
+          
+          let bestCanvas = null;
+          let bestScore = 0;
+          
+          for (let i = 0; i < canvases.length; i++) {
+            const canvas = canvases[i];
+            const rect = canvas.getBoundingClientRect();
+            const isVisible = rect.width > 0 && rect.height > 0;
+            
+            if (isVisible) {
+              const visualArea = rect.width * rect.height;
+              let score = Math.log(visualArea + 1) * 10;
+              
+              if (canvas.width >= 100 && canvas.height >= 100) {
+                score += 50;
+              }
+              
+              console.log(`📈 Canvas ${i} in CanvasEditor score: ${score} (area: ${visualArea})`);
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestCanvas = canvas;
+                console.log(`🏆 New best canvas in CanvasEditor: Canvas ${i} with score ${score}`);
+              }
+            }
+          }
+          
+          if (bestCanvas) {
+            targetElement = bestCanvas;
+            console.log('✅ Selected best canvas from CanvasEditor');
           }
         }
       }
       
+      // Method 4: Fallback to any canvas if CanvasEditor not found
       if (!targetElement) {
-        console.error('❌ No image or canvas found to reference');
-        showToast('No image or canvas found to reference', 'error');
+        console.log('🔄 CanvasEditor not found, searching all canvases...');
+        const allCanvases = document.querySelectorAll('canvas');
+        console.log(`📊 Found ${allCanvases.length} total canvas elements`);
+        
+        let bestCanvas = null;
+        let bestScore = 0;
+        
+        for (let i = 0; i < allCanvases.length; i++) {
+          const canvas = allCanvases[i];
+          const rect = canvas.getBoundingClientRect();
+          const isVisible = rect.width > 0 && rect.height > 0;
+          
+          if (isVisible) {
+            const visualArea = rect.width * rect.height;
+            let score = Math.log(visualArea + 1) * 10;
+            
+            if (canvas.width >= 100 && canvas.height >= 100) {
+              score += 50;
+            }
+            
+            if (canvas.closest('[data-canvas-editor="true"]')) {
+              score += 100; // Huge bonus for CanvasEditor canvases
+            }
+            
+            console.log(`📈 Canvas ${i} fallback score: ${score} (area: ${visualArea})`);
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestCanvas = canvas;
+              console.log(`🏆 New best fallback canvas: Canvas ${i} with score ${score}`);
+            }
+          }
+        }
+        
+        if (bestCanvas) {
+          targetElement = bestCanvas;
+          console.log('✅ Selected best fallback canvas');
+        }
+      }
+      
+      if (!targetElement) {
+        console.error('❌ No suitable element found to capture');
+        console.log('❌ CanvasEditor container found:', !!canvasEditorContainer);
+        if (canvasEditorContainer) {
+          console.log('❌ Images in CanvasEditor:', canvasEditorContainer.querySelectorAll('img').length);
+          console.log('❌ Canvases in CanvasEditor:', canvasEditorContainer.querySelectorAll('canvas').length);
+        }
+        console.log('❌ Total canvases on page:', document.querySelectorAll('canvas').length);
+        showToast('No suitable element found to capture', 'error');
         return;
       }
       
       console.log('🎯 Target element found:', targetElement.tagName, targetElement);
+      console.log('🎯 This captures the currently displayed content in the CanvasEditor');
       
-      // For image elements, create a URL-based reference instead of capturing
+      // Handle image elements (create URL reference)
       if (targetElement.tagName === 'IMG' && imageUrl) {
-        console.log('🖼️ Creating URL-based reference for:', imageUrl);
+        console.log('🖼️ Creating URL-based reference for displayed image:', imageUrl);
         
         if (onAddReferenceImage) {
-          console.log('🔄 Creating reference image with URL...');
-          
-          // Create a File object with the expected metadata format for SceneEditor
-          const filename = imageUrl.split('/').pop() || `reference-${Date.now()}.png`;
+          const filename = imageUrl.split('/').pop() || `canvas-reference-${Date.now()}.png`;
           const file = new File([''], filename, { type: 'image/png' });
           
           // Add the expected metadata properties that SceneEditor looks for
@@ -780,49 +942,51 @@ export function ImageAIPanel({
           (file as any).__isTemporary = false; // Mark as not temporary
           
           onAddReferenceImage(file);
-          showToast('Image referenced successfully', 'success');
-          
-          console.log('✅ URL reference created with R2 metadata:', filename);
+          showToast('Canvas image referenced successfully', 'success');
+          console.log('✅ URL reference created for CanvasEditor image:', filename);
         } else {
           console.error('❌ onAddReferenceImage function not available');
           showToast('Reference image function not available', 'error');
         }
       }
-      // For canvas elements, we still need to capture
+      // Handle canvas elements (capture current visual content)
       else if (targetElement.tagName === 'CANVAS') {
-        console.log('🖼️ Capturing from canvas...');
+        console.log('🖼️ Capturing current canvas visual content...');
         targetElement.toBlob((blob) => {
           if (blob) {
-            console.log('✅ Canvas blob created, size:', blob.size);
+            console.log('✅ Canvas blob created from current visual content, size:', blob.size);
             const filename = `canvas-capture-${Date.now()}.png`;
             const file = new File([blob], filename, { type: 'image/png' });
-            console.log('📁 File created:', file);
+            console.log('📁 File created from canvas visual content:', file);
             
             if (onAddReferenceImage) {
-              console.log('🔄 Calling onAddReferenceImage...');
+              console.log('🔄 Calling onAddReferenceImage with canvas capture...');
               onAddReferenceImage(file);
-              showToast('Canvas image added to reference images', 'success');
+              showToast('Canvas content captured and added to reference images', 'success');
+              console.log('✅ Successfully captured what is currently displayed on the canvas');
             } else {
               console.error('❌ onAddReferenceImage function not available');
               showToast('Reference image function not available', 'error');
             }
           } else {
-            console.error('❌ Failed to create canvas blob');
-            showToast('Failed to capture canvas image', 'error');
+            console.error('❌ Failed to create canvas blob from visual content');
+            showToast('Failed to capture canvas content', 'error');
           }
         }, 'image/png');
       } else {
         console.error('❌ Unable to capture element type:', targetElement.tagName);
-        showToast('Unable to capture image element', 'error');
+        showToast('Unable to capture element', 'error');
       }
+      
     } catch (error) {
-      console.error('❌ Error referencing image:', error);
-      showToast('Error referencing image', 'error');
+      console.error('❌ Error capturing content:', error);
+      showToast('Failed to capture content', 'error');
     }
   };
 
   // Fallback method for image capture
   const fallbackImageCapture = (img: HTMLImageElement) => {
+    console.log('🔍 Using fallback capture method...');
     console.log('� Using fallback capture method...');
     
     try {
@@ -882,8 +1046,8 @@ export function ImageAIPanel({
   };
 
   // Validation functions
-  const canOpenFileBrowser = () => !!(projectId && userCompanyId);
-  const canOpenElementLibrary = () => !!(projectId && userId && user && userCompanyId);
+  const canOpenFileBrowser = () => !!(projectId && currentCompanyId);
+  const canOpenElementLibrary = () => !!(projectId && userId && user && currentCompanyId);
 
   // Toast notification helper (simple implementation)
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -1183,9 +1347,102 @@ export function ImageAIPanel({
 
   const handleCompositionStart = () => { isComposingRef.current = true; };
 
-  const handleCompositionEnd = () => {
-    isComposingRef.current = false;
-    handleEditorInput();
+  const handleCompositionEnd = () => { isComposingRef.current = false; };
+
+  // Handle keyboard events for copy and paste
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.key) {
+        case 'c':
+          // Copy functionality
+          e.preventDefault();
+          const selection = window.getSelection();
+          if (selection && selection.toString()) {
+            navigator.clipboard.writeText(selection.toString()).then(() => {
+              console.log('Text copied to clipboard');
+            }).catch(err => {
+              console.error('Failed to copy text:', err);
+            });
+          }
+          break;
+        case 'v':
+          // Enhanced paste functionality with proper cursor positioning
+          e.preventDefault();
+          navigator.clipboard.readText().then((text) => {
+            if (text) {
+              const editor = editorRef.current;
+              if (!editor) return;
+              
+              // Get current selection
+              const selection = window.getSelection();
+              if (!selection) return;
+              
+              let range: Range;
+              
+              // Use existing selection range if available
+              if (selection.rangeCount > 0) {
+                range = selection.getRangeAt(0);
+              } else {
+                // Create a new range at the cursor position
+                range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false); // Collapse to end if no selection
+              }
+              
+              // Check if range is valid and within the editor
+              const rangeContainer = range.commonAncestorContainer;
+              const isWithinEditor = editor.contains(rangeContainer) || rangeContainer === editor;
+              
+              if (!isWithinEditor) {
+                // If range is outside editor, create a new range at the end
+                range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+              }
+              
+              // Delete any selected content
+              if (!range.collapsed) {
+                range.deleteContents();
+              }
+              
+              // Create a text node with the pasted content
+              const textNode = document.createTextNode(text);
+              
+              // Insert the text at the current cursor position
+              range.insertNode(textNode);
+              
+              // Move cursor to the end of the inserted text
+              range.setStartAfter(textNode);
+              range.collapse(true);
+              
+              // Apply the new range to selection
+              selection.removeAllRanges();
+              selection.addRange(range);
+              
+              // Trigger input event to update state
+              const inputEvent = new Event('input', { bubbles: true });
+              editor.dispatchEvent(inputEvent);
+              
+              console.log('Text pasted at cursor position');
+            }
+          }).catch(err => {
+            console.error('Failed to read clipboard:', err);
+            // Fallback: let the default paste behavior handle it
+            // This should respect cursor position naturally
+            const pasteEvent = new ClipboardEvent('paste', {
+              bubbles: true,
+              cancelable: true,
+              clipboardData: new DataTransfer()
+            });
+            
+            // Try to trigger default paste by dispatching the event
+            if (e.target) {
+              (e.target as HTMLElement).dispatchEvent(pasteEvent);
+            }
+          });
+          break;
+      }
+    }
   };
 
   const handleEditorBlur = () => {
@@ -1281,37 +1538,106 @@ export function ImageAIPanel({
     return null;
   };
 
-  // ── KIE AI Generate Function ─────────────────────────────────────────────
+  // ── KIE AI Generate Function with Complete Callback Workflow ─────────────────────────────────────────────
   const handleKieAIGenerate = async () => {
-    // Extract the current prompt with badges from the editor
-    const extractedPrompt = extractPlainText();
+    // Extract the current prompt with badges from the editor for AI model
+    const extractedPrompt = extractTextWithBadges();
     
     if (!extractedPrompt?.trim()) {
       alert("Please enter a prompt to generate");
       return;
     }
 
-    // Check if selected model is a Nano Banana model
-    if (!selectedModelOption.value.includes("nano-banana")) {
-      // For non-Nano Banana models, use the original onGenerate
-      onGenerate();
-      return;
-    }
-
-    // For Nano Banana models, use the actual credits from getModelCredits
     console.log("🚀 Starting KIE AI generation workflow...");
     console.log("Model:", selectedModelOption.value);
     console.log("Credits needed from getModelCredits:", displayedCredits);
-    console.log("Quality (resolution):", resolution);
     console.log("Extracted prompt with badges:", extractedPrompt);
     console.log("Reference images:", referenceImages);
+    console.log("Current company credits:", getBalance);
     
-    // Call onGenerate with the actual calculated credits and quality for Nano Banana models
-    // This will pass the correct credits (11) and quality to the API
-    onGenerate(displayedCredits, resolution, aspectRatio, outputFormat, extractedPrompt);
+    // Step 1: Check if user has sufficient credits
+    const currentCredits = getBalance ?? 0;
+    if (currentCredits < displayedCredits) {
+      alert(`Insufficient credits. Need ${displayedCredits} credits, but you only have ${currentCredits} credits.`);
+      return;
+    }
+    
+    console.log("Step 1: Credits check passed");
+    
+    try {
+      // Step 2: Create placeholder record in storyboard_files (Nano Banana 2 pattern)
+      console.log("Step 2: Creating placeholder record...");
+      
+      const fileId = await logUpload({
+        companyId,
+        userId: userId || "",
+        projectId: projectId || undefined,
+        category: outputMode === "video" ? "generated" : "generated",
+        filename: `${selectedModelOption.value.replace(/\//g, '-')}-${Date.now()}.${outputMode === "video" ? "mp4" : "png"}`,
+        fileType: outputMode === "video" ? "video" : "image",
+        mimeType: outputMode === "video" ? "video/mp4" : "image/png",
+        size: 0,
+        status: "generating",
+        creditsUsed: displayedCredits,
+        categoryId: undefined,
+        sourceUrl: undefined,
+        tags: [],
+        uploadedBy: userId || "",
+        
+        // Enhanced AI metadata
+        metadata: {
+          modelId: selectedModelOption.value,
+          modelName: selectedModelOption.label,
+          pricingType: "formula",
+          quality: outputMode === "video" ? `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}` : resolution,
+          creditsConsumed: displayedCredits,
+          generationTimestamp: Date.now(),
+          behavior: {
+            cropped: false,
+            combined: false,
+            referenceImagesUsed: referenceImages.length,
+          },
+          processingTime: 0,
+          success: false,
+        },
+      });
+      
+      console.log("Step 2: Placeholder record created with ID:", fileId);
+      
+      // Step 3: Deduct credits from company balance (Nano Banana 2 pattern)
+      console.log("Step 3: Deducting credits from company balance...");
+      await deductCredits({
+        companyId,
+        tokens: displayedCredits,
+        reason: `AI ${outputMode} generation with ${selectedModelOption.label}`,
+      });
+      
+      console.log("Step 3: Credits deducted successfully");
+      
+      // Update UI to show generating state and pass parameters to parent
+      if (onGenerate) {
+        const qualityParam = outputMode === "video" ? `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}` : resolution;
+        
+        // Include Veo 3.1 parameters if the model is Veo 3.1
+        const isVeoModel = selectedModelOption?.value === "google/veo-3.1";
+        const veoQualityParam = isVeoModel ? veoQuality : undefined;
+        const veoModeParam = isVeoModel ? veoMode : undefined;
+        
+        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioEnabled, extractedPrompt, veoQualityParam, veoModeParam);
+      }
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+      console.error("❌ KIE AI generation failed:", error);
+      
+      // Handle insufficient credits error specifically
+      if (errorMessage.includes('Insufficient credits')) {
+        alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating images.`);
+      } else {
+        alert(`AI generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
+      }
+    }
   };
-
-  // ── Bottom Bar (Element AI style) ───────────────────────────────────
   const renderBottomBar = () => {
     const modeTabs: Array<{
       id: ImageAIEditMode;
@@ -1345,13 +1671,6 @@ export function ImageAIPanel({
                    img.source === 'element' ? 'EL' : 
                    `Image ${index + 1}`}
                 </div>
-                <button
-                  onClick={() => insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl: img.url, imageNumber: index + 1, source: img.source })}
-                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center z-0"
-                  title="Insert mention"
-                >
-                  <Plus className="w-4 h-4 text-white" />
-                </button>
                 <button
                   onClick={() => onRemoveReferenceImage?.(img.id)}
                   className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
@@ -1406,7 +1725,7 @@ export function ImageAIPanel({
                               if (!canOpenFileBrowser()) {
                                 if (!projectId) {
                                   showToast('Project ID required to browse R2 files', 'error');
-                                } else if (!userCompanyId) {
+                                } else if (!currentCompanyId) {
                                   showToast('Company ID required to browse R2 files', 'error');
                                 } else {
                                   showToast('Project information required to browse R2 files', 'error');
@@ -1433,7 +1752,7 @@ export function ImageAIPanel({
                                   showToast('User ID required to browse elements', 'error');
                                 } else if (!user) {
                                   showToast('Authentication required to browse elements', 'error');
-                                } else if (!userCompanyId) {
+                                } else if (!currentCompanyId) {
                                   showToast('Company ID required to browse elements', 'error');
                                 } else {
                                   showToast('Project and user information required to browse elements', 'error');
@@ -1497,6 +1816,7 @@ export function ImageAIPanel({
                     onBlur={handleEditorBlur}
                     onCompositionStart={handleCompositionStart}
                     onCompositionEnd={handleCompositionEnd}
+                    onKeyDown={handleKeyDown}
                     className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:border-emerald-500/30 leading-6 text-sm selection:bg-white/20"
                     style={{
                       minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
@@ -1530,6 +1850,24 @@ export function ImageAIPanel({
                     {showPromptActions && (
                       <div className="absolute bottom-full right-0 mb-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px]">
                         <div className="py-1">
+                          {/* Clear */}
+                          <button
+                            onClick={() => {
+                              const el = editorRef.current;
+                              if (el) {
+                                el.innerHTML = '';
+                                setEditorIsEmpty(true);
+                                setCurrentPrompt('');
+                                setShowPromptActions(false);
+                              }
+                            }}
+                            disabled={editorIsEmpty}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                            <span>Clear Text</span>
+                          </button>
+                          
                           {/* Save Prompt */}
                           <button
                             onClick={() => {
@@ -1552,6 +1890,7 @@ export function ImageAIPanel({
                             onClick={() => {
                               const htmlContent = editorRef.current?.innerHTML || '';
                               const plainText = extractPlainText();
+                              const textWithBadges = extractTextWithBadges();
                               
                               // Extract @Image mentions from HTML
                               const imageMentions = htmlContent.match(/@Image\d+/g) || [];
@@ -1559,9 +1898,9 @@ export function ImageAIPanel({
                               const elMentions = htmlContent.match(/@EL\d+/g) || [];
                               const allMentions = [...imageMentions, ...r2Mentions, ...elMentions];
                               
-                              const mentionsText = allMentions.length > 0 ? allMentions.join(', ') : 'No @Image mentions found';
+                              const mentionsText = allMentions.length > 0 ? allMentions.join(' ') : 'No @Image mentions found';
                               
-                              alert(`Current textarea content:\n\n@IMAGE MENTIONS:\n${mentionsText}\n\nPLAIN TEXT:\n${plainText}`);
+                              alert(`Current textarea content with badges:\n\n${textWithBadges}\n\n@MENTIONS FOUND:\n${mentionsText}\n\nPLAIN TEXT (for AI):\n${plainText}`);
                               setShowPromptActions(false);
                             }}
                             disabled={editorIsEmpty}
@@ -1687,7 +2026,7 @@ export function ImageAIPanel({
                             name: savePromptName.trim(),
                             prompt: extractPlainText(),
                             type: 'custom',
-                            companyId: userCompanyId,
+                            companyId: currentCompanyId,
                             isPublic: false,
                           });
                           setSavePromptSuccess(true);
@@ -1713,7 +2052,7 @@ export function ImageAIPanel({
                             name: savePromptName.trim(),
                             prompt: extractPlainText(),
                             type: 'custom',
-                            companyId: userCompanyId,
+                            companyId: currentCompanyId,
                             isPublic: false,
                           });
                           setSavePromptSuccess(true);
@@ -1853,6 +2192,15 @@ export function ImageAIPanel({
                               setOutputMode(modelOutputMode);
                               // Reset resolution for the new mode
                               setResolution(modelOutputMode === "video" ? "480P" : "1K");
+                              
+                              // Set aspect ratio based on model and mode
+                              if (modelOutputMode === "video") {
+                                setAspectRatio("16:9"); // Video mode always 16:9
+                              } else {
+                                // Image mode: 16:9 for Nano Banana models, 1:1 for others
+                                const isNanoBanana = modelOption.value.includes("nano-banana");
+                                setAspectRatio(isNanoBanana ? "16:9" : "1:1");
+                              }
                             }
                             
                             onModelChange?.(modelOption.value);
@@ -2077,8 +2425,8 @@ export function ImageAIPanel({
                             if (option.value === "REFERENCE_2_VIDEO") {
                               // Only allow 16:9 and 9:16 for reference mode
                               if (!["16:9", "9:16"].includes(aspectRatio)) {
-                                // Change 1:1 to 6:19 if aspect ratio is not supported
-                                setAspectRatio(aspectRatio === "1:1" ? "6:19" : "16:9");
+                                // Change aspect ratio based on current selection
+                                setAspectRatio(aspectRatio === "1:1" ? "16:9" : "6:19");
                               }
                             }
                           }}
@@ -2242,7 +2590,7 @@ export function ImageAIPanel({
             onUserPromptChange?.(prompt);
           }
         }}
-        userCompanyId={userCompanyId}
+        userCompanyId={currentCompanyId}
       />
 
       {/* R2 File Browser Modal */}

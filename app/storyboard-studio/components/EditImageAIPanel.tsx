@@ -5,14 +5,17 @@ import { usePricingData } from "./usePricingData";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { useUser, useOrganization } from "@clerk/nextjs";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { api } from "@/convex/_generated/api";
 import { FileBrowser } from "./storyboard/FileBrowser";
+import { ElementLibrary } from "./storyboard/ElementLibrary";
+import PromptLibrary from "./storyboard/PromptLibrary";
 import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
-  Upload, Download, Save, History, Trash2,
+  Upload, Download, Save, History, Trash2, BookOpen, FolderOpen, FileText, Camera, Zap,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
-  Eye, EyeOff,
+  Eye, EyeOff, Bug, Video,
 } from "lucide-react";
 
 // Import Paintbrush separately to avoid conflicts
@@ -46,9 +49,14 @@ export interface EditImageAIPanelProps {
   userPrompt?: string;
   onUserPromptChange?: (prompt: string) => void;
   isGenerating?: boolean;
+  userCompanyId?: string;
   // Canvas props for area-edit mode
   isEraser?: boolean;
   setIsEraser?: (isEraser: boolean) => void;
+  // NEW: Active shot props for loading prompts
+  activeShotDescription?: string;
+  activeShotImagePrompt?: string;
+  activeShotVideoPrompt?: string;
   maskBrushSize?: number;
   setMaskBrushSize?: (size: number) => void;
   maskOpacity?: number;
@@ -150,6 +158,7 @@ export default function EditImageAIPanel({
   userPrompt,
   onUserPromptChange,
   isGenerating = false,
+  userCompanyId = "",
   isEraser,
   setIsEraser,
   maskBrushSize,
@@ -180,7 +189,27 @@ export default function EditImageAIPanel({
   onAspectRatioChange,
   selectedAspectRatio,
   onRectangleMaskAspectRatioChange,
+  // NEW: Active shot props
+  activeShotDescription,
+  activeShotImagePrompt,
+  activeShotVideoPrompt,
 }: EditImageAIPanelProps) {
+  console.log('🚀 EditImageAIPanel component loaded! Are we on the right component?');
+  
+  // Get the proper companyId using the auth hook
+  const currentCompanyId = useCurrentCompanyId();
+  
+  console.log('🎯 EditImageAIPanel component mounted!');
+  console.log('🎯 ReferenceImages prop:', referenceImages);
+  console.log('🎯 ReferenceImages length:', referenceImages?.length || 0);
+  console.log('🎯 onAddReferenceImage:', !!onAddReferenceImage);
+  console.log('🎯 onRemoveReferenceImage:', !!onRemoveReferenceImage);
+  
+  // Use exact same pattern as working CreditBalanceDisplay (avoid naming conflicts)
+  const { user: clerkUser } = useUser();
+  const { organization } = useOrganization();
+  const companyId = organization?.id ?? clerkUser?.id ?? "personal";
+  const userId = clerkUser?.id; // Add missing userId variable
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
@@ -188,11 +217,16 @@ export default function EditImageAIPanel({
   const { models, loading: pricingLoading, error: pricingError } = usePricingData();
   const [selectedQuality, setSelectedQuality] = useState("1K"); // Default quality for Nano Banana/Topaz
   const [gptImageQuality, setGptImageQuality] = useState("medium"); // Default quality for GPT Image
-
-  // Use exact same pattern as working CreditBalanceDisplay (avoid naming conflicts)
-  const { user: clerkUser } = useUser();
-  const { organization } = useOrganization();
-  const companyId = organization?.id ?? clerkUser?.id ?? "personal";
+  
+  // NEW: Prompt actions state
+  const [savePromptName, setSavePromptName] = useState("");
+  const [savePromptSaving, setSavePromptSaving] = useState(false);
+  const [savePromptSuccess, setSavePromptSuccess] = useState(false);
+  const [isSavePromptOpen, setIsSavePromptOpen] = useState(false);
+  const [isPromptLibraryOpen, setIsPromptLibraryOpen] = useState(false);
+  
+  // NEW: Mutations for prompt actions
+  const createTemplate = useMutation(api.promptTemplates.create);
   
   const getBalance = useQuery(api.credits.getBalance, {
     companyId: companyId
@@ -370,34 +404,794 @@ export default function EditImageAIPanel({
             result: topazResult 
           });
           return topazResult;
+        case 'getGptImagePrice':
+          // GPT Image pricing: use formula from database dynamically
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const gptQuality = (modelId === "gpt-image/1.5-image-to-image" || modelId === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality;
+              const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === gptQuality);
+              console.log("[EditImageAIPanel] GPT Image formula:", { formula, gptQuality, qualityData });
+              
+              if (qualityData) {
+                const factor = model.factor || 1;
+                const gptResult = Math.ceil(qualityData.cost * factor);
+                console.log("[EditImageAIPanel] GPT Image from formula:", { 
+                  modelId, 
+                  gptQuality, 
+                  cost: qualityData.cost, 
+                  factor, 
+                  result: gptResult 
+                });
+                return gptResult;
+              } else {
+                console.log("[EditImageAIPanel] GPT Image quality not found, available qualities:", formula.pricing?.qualities);
+              }
+            } catch (e) {
+              console.error("[EditImageAIPanel] Error parsing GPT Image formula:", e);
+            }
+          }
+          // Fallback to simple calculation if formula parsing fails
+          console.log("[EditImageAIPanel] GPT Image fallback pricing:", { modelId, base, factor });
+          return Math.ceil(base * factor);
+        case 'getRecraftCrispUpscale':
+          // Recraft Crisp Upscale pricing: use formula from database dynamically
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === "standard");
+              console.log("[EditImageAIPanel] Recraft Crisp formula:", { formula, qualityData });
+              
+              if (qualityData) {
+                const factor = model.factor || 1;
+                const recraftResult = Math.ceil(qualityData.cost * factor);
+                console.log("[EditImageAIPanel] Recraft Crisp from formula:", { 
+                  modelId, 
+                  cost: qualityData.cost, 
+                  factor, 
+                  result: recraftResult 
+                });
+                return recraftResult;
+              } else {
+                console.log("[EditImageAIPanel] Recraft Crisp quality not found, available qualities:", formula.pricing?.qualities);
+              }
+            } catch (e) {
+              console.error("[EditImageAIPanel] Error parsing Recraft Crisp formula:", e);
+            }
+          }
+          // Fallback to simple calculation if formula parsing fails
+          console.log("[EditImageAIPanel] Recraft Crisp fallback pricing:", { modelId, base, factor });
+          return Math.ceil(base * factor);
         default:
           console.log("[EditImageAIPanel] Unknown assigned function, using fallback");
+          // Special case for Recraft Crisp: use correct base cost of 0.5 instead of database value
+          if (modelId === 'recraft/crisp-upscale') {
+            const recraftBaseCost = 0.5;
+            const recraftFactor = 1.3;
+            const recraftResult = Math.ceil(recraftBaseCost * recraftFactor);
+            console.log("[EditImageAIPanel] Recraft Crisp special pricing:", { 
+              modelId, 
+              baseCost: recraftBaseCost, 
+              factor: recraftFactor, 
+              result: recraftResult 
+            });
+            return recraftResult; // 0.5 × 1.3 = 0.65 → 1 credit
+          }
           return Math.ceil((model.creditCost || 0) * (model.factor || 1));
       }
     } else {
       console.log("[EditImageAIPanel] No assigned function, using simple calculation");
+      // For fixed pricing models, use correct values when database has wrong ones
+      if (modelId === 'recraft/crisp-upscale') {
+        // Recraft Crisp should be 0.5 * 1.3 = 1 credit (from usePricingData.ts defaults)
+        const recraftBaseCost = 0.5;
+        const recraftFactor = 1.3;
+        const recraftResult = Math.ceil(recraftBaseCost * recraftFactor);
+        console.log("[EditImageAIPanel] Recraft Crisp fixed pricing (database had wrong values):", { 
+          modelId, 
+          databaseCost: model.creditCost,
+          correctCost: recraftBaseCost, 
+          factor: recraftFactor, 
+          result: recraftResult 
+        });
+        return recraftResult;
+      }
       return Math.ceil((model.creditCost || 0) * (model.factor || 1));
     }
-  }, [models, selectedQuality]);
+  }, [models, selectedQuality, gptImageQuality]);
 
-  // Use passed props for prompt
-  const currentPrompt = userPrompt || "";
-  const handlePromptChange = (value: string) => {
-    onUserPromptChange?.(value);
+  // ── ContentEditable editor helpers ──────────────────────────────────
+
+  // Extract plain text from contentEditable for prompt generation (excluding badges)
+  const extractPlainText = (): string => {
+    const el = editorRef.current;
+    if (!el) return "";
+    const collect = (node: Node): string => {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+      const htmlEl = node as HTMLElement;
+      if (htmlEl.nodeName === "BR") return "\n";
+      
+      // Exclude badge mentions from prompt text - they should not affect the prompt
+      if (htmlEl.dataset?.type === "mention") {
+        return ""; // Don't include badge content in prompt
+      }
+      
+      let result = "";
+      node.childNodes.forEach((child) => { result += collect(child); });
+      if (htmlEl.tagName === "DIV" && node !== el) result += "\n";
+      return result;
+    };
+    return collect(el).replace(/\n$/, "");
   };
+
+  // Extract text WITH badges for test button display
+  const extractTextWithBadges = (): string => {
+    const el = editorRef.current;
+    if (!el) return "";
+    const collect = (node: Node): string => {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+      const htmlEl = node as HTMLElement;
+      if (htmlEl.nodeName === "BR") return "\n";
+      
+      // Include badge mentions for test display
+      if (htmlEl.dataset?.type === "mention") {
+        // Extract the badge text from the label element
+        const label = htmlEl.querySelector('span[class*="text-cyan-300"]');
+        if (label) {
+          return label.textContent || "";
+        }
+        return "";
+      }
+      
+      let result = "";
+      node.childNodes.forEach((child) => { result += collect(child); });
+      if (htmlEl.tagName === "DIV" && node !== el) result += "\n";
+      return result;
+    };
+    return collect(el).replace(/\n$/, "");
+  };
+
+  // Create a badge DOM element (non-editable, inline)
+  const createBadgeElement = (entry: { id: string; imageUrl: string; imageNumber: number }): HTMLSpanElement => {
+    const span = document.createElement("span");
+    span.contentEditable = "false";
+    span.dataset.type = "mention";
+    span.dataset.mentionId = entry.id;
+    span.setAttribute(
+      "class",
+      "inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/40 rounded px-1.5 py-0.5 align-middle mx-0.5 select-none"
+    );
+    span.style.cursor = "default";
+    span.style.fontSize = "inherit";
+
+    const img = document.createElement("img");
+    img.src = entry.imageUrl;
+    img.alt = `Image ${entry.imageNumber}`;
+    img.setAttribute("class", "w-4 h-4 object-cover rounded");
+
+    const label = document.createElement("span");
+    label.setAttribute("class", "text-cyan-300 text-sm font-medium whitespace-nowrap");
+    label.textContent = entry.source === 'r2' ? `@R2${entry.imageNumber}` : 
+                        entry.source === 'element' ? `@EL${entry.imageNumber}` : 
+                        `@Image${entry.imageNumber}`;
+
+    const closeBtn = document.createElement("button");
+    closeBtn.setAttribute("type", "button");
+    closeBtn.setAttribute("title", "Remove");
+    closeBtn.setAttribute(
+      "class",
+      "ml-0.5 flex items-center justify-center w-3.5 h-3.5 rounded-full text-cyan-400/70 hover:text-white hover:bg-cyan-400/30 transition-colors"
+    );
+    closeBtn.innerHTML =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">` +
+      `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    closeBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const editor = editorRef.current;
+      span.remove();
+      if (editor) {
+        editor.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+
+    span.appendChild(img);
+    span.appendChild(label);
+    span.appendChild(closeBtn);
+    return span;
+  };
+
+  // Insert a badge at current caret position (or restore saved position)
+  const insertBadgeAtCaret = (entry: { id: string; imageUrl: string; imageNumber: number; source?: string }) => {
+    const el = editorRef.current;
+    if (!el) return;
+    el.focus();
+    const selection = window.getSelection();
+    if (!selection) return;
+    let range: Range;
+    if (selection.rangeCount > 0) {
+      range = selection.getRangeAt(0);
+      range.deleteContents();
+    } else if (savedSelectionRef.current) {
+      try {
+        range = document.createRange();
+        range.setStart(savedSelectionRef.current.container, savedSelectionRef.current.offset);
+        range.collapse(true);
+        selection.addRange(range);
+      } catch {
+        range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        selection.addRange(range);
+      }
+      range = selection.getRangeAt(0);
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      selection.addRange(range);
+      range = selection.getRangeAt(0);
+    }
+    
+    // Create a space element with non-breaking space to ensure spacing
+    const spaceBefore = document.createTextNode('\u00A0'); // Non-breaking space
+    range.insertNode(spaceBefore);
+    
+    // Insert the badge
+    const badge = createBadgeElement(entry);
+    range.insertNode(badge);
+    
+    // Create a space element with non-breaking space after the badge
+    const spaceAfter = document.createTextNode('\u00A0'); // Non-breaking space
+    range.insertNode(spaceAfter);
+    
+    // Add a regular space as well for better text flow
+    const regularSpace = document.createTextNode(' ');
+    range.insertNode(regularSpace);
+    
+    // Set cursor position after the badge and spaces
+    const newRange = document.createRange();
+    newRange.setStartAfter(regularSpace);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    
+    setEditorIsEmpty(false);
+    setTimeout(() => {
+      const plainText = extractPlainText();
+      setCurrentPrompt(plainText);
+      onUserPromptChange?.(plainText);
+    }, 0);
+  };
+
+  // Add image as a new reference image (duplicate functionality)
+  const addImageAsReference = (img: any, index: number) => {
+    console.log('🎯 Plus icon clicked - adding as reference image!', { img, index });
+    console.log('🎯 Current reference images count:', referenceImages?.length || 0);
+    console.log('🎯 Max reference images:', maxReferenceImages);
+    
+    // Check if we've reached the maximum reference images limit
+    if (maxReferenceImages > 0 && referenceImages.length >= maxReferenceImages) {
+      console.log('❌ Reference limit reached:', referenceImages.length, '/', maxReferenceImages);
+      showToast(`Maximum ${maxReferenceImages} reference images allowed for this mode`, 'error');
+      return;
+    }
+    
+    try {
+      // Create a mock element object like ElementLibrary does
+      const mockElement = {
+        _id: `duplicate-${img.id}-${Date.now()}`,
+        name: `Duplicate ${img.source || 'Image'} ${index + 1}`,
+        type: 'image',
+        thumbnailUrl: img.url,
+        referenceUrls: [img.url]
+      };
+      
+      console.log('🎯 Calling handleImageSelect like ElementLibrary...');
+      // Call the same handleImageSelect function that ElementLibrary uses
+      handleImageSelect('element', {
+        url: img.url,
+        name: mockElement.name,
+        source: 'duplicate',
+        metadata: {
+          originalId: img.id,
+          originalSource: img.source,
+          element: mockElement
+        }
+      });
+      
+      console.log('✅ Reference image added successfully!');
+      
+    } catch (error) {
+      console.error('❌ Error adding reference image:', error);
+      showToast('Failed to add reference image', 'error');
+    }
+  };
+
+  const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const backgroundInputRef = useRef<HTMLInputElement>(null);
+  const isComposingRef = useRef(false);
+  const savedSelectionRef = useRef<{ container: Node; offset: number } | null>(null);
+  const [currentPrompt, setCurrentPrompt] = useState(userPrompt || "");
+  const [editorIsEmpty, setEditorIsEmpty] = useState(!userPrompt);
+
+  // Handle output mode toggle and auto-switch to Seedance model for video
+  const handleOutputModeToggle = () => {
+    const newMode = outputMode === "image" ? "video" : "image";
+    setOutputMode(newMode);
+    
+    // Reset resolution to appropriate default when switching modes
+    if (newMode === "video") {
+      setResolution("480P");
+    } else {
+      setResolution("1K");
+    }
+    
+    // Auto-switch to Seedance 1.5 Pro when switching to video mode
+    if (newMode === "video" && onModelChange) {
+      onModelChange("bytedance/seedance-1.5-pro");
+    }
+    // Auto-switch to Nano Banana 2 when switching to image mode
+    else if (newMode === "image" && onModelChange) {
+      onModelChange("nano-banana-2");
+    }
+  };
+
+  // Model options for describe mode
+  const inpaintModelOptions = [
+    { value: "nano-banana-2", label: "Nano Banana 2", sub: "General purpose", maxReferenceImages: 7, icon: Zap },
+    { value: "nano-banana-pro", label: "Nano Banana Pro", sub: "Higher quality • Max 8 refs", maxReferenceImages: 8, icon: Camera },
+  ];
+
+  // Combine all models for the consolidated dropdown
+  const allModelOptions = [...inpaintModelOptions];
+  const selectedModelOption = allModelOptions.find((option) => option.value === model) ?? allModelOptions[0];
+
+  // Handle keyboard events for copy and paste
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.ctrlKey || e.metaKey) {
+      switch (e.key) {
+        case 'c':
+          // Copy functionality
+          e.preventDefault();
+          const selection = window.getSelection();
+          if (selection && selection.toString()) {
+            navigator.clipboard.writeText(selection.toString()).then(() => {
+              console.log('Text copied to clipboard');
+            }).catch(err => {
+              console.error('Failed to copy text:', err);
+            });
+          }
+          break;
+        case 'v':
+          // Enhanced paste functionality with proper cursor positioning
+          e.preventDefault();
+          navigator.clipboard.readText().then((text) => {
+            if (text) {
+              const editor = editorRef.current;
+              if (!editor) return;
+              
+              // Get current selection
+              const selection = window.getSelection();
+              if (!selection) return;
+              
+              let range: Range;
+              
+              // Use existing selection range if available
+              if (selection.rangeCount > 0) {
+                range = selection.getRangeAt(0);
+              } else {
+                // Create a new range at the cursor position
+                range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false); // Collapse to end if no selection
+              }
+              
+              // Check if range is valid and within the editor
+              const rangeContainer = range.commonAncestorContainer;
+              const isWithinEditor = editor.contains(rangeContainer) || rangeContainer === editor;
+              
+              if (!isWithinEditor) {
+                // If range is outside editor, create a new range at the end
+                range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+              }
+              
+              // Delete any selected content
+              if (!range.collapsed) {
+                range.deleteContents();
+              }
+              
+              // Create a text node with the pasted content
+              const textNode = document.createTextNode(text);
+              
+              // Insert the text at the current cursor position
+              range.insertNode(textNode);
+              
+              // Move cursor to the end of the inserted text
+              range.setStartAfter(textNode);
+              range.collapse(true);
+              
+              // Apply the new range to selection
+              selection.removeAllRanges();
+              selection.addRange(range);
+              
+              // Trigger input event to update state
+              const inputEvent = new Event('input', { bubbles: true });
+              editor.dispatchEvent(inputEvent);
+              
+              console.log('Text pasted at cursor position');
+            }
+          }).catch(err => {
+            console.error('Failed to read clipboard:', err);
+            // Fallback: let the default paste behavior handle it
+            // This should respect cursor position naturally
+            const pasteEvent = new ClipboardEvent('paste', {
+              bubbles: true,
+              cancelable: true,
+              clipboardData: new DataTransfer()
+            });
+            
+            // Try to trigger default paste by dispatching the event
+            if (e.target) {
+              (e.target as HTMLElement).dispatchEvent(pasteEvent);
+            }
+          });
+          break;
+      }
+    }
+  };
+
+  const handleEditorInput = () => {
+    if (isComposingRef.current) return;
+    const el = editorRef.current;
+    if (!el) return;
+    const hasContent = el.innerHTML !== "" && el.innerHTML !== "<br>";
+    setEditorIsEmpty(!hasContent);
+    const plainText = extractPlainText();
+    setCurrentPrompt(plainText);
+    onUserPromptChange?.(plainText);
+  };
+
+  const handleEditorBlur = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      savedSelectionRef.current = { container: range.startContainer, offset: range.startOffset };
+    }
+  };
+
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = () => {
+    isComposingRef.current = false;
+    handleEditorInput();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const imageUrl = e.dataTransfer.getData("imageUrl");
+    const imageIndex = e.dataTransfer.getData("imageIndex");
+    if (!imageUrl || imageIndex === "") return;
+    const imageNumber = parseInt(imageIndex) + 1;
+    let range: Range | null = null;
+    const doc = document as any;
+    if (typeof doc.caretRangeFromPoint === "function") {
+      range = doc.caretRangeFromPoint(e.clientX, e.clientY);
+    } else if (typeof doc.caretPositionFromPoint === "function") {
+      const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
+      if (pos) {
+        range = document.createRange();
+        range.setStart(pos.offsetNode, pos.offset);
+        range.collapse(true);
+      }
+    }
+    if (range) {
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl, imageNumber });
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
   const requiresPrompt = activeTool === "text-to-image";
   const canGenerate = mode === "area-edit" && !isGenerating && (!requiresPrompt || !!currentPrompt.trim());
   
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
+
+  // Constants for textarea
+  const TEXTAREA_MIN_HEIGHT = 60;
+  const TEXTAREA_MAX_HEIGHT = 200;
+
+  // State for upload menu and prompt actions
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [showPromptActions, setShowPromptActions] = useState(false);
+  const [showElementLibrary, setShowElementLibrary] = useState(false);
+
+  // Toast notification helper (simple implementation)
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    console.log(`[${type.toUpperCase()}] ${message}`);
+  };
+
+  // Validation functions
+  const canOpenFileBrowser = () => !!(projectId && companyId); // Use companyId instead of userCompanyId
+  const canOpenElementLibrary = () => !!(projectId && userId && companyId); // Use companyId instead of userCompanyId
+
+  // Handle add reference
+  const handleAddReference = (file: File) => {
+    // Check if we've reached the maximum reference images limit
+    if (maxReferenceImages > 0 && referenceImages.length >= maxReferenceImages) {
+      showToast(`Maximum ${maxReferenceImages} reference images allowed for this mode`, 'error');
+      return;
+    }
+    onAddReferenceImage?.(file);
+  };
+
+  // Handlers for existing component interfaces
+  const handleFileBrowserSelect = (url: string, type: string, file?: any) => {
+    if (type === 'image') {
+      handleImageSelect('r2', { 
+        url,
+        metadata: {
+          r2Key: file?.name || 'unknown',
+          source: 'r2'
+        }
+      });
+    }
+  };
+
+  const handleImageSelect = async (
+    source: 'r2' | 'element',
+    data: { 
+      url: string; 
+      name?: string; 
+      metadata?: Partial<ReferenceImageMetadata>;
+    }
+  ) => {
+    // Create a File object with R2 metadata for the reference image
+    const filename = data.name || `r2-image-${Date.now()}.png`;
+    const file = new File([''], filename, { type: 'image/png' });
+    
+    // Add the expected metadata properties
+    (file as any).__r2Url = data.url;
+    (file as any).__r2Key = data.metadata?.r2Key || filename;
+    (file as any).__isTemporary = false;
+    (file as any).__source = source;
+    
+    onAddReferenceImage?.(file);
+    showToast(`Added ${source} reference image: ${filename}`, 'success');
+  };
+
+  // Capture functionality - same as VideoImageAIPanel
+  const handleAddBackground = () => {
+    console.log('🎯 Capture button clicked');
+    
+    // Check if we've reached the maximum reference images limit
+    if (maxReferenceImages > 0 && referenceImages.length >= maxReferenceImages) {
+      showToast(`Maximum ${maxReferenceImages} reference images allowed for this mode`, 'error');
+      return;
+    }
+    
+    // Reference current image as reference image (no download needed)
+    try {
+      console.log('🔍 Starting CanvasEditor-specific search...');
+      let targetElement = null;
+      let imageUrl = null;
+      
+      // Method 1: Look for the CanvasEditor container with data-canvas-editor="true"
+      const canvasEditorContainer = document.querySelector('[data-canvas-editor="true"]');
+      console.log('📊 Found CanvasEditor container:', !!canvasEditorContainer);
+      
+      if (canvasEditorContainer) {
+        // Method 2: Look for the main image inside the CanvasEditor
+        // This is the currently displayed image that the user sees
+        const mainImage = canvasEditorContainer.querySelector('img[data-canvas-base-image="true"], img');
+        console.log('📸 Found main image in CanvasEditor:', !!mainImage);
+        
+        if (mainImage) {
+          const rect = mainImage.getBoundingClientRect();
+          const isVisible = rect.width > 0 && rect.height > 0 && 
+                           window.getComputedStyle(mainImage).display !== 'none' &&
+                           window.getComputedStyle(mainImage).visibility !== 'hidden';
+          
+          console.log('🖼️ Main image details:', {
+            dimensions: `${mainImage.naturalWidth}x${mainImage.naturalHeight}`,
+            visual: `${rect.width}x${rect.height}`,
+            area: rect.width * rect.height,
+            visible: isVisible,
+            display: window.getComputedStyle(mainImage).display,
+            visibility: window.getComputedStyle(mainImage).visibility,
+            src: mainImage.src.substring(0, 100) + '...',
+            classes: mainImage.className,
+            'data-canvas-base-image': mainImage.getAttribute('data-canvas-base-image')
+          });
+          
+          if (isVisible && mainImage.naturalWidth > 100 && mainImage.naturalHeight > 100) {
+            targetElement = mainImage;
+            imageUrl = mainImage.src;
+            console.log('✅ Selected main image from CanvasEditor');
+          }
+        }
+        
+        // Method 3: If no main image found, look for any canvas elements in the CanvasEditor
+        if (!targetElement) {
+          const canvases = canvasEditorContainer.querySelectorAll('canvas');
+          console.log(`📊 Found ${canvases.length} canvas elements in CanvasEditor`);
+          
+          let bestCanvas = null;
+          let bestScore = 0;
+          
+          for (let i = 0; i < canvases.length; i++) {
+            const canvas = canvases[i];
+            const rect = canvas.getBoundingClientRect();
+            const isVisible = rect.width > 0 && rect.height > 0;
+            
+            if (isVisible) {
+              const visualArea = rect.width * rect.height;
+              let score = Math.log(visualArea + 1) * 10;
+              
+              if (canvas.width >= 100 && canvas.height >= 100) {
+                score += 50;
+              }
+              
+              console.log(`📈 Canvas ${i} in CanvasEditor score: ${score} (area: ${visualArea})`);
+              
+              if (score > bestScore) {
+                bestScore = score;
+                bestCanvas = canvas;
+                console.log(`🏆 New best canvas in CanvasEditor: Canvas ${i} with score ${score}`);
+              }
+            }
+          }
+          
+          if (bestCanvas) {
+            targetElement = bestCanvas;
+            console.log('✅ Selected best canvas from CanvasEditor');
+          }
+        }
+      }
+      
+      // Method 4: Fallback to any canvas if CanvasEditor not found
+      if (!targetElement) {
+        console.log('🔄 CanvasEditor not found, searching all canvases...');
+        const allCanvases = document.querySelectorAll('canvas');
+        console.log(`📊 Found ${allCanvases.length} total canvas elements`);
+        
+        let bestCanvas = null;
+        let bestScore = 0;
+        
+        for (let i = 0; i < allCanvases.length; i++) {
+          const canvas = allCanvases[i];
+          const rect = canvas.getBoundingClientRect();
+          const isVisible = rect.width > 0 && rect.height > 0;
+          
+          if (isVisible) {
+            const visualArea = rect.width * rect.height;
+            let score = Math.log(visualArea + 1) * 10;
+            
+            if (canvas.width >= 100 && canvas.height >= 100) {
+              score += 50;
+            }
+            
+            if (canvas.closest('[data-canvas-editor="true"]')) {
+              score += 100; // Huge bonus for CanvasEditor canvases
+            }
+            
+            console.log(`📈 Canvas ${i} fallback score: ${score} (area: ${visualArea})`);
+            
+            if (score > bestScore) {
+              bestScore = score;
+              bestCanvas = canvas;
+              console.log(`🏆 New best fallback canvas: Canvas ${i} with score ${score}`);
+            }
+          }
+        }
+        
+        if (bestCanvas) {
+          targetElement = bestCanvas;
+          console.log('✅ Selected best fallback canvas');
+        }
+      }
+      
+      if (!targetElement) {
+        console.error('❌ No suitable element found to capture');
+        console.log('❌ CanvasEditor container found:', !!canvasEditorContainer);
+        if (canvasEditorContainer) {
+          console.log('❌ Images in CanvasEditor:', canvasEditorContainer.querySelectorAll('img').length);
+          console.log('❌ Canvases in CanvasEditor:', canvasEditorContainer.querySelectorAll('canvas').length);
+        }
+        console.log('❌ Total canvases on page:', document.querySelectorAll('canvas').length);
+        showToast('No suitable element found to capture', 'error');
+        return;
+      }
+      
+      console.log('🎯 Target element found:', targetElement.tagName, targetElement);
+      console.log('🎯 This captures the currently displayed content in the CanvasEditor');
+      
+      // Handle image elements (create URL reference)
+      if (targetElement.tagName === 'IMG' && imageUrl) {
+        console.log('🖼️ Creating URL-based reference for displayed image:', imageUrl);
+        
+        if (onAddReferenceImage) {
+          const filename = imageUrl.split('/').pop() || `canvas-reference-${Date.now()}.png`;
+          const file = new File([''], filename, { type: 'image/png' });
+          
+          // Add the expected metadata properties that SceneEditor looks for
+          (file as any).__r2Url = imageUrl; // SceneEditor will use this as the URL
+          (file as any).__r2Key = filename; // Store the filename as R2 key
+          (file as any).__isTemporary = false; // Mark as not temporary
+          
+          onAddReferenceImage(file);
+          showToast('Image captured and added to reference images', 'success');
+          console.log('✅ Successfully captured displayed image as reference');
+        } else {
+          console.error('❌ onAddReferenceImage function not available');
+          showToast('Reference image function not available', 'error');
+        }
+      }
+      // Handle canvas elements (capture current visual content)
+      else if (targetElement.tagName === 'CANVAS') {
+        console.log('🖼️ Capturing current canvas visual content...');
+        targetElement.toBlob((blob) => {
+          if (blob) {
+            console.log('✅ Canvas blob created from current visual content, size:', blob.size);
+            const filename = `canvas-capture-${Date.now()}.png`;
+            const file = new File([blob], filename, { type: 'image/png' });
+            console.log('📁 File created from canvas visual content:', file);
+            
+            if (onAddReferenceImage) {
+              console.log('🔄 Calling onAddReferenceImage with canvas capture...');
+              onAddReferenceImage(file);
+              showToast('Canvas content captured and added to reference images', 'success');
+              console.log('✅ Successfully captured what is currently displayed on the canvas');
+            } else {
+              console.error('❌ onAddReferenceImage function not available');
+              showToast('Reference image function not available', 'error');
+            }
+          } else {
+            console.error('❌ Failed to create canvas blob from visual content');
+            showToast('Failed to capture canvas content', 'error');
+          }
+        }, 'image/png');
+      } else {
+        console.error('❌ Unable to capture element type:', targetElement.tagName);
+        showToast('Unable to capture element', 'error');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error capturing content:', error);
+      showToast('Failed to capture content', 'error');
+    }
+  };
+
+  // Handle drag start for reference images
+  const handleDragStart = (e: React.DragEvent, imageUrl: string, imageIndex: number) => {
+    e.dataTransfer.setData("imageUrl", imageUrl);
+    e.dataTransfer.setData("imageIndex", imageIndex.toString());
+  };
+
+  // Calculate maximum reference images based on model and mode
+  const getMaxReferenceImages = () => {
+    return selectedModelOption?.maxReferenceImages || 0;
+  };
+
+  const maxReferenceImages = getMaxReferenceImages();
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showQualityDropdown, setShowQualityDropdown] = useState(false);
-  // Use existing brush size from props instead of local state
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   // Model options for area-edit mode (filtered by mask type)
-  const inpaintModelOptions = useMemo(() => {
+  const modelOptions = useMemo(() => {
     return activeTool === "text-to-image" ? [
     ] : activeTool === "image-to-image" ? [
       { value: "nano-banana-2", label: "Nano Banana 2", sub: `${selectedQuality} • 7 refs`, credits: getModelCredits("nano-banana-2"), maxReferenceImages: 7 },
@@ -411,7 +1205,7 @@ export default function EditImageAIPanel({
       // Default: include character-edit for any other tools in area-edit mode
       { value: "ideogram/character-edit", label: "Character Edit", sub: "Faceshift", credits: getModelCredits("ideogram/character-edit"), maxReferenceImages: 0 },
     ];
-  }, [activeTool, selectedQuality, gptImageQuality, getModelCredits]);
+  }, [activeTool, selectedQuality, gptImageQuality, getModelCredits, model]);
 
   const selectedModel = MODELS.find((m) => m.id === model) || MODELS[0];
   
@@ -464,14 +1258,40 @@ export default function EditImageAIPanel({
 
   // Get current selected model display name
   const getSelectedModelDisplay = () => {
-    const selected = inpaintModelOptions.find(m => m.value === normalizedModel) || inpaintModelOptions[0];
+    const selected = modelOptions.find(m => m.value === normalizedModel) || modelOptions[0];
     return selected ? selected.label : "Model";
   };
 
   // Get current selected model credits
   const getSelectedModelCredits = () => {
-    const selected = inpaintModelOptions.find(m => m.value === normalizedModel) || inpaintModelOptions[0];
-    return selected && (selected as any).credits ? (selected as any).credits : credits;
+    console.log('[DEBUG] getSelectedModelCredits called:', {
+      normalizedModel,
+      activeTool,
+      modelOptions: modelOptions.map(m => ({ value: m.value, label: m.label, credits: m.credits }))
+    });
+    
+    const selected = modelOptions.find(m => m.value === normalizedModel) || modelOptions[0];
+    const credits = selected && (selected as any).credits ? (selected as any).credits : getModelCredits(normalizedModel);
+    
+    console.log('[DEBUG] getSelectedModelCredits result:', {
+      selected: selected ? { value: selected.value, label: selected.label, credits: selected.credits } : null,
+      credits
+    });
+    
+    // Debug: Show the actual model data from database for recraft
+    if (normalizedModel === 'recraft/crisp-upscale') {
+      const model = models.find(m => m.modelId === 'recraft/crisp-upscale');
+      console.log('[DEBUG] Recraft Crisp model from database:', {
+        modelId: model?.modelId,
+        pricingType: model?.pricingType,
+        assignedFunction: model?.assignedFunction,
+        creditCost: model?.creditCost,
+        factor: model?.factor,
+        formulaJson: model?.formulaJson
+      });
+    }
+    
+    return credits;
   };
 
   const alertModelCredits = (selectedModelId: string, quality?: string) => {
@@ -1135,48 +1955,173 @@ export default function EditImageAIPanel({
   // ── Reference Images Panel (all modes) ──────────────────
   const renderReferencePanel = () => {
     // Show in all modes now
+    console.log('🎯 Rendering reference panel, mode:', mode);
+    console.log('🎯 Reference images:', referenceImages);
+    console.log('🎯 Reference images length:', referenceImages?.length || 0);
 
     return (
       <div className="px-0 py-0">
         <div className="flex items-start gap-2.5 overflow-x-auto">
-          {/* Reference image thumbnails */}
-          {(referenceImages ?? []).map((img) => (
-            <div
-              key={img.id}
-              className="relative shrink-0 w-14 h-14 rounded-lg overflow-hidden border border-white/20 group"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt="" className="w-full h-full object-cover" />
-              {onRemoveReferenceImage && (
-                <button
-                  onClick={() => onRemoveReferenceImage(img.id)}
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
-                >
-                  <X className="w-2.5 h-2.5 text-white" />
-                </button>
-              )}
+        {referenceImages?.map((img, index) => {
+          console.log('🎯 Rendering image:', index, img);
+          return (
+          <div key={img.id} className="relative flex-shrink-0 group">
+            <img
+              src={img.url}
+              alt={`Reference ${index + 1}`}
+              className="w-20 h-20 object-cover rounded-lg border border-white/10 cursor-move relative z-10"
+              draggable
+              onDragStart={(e) => handleDragStart(e, img.url, index)}
+            />
+            <div className={`absolute top-1.5 right-1.5 text-white text-[10px] px-1 rounded-full z-20 ${
+              img.source === 'r2' ? 'bg-blue-500' : 
+              img.source === 'element' ? 'bg-purple-500' : 
+              'bg-emerald-500'
+            }`}>
+              {img.source === 'r2' ? 'R2' : 
+               img.source === 'element' ? 'EL' : 
+               `Image ${index + 1}`}
             </div>
-          ))}
-
-          {/* Add Image button - only show if no images */}
-          {(referenceImages ?? []).length === 0 && (
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="shrink-0 w-14 h-14 rounded-lg bg-white/10 hover:bg-white/15 border border-white/20 flex flex-col items-center justify-center gap-1 transition text-gray-400 hover:text-gray-200"
+              onClick={() => onRemoveReferenceImage?.(img.id)}
+              className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
             >
-              <Plus className="w-4 h-4" />
-              <span className="text-[9px]">Image</span>
+              <X className="w-2.5 h-2.5 text-white" />
             </button>
-          )}
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleRightImageUpload}
-        />
+          </div>
+        )})}
+        
+        {/* Combined Upload Button with Slide Menu */}
+        {maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
+          <div className="relative">
+            {/* Add Button */}
+            <button
+              onClick={() => {
+                console.log('🔥🔥🔥 ADD BUTTON CLICKED! 🔥🔥🔥');
+                setShowUploadMenu(!showUploadMenu);
+              }}
+              className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-emerald-500/30 hover:border-emerald-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
+              title="Add reference image"
+            >
+              <Plus className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
+              <span className="text-[10px] text-emerald-400 group-hover:text-emerald-300 transition-colors">Add Image</span>
+            </button>
+            
+        
+            
+            {/* Slide-out Menu from Left - Horizontal Layout */}
+            {showUploadMenu && (
+              <>
+                {/* Overlay */}
+                <div 
+                  className="fixed inset-0 bg-black/50 z-40"
+                  onClick={() => setShowUploadMenu(false)}
+                />
+                {/* Slide Menu - Horizontal */}
+                <div className="absolute top-0 left-full ml-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50">
+                  <div className="p-3">
+                    {/* Horizontal Options */}
+                    <div className="flex gap-2">
+                      {/* Upload from computer */}
+                      <button
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                          setShowUploadMenu(false);
+                        }}
+                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
+                        title="Upload from computer"
+                      >
+                        <Upload className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs">Upload</span>
+                      </button>
+                      
+                      {/* R2 File Browser */}
+                      <button
+                        onClick={() => {
+                          console.log('R2 button clicked!');
+                          console.log('canOpenFileBrowser():', canOpenFileBrowser());
+                          console.log('projectId:', projectId);
+                          console.log('companyId:', companyId);
+                          console.log('userId:', userId);
+                          console.log('user:', clerkUser);
+                          
+                          if (!canOpenFileBrowser()) {
+                            if (!projectId) {
+                              showToast('Project ID required to browse R2 files', 'error');
+                            } else if (!companyId) {
+                              showToast('Company ID required to browse R2 files', 'error');
+                            } else {
+                              showToast('Project information required to browse R2 files', 'error');
+                            }
+                            return;
+                          }
+                          
+                          console.log('Opening FileBrowser...');
+                          setShowFileBrowser(true);
+                          setShowUploadMenu(false);
+                        }}
+                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
+                        title="Browse R2 files"
+                      >
+                        <FolderOpen className="w-4 h-4 text-blue-400" />
+                        <span className="text-xs">R2</span>
+                      </button>
+                      
+                      {/* Element Library */}
+                      <button
+                        onClick={() => {
+                          if (!canOpenElementLibrary()) {
+                            if (!projectId) {
+                              showToast('Project ID required to browse elements', 'error');
+                            } else if (!userId) {
+                              showToast('User ID required to browse elements', 'error');
+                            } else if (!user) {
+                              showToast('Authentication required to browse elements', 'error');
+                            } else if (!userCompanyId) {
+                              showToast('Company ID required to browse elements', 'error');
+                            } else {
+                              showToast('Project and user information required to browse elements', 'error');
+                            }
+                            return;
+                          }
+                          setShowElementLibrary(true);
+                          setShowUploadMenu(false);
+                        }}
+                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
+                        title="Browse elements"
+                      >
+                        <FileText className="w-4 h-4 text-purple-400" />
+                        <span className="text-xs">Elements</span>
+                      </button>
+                      
+                      {/* Capture Background */}
+                      <button
+                        onClick={() => {
+                          handleAddBackground();
+                          setShowUploadMenu(false);
+                        }}
+                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
+                        title="Capture background"
+                      >
+                        <Camera className="w-4 h-4 text-orange-400" />
+                        <span className="text-xs">Capture</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleRightImageUpload}
+      />
+    </div>
     );
   };
 
@@ -1187,22 +2132,285 @@ export default function EditImageAIPanel({
     return (
       <div className="px-[10px] pt-[10px] pb-0">
         <div className="flex items-start gap-2">
-          <textarea
-            value={currentPrompt || ""}
-            onChange={(e) => handlePromptChange(e.target.value)}
-            placeholder="Character [action] image, need to preserve the surrounding, maintain the background..."
-            className="flex-1 min-h-[40px] px-4 py-2 bg-transparent border border-white/[0.08] rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-white/[0.15] transition-all text-sm overflow-hidden resize-none"
-            style={{ 
-              caretColor: 'white',
-              height: 'auto',
-              minHeight: '40px'
-            }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = 'auto';
-              target.style.height = `${target.scrollHeight}px`;
-            }}
-          />
+          {/* Text Area */}
+                <div className="relative flex-1">
+                  <div
+                    ref={editorRef}
+                    contentEditable={true}
+                    suppressContentEditableWarning={true}
+                    onInput={handleEditorInput}
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                    onBlur={handleEditorBlur}
+                    onCompositionStart={handleCompositionStart}
+                    onCompositionEnd={handleCompositionEnd}
+                    onKeyDown={handleKeyDown}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:border-emerald-500/30 leading-6 text-sm selection:bg-white/20"
+                    style={{
+                      minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
+                      maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
+                      overflowY: "auto",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  />
+                  {editorIsEmpty && (
+                    <div className="absolute top-2 left-3 right-3 text-gray-500 text-sm pointer-events-none select-none leading-6">
+                      character holding flower , need to preserve the surrounding . maintain the background, maintain exact proportions and height.
+                    </div>
+                  )}
+                </div>
+                
+                {/* Prompt Actions Button on the Right */}
+                <div className="flex-shrink-0">
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowPromptActions(!showPromptActions)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-colors text-xs font-medium h-full"
+                      title="Prompt actions"
+                    >
+                      <BookOpen className="w-3 h-3" />
+                      Prompt Actions
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showPromptActions ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Dropdown Menu */}
+                    {showPromptActions && (
+                      <div className="absolute bottom-full right-0 mb-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px]">
+                        <div className="py-1">
+                          {/* Clear */}
+                          <button
+                            onClick={() => {
+                              const el = editorRef.current;
+                              if (el) {
+                                el.innerHTML = '';
+                                setEditorIsEmpty(true);
+                                setCurrentPrompt('');
+                                setShowPromptActions(false);
+                              }
+                            }}
+                            disabled={editorIsEmpty}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                            <span>Clear Text</span>
+                          </button>
+                          
+                          {/* Save Prompt */}
+                          <button
+                            onClick={() => {
+                              const prompt = extractPlainText();
+                              if (!prompt.trim()) return;
+                              setSavePromptName("");
+                              setSavePromptSuccess(false);
+                              setIsSavePromptOpen(true);
+                              setShowPromptActions(false);
+                            }}
+                            disabled={editorIsEmpty}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Save className="w-4 h-4 text-blue-400" />
+                            <span>Save Prompt</span>
+                          </button>
+                          
+                          {/* Test */}
+                          <button
+                            onClick={() => {
+                              const htmlContent = editorRef.current?.innerHTML || '';
+                              const plainText = extractPlainText();
+                              const textWithBadges = extractTextWithBadges();
+                              
+                              // Extract @Image mentions from HTML
+                              const imageMentions = htmlContent.match(/@Image\d+/g) || [];
+                              const r2Mentions = htmlContent.match(/@R2\d+/g) || [];
+                              const elMentions = htmlContent.match(/@EL\d+/g) || [];
+                              const allMentions = [...imageMentions, ...r2Mentions, ...elMentions];
+                              
+                              const mentionsText = allMentions.length > 0 ? allMentions.join(' ') : 'No @Image mentions found';
+                              
+                              // Debug: Show what each extraction method returns
+                              console.log('=== DEBUG EXTRACTION ===');
+                              console.log('HTML Content:', htmlContent);
+                              console.log('Plain Text (no badges):', plainText);
+                              console.log('Text with badges:', textWithBadges);
+                              console.log('Mentions from HTML:', mentionsText);
+                              
+                              alert(`Current textarea content with badges:\n\n${textWithBadges}\n\n@MENTIONS FOUND:\n${mentionsText}\n\nPLAIN TEXT (for AI):\n${plainText}\n\n=== DEBUG INFO ===\nHTML: ${htmlContent.substring(0, 200)}...`);
+                              setShowPromptActions(false);
+                            }}
+                            disabled={editorIsEmpty}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <span>Test</span>
+                          </button>
+                          
+                          {/* Load Description */}
+                          <button
+                            onClick={() => {
+                              console.log("Load Description clicked");
+                              if (activeShotDescription) {
+                                const el = editorRef.current;
+                                if (el) {
+                                  el.textContent = activeShotDescription;
+                                  setEditorIsEmpty(false);
+                                  handleEditorInput();
+                                  onUserPromptChange?.(activeShotDescription);
+                                  console.log("Description loaded:", activeShotDescription);
+                                }
+                              } else {
+                                console.log("No description available");
+                              }
+                              setShowPromptActions(false);
+                            }}
+                            disabled={!activeShotDescription}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <FileText className="w-4 h-4 text-orange-400" />
+                            <span>Load Description</span>
+                          </button>
+                          
+                          {/* Load Image Prompt */}
+                          <button
+                            onClick={() => {
+                              console.log("Load Image Prompt clicked");
+                              if (activeShotImagePrompt) {
+                                const el = editorRef.current;
+                                if (el) {
+                                  el.textContent = activeShotImagePrompt;
+                                  setEditorIsEmpty(false);
+                                  handleEditorInput();
+                                  onUserPromptChange?.(activeShotImagePrompt);
+                                  console.log("Image prompt loaded:", activeShotImagePrompt);
+                                }
+                              } else {
+                                console.log("No image prompt available");
+                              }
+                              setShowPromptActions(false);
+                            }}
+                            disabled={!activeShotImagePrompt}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Image className="w-4 h-4 text-cyan-400" />
+                            <span>Load Image Prompt</span>
+                          </button>
+                          
+                          {/* Load Video Prompt */}
+                          <button
+                            onClick={() => {
+                              console.log("Load Video Prompt clicked");
+                              console.log("activeShotVideoPrompt:", activeShotVideoPrompt);
+                              console.log("Type of activeShotVideoPrompt:", typeof activeShotVideoPrompt);
+                              console.log("Length of activeShotVideoPrompt:", activeShotVideoPrompt?.length);
+                              if (activeShotVideoPrompt) {
+                                const el = editorRef.current;
+                                if (el) {
+                                  el.textContent = activeShotVideoPrompt;
+                                  setEditorIsEmpty(false);
+                                  handleEditorInput();
+                                  onUserPromptChange?.(activeShotVideoPrompt);
+                                  console.log("Video prompt loaded:", activeShotVideoPrompt);
+                                }
+                              } else {
+                                console.log("No video prompt available");
+                              }
+                              setShowPromptActions(false);
+                            }}
+                            disabled={!activeShotVideoPrompt}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Video className="w-4 h-4 text-pink-400" />
+                            <span>Load Video Prompt</span>
+                          </button>
+                          
+                          {/* Prompt Library */}
+                          <button
+                            onClick={() => {
+                              setIsPromptLibraryOpen(true);
+                              setShowPromptActions(false);
+                            }}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
+                          >
+                            <BookOpen className="w-4 h-4 text-emerald-400" />
+                            <span>Prompt Library</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              {/* Save Prompt Inline Modal */}
+              {isSavePromptOpen && (
+                <div className="mt-2 p-3 bg-[#1a1a2e] border border-blue-500/30 rounded-lg">
+                  <p className="text-xs text-gray-400 mb-2">Save prompt as:</p>
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="e.g. Dark fantasy warrior..."
+                    value={savePromptName}
+                    onChange={(e) => setSavePromptName(e.target.value)}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (!savePromptName.trim()) return;
+                        setSavePromptSaving(true);
+                        try {
+                          await createTemplate({
+                            name: savePromptName.trim(),
+                            prompt: extractPlainText(),
+                            type: 'custom',
+                            companyId: currentCompanyId,
+                            isPublic: false,
+                          });
+                          setSavePromptSuccess(true);
+                          setTimeout(() => setIsSavePromptOpen(false), 1000);
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setSavePromptSaving(false);
+                        }
+                      }
+                    }}
+                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-gray-300 text-sm focus:outline-none focus:border-blue-500/30"
+                    disabled={savePromptSaving}
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <button
+                      onClick={() => setIsSavePromptOpen(false)}
+                      className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                      disabled={savePromptSaving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!savePromptName.trim()) return;
+                        setSavePromptSaving(true);
+                        try {
+                          await createTemplate({
+                            name: savePromptName.trim(),
+                            prompt: extractPlainText(),
+                            type: 'custom',
+                            companyId: currentCompanyId,
+                            isPublic: false,
+                          });
+                          setSavePromptSuccess(true);
+                          setTimeout(() => setIsSavePromptOpen(false), 1000);
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setSavePromptSaving(false);
+                        }
+                      }}
+                      disabled={!savePromptName.trim() || savePromptSaving}
+                      className="text-xs bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savePromptSaving ? 'Saving...' : savePromptSuccess ? 'Saved!' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              )}
         </div>
       </div>
     );
@@ -1267,7 +2475,7 @@ export default function EditImageAIPanel({
       
 
           {/* Model Select Box (in area-edit mode) */}
-          {mode === "area-edit" && inpaintModelOptions.length > 0 && (
+          {mode === "area-edit" && modelOptions.length > 0 && (
             <div className="flex items-center gap-2">
               <div className="relative" style={{ width: "200px" }}>
                 <button
@@ -1280,7 +2488,7 @@ export default function EditImageAIPanel({
                 {showInpaintModelDropdown && (
                   <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
                     <div className="p-2">
-                      {inpaintModelOptions.map((modelOption) => (
+                      {modelOptions.map((modelOption) => (
                         <button
                           key={modelOption.value}
                           onClick={() => {
@@ -1389,7 +2597,11 @@ export default function EditImageAIPanel({
               <Sparkles className="w-4 h-4" />
             )}
             <span className="hidden sm:inline">Generate</span>
-            <span className="text-white/70 text-xs">✦ {getSelectedModelCredits()}</span>
+            <span className="text-white/70 text-xs">✦ {(() => {
+              const credits = getSelectedModelCredits();
+              console.log('[DEBUG] Generate button rendering credits:', credits);
+              return credits;
+            })()}</span>
           </button>
         </div>
         </div>
@@ -1399,37 +2611,111 @@ export default function EditImageAIPanel({
 
   // ── Main Render ────────────────────────────────────────────────────
   return (
-    <div className="absolute inset-0 pointer-events-none z-10 flex flex-col">
-      {/* Canvas area with toolbars */}
-      <div className="flex-1 relative">
-        <div className="pointer-events-auto">{renderLeftToolbar()}</div>
-        <div className="pointer-events-auto">{renderRightToolbar()}</div>
+    <>
+      <div className="absolute inset-0 pointer-events-none z-10 flex flex-col">
+        {/* Canvas area with toolbars */}
+        <div className="flex-1 relative">
+          <div className="pointer-events-auto">{renderLeftToolbar()}</div>
+          <div className="pointer-events-auto">{renderRightToolbar()}</div>
+        </div>
+
+        {/* Bottom: Reference panel + Bottom bar */}
+        <div className="pointer-events-auto">
+          {renderBottomBar()}
+        </div>
       </div>
 
-      {/* Bottom: Reference panel + Bottom bar */}
-      <div className="pointer-events-auto">
-        {renderBottomBar()}
-      </div>
-
+      {/* Modals - rendered outside pointer-events-none container */}
       {showFileBrowser && projectId && (
         <div className="pointer-events-auto">
           <FileBrowser
             projectId={projectId}
             onClose={() => setShowFileBrowser(false)}
-            imageSelectionMode={true}
-            onSelectImage={(imageUrl) => {
-              onSetOriginalImage?.(imageUrl);
+            imageSelectionMode={true} // Enable image selection mode
+            filterTypes={['image']} // Only show images
+            onSelectImage={(imageUrl, fileName, fileData) => {
+              console.log('FileBrowser onSelectImage called:', { imageUrl, fileName, fileData });
+              // Handle single image selection from R2 File Browser (same as VideoImageAIPanel)
+              handleImageSelect('r2', {
+                url: imageUrl,
+                name: fileName,
+                metadata: {
+                  source: 'r2-file-browser',
+                  selectedAt: Date.now(),
+                  r2Key: fileData.r2Key,
+                  fileId: fileData._id,
+                  category: fileData.category,
+                  isFavorite: fileData.isFavorite,
+                  isGlobal: !fileData.projectId
+                }
+              });
+              // Auto-close after selection
               setShowFileBrowser(false);
             }}
-            onSelectFile={(url, type) => {
-              if (type === "image") {
-                onSetOriginalImage?.(url);
-                setShowFileBrowser(false);
+            onSelectFile={(url, type) => 
+              type === 'image' && handleFileBrowserSelect(url, type)
+            }
+          />
+        </div>
+      )}
+
+      {/* Element Library Modal */}
+      {showElementLibrary && projectId && userId && clerkUser && (
+        <div className="pointer-events-auto">
+          <ElementLibrary
+            projectId={projectId}
+            userId={userId}
+            user={clerkUser}
+            onClose={() => setShowElementLibrary(false)}
+            imageSelectionMode={true} // Enable image selection mode
+            onSelectImage={(imageUrl, elementName, element) => {
+              // Handle single image selection
+              handleImageSelect('element', {
+                url: imageUrl,
+                name: elementName,
+                metadata: {
+                  source: 'element-library-image',
+                  selectedAt: Date.now(),
+                  elementId: element._id,
+                  elementType: element.type,
+                  elementName: element.name
+                }
+              });
+            }}
+            onSelectElement={(referenceUrls, name, element) => {
+              // Handle multi-image element selection (existing behavior)
+              if (referenceUrls && referenceUrls.length > 0) {
+                referenceUrls.forEach(url => handleImageSelect('element', {
+                  url,
+                  name,
+                  metadata: {
+                    source: 'element-library-element',
+                    elementId: element._id,
+                    elementType: element.type,
+                    elementName: element.name,
+                    selectedAt: Date.now()
+                  }
+                }));
               }
             }}
           />
         </div>
       )}
-    </div>
+
+      {/* Prompt Library Modal */}
+      <PromptLibrary
+        isOpen={isPromptLibraryOpen}
+        onClose={() => setIsPromptLibraryOpen(false)}
+        onSelectPrompt={(prompt) => {
+          const el = editorRef.current;
+          if (el) {
+            el.textContent = prompt;
+            setEditorIsEmpty(false);
+            handleEditorInput();
+          }
+        }}
+        userCompanyId={currentCompanyId}
+      />
+    </>
   );
 }

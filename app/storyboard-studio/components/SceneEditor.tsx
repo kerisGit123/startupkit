@@ -89,8 +89,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [isInpainting, setIsInpainting] = useState(false);
   const [inpaintError, setInpaintError] = useState<string | null>(null);
   
-  // Get company ID for R2 uploads
-  const companyId = useCurrentCompanyId() || userCompanyId || userId;
+  // Get company ID for R2 uploads - use the standard hook
+  const companyId = useCurrentCompanyId();
   
   // Debug companyId values
   console.log('[SceneEditor] Auth debug:', {
@@ -503,6 +503,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     projectId ? { projectId } : "skip"
   );
   const updateStoryboardFile = useMutation(api.storyboard.storyboardFiles.update);
+  const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
+  const deductCredits = useMutation(api.credits.deductCredits);
 
   const projectGeneratedImages = useMemo(() => {
     if (!projectFiles) return [] as string[];
@@ -983,6 +985,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   };
 
   
+  // Helper function to extract badges from prompt text (similar to extractTextWithBadges)
+  const extractBadgesFromPrompt = (prompt: string): string => {
+    // Simple regex to find @Image1, @Image2 patterns and preserve them
+    // This is a basic implementation - the full extractTextWithBadges is more complex
+    return prompt;
+  };
+
   const activeIdx = shots.findIndex(s => s.id === activeShotId);
   const activeShot = shots[activeIdx];
 
@@ -1040,14 +1049,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // Update image mask when rectangleMaskAspectRatio changes and rectInpaint tool is active
   useEffect(() => {
-    console.log("[DEBUG] Rectangle repositioning effect running:", {
-      canvasTool,
-      rectangleMaskAspectRatio,
-      hasRectangle: !!rectangle,
-      isLocked: rectangleIsLockedRef.current,
-      shouldRun: canvasTool === "rectInpaint" && rectangleMaskAspectRatio && rectangle && !rectangleIsLockedRef.current
-    });
-    
     if (canvasTool === "rectInpaint" && rectangleMaskAspectRatio && rectangle && !rectangleIsLockedRef.current) {
       const container = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
       if (container) {
@@ -4268,8 +4269,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       
                       // For image-to-image mode, extract and upload cropped area to temps (only after credit check passes)
                       // Apply to nano-banana-2 and all GPT Image models (kie-image-v2, kie-image-pro-v2)
+                      // EXCLUDE upscale models (recraft/crisp-upscale, topaz/image-upscale) - they should process full image
                       const shouldCropForImageToImage = aiEditMode === "area-edit" && 
                         (aiModel !== "ideogram/character-edit") && 
+                        (aiModel !== "recraft/crisp-upscale") && 
+                        (aiModel !== "topaz/image-upscale") &&
                         (aiModel === "nano-banana-2" || aiModel === "nano-banana-pro" || aiModel === "google/nano-banana-edit" || aiModel?.startsWith("kie-image") || aiModel?.startsWith("gpt-image")) && 
                         currentImageUrl;
                       
@@ -4633,24 +4637,28 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     setZoomLevel(100);
                   }}
                   backgroundImage={backgroundImage}
-                onZoomIn={handleZoomIn}
-                onZoomOut={handleZoomOut}
-                onFitToScreen={handleFitToScreen}
-                zoomLevel={zoomLevel}
-                onZoomChange={setZoomLevel}
+                  onZoomIn={handleZoomIn}
+                  onZoomOut={handleZoomOut}
+                  onFitToScreen={handleFitToScreen}
+                  zoomLevel={zoomLevel}
+                  onZoomChange={setZoomLevel}
+                  activeShotDescription={activeShot?.description}
+                  activeShotImagePrompt={activeShot?.imagePrompt}
+                  activeShotVideoPrompt={activeShot?.videoPrompt}
                 />
                   ) : (
                     <ImageAIPanel
                       mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
-                      onGenerate={async (creditsUsed?: number, quality?: string, aspectRatio?: string, outputFormat?: string, extractedPrompt?: string) => {
+                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string) => {
                         console.log("=== ELEMENT CREDIT-BASED GENERATION CALLED ===");
                         console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
-                        console.log("Prompt:", extractedPrompt || promptText);
+                        console.log("Prompt:", extractedPrompt);
                         console.log("Credits received from VideoImageAIPanel:", creditsUsed);
                         console.log("Quality received from VideoImageAIPanel:", quality);
                         console.log("AspectRatio received from VideoImageAIPanel:", aspectRatio);
-                        console.log("OutputFormat received from VideoImageAIPanel:", outputFormat);
+                        console.log("Duration received from VideoImageAIPanel:", duration);
+                        console.log("Audio received from VideoImageAIPanel:", audioEnabled);
                         console.log("Reference images (aiRefImages):", aiRefImages);
                         
                         // Map aspect ratio to KIE AI supported options (simplified since we only use supported ratios)
@@ -4703,62 +4711,253 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         console.log("Processed reference image URLs:", processedReferenceImages);
                         
                         try {
-                          // Use credits from VideoImageAIPanel if provided, otherwise calculate
-                          const actualCredits = creditsUsed || calculateModelCredits(aiModel);
-                          const qualityToUse = quality || "standard";
-                          const aspectRatioToUse = aspectRatio || "1:1";
-                          const outputFormatToUse = outputFormat || "png";
-                          const promptToUse = extractedPrompt || promptText || "Generate element";
+                          console.log("Final credits used:", creditsUsed);
+                          console.log("Final quality:", quality);
+                          console.log("Final aspect ratio:", aspectRatio);
+                          console.log("Final duration:", duration);
+                          console.log("Final audio enabled:", audioEnabled);
+                          console.log("Final prompt:", extractedPrompt);
                           
-                          console.log("Final credits used:", actualCredits);
-                          console.log("Final quality:", qualityToUse);
-                          console.log("Final aspect ratio:", aspectRatioToUse);
-                          console.log("Final output format:", outputFormatToUse);
-                          console.log("Final prompt:", promptToUse);
-                          
-                          // Use the new credit-based generation for elements
-                          const result = await generateImageWithCredits(
-                            promptToUse, // Use extracted prompt with badges
-                            "realistic", // Default style
-                            qualityToUse, // Use quality from VideoImageAIPanel
-                            kieAIAspectRatio, // Use mapped KIE AI aspect ratio
-                            activeShot?.id || "", // Link to current storyboard item like EditImageAIPanel
-                            actualCredits, // Use actual credit amount from VideoImageAIPanel
-                            aiModel, // Pass the model
-                            undefined, // imageUrl
-                            processedReferenceImages, // Pass processed reference image URLs to KIE AI
-                            undefined, // maskUrl
-                            undefined, // existingFileId
-                            undefined, // cropX
-                            undefined, // cropY
-                            undefined, // cropWidth
-                            undefined, // cropHeight
-                            undefined  // originalImageUrl
-                          );
-                          
-                          if (result) {
-                            console.log("✅ Element generation started with credit tracking:", {
-                              fileId: result.fileId,
-                              taskId: result.taskId,
-                              creditsUsed: result.creditsUsed
+                          // Check if this is Seedance 1.5 Pro and use proper API format
+                          if (aiModel === "bytedance/seedance-1.5-pro") {
+                            console.log("Using Seedance 1.5 Pro API format...");
+                            
+                            // Extract resolution from quality string (first part before underscore)
+                            const resolution = quality.split('_')[0] || '720p';
+                            
+                            console.log("Seedance 1.5 Pro parameters:", { resolution, duration, audioEnabled, aspectRatio });
+                            
+                            // Create placeholder record (Nano Banana 2 pattern)
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `${aiModel.replace(/\//g, '-')}-${Date.now()}.mp4`,
+                              fileType: "video",
+                              mimeType: "video/mp4",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId, // ✅ Save storyboard item ID as categoryId
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: aiModel,
+                                pricingType: "formula",
+                                quality: quality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: {
+                                  cropped: false,
+                                  combined: false,
+                                  referenceImagesUsed: processedReferenceImages.length,
+                                },
+                                processingTime: 0,
+                                success: false,
+                              },
                             });
                             
-                            // Task status will be updated automatically via Convex real-time subscriptions
+                            console.log("Seedance 1.5 Pro placeholder record created:", fileId);
                             
-                            alert(`Element generation started! ${result.creditsUsed} credits deducted. File ID: ${result.fileId}`);
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI video generation with ${aiModel}`,
+                            });
+                            
+                            console.log("Seedance 1.5 Pro credits deducted");
+                            
+                            // Call Seedance 1.5 Pro API through our server route
+                            const response = await fetch('/api/storyboard/generate-seedance', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                prompt: extractedPrompt,
+                                input_urls: processedReferenceImages,
+                                aspect_ratio: aspectRatio,
+                                resolution: resolution,
+                                duration: duration,
+                                generate_audio: audioEnabled,
+                                callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`
+                              }),
+                            });
+
+                            if (!response.ok) {
+                              throw new Error(`Seedance API error: ${response.status} ${response.statusText}`);
+                            }
+
+                            const result = await response.json();
+                            console.log("Seedance 1.5 Pro API call successful:", result);
+                            
+                            if (result) {
+                              console.log("✅ Seedance 1.5 Pro generation started:", {
+                                fileId: fileId,
+                                taskId: result.taskId || result.id,
+                                creditsUsed: creditsUsed
+                              });
+                              
+                              alert(`Element generation started! ${creditsUsed} credits deducted. File ID: ${fileId}`);
+                            }
+                            
+                          } else if (aiModel === "google/veo-3.1") {
+                            console.log("Using Veo 3.1 API format...");
+                            
+                            // Validate reference images based on mode
+                            if (veoMode === "TEXT_2_VIDEO" && processedReferenceImages.length > 0) {
+                              throw new Error("TEXT_2_VIDEO mode does not accept reference images");
+                            }
+                            
+                            if (veoMode === "FIRST_AND_LAST_FRAMES_2_VIDEO" && processedReferenceImages.length !== 2) {
+                              throw new Error("FIRST_AND_LAST_FRAMES_2_VIDEO mode requires exactly 2 reference images");
+                            }
+                            
+                            if (veoMode === "REFERENCE_2_VIDEO" && processedReferenceImages.length !== 3) {
+                              throw new Error("REFERENCE_2_VIDEO mode requires exactly 3 reference images");
+                            }
+                            
+                            // Validate aspect ratio for REFERENCE_2_VIDEO
+                            if (veoMode === "REFERENCE_2_VIDEO" && !["9:16", "16:9"].includes(aspectRatio)) {
+                              throw new Error("REFERENCE_2_VIDEO mode only supports 9:16 and 16:9 aspect ratios");
+                            }
+                            
+                            console.log("Veo 3.1 parameters:", { aspectRatio, veoQuality, veoMode, referenceImageCount: processedReferenceImages.length });
+                            
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `${aiModel.replace(/\//g, '-')}-${Date.now()}.mp4`,
+                              fileType: "video",
+                              mimeType: "video/mp4",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId,
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: aiModel,
+                                pricingType: "formula",
+                                quality: veoQuality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: {
+                                  cropped: false,
+                                  combined: false,
+                                  referenceImagesUsed: processedReferenceImages.length,
+                                  veoMode: veoMode,
+                                },
+                                processingTime: 0,
+                                success: false,
+                              },
+                            });
+                            
+                            console.log("Veo 3.1 placeholder record created:", fileId);
+                            
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI video generation with ${aiModel}`,
+                            });
+                            
+                            console.log("Veo 3.1 credits deducted");
+                            
+                            // Call Veo 3.1 API through our server route
+                            const response = await fetch('/api/storyboard/generate-veo', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({
+                                prompt: extractedPrompt,
+                                imageUrls: veoMode === "TEXT_2_VIDEO" ? [] : processedReferenceImages,
+                                model: `veo3_${veoQuality.toLowerCase()}`,
+                                callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                aspect_ratio: aspectRatio,
+                                generationType: veoMode,
+                                enableFallback: false,
+                                enableTranslation: true,
+                              }),
+                            });
+
+                            if (!response.ok) {
+                              throw new Error(`Veo 3.1 API error: ${response.status} ${response.statusText}`);
+                            }
+
+                            const result = await response.json();
+                            console.log("Veo 3.1 API call successful:", result);
+                            
+                            if (result) {
+                              console.log("✅ Veo 3.1 generation started:", {
+                                fileId: fileId,
+                                taskId: result.taskId || result.id,
+                                creditsUsed: creditsUsed
+                              });
+                              
+                              alert(`Element generation started! ${creditsUsed} credits deducted. File ID: ${fileId}`);
+                            }
+                            
                           } else {
-                            console.error("❌ Element generation failed");
-                            alert("Element generation failed. Please check your credits and try again.");
+                            // Use the existing generateImageWithCredits function for other models
+                            console.log("Using generateImageWithCredits for other models...");
+                            
+                            const result = await generateImageWithCredits(
+                              promptToUse, // Use extracted prompt with badges
+                              "realistic", // Default style
+                              qualityToUse, // Use quality from VideoImageAIPanel
+                              kieAIAspectRatio, // Use mapped KIE AI aspect ratio
+                              activeShot?.id || "", // Link to current storyboard item like EditImageAIPanel
+                              actualCredits, // Use actual credit amount from VideoImageAIPanel
+                              aiModel, // Pass the model
+                              undefined, // imageUrl
+                              processedReferenceImages, // Pass processed reference image URLs to KIE AI
+                              undefined, // maskUrl
+                              undefined, // existingFileId
+                              undefined, // cropX
+                              undefined, // cropY
+                              undefined, // cropWidth
+                              undefined, // cropHeight
+                              undefined, // originalImageUrl
+                              undefined, // maskUrl
+                              undefined, // existingFileId
+                              undefined, // cropX
+                              undefined, // cropY
+                              undefined, // cropWidth
+                              undefined, // cropHeight
+                              undefined  // originalImageUrl
+                            );
+                            
+                            if (result) {
+                              console.log("✅ Element generation started with credit tracking:", {
+                                fileId: result.fileId,
+                                taskId: result.taskId,
+                                creditsUsed: result.creditsUsed
+                              });
+                            }
                           }
+                          
                         } catch (error) {
-                          console.error("[onGenerate] Element credit-based generation failed:", error);
+                          const errorMessage = error instanceof Error ? error.message : 'Generation failed';
+                          console.error("[VideoImageAIPanel] Element generation failed:", error);
                           
                           // Handle insufficient credits error specifically
-                          const errorMessage = error instanceof Error ? error.message : 'Element generation failed';
                           if (errorMessage.includes('Insufficient credits')) {
-                            alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating elements.`);
+                            alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating images.`);
                           } else {
-                            alert(`Element generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
+                            alert(`AI generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
                           }
                         }
                       }}
