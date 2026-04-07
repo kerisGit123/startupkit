@@ -1,31 +1,18 @@
-# Image AI Panel — Planning 
+# Image AI Panel — Planning
 
-> **Schema**: See `corePlaning.md` → `storyboard_items.imageGeneration`, `storyboard_items.imageUrl`, `storyboard_credit_usage`
-> **Owns**: Kie AI integration, prompt enhancement, style presets, batch generation, image panel UI
-> **Phase**: 3 (Image AI) - **COMPLETED**
+ > **Schema**: Current generated-image flows rely on `storyboard_files`, related item/project references, and pricing metadata rather than only legacy item URL fields
+ > **Owns**: Image generation controls, prompting UX, model selection, batch generation behavior, and generation UI state
+ > **Status**: ✅ **IMPLEMENTED / IN USE**
 
 ---
 
-## Implementation Status: ✅ **100% COMPLETE - PRODUCTION READY**
+## ✅ Current Implementation Summary (April 2026)
 
-### ✅ **Fully Implemented Features:**
-- **Kie AI API Configuration** - Complete integration with all models
-- **Advanced Style Presets** - 4 styles with proper model mapping
-- **GPT-4o Prompt Enhancement** - Via Kie AI (more integrated than OpenAI)
-- **Image Generation API** - `/api/storyboard/generate-image/route.ts`
-- **Callback Handler** - `/api/callback/image/route.ts` with R2 upload
-- **Production UI Component** - `ImageAIPanel.tsx` with full functionality
-- **Credit Logging** - Automatic tracking with companyId security
-- **Batch Generation** - Multiple items with progress tracking
-- **Character Consistency** - `characterContext` prop support
-- **Real-time Progress** - Generation status updates
-- **Error Handling** - Comprehensive error management
-
-### ✅ **Implementation Better Than Planned:**
-- **Kie AI GPT-4o** instead of OpenAI GPT-5.2 (more integrated, faster)
-- **Advanced Models** (kie-image-pro-v2 for realistic/cinematic)
-- **R2 Integration** in callbacks (proper file storage with companyId)
-- **Progress Tracking** with real-time status updates
+- **Image generation UI is live** and integrated into storyboard workspace flows
+- **The panel is responsible for generation controls**, not long-term asset persistence by itself
+- **Generated image persistence now centers on `storyboard_files`** and callback-completed storage workflows
+- **Dynamic pricing and model credit display** are integrated into the panel experience
+- **Prompting, style/model selection, and batch behaviors** are available through the image generation surface
 - **Mobile Responsive** design with touch-friendly controls
 - **Enhanced UI** with modern design and better UX
 
@@ -35,14 +22,19 @@
 
 This file covers:
 
-1. Kie AI API configuration and call pattern
-2. Prompt enhancement via GPT-5.2
-3. Style presets (realistic, cartoon, anime, cinematic)
-4. Single-item and batch image generation
-5. ImageAIPanel UI component
-6. Credit logging per generation (→ `storyboard_credit_usage` table)
+1. image-generation request controls and prompting UX
+2. style/model selection behavior
+3. single-item and batch image generation surfaces
+4. panel-level pricing display and generation state
+5. how image generation hands off to shared persistence/finalization flows
 
-This file does NOT cover project/script management (→ `storyboardplanning.md`), video generation (→ `videoplanning.md`), or file storage (→ `filePlaning.md`).
+This file does NOT cover:
+
+- project/script/workspace orchestration (see `plan_storyboard.md`)
+- scene-editor orchestration across panels (see `plan_scene_edit_image.md`)
+- edit-image/mask/crop tool behavior (see `plan_EditImageAIPanel.md`)
+- generated-image persistence lifecycle and GPT output finalization (see `plan_generatedImage_final02.md`)
+- file storage architecture (see `plan_file_final.md`)
 
 ---
 

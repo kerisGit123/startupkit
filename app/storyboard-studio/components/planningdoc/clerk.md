@@ -2,6 +2,34 @@
 
 ## Strategy: Free + Credits (Stripe) vs Paid Org Plans (Clerk)
 
+> **Status**: PARTIALLY IMPLEMENTED / ACTIVE FOUNDATION
+> **Role**: Current reference for Storyboard Studio authentication, organization access, and hybrid billing boundaries between Stripe credits and Clerk-managed subscriptions/org features
+
+---
+
+## Current Storyboard Studio Foundation (April 2026)
+
+- **Clerk authentication and organization context already exist** in the product foundation
+- **Stripe credit purchases are already live** for pay-as-you-go AI usage
+- **Storyboard Studio core product is already functional** across projects, AI generation, file storage, and collaboration-oriented workflows
+- **The missing Clerk work is primarily subscription/productization work**, not a full auth/org rebuild
+
+### Already Working in the Current Product
+
+- **Credit purchases** via Stripe with working balance updates
+- **Credit balance / usage tracking** for AI generation flows
+- **Organization-aware context switching** for company/org scoped usage
+- **Storyboard workspace and project lifecycle** for the main product
+- **R2-backed file storage and generated asset persistence**
+- **Team/member collaboration foundations** through the current org/user structure
+
+### Implementation Reality Check
+
+- **Core product** is effectively already built
+- **Billing foundation** already supports immediate monetization through credits
+- **Clerk subscription work** is a layer on top of the existing system, not a restart
+- **The biggest remaining gap** is turning current auth/org infrastructure into a fully packaged subscription entitlement model
+
 ### User Journey
 ```
 Free Plan → Buy Credits as Needed → Need Team? → Subscribe → Create Organizations
@@ -17,6 +45,12 @@ Free Plan → Buy Credits as Needed → Need Team? → Subscribe → Create Orga
 | Credit balance / ledger | convex/credits.ts | Done |
 | Stripe credit purchases | app/api/stripe/create-checkout + webhook | Done |
 | Sidebar nav item | SidebarNav.tsx — "Billing & Subscription" below Price Management | Done |
+
+### What This Means Strategically
+
+- **Free users already have a viable entry path** through pay-as-you-go credits
+- **Paid users can be upgraded into stronger org/team entitlements** without replacing the current billing foundation
+- **The current system already supports a hybrid monetization model** much better than a greenfield product would
 
 ## Hybrid Model Architecture
 

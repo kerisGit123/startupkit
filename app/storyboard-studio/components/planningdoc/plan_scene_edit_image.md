@@ -1,8 +1,24 @@
 # Scene Edit Image System - Planning Document
+> **Purpose**: Current reference for the scene-based editing workflow used by `SceneEditor`
+> **Scope**: SceneEditor integration with edit-image, element-image, and video/image generation panels
+> **Status**: ✅ **IMPLEMENTED / IN USE**
 
-> **Purpose**: Comprehensive planning for scene-based image editing and AI generation system
-> **Scope**: SceneEditor integration with AI panels for image editing, element generation, and video creation
-> **Phase**: Production-ready implementation with advanced AI capabilities and dynamic pricing
+---
+
+## ✅ Current Implementation Summary (April 2026)
+
+- **`SceneEditor.tsx` is the central orchestration layer** for scene editing, AI panel switching, generation calls, and callback-aware media handling
+- **Canvas editing** is shared across original/generated contexts using a unified state model
+- **Edit-image flows** support mask-based and crop-based generation behavior depending on model/tool mode
+- **Generated assets** are increasingly tracked through `storyboard_files` and callback-completed storage flows instead of only transient local state
+- **Video generation flows** now live alongside image generation in the same scene editing surface
+
+### **Current Responsibility Split**
+
+- **`SceneEditor.tsx`**: orchestration, generation entry points, shot state, project/media coordination
+- **`EditImageAIPanel.tsx`**: image editing controls, quality/model selection, prompting, mask/edit UX
+- **`ElementImageAIPanel.tsx`**: reusable asset/element generation workflows
+- **video/image panels**: model-specific generation controls that delegate actual mutation/API work back into the scene editor layer
 
 ---
 
@@ -172,12 +188,12 @@ interface ElementImageAIPanelProps {
 4. **Generated Content Flow**: Direct integration of AI results into scene
 5. **Element Creation**: Save AI results as reusable elements
 
-### **Data Flow Architecture**:
+### **Data Flow Architecture**
 ```
 SceneEditor (Canvas) → AI Panel Selection → Model Processing → R2 Storage → Element Library → Scene Integration
 ```
 
-### **State Management Pattern**:
+### **State Management Pattern**
 ```typescript
 // Scene Editor manages AI panel state
 const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'video' | 'element'>('editimage');
@@ -203,23 +219,25 @@ const canvasState = {
 
 ## 🎨 **UI/UX Design System**
 
-### **LTX Style Compliance**:
+### **LTX Style Compliance**
 - **Color System**: Full LTX color variable integration
 - **Typography**: Consistent text hierarchy and styling
 - **Interactive States**: Proper hover, focus, and selected states
 - **Border Radius**: Consistent `rounded-xl` patterns
 - **Transitions**: Smooth animations with proper duration
 
-### **Panel Layout**:
+### **Panel Layout**
 
-**Mobile-First Design Principles**:
+#### **Mobile-First Design Principles**
+
 - **Responsive Panels**: Adaptive panel sizing for mobile/tablet/desktop
 - **Touch-Optimized**: Minimum 44px touch targets for all interactive elements
 - **Gesture Support**: Pinch-to-zoom, swipe navigation, and drag gestures
 - **Compact Mode**: Collapsible panels to maximize canvas space on mobile
 - **Bottom Navigation**: Mobile-optimized toolbar placement
 
-**Responsive Breakpoints**:
+#### **Responsive Breakpoints**
+
 ```css
 /* Mobile: 320px - 768px */
 .panel-mobile {
@@ -246,21 +264,24 @@ const canvasState = {
 }
 ```
 
-**Mobile-Specific Features**:
+#### **Mobile-Specific Features**
+
 - **Sliding Panels**: Smooth slide-in/out animations optimized for touch
 - **Swipe Gestures**: Swipe to dismiss panels, switch between AI modes
 - **Floating Action Buttons**: Quick access to common tools
 - **Haptic Feedback**: Tactile response for touch interactions
 - **Keyboard Adaptation**: Mobile keyboard handling for text input
 
-**Tool Organization**:
+#### **Tool Organization**
+
 - **Logical Grouping**: Categorized tool layouts for different screen sizes
 - **Progressive Disclosure**: Show essential tools first, advanced tools on demand
 - **Context Menus**: Long-press context menus for quick actions
 - **Keyboard Shortcuts**: Efficient workflow support (desktop focus)
 - **Voice Commands**: Voice-activated tool selection (mobile enhancement)
 
-**Canvas Integration**:
+#### **Canvas Integration**
+
 - **Touch-Enabled Canvas**: Multi-touch drawing and gesture support
 - **Adaptive Zoom**: Smooth zoom with pinch gestures and fit-to-screen options
 - **Tool Palette**: Responsive tool layout with scrollable categories
@@ -268,7 +289,8 @@ const canvasState = {
 - **Layer Management**: Compact layer view for mobile screens
 - **Grid & Guides**: Optional alignment assistance with touch controls
 
-**Mobile Canvas Optimizations**:
+#### **Mobile Canvas Optimizations**
+
 - **Touch Precision**: Enhanced touch accuracy for fine details
 - **Stabilization**: Hand-stabilization for smoother drawing
 - **Pressure Sensitivity**: Support for stylus pressure on compatible devices
@@ -279,16 +301,18 @@ const canvasState = {
 
 ## 🔧 **Technical Implementation Details**
 
-### **Canvas Editor Integration**:
+### **Canvas Editor Integration**
 
-**Drawing Tools**:
+#### **Drawing Tools**
+
 ```typescript
 // Available tools from CanvasEditor
 type CanvasTool = CanvasActiveTool;
 // Includes: select, brush, eraser, text, shape, etc.
 ```
 
-**Mask System**:
+#### **Mask System**
+
 ```typescript
 // Brush inpaint mask
 const maskBrushSize = 10; // Adjustable brush size
@@ -296,7 +320,8 @@ const maskOpacity = 0.8;  // Adjustable opacity
 const mask = Array<{ x: number; y: number }>; // Pixel coordinates
 ```
 
-**Reference Image Handling**:
+#### **Reference Image Handling**
+
 ```typescript
 interface ReferenceImage {
   id: string;
@@ -307,9 +332,10 @@ interface ReferenceImage {
 }
 ```
 
-### **AI Model Integration**:
+### **AI Model Integration**
 
-**Model Selection**:
+#### **Model Selection**
+
 ```typescript
 const MODELS = [
   { id: "nano-banana-2", label: "Nano Banana 2", icon: "G" },
@@ -319,23 +345,26 @@ const MODELS = [
 ];
 ```
 
-**Prompt Enhancement**:
+#### **Prompt Enhancement**
+
 ```typescript
 // @mention system for references
 const promptWithMentions = "Edit character @ref:character_1 to smile";
 // Supports element references, file references, and AI guidance
 ```
 
-### **R2 Storage Integration**:
+### **R2 Storage Integration**
 
-**File Structure**:
+#### **File Structure**
+
 ```
 {companyId}/elements/{timestamp}-{filename}
 {companyId}/generated/{timestamp}-{filename}
 {companyId}/references/{timestamp}-{filename}
 ```
 
-**Metadata Tracking**:
+#### **Metadata Tracking**
+
 ```typescript
 interface ReferenceImageMetadata {
   companyId: string;
@@ -350,197 +379,145 @@ interface ReferenceImageMetadata {
 
 ## 📊 **Performance Optimizations**
 
-### **Canvas Performance**:
+### **Canvas Performance**
+
 - **Virtualization**: Large canvas rendering optimization
 - **Debounced Updates**: Smooth tool interactions
 - **Memory Management**: Efficient canvas state handling
 - **GPU Acceleration**: Hardware-accelerated rendering
 
-### **AI Processing**:
+### **AI Processing**
+
 - **Parallel Processing**: Multiple AI requests support
 - **Progressive Loading**: Preview generation during processing
 - **Caching**: Intelligent result caching
 - **Error Handling**: Robust error recovery
 
-### **State Management**:
+### **State Management**
+
 - **React.memo**: Component optimization
 - **useCallback**: Event handler optimization
 - **useMemo**: Expensive computation caching
 - **Lazy Loading**: On-demand component loading
 
-### **Mobile UX Considerations**:
+### **Mobile UX Considerations**
 
-**Screen Real Estate Management**:
+#### **Screen Real Estate Management**
+
 - **Progressive Disclosure**: Hide complex tools behind expandable sections
 - **Contextual Toolbars**: Show relevant tools based on current task
 - **Minimalist Interface**: Reduce cognitive load on smaller screens
 - **Adaptive Layouts**: Reorganize UI elements based on screen orientation
 
-**Input Adaptations**:
+#### **Input Adaptations**
+
 - **Mobile Keyboard**: Optimize text input for mobile keyboards
 - **Voice Input**: Voice-to-text for prompt entry
 - **Camera Integration**: Direct camera access for reference images
 - **File Upload**: Mobile-optimized file selection interface
 
-**Accessibility Enhancements**:
+#### **Accessibility Enhancements**
+
 - **Screen Reader Support**: Full accessibility for visually impaired users
 - **High Contrast Mode**: Support for system high contrast preferences
 - **Large Text Support**: Respect system font size preferences
 - **Switch Control**: Support for external accessibility devices
 
-**Orientation Handling**:
+#### **Orientation Handling**
+
 - **Landscape Mode**: Optimized layout for horizontal orientation
 - **Auto-Rotation**: Smooth transition between orientations
 - **Lock Mode**: Option to lock orientation for focused work
 - **Responsive Tools**: Tool layout adapts to orientation changes
 
-**Mobile-Specific Workflows**:
+#### **Mobile-Specific Workflows**
+
 - **Quick Actions**: One-tap common operations
 - **Gesture Shortcuts**: Custom gesture mappings for frequent tasks
 - **Template Library**: Mobile-optimized template selection
 - **Recent Projects**: Quick access to recent work
 
-### **Mobile Testing & Validation**:
+### **Mobile Testing & Validation**
 
-**Device Compatibility**:
+#### **Device Compatibility**
+
 - **iOS Devices**: iPhone SE (375px) to iPhone Pro Max (430px)
 - **Android Devices**: Various screen sizes from 360px to 412px width
 - **Tablet Support**: iPad (768px+) and Android tablets (600px+)
 - **Touch Variations**: Finger touch, stylus, and Apple Pencil support
 
-**Mobile Testing Scenarios**:
+#### **Mobile Testing Scenarios**
+
 - **One-Handed Usage**: Critical functions accessible with thumb
 - **Portrait/Landscape**: Full functionality in both orientations
 - **Touch Accuracy**: Reliable touch target registration
 - **Gesture Recognition**: Consistent gesture behavior across devices
 - **Performance**: Smooth performance on mid-range mobile devices
 
-**Progressive Enhancement**:
+#### **Progressive Enhancement**
+
 - **Core Functionality**: Essential features work on all devices
 - **Enhanced Features**: Advanced features on capable devices
 - **Graceful Degradation**: Reduced functionality on low-end devices
 - **Network Adaptation**: Adjust quality based on connection speed
 
-**Mobile Analytics & Monitoring**:
+#### **Mobile Analytics & Monitoring**
+
 - **Touch Interaction Tracking**: Monitor touch patterns and usability
 - **Performance Metrics**: Canvas rendering and AI processing times
 - **Error Rates**: Mobile-specific error tracking
 - **User Behavior**: Mobile usage patterns and feature adoption
 
-### **Mobile Performance Optimizations**:
+### Mobile Performance Optimizations
 
-**Touch Performance**:
-- **Touch Event Optimization**: Efficient touch event handling with passive listeners
-- **Gesture Debouncing**: Smooth gesture recognition without performance impact
-- **Hardware Acceleration**: GPU-accelerated touch interactions and animations
-- **Memory Management**: Optimized canvas state for mobile devices
+#### Touch Performance
 
-**Mobile-Specific Optimizations**:
-- **Viewport Meta Tag**: Proper mobile viewport configuration
-- **Touch Target Optimization**: Minimum 44px targets for reliable touch interaction
-- **Reduced Motion**: Respect user's motion preferences for accessibility
-- **Battery Optimization**: Efficient rendering to preserve battery life
+- Touch Event Optimization: Efficient touch event handling with passive listeners
+- Gesture Debouncing: Smooth gesture recognition without performance impact
+- Hardware Acceleration: GPU-accelerated touch interactions and animations
+- Memory Management: Optimized canvas state for mobile devices
 
-**Responsive Canvas Performance**:
-- **Adaptive Resolution**: Dynamic canvas resolution based on device capabilities
-- **LOD (Level of Detail)**: Simplified rendering for zoomed-out views on mobile
-- **Progressive Loading**: Load canvas content progressively on slower connections
-- **Offline Support**: Basic canvas functionality available offline
+#### Mobile-Specific Optimizations
 
----
+- Viewport Meta Tag: Proper mobile viewport configuration
+- Touch Target Optimization: Minimum 44px targets for reliable touch interaction
+- Reduced Motion: Respect user's motion preferences for accessibility
+- Battery Optimization: Efficient rendering to preserve battery life
 
-## 🔐 **Security & Multi-tenancy**
+#### Responsive Canvas Performance
 
-### **CompanyId-based Security**:
-- **Server-side Validation**: All operations validated server-side
-- **Data Isolation**: Complete tenant separation
-- **Access Control**: Role-based permissions
-- **Audit Trail**: Comprehensive logging
-
-### **R2 Security**:
-- **Signed URLs**: Temporary access URLs
-- **Path Isolation**: Company-based file organization
-- **Metadata Protection**: Secure metadata handling
-- **Cleanup Automation**: Orphaned file cleanup
+- Adaptive Resolution: Dynamic canvas resolution based on device capabilities
+- LOD (Level of Detail): Simplified rendering for zoomed-out views on mobile
+- Progressive Loading: Load canvas content progressively on slower connections
+- Offline Support: Basic canvas functionality available offline
 
 ---
 
-## 🚀 **Implementation Status**
+## Security & Multi-tenancy
 
-### **✅ Completed Features**:
-
-**SceneEditor.tsx**:
-- ✅ Full canvas editing system
-- ✅ Multi-AI panel integration
-- ✅ Shot management and navigation
-- ✅ Reference image handling
-- ✅ Zoom and viewport controls
-- ✅ Element saving functionality
-- ✅ Real-time collaboration tools
-- ✅ Mobile-responsive design
-
-**EditImageAIPanel.tsx**:
-- ✅ 8+ AI model integration
-- ✅ Brush inpainting system
-- ✅ Area selection tools
-- ✅ Reference image management
-- ✅ Prompt enhancement with @mentions
-- ✅ Real-time preview
-- ✅ Undo/redo functionality
-- ✅ Canvas state integration
-- ✅ **QUALITY-BASED PRICING**: Dynamic quality selection for Nano Banana 2 and Topaz Upscale
-- ✅ **FORMULA JSON CALCULATIONS**: Direct cost extraction from formulaJson with factor multiplication
-- ✅ **REAL-TIME CREDIT UPDATES**: Immediate credit recalculation on quality changes
-- ✅ **ACCURATE ALERT MESSAGING**: Quality-specific alerts showing correct model names and credits
-
-**ElementImageAIPanel.tsx**:
-- ✅ 10+ specialized AI models
-- ✅ R2 storage integration
-- ✅ Element library connectivity
-- ✅ Advanced reference handling
-- ✅ Prompt library integration
-- ✅ File browser integration
-- ✅ Character consistency features
-- ✅ Canvas element addition
-
-### **📱 Mobile Implementation Status (2026)
-- ✅ **Mobile-First Design**: All components responsive with mobile-first approach
-- ✅ **Touch Interactions**: Touch-optimized controls and gesture support  
-- ✅ **Responsive Layouts**: Adaptive layouts for different screen sizes
-- ✅ **Mobile Performance**: Optimized for mobile devices
-- ✅ **Mobile UI Components**: Touch-friendly buttons, panels, and controls
-- ✅ **Gesture Handling**: Pinch-to-zoom, swipe navigation, touch drawing
-- ✅ **Mobile Canvas**: Touch-enabled canvas with proper event handling
-- ✅ **Mobile AI Panels**: Full-screen AI panels on mobile devices
-- ✅ **Mobile Toolbars**: Adaptive toolbars with mobile-friendly controls
-- ✅ **Mobile Navigation**: Bottom navigation and mobile-optimized menus
-
-#### 🎯 Current Implementation (2026) - PRODUCTION READY
-- ✅ **SceneEditor.tsx**: Mobile-responsive canvas editing with touch support
-- ✅ **EditImageAIPanel.tsx**: Mobile-optimized AI panel with touch interactions
-- ✅ **ElementImageAIPanel.tsx**: Mobile-friendly element generation interface
-- ✅ **Mobile Breakpoints**: 640px, 768px, 1024px with adaptive layouts
-- ✅ **Touch Events**: Comprehensive touch event handling for all interactions
-- ✅ **Mobile Performance**: Optimized rendering and interaction performance
-- ✅ **Mobile UI**: Consistent mobile experience across all components addition
-
-### **🎯 Production Ready Status**: 100%
-
-All three components are fully implemented and production-ready with:
-
-- **Complete LTX Style Compliance**: Professional UI/UX design
-- **Advanced AI Integration**: Multiple models and capabilities
-- **Robust Error Handling**: Comprehensive error management
-- **Mobile Optimization**: Touch-friendly interfaces
-- **Performance Optimization**: Efficient rendering and processing
-- **Security Implementation**: Multi-tenant data protection
-- **Documentation**: Complete API and usage documentation
+- CompanyId-based Security: Server-side validation, data isolation, access control, and audit trail
+- R2 Security: Signed URLs, path isolation, metadata protection, and cleanup automation
 
 ---
 
-## 📋 **Usage Examples**
+## Implementation Status
 
-### **Basic Scene Editing**:
+### Completed Features
+
+- Complete LTX Style Compliance: Professional UI/UX design
+- Advanced AI Integration: Multiple models and capabilities
+- Robust Error Handling: Comprehensive error management
+- Mobile Optimization: Touch-friendly interfaces
+- Performance Optimization: Efficient rendering and processing
+- Security Implementation: Multi-tenant data protection
+- Documentation: Complete API and usage documentation
+
+---
+
+## Usage Examples
+
+### Basic Scene Editing
+
 ```typescript
 // Initialize SceneEditor with AI panels
 <SceneEditor
@@ -554,7 +531,8 @@ All three components are fully implemented and production-ready with:
 />
 ```
 
-### **AI Panel Integration**:
+### AI Panel Integration
+
 ```typescript
 // Switch between AI modes
 const handleAIPanelSwitch = (panel: 'editimage' | 'video' | 'element') => {
@@ -570,7 +548,8 @@ const canvasState = {
 };
 ```
 
-### **Element Generation**:
+### **Element Generation**
+
 ```typescript
 // Generate element from AI
 const handleGenerateElement = async (prompt: string, model: string) => {

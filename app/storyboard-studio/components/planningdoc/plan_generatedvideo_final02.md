@@ -2,8 +2,39 @@
 ## Dynamic Pricing Integration + KIE AI Callback System
 
 > **Status**: ✅ **IMPLEMENTED WITH DYNAMIC PRICING**  
-> **Objective**: Complete credit usage tracking + KIE AI callback workflow with `storyboard_files` and dynamic AI model pricing
+> **Objective**: Current reference for generated video and related AI media flows using `storyboard_files`, callback completion, and dynamic pricing
 > **Last Updated**: April 2026
+
+---
+
+## ✅ Current Implementation Summary (April 2026)
+
+- **Generated video flows are live** inside the storyboard workspace and scene editing surfaces
+- **`storyboard_files` is the canonical metadata layer** for generated video and image outputs that need shared persistence and UI visibility
+- **Callback/finalization flow is the operational model** for externally generated assets, including video jobs that complete asynchronously
+- **Dynamic pricing is integrated across supported video models** and aligned with the same pricing system used for image generation and editing
+- **Scene/item linkage remains important** so generated media can be associated with the relevant storyboard item, project context, and downstream UI panels
+
+### **Source-of-Truth Boundary**
+
+- **This file owns the generated-video lifecycle**: placeholder creation, async provider completion, status/result reconciliation, and finalized video persistence behavior
+- **Pricing source of truth** remains `plan_price_management.md`
+- **File/R2 persistence architecture** remains `plan_file_final.md`
+- **SceneEditor orchestration** remains `plan_scene_edit_image.md`
+
+### **Current Media Generation Scope**
+
+- **Image generation/edit continuation flows** and **video generation flows** now share the same broader placeholder-first persistence direction
+- **Seedance 1.5 Pro** and **Veo 3.1** belong to the active video-generation path documented here
+- **Generated outputs** are finalized by storing returned media in R2 and patching the corresponding `storyboard_files` row with task/result metadata
+- **UI surfaces** such as generated asset panels, scene editor flows, and file browsing increasingly consume the same finalized records instead of isolated local-only URLs
+
+### **Current Responsibility Split**
+
+- **generation panels / `SceneEditor`**: collect prompt/model/quality/duration inputs and initiate generation
+- **server API routes**: validate model-specific parameters and create/forward generation requests
+- **callback/status handlers**: reconcile asynchronous provider responses, fetch result URLs if needed, and finalize records
+- **`storyboard_files` + R2**: persist metadata and finalized binary assets for later reuse
 
 ---
 

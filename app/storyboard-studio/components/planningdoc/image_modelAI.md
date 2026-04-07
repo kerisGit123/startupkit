@@ -1,23 +1,48 @@
 # Kie AI API — Complete Implementation Guide
 
-> **Purpose**: Comprehensive guide for integrating Kie AI image generation models
-> **Scope**: API endpoints, model configurations, implementation patterns, best practices
-> **Status**: Production-ready with latest Kie AI models and quality-based pricing
-> **Updated**: March 2026 - Aligned with pricing management system
+> **Purpose**: Reference guide for Kie AI model capabilities, request patterns, and example payloads used by Storyboard Studio image workflows
+> **Scope**: model catalog, provider request structure, example API patterns, and implementation notes that support image-generation surfaces
+> **Status**: Active reference, but no longer the sole source of truth for pricing or generated-asset lifecycle behavior
+> **Updated**: April 2026 - aligned with current Storyboard Studio planning doc boundaries
 
 ---
+
+## ✅ Current Role in the Planning Doc Set
+
+- **This file is now best treated as a provider/model reference**, not the primary source of truth for Storyboard Studio architecture
+- **Runtime pricing logic** is documented in `plan_price_management.md`
+- **Image generation surface behavior** is documented in `plan_imageAIPanel.md`
+- **Edit-image / crop / mask workflows** are documented in `plan_EditImageAIPanel.md`
+- **Generated-image persistence, callback completion, and GPT final-output flow** are documented in `plan_generatedImage_final02.md`
+- **File persistence and R2 storage architecture** are documented in `plan_file_final.md`
+
+### **What this file should focus on**
+
+- which Kie AI image models are relevant to Storyboard Studio
+- what request payload shapes and provider parameters look like
+- how model capabilities differ at a provider-reference level
+- implementation examples that help explain provider usage patterns
+
+### **What this file should not be the source of truth for**
+
+- final UI pricing display rules
+- generated asset persistence architecture
+- panel ownership boundaries
+- file browser / callback-completed asset lifecycle behavior
 
 ## 🎯 **Kie AI Overview**
 
 Kie AI provides unified access to the best AI models through a single API. For image generation, they offer premium models including Flux.1, Ideogram, Nano Banana, and more with competitive credit-based pricing.
 
 ### **🔗 Base API Information**
+
 - **Base URL**: `https://api.kie.ai/api/v1/jobs/createTask`
 - **Authentication**: Bearer token (`Authorization: Bearer YOUR_API_KEY`)
 - **Method**: POST
 - **Response Format**: JSON with `taskId` for async processing
 
 ### **💳 Credit System**
+
 - **1 Credit** = $0.0025 (400 credits = $1.00)
 - **Models range**: 1-45 credits per generation
 - **Billing**: Per-generation, not per-request
@@ -31,11 +56,11 @@ Kie AI provides unified access to the best AI models through a single API. For i
 ### **📊 Updated Model Pricing (March 2026)**
 
 | Model | Base Credits | Quality Multipliers | Max References | Best For |
-|-------|--------------|-------------------|----------------|----------|
-| **Text-to-Image** | | | | |
+| --- | --- | --- | --- | --- |
+| **Text-to-Image** |  |  |  |  |
 | `gpt-image/1.5-text-to-image` | 4 | 1x (fixed) | 0 | Photorealistic |
 | `flux-2/flex-text-to-image` | 5 | 1K:1x, 2K:1.4x | 0 | High quality |
-| **Image-to-Image** | | | | |
+| **Image-to-Image** |  |  |  |  |
 | `flux-2/flex-image-to-image` | 5 | 1K:1x, 2K:1.4x | 7 | General editing |
 | `flux-2/pro-image-to-image` | 5 | 1K:1x, 2K:1.4x | 7 | Professional |
 | `gpt-image/1.5-image-to-image` | 4 | 1x (fixed) | 15 | Character editing |
@@ -44,25 +69,28 @@ Kie AI provides unified access to the best AI models through a single API. For i
 | `qwen/image-edit` | 4 | 1x (fixed) | 0 | Quick edits |
 | `google/nano-banana-edit` | 4 | 1x (fixed) | 0 | Style transfer |
 | `seedream/5-lite-image-to-image` | 4 | 1x (fixed) | 13 | Lighting effects |
-| **Upscale** | | | | |
+| **Upscale** |  |  |  |  |
 | `recraft/crisp-upscale` | 1 | 1x (fixed) | 0 | Quality enhancement |
 | `topaz/image-upscale` | 10 | 1K:1x, 2K:2x, 4K:4x | 0 | Professional upscale |
 
 ### **💰 Quality-Based Pricing Examples**
 
 #### **Nano Banana 2 (Formula-Based)**
+
 - **Base**: 8 credits with 1.3x factor
 - **1K Quality**: 8 × 1.3 × 1 = **11 credits**
 - **2K Quality**: 8 × 1.3 × 1.5 = **16 credits**  
 - **4K Quality**: 8 × 1.3 × 2.25 = **24 credits**
 
 #### **Topaz Upscale (Formula-Based)**
+
 - **Base**: 10 credits with 1.3x factor
 - **1K (1x upscale)**: 10 × 1.3 × 1 = **13 credits**
 - **2K (2x upscale)**: 10 × 1.3 × 2 = **26 credits**
 - **4K (4x upscale)**: 10 × 1.3 × 4 = **52 credits**
 
 #### **Fixed Pricing Models**
+
 - **GPT Image 1.5**: 4 credits × 1.3 = **5 credits**
 - **Flux 2 Flex**: 5 credits × 1.3 = **7 credits** (1K), **10 credits** (2K)
 - **Ideogram Character**: 12 credits × 1.3 = **16 credits**
@@ -72,6 +100,7 @@ Kie AI provides unified access to the best AI models through a single API. For i
 ## 🔧 **API Implementation Patterns**
 
 ### **📋 Base Request Structure**
+
 ```typescript
 const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
   method: 'POST',
@@ -93,11 +122,12 @@ console.log(result.taskId); // Use for polling
 ```
 
 ### **🔄 Callback Handling**
+
 ```typescript
 // Callback endpoint receives POST when task completes
 export async function POST(request: Request) {
   const data = await request.json();
-  
+
   if (data.status === 'completed') {
     // Success: data.result.imageUrl
     console.log('Generated image:', data.result.imageUrl);
@@ -105,7 +135,7 @@ export async function POST(request: Request) {
     // Error: data.error
     console.error('Generation failed:', data.error);
   }
-  
+
   return Response.json({ received: true });
 }
 ```
@@ -117,6 +147,7 @@ export async function POST(request: Request) {
 ### **1. Text-to-Image Models**
 
 #### **GPT Image 1.5 Text-to-Image (8 credits)**
+
 ```typescript
 const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
   method: 'POST',
@@ -137,6 +168,7 @@ const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
 ```
 
 #### **Flux 2 Flex Text-to-Image (40 credits)**
+
 ```typescript
 const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
   method: 'POST',
@@ -159,6 +191,7 @@ const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
 ### **2. Image-to-Image Models**
 
 #### **Flux 2 Flex Image-to-Image (15-30 credits)**
+
 ```typescript
 const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
   method: 'POST',

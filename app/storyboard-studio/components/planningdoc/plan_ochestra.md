@@ -1,8 +1,54 @@
 # Storyboard Studio — Orchestra (Core Coordination)
 
-> **Purpose**: Master coordination document that orchestrates all planning components
-> **Scope**: System-wide architecture, component relationships, implementation status
-> **Phase**: All phases coordinated - **✅ 100% COMPLETE - PRODUCTION READY**
+> **Purpose**: Master coordination document for the live Storyboard Studio architecture
+> **Scope**: System-wide architecture, component relationships, shared data flow, and implementation status
+> **Status**: ✅ **PRODUCTION READY / ACTIVE**
+
+---
+
+## ✅ Current System Summary (April 2026)
+
+- **Storyboard Studio is fully operational** across project management, frame editing, file management, element workflows, and AI generation
+- **SceneEditor / workspace flows** act as the operational center for day-to-day creation work
+- **`storyboard_files` now plays a central orchestration role** for uploaded and generated assets across image and video systems
+- **Dynamic pricing** is shared across image generation, image editing, upscaling, and video generation paths
+- **Canvas, file, item, and element systems** are coordinated but remain modular
+
+### **Current Coordination Model**
+
+- **Projects / items** define the creative structure
+- **Files** define persisted generated/uploaded media
+- **Elements** define reusable creative assets
+- **Pricing** defines model-specific credit behavior
+- **Panels/editors** orchestrate generation and editing actions on top of those shared layers
+
+### **Maintained Planning Doc Structure**
+
+- **Architecture / orchestration**
+  - `plan_storyboard.md`
+  - `plan_scene_edit_image.md`
+  - `plan_canvas.md`
+  - `plan_ochestra.md`
+
+- **Persistence / assets**
+  - `plan_file_final.md`
+  - `plan_fileBrowser.md`
+  - `plan_generatedImage_final02.md`
+  - `plan_generatedvideo_final02.md`
+
+- **Panel-specific behavior**
+  - `plan_imageAIPanel.md`
+  - `plan_EditImageAIPanel.md`
+
+- **Pricing / item-element**
+  - `plan_price_management.md`
+  - `plan_storyboard_item_element.md`
+
+### **Documentation Cleanup Note**
+
+- Remaining markdownlint warnings across the planning docs are still mostly **formatting-only** issues
+- The most common warnings are **blank lines around headings/lists/fences**, **trailing spaces**, and other **legacy formatting inconsistencies**
+- These warnings should be handled as a separate cleanup pass and do not change the current architectural/source-of-truth structure described here
 
 ---
 
@@ -102,48 +148,39 @@ interface QualityMetadata {
 
 ## 🎯 **Orchestra Overview**
 
-The Storyboard Studio is composed of 10 core planning components that work together harmoniously:
+The Storyboard Studio planning set is now organized around a smaller maintained group of docs that work together without duplicated ownership:
 
-### **📚 Core Planning Documents:**
-1. **`plan_file.md`** - File & Asset Management (R2, storage, CRUD) - ✅ **PRODUCTION READY**
-2. **`plan_storyboard.md`** - Core Storyboard System (projects, scripts, scenes) - ✅ **PRODUCTION READY**
-3. **`plan_imageAIPanel.md`** - AI Image Generation (Kie AI, styles, prompts) - ✅ **PRODUCTION READY**
-4. **`plan_video_planning.md`** - AI Video Generation (Veo-3.1, Kling 3.0, callbacks) - ✅ **PRODUCTION READY**
-5. **`plan_storyboard_item_element.md`** - Consolidated Build System (build + reorder + elements) - ✅ **PRODUCTION READY**
-6. **`plan_price_management.md`** - Pricing Management System (credit tracking, models) - ✅ **PRODUCTION READY**
-7. **`tags_plan.md`** - Tags System (dynamic colors, patterns, hybrid approach) - ✅ **PRODUCTION READY**
-8. **`plan_style.md`** - UI Style System (Consist design, components) - ✅ **PRODUCTION READY**
-9. **`plan_textarea.md`** - Text Input System (ContentEditable, mentions) - ✅ **PRODUCTION READY**
-10. **`storyboard scene/file_R2_element.md`** - R2 & Element Integration (references, AI) - ✅ **PRODUCTION READY**
+### **📚 Maintained Planning Documents:**
+1. **`plan_storyboard.md`** - Core storyboard/workspace system, projects, scripts, items
+2. **`plan_scene_edit_image.md`** - SceneEditor orchestration and cross-panel editing flow
+3. **`plan_canvas.md`** - Canvas geometry, tool state, masks, and interaction model
+4. **`plan_file_final.md`** - `storyboard_files`, R2 persistence, upload/delete/finalization architecture
+5. **`plan_fileBrowser.md`** - File browser behavior over finalized persisted records
+6. **`plan_generatedImage_final02.md`** - Generated-image lifecycle, callback completion, GPT/image output flow
+7. **`plan_generatedvideo_final02.md`** - Generated-video lifecycle, callback/status flow, video model path
+8. **`plan_imageAIPanel.md`** - Image-generation panel behavior and request controls
+9. **`plan_EditImageAIPanel.md`** - Edit-image panel behavior, tools, crop/mask/edit UX
+10. **`plan_price_management.md`** - Pricing source of truth and model credit behavior
+11. **`plan_storyboard_item_element.md`** - Item/element linkage, reference selection, reusable asset flow
 
-### **🔗 Component Relationships:**
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   plan_file.md  │◄──►│ plan_storyboard │◄──►│ plan_imageAI    │
-│  (R2 Storage)   │    │  (Core System)  │    │  (Images)       │
-│   ✅ PRODUCTION │    │   ✅ PRODUCTION │    │   ✅ PRODUCTION │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ plan_price_mgmt │◄──►│ plan_video      │◄──►│   Orchestra     │
-│ (Credits+Models)│    │ (Video AI)      │    │ (Coordination)  │
-│   ✅ PRODUCTION │    │   ✅ PRODUCTION │    │   ✅ PRODUCTION │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   tags_plan.md  │◄──►│ plan_style.md   │◄──►│ plan_textarea   │
-│  (Tags System)  │    │  (UI Style)     │    │ (Text Input)    │
-│   ✅ PRODUCTION │    │   ✅ PRODUCTION │    │   ✅ PRODUCTION │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+### **🔗 Current Relationship Model:**
+```text
+plan_storyboard.md
+      ↓
+plan_scene_edit_image.md  ←→  plan_canvas.md
+      ↓
+plan_imageAIPanel.md   /   plan_EditImageAIPanel.md
+      ↓
+plan_generatedImage_final02.md   /   plan_generatedvideo_final02.md
+      ↓
+plan_file_final.md  ←→  plan_fileBrowser.md
+
+plan_price_management.md supports all generation/edit flows
+plan_storyboard_item_element.md connects items, elements, references, and reusable asset behavior
+plan_ochestra.md coordinates the whole system-level picture
 ```
 
----
-
-## 📊 **System-Wide Implementation Status (2026)**
+### ** System-Wide Implementation Status (2026)**
 
 ### **✅ ALL COMPONENTS PRODUCTION READY (100% Overall)**
 
@@ -380,32 +417,31 @@ User Input → UI Component → API Route → Convex Action → AI Service → C
 - Component library with consistent patterns
 - Professional SaaS dashboard styling
 
-### **9. Text Input System (`plan_textarea.md`)**
-**Role**: Advanced text editing and input management
-- **Uses**: Storyboard Core, AI Panels, Element System
-- **Provides**: ContentEditable editing, @mention system, formatting
+### **9. Editing & Prompt Input System (`plan_scene_edit_image.md`, `plan_EditImageAIPanel.md`)**
+**Role**: Scene-level editing orchestration, prompt input, and AI-edit interaction management
+- **Uses**: Storyboard Core, Canvas System, AI Panels, Element System
+- **Provides**: editor coordination, prompt editing, mask/crop workflows, model-specific editing controls
 - **Status**: ✅ **100% PRODUCTION READY**
 
 **Key Services:**
-- ContentEditable text editing with rich formatting
-- Advanced @mention system with visual badges
-- Real-time collaboration features
-- Mobile-optimized text input
-- Integration with AI generation prompts
+- SceneEditor-centered editing workflow
+- ContentEditable/prompt interaction patterns inside active AI panels
+- Mask, crop, and canvas-linked edit behavior
+- GPT and image-edit model coordination
+- Integration with AI generation prompts and persisted media flows
 
-### **10. R2 & Element Integration (`storyboard scene/file_R2_element.md`)**
-**Role**: File and element reference management for AI generation
-- **Uses**: File Management, Element System, AI Panels
-- **Provides**: Reference image management, AI integration, file browser
+### **10. File / R2 / Element Reference System (`plan_storyboard_item_element.md`, `plan_file_final.md`, `plan_fileBrowser.md`)**
+**Role**: Shared persisted asset and reference-management layer for storyboard, element, and AI generation workflows
+- **Uses**: File Management, Element System, Image/Video Panels, Scene Editor
+- **Provides**: reference image selection, file browser access, R2-backed persistence, reusable asset provenance
 - **Status**: ✅ **100% PRODUCTION READY**
 
 **Key Services:**
-- Unified reference image handler
-- R2 File Browser integration with mobile support
-- Element Library with image selection mode
-- @mention system for AI references
-- Performance-optimized with React.memo and useCallback
-- Company-based security throughout
+- Unified reference-image handling across files and elements
+- R2-backed file browser integration for reusable media selection
+- Element Library reference selection modes and provenance metadata
+- Shared `storyboard_files` metadata model for uploaded/generated assets
+- Company-based security and project-scoped file visibility throughout
 
 ---
 

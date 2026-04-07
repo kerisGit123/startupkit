@@ -1,9 +1,28 @@
 # Pricing Management System
+ 
+ > **Status**: ✅ **IMPLEMENTED / ACTIVE**
+ > **Primary Source of Truth**: `storyboard_model_credit`
+ > **Role**: Admin pricing configuration for image/video AI models used across storyboard generation, editing, upscaling, and video generation flows
+ 
+ 
+ ## Overview
+ 
+ A comprehensive pricing management system for AI models that supports both fixed price and formula-based calculations. The system provides a complete admin interface for managing pricing models, real-time testing, and instant price calculators with database-driven dynamic pricing integration.
 
+## ✅ Current Implementation Summary (April 2026)
 
-## Overview
+- **Pricing models** are stored in Convex and used as the live source for UI credit display
+- **Edit flow** updates existing models only; it must not create duplicates
+- **Create flow** is separate and guarded against duplicate `modelId` values
+- **Reset defaults** is explicit and handled through a dedicated action path
+- **Runtime pricing** is used across image generation, image editing, upscaling, and video generation surfaces
+- **Seedance and Veo-related pricing** belong to the same managed pricing system as image models
 
-A comprehensive pricing management system for AI models that supports both fixed price and formula-based calculations. The system provides a complete admin interface for managing pricing models, real-time testing, and instant price calculators with database-driven dynamic pricing integration.
+### **Current Model Coverage**
+
+- **Image generation/editing**: Nano Banana, GPT image variants, Ideogram, Qwen, Nano Banana Edit
+- **Upscaling/enhancement**: Recraft Crisp, Topaz Upscale
+- **Video generation**: Seedance 1.5 Pro and related video pricing configurations
 
 
 ## Current Implementation Status: ✅ **IMPLEMENTED WITH DYNAMIC PRICING INTEGRATION (April 2026)**

@@ -1,11 +1,28 @@
 # File Management Implementation — Storyboard Studio with Dynamic Pricing
 
-> **Status**: Fully Implemented & Verified with Dynamic Pricing Integration  
+> **Status**: Fully Implemented & Verified with Dynamic Pricing Integration
+> **Role**: Authoritative reference for `storyboard_files`, R2 persistence, upload/delete flows, and callback-completed asset storage
 > Last updated: April 2026
 
 ## Overview
 
 **Convex for metadata + Cloudflare R2 for files** — the hybrid approach that gives you searchable metadata with direct file access and dynamic AI model pricing integration.
+
+## ✅ Current Implementation Summary
+
+- **`storyboard_files` is the canonical metadata layer** for uploaded and generated assets
+- **R2 is the canonical binary/file storage layer** for finalized assets
+- **Uploaded files** are written directly into R2 and immediately represented in `storyboard_files`
+- **Generated images/videos** use a placeholder-first flow, then become finalized when callback processing stores the returned asset into R2 and patches the record with `sourceUrl`, `r2Key`, `size`, `taskId`, and `status`
+- **File browser and generated-asset UI surfaces** both depend on the same underlying `storyboard_files` records
+
+### **Current Flow Types**
+
+- **Manual upload flow**: upload → R2 → metadata row available immediately
+- **Generated asset flow**: placeholder row → external generation/callback → download result → upload final asset to R2 → patch metadata row
+- **Delete flow**: remove R2 object and remove or update associated metadata depending on UI path and asset state
+
+---
 
 ```
 uploadToR2()  →  POST /api/storyboard/upload   →  ① R2 (stores object)

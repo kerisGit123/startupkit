@@ -1,8 +1,42 @@
 # Image Generation Enhancement Plan
 ## Credit Usage Tracking + KIE AI Callback Integration
 
+
 > **Status**: ✅ **IMPLEMENTATION COMPLETE**  
-> **Objective**: Simplify credit usage tracking + KIE AI callback workflow with `storyboard_files`
+> **Objective**: Authoritative reference for generated-image persistence, credit usage, callback completion, and GPT/image output flow with `storyboard_files`
+
+
+---
+
+## ✅ Current Generated Images Panel Summary (Merged)
+
+ 
+### **Current Panel Behavior**
+
+ 
+ - **Source of truth**: generated image cards come from real `storyboard_files` rows
+ - **Project/item scoping**: generated files are filtered by project and active storyboard item / shot linkage
+ - **Completed rule**: completed/ready cards should only appear when a finalized asset exists (`r2Key` + usable URL)
+ - **Processing rule**: generating/processing cards represent placeholder rows that are not finalized yet
+ - **Delete behavior**: generated-image panel actions update record state rather than relying only on hard deletion semantics
+ - **GPT area-edit outputs** follow the same generated-image persistence direction instead of being treated as a standalone storage flow
+ 
+ 
+### **Current UI Direction**
+
+ 
+ - **Completed cards** are intentionally compact and image-focused
+ - **Processing cards** emphasize state/progress/debug visibility instead of pretending the image is finished
+ - **Copy actions** should use the real `storyboard_files._id`
+ - **The generated images panel and file browser are complementary views over the same persisted records**
+ 
+ 
+### **Single-Source-of-Truth Rule**
+
+ 
+ - `plan_generatedImage_final02.md` should be treated as the authoritative generated-images planning/reference doc
+ - `plan_generatedImage.md` is now legacy/reference material whose useful panel behavior has been folded into this document
+
 
 ---
 
@@ -209,6 +243,14 @@ export const updateFromCallback = mutation({
 
 ### **Generated Images Panel - Project Scoped**
 
+#### **Merged Panel Rules from Legacy Generated Images Doc**
+
+- **Only real database rows** are rendered; no synthetic/generated fallback cards
+- **Processing placeholders** appear when status is `processing` / `generating` and the asset is not finalized yet
+- **Completed cards** appear only when the generated asset has been persisted and is actually viewable
+- **Hidden states**: deleted/failed rows should not behave like active completed generated images
+- **Compact generated cards** remain the preferred UX direction for completed outputs
+
 ```typescript
 // app/storyboard-studio/components/SceneEditor.tsx
 import { useQuery } from "convex/react";
@@ -303,6 +345,37 @@ KIE AI Processes → Callback Received
 [If Failed] Refund Credits to Company Balance
         ↓
 UI Updates: Show Result/Error
+```
+
+### **GPT Pricing Notes (Merged)**
+
+- **GPT 1.5 Image to Image** remains part of the shared formula-based pricing system
+- **Quality options**: `medium`, `high`
+- **Current pricing examples**:
+  - `medium`: 4 × 1.3 = **6 credits**
+  - `high`: 22 × 1.3 = **29 credits**
+- **Behavior**: area-based cropping with reference/canvas context before the generated output enters the shared persistence flow
+
+### **GPT Crop-to-Final-Asset Flow (Merged)**
+
+```text
+User selects crop area on canvas
+        ↓
+SceneEditor derives crop region + original image context
+        ↓
+EditImageAIPanel resolves GPT model / quality / credits
+        ↓
+Create placeholder `storyboard_files` record
+        ↓
+Send cropped/context image to generation route / provider
+        ↓
+Async callback or result-finalization flow completes
+        ↓
+Result is composited/finalized as needed
+        ↓
+Upload final asset to R2 and patch `storyboard_files`
+        ↓
+Generated image panels and file browser consume finalized record
 ```
 
 ### **Company Credit Balance Benefits**

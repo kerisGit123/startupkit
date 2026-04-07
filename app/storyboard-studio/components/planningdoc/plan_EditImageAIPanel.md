@@ -35,7 +35,7 @@
   - Real backend image compositing implemented with `sharp`
   - Crop/mask reintegration now happens on the server when original image + mask metadata are available
 
-- **Phase 7** - **NEW COMPLETED** 
+- **Phase 7** - **NEW COMPLETED**
   - **Dynamic Pricing System Integration** - Database-driven pricing for all AI models
   - **Recraft Crisp Credit Fix** - Fixed 11 credit display to show correct 1 credit
   - **Model Behavior Handling** - Proper cropping logic for different model types
@@ -605,6 +605,7 @@ const handleRightImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) =>
 ### **📋 Mode-Specific Model Configuration**
 
 #### **Image-to-Image Mode**
+
 ```typescript
 const IMAGE_TO_IMAGE_MODELS = [
   { 
@@ -1106,17 +1107,20 @@ const getActiveMode = () => {
 #### **🎯 Mode-Specific Implementations**
 
 ### **✅ Image-to-Image Mode**
+
 - **Nano Banana 2** (7 reference images) - Primary model
 - **GPT Image** (15 reference images) - Secondary model
 - **Full crop/mask workflow** with reference image support
 
 ### **✅ Text-to-Image Mode**
+
 - **GPT Image 1.5** - Primary text-to-image (0 refs)
 - **Nano Banana Edit** - Specialized text-based (3 refs)
 - **Qwen Image Edit** - Alternative text-to-image (5 refs)
 - **Prompt validation** (10-character minimum)
 
 ### **✅ Upscale Mode**
+
 - **Recraft Crisp Upscale** - AI-powered upscaling
 - **Topaz Upscale** - Quality-based (1K/2K/4K options)
 - **Full image processing** (no crop needed)

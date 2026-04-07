@@ -5,7 +5,7 @@ description: Canvas Implementation Plan - Production Ready with Credit Integrati
 # Canvas Implementation Plan
 
 ## Overview
-This document outlines the **production-ready** canvas implementation in the storyboard studio with integrated credit system, covering core components, styling, dimensions, AI model pricing, and interaction patterns.
+This document outlines the **current production canvas implementation** in Storyboard Studio, including sizing behavior, tool state, zoom handling, mask behavior, and how the canvas integrates with image editing and AI workflows.
 
 ## ✅ Current Status: **PRODUCTION READY**
 
@@ -17,6 +17,31 @@ This document outlines the **production-ready** canvas implementation in the sto
 - ✅ Zoom, pan, and responsive design
 - ✅ Organization-aware credit usage
 - ✅ Hybrid billing model integration
+- ✅ Shared canvas-state workflow across original/generated editing flows
+- ✅ Stable brush and mask coordinate behavior
+- ✅ Updated fit logic with additional bottom UI spacing
+
+---
+
+## 🧩 Current Implementation Notes (April 2026)
+
+### **What the canvas is responsible for**
+- Rendering the active image in a controlled aspect-ratio container
+- Managing annotation objects, text, bubbles, assets, and shapes
+- Managing inpaint masks and rectangle-based edit regions
+- Providing a shared interaction surface for `EditImageAIPanel` and scene-level editing flows
+
+### **Current Boundary**
+- **Canvas owns interaction geometry and editing state**, not long-term generated asset persistence
+- **Generated image lifecycle and callback-completed storage** are documented in `plan_generatedImage_final02.md`
+- **File persistence and R2 architecture** are documented in `plan_file_final.md`
+- **Scene orchestration around the canvas** is documented in `plan_scene_edit_image.md`
+
+### **What changed in the latest implementation**
+- **Canvas sizing** now reserves explicit top and bottom UI space before fitting the drawing area
+- **Canvas scale-up** applies a mild 1.1x display boost after aspect-ratio fitting for better visibility
+- **Shared mask behavior** keeps editing state consistent while switching between original and generated image contexts
+- **Brush positioning** uses container/image geometry consistently to reduce drift and offset issues
 
 ---
 
@@ -25,229 +50,7 @@ This document outlines the **production-ready** canvas implementation in the sto
 ### **Overview**
 Advanced pricing system for AI models with dynamic quality selection and real-time credit calculation integrated into the canvas-based AI editing workflow.
 
-### **Implemented Models with Quality Pricing**
-
-#### **Nano Banana 2** (Canvas-Based Image Generation)
-- **Quality Options**: 1K, 2K, 4K
-- **Pricing**: 
-  - 1K: 8 × 1.3 = **11 credits**
-  - 2K: 12 × 1.3 = **16 credits**  
-  - 4K: 18 × 1.3 = **24 credits**
-- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
-
-#### **Topaz Upscale** (Canvas-Based Image Enhancement)
-- **Quality Options**: 1K, 2K, 4K
-- **Pricing**:
-  - 1K: 10 × 1.3 = **13 credits**
-  - 2K: 18 × 1.3 = **24 credits**
-  - 4K: 30 × 1.3 = **39 credits**
-- **Formula**: Direct cost extraction from formulaJson × factor (1.3)
-
-### **Canvas Integration with Quality Pricing**
-
-#### **Quality Selection in Canvas Context**
-```typescript
-// EditImageAIPanel.tsx - Quality dropdown for canvas-based AI editing
-{(normalizedModel === "nano-banana-2" || normalizedModel === "topaz/image-upscale") && (
-  <div className="quality-dropdown">
-    {["1K", "2K", "4K"].map((quality) => (
-      <button onClick={() => {
-        setSelectedQuality(quality);
-        alertModelCredits(currentModelId, quality);
-      }}>
-        {quality}
-      </button>
-    ))}
-  </div>
-)}
-```
-
-#### **Canvas-Based Generation with Quality Parameters**
-```typescript
-// CanvasEditor.tsx - Generate with quality-based pricing
-const handleCanvasGeneration = async () => {
-  const selectedModel = "nano-banana-2"; // or "topaz/image-upscale"
-  const selectedQuality = "2K"; // from quality dropdown
-  const creditCost = getModelCredits(selectedModel, selectedQuality);
-  
-  // Check user credits before generation
-  if (userCredits < creditCost) {
-    alert(`Insufficient credits. Need ${creditCost} credits for ${selectedQuality} generation.`);
-    return;
-  }
-  
-  // Generate with canvas context and quality parameters
-  const result = await generateFromCanvas({
-    canvasState,
-    model: selectedModel,
-    quality: selectedQuality,
-    referenceImages,
-    maskData: canvasState.mask
-  });
-  
-  // Store generated result with quality metadata
-  await uploadToR2({
-    file: result.imageFile,
-    category: 'generated',
-    userId,
-    companyId,
-    projectId,
-    tags: [selectedModel, selectedQuality, 'canvas-generated']
-  });
-};
-```
-
-#### **Canvas Mask Integration with Quality Pricing**
-```typescript
-// CanvasEditor.tsx - Apply AI edits with quality-based pricing
-const handleApplyAIEdit = async () => {
-  const selectedModel = "nano-banana-2";
-  const selectedQuality = "4K"; // user-selected quality
-  const creditCost = getModelCredits(selectedModel, selectedQuality);
-  
-  // Canvas mask data for inpainting
-  const maskData = canvasState.mask;
-  const baseImage = canvasState.backgroundImage;
-  
-  // Generate with quality parameters
-  const result = await aiInpaint({
-    image: baseImage,
-    mask: maskData,
-    model: selectedModel,
-    quality: selectedQuality,
-    prompt: userPrompt
-  });
-  
-  // Update canvas with result
-  setCanvasState(prev => ({
-    ...prev,
-    backgroundImage: result.imageUrl,
-    generatedWithQuality: selectedQuality,
-    creditCost: creditCost
-  }));
-};
-```
-
-### **Canvas-Specific Quality Features**
-
-#### **✅ Quality-Aware Canvas Operations**
-- **Generation Quality**: Canvas-based generation respects quality selection
-- **Edit Quality**: AI edits (inpainting, upscaling) use quality parameters
-- **Cost Display**: Real-time credit cost updates in canvas context
-- **Metadata Storage**: Quality information stored with canvas-generated assets
-
-#### **✅ Canvas Workflow Integration**
-```typescript
-// Canvas workflow with quality-based pricing
-const canvasWorkflow = {
-  1: "Select AI model (Nano Banana 2 / Topaz Upscale)",
-  2: "Choose quality (1K, 2K, 4K)",
-  3: "Create mask or select area on canvas",
-  4: "Review credit cost for selected quality",
-  5: "Generate with quality parameters",
-  6: "Store result with quality metadata"
-};
-```
-
-#### **✅ Quality Metadata in Canvas State**
-```typescript
-interface CanvasEditorState {
-  // ... existing state
-  generatedWithQuality?: string; // "1K", "2K", "4K"
-  creditCost?: number; // Actual cost for last generation
-  modelUsed?: string; // "nano-banana-2" or "topaz/image-upscale"
-}
-```
-
----
-
-## Core Components
-
-### 1. CanvasEditor (`shared/CanvasEditor.tsx`)
-**Purpose**: Main canvas component handling all drawing, editing, and interaction logic.
-
-**Key Features**:
-- Multi-tool support (bubbles, text, assets, shapes, inpainting, crop, move)
-- Aspect ratio preservation and dynamic sizing
-- Zoom and pan functionality
-- Mask painting and erasing
-- Rectangle mask for AI editing
-- Element selection and manipulation
-- Undo/redo stack for mask operations
-- Color picker integration
-- Drag and resize operations
-
-**Props Interface**:
-```typescript
-interface CanvasEditorProps {
-  panelId: string;
-  imageUrl?: string | null;
-  activeTool: CanvasActiveTool;
-  state: CanvasEditorState;
-  onStateChange: (s: CanvasEditorState) => void;
-  brushSize: number;
-  isEraser: boolean;
-  maskOpacity: number;
-  aspectRatio?: string;
-  rectangle?: { x: number; y: number; width: number; height: number } | null;
-  onRectangleChange?: (rect: { x: number; y: number; width: number; height: number } | null) => void;
-  rectangleVisible?: boolean;
-  isSquareMode?: boolean;
-  selectedColor?: string;
-  onColorPickerClick?: () => void;
-  onDeleteSelected?: () => void;
-  onAspectRatioChange?: (aspectRatio: string) => void;
-  mode?: "describe" | "area-edit" | "annotate";
-  onSetOriginalImage?: (imageUrl: string) => void;
-  zoomLevel?: number;
-  // ... additional props
-}
-```
-
-### 2. CanvasArea (`components/CanvasArea.tsx`)
-**Purpose**: Wrapper component that manages canvas rendering and navigation between shots.
-
-**Key Features**:
-- Navigation between multiple shots
-- Conditional rendering based on active AI panel
-- Integration with SceneEditor state management
-- Props passing to CanvasEditor
-
-**Rendering Logic**:
-```typescript
-{activeAIPanel === 'element' || activeAIPanel === 'editimage' ? (
-  <CanvasEditor
-    panelId={panelId}
-    imageUrl={backgroundImage || activeShot?.imageUrl}
-    activeTool={canvasActiveTool}
-    state={canvasState}
-    onStateChange={setCanvasState}
-    // ... props mapping
-  />
-) : null}
-```
-
-### 3. Canvas Types (`shared/canvas-types.ts`)
-**Purpose**: TypeScript definitions for all canvas-related data structures.
-
-**Key Types**:
-- `Bubble`: Speech/thought bubbles with tails and styling
-- `TextElement`: Text with font, color, and positioning
-- `AssetElement`: Image assets with transform properties
-- `ShapeElement`: Arrows, lines, rectangles, circles
-- `MaskDot`: Points for mask painting
-- `CanvasEditorState`: Complete canvas state
-- `CanvasActiveTool`: Available tools
-
-## Canvas Dimensions and Styling
-
-### Aspect Ratio System
-The canvas supports multiple aspect ratios with automatic sizing:
-- **16:9** (16/9 = 1.78) - Standard widescreen
-- **9:16** (9/16 = 0.56) - Vertical/portrait
-- **1:1** (1/1 = 1.0) - Square
-
-### Dynamic Sizing Algorithm
+### **Dynamic Sizing Algorithm**
 ```typescript
 const PAD = 100;           // Side padding
 const TOP_PAD = 100;       // Top padding  
@@ -269,6 +72,12 @@ if (h > maxH) {
 canvasStyle = { width: `${w * 1.1}px`, height: `${h * 1.1}px` };
 ```
 
+### **Sizing Behavior Summary**
+- The outer container determines the maximum drawable region
+- Width is fitted first, then height is clamped if the chosen aspect ratio would overflow vertically
+- Extra bottom space is intentionally reserved for toolbar and panel controls
+- Final rendered canvas is slightly enlarged for usability without changing the logical drawing coordinate system
+
 ### Canvas Container Structure
 ```typescript
 <div ref={outerRef} className="relative w-full h-full flex items-center justify-center bg-[#0d0d12] overflow-hidden">
@@ -281,52 +90,6 @@ canvasStyle = { width: `${w * 1.1}px`, height: `${h * 1.1}px` };
 </div>
 ```
 
-## Tool System
-
-### Available Tools
-- **canvas-object**: Default selection/move mode
-- **inpaint**: Brush painting for masks
-- **rectInpaint**: Rectangle mask for AI editing
-- **crop**: Aspect ratio cropping
-- **move**: Canvas pan/drag mode
-- **text**: Text element creation
-- **bubbles**: Speech bubble creation
-- **assets**: Asset placement
-- **shapes**: Arrow, line, rectangle, circle drawing
-
-### Tool State Management
-Each tool has specific:
-- Cursor styles
-- Mouse event handlers
-- UI overlays
-- Keyboard shortcuts
-- State persistence
-
-## Zoom Implementation
-
-### Zoom Controls
-```typescript
-// Zoom controls in AI panels
-<div className="flex items-center gap-1 bg-[#1a1a24] rounded-lg p-1 border border-white/10">
-  <button onClick={() => onZoomChange?.(Math.max(25, zoomLevel - 25))}>
-    <ZoomOut />
-  </button>
-  <span>{zoomLevel}%</span>
-  <button onClick={() => onZoomChange?.(Math.min(200, zoomLevel + 25))}>
-    <ZoomIn />
-  </button>
-  <button onClick={() => onZoomChange?.(100)}>
-    <Maximize2 />
-  </button>
-</div>
-```
-
-### Zoom Levels
-- **Minimum**: 25%
-- **Maximum**: 200%
-- **Default**: 100% (fit to screen)
-- **Step**: 25% increments
-
 ## Mask System
 
 ### Brush Inpainting
@@ -335,12 +98,11 @@ Each tool has specific:
 - Opacity control for mask visibility
 - Undo/redo stack for mask operations
 - **Fixed coordinate calculation** for accurate brush positioning across all images
-- **CSS transform handling** for proper brush alignment on transformed images
 - **Consistent brush behavior** across original, generated, and panel images
-- **Image loading verification** to ensure proper coordinate calculations
+- **Shared mask state** so painted areas remain consistent while the editing context changes
 
 ### Coordinate Calculation System
-The brush system uses a simplified coordinate calculation approach:
+The brush system uses a simplified coordinate calculation approach based on the rendered image rect inside the canvas container:
 ```typescript
 // Calculate scale from actual rendered dimensions
 const scale = imgRect.width / image.naturalWidth;
@@ -359,6 +121,11 @@ const y = (mouseY - imgTop) / scale;
 - Uses browser's native getBoundingClientRect() for accurate positioning
 - Handles all image types consistently (original, generated, panel images)
 - Prevents coordinate drift and offset issues
+
+### **Shared Editing Behavior**
+- The mask and editor state are treated as canvas-space data rather than per-image CSS-space data
+- Switching between panels should not silently reset the active mask unless the calling flow explicitly clears it
+- Tool changes from AI panels should map into a single authoritative canvas tool state to avoid conflicts
 
 ### Rectangle Masks
 - Fixed aspect ratio rectangles (1:1 by default)
@@ -439,7 +206,9 @@ The canvas supports three AI editing modes:
 ## Integration Points
 
 ### SceneEditor Integration
+
 ```typescript
+
 // State management
 const [canvasState, setCanvasState] = useState<CanvasEditorState>(emptyCanvasState());
 const [canvasTool, setCanvasTool] = useState<CanvasActiveTool>("canvas-object");
@@ -449,7 +218,13 @@ const [zoomLevel, setZoomLevel] = useState(100);
 const handleZoomIn = () => setZoomLevel(prev => Math.min(200, prev + 25));
 const handleZoomOut = () => setZoomLevel(prev => Math.max(25, prev - 25));
 const handleFitToScreen = () => setZoomLevel(100);
+
 ```
+
+### **Current Integration Expectations**
+- `SceneEditor` owns the authoritative canvas state and passes it into the canvas wrapper/components
+- AI panels should adjust tool mode, prompt/configuration, and generation actions without duplicating canvas state logic
+- Generated result workflows should reuse the same canvas interaction model rather than spawning separate coordinate systems
 
 ### AI Panel Integration
 - Shared zoom state across panels
@@ -495,4 +270,4 @@ const handleFitToScreen = () => setZoomLevel(100);
 
 ## Conclusion
 
-The current canvas implementation provides a robust foundation for image editing and annotation with extensive tool support, responsive design, and AI integration. The modular architecture allows for easy extension and maintenance while maintaining performance across different devices and use cases.
+The current canvas implementation is already production-capable and acts as the shared editing surface for annotation and AI-assisted editing. The most important implementation details are the aspect-ratio fit logic, reserved UI padding, shared mask/tool state, and consistent coordinate calculations that keep editing stable across original and generated image flows.

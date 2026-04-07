@@ -620,7 +620,12 @@ export function FileBrowser({
                                   src={publicUrl}
                                   className="w-full h-full object-cover rounded-2xl"
                                   muted
-                                  onMouseEnter={(e) => e.currentTarget.play()}
+                                  onMouseEnter={(e) => {
+                                    const playPromise = e.currentTarget.play();
+                                    if (playPromise && typeof playPromise.catch === "function") {
+                                      playPromise.catch(() => {});
+                                    }
+                                  }}
                                   onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                                 />
                               ) : (

@@ -1,7 +1,52 @@
 # 🎬 Storyboard Build Plan with n8n Integration
 
 ## 🎯 Objective
-Integrate n8n workflow "storyboard - Script Extractor" into the existing storyboard build system to replace manual script processing with AI-powered extraction.
+Document the current storyboard item + element integration, including frame card behavior, element linking, build flows, and the current role of automation/build tooling.
+
+## ✅ Current Implementation Summary (April 2026)
+
+- **Storyboard items** are live frame records used by the workspace and scene editor
+- **Element linking** is active and visible directly on frame cards via overlay badges/actions
+- **Element library integration** is already wired into storyboard editing flows
+- **Generated media and reusable references** are increasingly tracked through `storyboard_files` instead of only item-level URLs
+- **Build flows** support rebuild strategy, element strategy, and script/build configuration in the storyboard workspace
+
+### **Current Responsibility Split**
+
+- `storyboard_items` stores frame/scene-level editing data
+- `storyboard_elements` stores reusable characters, props, environments, and related metadata
+- `storyboard_files` stores uploaded/generated image assets that can be reused by both item and element workflows
+- item/element linking behavior is handled through storyboard item element relationships, reference-image selection, and workspace actions
+- build/extraction tooling augments the workspace, but the core editing experience is already implemented independently of any single automation path
+
+### **Current File / R2 / Element Integration**
+
+- **File Browser and Element Library are both active reference sources** for storyboard and element generation workflows
+- **R2-backed files** can be selected as image references with persisted metadata such as file id and `r2Key`
+- **Element Library assets** can be selected as reusable references and carry element identity/type context into downstream generation flows
+- **Reference images are no longer just temporary UI state**; they increasingly participate in the same broader persisted asset model used elsewhere in Storyboard Studio
+- **The item/element planning story should be read together with the shared file persistence model**, not as a standalone isolated badge/UI feature
+
+### **Reference Selection Flow (Current Behavior)**
+
+- user opens **File Browser** to pick an existing R2-backed image reference
+- user opens **Element Library** to pick one or more reusable element images
+- selected references are attached with source metadata such as `fileId`, `r2Key`, or `elementId`
+- prompt/reference workflows can distinguish whether an image came from file storage or an element asset
+- this allows the same asset ecosystem to support frame generation, element generation, and scene editing without duplicating storage concepts
+
+### **Selection Modes and Provenance Metadata**
+
+- **Element Library image selection mode** is important when the library is opened as a reference picker rather than a general management surface
+- **Single-image selection** and **whole-element selection** are both relevant behaviors depending on whether the user picks one reference image or all reference URLs from an element
+- **Reference provenance should remain explicit** through metadata such as source type, selected timestamp, `elementId`, element type, element name, `fileId`, and `r2Key`
+- **This provenance matters downstream** for prompt mentions, debugging generation inputs, and understanding whether a reference came from persisted file storage or reusable element assets
+
+### **Operational UX Notes**
+
+- **Modal-based selection flows** should close cleanly after successful selection and surface errors when invalid data is provided
+- **Reference selection UX** benefits from lightweight performance protections such as memoized handlers and avoiding unnecessary card rerenders in large libraries
+- **Accessibility still matters** in these flows: keyboard navigation, clear labels, and focus management are part of a production-quality reference picker experience
 
 ## 🎨 Recent UI Improvements (March 2026)
 
