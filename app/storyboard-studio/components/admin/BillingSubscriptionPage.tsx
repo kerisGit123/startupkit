@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   PanelLeftClose, PanelLeftOpen, ChevronDown, CreditCard,
   CheckCircle2, Zap, Building2, Download, Eye, Receipt,
@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { useUser } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useCompany } from "@/hooks/useCompany";
 import { getCreditPackages } from "@/lib/credit-pricing";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
@@ -74,6 +76,25 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
   const [currentPlan] = useState("starter");
   const [activeTab, setActiveTab] = useState<"overview" | "credits" | "plans" | "invoices">("overview");
   const creditPackages = getCreditPackages();
+
+  // Real credit data from Convex
+  const creditBalance = useQuery(api.credits.getBalance, companyId ? { companyId } : "skip");
+  const ledger = useQuery(api.credits.getLedger, companyId ? { companyId, limit: 50 } : "skip");
+
+  // Calculate used credits (sum of negative entries = debits)
+  const { totalUsed, totalAdded } = useMemo(() => {
+    if (!ledger) return { totalUsed: 0, totalAdded: 0 };
+    let used = 0;
+    let added = 0;
+    for (const entry of ledger) {
+      if (entry.tokens < 0) {
+        used += Math.abs(entry.tokens);
+      } else {
+        added += entry.tokens;
+      }
+    }
+    return { totalUsed: Math.round(used), totalAdded: Math.round(added) };
+  }, [ledger]);
 
   const handleBuyCredits = async (tokens: number, amount: number) => {
     if (!user || !companyId) {
@@ -240,9 +261,9 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                             </div>
                             <div>
                               <p className="text-3xl font-bold text-white mb-1">
-                                {currentPlan === 'free' ? '0' : currentPlan === 'starter' ? '50' : '200'}
+                                {PLANS.find(p => p.key === currentPlan)?.key === 'free' ? '0' : PLANS.find(p => p.key === currentPlan)?.key === 'starter' ? '50' : '200'}
                               </p>
-                              <p className="text-sm text-(--text-secondary) uppercase tracking-wider">Credits/Month</p>
+                              <p className="text-sm text-(--text-secondary) uppercase tracking-wider">Plan Credits/Mo</p>
                             </div>
                           </div>
                         </div>
@@ -309,18 +330,18 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                         </div>
                         
                         <div className="text-center mb-6">
-                          <p className="text-5xl font-bold text-white mb-2">488</p>
+                          <p className="text-5xl font-bold text-white mb-2">{creditBalance !== undefined ? creditBalance.toLocaleString() : '...'}</p>
                           <p className="text-emerald-200 text-sm uppercase tracking-wider">Available Credits</p>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center">
-                            <p className="text-2xl font-bold text-white mb-1">12</p>
+                            <p className="text-2xl font-bold text-white mb-1">{totalUsed.toLocaleString()}</p>
                             <p className="text-xs text-emerald-200 uppercase tracking-wider">Used</p>
                           </div>
                           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center">
-                            <p className="text-2xl font-bold text-white mb-1">36</p>
-                            <p className="text-xs text-emerald-200 uppercase tracking-wider">Remaining</p>
+                            <p className="text-2xl font-bold text-white mb-1">{totalAdded.toLocaleString()}</p>
+                            <p className="text-xs text-emerald-200 uppercase tracking-wider">Purchased</p>
                           </div>
                         </div>
                         
@@ -562,13 +583,13 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                 </p>
               </div>
 
-              {/* Stats Overview */}
+              {/* Stats Overview — real data */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 max-w-6xl mx-auto">
                 {[
-                  { label: "Total Invoices", value: "4", icon: Receipt, color: "from-blue-500/20 to-blue-600/20", iconColor: "text-blue-400", borderColor: "border-blue-500/30" },
-                  { label: "Total Amount", value: "MYR 108.00", icon: TrendingUp, color: "from-purple-500/20 to-purple-600/20", iconColor: "text-purple-400", borderColor: "border-purple-500/30" },
-                  { label: "Paid", value: "MYR 108.00", icon: CheckCircle2, color: "from-emerald-500/20 to-emerald-600/20", iconColor: "text-emerald-400", borderColor: "border-emerald-500/30" },
-                  { label: "Pending", value: "MYR 0.00", icon: Calendar, color: "from-yellow-500/20 to-yellow-600/20", iconColor: "text-yellow-400", borderColor: "border-yellow-500/30" },
+                  { label: "Transactions", value: String(ledger?.length ?? 0), icon: Receipt, color: "from-blue-500/20 to-blue-600/20", iconColor: "text-blue-400", borderColor: "border-blue-500/30" },
+                  { label: "Total Purchased", value: totalAdded.toLocaleString() + " cr", icon: TrendingUp, color: "from-purple-500/20 to-purple-600/20", iconColor: "text-purple-400", borderColor: "border-purple-500/30" },
+                  { label: "Total Used", value: totalUsed.toLocaleString() + " cr", icon: CheckCircle2, color: "from-emerald-500/20 to-emerald-600/20", iconColor: "text-emerald-400", borderColor: "border-emerald-500/30" },
+                  { label: "Balance", value: (creditBalance ?? 0).toLocaleString() + " cr", icon: Coins, color: "from-yellow-500/20 to-yellow-600/20", iconColor: "text-yellow-400", borderColor: "border-yellow-500/30" },
                 ].map((stat) => (
                   <div key={stat.label} className={`bg-gradient-to-br ${stat.color} backdrop-blur-sm rounded-2xl p-6 border ${stat.borderColor} transition-all duration-300 hover:scale-105`}>
                     <div className="flex items-center gap-4">
@@ -599,46 +620,34 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                         </tr>
                       </thead>
                       <tbody>
-                        {MOCK_INVOICES.map((inv, index) => (
+                        {(ledger || []).map((entry: any, index: number) => (
                           <tr
-                            key={inv.id}
+                            key={entry._id}
                             className={`border-b border-(--border-primary) last:border-0 hover:bg-(--bg-tertiary)/30 transition-all duration-200 ${
                               index % 2 === 0 ? "" : "bg-(--bg-primary)/20"
                             }`}
                           >
-                            <td className="px-6 py-4 text-sm font-mono text-white font-semibold">{inv.id}</td>
-                            <td className="px-6 py-4 text-sm text-(--text-secondary)">{inv.date}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-white font-semibold">{entry._id.slice(-8).toUpperCase()}</td>
+                            <td className="px-6 py-4 text-sm text-(--text-secondary)">{new Date(entry.createdAt || entry._creationTime).toLocaleDateString()}</td>
                             <td className="px-6 py-4">
                               <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-                                inv.type === "Payment" 
-                                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                                  : "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-                              }`}>
-                                {inv.type}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-white">{inv.description}</td>
-                            <td className="px-6 py-4 text-sm font-semibold text-white">{inv.amount}</td>
-                            <td className="px-6 py-4">
-                              <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-                                inv.status === "Paid" 
+                                entry.tokens > 0
                                   ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                  : inv.status === "Pending"
-                                  ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
                                   : "bg-red-500/20 text-red-400 border border-red-500/30"
                               }`}>
-                                {inv.status}
+                                {entry.tokens > 0 ? 'Credit' : 'Debit'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-white">{entry.reason || 'Credit transaction'}</td>
+                            <td className={`px-6 py-4 text-sm font-semibold ${entry.tokens > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {entry.tokens > 0 ? '+' : ''}{entry.tokens} credits
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                Completed
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-200 flex items-center justify-center text-(--text-secondary) hover:text-white">
-                                  <Eye className="w-4 h-4" />
-                                </button>
-                                <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-200 flex items-center justify-center text-(--text-secondary) hover:text-white">
-                                  <Download className="w-4 h-4" />
-                                </button>
-                              </div>
                             </td>
                           </tr>
                         ))}

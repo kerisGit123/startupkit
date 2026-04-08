@@ -8,12 +8,24 @@ import { Search, Plus, Edit, Trash2, Copy, Star, Grid, List, X, Zap, Clock, Save
 interface Prompt {
   _id: string;
   name: string;
-  type: 'character' | 'environment' | 'prop' | 'style' | 'custom';
+  type: 'character' | 'environment' | 'prop' | 'style' | 'camera' | 'action' | 'other';
   prompt: string;
+  notes?: string;
   companyId: string;
   isPublic: boolean;
   usageCount: number;
 }
+
+const PROMPT_CATEGORIES = [
+  { key: 'all', label: 'All' },
+  { key: 'character', label: 'Character' },
+  { key: 'environment', label: 'Environment' },
+  { key: 'prop', label: 'Prop' },
+  { key: 'style', label: 'Style' },
+  { key: 'camera', label: 'Camera' },
+  { key: 'action', label: 'Action' },
+  { key: 'other', label: 'Other' },
+] as const;
 
 interface PromptLibraryProps {
   onSelectPrompt: (prompt: string) => void;
@@ -23,6 +35,278 @@ interface PromptLibraryProps {
 }
 
 const DEFAULT_PROMPT_TEMPLATES = [
+  {
+    name: 'Prompt Edit Image',
+    type: 'other' as const,
+    isPublic: false,
+    notes: 'Simple edit prompt for modifying a character in an existing scene while preserving the background.',
+    prompt: `character holding flower , need to preserve the surrounding . maintain the background, maintain exact proportions and height.`,
+  },
+  {
+    name: 'General Character',
+    type: 'character' as const,
+    isPublic: false,
+    notes: 'General-purpose character reference sheet. Works with any character style.',
+    prompt: `Create a professional character reference sheet based strictly on the uploaded reference image. Use a clean, neutral plain background and present the sheet as a technical model turnaround while matching the exact visual style of the reference (same realism level, rendering approach, texture, color treatment, and overall aesthetic). Arrange the composition into two horizontal rows. Top row: four full-body standing views placed side-by-side in this order: front view, left profile view (facing left), right profile view (facing right), back view. Bottom row: three highly detailed close-up portraits aligned beneath the full-body row in this order: front portrait, left profile portrait (facing left), right profile portrait (facing right). Maintain perfect identity consistency across every panel. Keep the subject in a relaxed A-pose and with consistent scale and alignment between views, accurate anatomy, and clear silhouette; ensure even spacing and clean panel separation, with uniform framing and consistent head height across the full-body lineup and consistent facial scale across the portraits. Lighting should be consistent across all panels (same direction, intensity, and softness), with natural, controlled shadows that preserve detail without dramatic mood shifts. Output a crisp, print-ready reference sheet look, sharp details.`,
+  },
+  {
+    name: 'Monster',
+    type: 'character' as const,
+    isPublic: false,
+    notes: 'Creature/monster identity sheet for film or game design production.',
+    prompt: `Create a **professional creature identity sheet** based strictly on the uploaded reference image.
+
+Present the result as a **technical production reference sheet used in film or game design**, matching the exact visual style of the reference (same realism level, rendering style, texture quality, color treatment, and overall aesthetic).
+
+Use a **clean neutral studio background** so the creature silhouette and anatomical details remain clearly visible.
+
+---
+
+## Sheet Layout
+
+Arrange the sheet into **two horizontal rows**.
+
+### Top Row — Anatomical Turnaround
+
+Four full-body views placed side-by-side in this order:
+
+1. **Front view**
+2. **Left profile view (facing left)**
+3. **Right profile view (facing right)**
+4. **Back view**
+
+The creature should stand in a **neutral anatomical pose (A-pose or relaxed stance)**.
+
+All anatomical structures must remain fully visible, including:
+
+* horns
+* claws
+* wings
+* dorsal spines
+* tentacles
+* tail
+* armor plates
+* skeletal protrusions
+* unique biological features
+
+Maintain **perfect anatomical consistency across every view**.
+
+---
+
+### Bottom Row — Surface Detail and Facial Structure
+
+Three detailed close-up portraits aligned beneath the full-body row:
+
+1. **Front head portrait**
+2. **Left profile head portrait**
+3. **Right profile head portrait**
+
+These close-ups must clearly display:
+
+* eye structure
+* teeth or mandibles
+* facial anatomy
+* skin texture or scales
+* scars or unique markings
+* biological surface details
+
+---
+
+# Silhouette Lock (Important)
+
+The creature must maintain a **strong and identical silhouette across all views**.
+
+The outer shape formed by:
+
+* head
+* limbs
+* wings
+* tail
+* horns
+* dorsal structures
+
+must remain **structurally identical from every angle**.
+
+Do not redesign or alter the creature's body structure.
+
+---
+
+# Texture Mapping Consistency
+
+Surface patterns must remain consistent across all views, including:
+
+* scale arrangement
+* skin texture
+* scars
+* color distribution
+* glowing elements
+* biological markings
+
+Patterns should **align naturally across the body**, as if mapped to a real three-dimensional creature.
+
+Avoid random texture changes between views.
+
+---
+
+# Proportion Lock
+
+Maintain strict proportional consistency:
+
+* limb length
+* head size relative to body
+* torso thickness
+* wing span
+* tail length
+
+All proportions must remain identical across every panel.
+
+---
+
+# Lighting
+
+Use **neutral studio lighting** with consistent direction and intensity across all panels.
+
+Lighting should reveal surface details without dramatic shadows or cinematic mood lighting.
+
+---
+
+# Alignment
+
+Ensure professional presentation:
+
+* consistent scale between full-body views
+* identical head height across the turnaround lineup
+* consistent portrait scale for close-ups
+* evenly spaced panels
+* clean separation between views
+
+The result should resemble a **professional creature model sheet used in visual effects production**.
+
+---
+
+# Output
+
+Produce a **high-resolution creature identity sheet** with crisp details suitable for design reference.`,
+  },
+  {
+    name: 'General Environment',
+    type: 'environment' as const,
+    isPublic: false,
+    notes: `Environment identity sheet with 4-panel 2x2 grid layout. Replace the environment description at the bottom. 
+    ## Output Format
+
+Produce **one high-resolution environment reference sheet** with a **2x2 grid layout**, showing the **four views of the same environment**.
+
+---
+
+## Example Environment Slot (replace when needed)
+
+You can insert the environment description here:
+
+Environment: futuristic alpine research habitat in a grassy valley,
+with spherical concrete research domes, a winding stream,
+rocky terrain, and towering jagged mountains in the background.`,
+    prompt: `Use **Image 1 as the base reference environment**.
+
+Generate a **photorealistic environment identity sheet** composed of **four panels arranged in a 2x2 grid**, showing the **same real-world location** from multiple viewpoints.
+
+All panels must depict the **exact same environment from Image 1**, preserving:
+
+* architectural structures
+* terrain layout
+* ground surfaces
+* materials and textures
+* lighting conditions
+* spatial relationships between objects
+
+No new elements may be introduced.
+
+---
+
+## Panel Layout
+
+**Panel 1 (Top-Left) — Establishing Perspective**
+
+A wide establishing view matching the **main front perspective** of the environment seen in Image 1.
+
+Show the full spatial composition and surrounding landscape.
+
+---
+
+**Panel 2 (Top-Right) — Side Perspective**
+
+A side-angle view of the **same location**, revealing the **depth, side structures, and surrounding terrain** while keeping the primary landmarks visible.
+
+---
+
+**Panel 3 (Bottom-Left) — Elevated / Aerial Perspective**
+
+A slightly elevated **three-quarter aerial view** revealing the **overall layout of the environment**, including placement of structures, paths, terrain features, and spatial relationships.
+
+---
+
+**Panel 4 (Bottom-Right) — Environmental Detail Perspective**
+
+A closer environmental view highlighting **architectural details, materials, textures, surfaces, and ground elements** from the same location.
+
+---
+
+## Consistency Rules
+
+Maintain **strict environmental continuity across all panels**:
+
+* identical architecture and structures
+* identical terrain layout
+* identical ground elements (rocks, paths, water, vegetation)
+* identical scale and spatial positioning
+* identical landmark placement
+
+All perspectives must clearly represent **the same physical location**.
+
+---
+
+## Lighting & Atmosphere
+
+Preserve the **exact lighting conditions and atmospheric qualities** from Image 1, including:
+
+* time of day
+* color temperature
+* shadows
+* haze, fog, or environmental atmosphere
+
+---
+
+## Style Requirements
+
+The result must appear as **real photography of the same location captured from different camera positions**, not concept art or stylized illustration.
+
+Maintain:
+
+* photorealistic lighting
+* natural materials and textures
+* realistic scale and perspective
+
+---
+
+## Restrictions
+
+Do **not** add:
+
+* people
+* vehicles
+* animals
+* logos
+* text
+* watermarks
+* new buildings or objects
+
+Only the environment from Image 1 should exist.
+
+---
+
+
+`,
+  },
   {
     name: 'Photorealistic Character Identity Sheet',
     type: 'character' as const,
@@ -212,6 +496,30 @@ The final result should look like **real photographic documentation of a real en
     name: 'Photorealistic Prop / Object Identity Sheet',
     type: 'prop' as const,
     isPublic: false,
+    notes:`
+# How This Fits Your Full Pipeline
+
+Your generation pipeline becomes very stable when you anchor **three identity layers**.
+
+**1. Character Identity Sheet**
+Defines people.
+
+**2. Environment Identity Sheet**
+Defines locations.
+
+**3. Prop / Object Identity Sheet**
+Defines objects that appear repeatedly.
+
+Scene generation then references these anchors.
+
+Example scene prompt:
+
+Character: little boy Jerry
+Environment: Paris street café environment sheet
+Prop: small red backpack prop identity sheet
+Action: Jerry walking along the street holding the backpack
+
+This structure significantly reduces **visual drift in long image → video sequences**.`,
     prompt: `# Photorealistic Prop / Object Identity Sheet
 
 ### Prompt
@@ -354,29 +662,6 @@ The result must resemble **real photographic documentation of a physical object*
 
 ---
 
-# How This Fits Your Full Pipeline
-
-Your generation pipeline becomes very stable when you anchor **three identity layers**.
-
-**1. Character Identity Sheet**
-Defines people.
-
-**2. Environment Identity Sheet**
-Defines locations.
-
-**3. Prop / Object Identity Sheet**
-Defines objects that appear repeatedly.
-
-Scene generation then references these anchors.
-
-Example scene prompt:
-
-Character: little boy Jerry
-Environment: Paris street café environment sheet
-Prop: small red backpack prop identity sheet
-Action: Jerry walking along the street holding the backpack
-
-This structure significantly reduces **visual drift in long image → video sequences**.
 `,
   },
 ];
@@ -388,6 +673,7 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'name' | 'usage'>('usage');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isResettingDefaults, setIsResettingDefaults] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Prompt | null>(null);
@@ -424,10 +710,12 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
 
   // Filter and sort templates
   const filteredTemplates = allTemplates
-    .filter(template => 
-      template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      template.prompt.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    .filter(template => {
+      const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        template.prompt.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || template.type === selectedCategory;
+      return matchesSearch && matchesCategory;
+    })
     .sort((a, b) => {
       switch (sortBy) {
         case 'name': return a.name.localeCompare(b.name);
@@ -446,7 +734,7 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
     try {
       await createTemplate({
         ...templateData,
-        type: 'custom',
+        type: templateData.type || 'other',
         companyId: userCompanyId
       });
       setIsCreateModalOpen(false);
@@ -462,6 +750,7 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
         name: `${template.name} Copy`,
         prompt: template.prompt,
         type: template.type,
+        notes: template.notes,
         companyId: userCompanyId,
         isPublic: false,
       });
@@ -551,6 +840,28 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
                 <option value="name">Name (A-Z)</option>
                 <option value="usage">Most Used</option>
               </select>
+            </div>
+
+            {/* Category filter tabs */}
+            <div className="flex gap-1 flex-wrap mb-4">
+              {PROMPT_CATEGORIES.map((cat) => {
+                const count = cat.key === 'all'
+                  ? allTemplates.length
+                  : allTemplates.filter(t => t.type === cat.key).length;
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => setSelectedCategory(cat.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      selectedCategory === cat.key
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-white/5 text-gray-400 border border-transparent hover:bg-white/10 hover:text-gray-300'
+                    }`}
+                  >
+                    {cat.label} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center justify-between">
@@ -801,7 +1112,9 @@ const PromptListItem = ({ template, onSelect, onEdit, onDelete, onDuplicate }: a
 const PromptEditorModal = ({ template, isOpen, onClose, onSave }: any) => {
   const [formData, setFormData] = useState({
     name: template?.name || '',
+    type: template?.type || 'other',
     prompt: template?.prompt || '',
+    notes: template?.notes || '',
     isPublic: template?.isPublic || false
   });
 
@@ -809,7 +1122,9 @@ const PromptEditorModal = ({ template, isOpen, onClose, onSave }: any) => {
     if (!isOpen) return;
     setFormData({
       name: template?.name || '',
+      type: template?.type || 'other',
       prompt: template?.prompt || '',
+      notes: template?.notes || '',
       isPublic: template?.isPublic || false,
     });
   }, [isOpen, template]);
@@ -853,6 +1168,25 @@ const PromptEditorModal = ({ template, isOpen, onClose, onSave }: any) => {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-300">
+              Category
+            </label>
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              className="w-full rounded-lg border border-white/10 bg-[#1A1A1A] px-3 py-2 text-white focus:border-emerald-500/40 focus:outline-none"
+            >
+              <option value="character">Character</option>
+              <option value="environment">Environment</option>
+              <option value="prop">Prop</option>
+              <option value="style">Style</option>
+              <option value="camera">Camera</option>
+              <option value="action">Action</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-300">
               Prompt Text
             </label>
             <textarea
@@ -875,6 +1209,19 @@ const PromptEditorModal = ({ template, isOpen, onClose, onSave }: any) => {
                 Preview
               </button>
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-300">
+              Notes <span className="text-gray-500 font-normal">(optional)</span>
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full rounded-lg border border-white/10 bg-[#1A1A1A] px-3 py-2 text-white placeholder:text-gray-500 focus:border-emerald-500/40 focus:outline-none"
+              rows={2}
+              placeholder="Internal notes about when/how to use this prompt..."
+            />
           </div>
 
           <div className="flex items-center justify-between">

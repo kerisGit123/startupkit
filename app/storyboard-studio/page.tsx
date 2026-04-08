@@ -8,7 +8,7 @@ import { api } from "@/convex/_generated/api";
 import type { Step, Orientation, ViewMode, Shot, Tag, CommentItem, CastMember, LocationAsset, BoardSettings, Project } from "./types";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS, SIMPLE_TAGS, TAG_COLORS } from "./constants";
-import { getCurrentCompanyId } from "@/lib/auth-utils";
+import { getCurrentCompanyId, useCurrentCompanyId } from "@/lib/auth-utils";
 
 import { ProjectsDashboard }  from "./components/ProjectsDashboard";
 import { BoardView }          from "./components/BoardView";
@@ -32,7 +32,8 @@ export default function StoryboardPage() {
   
   // ✅ Use global getCurrentCompanyId function
   const companyId = getCurrentCompanyId(user);
-  const orgId = organization?.id ?? user?.id ?? "personal";
+  const currentCompanyId = useCurrentCompanyId();
+  const orgId = currentCompanyId || "personal";
 
   // ── Convex project data ─────────────────────────────────────────────────────
   const convexProjects = useQuery(api.storyboard.projects.listByOrg, { orgId });
@@ -208,7 +209,7 @@ export default function StoryboardPage() {
       
       // Use client-side mutation like FrameCard
       await logFile({
-        orgId: organization?.id ?? null, // Use null instead of undefined for optional fields
+        orgId: currentCompanyId || null, // Use null instead of undefined for optional fields
         userId: organization?.id ? null : (user?.id ?? null), // Only set userId if no org
         projectId: null, // Main page uploads don't belong to specific projects
         // ✅ Remove companyId - calculated on server from auth context

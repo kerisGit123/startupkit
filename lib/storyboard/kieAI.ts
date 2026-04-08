@@ -2,6 +2,48 @@ import { ConvexHttpClient } from "convex/browser";
 
 const KIE_AI_BASE = "https://api.kie.ai";
 
+/**
+ * Resolve the KIE AI API key for a company.
+ * 1. Look up org_settings.defaultAI by companyId
+ * 2. Fetch the storyboard_kie_ai record to get the apiKey
+ * 3. Fall back to process.env.KIE_AI_API_KEY if anything fails
+ *
+ * Returns { apiKey, kieAiId } where kieAiId is the storyboard_kie_ai record ID (for storing in storyboard_files)
+ */
+export async function resolveKieApiKey(companyId?: string): Promise<{ apiKey: string; kieAiId?: string }> {
+  const fallbackKey = process.env.KIE_AI_API_KEY || "";
+
+  if (!companyId) return { apiKey: fallbackKey };
+
+  try {
+    const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+    const { api } = await import("../../convex/_generated/api");
+
+    // Step 1: Get org_settings for this company
+    const settings = await convex.query(api.settings.getSettings, { companyId });
+
+    if (settings?.defaultAI) {
+      // Step 2: Fetch the KIE AI key record
+      const kieRecord = await convex.query(api.storyboard.kieAiConfig.getKeyById, { id: settings.defaultAI });
+      if (kieRecord?.apiKey && kieRecord.isActive) {
+        console.log("[resolveKieApiKey] Using database key:", kieRecord.name);
+        return { apiKey: kieRecord.apiKey, kieAiId: kieRecord._id };
+      }
+    }
+
+    // Step 2b: No defaultAI in org_settings — try the system default key
+    const defaultKey = await convex.query(api.storyboard.kieAiConfig.getDefaultKey);
+    if (defaultKey?.apiKey && defaultKey.isActive) {
+      console.log("[resolveKieApiKey] Using system default key:", defaultKey.name);
+      return { apiKey: defaultKey.apiKey, kieAiId: defaultKey._id };
+    }
+  } catch (e) {
+    console.warn("[resolveKieApiKey] Failed to resolve from database, using env fallback:", e);
+  }
+
+  return { apiKey: fallbackKey };
+}
+
 // Placeholder record creation function
 async function createPlaceholderRecord(params: {
   companyId: string;
@@ -151,10 +193,13 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
   console.log('[triggerVideoGeneration] Request body:', JSON.stringify(requestBody, null, 2));
 
   try {
+    // Resolve API key: database defaultAI → system default → env fallback
+    const { apiKey: resolvedKey } = await resolveKieApiKey(params.companyId);
+
     const response = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`,
+        'Authorization': `Bearer ${resolvedKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
@@ -277,6 +322,10 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     console.warn('[triggerImageGeneration] Missing companyId or creditsUsed, cannot check balance');
   }
 
+  // Resolve API key early: need kieAiId for placeholder record
+  const { apiKey: resolvedImageKey, kieAiId } = await resolveKieApiKey(params.companyId);
+  console.log('[triggerImageGeneration] Resolved API key:', { hasKey: !!resolvedImageKey, kieAiId });
+
   // Step 2: Create placeholder record
   const createdFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
     companyId: params.companyId,
@@ -284,6 +333,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     projectId: params.projectId,
     categoryId: params.categoryId,
     creditsUsed: requiredCredits,
+    defaultAI: kieAiId, // Store which KIE AI key was used
     category: "generated",
     status: "generating",
     filename: `ai-generated-${Date.now()}.${params.outputFormat || 'png'}`,
@@ -411,7 +461,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.KIE_AI_API_KEY}`,
+        Authorization: `Bearer ${resolvedImageKey}`,
       },
       body: JSON.stringify(requestBody),
     });

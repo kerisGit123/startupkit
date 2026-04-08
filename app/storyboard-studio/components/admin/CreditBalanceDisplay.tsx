@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useQuery } from "convex/react";
-import { useUser, useOrganization } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { Coins, TrendingUp, TrendingDown } from "lucide-react";
 
 interface CreditBalanceDisplayProps {
@@ -12,9 +12,7 @@ interface CreditBalanceDisplayProps {
 
 export default function CreditBalanceDisplay({ className = "" }: CreditBalanceDisplayProps) {
   // Get current user's company ID
-  const { user } = useUser();
-  const { organization } = useOrganization();
-  const companyId = organization?.id ?? user?.id ?? "personal";
+  const companyId = useCurrentCompanyId() || "personal";
 
   // Get credit usage summary (like dashboard)
   const summary = useQuery(api.storyboard.creditUsage.getOrgSummary, { 

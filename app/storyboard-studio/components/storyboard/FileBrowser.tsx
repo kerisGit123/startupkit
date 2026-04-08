@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useUser } from "@clerk/nextjs";
 import {
@@ -167,95 +167,42 @@ export function FileBrowser({
 
   console.log(`[FileBrowser] Using companyId: ${companyId} (from useCurrentCompanyId hook)`);
 
-  // ── Data ──────────────────────────────────────────────────────────────────
-  const files = useQuery(api.storyboard.storyboardFiles.listByCompany, {
-    companyId: companyId || "",
-  });
-  
-  console.log(`[FileBrowser] Querying files with companyId: "${companyId}"`);
-  console.log(`[FileBrowser] Found ${files?.length || 0} files total`);
-  if (files && files.length > 0) {
-    console.log(`[FileBrowser] Sample files:`, files.map(f => ({
-      filename: f.filename,
-      category: f.category,
-      companyId: f.companyId,
-      fileType: f.fileType,
-      projectId: f.projectId,
-      _id: f._id
-    })));
-    
-    // Check specifically for upload files
-    const uploadFiles = files.filter(f => f.category === 'uploads');
-    console.log(`[FileBrowser] Upload files in raw data: ${uploadFiles.length}`, uploadFiles.map(f => ({
-      filename: f.filename,
-      category: f.category,
-      companyId: f.companyId
-    })));
-  }
+  // ── Data (paginated, server-side filtered) ─────────────────────────────
+  const { results: files, status: paginationStatus, loadMore } = usePaginatedQuery(
+    api.storyboard.storyboardFiles.listFiltered,
+    {
+      companyId: companyId || "",
+      category: selectedFilter === "all" ? undefined : selectedFilter,
+      fileType: selectedType === "all" ? undefined : selectedType,
+      searchTerm: searchTerm || undefined,
+    },
+    { initialNumItems: 50 }
+  );
   
   const toggleFavorite = useMutation(api.storyboard.storyboardFiles.toggleFavorite);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
 
-  // ── Filter / group ────────────────────────────────────────────────────────
+  // ── Filter (client-side — only element sub-category remains) ──
   const filteredFiles = useMemo(() => {
-    if (!files) {
-      console.log(`[FileBrowser] No files available for filtering`);
-      return [];
-    }
-    
-    console.log(`[FileBrowser] Filtering ${files.length} files with:`, {
-      selectedFilter,
-      selectedType,
-      selectedElementCategory,
-      searchTerm,
-      projectId
-    });
-    
-    const filtered = files.filter((file) => {
-      const matchesCategory  = selectedFilter === "all" || file.category === selectedFilter;
-      const matchesType      = selectedType   === "all" || file.fileType === selectedType;
-      const matchesSearch    = file.filename.toLowerCase().includes(searchTerm.toLowerCase());
-      // Fix: Handle files without projectId (upload files typically don't have projectId)
-      const matchesProject   = !projectId || file.projectId === projectId || (!file.projectId && (file.category === 'uploads' || file.category === 'elements'));
-      
-      // Element category filtering (only applies to elements)
+    if (!files) return [];
+
+    return files.filter((file) => {
+      // Generated and temps: always show (no project filter)
+      if (file.category === 'generated' || file.category === 'temps') return true;
+
+      // Project filtering for other categories
+      const matchesProject = !projectId || file.projectId === projectId ||
+        (!file.projectId && ['uploads', 'elements'].includes(file.category));
+
+      // Element sub-category filtering (tag-based)
       let matchesElementCategory = true;
       if (selectedFilter === "elements" && selectedElementCategory !== "all") {
         matchesElementCategory = file.tags?.includes(selectedElementCategory) || false;
       }
-      
-      return matchesCategory && matchesType && matchesSearch && matchesProject && matchesElementCategory;
+
+      return matchesProject && matchesElementCategory;
     });
-    
-    console.log(`[FileBrowser] Filtered to ${filtered.length} files`);
-    
-    // Log upload files specifically
-    const uploadFiles = filtered.filter(f => f.category === 'uploads');
-    console.log(`[FileBrowser] Upload files found: ${uploadFiles.length}`, uploadFiles.map(f => ({
-      filename: f.filename,
-      category: f.category,
-      companyId: f.companyId
-    })));
-    
-    // Log element files specifically
-    const elementFiles = files.filter(f => f.category === 'elements');
-    console.log(`[FileBrowser] Element files in raw data: ${elementFiles.length}`, elementFiles.map(f => ({
-      filename: f.filename,
-      category: f.category,
-      tags: f.tags,
-      companyId: f.companyId
-    })));
-    
-    // Log filtered element files
-    const filteredElementFiles = filtered.filter(f => f.category === 'elements');
-    console.log(`[FileBrowser] Filtered element files: ${filteredElementFiles.length}`, filteredElementFiles.map(f => ({
-      filename: f.filename,
-      category: f.category,
-      tags: f.tags
-    })));
-    
-    return filtered;
-  }, [files, selectedFilter, selectedType, selectedElementCategory, searchTerm, projectId]);
+  }, [files, selectedFilter, selectedElementCategory, projectId]);
 
   const grouped = useMemo(() => {
     const g: Record<string, typeof filteredFiles> = {};
@@ -268,7 +215,7 @@ export function FileBrowser({
   }, [filteredFiles]);
 
   const categories = Object.keys(grouped).sort();
-  const isLoading  = files === undefined;
+  const isLoading  = paginationStatus === "LoadingFirstPage";
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -577,6 +524,7 @@ export function FileBrowser({
             <div className="space-y-8">
               {categories.map((cat) => {
                 const catFiles = grouped[cat] ?? [];
+                if (catFiles.length === 0) return null;
                 return (
                   <div key={cat}>
                     <p className="text-sm text-(--text-secondary) font-semibold uppercase tracking-wider mb-4">
@@ -620,6 +568,7 @@ export function FileBrowser({
                                   src={publicUrl}
                                   className="w-full h-full object-cover rounded-2xl"
                                   muted
+                                  preload="none"
                                   onMouseEnter={(e) => {
                                     const playPromise = e.currentTarget.play();
                                     if (playPromise && typeof playPromise.catch === "function") {
@@ -670,6 +619,19 @@ export function FileBrowser({
                               </button>
                             </div>
 
+                            {/* File type badge — top left */}
+                            {!isImage && (
+                              <div className="absolute top-3 left-3 z-10">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium backdrop-blur-sm ${
+                                  isVideo ? 'bg-green-500/80 text-white' :
+                                  file.fileType === 'audio' ? 'bg-purple-500/80 text-white' :
+                                  'bg-gray-500/80 text-white'
+                                }`}>
+                                  {isVideo ? 'VIDEO' : file.fileType === 'audio' ? 'AUDIO' : 'DOC'}
+                                </span>
+                              </div>
+                            )}
+
                             {/* File info */}
                             <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent px-3 py-2">
                               <div className="flex items-center gap-2">
@@ -677,6 +639,13 @@ export function FileBrowser({
                                   ? <span className="text-[10px] px-1.5 py-0.5 bg-(--accent-blue)/20 text-(--accent-blue) rounded-md font-medium">Project</span>
                                   : <span className="text-[10px] px-1.5 py-0.5 bg-(--accent-teal)/20 text-(--accent-teal) rounded-md font-medium">Global</span>
                                 }
+                                {/* File extension */}
+                                {(() => {
+                                  const ext = file.filename.split('.').pop()?.toUpperCase();
+                                  return ext ? (
+                                    <span className="text-[9px] px-1 py-0.5 bg-white/10 text-gray-300 rounded font-mono">{ext}</span>
+                                  ) : null;
+                                })()}
                                 <p className="text-xs text-white truncate flex-1 font-medium">{file.filename}</p>
                               </div>
                             </div>
@@ -687,6 +656,28 @@ export function FileBrowser({
                   </div>
                 );
               })}
+
+              {/* Load More */}
+              {paginationStatus === "CanLoadMore" && (
+                <div className="flex justify-center pt-6">
+                  <button
+                    onClick={() => loadMore(50)}
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 hover:scale-105"
+                    style={{
+                      backgroundColor: "var(--bg-tertiary)",
+                      color: "var(--text-primary)",
+                      border: "1px solid var(--border-primary)",
+                    }}
+                  >
+                    Load More Files
+                  </button>
+                </div>
+              )}
+              {paginationStatus === "LoadingMore" && (
+                <div className="flex justify-center pt-6">
+                  <div className="w-6 h-6 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
             </div>
           )}
         </div>

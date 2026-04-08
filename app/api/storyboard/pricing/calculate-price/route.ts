@@ -112,6 +112,35 @@ export async function POST(req: NextRequest) {
           });
           break;
 
+        case 'getKlingMotionControl': {
+          // Per-second pricing: resolution cost * duration * factor
+          // 720p = 20 credits/s, 1080p = 27 credits/s
+          const klingCosts: Record<string, number> = { '720p': 20, '1080p': 27 };
+          const klingCostPerSec = klingCosts[resolution] || (model.creditCost || 20);
+          credits = Math.ceil(klingCostPerSec * duration * (model.factor || 1));
+          console.log("[pricing-calc] Kling Motion Control formula:", {
+            resolution, costPerSec: klingCostPerSec, duration, factor: model.factor, result: credits
+          });
+          break;
+        }
+
+        case 'getSeedance20': {
+          // Per-second pricing: resolution + video input type * duration * factor
+          // no_video = cheaper (text-to-video), video_input = more expensive (image/video-to-video)
+          // 480p: no_video=11.5, video_input=19 | 720p: no_video=25, video_input=41
+          const seedCosts: Record<string, { noVideo: number; videoInput: number }> = {
+            '480p': { noVideo: 11.5, videoInput: 19 },
+            '720p': { noVideo: 25, videoInput: 41 },
+          };
+          const seedRes = seedCosts[resolution] || seedCosts['480p'];
+          const seedCostPerSec = audio ? seedRes.videoInput : seedRes.noVideo;
+          credits = Math.ceil(seedCostPerSec * duration * (model.factor || 1));
+          console.log("[pricing-calc] Seedance 2.0 formula:", {
+            resolution, hasVideoInput: audio, costPerSec: seedCostPerSec, duration, factor: model.factor, result: credits
+          });
+          break;
+        }
+
         default:
           console.log("[pricing-calc] Unknown formula function, using simple calculation");
           // Fallback to simple calculation

@@ -1,20 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { type PricingModel, DEFAULT_PRICING_MODELS } from '@/lib/storyboard/pricing';
 
-// Define the pricing model interface
-export interface PricingModel {
-  _id?: string;
-  modelId: string;
-  modelName: string;
-  modelType: 'image' | 'video';
-  isActive: boolean;
-  pricingType: 'fixed' | 'formula';
-  creditCost?: number;
-  factor?: number;
-  formulaJson?: string;
-  assignedFunction?: 'getTopazUpscale' | 'getSeedance15' | 'getNanoBananaPrice' | 'getGptImagePrice' | 'getVeo31' ;
-  createdAt?: number;
-  updatedAt?: number;
-}
+// Re-export for consumers that import from this file
+export type { PricingModel };
 
 interface Analytics {
   totalRevenue: number;
@@ -24,8 +12,10 @@ interface Analytics {
   usageByModel: Record<string, number>;
 }
 
-// Default pricing models with assignedFunction for formula-based models
-const DEFAULT_PRICING_MODELS: PricingModel[] = [
+// DEFAULT_PRICING_MODELS is now imported from @/lib/storyboard/pricing
+// The following legacy array is kept commented for reference but no longer used:
+// See lib/storyboard/pricing.ts for the canonical definitions
+const _LEGACY_MODELS_REMOVED: PricingModel[] = [
   {
     modelId: "nano-banana-2",
     modelName: "Nano Banana 2",
@@ -182,8 +172,7 @@ const DEFAULT_PRICING_MODELS: PricingModel[] = [
 
 ];
 
-// Export DEFAULT_PRICING_MODELS for use in reset function
-export { DEFAULT_PRICING_MODELS };
+// DEFAULT_PRICING_MODELS re-exported from @/lib/storyboard/pricing via the import at top of file
 
 export const usePricingData = () => {
   const [models, setModels] = useState<PricingModel[]>([]);
@@ -397,6 +386,52 @@ export const usePricingData = () => {
               }
             } catch (e) {
               console.error("[usePricingData] Error parsing Veo 3.1 formula:", e);
+            }
+          }
+          return Math.ceil(base * factor);
+        case 'getKlingMotionControl':
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const qualities = formula.pricing?.qualities || [];
+              // Parse resolution and duration from selectedQuality: "720P_4s"
+              const klingResMatch = selectedQuality.match(/^(\d+[pP])/i);
+              const klingDurMatch = selectedQuality.match(/(\d+)s/);
+              const klingRes = klingResMatch ? klingResMatch[1] : "720p";
+              const klingDuration = klingDurMatch ? parseInt(klingDurMatch[1]) : 4;
+              // Case-insensitive quality lookup
+              const klingQuality = qualities.find((q: any) => q.name.toLowerCase() === klingRes.toLowerCase());
+              const costPerSec = klingQuality ? klingQuality.cost : base;
+              const result = Math.ceil(costPerSec * klingDuration * factor);
+              console.log("[usePricingData] Kling Motion Control pricing:", { modelId, selectedQuality, klingRes, costPerSec, klingDuration, factor, result });
+              return result;
+            } catch (e) {
+              console.error("[usePricingData] Error parsing Kling Motion Control formula:", e);
+            }
+          }
+          return Math.ceil(base * factor);
+        case 'getSeedance20':
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const resolutions = formula.pricing?.resolutions;
+              // Parse selectedQuality: format "480P_5s_video" or "720P_8s_novideo"
+              const resMatch = selectedQuality.match(/^(\d+[pP])/i);
+              const durMatch = selectedQuality.match(/(\d+)s/);
+              const hasVideo = !selectedQuality.includes('novideo');
+              const rawRes = resMatch ? resMatch[1] : "480p";
+              const duration = durMatch ? parseInt(durMatch[1]) : 5;
+              // Case-insensitive resolution lookup
+              const resKey = Object.keys(resolutions || {}).find(
+                k => k.toLowerCase() === rawRes.toLowerCase()
+              ) || rawRes;
+              const resCost = resolutions?.[resKey];
+              const costPerSec = resCost ? (hasVideo ? resCost.video_input : resCost.no_video) : base;
+              const result = Math.ceil(costPerSec * duration * factor);
+              console.log("[usePricingData] Seedance 2.0 pricing:", { modelId, selectedQuality, resKey, hasVideo, costPerSec, duration, factor, result });
+              return result;
+            } catch (e) {
+              console.error("[usePricingData] Error parsing Seedance 2.0 formula:", e);
             }
           }
           return Math.ceil(base * factor);

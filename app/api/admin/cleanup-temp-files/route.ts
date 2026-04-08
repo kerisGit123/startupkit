@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
     }
     
     const oldFiles = allFiles.filter(f => {
-      const isOld = f.createdAt < cutoffTime; // Use createdAt instead of uploadedAt
-      const isTempsOrGenerated = f.category === "temps" || f.category === "generated";
-      return isOld && isTempsOrGenerated;
+      const isOld = f.createdAt < cutoffTime;
+      const isTemps = f.category === "temps"; // Only clean temporary files, never generated
+      return isOld && isTemps;
     });
     
     console.log(`[cleanup-temp-files] Cutoff time: ${new Date(cutoffTime).toISOString()}`);

@@ -281,6 +281,7 @@ export default defineSchema({
     totalApiCall: v.optional(v.number()),
     
     // System Fields
+    defaultAI: v.optional(v.id("storyboard_kie_ai")), // Default KIE AI key for this org/user
     aiEnabled: v.optional(v.boolean()),
     onboardingCompletedAt: v.optional(v.number()),
     trialEndsAt: v.optional(v.number()),
@@ -1854,12 +1855,14 @@ export default defineSchema({
     sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
     metadata: v.optional(v.any()),
     deletedAt: v.optional(v.number()),     // Soft delete timestamp
+    defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used for generation
   })
     .index("by_project", ["projectId"])
     .index("by_category", ["projectId", "category"])
     .index("by_r2Key", ["r2Key"])
     .index("by_categoryId", ["categoryId"]) // For efficient cleanup by parent entity
-    .index("by_companyId", ["companyId"]), // For company-wide file listing
+    .index("by_companyId", ["companyId"]) // For company-wide file listing
+    .index("by_companyId_category", ["companyId", "category"]), // For filtered file listing
 
   // ============================================
   // STORYBOARD STUDIO: Elements (LTX-style reusable assets)
@@ -1967,12 +1970,16 @@ export default defineSchema({
     name: v.string(),
     type: v.union(
       v.literal("character"),
-      v.literal("environment"), 
+      v.literal("environment"),
       v.literal("prop"),
       v.literal("style"),
+      v.literal("camera"),
+      v.literal("action"),
+      v.literal("other"),
       v.literal("custom")
     ),
     prompt: v.string(),
+    notes: v.optional(v.string()),
     companyId: v.string(),
     isPublic: v.boolean(),
     usageCount: v.number(),
@@ -2001,8 +2008,11 @@ export default defineSchema({
     assignedFunction: v.optional(v.union(    // Function mapping for formula types
       v.literal("getTopazUpscale"),
       v.literal("getSeedance15"),
+      v.literal("getSeedance20"),
+      v.literal("getKlingMotionControl"),
       v.literal("getNanoBananaPrice"),
-      v.literal("getGptImagePrice")
+      v.literal("getGptImagePrice"),
+      v.literal("getVeo31")
     )),
     
     createdAt: v.number(),
@@ -2011,4 +2021,18 @@ export default defineSchema({
     .index("by_model_type", ["modelType", "isActive"])
     .index("by_model_id", ["modelId"])
     .index("by_assigned_function", ["assignedFunction"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: KIE AI API Key Management
+  // ============================================
+  storyboard_kie_ai: defineTable({
+    name: v.string(),              // Reference name (e.g., "Production Key", "Test Key")
+    apiKey: v.string(),            // KIE AI API key
+    isDefault: v.boolean(),        // Only one can be default
+    isActive: v.boolean(),         // Enable/disable without deleting
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_default", ["isDefault"])
+    .index("by_name", ["name"]),
 });

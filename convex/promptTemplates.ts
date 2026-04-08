@@ -5,8 +5,9 @@ import type { Id } from "./_generated/dataModel";
 export const create = mutation({
   args: {
     name: v.string(),
-    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("custom")),
+    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom")),
     prompt: v.string(),
+    notes: v.optional(v.string()),
     companyId: v.string(),
     isPublic: v.boolean(),
   },
@@ -28,8 +29,9 @@ export const update = mutation({
   args: {
     id: v.id("promptTemplates"),
     name: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("custom"))),
+    type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom"))),
     prompt: v.optional(v.string()),
+    notes: v.optional(v.string()),
     isPublic: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -37,7 +39,7 @@ export const update = mutation({
     if (!identity) throw new Error("Unauthorized");
 
     const { id, ...updateData } = args;
-    
+
     await ctx.db.patch(id, updateData);
     return id;
   },
@@ -74,7 +76,7 @@ export const getByCompany = query({
 });
 
 export const getPublicTemplates = query({
-  args: { type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("custom"))) },
+  args: { type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom"))) },
   handler: async (ctx, args) => {
     let query = ctx.db
       .query("promptTemplates")
@@ -113,9 +115,10 @@ export const resetDefaults = mutation({
           v.literal("environment"),
           v.literal("prop"),
           v.literal("style"),
-          v.literal("custom")
+          v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom")
         ),
         prompt: v.string(),
+        notes: v.optional(v.string()),
         isPublic: v.boolean(),
       })
     ),
@@ -143,6 +146,7 @@ export const resetDefaults = mutation({
         name: prompt.name,
         type: prompt.type,
         prompt: prompt.prompt,
+        notes: prompt.notes,
         companyId: args.companyId,
         isPublic: prompt.isPublic,
         usageCount: 0,

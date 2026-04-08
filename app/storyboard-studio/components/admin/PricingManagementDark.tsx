@@ -25,25 +25,24 @@ import {
   Image,
   Film,
   Check,
-  Circle
+  Circle,
+  Key,
+  Eye,
+  EyeOff,
+  Shield
 } from "lucide-react";
 import { usePricingData } from "../usePricingData";
-
-// Types
-interface PricingModel {
-  _id: string;
-  modelId: string;
-  modelName: string;
-  modelType: "image" | "video";
-  isActive: boolean;
-  pricingType: "fixed" | "formula";
-  creditCost?: number;
-  factor?: number;
-  formulaJson?: string;
-  assignedFunction?: "getTopazUpscale" | "getSeedance15" | "getNanoBananaPrice" | "getGptImagePrice" | "getVeo31";
-  createdAt: number;
-  updatedAt: number;
-}
+import {
+  type PricingModel,
+  getFixedPrice,
+  getGptImagePrice,
+  getFormulaQualityPrice,
+  getNanoBananaPrice,
+  getTopazUpscale,
+  getSeedance15,
+  getSeedance20,
+  getKlingMotionControl,
+} from "@/lib/storyboard/pricing";
 
 interface Analytics {
   totalRevenue: number;
@@ -51,95 +50,6 @@ interface Analytics {
   avgCost: number;
   activeModels: number;
   usageByModel: Record<string, number>;
-}
-
-// Helper function for fixed price calculation
-function getFixedPrice(base: number, multiplier: number): number {
-  return Math.ceil(base * multiplier);
-}
-
-// GPT Image pricing function (Updated from plan_price_management.md)
-// getGptImagePrice(4, 1.3, 'medium')  // → 6 credits (4 × 1.3 = 5.2 → 6)
-// getGptImagePrice(4, 1.3, 'high')    // → 29 credits (22 × 1.3 = 28.6 → 29)
-function getGptImagePrice(base: number, multiplier: number, quality: string): number {
-  const qualityCosts: Record<string, number> = {
-    'medium': base,
-    'high': 22,
-  };
-  
-  const qualityCost = qualityCosts[quality] || base;
-  return Math.ceil(qualityCost * multiplier);
-}
-
-function getFormulaQualityPrice(formulaJson: string | undefined, multiplier: number, quality: string, fallbackBase: number): number {
-  if (!formulaJson) {
-    return Math.ceil(fallbackBase * multiplier);
-  }
-
-  try {
-    const formula = JSON.parse(formulaJson);
-    const qualityData = formula.pricing?.qualities?.find((q: { name: string; cost: number }) => q.name === quality);
-    if (qualityData) {
-      return Math.ceil(qualityData.cost * multiplier);
-    }
-  } catch (error) {
-    console.error("Failed to parse formulaJson for pricing test:", error);
-  }
-
-  return Math.ceil(fallbackBase * multiplier);
-}
-
-// Custom Nano Banana pricing function (Updated from plan_price_management.md)
-// getNanoBananaPrice(8, 1.3, '1K')  // → 11 credits (8 × 1.3 = 10.4 → 11)
-// getNanoBananaPrice(8, 1.3, '2K')  // → 16 credits (12 × 1.3 = 15.6 → 16)  
-// getNanoBananaPrice(8, 1.3, '4K')  // → 24 credits (18 × 1.3 = 23.4 → 24)
-function getNanoBananaPrice(base: number, multiplier: number, quality: string): number {
-  return getFormulaQualityPrice(undefined, multiplier, quality, base);
-}
-
-// Topaz AI upscaling pricing function (Updated from plan_price_management.md)
-// getTopazUpscale(10, 1.3, '1x')  // → 13 credits (10 × 1.3 = 13)
-// getTopazUpscale(10, 1.3, '2x')  // → 26 credits (18 × 1.3 = 23.4 → 26)
-// getTopazUpscale(10, 1.3, '4x')  // → 52 credits (30 × 1.3 = 39 → 52)
-// Note: Updated to use quality-based costs from formulaJson
-function getTopazUpscale(base: number, multiplier: number, quality: string): number {
-  return getFormulaQualityPrice(undefined, multiplier, quality, base);
-}
-
-// Seedance 1.5 video generation pricing function (Updated for correct calculation)
-// Base cost: 7 credits
-// Resolution multipliers: 480p: 1, 720p: 2, 1080p: 4, 4K: 5
-// Audio multiplier: 2 (when audio is enabled)
-// Duration multipliers: 4s: 1, 8s: 2, 12s: 4 (every 4 seconds)
-// Examples with factor 1.3:
-// - 7 base, with audio, 720p, 8s: 7 × 2 × 2 × 1.3 = 36.4 → 37 credits
-// - 7 base, with audio, 1080p, 12s: 7 × 2 × 4 × 1.3 = 72.8 → 73 credits
-function getSeedance15(base: number, multiplier: number, resolution: string, audio: boolean, duration: number): number {
-  const resolutionMultipliers: Record<string, number> = {
-    '480p': 1,
-    '720p': 2,
-    '1080p': 4,
-    '4K': 5
-  };
-  
-  // Duration multiplier based on 4-second intervals
-  let durationMultiplier = 1;
-  if (duration <= 4) {
-    durationMultiplier = 1;
-  } else if (duration <= 8) {
-    durationMultiplier = 2;
-  } else if (duration <= 12) {
-    durationMultiplier = 4;
-  } else {
-    // For durations longer than 12 seconds, calculate additional 4-second blocks
-    const additionalBlocks = Math.ceil((duration - 12) / 4);
-    durationMultiplier = 4 + additionalBlocks;
-  }
-  
-  const audioMultiplier = audio ? 2 : 1;
-  const resolutionMultiplier = resolutionMultipliers[resolution] || 1;
-  
-  return Math.ceil(base * multiplier * resolutionMultiplier * audioMultiplier * durationMultiplier);
 }
 
 // Dark Theme Price Management Component (LTX Studio Style)
@@ -152,7 +62,14 @@ export default function PricingManagementDark() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'grid' | 'card'>('table');
-  const [activeTab, setActiveTab] = useState<'models' | 'testing'>('models'); // New tab state
+  const [activeTab, setActiveTab] = useState<'models' | 'testing' | 'kie'>('models');
+  // KIE AI key management state
+  const [kieKeys, setKieKeys] = useState<Array<{ _id: string; name: string; apiKey: string; isDefault: boolean; isActive: boolean; createdAt: number; updatedAt: number }>>([]);
+  const [kieLoading, setKieLoading] = useState(false);
+  const [showKieModal, setShowKieModal] = useState(false);
+  const [editingKieKey, setEditingKieKey] = useState<any>(null);
+  const [kieForm, setKieForm] = useState({ name: '', apiKey: '', isDefault: false });
+  const [kieVisibleKeys, setKieVisibleKeys] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState({
     pricingType: 'all',
     status: 'all',
@@ -218,6 +135,66 @@ export default function PricingManagementDark() {
   };
 
   // Test pricing function (Updated to use model's actual costs)
+  // ─── KIE AI Key Management ──────────────────────────────────────────────────
+  const fetchKieKeys = async () => {
+    setKieLoading(true);
+    try {
+      const res = await fetch('/api/storyboard/pricing/kie');
+      if (res.ok) setKieKeys(await res.json());
+    } catch (e) { console.error('Failed to fetch KIE keys:', e); }
+    finally { setKieLoading(false); }
+  };
+
+  const handleSaveKieKey = async () => {
+    try {
+      if (editingKieKey) {
+        await fetch('/api/storyboard/pricing/kie', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingKieKey._id, ...kieForm }),
+        });
+      } else {
+        await fetch('/api/storyboard/pricing/kie', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(kieForm),
+        });
+      }
+      setShowKieModal(false);
+      setEditingKieKey(null);
+      setKieForm({ name: '', apiKey: '', isDefault: false });
+      fetchKieKeys();
+    } catch (e) { console.error('Failed to save KIE key:', e); }
+  };
+
+  const handleDeleteKieKey = async (id: string) => {
+    if (!confirm('Delete this API key? This cannot be undone.')) return;
+    try {
+      await fetch('/api/storyboard/pricing/kie', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      fetchKieKeys();
+    } catch (e) { console.error('Failed to delete KIE key:', e); }
+  };
+
+  const handleToggleKieDefault = async (id: string) => {
+    try {
+      await fetch('/api/storyboard/pricing/kie', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isDefault: true }),
+      });
+      fetchKieKeys();
+    } catch (e) { console.error('Failed to set default:', e); }
+  };
+
+  const maskKey = (key: string) => {
+    if (key.length <= 8) return '••••••••';
+    return '••••••••' + key.slice(-4);
+  };
+
   const handleTestPricing = async (model: PricingModel) => {
     setIsTesting(true);
     setTestResult(null);
@@ -249,6 +226,21 @@ export default function PricingManagementDark() {
         result = formulaPrice;
       } else if (assignedFunction === 'getVeo31') {
         result = formulaPrice;
+      } else if (assignedFunction === 'getKlingMotionControl') {
+        result = getKlingMotionControl(
+          baseCost,
+          factor,
+          testParams.resolution,
+          testParams.duration
+        );
+      } else if (assignedFunction === 'getSeedance20') {
+        result = getSeedance20(
+          baseCost,
+          factor,
+          testParams.resolution,
+          testParams.audio, // "Include Audio" checkbox = has video input
+          testParams.duration
+        );
       } else {
         // Fallback to model type detection
         if (model.modelType === 'video') {
@@ -494,6 +486,17 @@ export default function PricingManagementDark() {
         >
           <Calculator className="w-4 h-4" />
           Testing
+        </button>
+        <button
+          onClick={() => { setActiveTab('kie'); fetchKieKeys(); }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
+            activeTab === 'kie'
+              ? 'bg-emerald-600 text-(--text-primary)'
+              : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
+          }`}
+        >
+          <Key className="w-4 h-4" />
+          KIE AI
         </button>
       </div>
 
@@ -981,7 +984,14 @@ export default function PricingManagementDark() {
               <label className="block text-sm font-medium text-(--text-secondary) mb-1">Select Model</label>
               <select 
                 value={testParams.modelId}
-                onChange={(e) => setTestParams({...testParams, modelId: e.target.value})}
+                onChange={(e) => {
+                  const newModelId = e.target.value;
+                  const newModel = models?.find(m => m.modelId === newModelId);
+                  const fn = (newModel as any)?.assignedFunction;
+                  // Reset resolution and duration to valid defaults for the selected model
+                  const defaultRes = fn === 'getKlingMotionControl' ? '720p' : fn === 'getSeedance20' ? '480p' : '720p';
+                  setTestParams({...testParams, modelId: newModelId, resolution: defaultRes, duration: 4, audio: false});
+                }}
                 className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               >
                 {models?.map((model, index) => (
@@ -1043,50 +1053,61 @@ export default function PricingManagementDark() {
                   </div>
                 ) : (
                   <>
+                    {/* Resolution dropdown — model-specific options */}
                     <div>
                       <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
-                      <select 
+                      <select
                         value={testParams.resolution}
                         onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
                         className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                       >
-                        <option value="480p">480p</option>
-                        <option value="720p">720p</option>
-                        <option value="1080p">1080p</option>
-                        <option value="4K">4K</option>
+                        {(() => {
+                          const fn = models?.find(m => m.modelId === testParams.modelId)?.assignedFunction;
+                          if (fn === 'getKlingMotionControl') {
+                            return (<><option value="720p">720p</option><option value="1080p">1080p</option></>);
+                          } else if (fn === 'getSeedance20') {
+                            return (<><option value="480p">480p</option><option value="720p">720p</option></>);
+                          } else {
+                            return (<><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option><option value="4K">4K</option></>);
+                          }
+                        })()}
                       </select>
                     </div>
-                    {/* Show Duration for video models only */}
-                    {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
-                      <div>
-                        <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
-                        <select 
-                          value={testParams.duration}
-                          onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
-                          className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-                        >
-                          <option value="4">4 seconds</option>
-                          <option value="8">8 seconds</option>
-                          <option value="12">12 seconds</option>
-                          <option value="16">16 seconds</option>
-                          <option value="20">20 seconds</option>
-                        </select>
-                      </div>
-                    )}
-                    {/* Show Audio for video models only */}
-                    {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
-                      <div>
-                      <label className="flex items-center text-sm text-(--text-secondary) mb-1">
-                        <input 
-                          type="checkbox" 
-                          checked={testParams.audio}
-                          onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
-                          className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-                        />
-                        Include Audio
-                      </label>
+
+                    {/* Duration */}
+                    <div>
+                      <label className="block text-sm font-medium text-(--text-secondary) mb-1">Duration (seconds)</label>
+                      <select
+                        value={testParams.duration}
+                        onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
+                        className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                      >
+                        <option value="4">4 seconds</option>
+                        <option value="8">8 seconds</option>
+                        <option value="12">12 seconds</option>
+                        <option value="16">16 seconds</option>
+                        <option value="20">20 seconds</option>
+                      </select>
                     </div>
-                    )}
+
+                    {/* Audio/Video input checkbox — hide for Kling, label changes for Seedance 2.0 */}
+                    {(() => {
+                      const fn = models?.find(m => m.modelId === testParams.modelId)?.assignedFunction;
+                      if (fn === 'getKlingMotionControl') return null; // No audio option for Kling
+                      return (
+                        <div>
+                          <label className="flex items-center gap-2 text-sm text-(--text-secondary) mb-1">
+                            <input
+                              type="checkbox"
+                              checked={testParams.audio}
+                              onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
+                              className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                            />
+                            {fn === 'getSeedance20' ? 'Include Video Input' : 'Include Audio'}
+                          </label>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </>
@@ -1319,6 +1340,202 @@ export default function PricingManagementDark() {
       </div>
       )}
 
+      {/* ─── KIE AI Tab ─── */}
+      {activeTab === 'kie' && (
+        <div className="bg-(--bg-secondary) border border-(--border-primary) rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-(--text-primary) flex items-center gap-2">
+                <Shield className="w-5 h-5 text-emerald-400" />
+                KIE AI API Keys
+              </h3>
+              <p className="text-sm text-(--text-tertiary) mt-1">Manage API keys for KIE AI services. Only the default key is used for generation.</p>
+            </div>
+            <button
+              onClick={() => {
+                setEditingKieKey(null);
+                setKieForm({ name: '', apiKey: '', isDefault: false });
+                setShowKieModal(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-4 rounded-xl flex items-center gap-2 transition-all"
+            >
+              <Plus className="w-4 h-4" />
+              Add New Key
+            </button>
+          </div>
+
+          {kieLoading ? (
+            <div className="text-center py-12 text-(--text-tertiary)">Loading...</div>
+          ) : kieKeys.length === 0 ? (
+            <div className="text-center py-12">
+              <Key className="w-10 h-10 text-(--text-tertiary) mx-auto mb-3 opacity-50" />
+              <p className="text-(--text-secondary) font-medium">No API Keys</p>
+              <p className="text-sm text-(--text-tertiary) mt-1">Add a KIE AI API key to get started.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {kieKeys.map((key) => (
+                <div
+                  key={key._id}
+                  className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                    key.isDefault
+                      ? 'border-emerald-500/50 bg-emerald-500/5'
+                      : 'border-(--border-primary) bg-(--bg-primary)'
+                  }`}
+                >
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${key.isDefault ? 'bg-emerald-600' : 'bg-(--bg-tertiary)'}`}>
+                      <Key className={`w-5 h-5 ${key.isDefault ? 'text-white' : 'text-(--text-tertiary)'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-(--text-primary)">{key.name}</span>
+                        {key.isDefault && (
+                          <span className="text-[10px] px-2 py-0.5 bg-emerald-600 text-white rounded-full font-medium">DEFAULT</span>
+                        )}
+                        {!key.isActive && (
+                          <span className="text-[10px] px-2 py-0.5 bg-gray-600 text-gray-300 rounded-full font-medium">INACTIVE</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="text-xs text-(--text-tertiary) font-mono">
+                          {kieVisibleKeys.has(key._id) ? key.apiKey : maskKey(key.apiKey)}
+                        </code>
+                        <button
+                          onClick={() => {
+                            const next = new Set(kieVisibleKeys);
+                            if (next.has(key._id)) next.delete(key._id); else next.add(key._id);
+                            setKieVisibleKeys(next);
+                          }}
+                          className="p-0.5 hover:bg-(--bg-tertiary) rounded transition-colors"
+                          title={kieVisibleKeys.has(key._id) ? 'Hide key' : 'Show key'}
+                        >
+                          {kieVisibleKeys.has(key._id)
+                            ? <EyeOff className="w-3.5 h-3.5 text-(--text-tertiary)" />
+                            : <Eye className="w-3.5 h-3.5 text-(--text-tertiary)" />
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-4">
+                    {!key.isDefault && (
+                      <button
+                        onClick={() => handleToggleKieDefault(key._id)}
+                        className="text-xs px-3 py-1.5 bg-(--bg-tertiary) hover:bg-emerald-600/20 text-(--text-secondary) hover:text-emerald-400 rounded-lg transition-colors"
+                        title="Set as default"
+                      >
+                        Set Default
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setEditingKieKey(key);
+                        setKieForm({ name: key.name, apiKey: key.apiKey, isDefault: key.isDefault });
+                        setShowKieModal(true);
+                      }}
+                      className="p-2 hover:bg-(--bg-tertiary) rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit3 className="w-4 h-4 text-(--text-secondary)" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteKieKey(key._id)}
+                      className="p-2 hover:bg-red-900/30 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* KIE AI Add/Edit Modal */}
+      {showKieModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-(--bg-secondary) rounded-2xl border border-(--border-primary) w-full max-w-md">
+            <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
+              <h3 className="text-sm font-bold text-(--text-primary)">
+                {editingKieKey ? 'Edit API Key' : 'Add New API Key'}
+              </h3>
+              <button onClick={() => { setShowKieModal(false); setEditingKieKey(null); }} className="p-1 hover:bg-(--bg-tertiary) rounded-xl">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Name</label>
+                <input
+                  type="text"
+                  value={kieForm.name}
+                  onChange={(e) => setKieForm({ ...kieForm, name: e.target.value })}
+                  className="w-full bg-(--bg-primary) border border-(--border-primary) rounded-xl px-4 py-3 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                  placeholder="e.g. Production Key"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">API Key</label>
+                <div className="relative">
+                  <input
+                    type={kieVisibleKeys.has('modal') ? 'text' : 'password'}
+                    value={kieForm.apiKey}
+                    onChange={(e) => setKieForm({ ...kieForm, apiKey: e.target.value })}
+                    className="w-full bg-(--bg-primary) border border-(--border-primary) rounded-xl px-4 py-3 pr-10 text-(--text-primary) font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                    placeholder="Enter KIE AI API key"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = new Set(kieVisibleKeys);
+                      if (next.has('modal')) next.delete('modal'); else next.add('modal');
+                      setKieVisibleKeys(next);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-(--bg-tertiary) rounded"
+                  >
+                    {kieVisibleKeys.has('modal')
+                      ? <EyeOff className="w-4 h-4 text-(--text-tertiary)" />
+                      : <Eye className="w-4 h-4 text-(--text-tertiary)" />
+                    }
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={kieForm.isDefault}
+                    onChange={(e) => setKieForm({ ...kieForm, isDefault: e.target.checked })}
+                    className="w-4 h-4 rounded"
+                  />
+                  Set as Default Key
+                </label>
+                <p className="text-xs text-(--text-tertiary) mt-1 ml-6">The default key will be used for all AI generation requests.</p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={handleSaveKieKey}
+                  disabled={!kieForm.name.trim() || !kieForm.apiKey.trim()}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-xl transition-colors"
+                >
+                  {editingKieKey ? 'Save Changes' : 'Add Key'}
+                </button>
+                <button
+                  onClick={() => { setShowKieModal(false); setEditingKieKey(null); }}
+                  className="flex-1 bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--text-secondary) font-medium py-2.5 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isEditing && (
         <DarkEditModal
           model={selectedModel}
@@ -1492,6 +1709,8 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                   <option value="getGptImagePrice">getGptImagePrice - Image Generation</option>
                   <option value="getNanoBananaPrice">getNanoBananaPrice - Image Generation</option>
                   <option value="getSeedance15">getSeedance15 - Video Generation</option>
+                  <option value="getSeedance20">getSeedance20 - Video Generation (Seedance 2.0)</option>
+                  <option value="getKlingMotionControl">getKlingMotionControl - Video Generation (Kling 3.0)</option>
                   <option value="getVeo31">getVeo31 - Video Generation</option>
                   <option value="getTopazUpscale">getTopazUpscale - AI Upscaling</option>
                 </select>

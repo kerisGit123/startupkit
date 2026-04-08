@@ -18,8 +18,11 @@ export const pricingModels = {
   assignedFunction: v.optional(v.union(    // Function mapping for formula types
     v.literal("getTopazUpscale"),
     v.literal("getSeedance15"),
+    v.literal("getSeedance20"),
+    v.literal("getKlingMotionControl"),
     v.literal("getNanoBananaPrice"),
-    v.literal("getGptImagePrice")
+    v.literal("getGptImagePrice"),
+    v.literal("getVeo31")
   )),
   
   createdAt: v.number(),
@@ -39,8 +42,11 @@ export const createPricingModel = mutation({
     assignedFunction: v.optional(v.union(
       v.literal("getTopazUpscale"),
       v.literal("getSeedance15"),
+      v.literal("getSeedance20"),
+      v.literal("getKlingMotionControl"),
       v.literal("getNanoBananaPrice"),
-      v.literal("getGptImagePrice")
+      v.literal("getGptImagePrice"),
+      v.literal("getVeo31")
     )),
   },
   handler: async (ctx, args) => {
@@ -87,8 +93,11 @@ export const updatePricingModel = mutation({
     assignedFunction: v.optional(v.union(
       v.literal("getTopazUpscale"),
       v.literal("getSeedance15"),
+      v.literal("getSeedance20"),
+      v.literal("getKlingMotionControl"),
       v.literal("getNanoBananaPrice"),
-      v.literal("getGptImagePrice")
+      v.literal("getGptImagePrice"),
+      v.literal("getVeo31")
     )),
   },
   handler: async (ctx, args) => {

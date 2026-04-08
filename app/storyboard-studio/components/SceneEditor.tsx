@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import { FrameInfoDialog } from "./FrameInfoDialog";
+import { FileBrowser } from "./storyboard/FileBrowser";
 import { CanvasArea } from "./CanvasArea";
 import { GeneratedImagesPanel } from "./GeneratedImagesPanel/index";
 import type { Shot, CommentItem, Tag as TagType } from "../types";
@@ -397,12 +398,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         // Horizontal swipe - switch AI panels
         if (deltaX > 0) {
           setActiveAIPanel(prev => {
-            if (prev === 'element') return 'editimage';
+            if (prev === 'element') { setAiModel('gpt-image'); return 'editimage'; }
             return prev;
           });
         } else {
           setActiveAIPanel(prev => {
-            if (prev === 'editimage') return 'element';
+            if (prev === 'editimage') { setAiModel('nano-banana-2'); return 'element'; }
             return prev;
           });
         }
@@ -474,6 +475,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const generatedImageRef = useRef<HTMLImageElement>(null);
   const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'element'>('editimage');
+  const [showUploadOverrideBrowser, setShowUploadOverrideBrowser] = useState(false);
   const [showMask, setShowMask] = useState(true); // Add mask visibility state
   
   // Video AI state management
@@ -3710,9 +3712,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveAIPanel(prev => {
-                  if (prev === 'editimage') return 'video';
-                  if (prev === 'video') return 'element';
-                  return 'editimage';
+                  if (prev === 'editimage') { setAiModel('nano-banana-2'); return 'element'; }
+                  setAiModel('gpt-image'); return 'editimage';
                 })}
                 className="px-3 py-1.5 bg-(--accent-blue) text-white rounded-lg text-xs font-medium transition"
               >
@@ -3802,37 +3803,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           <Save className="w-4 h-4" />
           Save
         </button>
-        <button 
-          onClick={() => {
-            try {
-              buildSnapshotCanvas().then((canvas) => {
-                function downloadCanvas(c: HTMLCanvasElement) {
-                  const link = document.createElement('a');
-                  link.download = `frame-${String((activeShot.order || 0) + 1).padStart(2, "0")}.png`;
-                  link.href = c.toDataURL('image/png', 1.0);
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                }
-
-                downloadCanvas(canvas);
-              }).catch((error) => {
-                console.error('Download failed:', error);
-                alert('Download failed. Please try again.');
-              });
-            } catch (error) {
-              console.error('Download failed:', error);
-              alert('Download failed. Please try again.');
-            }
-          }}
-          className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm transition flex items-center gap-1.5"
-          title="Download frame"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l4-4m-4 4h4" />
-          </svg>
-          Download
-        </button>
       </div>
 
       {/* ── Main area ── */}
@@ -3861,8 +3831,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               onClick={() => {
                 if (activeAIPanel === 'editimage') {
                   setActiveAIPanel('element');
+                  setAiModel('nano-banana-2'); // Reset to valid VideoImageAIPanel model
                 } else {
                   setActiveAIPanel('editimage');
+                  setAiModel('gpt-image'); // Reset to valid EditImageAIPanel model
                 }
               }}
               className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
@@ -3944,7 +3916,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             // Original Image Props
             onSetOriginalImage={(imageUrl) => {
               console.log("[DEBUG] onSetOriginalImage called with:", imageUrl?.substring(0,50));
-              
+
               setBackgroundImage(imageUrl);
               // Only set originalImage if not already set (using ref for accurate tracking)
               if (!originalImageRef.current && imageUrl) {
@@ -3957,8 +3929,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 setZoomLevel(100);
               } else {
                 console.log("[DEBUG] Background update - preserving mask, rectangle, and state");
-                // IMPORTANT: Don't clear mask or reset state when background changes after generation
-                // The rectangle should stay in the same canvas coordinates regardless of image dimensions
               }
             }}
           />
@@ -4645,6 +4615,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   activeShotDescription={activeShot?.description}
                   activeShotImagePrompt={activeShot?.imagePrompt}
                   activeShotVideoPrompt={activeShot?.videoPrompt}
+                  onUploadOverride={() => setShowUploadOverrideBrowser(true)}
+                  onDownloadCanvas={undefined}
+                  onSaveAsOriginal={undefined}
                 />
                   ) : (
                     <ImageAIPanel
@@ -4915,12 +4888,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             console.log("Using generateImageWithCredits for other models...");
                             
                             const result = await generateImageWithCredits(
-                              promptToUse, // Use extracted prompt with badges
+                              extractedPrompt, // Use extracted prompt from VideoImageAIPanel
                               "realistic", // Default style
-                              qualityToUse, // Use quality from VideoImageAIPanel
+                              quality, // Use quality from VideoImageAIPanel callback
                               kieAIAspectRatio, // Use mapped KIE AI aspect ratio
                               activeShot?.id || "", // Link to current storyboard item like EditImageAIPanel
-                              actualCredits, // Use actual credit amount from VideoImageAIPanel
+                              creditsUsed, // Use credit amount from VideoImageAIPanel callback
                               aiModel, // Pass the model
                               undefined, // imageUrl
                               processedReferenceImages, // Pass processed reference image URLs to KIE AI
@@ -5263,6 +5236,51 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         shots={shots}
         activeShotId={activeShotId}
       />
+
+      {/* Upload Override FileBrowser — works from any AI panel */}
+      {showUploadOverrideBrowser && (
+        <FileBrowser
+          projectId={projectId as any}
+          onClose={() => setShowUploadOverrideBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={async (imageUrl, fileName, fileData) => {
+            console.log("[SceneEditor] Upload Override selected:", { imageUrl, fileName });
+            try {
+              await logUpload({
+                companyId: companyId || "",
+                userId: user?.id || "",
+                projectId: projectId || undefined,
+                category: "generated",
+                filename: fileName || `upload-override-${Date.now()}.png`,
+                fileType: "image",
+                mimeType: fileData?.mimeType || "image/png",
+                size: fileData?.size || 0,
+                status: "ready",
+                creditsUsed: 0,
+                categoryId: activeShotId || undefined,
+                sourceUrl: imageUrl,
+                r2Key: fileData?.r2Key || undefined,
+                tags: ["upload-override"],
+                uploadedBy: user?.id || "",
+              });
+              setBackgroundImage(imageUrl);
+              setGeneratedImages(prev => [imageUrl, ...prev]);
+              console.log("[SceneEditor] Upload Override saved as generated");
+            } catch (error) {
+              console.error("[SceneEditor] Upload Override failed:", error);
+            }
+            setShowUploadOverrideBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image') {
+              // Trigger same flow via onSelectImage path
+              setBackgroundImage(url);
+              setGeneratedImages(prev => [url, ...prev]);
+              setShowUploadOverrideBrowser(false);
+            }
+          }}
+        />
+      )}
 
       {/* Use Case Info Modal */}
       <UseCaseInfoModal

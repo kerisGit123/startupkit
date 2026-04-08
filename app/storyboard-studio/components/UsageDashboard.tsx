@@ -1,8 +1,9 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { BarChart2, Zap, Image as ImageIcon, Video, FileText, Users } from "lucide-react";
 
 const ACTION_META: Record<string, { label: string; Icon: React.ElementType; color: string }> = {
@@ -13,9 +14,7 @@ const ACTION_META: Record<string, { label: string; Icon: React.ElementType; colo
 };
 
 export function UsageDashboard() {
-  const { organization } = useOrganization();
-  const { user } = useUser();
-  const orgId = organization?.id ?? user?.id ?? "personal";
+  const orgId = useCurrentCompanyId() || "personal";
 
   const summary = useQuery(api.storyboard.creditUsage.getOrgSummary, { orgId });
   const recent  = useQuery(api.storyboard.creditUsage.listByOrg, { orgId, limit: 20 });

@@ -240,7 +240,7 @@ export default function AdminPage({ sidebarOpen, onToggleSidebar }: AdminPagePro
                   <Info className="w-3 h-3 text-(--accent-blue)" />
                   <span className="font-medium text-(--text-secondary)">Important:</span>
                 </div>
-                Files in the temps folder and storyboard_files older than {cleanupDays} days will be permanently deleted. This action cannot be undone.
+                Only temporary files older than {cleanupDays} days will be permanently deleted. Generated files are not affected. This action cannot be undone.
               </div>
             </div>
 

@@ -225,7 +225,7 @@ export function ImageAIPanel({
   // Use exact same pattern as working CreditBalanceDisplay (avoid naming conflicts)
   const { user: clerkUser } = useUser();
   const { organization } = useOrganization();
-  const companyId = organization?.id ?? clerkUser?.id ?? "personal";
+  const companyId = currentCompanyId || "personal";
   
   const getBalance = useQuery(api.credits.getBalance, {
     companyId: companyId
@@ -303,6 +303,8 @@ export function ImageAIPanel({
   ];
   const videoModelOptions = [
     { value: "bytedance/seedance-1.5-pro", label: "Seedance 1.5 Pro", sub: "Video generation", icon: Film, maxReferenceImages: 2 },
+    { value: "bytedance/seedance-2", label: "Seedance 2.0", sub: "480p/720p • Video input", icon: Film, maxReferenceImages: 9 },
+    { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 ref", icon: Film, maxReferenceImages: 1 },
     { value: "google/veo-3.1", label: "Veo 3.1", sub: "Google Video generation", icon: Film, maxReferenceImages: 3 },
   ];
   // Combine all models for the consolidated dropdown
@@ -327,7 +329,22 @@ export function ImageAIPanel({
     { value: "720P", label: "720p", sub: "1280×720", icon: Monitor },
     { value: "1080P", label: "1080p", sub: "1920×1080", icon: Monitor },
   ];
-  const currentResolutionOptions = outputMode === "video" ? videoResolutionOptions : imageResolutionOptions;
+  const currentResolutionOptions = (() => {
+    if (outputMode !== "video") return imageResolutionOptions;
+    if (selectedModelOption.value === "kling-3.0/motion-control") {
+      return [
+        { value: "720P", label: "720p", sub: "1280×720", icon: Monitor },
+        { value: "1080P", label: "1080p", sub: "1920×1080", icon: Monitor },
+      ];
+    }
+    if (selectedModelOption.value === "bytedance/seedance-2") {
+      return [
+        { value: "480P", label: "480p", sub: "854×480", icon: Monitor },
+        { value: "720P", label: "720p", sub: "1280×720", icon: Monitor },
+      ];
+    }
+    return videoResolutionOptions;
+  })();
 
   // Output format options
   const outputFormatOptions = [
@@ -343,6 +360,77 @@ export function ImageAIPanel({
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [veoQuality, setVeoQuality] = useState("Fast");
   const [veoMode, setVeoMode] = useState("TEXT_2_VIDEO");
+  const [hasVideoInput, setHasVideoInput] = useState(false); // Seedance 2.0: video input toggle
+  const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("image"); // Kling: character orientation
+  const [klingSource, setKlingSource] = useState<"input_video" | "input_image">("input_video"); // Kling: background source
+  const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null); // Seedance 2.0: first frame
+  const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(null); // Seedance 2.0: last frame
+  const [showFirstFrameBrowser, setShowFirstFrameBrowser] = useState(false);
+  const [showLastFrameBrowser, setShowLastFrameBrowser] = useState(false);
+  // Video references: Kling (1 video), Seedance 2.0 (max 3 videos, total ≤15s)
+  const [videoRefs, setVideoRefs] = useState<Array<{ url: string; duration: number }>>([]);
+  const [showVideoBrowser, setShowVideoBrowser] = useState(false);
+  // Audio references: Seedance 2.0 (max 3 audio, total ≤15s)
+  const [audioRefs, setAudioRefs] = useState<Array<{ url: string; duration: number }>>([]);
+  const [showAudioBrowser, setShowAudioBrowser] = useState(false);
+  // Seedance 2.0 toggles
+  const [webSearch, setWebSearch] = useState(false);
+  const [generateAudio, setGenerateAudio] = useState(true);
+
+  // Get media duration from URL
+  const getMediaDuration = (url: string, type: 'video' | 'audio'): Promise<number> => {
+    return new Promise((resolve) => {
+      const el = document.createElement(type);
+      el.preload = 'metadata';
+      // Don't set crossOrigin for R2 URLs — they serve without CORS for same-origin
+      // Setting crossOrigin = 'anonymous' causes CORS errors on R2 public URLs
+
+      let resolved = false;
+
+      el.onloadedmetadata = () => {
+        if (!resolved) {
+          resolved = true;
+          const dur = Math.round(el.duration);
+          console.log(`[getMediaDuration] ${type} duration loaded: ${dur}s from ${url.substring(0, 60)}`);
+          resolve(dur);
+        }
+      };
+
+      el.ondurationchange = () => {
+        if (!resolved && el.duration && isFinite(el.duration)) {
+          resolved = true;
+          const dur = Math.round(el.duration);
+          console.log(`[getMediaDuration] ${type} duration from durationchange: ${dur}s`);
+          resolve(dur);
+        }
+      };
+
+      el.onerror = (e) => {
+        if (!resolved) {
+          resolved = true;
+          console.warn(`[getMediaDuration] Failed to load ${type} metadata:`, e);
+          resolve(0);
+        }
+      };
+
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.warn(`[getMediaDuration] Timeout loading ${type} metadata`);
+          resolve(0);
+        }
+      }, 10000);
+
+      el.src = url;
+      // Force load for some browsers
+      el.load();
+    });
+  };
+
+  // Total duration of video + audio refs
+  const totalVideoDuration = videoRefs.reduce((sum, v) => sum + v.duration, 0);
+  const totalAudioDuration = audioRefs.reduce((sum, a) => sum + a.duration, 0);
   
   // Calculate maximum reference images based on model and mode
   const getMaxReferenceImages = () => {
@@ -377,14 +465,22 @@ export function ImageAIPanel({
         });
         return credits;
       })()
+    : selectedModelOption.value === "bytedance/seedance-2"
+    ? (() => {
+        const params = `${resolution}_${videoDuration}_${hasVideoInput ? 'video' : 'novideo'}`;
+        return getModelCredits(selectedModelOption.value, params);
+      })()
+    : selectedModelOption.value === "kling-3.0/motion-control"
+    ? (() => {
+        // Use video ref duration if available, otherwise 0
+        const durationSec = videoRefs.length > 0 ? videoRefs[0].duration : 0;
+        const params = `${resolution}_${durationSec}s`;
+        const credits = getModelCredits(selectedModelOption.value, params);
+        return credits;
+      })()
     : selectedModelOption.value === "google/veo-3.1"
     ? (() => {
         const credits = getModelCredits(selectedModelOption.value, veoQuality);
-        console.log("[ElementImageAIPanel] Veo 3.1 credit calculation:", {
-          model: selectedModelOption.value,
-          veoQuality,
-          credits
-        });
         return credits;
       })()
     : credits;
@@ -399,12 +495,14 @@ export function ImageAIPanel({
   const [showVeoQualityDropdown, setShowVeoQualityDropdown] = useState(false);
   const [showVeoModeDropdown, setShowVeoModeDropdown] = useState(false);
 
-  // Video duration options
-  const videoDurationOptions = [
-    { value: "4s", label: "4s", icon: Clock },
-    { value: "8s", label: "8s", icon: Clock },
-    { value: "12s", label: "12s", icon: Clock },
-  ];
+  // Video duration options — model-specific
+  const videoDurationOptions = selectedModelOption.value === "bytedance/seedance-2"
+    ? Array.from({ length: 12 }, (_, i) => ({ value: `${i + 4}s`, label: `${i + 4}s`, icon: Clock }))
+    : [
+        { value: "4s", label: "4s", icon: Clock },
+        { value: "8s", label: "8s", icon: Clock },
+        { value: "12s", label: "12s", icon: Clock },
+      ];
 
   // Audio options
   const audioOptions = [
@@ -1480,6 +1578,24 @@ export function ImageAIPanel({
     }
   }, [model, onModelChange, selectedModelOption]);
 
+  // Reset resolution/duration/toggles when model prop changes from parent
+  useEffect(() => {
+    if (!model) return;
+    if (model === "kling-3.0/motion-control") {
+      setResolution("720P");
+    } else if (model === "bytedance/seedance-2") {
+      setResolution("480P");
+      setVideoDuration("5s");
+    } else if (model === "bytedance/seedance-1.5-pro") {
+      setResolution("480P");
+      setVideoDuration("8s");
+    } else if (model === "google/veo-3.1") {
+      // Veo uses quality, not resolution
+    } else if (model.includes("nano-banana")) {
+      setResolution("1K");
+    }
+  }, [model]);
+
   // Communicate to parent that we're in element mode (no brush tools needed)
   useEffect(() => {
     onToolSelect?.("element");
@@ -1616,7 +1732,13 @@ export function ImageAIPanel({
       
       // Update UI to show generating state and pass parameters to parent
       if (onGenerate) {
-        const qualityParam = outputMode === "video" ? `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}` : resolution;
+        const qualityParam = outputMode === "video"
+          ? selectedModelOption.value === "bytedance/seedance-2"
+            ? `${resolution}_${videoDuration}_${hasVideoInput ? 'video' : 'novideo'}`
+            : selectedModelOption.value === "kling-3.0/motion-control"
+            ? `${resolution}_${videoDuration}`
+            : `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}`
+          : resolution;
         
         // Include Veo 3.1 parameters if the model is Veo 3.1
         const isVeoModel = selectedModelOption?.value === "google/veo-3.1";
@@ -1788,9 +1910,64 @@ export function ImageAIPanel({
                 )}
               </div>
             )}
+
+            {/* Seedance 2.0: First Frame & Last Frame slots */}
+            {selectedModelOption.value === "bytedance/seedance-2" && (
+              <>
+                {/* First Frame */}
+                <div className="relative flex-shrink-0">
+                  {firstFrameUrl ? (
+                    <div className="relative group">
+                      <img src={firstFrameUrl} alt="First Frame" className="w-20 h-20 object-cover rounded-lg border border-blue-500/30" />
+                      <div className="absolute top-1.5 left-1.5 bg-blue-500 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium">1st</div>
+                      <button
+                        onClick={() => setFirstFrameUrl(null)}
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowFirstFrameBrowser(true)}
+                      className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-blue-500/30 hover:border-blue-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
+                      title="Set first frame"
+                    >
+                      <Plus className="w-4 h-4 text-blue-400 group-hover:text-blue-300 transition-colors" />
+                      <span className="text-[9px] text-blue-400 group-hover:text-blue-300 transition-colors leading-tight text-center">First Frame</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Last Frame */}
+                <div className="relative flex-shrink-0">
+                  {lastFrameUrl ? (
+                    <div className="relative group">
+                      <img src={lastFrameUrl} alt="Last Frame" className="w-20 h-20 object-cover rounded-lg border border-orange-500/30" />
+                      <div className="absolute top-1.5 left-1.5 bg-orange-500 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium">Last</div>
+                      <button
+                        onClick={() => setLastFrameUrl(null)}
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowLastFrameBrowser(true)}
+                      className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-orange-500/30 hover:border-orange-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
+                      title="Set last frame"
+                    >
+                      <Plus className="w-4 h-4 text-orange-400 group-hover:text-orange-300 transition-colors" />
+                      <span className="text-[9px] text-orange-400 group-hover:text-orange-300 transition-colors leading-tight text-center">Last Frame</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
           </div>
-          
+
           {referenceImages.length === 0 && (
             <p className="text-xs text-gray-500">
               Click to add reference images from computer, R2 storage, or element library for consistent characters and props
@@ -1833,6 +2010,83 @@ export function ImageAIPanel({
                   )}
                 </div>
                 
+                {/* Video & Audio slots — right side, for Kling/Seedance 2.0 */}
+                {(selectedModelOption.value === "kling-3.0/motion-control" || selectedModelOption.value === "bytedance/seedance-2") && (
+                  <div className="flex-shrink-0 flex items-center gap-1.5">
+                    {/* Video refs with duration */}
+                    {videoRefs.map((vid, index) => (
+                      <div key={`video-${index}`} className="relative group">
+                        <div className="w-16 h-16 rounded-md border border-green-500/30 bg-[#1a1a24] overflow-hidden">
+                          <video src={vid.url} className="w-full h-full object-cover" muted />
+                        </div>
+                        <div className="absolute -top-1.5 -left-1 bg-green-800 text-green-200 text-[11px] px-1.5 py-0.5 rounded-full z-20 font-medium">Video {index + 1}</div>
+                        {vid.duration > 0 && (
+                          <div className="absolute -bottom-1.5 left-0 right-0 text-center z-20">
+                            <span className="text-[11px] bg-green-800 text-green-200 px-1.5 py-0.5 rounded-full font-medium">{vid.duration}s</span>
+                          </div>
+                        )}
+                        <button onClick={() => setVideoRefs(prev => prev.filter((_, i) => i !== index))}
+                          className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20">
+                          <X className="w-2 h-2 text-white" />
+                        </button>
+                      </div>
+                    ))}
+                    {((selectedModelOption.value === "kling-3.0/motion-control" && videoRefs.length < 1) ||
+                      (selectedModelOption.value === "bytedance/seedance-2" && videoRefs.length < 3)) && (
+                      <button onClick={() => setShowVideoBrowser(true)}
+                        className="w-16 h-16 rounded-md border border-dashed border-green-800/50 hover:border-green-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-green-900/10"
+                        title="Add Video">
+                        <Film className="w-4 h-4 text-green-600 group-hover:text-green-400" />
+                        <span className="text-[11px] text-green-600 group-hover:text-green-400">Video</span>
+                      </button>
+                    )}
+
+                    {/* Audio refs with duration — Seedance 2.0 only */}
+                    {selectedModelOption.value === "bytedance/seedance-2" && (
+                      <>
+                        {audioRefs.map((aud, index) => (
+                          <div key={`audio-${index}`} className="relative group">
+                            <div className="w-16 h-16 rounded-md border border-purple-500/30 bg-[#1a1a24] flex flex-col items-center justify-center">
+                              <Volume2 className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <div className="absolute -top-1.5 -left-1 bg-purple-800 text-purple-200 text-[11px] px-1.5 py-0.5 rounded-full z-20 font-medium">Audio {index + 1}</div>
+                            {aud.duration > 0 && (
+                              <div className="absolute -bottom-1.5 left-0 right-0 text-center z-20">
+                                <span className="text-[11px] bg-purple-800 text-purple-200 px-1.5 py-0.5 rounded-full font-medium">{aud.duration}s</span>
+                              </div>
+                            )}
+                            <button onClick={() => setAudioRefs(prev => prev.filter((_, i) => i !== index))}
+                              className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20">
+                              <X className="w-2 h-2 text-white" />
+                            </button>
+                          </div>
+                        ))}
+                        {audioRefs.length < 3 && (
+                          <button onClick={() => setShowAudioBrowser(true)}
+                            className="w-16 h-16 rounded-md border border-dashed border-purple-800/50 hover:border-purple-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-purple-900/10"
+                            title="Add Audio">
+                            <Volume2 className="w-4 h-4 text-purple-600 group-hover:text-purple-400" />
+                            <span className="text-[11px] text-purple-600 group-hover:text-purple-400">Audio</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {/* Total duration warning for Seedance 2.0 */}
+                    {selectedModelOption.value === "bytedance/seedance-2" && (totalVideoDuration > 0 || totalAudioDuration > 0) && (
+                      <div className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium ${
+                        totalVideoDuration > 15 || totalAudioDuration > 15
+                          ? 'bg-red-500/20 text-red-400'
+                          : 'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {totalVideoDuration > 0 && <span>V:{totalVideoDuration}s </span>}
+                        {totalAudioDuration > 0 && <span>A:{totalAudioDuration}s</span>}
+                        {(totalVideoDuration > 15 || totalAudioDuration > 15) && <span> (max 15s)</span>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Prompt Actions Button on the Right */}
                 <div className="flex-shrink-0">
                   <div className="relative">
@@ -2116,7 +2370,8 @@ export function ImageAIPanel({
             {/* Spacer to push model and generate to right */}
             <div className="flex-1" />
 
-            {/* Aspect Ratio Select Box */}
+            {/* Aspect Ratio Select Box - Hide for Kling Motion */}
+            {selectedModelOption.value !== "kling-3.0/motion-control" && (
             <div className="relative" style={{ width: "80px" }}>
               <button
                 onClick={() => setShowAspectRatioDropdown(!showAspectRatioDropdown)}
@@ -2157,6 +2412,7 @@ export function ImageAIPanel({
                 </div>
               )}
             </div>
+            )}
 
             {/* Model Select Box - Combined with Output Mode */}
             {allModelOptions.length > 0 && (
@@ -2203,6 +2459,32 @@ export function ImageAIPanel({
                               }
                             }
                             
+                            // Reset resolution/duration to valid defaults for the new model
+                            if (modelOption.value === "kling-3.0/motion-control") {
+                              setResolution("720P");
+                              setVideoDuration("4s");
+                            } else if (modelOption.value === "bytedance/seedance-2") {
+                              setResolution("480P");
+                              setVideoDuration("5s");
+                              setHasVideoInput(false);
+                              setWebSearch(false);
+                              setGenerateAudio(true);
+                              setVideoRefs([]);
+                              setAudioRefs([]);
+                              setFirstFrameUrl(null);
+                              setLastFrameUrl(null);
+                            } else if (modelOption.value === "bytedance/seedance-1.5-pro") {
+                              setResolution("480P");
+                              setVideoDuration("8s");
+                              setAudioEnabled(false);
+                            } else if (modelOption.value === "google/veo-3.1") {
+                              setVeoQuality("Fast");
+                              setVeoMode("TEXT_2_VIDEO");
+                            } else {
+                              // Image models
+                              setResolution("1K");
+                            }
+
                             onModelChange?.(modelOption.value);
                             setShowModelDropdown(false);
                           }}
@@ -2279,8 +2561,40 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Video Duration Select Box - Only show in video mode and not Veo 3.1 */}
-            {outputMode === "video" && selectedModelOption.value !== "google/veo-3.1" && (
+            {/* Kling Motion: Orientation dropdown */}
+            {selectedModelOption.value === "kling-3.0/motion-control" && (
+              <div className="relative" style={{ width: "120px" }}>
+                <button
+                  onClick={() => setKlingOrientation(klingOrientation === "image" ? "video" : "image")}
+                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
+                    klingOrientation === "video"
+                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span>{klingOrientation === "image" ? "Image Orient" : "Video Orient"}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Kling Motion: Background Source dropdown */}
+            {selectedModelOption.value === "kling-3.0/motion-control" && (
+              <div className="relative" style={{ width: "120px" }}>
+                <button
+                  onClick={() => setKlingSource(klingSource === "input_video" ? "input_image" : "input_video")}
+                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
+                    klingSource === "input_image"
+                      ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
+                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span>{klingSource === "input_video" ? "Video Source" : "Image Source"}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Video Duration Select Box - Hide for Veo 3.1 and Kling Motion */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "100px" }}>
                 <button
                   onClick={() => setShowVideoDurationDropdown(!showVideoDurationDropdown)}
@@ -2319,8 +2633,27 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Audio Select Box - Only show in video mode and not Veo 3.1 */}
-            {outputMode === "video" && selectedModelOption.value !== "google/veo-3.1" && (
+            {/* Video Input toggle - Only for Seedance 2.0 */}
+            {outputMode === "video" && selectedModelOption.value === "bytedance/seedance-2" && (
+              <div className="relative" style={{ width: "140px" }}>
+                <button
+                  onClick={() => setHasVideoInput(!hasVideoInput)}
+                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
+                    hasVideoInput
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Film className="w-4 h-4" />
+                    <span>{hasVideoInput ? "Video Input" : "No Video"}</span>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0 */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowAudioDropdown(!showAudioDropdown)}
@@ -2493,6 +2826,40 @@ export function ImageAIPanel({
               </div>
             )}
 
+            {/* Seedance 2.0: Web Search + Generate Audio switches */}
+            {selectedModelOption.value === "bytedance/seedance-2" && (
+              <>
+                <button
+                  onClick={() => setWebSearch(!webSearch)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
+                    webSearch
+                      ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400'
+                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  }`}
+                  title="Web Search"
+                >
+                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${webSearch ? 'bg-cyan-500' : 'bg-gray-600'}`}>
+                    <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${webSearch ? 'left-3' : 'left-0.5'}`} />
+                  </div>
+                  Search
+                </button>
+                <button
+                  onClick={() => setGenerateAudio(!generateAudio)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
+                    generateAudio
+                      ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
+                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  }`}
+                  title="Generate Audio"
+                >
+                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${generateAudio ? 'bg-purple-500' : 'bg-gray-600'}`}>
+                    <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${generateAudio ? 'left-3' : 'left-0.5'}`} />
+                  </div>
+                  Audio
+                </button>
+              </>
+            )}
+
             {/* Credits Display */}
             <div className="flex items-center gap-2 text-[12px] text-gray-400">
               <span className="text-blue-400">⚡</span>
@@ -2618,9 +2985,98 @@ export function ImageAIPanel({
             // Auto-close after selection
             setShowFileBrowser(false);
           }}
-          onSelectFile={(url, type) => 
+          onSelectFile={(url, type) =>
             type === 'image' && handleFileBrowserSelect(url, type)
           }
+        />
+      )}
+
+      {/* First Frame FileBrowser */}
+      {showFirstFrameBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowFirstFrameBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl) => {
+            setFirstFrameUrl(imageUrl);
+            setShowFirstFrameBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image') {
+              setFirstFrameUrl(url);
+              setShowFirstFrameBrowser(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Last Frame FileBrowser */}
+      {showLastFrameBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowLastFrameBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl) => {
+            setLastFrameUrl(imageUrl);
+            setShowLastFrameBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image') {
+              setLastFrameUrl(url);
+              setShowLastFrameBrowser(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Video Reference FileBrowser */}
+      {showVideoBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowVideoBrowser(false)}
+          onSelectFile={async (url, type) => {
+            if (type === 'video') {
+              const maxVideos = selectedModelOption.value === "kling-3.0/motion-control" ? 1 : 3;
+              if (videoRefs.length >= maxVideos) {
+                setShowVideoBrowser(false);
+                return;
+              }
+              // Get video duration
+              const duration = await getMediaDuration(url, 'video');
+              // Validate total ≤15s for Seedance 2.0
+              if (selectedModelOption.value === "bytedance/seedance-2" && totalVideoDuration + duration > 15) {
+                alert(`Total video duration would be ${totalVideoDuration + duration}s. Maximum is 15s.`);
+                return;
+              }
+              setVideoRefs(prev => [...prev, { url, duration }]);
+              setShowVideoBrowser(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Audio Reference FileBrowser — Seedance 2.0 */}
+      {showAudioBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowAudioBrowser(false)}
+          onSelectFile={async (url, type) => {
+            if (type === 'audio' || type === 'file') {
+              if (audioRefs.length >= 3) {
+                setShowAudioBrowser(false);
+                return;
+              }
+              // Get audio duration
+              const duration = await getMediaDuration(url, 'audio');
+              // Validate total ≤15s
+              if (totalAudioDuration + duration > 15) {
+                alert(`Total audio duration would be ${totalAudioDuration + duration}s. Maximum is 15s.`);
+                return;
+              }
+              setAudioRefs(prev => [...prev, { url, duration }]);
+              setShowAudioBrowser(false);
+            }
+          }}
         />
       )}
 

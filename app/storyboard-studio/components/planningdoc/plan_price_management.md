@@ -22,7 +22,7 @@
 
 - **Image generation/editing**: Nano Banana, GPT image variants, Ideogram, Qwen, Nano Banana Edit
 - **Upscaling/enhancement**: Recraft Crisp, Topaz Upscale
-- **Video generation**: Seedance 1.5 Pro and related video pricing configurations
+- **Video generation**: Seedance 1.5 Pro, Kling 3.0 Motion Control, Seedance 2.0
 
 
 ## Current Implementation Status: ✅ **IMPLEMENTED WITH DYNAMIC PRICING INTEGRATION (April 2026)**
@@ -149,7 +149,48 @@ function getSeedance15(base: number, multiplier: number, resolution: string, aud
 - `getSeedance15(7, 1.3, '480p', false, 4)` → 10 credits
 
 
-### 3. getTopazUpscale - AI Upscaling
+### 3. getKlingMotionControl - Kling 3.0 Video Generation
+
+```typescript
+function getKlingMotionControl(base: number, multiplier: number, resolution: string, duration: number): number {
+  const resolutionMultipliers = { '720p': 1, '1080p': 2 };
+  const resolutionMultiplier = resolutionMultipliers[resolution] || 1;
+  return Math.ceil(base * multiplier * resolutionMultiplier * duration);
+}
+```
+
+**Usage:** `getKlingMotionControl(base, multiplier, resolution, duration)`
+
+**Examples** (with factor 1.3):
+- `getKlingMotionControl(5, 1.3, '720p', 5)` → 33 credits
+- `getKlingMotionControl(5, 1.3, '1080p', 5)` → 65 credits
+
+
+### 4. getSeedance20 - Seedance 2.0 Video Generation
+
+```typescript
+function getSeedance20(base: number, multiplier: number, resolution: string, hasVideoInput: boolean, duration: number): number {
+  const resolutionMultipliers = { '480p': 1, '720p': 2 };
+  const videoInputMultiplier = hasVideoInput ? 1.5 : 1;
+  const resolutionMultiplier = resolutionMultipliers[resolution] || 1;
+  // Duration uses 4-second block intervals similar to Seedance 1.5
+  let durationMultiplier = 1;
+  if (duration <= 4) durationMultiplier = 1;
+  else if (duration <= 8) durationMultiplier = 2;
+  else if (duration <= 12) durationMultiplier = 4;
+  else durationMultiplier = 4 + Math.ceil((duration - 12) / 4);
+  return Math.ceil(base * multiplier * resolutionMultiplier * videoInputMultiplier * durationMultiplier);
+}
+```
+
+**Usage:** `getSeedance20(base, multiplier, resolution, hasVideoInput, duration)`
+
+**Examples** (with factor 1.3):
+- `getSeedance20(7, 1.3, '480p', false, 5)` → 19 credits
+- `getSeedance20(7, 1.3, '720p', true, 10)` → 73 credits
+
+
+### 5. getTopazUpscale - AI Upscaling
 
 ```typescript
 function getTopazUpscale(base: number, multiplier: number, upscaleFactor: string): number {
@@ -568,32 +609,29 @@ const DEFAULT_PRICING_MODELS = [
 - **Saving after edit keeps the newly saved values in the modal**
 - **Duplicate rows created before the strict update fix may still need manual cleanup**
 
-## Benefits of Current Implementation
+## KIE AI Key Management (April 2026)
 
-### ✅ **Complete Functionality**
+### Overview
+The Pricing Management page now has 3 tabs: **Models | Testing | KIE AI**. The KIE AI tab provides CRUD for API keys stored in the `storyboard_kie_ai` Convex table.
 
-- **Full CRUD Operations**: Create, read, update, delete models
-- **Working Dropdowns**: Favorites and delete operations functional
-- **Price Calculators**: Instant credit checking for all models
-- **Real-time Testing**: Verify pricing changes instantly
-- **Professional UI**: Dark theme with multiple view modes
-- **Intuitive Controls**: Clear buttons and dropdown menus
-- **Instant Feedback**: Real-time calculations and updates
-- **Error Handling**: Proper validation and user messages
+### `storyboard_kie_ai` Table Schema
+- `name` — human-readable label for the key
+- `key` — the API key string (hidden by default in UI with show/hide toggle)
+- `isDefault` — whether this key is the system-wide default
+- `isActive` — whether the key is currently active
 
-### ✅ **Developer Experience**
+### Key Resolution (`resolveKieApiKey()`)
+Located in `lib/storyboard/kieAI.ts`. Fallback chain:
+1. `org_settings.defaultAI` — per-org key from the referenced `storyboard_kie_ai` record
+2. System default — the `storyboard_kie_ai` record where `isDefault === true`
+3. `KIE_AI_API_KEY` env var — final fallback
 
-- **TypeScript**: Typed pricing models and functions
-- **Clean Code**: Well-organized and maintainable
-- **Proper Database**: Convex with correct schema and indexes
-- **API Integration**: Full REST API with proper error handling
+### defaultAI Integration
+- `org_settings.defaultAI` field references a `storyboard_kie_ai` record ID
+- `storyboard_files.defaultAI` stores which key was used for each generation
+- Project Settings modal has two tabs: **Company** and **Default AI Key**
 
-### ✅ **Business Control**
-
-- **Model Management**: Enable/disable models instantly
-- **Pricing Flexibility**: Fixed and formula-based pricing
-- **Testing Tools**: Verify pricing before deployment
-- **Audit Trail**: Complete tracking of changes
+---
 
 ## File Structure
 
@@ -757,15 +795,5 @@ console.log("[EditImageAIPanel] Alert debug:", {
 - **✅ Maintainable**: Formula-driven pricing reduces hardcoded values
 
 ---
-
-## ✅ **Implementation Status: CURRENTLY IN USE**
-
-The pricing management system is implemented and currently used with:
-- ✅ Separate create and update flows
-- ✅ Edit flow that does not create new models
-- ✅ Fresh modal state after save
-- ✅ Formula and fixed price support
-- ✅ Admin testing panel
-- ✅ Convex-backed pricing storage
 
 **Keep this document aligned with the actual model IDs and save flow in code.**

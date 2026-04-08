@@ -1,4 +1,538 @@
-# ContentEditable Inline Badge System with Dynamic Pricing Integration
+# UI Components — Style, Tags & Text Input
+
+> **Owns**: LTX design system, tag display patterns, ContentEditable badge system
+> **Status**: Implemented
+
+---
+
+# LTX Style Guide
+
+> **Purpose**: A modern, simple, and efficient design system for the LTX platform.
+> **Scope**: To ensure a consistent and high-quality user experience across all product features.
+> **Inspiration**: Based on the LTX application's existing UI patterns.
+
+---
+
+## 🎯 **Design Philosophy**
+
+### **🎨 **Core Principles**
+- **Modern & Sleek**: A dark-themed, professional UI that feels contemporary and focused.
+- **Simple & Intuitive**: Minimal complexity, clear information hierarchy, and predictable interactions.
+- **Efficient & Focused**: Workflows are optimized to reduce cognitive load and help users complete tasks quickly.
+- **Consistent**: A unified visual and interactive language across the entire platform.
+
+---
+
+## 🎨 **Color Palette (Dark Theme)**
+
+### **⚫ **Primary & Neutral Colors**
+```css
+/* Backgrounds */
+--bg-primary: #1A1A1A;      /* Main app background */
+--bg-secondary: #2C2C2C;    /* Cards, panels, and secondary surfaces */
+--bg-tertiary: #3D3D3D;     /* UI controls, borders, hover states */
+
+/* Text */
+--text-primary: #FFFFFF;       /* Primary text, headings */
+--text-secondary: #A0A0A0;     /* Secondary text, labels, descriptions */
+--text-tertiary: #6E6E6E;      /* Tertiary text, placeholders, disabled states */
+
+/* Borders */
+--border-primary: #3D3D3D;     /* Default border color */
+--border-secondary: #4A4A4A;   /* Subtle borders */
+```
+
+### **🔵 **Accent Colors**
+```css
+/* Primary Accent (Blue) */
+--accent-blue: #4A90E2;         /* Primary buttons, links, focus rings, selected states */
+--accent-blue-hover: #357ABD;   /* Hover state for primary blue elements */
+
+/* Secondary Accent (Teal) */
+--accent-teal: #4A9E8E;         /* Secondary buttons or highlights */
+--accent-teal-hover: #378B7C;   /* Hover state for teal elements */
+
+/* Semantic Colors */
+--color-success: #52C41A;       /* Success messages, confirmation */
+--color-warning: #FAAD14;       /* Warnings, alerts */
+--color-error: #FF4D4F;         /* Error messages, destructive actions */
+```
+
+---
+
+## ✒️ **Typography**
+
+### **📝 **Font Family**
+```css
+/* A clean, modern sans-serif font is used throughout the UI. */
+--font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+--font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+```
+
+### **📏 **Font Scale**
+- **Headings**: Bold weight (`700`), ranging from `1.5rem` to `2.25rem`.
+- **Body**: Normal weight (`400`) at `1rem` (16px).
+- **Labels/Subtext**: Medium weight (`500`) at `0.875rem` (14px).
+- **Captions**: Normal weight (`400`) at `0.75rem` (12px).
+
+---
+
+## 🎨 **Component Design (LTX Style)**
+
+### **🔘 **Buttons**
+- **Primary Action**:
+  - **Background**: `var(--accent-blue)`
+  - **Text**: `var(--text-primary)`
+  - **Hover**: `var(--accent-blue-hover)`
+  - **Border Radius**: `0.5rem` (8px)
+- **Secondary Action**:
+  - **Background**: `var(--bg-tertiary)`
+  - **Text**: `var(--text-secondary)`
+  - **Hover**: `var(--border-primary)`
+  - **Border Radius**: `0.5rem` (8px)
+- **Text/Icon Buttons**:
+  - **Background**: `transparent`
+  - **Text/Icon Color**: `var(--text-secondary)`
+  - **Hover**: Background `var(--bg-tertiary)`
+
+### **📋 **Cards & Panels**
+- **Background**: `var(--bg-secondary)`
+- **Border**: `1px solid var(--border-primary)`
+- **Border Radius**: `0.75rem` (12px)
+- **Shadow**: Subtle shadow to create depth, especially on hover.
+
+### **🪟 **Modals & Overlays**
+- **Background**: `var(--bg-secondary)`
+- **Border**: `1px solid var(--border-primary)`
+- **Border Radius**: `1rem` (16px) for top-level modals
+- **Shadow**: `0 25px 50px -12px rgba(0, 0, 0, 0.25)` for dramatic depth
+- **Overlay**: `rgba(0, 0, 0, 0.8)` with backdrop blur for modern glass effect
+- **Header**: Clean header with rounded top corners, no border conflicts
+- **Content**: Subtle divider between header and content (`h-px bg-(--border-primary)`)
+
+### **📝 **Input Fields**
+- **Background**: `var(--bg-primary)` or `var(--bg-secondary)`
+- **Border**: `1px solid var(--border-primary)`
+- **Border Radius**: `0.5rem` (8px)
+- **Text Color**: `var(--text-primary)`
+- **Placeholder Color**: `var(--text-tertiary)`
+- **Focus State**: A blue ring or border using `var(--accent-blue)`.
+
+### **🧭 **Navigation & Tabs**
+- **Active Tab**: A solid background (`var(--bg-tertiary)`) or a colored line indicator (`var(--accent-blue)`).
+- **Inactive Tab**: `var(--text-secondary)` color, transparent background.
+- **Icons**: Minimalist, line-art style, colored `var(--text-secondary)`.
+
+### **▶️ **Video Player & Timeline**
+- **Timeline**: A dark track (`var(--bg-primary)`) with a red playhead indicator.
+- **Thumbnails**: Rounded corners, with subtle overlays for text or icons.
+- **Controls**: Minimalist icons with clear, intuitive functions.
+
+### **📱 **Mobile Responsiveness**
+- **Breakpoints**: Mobile (<768px), Tablet (768px-1024px), Desktop (>1024px)
+- **Modal Adaptation**: Full viewport on mobile with reduced padding and rounded corners
+- **Header Layout**: Stack controls vertically on mobile, wrap to multiple lines
+- **File Grid**: Single column on mobile, 2-3 columns on tablet, responsive on desktop
+- **Touch Targets**: Minimum 44px touch targets for mobile interactions
+- **Typography**: Scale down appropriately on smaller screens
+- **Gestures**: Support swipe gestures for mobile interactions
+
+### **📁 **File Browser (LTX Pattern)**
+- **Modal Layout**: Full-screen modal with rounded corners and dramatic shadow
+- **Header**: Clean toolbar with organized controls (Filter, Search, Zoom, Upload, Close)
+- **Filter System**: Consolidated dropdown with file type and source filters
+- **File Grid**: Responsive grid with adjustable zoom (80px - 200px)
+- **File Cards**: Rounded corners (`rounded-2xl`), hover effects, and clean overlays
+- **Image Display**: Rounded corners on all images with `object-cover` scaling
+- **Action Buttons**: Favorite star, download, and delete controls on hover
+- **File Info**: Gradient overlay with filename and project/global badges
+- **Empty States**: Clear messaging with appropriate icons and styling
+
+#### **📱 Mobile File Browser Adaptations**
+- **Modal**: Full viewport with minimal padding, `rounded-t-2xl` only on top
+- **Header**: Stack search and controls vertically, prioritize essential actions
+- **Search**: Full-width search bar with prominent positioning
+- **Filter**: Bottom sheet or slide-up panel for better mobile access
+- **Grid**: Single column layout with larger touch targets (minimum 80px height)
+- **File Cards**: Increased spacing for touch interaction, persistent action buttons
+- **Zoom**: Slider replaced with preset size options (Small, Medium, Large)
+- **Upload**: Prominent upload button with drag-and-drop support
+- **Gestures**: Swipe to delete, long-press for context menu
+
+---
+
+## ✨ **Interactive States**
+
+- **Hover**: Elements should provide clear feedback, such as a change in background color, border, or shadow.
+- **Focus**: Interactive elements must have a visible focus state, typically a blue ring (`var(--accent-blue)`), for accessibility.
+- **Selected**: Selected items in lists or grids should be clearly indicated, often with a border or background color change (`var(--accent-blue)`).
+
+---
+
+---
+
+# Tags System
+
+## Overview
+This document outlines the current tag implementation across the storyboard studio components and provides guidelines for consistent tag display and management.
+
+## Tag Data Structure
+
+### Convex Backend Storage Schema
+
+#### 1. Storyboard Projects Table
+```typescript
+storyboard_projects: defineTable({
+  // ... other fields
+  tags: v.array(v.string()), // Simple string array storage
+})
+```
+- **Format**: Array of strings (`string[]`)
+- **Purpose**: Simple, efficient storage for project-level tags
+- **Example**: `["action", "dialogue", "custom-tag"]`
+
+#### 2. Storyboard Items Table (Individual Frames)
+```typescript
+storyboard_items: defineTable({
+  // ... other fields  
+  tags: v.optional(v.array(v.object({
+    id: v.string(),
+    name: v.string(), 
+    color: v.string(),
+  }))),
+})
+```
+- **Format**: Array of tag objects with full metadata
+- **Purpose**: Rich tag data for individual storyboard items
+- **Example**: `[{id: "action", name: "Action", color: "#ef4444"}]`
+
+#### 3. Other Tables (Elements, Assets, etc.)
+- **storyboard_elements**: `tags: v.array(v.string())`
+- **storyboard_assets**: `tags: v.array(v.string())`
+- **users**: `userTags: v.optional(v.array(v.string()))`
+
+### Frontend Display (UI Components)
+- **Format**: Tag objects with full metadata
+- **Interface**: `Tag { id: string; name: string; color: string; }`
+- **Purpose**: Rich visual display with colors and names
+
+### Predefined Tags
+```typescript
+export const SIMPLE_TAGS = [
+  { id: "action", name: "Action", color: "#ef4444" },
+  { id: "dialogue", name: "Dialogue", color: "#f97316" },
+  { id: "dramatic", name: "Dramatic", color: "#eab308" },
+  { id: "close-up", name: "Close Up", color: "#22c55e" },
+  { id: "wide", name: "Wide", color: "#3b82f6" },
+  { id: "interior", name: "Interior", color: "#8b5cf6" },
+  { id: "exterior", name: "Exterior", color: "#ec4899" },
+  { id: "day", name: "Day", color: "#06b6d4" },
+  { id: "night", name: "Night", color: "#ef4444" },
+  { id: "montage", name: "Montage", color: "#f97316" },
+];
+
+export const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899", "#06b6d4"];
+```
+
+## Tag Display Patterns
+
+### 1. Storyboard Item Tags (Primary Pattern)
+**Used in**: TimelineView, ProjectsDashboard (updated)
+**Characteristics**:
+- Purple theme with opacity
+- Rounded corners (not full)
+- Hash icon for visual identification
+- Consistent spacing
+
+```typescript
+<span className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs flex items-center gap-1">
+  <Hash className="w-3 h-3" />
+  {tagString}
+</span>
+```
+
+**Visual Style**:
+- Background: `bg-purple-500/10` (10% opacity purple)
+- Text: `text-purple-400` (light purple)
+- Border: `rounded` (slightly rounded corners)
+- Typography: `text-xs` (extra small)
+- Layout: `flex items-center gap-1`
+- Icon: `Hash` (w-3 h-3)
+
+### 2. Scene Editor Tags (Shot-level)
+**Used in**: SceneEditor component
+**Characteristics**:
+- Dynamic colored backgrounds
+- White text for contrast
+- Smaller text size
+- No icons
+
+```typescript
+<span className="px-2 py-0.5 rounded text-[10px] font-semibold text-white" style={{ backgroundColor: t.color + "cc" }}>
+  {t.name}
+</span>
+```
+
+**Visual Style**:
+- Background: Dynamic color with 80% opacity (`color + "cc"`)
+- Text: `text-white` (white)
+- Border: `rounded`
+- Typography: `text-[10px] font-semibold` (10px, bold)
+- Layout: No flex, text only
+
+### 3. Element Library Tags
+**Used in**: ElementLibrary component
+**Characteristics**:
+- Purple theme with higher opacity
+- Backdrop blur effect
+- Compact size
+- No icons
+
+```typescript
+<span className="text-xs bg-purple-500/80 text-white rounded px-1.5 py-0.5 backdrop-blur-sm">
+  {tag}
+</span>
+```
+
+**Visual Style**:
+- Background: `bg-purple-500/80` (80% opacity purple)
+- Text: `text-white` (white)
+- Border: `rounded`
+- Typography: `text-xs`
+- Layout: `px-1.5 py-0.5`
+- Effect: `backdrop-blur-sm`
+
+### 4. TagEditor Tags (Interactive)
+**Used in**: TagEditor component
+**Characteristics**:
+- Dynamic colored backgrounds
+- Rounded-full (pill shape)
+- Hover effects and transitions
+- Remove button (X icon)
+
+```typescript
+<span
+  key={`${tag.id}-${index}`}
+  className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 hover:scale-105"
+  style={{ 
+    backgroundColor: tag.color + '25', 
+    color: tag.color,
+    border: `1px solid ${tag.color}30`
+  }}
+>
+  {tag.name}
+  <button onClick={() => removeTag(tag.id)} className="ml-1 hover:opacity-70 transition">
+    <X className="w-3 h-3" />
+  </button>
+</span>
+```
+
+**Visual Style**:
+- Background: Dynamic color with 15% opacity (`color + '25'`)
+- Text: Dynamic color (`color`)
+- Border: `rounded-full` (pill shape)
+- Typography: `text-xs font-medium`
+- Layout: `inline-flex items-center gap-1`
+- Effects: `transition-all duration-200 hover:scale-105`
+- Border: `1px solid ${color}30`
+
+## Data Conversion Functions
+
+### Convex Integration Patterns
+
+#### 1. Projects Tags (String Storage)
+```typescript
+// Storage: storyboard_projects.tags = ["action", "dialogue", "custom"]
+
+// Frontend Display Conversion
+const toProjectTagOption = (tag: string, index: number): ProjectTagOption => {
+  const predefinedTag = SIMPLE_TAGS.find((t) => t.id === tag);
+  if (predefinedTag) {
+    return predefinedTag;
+  }
+
+  // Create a tag option from string tag
+  const color = TAG_COLORS[index % TAG_COLORS.length];
+  return {
+    id: tag,
+    name: tag,
+    color: color
+  };
+};
+
+// Backend Storage Conversion
+const handleProjectTagsChange = (newTags: ProjectTagOption[]) => {
+  // Convert tag objects back to strings and deduplicate
+  const tagStrings = [...new Set(newTags.map(tag => tag.id))];
+  // Save to Convex as string array
+};
+```
+
+#### 2. Items Tags (Object Storage)
+```typescript
+// Storage: storyboard_items.tags = [{id: "action", name: "Action", color: "#ef4444"}]
+
+// Direct usage - no conversion needed for items
+const itemTags = item.metadata.tags; // Already objects with color/name
+
+// Backend Storage - save full objects
+await updateStoryboardItem({
+  id: itemId,
+  tags: shotTags // Array of {id, name, color} objects
+});
+```
+
+### String to Object Conversion
+```typescript
+const toProjectTagOption = (tag: string, index: number): ProjectTagOption => {
+  const predefinedTag = SIMPLE_TAGS.find((t) => t.id === tag);
+  if (predefinedTag) {
+    return predefinedTag;
+  }
+
+  // Create a tag option from string tag
+  const color = TAG_COLORS[index % TAG_COLORS.length];
+  return {
+    id: tag,
+    name: tag,
+    color: color
+  };
+};
+```
+
+### Object to String Conversion
+```typescript
+const handleProjectTagsChange = (newTags: ProjectTagOption[]) => {
+  // Convert tag objects back to strings and deduplicate
+  const tagStrings = [...new Set(newTags.map(tag => tag.id))];
+  // Save to backend...
+};
+```
+
+## Implementation Guidelines
+
+### 1. Consistency Rules
+- **Storyboard Items**: Use purple theme with Hash icon (Pattern 1)
+- **Scene Elements**: Use dynamic colors with white text (Pattern 2)
+- **Interactive Tags**: Use TagEditor pattern with hover effects (Pattern 4)
+- **Card Overlays**: Use ElementLibrary pattern with backdrop blur (Pattern 3)
+
+### 2. Color Usage
+- **Purple Theme**: For primary tag display (timeline, project cards)
+- **Dynamic Colors**: For scene-specific tags (shot types, locations)
+- **High Contrast**: Ensure readability on various backgrounds
+
+### 3. Icon Usage
+- **Hash Icon**: For general tag identification
+- **Tag Icon**: For metadata tags in timeline
+- **X Icon**: For removable tags in editors
+
+### 4. Responsive Design
+- **Desktop**: Full tag display with all metadata
+- **Mobile**: Truncated tags with "+N" overflow indicator
+- **Table View**: Limited to 2 tags per row
+- **Grid View**: Limited to 3 tags per card
+
+## Component Mapping
+
+| Component | Pattern | Use Case | Icon |
+|-----------|---------|----------|------|
+| TimelineView | Pattern 1 | Timeline items | Hash |
+| ProjectsDashboard | Pattern 1 | Project cards | Hash |
+| SceneEditor | Pattern 2 | Shot tags | None |
+| ElementLibrary | Pattern 3 | Element overlays | None |
+| TagEditor | Pattern 4 | Interactive editing | X |
+
+## Future Considerations
+
+### 1. Tag Categories
+- Consider implementing tag categories (scene types, emotions, technical)
+- Category-specific color schemes
+- Filter by category functionality
+
+### 2. Tag Management
+- Bulk tag operations
+- Tag renaming across all projects
+- Tag merging and deletion
+
+### 3. Performance Optimization
+- Tag caching for frequently used combinations
+- Lazy loading for large tag sets
+- Virtual scrolling for tag lists
+
+### 4. Accessibility
+- Keyboard navigation for tag selection
+- Screen reader support for tag content
+- High contrast mode support
+
+## Migration Notes
+
+### Recent Changes
+1. **ProjectsDashboard Updated**: Changed from dynamic colored tags to purple theme (Pattern 1)
+2. **Consistent Implementation**: All storyboard items now use the same visual pattern
+3. **Icon Standardization**: Hash icon adopted for primary tag display
+
+### Breaking Changes
+- Custom tag colors in project cards now use standardized purple theme
+- Dynamic colors preserved in SceneEditor for shot-specific context
+
+## Testing Checklist
+
+- [ ] Tag display consistency across all components
+- [ ] Tag creation and deletion functionality
+- [ ] Tag deduplication in storage
+- [ ] Responsive behavior on different screen sizes
+- [ ] Keyboard navigation and accessibility
+- [ ] Performance with large tag sets
+- [ ] Data persistence and synchronization
+
+---
+
+# Prompt Library (April 2026 Update)
+
+## Category Expansion
+Categories expanded from the original set (character/environment/prop/style/custom) to include:
+- **camera** — camera angle and movement prompts
+- **action** — character action and motion prompts
+- **other** — miscellaneous prompts that don't fit other categories
+
+## Category Filter Tabs
+- Tab bar with category filter buttons, each showing a count of prompts in that category
+- "All" tab shows all prompts across categories
+- Selecting a category tab filters the prompt list in real time
+
+## Notes Field
+- Create and edit modals now include a `notes` text field
+- Provides a place for usage tips, context, or reminders about each prompt
+- Displayed as secondary text on prompt cards
+
+## New Default Prompts
+The following default prompts are now seeded:
+- **General Character** — baseline character description prompt
+- **Monster** — creature/monster generation prompt
+- **General Environment** — baseline environment/scene prompt
+- **Prompt Edit Image** — prompt template for image editing workflows
+
+---
+
+## FileBrowser Updates (April 2026)
+
+### Pagination
+- Switched from `useQuery` to `usePaginatedQuery` with a new `listFiltered` query
+- Server-side filtering by `category` and `fileType`
+- "Load More" button at the bottom of the file grid for incremental loading
+
+### File Type Badges
+- File cards display type badges: VIDEO, AUDIO, DOC
+- File extension shown on cards for quick identification
+
+### Video Lazy Loading
+- Video elements use `preload="none"` to avoid loading video data until playback is requested
+- Reduces initial page load time for projects with many video files
+
+---
+
+# ContentEditable Badge System
 
 ## Overview
 

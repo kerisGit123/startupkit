@@ -1217,6 +1217,8 @@ export default function StoryboardWorkspacePage() {
                         onNotesChange={(notes) => handleNotesChange(item._id, notes)}
                         onTitleChange={(title) => handleTitleChange(item._id, title)}
                         onDescriptionChange={(description) => handleDescriptionChange(item._id, description)}
+                        onImagePromptChange={(imagePrompt) => updateItem({ id: item._id, imagePrompt })}
+                        onVideoPromptChange={(videoPrompt) => updateItem({ id: item._id, videoPrompt })}
                         onRemoveElement={(elementId) => handleRemoveElement(item._id, elementId)}
                         onAddElement={() => handleAddElement(item._id)}
                         onMoveUp={() => handleMoveUp(item._id)}
@@ -1603,7 +1605,7 @@ function TagEditorInline({ selectedTags, onTagsChange, onClose }: TagEditorInlin
 }
 
 interface FrameCardProps {
-  item: { _id: string; title: string; description?: string; imageUrl?: string; videoUrl?: string; duration: number; generationStatus: string; order: number; tags?: Array<{ id: string; name: string; color: string }>; isFavorite?: boolean; frameStatus?: string; notes?: string; linkedElements?: Array<{ id: string; name: string; type: string }> };
+  item: { _id: string; title: string; description?: string; imageUrl?: string; videoUrl?: string; duration: number; generationStatus: string; order: number; tags?: Array<{ id: string; name: string; color: string }>; isFavorite?: boolean; frameStatus?: string; notes?: string; imagePrompt?: string; videoPrompt?: string; linkedElements?: Array<{ id: string; name: string; type: string }> };
   index: number;
   frameRatio: string;
   selected: boolean;
@@ -1620,6 +1622,8 @@ interface FrameCardProps {
   onNotesChange: (notes: string) => void;
   onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
+  onImagePromptChange: (imagePrompt: string) => void;
+  onVideoPromptChange: (videoPrompt: string) => void;
   onRemoveElement: (elementId: string) => void;
   onAddElement: () => void;
   onMoveUp?: (itemId: string) => void;
@@ -1635,14 +1639,17 @@ interface FrameCardProps {
   projectStoryboardUrl?: string; // To show if this frame's image is the storyboard URL
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onSetPrimaryImage, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard, onSetStoryboardUrl, onClearStoryboardUrl, projectStoryboardUrl }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onSetPrimaryImage, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onImagePromptChange, onVideoPromptChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard, onSetStoryboardUrl, onClearStoryboardUrl, projectStoryboardUrl }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showPromptDialog, setShowPromptDialog] = useState(false);
   const [newTitle, setNewTitle] = useState(item.title);
   const [newDescription, setNewDescription] = useState(item.description || "");
+  const [newImagePrompt, setNewImagePrompt] = useState(item.imagePrompt || "");
+  const [newVideoPrompt, setNewVideoPrompt] = useState(item.videoPrompt || "");
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
 
   // Frame status configuration
@@ -2093,6 +2100,17 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             </div>
           </button>
           
+          {/* Edit Prompts button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowPromptDialog(true); }}
+            className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
+            title="Edit image & video prompts"
+          >
+            <div className={`w-8 h-8 backdrop-blur-sm rounded-full flex items-center justify-center transition-colors ${item.imagePrompt || item.videoPrompt ? 'bg-emerald-600/90 hover:bg-emerald-600' : 'bg-teal-600/90 hover:bg-teal-600'}`}>
+              <Sparkles className="w-3.5 h-3.5 text-white" />
+            </div>
+          </button>
+
           {/* Add Element button */}
           <button
             onClick={(e) => { e.stopPropagation(); onAddElement?.(); }}
@@ -2140,9 +2158,26 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             </div>
           </div>
         </div>
-        <p className="text-xs text-gray-500 mb-3 line-clamp-2">
+        <p className="text-xs text-gray-500 mb-2 line-clamp-2">
           {item.description || <span className="text-gray-600">No description</span>}
         </p>
+        {/* Prompt indicators */}
+        {(item.imagePrompt || item.videoPrompt) && (
+          <div className="flex items-center gap-2 mb-1">
+            {item.imagePrompt && (
+              <div className="flex items-center gap-1 text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded" title={item.imagePrompt}>
+                <ImageIcon className="w-3 h-3" />
+                <span className="truncate max-w-[100px]">Image</span>
+              </div>
+            )}
+            {item.videoPrompt && (
+              <div className="flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded" title={item.videoPrompt}>
+                <Video className="w-3 h-3" />
+                <span className="truncate max-w-[100px]">Video</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       
       {/* NEW: Inline Edit Dialog */}
@@ -2180,7 +2215,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                   placeholder="Enter frame description..."
                 />
               </div>
-              
+
               {/* Action Buttons */}
               <div className="flex gap-2 pt-2">
                 <button
@@ -2213,6 +2248,83 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         </div>
       )}
       
+      {/* Prompt Edit Dialog */}
+      {showPromptDialog && (
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
+          <div className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-3 border-b border-(--border-primary)">
+              <h3 className="text-sm font-bold text-(--text-primary) flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                Edit Prompts
+              </h3>
+              <button onClick={() => setShowPromptDialog(false)} className="p-1 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200">
+                <X className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            </div>
+
+            <div className="p-3 space-y-3">
+              {/* Image Prompt */}
+              <div>
+                <label className="text-xs text-(--text-tertiary) font-medium mb-1 flex items-center gap-1.5">
+                  <ImageIcon className="w-3 h-3 text-blue-400" />
+                  Image Prompt
+                </label>
+                <textarea
+                  value={newImagePrompt}
+                  onChange={(e) => setNewImagePrompt(e.target.value)}
+                  className="w-full text-sm text-gray-300 bg-white/10 border border-white/20 rounded-lg px-3 py-2 outline-none focus:border-blue-500 resize-none transition-colors"
+                  rows={3}
+                  placeholder="Describe the image to generate..."
+                />
+              </div>
+
+              {/* Video Prompt */}
+              <div>
+                <label className="text-xs text-(--text-tertiary) font-medium mb-1 flex items-center gap-1.5">
+                  <Video className="w-3 h-3 text-emerald-400" />
+                  Video Prompt
+                </label>
+                <textarea
+                  value={newVideoPrompt}
+                  onChange={(e) => setNewVideoPrompt(e.target.value)}
+                  className="w-full text-sm text-gray-300 bg-white/10 border border-white/20 rounded-lg px-3 py-2 outline-none focus:border-emerald-500 resize-none transition-colors"
+                  rows={3}
+                  placeholder="Describe the video to generate..."
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    if (newImagePrompt.trim() !== (item.imagePrompt || "")) {
+                      onImagePromptChange?.(newImagePrompt.trim());
+                    }
+                    if (newVideoPrompt.trim() !== (item.videoPrompt || "")) {
+                      onVideoPromptChange?.(newVideoPrompt.trim());
+                    }
+                    setShowPromptDialog(false);
+                  }}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-2 rounded-lg transition-colors"
+                >
+                  Save Prompts
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPromptDialog(false);
+                    setNewImagePrompt(item.imagePrompt || "");
+                    setNewVideoPrompt(item.videoPrompt || "");
+                  }}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium py-2 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NEW: Notes Modal */}
       {showNotesModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">

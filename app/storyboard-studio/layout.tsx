@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
-import { useOrganization, useUser, ClerkProvider } from "@clerk/nextjs";
+import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/ui/themes";
 import { api } from "@/convex/_generated/api";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { SidebarNav } from "./components/SidebarNav";
 import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
@@ -18,9 +19,7 @@ export default function StoryboardStudioLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { organization } = useOrganization();
-  const { user } = useUser();
-  const orgId = organization?.id ?? user?.id ?? "personal";
+  const orgId = useCurrentCompanyId() || "personal";
   const hideStudioSidebar = pathname?.startsWith("/storyboard-studio/projects") ||
     pathname?.startsWith("/storyboard-studio/workspace");
 

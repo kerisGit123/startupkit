@@ -1,4 +1,5 @@
 import { mutation, query, internalMutation } from "../_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 
 export const logUpload = mutation({
@@ -28,6 +29,7 @@ export const logUpload = mutation({
     taskId: v.optional(v.string()),       // KIE AI task ID (only for category="generated")
     sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
     metadata: v.optional(v.any()),         // Generation metadata for compositing
+    defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used
   },
   handler: async (ctx, args) => {
     // Since we're calling from API route with auth, we can work without auth context
@@ -240,6 +242,66 @@ export const listByCompany = query({
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
       .collect();
     return files;
+  },
+});
+
+export const listFiltered = query({
+  args: {
+    companyId: v.string(),
+    category: v.optional(v.string()),
+    fileType: v.optional(v.string()),
+    searchTerm: v.optional(v.string()),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    // Special case: temps files have NO companyId — query by category directly
+    if (args.category === "temps") {
+      let tempsQuery = ctx.db
+        .query("storyboard_files")
+        .filter((q) => q.eq(q.field("category"), "temps"));
+
+      if (args.fileType) {
+        const ft = args.fileType;
+        tempsQuery = tempsQuery.filter((q) => q.eq(q.field("fileType"), ft));
+      }
+
+      const results = await tempsQuery.order("desc").paginate(args.paginationOpts);
+
+      if (args.searchTerm) {
+        const term = args.searchTerm.toLowerCase();
+        return { ...results, page: results.page.filter((file) => file.filename.toLowerCase().includes(term)) };
+      }
+      return results;
+    }
+
+    // Normal case: use by_companyId index
+    let baseQuery = ctx.db
+      .query("storyboard_files")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId));
+
+    // Apply server-side filters
+    if (args.category && args.fileType) {
+      const cat = args.category;
+      const ft = args.fileType;
+      baseQuery = baseQuery.filter((q) =>
+        q.and(q.eq(q.field("category"), cat), q.eq(q.field("fileType"), ft))
+      );
+    } else if (args.category) {
+      const cat = args.category;
+      baseQuery = baseQuery.filter((q) => q.eq(q.field("category"), cat));
+    } else if (args.fileType) {
+      const ft = args.fileType;
+      baseQuery = baseQuery.filter((q) => q.eq(q.field("fileType"), ft));
+    }
+
+    const results = await baseQuery.order("desc").paginate(args.paginationOpts);
+
+    if (args.searchTerm) {
+      const term = args.searchTerm.toLowerCase();
+      return { ...results, page: results.page.filter((file) => file.filename.toLowerCase().includes(term)) };
+    }
+
+    return results;
   },
 });
 

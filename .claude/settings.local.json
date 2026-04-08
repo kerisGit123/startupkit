@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(printf '\\\\n\\\\n---\\\\n\\\\n# Item & Element Integration\\\\n\\\\n> Merged from plan_storyboard_item_element.md\\\\n\\\\n')",
+      "Bash(ls \"D:/gemini/startupkit/app/storyboard-studio/components/planningdoc/\"*.md)",
+      "Bash(ls -1 \"D:/gemini/startupkit/app/storyboard-studio/components/planningdoc/\"*.md)",
+      "Bash(wc -l \"D:/gemini/startupkit/app/storyboard-studio/components/planningdoc/\"*.md)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const c = require\\('convex/values'\\); console.log\\('values:', typeof c.paginationOptsValidator\\)\")",
+      "Bash(node -e \"const c = require\\('convex/server'\\); console.log\\('server:', typeof c.paginationOptsValidator\\)\")",
+      "Bash(grep -n \"const updateItem = useMutation\\\\|const updateFrameStatus\\\\|const updateFrameNotes\\\\|export const update\" /d/gemini/startupkit/app/storyboard-studio/workspace/[projectId]/page.tsx)",
+      "Bash(xargs grep:*)",
+      "Bash(cd /d \"D:\\\\gemini\\\\startupkit\\\\app\\\\storyboard-studio\")",
+      "Bash(find:*)"
+    ]
+  }
+}

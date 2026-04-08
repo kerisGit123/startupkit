@@ -69,6 +69,9 @@ Kie AI provides unified access to the best AI models through a single API. For i
 | `qwen/image-edit` | 4 | 1x (fixed) | 0 | Quick edits |
 | `google/nano-banana-edit` | 4 | 1x (fixed) | 0 | Style transfer |
 | `seedream/5-lite-image-to-image` | 4 | 1x (fixed) | 13 | Lighting effects |
+| **Video Generation** |  |  |  |  |
+| `kling-3.0/motion-control` | per-second | 720p/1080p | 1 video | Motion control |
+| `bytedance/seedance-2` | per-second | 480p/720p | 9 img, 3 vid, 3 aud | Video generation |
 | **Upscale** |  |  |  |  |
 | `recraft/crisp-upscale` | 1 | 1x (fixed) | 0 | Quality enhancement |
 | `topaz/image-upscale` | 10 | 1K:1x, 2K:2x, 4K:4x | 0 | Professional upscale |
@@ -342,7 +345,71 @@ const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
 });
 ```
 
-### **3. Upscale Models**
+### **3. Video Generation Models**
+
+#### **Kling 3.0 Motion Control**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'kling-3.0/motion-control',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "prompt": "A cinematic slow-motion shot of a warrior drawing a sword",
+      "resolution": "1080p",        // 720p | 1080p
+      "duration": 5,                // per-second pricing
+      "orientation": "image",       // "image" | "video"
+      "background_source": "input_image", // "input_video" | "input_image"
+      "input_urls": ["https://example.com/reference.mp4"]  // max 1 reference video
+    }
+  })
+});
+```
+
+- **Resolution**: 720p, 1080p
+- **Pricing**: Per-second, uses `getKlingMotionControl(base, multiplier, resolution, duration)`
+- **Orientation**: `image` or `video`
+- **Background Source**: `input_video` or `input_image`
+- **Max References**: 1 video
+
+#### **Seedance 2.0 (ByteDance)**
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'bytedance/seedance-2',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      "prompt": "A character walking through a forest at sunset",
+      "resolution": "720p",          // 480p | 720p
+      "duration": 10,                // 4-15 seconds
+      "frame_mode": "first",         // "first" | "last" (first frame or last frame)
+      "input_urls": ["https://example.com/ref1.jpg"],   // max 9 reference images
+      "video_urls": ["https://example.com/clip.mp4"],   // max 3 videos (<=15s)
+      "audio_urls": ["https://example.com/audio.mp3"],  // max 3 audio (<=15s)
+      "web_search": false,
+      "generate_audio": true
+    }
+  })
+});
+```
+
+- **Resolution**: 480p, 720p
+- **Duration**: 4-15 seconds
+- **Pricing**: Uses `getSeedance20(base, multiplier, resolution, hasVideoInput, duration)`
+- **Frame Mode**: First frame or last frame reference
+- **Max References**: 9 images, 3 videos (<=15s each), 3 audio (<=15s each)
+- **Toggles**: `web_search`, `generate_audio`
+
+### **4. Upscale Models**
 
 #### **Recraft Crisp Upscale (1 credit)**
 ```typescript
@@ -471,61 +538,20 @@ async function pollForResult(taskId: string, timeout: number = 300000) {
       throw error;
     }
   }
-  'recraft/crisp-upscale': 1,
-  'topaz/image-upscale': 10   // Formula-based with upscale multipliers
-};
 
-// Quality multipliers for formula-based models
-const QUALITY_MULTIPLIERS = {
-  'nano-banana-2': {
-    '1K': 1.0,
-    '2K': 1.5,
-    '4K': 2.25
-  },
-  'topaz/image-upscale': {
-    '1K': 1.0,  // 1x upscale
-    '2K': 2.0,  // 2x upscale
-    '4K': 4.0   // 4x upscale
-  }
-};
-
-// Standard factor applied to all models
-const PRICING_FACTOR = 1.3;
-
-function calculateCredits(model: string, quality?: string, quantity: number = 1): number {
-  const baseCredits = MODEL_BASE_CREDITS[model] || 10;
-  
-  // Check if model uses quality-based pricing
-  if (model === 'nano-banana-2' && quality) {
-    const qualityMultiplier = QUALITY_MULTIPLIERS[model][quality] || 1;
-    return Math.ceil(baseCredits * PRICING_FACTOR * qualityMultiplier * quantity);
-  }
-  
-  if (model === 'topaz/image-upscale' && quality) {
-    const qualityMultiplier = QUALITY_MULTIPLIERS[model][quality] || 1;
-    return Math.ceil(baseCredits * PRICING_FACTOR * qualityMultiplier * quantity);
-  }
-  
-  // Fixed pricing models
-  return Math.ceil(baseCredits * PRICING_FACTOR * quantity);
+  throw new Error(`Polling timed out after ${timeout}ms`);
 }
+```
 
-// Examples:
-// calculateCredits('nano-banana-2', '2K') → 16 credits
-// calculateCredits('topaz/image-upscale', '4K') → 52 credits
-// calculateCredits('gpt-image/1.5-text-to-image') → 5 credits
+> **Note**: For credit calculations and pricing, see `plan_price_management.md`.
 
+### **🔒 Security Best Practices**
+```typescript
 // Server-side only - never expose API key to client
 const KIE_AI_API_KEY = process.env.KIE_AI_API_KEY;
 
 if (!KIE_AI_API_KEY) {
   throw new Error('KIE_AI_API_KEY environment variable is required');
-}
-
-// Validate model names
-const VALID_MODELS = Object.keys(MODEL_CREDITS);
-if (!VALID_MODELS.includes(model)) {
-  throw new Error(`Invalid model: ${model}`);
 }
 ```
 

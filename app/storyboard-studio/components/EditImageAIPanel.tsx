@@ -73,6 +73,9 @@ export interface EditImageAIPanelProps {
   onSetSquareMode?: (isSquare: boolean) => void;
   onResetRectangle?: () => void;
   onSetOriginalImage?: (imageUrl: string) => void;
+  onUploadOverride?: () => void;
+  onDownloadCanvas?: () => void;
+  onSaveAsOriginal?: () => void;
   onAddCanvasElement?: (file: File) => void;
   backgroundImage?: string;
   onZoomIn?: () => void;
@@ -175,6 +178,9 @@ export default function EditImageAIPanel({
   onSetSquareMode,
   onResetRectangle,
   onSetOriginalImage,
+  onUploadOverride,
+  onDownloadCanvas,
+  onSaveAsOriginal,
   onAddCanvasElement,
   backgroundImage,
   onZoomIn,
@@ -208,13 +214,14 @@ export default function EditImageAIPanel({
   // Use exact same pattern as working CreditBalanceDisplay (avoid naming conflicts)
   const { user: clerkUser } = useUser();
   const { organization } = useOrganization();
-  const companyId = organization?.id ?? clerkUser?.id ?? "personal";
+  const companyId = currentCompanyId || "personal";
   const userId = clerkUser?.id; // Add missing userId variable
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [fileBrowserMode, setFileBrowserMode] = useState<'reference' | 'override'>('reference');
   const [contentType, setContentType] = useState("image");
-  const { models, loading: pricingLoading, error: pricingError } = usePricingData();
+  const { models, loading: pricingLoading, error: pricingError, getModelCredits: hookGetModelCredits } = usePricingData();
   const [selectedQuality, setSelectedQuality] = useState("1K"); // Default quality for Nano Banana/Topaz
   const [gptImageQuality, setGptImageQuality] = useState("medium"); // Default quality for GPT Image
   
@@ -265,240 +272,12 @@ export default function EditImageAIPanel({
     return ["1K", "2K", "4K"];
   }, [models]);
 
-  // Local helper to match the old usePricingModels API
+  // Delegate to usePricingData's getModelCredits, passing the appropriate quality
+  // GPT models use gptImageQuality state, all others use selectedQuality
   const getModelCredits = useCallback((modelId: string): number => {
-    console.log('[EditImageAIPanel] getModelCredits called with modelId:', modelId);
-    console.log('[EditImageAIPanel] Available models in pricing:', models.map(m => ({ 
-      modelId: m.modelId, 
-      creditCost: m.creditCost, 
-      pricingType: m.pricingType,
-      factor: m.factor,
-      assignedFunction: m.assignedFunction
-    })));
-    console.log('[EditImageAIPanel] Full model objects:', JSON.stringify(models, null, 2));
-    
-    // Try to find exact match first
-    let model = models.find(m => m.modelId === modelId);
-    
-    // If not found, try to find partial match (for GPT Image variations)
-    if (!model && modelId.includes('gpt-image')) {
-      console.log('[EditImageAIPanel] Exact match not found, searching for GPT Image models...');
-      model = models.find(m => m.modelId.includes('gpt-image'));
-      if (model) {
-        console.log('[EditImageAIPanel] Found GPT Image model with partial match:', model.modelId);
-      }
-    }
-    
-    if (!model) {
-      console.log("[EditImageAIPanel] Model not found:", modelId);
-      return 0;
-    }
-    
-    console.log("[EditImageAIPanel] Using model:", { modelId: model.modelId, creditCost: model.creditCost, pricingType: model.pricingType });
-    
-    console.log("[EditImageAIPanel] Calculating credits for:", modelId, {
-      pricingType: model.pricingType,
-      assignedFunction: model.assignedFunction,
-      creditCost: model.creditCost,
-      factor: model.factor,
-      selectedQuality
-    });
-    
-        
-    if (model.pricingType === 'fixed') {
-      const result = Math.ceil((model.creditCost || 0) * (model.factor || 1));
-      console.log("[EditImageAIPanel] Fixed pricing result:", result);
-      return result;
-    }
-    
-    // Formula-based pricing (use selected quality for multipliers)
-    if (model.assignedFunction) {
-      const base = model.creditCost || 0;
-      const factor = model.factor || 1;
-      
-      switch (model.assignedFunction) {
-        case 'getNanoBananaPrice':
-          // Use formulaJson for Nano Banana pricing (same as other formula-based models)
-          console.log("[EditImageAIPanel] getNanoBananaPrice called for:", { modelId, selectedQuality, model });
-          if (model.formulaJson) {
-            try {
-              const formula = JSON.parse(model.formulaJson);
-              console.log("[EditImageAIPanel] Parsed formula:", formula);
-              const quality = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-              console.log("[EditImageAIPanel] Found quality:", quality, "for selectedQuality:", selectedQuality);
-              if (quality) {
-                const factor = model.factor || 1;
-                const result = Math.ceil(quality.cost * factor);
-                console.log("[EditImageAIPanel] Nano Banana from formula:", { 
-                  modelId, 
-                  selectedQuality, 
-                  cost: quality.cost, 
-                  factor, 
-                  result 
-                });
-                return result;
-              } else {
-                console.log("[EditImageAIPanel] Quality not found, available qualities:", formula.pricing?.qualities);
-              }
-            } catch (e) {
-              console.error("[EditImageAIPanel] Error parsing Nano Banana formula:", e);
-            }
-          }
-          // Fallback to hardcoded multipliers if formula parsing fails
-          const qualityMultipliers = { '1K': 1, '2K': 1.5, '4K': 2.25 };
-          const qualityMultiplier = qualityMultipliers[selectedQuality as keyof typeof qualityMultipliers] || 1;
-          const nanoResult = Math.ceil(base * factor * qualityMultiplier);
-          console.log("[EditImageAIPanel] Nano Banana fallback pricing:", { 
-            modelId, 
-            base, 
-            factor, 
-            qualityMultiplier, 
-            selectedQuality, 
-            calculation: `${base} * ${factor} * ${qualityMultiplier} = ${base * factor * qualityMultiplier}`,
-            result: nanoResult 
-          });
-          return nanoResult;
-        case 'getSeedance15':
-          const resolutionMultipliers = { '480p': 1, '720p': 2, '1080p': 4, '4K': 5 };
-          const resolutionMultiplier = resolutionMultipliers['720p'] || 1;
-          const audioMultiplier = 1;
-          const durationMultiplier = 1;
-          return Math.ceil(base * factor * resolutionMultiplier * audioMultiplier * durationMultiplier);
-        case 'getTopazUpscale':
-          // Use formulaJson for Topaz Upscale pricing (same as other formula-based models)
-          if (model.formulaJson) {
-            try {
-              const formula = JSON.parse(model.formulaJson);
-              const quality = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-              if (quality) {
-                const factor = model.factor || 1;
-                const result = Math.ceil(quality.cost * factor);
-                console.log("[EditImageAIPanel] Topaz Upscale from formula:", { 
-                  modelId, 
-                  selectedQuality, 
-                  cost: quality.cost, 
-                  factor, 
-                  result 
-                });
-                return result;
-              }
-            } catch (e) {
-              console.error("[EditImageAIPanel] Error parsing Topaz Upscale formula:", e);
-            }
-          }
-          // Fallback to hardcoded multipliers if formula parsing fails
-          const upscaleMultipliers = { '1x': 1, '2x': 2, '3x': 3, '4x': 4 };
-          // Map quality to upscale multiplier
-          const qualityToUpscale = { '1K': '1x', '2K': '2x', '4K': '4x' };
-          const upscaleKey = qualityToUpscale[selectedQuality as keyof typeof qualityToUpscale] || '2x';
-          const upscaleMultiplier = upscaleMultipliers[upscaleKey as keyof typeof upscaleMultipliers] || 1;
-          const topazResult = Math.ceil(base * factor * upscaleMultiplier);
-          console.log("[EditImageAIPanel] Topaz Upscale fallback pricing:", { 
-            modelId, 
-            base, 
-            factor, 
-            upscaleKey, 
-            upscaleMultiplier, 
-            selectedQuality, 
-            calculation: `${base} * ${factor} * ${upscaleMultiplier} = ${base * factor * upscaleMultiplier}`,
-            result: topazResult 
-          });
-          return topazResult;
-        case 'getGptImagePrice':
-          // GPT Image pricing: use formula from database dynamically
-          if (model.formulaJson) {
-            try {
-              const formula = JSON.parse(model.formulaJson);
-              const gptQuality = (modelId === "gpt-image/1.5-image-to-image" || modelId === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality;
-              const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === gptQuality);
-              console.log("[EditImageAIPanel] GPT Image formula:", { formula, gptQuality, qualityData });
-              
-              if (qualityData) {
-                const factor = model.factor || 1;
-                const gptResult = Math.ceil(qualityData.cost * factor);
-                console.log("[EditImageAIPanel] GPT Image from formula:", { 
-                  modelId, 
-                  gptQuality, 
-                  cost: qualityData.cost, 
-                  factor, 
-                  result: gptResult 
-                });
-                return gptResult;
-              } else {
-                console.log("[EditImageAIPanel] GPT Image quality not found, available qualities:", formula.pricing?.qualities);
-              }
-            } catch (e) {
-              console.error("[EditImageAIPanel] Error parsing GPT Image formula:", e);
-            }
-          }
-          // Fallback to simple calculation if formula parsing fails
-          console.log("[EditImageAIPanel] GPT Image fallback pricing:", { modelId, base, factor });
-          return Math.ceil(base * factor);
-        case 'getRecraftCrispUpscale':
-          // Recraft Crisp Upscale pricing: use formula from database dynamically
-          if (model.formulaJson) {
-            try {
-              const formula = JSON.parse(model.formulaJson);
-              const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === "standard");
-              console.log("[EditImageAIPanel] Recraft Crisp formula:", { formula, qualityData });
-              
-              if (qualityData) {
-                const factor = model.factor || 1;
-                const recraftResult = Math.ceil(qualityData.cost * factor);
-                console.log("[EditImageAIPanel] Recraft Crisp from formula:", { 
-                  modelId, 
-                  cost: qualityData.cost, 
-                  factor, 
-                  result: recraftResult 
-                });
-                return recraftResult;
-              } else {
-                console.log("[EditImageAIPanel] Recraft Crisp quality not found, available qualities:", formula.pricing?.qualities);
-              }
-            } catch (e) {
-              console.error("[EditImageAIPanel] Error parsing Recraft Crisp formula:", e);
-            }
-          }
-          // Fallback to simple calculation if formula parsing fails
-          console.log("[EditImageAIPanel] Recraft Crisp fallback pricing:", { modelId, base, factor });
-          return Math.ceil(base * factor);
-        default:
-          console.log("[EditImageAIPanel] Unknown assigned function, using fallback");
-          // Special case for Recraft Crisp: use correct base cost of 0.5 instead of database value
-          if (modelId === 'recraft/crisp-upscale') {
-            const recraftBaseCost = 0.5;
-            const recraftFactor = 1.3;
-            const recraftResult = Math.ceil(recraftBaseCost * recraftFactor);
-            console.log("[EditImageAIPanel] Recraft Crisp special pricing:", { 
-              modelId, 
-              baseCost: recraftBaseCost, 
-              factor: recraftFactor, 
-              result: recraftResult 
-            });
-            return recraftResult; // 0.5 × 1.3 = 0.65 → 1 credit
-          }
-          return Math.ceil((model.creditCost || 0) * (model.factor || 1));
-      }
-    } else {
-      console.log("[EditImageAIPanel] No assigned function, using simple calculation");
-      // For fixed pricing models, use correct values when database has wrong ones
-      if (modelId === 'recraft/crisp-upscale') {
-        // Recraft Crisp should be 0.5 * 1.3 = 1 credit (from usePricingData.ts defaults)
-        const recraftBaseCost = 0.5;
-        const recraftFactor = 1.3;
-        const recraftResult = Math.ceil(recraftBaseCost * recraftFactor);
-        console.log("[EditImageAIPanel] Recraft Crisp fixed pricing (database had wrong values):", { 
-          modelId, 
-          databaseCost: model.creditCost,
-          correctCost: recraftBaseCost, 
-          factor: recraftFactor, 
-          result: recraftResult 
-        });
-        return recraftResult;
-      }
-      return Math.ceil((model.creditCost || 0) * (model.factor || 1));
-    }
-  }, [models, selectedQuality, gptImageQuality]);
+    const quality = (modelId.includes('gpt-image')) ? gptImageQuality : selectedQuality;
+    return hookGetModelCredits(modelId, quality);
+  }, [hookGetModelCredits, selectedQuality, gptImageQuality]);
 
   // ── ContentEditable editor helpers ──────────────────────────────────
 
@@ -1544,8 +1323,8 @@ export default function EditImageAIPanel({
       setShowBrushSizeMenu(false);
       onToolSelect?.("move");
     } else if (id === "upload-override") {
-      if (projectId) {
-        setShowFileBrowser(true);
+      if (onUploadOverride) {
+        onUploadOverride();
       } else {
         uploadInputRef.current?.click();
       }
@@ -1641,22 +1420,28 @@ export default function EditImageAIPanel({
       // Reset square size to 200x200
       onResetRectangle?.();
     } else if (id === "download") {
-      // Handle download functionality
-      if (backgroundImage) {
+      if (onDownloadCanvas) {
+        onDownloadCanvas();
+      } else if (backgroundImage) {
+        // Proxy through server to avoid CORS and force download
         const link = document.createElement('a');
-        link.href = backgroundImage;
+        link.href = `/api/storyboard/download-image?url=${encodeURIComponent(backgroundImage)}`;
         link.download = `generated-image-${Date.now()}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-      } else {
       }
     } else if (id === "delete") {
       onDeleteSelected?.();
       setActiveTool("canvas-object");
       setShowBrushSizeMenu(false);
     } else if (id === "save") {
-      onSaveSelectedImage?.();
+      // Save current image as the original image (imageUrl in storyboard_items)
+      if (onSaveAsOriginal) {
+        onSaveAsOriginal();
+      } else {
+        onSaveSelectedImage?.();
+      }
     } else if (id === "zoom-in") {
       // Handle zoom in functionality
       onZoomIn?.();
@@ -1910,13 +1695,10 @@ export default function EditImageAIPanel({
           </ToolBtn>
         </div>
         
-        {/* Group 1: Upload, History, Delete */}
+        {/* Group 1: Upload, Delete */}
         <div className={grp}>
           <ToolBtn active={false} onClick={() => pick("upload-override")} title="Upload (Override)">
             <Upload className={ic} />
-          </ToolBtn>
-          <ToolBtn active={false} onClick={() => pick("history")} title="History">
-            <History className={ic} />
           </ToolBtn>
           <ToolBtn danger active={false} onClick={() => pick("delete")} title="Delete">
             <Trash2 className={ic} />
@@ -2056,7 +1838,8 @@ export default function EditImageAIPanel({
                             return;
                           }
                           
-                          console.log('Opening FileBrowser...');
+                          console.log('Opening FileBrowser for reference...');
+                          setFileBrowserMode('reference');
                           setShowFileBrowser(true);
                           setShowUploadMenu(false);
                         }}
@@ -2626,16 +2409,15 @@ export default function EditImageAIPanel({
       </div>
 
       {/* Modals - rendered outside pointer-events-none container */}
-      {showFileBrowser && projectId && (
+
+      {/* FileBrowser for REFERENCE images (Add Image button) */}
+      {showFileBrowser && fileBrowserMode === 'reference' && projectId && (
         <div className="pointer-events-auto">
           <FileBrowser
             projectId={projectId}
             onClose={() => setShowFileBrowser(false)}
-            imageSelectionMode={true} // Enable image selection mode
-            filterTypes={['image']} // Only show images
+            imageSelectionMode={true}
             onSelectImage={(imageUrl, fileName, fileData) => {
-              console.log('FileBrowser onSelectImage called:', { imageUrl, fileName, fileData });
-              // Handle single image selection from R2 File Browser (same as VideoImageAIPanel)
               handleImageSelect('r2', {
                 url: imageUrl,
                 name: fileName,
@@ -2649,15 +2431,16 @@ export default function EditImageAIPanel({
                   isGlobal: !fileData.projectId
                 }
               });
-              // Auto-close after selection
               setShowFileBrowser(false);
             }}
-            onSelectFile={(url, type) => 
-              type === 'image' && handleFileBrowserSelect(url, type)
-            }
+            onSelectFile={(url, type) => {
+              type === 'image' && handleFileBrowserSelect(url, type);
+            }}
           />
         </div>
       )}
+
+      {/* Upload Override FileBrowser is now in SceneEditor */}
 
       {/* Element Library Modal */}
       {showElementLibrary && projectId && userId && clerkUser && (

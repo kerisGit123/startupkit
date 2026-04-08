@@ -313,6 +313,16 @@ export function ElementLibrary({
     const normalizedElementUrls = (element.referenceUrls ?? []).map((url) => normalizeAssetUrl(url)).filter((url) => url.length > 0);
     const normalizedThumbnailUrl = normalizeAssetUrl(element.thumbnailUrl);
 
+    const resolvedUrls = normalizedElementUrls.length > 0
+      ? normalizedElementUrls
+      : (normalizedThumbnailUrl ? [normalizedThumbnailUrl] : []);
+
+    // When linking elements to a storyboard item, always select the whole element
+    if (selectedItemId) {
+      onSelectElement?.(resolvedUrls, element.name, element);
+      return;
+    }
+
     if (imageSelectionState.mode === 'enabled' && normalizedElementUrls.length > 1) {
       // Open image selection view for multi-image elements
       dispatch({ type: 'START_SELECTION', element });
@@ -327,25 +337,13 @@ export function ElementLibrary({
         dispatch({ type: 'END_SELECTION' });
         setEditingId(null);
         // Handle as regular element selection
-        onSelectElement?.(
-          normalizedElementUrls.length > 0
-            ? normalizedElementUrls
-            : (normalizedThumbnailUrl ? [normalizedThumbnailUrl] : []),
-          element.name,
-          element
-        );
+        onSelectElement?.(resolvedUrls, element.name, element);
       }
     } else {
       // Preserve existing behavior for all other cases
-      onSelectElement?.(
-        normalizedElementUrls.length > 0
-          ? normalizedElementUrls
-          : (normalizedThumbnailUrl ? [normalizedThumbnailUrl] : []),
-        element.name,
-        element
-      );
+      onSelectElement?.(resolvedUrls, element.name, element);
     }
-  }, [imageSelectionState.mode, onSelectElement]);
+  }, [imageSelectionState.mode, onSelectElement, selectedItemId]);
 
   // Memoized multi-image badge
   const MultiImageBadge = useCallback((element: Element) => {
@@ -433,7 +431,7 @@ export function ElementLibrary({
   
   // ✅ FALLBACK: Explicitly use organization ID from user object (only if authenticated)
   // This handles cases where elements were created in organization mode but user is in personal mode
-  const orgCompanyId = user?.organizationMemberships?.[0]?.organization?.id || user?.id;
+  const orgCompanyId = projectCompanyId;
   console.log(`[ElementLibrary] Fallback orgCompanyId: ${orgCompanyId}`);
   
   const fallbackElements = useQuery(isAuth ? api.storyboard.storyboardElements.listByProject : undefined, {
@@ -1296,42 +1294,42 @@ export function ElementLibrary({
                         </div>
                       </div>
                       <div className="flex items-center justify-between border-t border-neutral-800/50 px-3 sm:px-4 py-2 sm:py-3 bg-neutral-900">
-                        {selectedItemId ? (
-                          <button
-                            onClick={async () => {
-                              const element = displayElements?.find(el => el._id === selectedItemId);
-                              if (element) {
-                                await handleDeleteElement(element._id, element.name);
-                              }
-                            }}
-                            className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleDeleteElement(element._id, element.name)}
-                            className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 transition-colors"
-                            title={deletingIds.has(element._id) ? 'Deleting...' : recentlyDeleted.has(element._id) ? 'Recently deleted' : 'Delete element'}
-                          >
-                            {deletingIds.has(element._id) ? (
-                              <div className="animate-spin h-4 w-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
-                            ) : (
-                              <Trash2 className="h-4 w-4" />
-                            )}
-                          </button>
-                        )}
                         <button
-                          onClick={() => {
-                            setEditingId(element._id);
-                            setShowCreate(true);
-                          }}
-                          className="flex items-center gap-2 text-xs text-(--accent-blue) hover:text-(--accent-blue-hover) transition-colors"
+                          onClick={() => handleDeleteElement(element._id, element.name)}
+                          className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+                          title="Delete element"
                         >
-                          <Pencil className="w-3 h-3" />
-                         
+                          {deletingIds.has(element._id) ? (
+                            <div className="animate-spin h-4 w-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </button>
+                        <div className="flex items-center gap-2">
+                          {/* Add to storyboard item button — only shown when linking elements */}
+                          {selectedItemId && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleElementClick(element);
+                              }}
+                              className="flex items-center gap-1.5 text-xs bg-emerald-600/80 hover:bg-emerald-600 text-white px-2.5 py-1 rounded-lg transition-colors"
+                              title={`Add "${element.name}" to frame`}
+                            >
+                              <Plus className="w-3 h-3" />
+                              Add
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setEditingId(element._id);
+                              setShowCreate(true);
+                            }}
+                            className="flex items-center gap-2 text-xs text-(--accent-blue) hover:text-(--accent-blue-hover) transition-colors"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                     );

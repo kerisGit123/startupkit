@@ -104,6 +104,7 @@ export const update = mutation({
     imageUrl: v.optional(v.string()),
     primaryImage: v.optional(v.string()), // NEW: Primary image field
     imagePrompt: v.optional(v.string()),
+    videoPrompt: v.optional(v.string()),
     videoUrl: v.optional(v.string()),
     generationStatus: v.optional(v.string()),
     tags: v.optional(v.array(v.object({
