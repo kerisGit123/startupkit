@@ -1,7 +1,7 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import AdminPage from "@/app/storyboard-studio/components/admin/AdminPage";
+import AdminPage from "@/app/storyboard-studio/components/account/AdminPage";
 
 export default function AdminDashboardPage() {
   const { user } = useUser();
