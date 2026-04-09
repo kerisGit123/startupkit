@@ -4716,7 +4716,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
-                              
+                              model: aiModel, // Store the AI model used
+
                               metadata: {
                                 modelId: aiModel,
                                 modelName: aiModel,
@@ -4818,7 +4819,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
-                              
+                              model: aiModel, // Store the AI model used
+
                               metadata: {
                                 modelId: aiModel,
                                 modelName: aiModel,

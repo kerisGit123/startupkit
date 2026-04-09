@@ -6,11 +6,13 @@ import {
   CheckCircle2, Zap, Building2, Download, Eye, Receipt,
   Calendar, TrendingUp, Coins, Crown, Star, ArrowUpRight,
   Info, AlertCircle, Shield, Sparkles, CreditCard as CreditCardIcon,
+  Loader2, FileText, DollarSign, Search,
 } from "lucide-react";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
 import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { useCompany } from "@/hooks/useCompany";
 import { getCreditPackages } from "@/lib/credit-pricing";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
@@ -50,23 +52,17 @@ const PLANS = [
 ];
 
 
-const MOCK_INVOICES = [
-  { id: "INV-260007", date: "Feb 10, 2026", type: "Payment", description: "500 Credits Top-up", amount: "MYR 40.00", status: "Paid" },
-  { id: "INV-260006", date: "Feb 10, 2026", type: "Subscription", description: "Pro - Subscription", amount: "MYR 29.00", status: "Paid" },
-  { id: "INV-260005", date: "Jan 12, 2026", type: "Subscription", description: "Pro - Subscription", amount: "MYR 29.00", status: "Paid" },
-  { id: "INV-260004", date: "Jan 10, 2026", type: "Payment", description: "100 Credits Top-up", amount: "MYR 10.00", status: "Paid" },
-];
-
 const statusColor: Record<string, string> = {
-  Paid: "bg-emerald-500/20 text-emerald-400",
-  Pending: "bg-yellow-500/20 text-yellow-400",
-  Cancelled: "bg-red-500/20 text-red-400",
-  Draft: "bg-gray-500/20 text-gray-400",
+  paid: "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30",
+  issued: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
+  overdue: "bg-red-500/20 text-red-400 border border-red-500/30",
+  cancelled: "bg-gray-500/20 text-gray-400 border border-gray-500/30",
+  draft: "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
 };
 
 const typeColor: Record<string, string> = {
-  Payment: "bg-blue-500/20 text-blue-400",
-  Subscription: "bg-purple-500/20 text-purple-400",
+  payment: "bg-blue-500/20 text-blue-400 border border-blue-500/30",
+  subscription: "bg-purple-500/20 text-purple-400 border border-purple-500/30",
 };
 
 export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }: BillingSubscriptionPageProps) {
@@ -77,9 +73,35 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
   const [activeTab, setActiveTab] = useState<"overview" | "credits" | "plans" | "invoices">("overview");
   const creditPackages = getCreditPackages();
 
+  const [invoiceType, setInvoiceType] = useState<"all" | "subscription" | "payment">("all");
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<Id<"invoices"> | null>(null);
+
   // Real credit data from Convex
   const creditBalance = useQuery(api.credits.getBalance, companyId ? { companyId } : "skip");
   const ledger = useQuery(api.credits.getLedger, companyId ? { companyId, limit: 50 } : "skip");
+
+  // Real invoice data from Convex (same source as dashboard/invoices)
+  const invoices = useQuery(
+    api.invoices.userQueries.getUserInvoicesWithFilters,
+    user?.id ? {
+      companyId: user.id,
+      invoiceType: invoiceType,
+      limit: 100,
+    } : "skip"
+  );
+
+  const invoiceStats = useQuery(
+    api.invoices.userQueries.getUserInvoiceStats,
+    user?.id ? { companyId: user.id } : "skip"
+  );
+
+  const selectedInvoice = useQuery(
+    api.invoices.userQueries.getUserInvoiceDetail,
+    selectedInvoiceId && user?.id ? {
+      invoiceId: selectedInvoiceId,
+      companyId: user.id,
+    } : "skip"
+  );
 
   // Calculate used credits (sum of negative entries = debits)
   const { totalUsed, totalAdded } = useMemo(() => {
@@ -125,6 +147,22 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
       console.error("Checkout error:", error);
       alert("An error occurred. Please try again.");
     }
+  };
+
+  const formatDate = (timestamp: number | undefined) => {
+    if (!timestamp) return "N/A";
+    return new Date(timestamp).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const formatCurrency = (amount: number, currency: string = "MYR") => {
+    return new Intl.NumberFormat("en-MY", {
+      style: "currency",
+      currency: currency,
+    }).format(amount / 100);
   };
 
   return (
@@ -583,79 +621,244 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                 </p>
               </div>
 
-              {/* Stats Overview — real data */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 max-w-6xl mx-auto">
-                {[
-                  { label: "Transactions", value: String(ledger?.length ?? 0), icon: Receipt, color: "from-blue-500/20 to-blue-600/20", iconColor: "text-blue-400", borderColor: "border-blue-500/30" },
-                  { label: "Total Purchased", value: totalAdded.toLocaleString() + " cr", icon: TrendingUp, color: "from-purple-500/20 to-purple-600/20", iconColor: "text-purple-400", borderColor: "border-purple-500/30" },
-                  { label: "Total Used", value: totalUsed.toLocaleString() + " cr", icon: CheckCircle2, color: "from-emerald-500/20 to-emerald-600/20", iconColor: "text-emerald-400", borderColor: "border-emerald-500/30" },
-                  { label: "Balance", value: (creditBalance ?? 0).toLocaleString() + " cr", icon: Coins, color: "from-yellow-500/20 to-yellow-600/20", iconColor: "text-yellow-400", borderColor: "border-yellow-500/30" },
-                ].map((stat) => (
-                  <div key={stat.label} className={`bg-gradient-to-br ${stat.color} backdrop-blur-sm rounded-2xl p-6 border ${stat.borderColor} transition-all duration-300 hover:scale-105`}>
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
-                        <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
-                      </div>
-                      <div>
-                        <p className="text-sm text-(--text-secondary) mb-1">{stat.label}</p>
-                        <p className="text-xl font-bold text-white">{stat.value}</p>
+              {/* Stats Overview — real invoice data */}
+              {invoiceStats && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8 max-w-6xl mx-auto">
+                  {[
+                    { label: "Total Invoices", value: String(invoiceStats.total), icon: FileText, color: "from-blue-500/20 to-blue-600/20", iconColor: "text-blue-400", borderColor: "border-blue-500/30" },
+                    { label: "Total Amount", value: formatCurrency(invoiceStats.totalAmount), icon: DollarSign, color: "from-purple-500/20 to-purple-600/20", iconColor: "text-purple-400", borderColor: "border-purple-500/30" },
+                    { label: "Paid", value: formatCurrency(invoiceStats.totalPaid), icon: CheckCircle2, color: "from-emerald-500/20 to-emerald-600/20", iconColor: "text-emerald-400", borderColor: "border-emerald-500/30" },
+                    { label: "Pending", value: formatCurrency(invoiceStats.totalPending), icon: Calendar, color: "from-yellow-500/20 to-yellow-600/20", iconColor: "text-yellow-400", borderColor: "border-yellow-500/30" },
+                  ].map((stat) => (
+                    <div key={stat.label} className={`bg-gradient-to-br ${stat.color} backdrop-blur-sm rounded-2xl p-6 border ${stat.borderColor} transition-all duration-300 hover:scale-105`}>
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center">
+                          <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm text-(--text-secondary) mb-1">{stat.label}</p>
+                          <p className="text-xl font-bold text-white">{stat.value}</p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+
+              {/* Type Filter */}
+              <div className="max-w-6xl mx-auto">
+                <div className="flex items-center gap-3 mb-4">
+                  {(["all", "subscription", "payment"] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setInvoiceType(type)}
+                      className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                        invoiceType === type
+                          ? "bg-(--accent-purple) text-white shadow-lg"
+                          : "bg-(--bg-tertiary) text-(--text-secondary) hover:text-(--text-primary) border border-(--border-primary)"
+                      }`}
+                    >
+                      {type === "all" ? "All Types" : type.charAt(0).toUpperCase() + type.slice(1)}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Invoice Table */}
               <div className="max-w-6xl mx-auto">
                 <div className="bg-gradient-to-br from-(--bg-secondary) to-(--bg-tertiary) border border-(--border-primary) rounded-3xl overflow-hidden shadow-2xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-(--border-primary) bg-(--bg-tertiary)/50">
-                          {["Invoice #", "Date", "Type", "Description", "Amount", "Status", "Actions"].map((header) => (
-                            <th key={header} className="px-6 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">
-                              {header}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(ledger || []).map((entry: any, index: number) => (
-                          <tr
-                            key={entry._id}
-                            className={`border-b border-(--border-primary) last:border-0 hover:bg-(--bg-tertiary)/30 transition-all duration-200 ${
-                              index % 2 === 0 ? "" : "bg-(--bg-primary)/20"
-                            }`}
-                          >
-                            <td className="px-6 py-4 text-sm font-mono text-white font-semibold">{entry._id.slice(-8).toUpperCase()}</td>
-                            <td className="px-6 py-4 text-sm text-(--text-secondary)">{new Date(entry.createdAt || entry._creationTime).toLocaleDateString()}</td>
-                            <td className="px-6 py-4">
-                              <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
-                                entry.tokens > 0
-                                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                                  : "bg-red-500/20 text-red-400 border border-red-500/30"
-                              }`}>
-                                {entry.tokens > 0 ? 'Credit' : 'Debit'}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-sm text-white">{entry.reason || 'Credit transaction'}</td>
-                            <td className={`px-6 py-4 text-sm font-semibold ${entry.tokens > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {entry.tokens > 0 ? '+' : ''}{entry.tokens} credits
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                Completed
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                            </td>
+                  {!invoices ? (
+                    <div className="flex items-center justify-center py-16">
+                      <Loader2 className="h-8 w-8 animate-spin text-(--text-secondary)" />
+                    </div>
+                  ) : invoices.length === 0 ? (
+                    <div className="text-center py-16">
+                      <FileText className="h-12 w-12 text-(--text-tertiary) mx-auto mb-4" />
+                      <p className="text-(--text-secondary) mb-2">No invoices found</p>
+                      <p className="text-sm text-(--text-tertiary)">
+                        Your invoices will appear here once you make a purchase
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-(--border-primary) bg-(--bg-tertiary)/50">
+                            {["Invoice #", "Date", "Type", "Description", "Amount", "Status", "Actions"].map((header) => (
+                              <th key={header} className="px-6 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">
+                                {header}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {invoices.map((invoice: any, index: number) => (
+                            <tr
+                              key={invoice._id}
+                              className={`border-b border-(--border-primary) last:border-0 hover:bg-(--bg-tertiary)/30 transition-all duration-200 ${
+                                index % 2 === 0 ? "" : "bg-(--bg-primary)/20"
+                              }`}
+                            >
+                              <td className="px-6 py-4 text-sm font-mono text-white font-semibold">
+                                {invoice.invoiceNo}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-(--text-secondary)">
+                                {formatDate(invoice.issuedAt || invoice.createdAt)}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+                                  typeColor[invoice.invoiceType] || "bg-gray-500/20 text-gray-400 border border-gray-500/30"
+                                }`}>
+                                  {invoice.invoiceType === "subscription" ? "Subscription" : "Payment"}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-sm text-white">
+                                {invoice.items?.[0]?.description || "N/A"}
+                                {invoice.items?.length > 1 && (
+                                  <span className="text-xs text-(--text-tertiary) ml-1">
+                                    +{invoice.items.length - 1} more
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-sm font-semibold text-white">
+                                {formatCurrency(invoice.total, invoice.currency)}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+                                  statusColor[invoice.status] || "bg-gray-500/20 text-gray-400 border border-gray-500/30"
+                                }`}>
+                                  {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <button
+                                  onClick={() => setSelectedInvoiceId(invoice._id)}
+                                  className="text-xs text-(--accent-purple) hover:text-white transition-colors flex items-center gap-1"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  View
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* Invoice Detail Modal */}
+              {selectedInvoiceId && selectedInvoice && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedInvoiceId(null)}>
+                  <div className="bg-(--bg-secondary) border border-(--border-primary) rounded-3xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-8">
+                      {/* Modal Header */}
+                      <div className="flex justify-between items-start mb-8">
+                        <div>
+                          <h3 className="text-2xl font-bold text-white">{selectedInvoice.invoiceNo}</h3>
+                          <p className="text-sm text-(--text-secondary) mt-1">
+                            Issued: {formatDate(selectedInvoice.issuedAt || selectedInvoice.createdAt)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${statusColor[selectedInvoice.status] || ""}`}>
+                            {selectedInvoice.status.charAt(0).toUpperCase() + selectedInvoice.status.slice(1)}
+                          </span>
+                          <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${typeColor[selectedInvoice.invoiceType] || ""}`}>
+                            {selectedInvoice.invoiceType === "subscription" ? "Subscription" : "Payment"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Billing Details */}
+                      <div className="border-t border-(--border-primary) pt-6 mb-6">
+                        <h4 className="font-semibold text-white mb-3">Billing Information</h4>
+                        <div className="text-sm text-(--text-secondary)">
+                          <p className="font-medium text-white">{selectedInvoice.billingDetails?.name}</p>
+                          <p>{selectedInvoice.billingDetails?.email}</p>
+                          {selectedInvoice.billingDetails?.address && (
+                            <p className="mt-1">{selectedInvoice.billingDetails.address}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Items Table */}
+                      <div className="border-t border-(--border-primary) pt-6 mb-6">
+                        <h4 className="font-semibold text-white mb-3">Items</h4>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-(--border-primary)">
+                              <th className="text-left py-2 text-xs font-semibold text-(--text-secondary) uppercase">Description</th>
+                              <th className="text-center py-2 text-xs font-semibold text-(--text-secondary) uppercase">Qty</th>
+                              <th className="text-right py-2 text-xs font-semibold text-(--text-secondary) uppercase">Unit Price</th>
+                              <th className="text-right py-2 text-xs font-semibold text-(--text-secondary) uppercase">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedInvoice.items?.map((item: any, idx: number) => (
+                              <tr key={idx} className="border-b border-(--border-primary)/50">
+                                <td className="py-3 text-sm text-white">{item.description}</td>
+                                <td className="py-3 text-sm text-(--text-secondary) text-center">{item.quantity}</td>
+                                <td className="py-3 text-sm text-(--text-secondary) text-right">
+                                  {formatCurrency(item.unitPrice, selectedInvoice.currency)}
+                                </td>
+                                <td className="py-3 text-sm font-semibold text-white text-right">
+                                  {formatCurrency(item.total, selectedInvoice.currency)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Totals */}
+                      <div className="border-t border-(--border-primary) pt-6 mb-6">
+                        <div className="space-y-2 max-w-xs ml-auto">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-(--text-secondary)">Subtotal:</span>
+                            <span className="font-medium text-white">{formatCurrency(selectedInvoice.subtotal, selectedInvoice.currency)}</span>
+                          </div>
+                          {selectedInvoice.tax > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-(--text-secondary)">Tax{selectedInvoice.taxRate ? ` (${selectedInvoice.taxRate}%)` : ""}:</span>
+                              <span className="font-medium text-white">{formatCurrency(selectedInvoice.tax, selectedInvoice.currency)}</span>
+                            </div>
+                          )}
+                          {selectedInvoice.discount > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="text-(--text-secondary)">Discount:</span>
+                              <span className="font-medium text-emerald-400">-{formatCurrency(selectedInvoice.discount, selectedInvoice.currency)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-lg font-bold border-t border-(--border-primary) pt-2">
+                            <span className="text-white">Total:</span>
+                            <span className="text-white">{formatCurrency(selectedInvoice.total, selectedInvoice.currency)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Notes */}
+                      {selectedInvoice.notes && (
+                        <div className="border-t border-(--border-primary) pt-6 mb-6">
+                          <h4 className="font-semibold text-white mb-2">Notes</h4>
+                          <p className="text-sm text-(--text-secondary)">{selectedInvoice.notes}</p>
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div className="border-t border-(--border-primary) pt-6 flex justify-end gap-3">
+                        <button
+                          onClick={() => setSelectedInvoiceId(null)}
+                          className="px-6 py-3 rounded-xl border border-(--border-primary) text-(--text-secondary) hover:text-white hover:bg-(--bg-tertiary) transition-all duration-200 font-medium"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

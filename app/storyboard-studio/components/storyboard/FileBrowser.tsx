@@ -683,7 +683,7 @@ export function FileBrowser({
         </div>
 
         {/* Hidden input */}
-        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileUpload} />
+        <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/wav" className="hidden" onChange={handleFileUpload} />
       </div>
     </div>
   );

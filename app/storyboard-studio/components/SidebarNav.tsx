@@ -4,12 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Film, FolderOpen, Users, Star, Clock, Tag, Check,
-  ChevronDown, ChevronUp, Sparkles, BarChart2, LayoutGrid, Settings,
-  LogOut, DollarSign, CreditCard, Trash2,
+  ChevronDown, ChevronUp, BarChart2, LayoutGrid, Settings,
+  LogOut, DollarSign, CreditCard, Trash2, LifeBuoy, ScrollText,
 } from "lucide-react";
 import type { Project } from "../types";
 import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
-import CreditBalanceDisplay from "./admin/CreditBalanceDisplay";
+import CreditBalanceDisplay from "./account/CreditBalanceDisplay";
 
 interface SidebarNavProps {
   open: boolean;
@@ -31,9 +31,10 @@ const ORGANIZE_ITEMS = [
 ];
 
 const UNIVERSE_NAV_ITEMS = [
-  { key: "asset-generator", icon: Sparkles, label: "Element Generator"  },
   { key: "price-management", icon: DollarSign, label: "Price Management" },
   { key: "billing", icon: CreditCard, label: "Billing & Subscription" },
+  { key: "support", icon: LifeBuoy, label: "Support" },
+  { key: "logs", icon: ScrollText, label: "Logs" },
   { key: "cleaning", icon: Trash2, label: "Cleaning" },
 ];
 

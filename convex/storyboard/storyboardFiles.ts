@@ -30,6 +30,7 @@ export const logUpload = mutation({
     sourceUrl: v.optional(v.string()),     // KIE AI link (set by callback)
     metadata: v.optional(v.any()),         // Generation metadata for compositing
     defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used
+    model: v.optional(v.string()),                    // AI model used for generation
   },
   handler: async (ctx, args) => {
     // Since we're calling from API route with auth, we can work without auth context
@@ -478,5 +479,163 @@ export const migrateCreditUsage = internalMutation({
     console.log(`[migrateCreditUsage] Migration complete. Migrated ${migratedCount} files.`);
     return { migratedFiles: migratedCount, totalFiles: files.length };
   }
+});
+
+// ── Logs: total storage usage by company ─────────────────────────────────
+export const getStorageUsage = query({
+  args: { companyId: v.string() },
+  handler: async (ctx, args) => {
+    const files = await ctx.db
+      .query("storyboard_files")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .collect();
+
+    let totalSize = 0;
+    const byCategory: Record<string, { count: number; size: number }> = {};
+    const byFileType: Record<string, { count: number; size: number }> = {};
+
+    for (const file of files) {
+      const size = file.size ?? 0;
+      totalSize += size;
+
+      const cat = file.category || "other";
+      if (!byCategory[cat]) byCategory[cat] = { count: 0, size: 0 };
+      byCategory[cat].count++;
+      byCategory[cat].size += size;
+
+      const ft = file.fileType || "other";
+      if (!byFileType[ft]) byFileType[ft] = { count: 0, size: 0 };
+      byFileType[ft].count++;
+      byFileType[ft].size += size;
+    }
+
+    const categoryStats = Object.entries(byCategory)
+      .map(([category, stats]) => ({ category, ...stats }))
+      .sort((a, b) => b.size - a.size);
+
+    const fileTypeStats = Object.entries(byFileType)
+      .map(([fileType, stats]) => ({ fileType, ...stats }))
+      .sort((a, b) => b.size - a.size);
+
+    return { totalFiles: files.length, totalSize, categoryStats, fileTypeStats };
+  },
+});
+
+// ── Logs: analytics for generated files ──────────────────────────────────
+export const getGenerationAnalytics = query({
+  args: {
+    companyId: v.string(),
+    fromTimestamp: v.number(),
+    toTimestamp: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const files = await ctx.db
+      .query("storyboard_files")
+      .withIndex("by_companyId_category", (q) =>
+        q.eq("companyId", args.companyId).eq("category", "generated")
+      )
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("createdAt"), args.fromTimestamp),
+          q.lte(q.field("createdAt"), args.toTimestamp)
+        )
+      )
+      .collect();
+
+    // Aggregate by model
+    const byModel: Record<string, { count: number; credits: number; storage: number; success: number; failed: number }> = {};
+    let totalCredits = 0;
+    let totalGenerations = 0;
+    let totalSuccess = 0;
+    let totalFailed = 0;
+    let totalStorage = 0;
+
+    for (const file of files) {
+      const model = file.model || (file.metadata as any)?.model || (file.metadata as any)?.modelId || "unknown";
+      if (!byModel[model]) {
+        byModel[model] = { count: 0, credits: 0, storage: 0, success: 0, failed: 0 };
+      }
+      byModel[model].count++;
+      byModel[model].credits += file.creditsUsed ?? 0;
+      byModel[model].storage += file.size ?? 0;
+      totalCredits += file.creditsUsed ?? 0;
+      totalStorage += file.size ?? 0;
+      totalGenerations++;
+
+      if (file.status === "ready" || file.status === "completed") {
+        byModel[model].success++;
+        totalSuccess++;
+      } else if (file.status === "failed" || file.status === "error") {
+        byModel[model].failed++;
+        totalFailed++;
+      }
+    }
+
+    // Sort by count descending
+    const modelStats = Object.entries(byModel)
+      .map(([model, stats]) => ({ model, ...stats }))
+      .sort((a, b) => b.count - a.count);
+
+    // Aggregate by day for chart
+    const byDay: Record<string, { count: number; credits: number }> = {};
+    for (const file of files) {
+      const day = new Date(file.createdAt).toISOString().split("T")[0];
+      if (!byDay[day]) byDay[day] = { count: 0, credits: 0 };
+      byDay[day].count++;
+      byDay[day].credits += file.creditsUsed ?? 0;
+    }
+
+    const dailyStats = Object.entries(byDay)
+      .map(([date, stats]) => ({ date, ...stats }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      totalGenerations,
+      totalCredits,
+      totalStorage,
+      totalSuccess,
+      totalFailed,
+      modelStats,
+      dailyStats,
+    };
+  },
+});
+
+// ── Logs: generated files with credits consumed ──────────────────────────
+export const listGenerationLogs = query({
+  args: {
+    companyId: v.string(),
+    status: v.optional(v.string()),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    let baseQuery = ctx.db
+      .query("storyboard_files")
+      .withIndex("by_companyId_category", (q) =>
+        q.eq("companyId", args.companyId).eq("category", "generated")
+      );
+
+    if (args.status) {
+      const st = args.status;
+      baseQuery = baseQuery.filter((q) => q.eq(q.field("status"), st));
+    }
+
+    const results = await baseQuery.order("desc").paginate(args.paginationOpts);
+
+    // Resolve defaultAI references to get key names
+    const enriched = await Promise.all(
+      results.page.map(async (file) => {
+        let aiKeyName: string | null = null;
+        if (file.defaultAI) {
+          const aiKey = await ctx.db.get(file.defaultAI);
+          aiKeyName = aiKey?.name ?? null;
+        }
+        return { ...file, aiKeyName };
+      })
+    );
+
+    return { ...results, page: enriched };
+  },
 });
 

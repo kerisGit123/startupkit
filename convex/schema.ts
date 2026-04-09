@@ -1856,6 +1856,7 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     deletedAt: v.optional(v.number()),     // Soft delete timestamp
     defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used for generation
+    model: v.optional(v.string()),         // AI model used for generation (e.g. "nano-banana-2", "kling-3.0")
   })
     .index("by_project", ["projectId"])
     .index("by_category", ["projectId", "category"])

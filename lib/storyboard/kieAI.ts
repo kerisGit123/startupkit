@@ -334,6 +334,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     categoryId: params.categoryId,
     creditsUsed: requiredCredits,
     defaultAI: kieAiId, // Store which KIE AI key was used
+    model: kieModel,   // Store the AI model used for generation
     category: "generated",
     status: "generating",
     filename: `ai-generated-${Date.now()}.${params.outputFormat || 'png'}`,

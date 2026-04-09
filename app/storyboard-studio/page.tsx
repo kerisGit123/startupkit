@@ -15,14 +15,15 @@ import { BoardView }          from "./components/BoardView";
 import { SceneEditor }        from "./components/SceneEditor";
 import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./components/WizardSteps";
 import { PdfModal, ShareModal, TagModal } from "./components/Modals";
-import { AssetGenerator }     from "./components/AssetGenerator";
 import { MembersPage }        from "./components/MembersPage";
 import { UsageDashboard }     from "./components/UsageDashboard";
 import { FileBrowser } from "./components/storyboard/FileBrowser";
 import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
-import PricingManagementPage from "./components/admin/PricingManagementPage";
-import BillingSubscriptionPage from "./components/admin/BillingSubscriptionPage";
-import AdminPage from "./components/admin/AdminPage";
+import PricingManagementPage from "./components/account/PricingManagementPage";
+import BillingSubscriptionPage from "./components/account/BillingSubscriptionPage";
+import SupportPage from "./components/account/SupportPage";
+import LogsPage from "./components/account/LogsPage";
+import AdminPage from "./components/account/AdminPage";
 
 export default function StoryboardPage() {
   const router = useRouter();
@@ -282,10 +283,11 @@ export default function StoryboardPage() {
     setActiveFilter(activeNav === "projects" ? null : activeNav);
 
     if (activeNav === "projects") setCurrentStep("dashboard");
-    if (activeNav === "asset-generator") setCurrentStep("element-generator");
     if (activeNav === "image-maker") setCurrentStep("image-maker");
     if (activeNav === "price-management") setCurrentStep("price-management");
     if (activeNav === "billing") setCurrentStep("billing");
+    if (activeNav === "support") setCurrentStep("support");
+    if (activeNav === "logs") setCurrentStep("logs");
     if (activeNav === "cleaning") setCurrentStep("cleaning");
     if (activeNav === "members") setCurrentStep("members");
     if (activeNav === "usage") setCurrentStep("usage");
@@ -402,12 +404,13 @@ export default function StoryboardPage() {
   // ── Breadcrumb for board views ─────────────────────────────────────────────
   const renderBreadcrumb = () => {
     if (
-      currentStep === "element-generator" ||
       currentStep === "image-maker" ||
       currentStep === "members" ||
       currentStep === "usage" ||
       currentStep === "price-management" ||
       currentStep === "billing" ||
+      currentStep === "support" ||
+      currentStep === "logs" ||
       currentStep === "cleaning"
     ) return null;
     const crumbs: { label: string; step: Step }[] = [
@@ -584,10 +587,6 @@ export default function StoryboardPage() {
           />
         )}
 
-        {currentStep === "element-generator" && (
-          <AssetGenerator />
-        )}
-
         {currentStep === "members" && (
           <MembersPage />
         )}
@@ -607,6 +606,20 @@ export default function StoryboardPage() {
 
         {currentStep === "billing" && (
           <BillingSubscriptionPage
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "support" && (
+          <SupportPage
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "logs" && (
+          <LogsPage
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />

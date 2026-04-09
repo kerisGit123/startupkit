@@ -11,7 +11,9 @@
       "Bash(grep -n \"const updateItem = useMutation\\\\|const updateFrameStatus\\\\|const updateFrameNotes\\\\|export const update\" /d/gemini/startupkit/app/storyboard-studio/workspace/[projectId]/page.tsx)",
       "Bash(xargs grep:*)",
       "Bash(cd /d \"D:\\\\gemini\\\\startupkit\\\\app\\\\storyboard-studio\")",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Read(//tmp/**)",
+      "Bash(git mv:*)"
     ]
   }
 }

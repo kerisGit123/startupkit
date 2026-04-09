@@ -1699,7 +1699,8 @@ export function ImageAIPanel({
         sourceUrl: undefined,
         tags: [],
         uploadedBy: userId || "",
-        
+        model: selectedModelOption.value, // Store the AI model used
+
         // Enhanced AI metadata
         metadata: {
           modelId: selectedModelOption.value,
