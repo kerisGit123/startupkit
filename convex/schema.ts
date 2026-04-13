@@ -505,15 +505,75 @@ export default defineSchema({
     invoiceId: v.optional(v.id("invoices")),
     invoiceNo: v.optional(v.string()),
     createdAt: v.number(),
+    // Typed classification for every ledger entry. Used by getCompanyCreator,
+    // transferCredits rate limiting, and UsageDashboard analytics.
+    type: v.optional(
+      v.union(
+        v.literal("org_created"),      // Marker written by Clerk webhook on org creation
+        v.literal("purchase"),         // User bought a top-up pack
+        v.literal("subscription"),     // Monthly subscription refill
+        v.literal("usage"),            // AI generation deducted credits
+        v.literal("refund"),           // Credits added back (refund)
+        v.literal("transfer_out"),     // Sent to another owned org
+        v.literal("transfer_in"),      // Received from another owned org
+        v.literal("admin_adjustment"), // Manual support adjustment (excluded from ownership)
+      ),
+    ),
+    // The Clerk user who caused this ledger entry (creator for org_created,
+    // purchaser for purchase, initiator for transfers, etc.)
+    userId: v.optional(v.string()),
+    // For transfer pairs: the other companyId involved in the transfer
+    counterpartCompanyId: v.optional(v.string()),
+    // Usage-specific metadata (populated when type === "usage")
+    projectId: v.optional(v.id("storyboard_projects")),
+    itemId: v.optional(v.id("storyboard_items")),
+    model: v.optional(v.string()),
+    action: v.optional(v.string()),
   })
     .index("by_companyId", ["companyId"])
-    .index("by_invoiceId", ["invoiceId"]),
+    .index("by_invoiceId", ["invoiceId"])
+    .index("by_user", ["userId"])
+    .index("by_company_type", ["companyId", "type"]),
 
   credits_balance: defineTable({
     companyId: v.string(),
     balance: v.number(),
     updatedAt: v.number(),
-  }).index("by_companyId", ["companyId"]),
+    // Ownership snapshot used by useSubscription to derive the effective
+    // plan for org workspaces. When a user creates an org, creatorUserId
+    // is set to their Clerk userId and ownerPlan is set to their current
+    // plan. When the owner upgrades/downgrades, a webhook updates
+    // ownerPlan on all rows where creatorUserId === owner.
+    //
+    // For personal workspaces (companyId === userId), creatorUserId ===
+    // userId and ownerPlan tracks the user's current plan.
+    ownerPlan: v.optional(v.string()),
+    creatorUserId: v.optional(v.string()),
+    // Human-readable name of the workspace, captured at creation time
+    // so the audit trail remains meaningful after the Clerk org is
+    // deleted. For personal workspaces, this is typically the user's
+    // email or "Personal Workspace". For orgs, this is the Clerk org
+    // name (e.g. "Acme Agency"). Preserved across purges.
+    organizationName: v.optional(v.string()),
+    // Timestamp (ms since epoch) when this workspace's subscription
+    // lapsed. Set when ownerPlan drops to "free" via cancellation.
+    // Cleared (set undefined) when owner re-subscribes to a paid plan.
+    // Used by the super-admin purge flow to find orgs that have been
+    // unpaid for 90+ days and are eligible for R2 cleanup.
+    lapsedAt: v.optional(v.number()),
+    // Timestamp (ms since epoch) when this org's R2 files were purged
+    // and the Clerk org was released. Set once after successful purge;
+    // never cleared. Presence of this field is the marker that "this
+    // workspace's R2 files are gone but transaction data is preserved
+    // for audit/tax purposes." Only the UI reflects this — transaction
+    // mutations (deductCredits, credits_ledger inserts) still work
+    // against these rows if the companyId somehow reappears, because
+    // we never delete the financial records.
+    purgedAt: v.optional(v.number()),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_creatorUserId", ["creatorUserId"])
+    .index("by_lapsedAt", ["lapsedAt"]),
 
   // ============================================
   // CORE: User Activity Logs (MAU Tracking)
@@ -1857,6 +1917,8 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),     // Soft delete timestamp
     defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used for generation
     model: v.optional(v.string()),         // AI model used for generation (e.g. "nano-banana-2", "kling-3.0")
+    responseCode: v.optional(v.number()),  // KIE AI response code (200=success, 401/402/404/422/429/455/500/501/505)
+    responseMessage: v.optional(v.string()), // KIE AI response message (e.g. "success", "internal error, please try again later.")
   })
     .index("by_project", ["projectId"])
     .index("by_category", ["projectId", "category"])
@@ -1915,25 +1977,9 @@ export default defineSchema({
     .index("by_companyId", ["companyId"])
     .index("by_visibility", ["visibility"]),
 
-  // ============================================
-  // STORYBOARD STUDIO: Credit Usage (per-member tracking)
-  // ============================================
-  storyboard_credit_usage: defineTable({
-    companyId: v.optional(v.string()), // Organization ID from Clerk
-    orgId: v.string(),
-    userId: v.string(),
-    projectId: v.id("storyboard_projects"),
-    itemId: v.optional(v.id("storyboard_items")),
-    action: v.string(), // script_generation | image_generation | video_generation
-    model: v.string(),  // gpt-5.2 | kie-pro-v2 | veo-3-1 | kling-3.0
-    creditsUsed: v.number(),
-    metadata: v.optional(v.any()),
-    createdAt: v.number(),
-  })
-    .index("by_companyId", ["companyId"])
-    .index("by_org", ["orgId"])
-    .index("by_user", ["orgId", "userId"])
-    .index("by_project", ["projectId"]),
+  // NOTE: The former `storyboard_credit_usage` table has been removed.
+  // All credit-usage tracking now lives in `credits_ledger` with
+  // type === "usage" and the projectId/itemId/model/action fields.
 
   // ============================================
   // STORYBOARD STUDIO: Element Usage Tracking

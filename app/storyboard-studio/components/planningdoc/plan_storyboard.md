@@ -1886,6 +1886,14 @@ return (
 );
 ```
 
+### **Empty State & Manual Frame Creation (April 2026)**
+
+The storyboard and table view empty states now show two buttons:
+- **"Go to Script"** — navigates to script tab (existing)
+- **"Create Frame"** — creates a manual frame immediately without writing a script first
+
+FrameCard's "No media" state uses **FileBrowser** (with `imageSelectionMode`) instead of direct R2 upload to avoid CORS issues. Users can browse existing files or upload new ones through FileBrowser's built-in upload flow.
+
 ### **Storyboard Item Card Implementation**
 ```javascript
 // workspace/[projectId]/page.tsx - FrameCard Props (Current Implementation)

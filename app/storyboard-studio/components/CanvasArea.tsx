@@ -24,7 +24,7 @@ interface CanvasAreaProps {
   canvasState: CanvasEditorState;
   setCanvasState: (state: CanvasEditorState) => void;
   canvasContainerRef: React.RefObject<HTMLDivElement>;
-  generateImageWithElements?: () => void;
+  generateImageWithElements?: () => Promise<string | null>;
   zoomLevel?: number;
   
   // Brush Props

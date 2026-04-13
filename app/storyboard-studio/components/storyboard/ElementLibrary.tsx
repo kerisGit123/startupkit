@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState, useReducer, useCallback, memo, type Chang
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus, Hash } from "lucide-react";
+import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload } from "lucide-react";
 import { useCurrentCompanyId, getCurrentCompanyId, logUserInfo } from "@/lib/auth-utils";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
+import { FileBrowser } from "./FileBrowser";
 
 // ─── URL Helper Functions ───────────────────────────────────────────────────────
 const getFileUrl = (r2Key: string): string => {
@@ -263,6 +264,7 @@ export function ElementLibrary({
   const [thumbnailIndex, setThumbnailIndex] = useState(0); // Track which image is thumbnail
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showRefFileBrowser, setShowRefFileBrowser] = useState(false);
   const [visibility, setVisibility] = useState<"private" | "public" | "shared">("private");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -391,62 +393,14 @@ export function ElementLibrary({
   const isAuth = projectCompanyId && projectCompanyId !== 'undefined' && projectCompanyId !== 'null';
   console.log(`[ElementLibrary] Authentication check: isAuth=${isAuth}, projectCompanyId=${projectCompanyId}`);
   
-  // ✅ DEBUG: Query all elements without companyId filtering to see what's in database (only if authenticated)
-  const allElements = useQuery(isAuth ? api.storyboard.storyboardElements.listAll : undefined, {});
-  
-  console.log(`[ElementLibrary] DEBUG - All elements in database:`, allElements?.length || 0);
-  if (allElements && allElements.length > 0) {
-    console.log(`[ElementLibrary] DEBUG - All element details:`, allElements.map(el => ({
-      name: el.name,
-      companyId: el.companyId,
-      projectId: el.projectId,
-      type: el.type,
-      createdBy: el.createdBy,
-      description: el.description?.substring(0, 50) || 'none'
-    })));
-  }
-  
-  // Filter elements for this project manually
-  const projectElements = allElements?.filter(el => el.projectId === projectId && el.type === activeType) || [];
-  console.log(`[ElementLibrary] DEBUG - Project elements (manual filter):`, projectElements.length);
-  if (projectElements.length > 0) {
-    console.log(`[ElementLibrary] DEBUG - Project element companyIds:`, projectElements.map(el => ({
-      name: el.name,
-      companyId: el.companyId,
-      projectId: el.projectId
-    })));
-    
-    // ✅ KEY DEBUG: Show what companyId we're querying vs what elements have
-    console.log(`[ElementLibrary] DEBUG - Querying for companyId: ${queryCompanyId}`);
-    console.log(`[ElementLibrary] DEBUG - Element companyIds found:`, projectElements.map(el => el.companyId));
-    console.log(`[ElementLibrary] DEBUG - Match found:`, projectElements.some(el => el.companyId === queryCompanyId));
-  }
-  
-  // Keep the original queries for debugging but don't use them for display (only if authenticated)
+  // Query elements for this project (includes public/shared from other projects in same company)
   const elements = useQuery(isAuth ? api.storyboard.storyboardElements.listByProject : undefined, {
     projectId,
     type: activeType,
-    companyId: queryCompanyId, // ✅ Use active organization or user ID
+    companyId: queryCompanyId,
   } as any);
-  
-  // ✅ FALLBACK: Explicitly use organization ID from user object (only if authenticated)
-  // This handles cases where elements were created in organization mode but user is in personal mode
-  const orgCompanyId = projectCompanyId;
-  console.log(`[ElementLibrary] Fallback orgCompanyId: ${orgCompanyId}`);
-  
-  const fallbackElements = useQuery(isAuth ? api.storyboard.storyboardElements.listByProject : undefined, {
-    projectId,
-    type: activeType,
-    companyId: orgCompanyId, // Try organization ID as fallback
-  } as any);
-  
-  // ✅ TEMPORARY FIX: Use manual filtering to display elements
-  // This bypasses the Convex query issue while we debug the server-side function
-  const displayElements = projectElements.length > 0 ? projectElements : fallbackElements;
-  
-  console.log(`[ElementLibrary] Querying elements with:`, { projectId, type: activeType, companyId: queryCompanyId });
-  console.log(`[ElementLibrary] Found elements (primary):`, elements?.length || 0);
-  console.log(`[ElementLibrary] Found elements (fallback org):`, fallbackElements?.length || 0);
+
+  const displayElements = elements;
   console.log(`[ElementLibrary] Displaying elements (manual filter):`, displayElements?.length || 0);
   if (displayElements && displayElements.length > 0) {
     console.log(`[ElementLibrary] Element companyIds:`, displayElements.map(el => ({ name: el.name, companyId: el.companyId })));
@@ -1404,12 +1358,20 @@ export function ElementLibrary({
                       </select>
                     </div>
 
-                    <div>
-                      <label className="flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-primary) px-4 py-4 text-sm text-(--text-secondary) transition-all duration-200 hover:bg-(--bg-tertiary) hover:border-(--accent-blue)">
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                        <span className="text-sm">Add reference images</span>
+                    <div className="flex gap-2">
+                      <label className="flex-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-primary) px-4 py-4 text-sm text-(--text-secondary) transition-all duration-200 hover:bg-(--bg-tertiary) hover:border-(--accent-blue)">
+                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                        <span className="text-sm">Upload</span>
                         <input className="hidden" type="file" accept="image/*" multiple onChange={handleUploadDraftRefs} />
                       </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowRefFileBrowser(true)}
+                        className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-primary) px-4 py-4 text-sm text-(--text-secondary) transition-all duration-200 hover:bg-(--bg-tertiary) hover:border-blue-500"
+                      >
+                        <FolderOpen className="h-4 w-4 text-blue-400" />
+                        <span className="text-sm">R2 Browser</span>
+                      </button>
                     </div>
 
                     {referencePreviewItems.length > 0 && (
@@ -1603,7 +1565,7 @@ export function ElementLibrary({
                               </button>
                             </div>
                           );
-                          })};
+                          })}
                         </div>
                       </div>
                     )}
@@ -1791,6 +1753,33 @@ export function ElementLibrary({
           );
         })()}
       </div>
+
+      {/* R2 FileBrowser for adding reference images to elements */}
+      {showRefFileBrowser && projectId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+          <div className="w-[90vw] max-w-4xl h-[80vh]">
+            <FileBrowser
+              projectId={projectId}
+              companyId={projectCompanyId || ""}
+              userId={userId}
+              user={user}
+              onClose={() => setShowRefFileBrowser(false)}
+              imageSelectionMode={true}
+              onSelectFile={(url, type) => {
+                if (type === "image" && url) {
+                  const maxImages = 14;
+                  if (referenceUrls.length >= maxImages) {
+                    alert(`Maximum of ${maxImages} reference images allowed.`);
+                    return;
+                  }
+                  setReferenceUrls(prev => [...prev, url]);
+                  setShowRefFileBrowser(false);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -174,10 +174,76 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
     referenceImagesCount: params.referenceImages?.length || 0,
   });
 
+  // Initialize Convex client for credit operations
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  const { api } = await import("../../convex/_generated/api");
+
+  // Default credit cost for video generation
+  const requiredCredits = 25; // Base video generation cost
+
+  // Step 1: Check credit balance before proceeding
+  if (params.companyId && requiredCredits) {
+    const currentBalance = await convex.query(api.credits.getBalance, {
+      companyId: params.companyId,
+    });
+
+    console.log('[triggerVideoGeneration] Current balance:', currentBalance, 'Credits needed:', requiredCredits);
+
+    if (currentBalance < requiredCredits) {
+      throw new Error(
+        `Insufficient credits. You have ${currentBalance} credits but need ${requiredCredits} credits. Please purchase more credits to continue.`
+      );
+    }
+  }
+
+  // Resolve API key
+  const { apiKey: resolvedKey, kieAiId } = await resolveKieApiKey(params.companyId);
+
+  // Step 2: Create placeholder record
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const createdFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
+    companyId: params.companyId,
+    userId: params.userId,
+    projectId: params.projectId,
+    category: "generated",
+    filename: `ai-video-${Date.now()}.mp4`,
+    fileType: "video",
+    mimeType: "video/mp4",
+    size: 0,
+    status: "generating",
+    creditsUsed: requiredCredits,
+    defaultAI: kieAiId,
+    model: params.model,
+    tags: [],
+    uploadedBy: params.userId,
+  });
+
+  // Step 3: Deduct credits
+  if (params.companyId && requiredCredits) {
+    console.log('[triggerVideoGeneration] Deducting credits:', requiredCredits);
+    await convex.mutation(api.credits.deductCredits, {
+      companyId: params.companyId,
+      tokens: requiredCredits,
+      reason: `AI Video Generation - ${params.model}`,
+    });
+    console.log('[triggerVideoGeneration] Credits deducted successfully');
+  }
+
+  // Update file status to processing
+  await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+    fileId: createdFileId,
+    status: 'processing',
+  });
+
+  // Build callback URL with fileId
+  const callbackUrl = params.callBackUrl.includes('fileId=')
+    ? params.callBackUrl
+    : `${baseUrl}/api/kie-callback?fileId=${createdFileId}`;
+
   // Prepare the request body for Seedance 1.5 Pro API
   const requestBody = {
     model: params.model,
-    callBackUrl: params.callBackUrl,
+    callBackUrl: callbackUrl,
     input: {
       prompt: params.prompt,
       input_urls: params.referenceImages || [],
@@ -192,11 +258,10 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
 
   console.log('[triggerVideoGeneration] Request body:', JSON.stringify(requestBody, null, 2));
 
-  try {
-    // Resolve API key: database defaultAI → system default → env fallback
-    const { apiKey: resolvedKey } = await resolveKieApiKey(params.companyId);
+  let response: Response;
 
-    const response = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+  try {
+    response = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${resolvedKey}`,
@@ -204,20 +269,59 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
       },
       body: JSON.stringify(requestBody),
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`KIE AI API error: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    console.log('[triggerVideoGeneration] KIE AI response:', result);
-
-    return result;
   } catch (error) {
-    console.error('[triggerVideoGeneration] Error calling KIE AI:', error);
+    // Refund credits on network failure
+    if (params.companyId && requiredCredits) {
+      await convex.mutation(api.credits.refundCredits, {
+        companyId: params.companyId,
+        tokens: requiredCredits,
+        reason: `AI Video Generation Request Failed - ${params.model}`,
+      });
+    }
+    await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+      fileId: createdFileId,
+      status: 'failed',
+    });
     throw error;
   }
+
+  if (!response.ok) {
+    // Refund credits on API error
+    if (params.companyId && requiredCredits) {
+      await convex.mutation(api.credits.refundCredits, {
+        companyId: params.companyId,
+        tokens: requiredCredits,
+        reason: `AI Video Generation Failed to Start - ${params.model}`,
+      });
+    }
+    await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+      fileId: createdFileId,
+      status: 'failed',
+    });
+    const errorText = await response.text();
+    throw new Error(`KIE AI API error: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log('[triggerVideoGeneration] KIE AI response:', result);
+
+  // Use centralized response handler
+  const { handleKieResponse } = await import("./kieResponse");
+  const { responseCode, responseMessage, taskId, isSuccess } = await handleKieResponse({
+    fileId: createdFileId,
+    responseData: result,
+    companyId: params.companyId,
+    creditsUsed: requiredCredits,
+    modelName: params.model,
+  });
+
+  return {
+    taskId,
+    fileId: createdFileId,
+    raw: result,
+    responseCode,
+    responseMessage,
+  };
 }
 
 export async function triggerImageGeneration(params: TriggerImageGenerationParams) {
@@ -237,8 +341,12 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
 
   // Use the provided model or fall back to STYLE_PRESETS
   const actualModel = params.model || STYLE_PRESETS[params.style]?.model;
-  const { promptSuffix } = STYLE_PRESETS[params.style];
-  const fullPrompt = `${params.prompt}, ${promptSuffix}`;
+  // Skip style suffix for models that work better with clean prompts
+  const skipSuffix = actualModel === 'ideogram/character-edit' || actualModel === 'topaz/image-upscale' || actualModel === 'recraft/crisp-upscale';
+  const promptSuffix = skipSuffix ? '' : (STYLE_PRESETS[params.style]?.promptSuffix || '');
+  // Clean up extra whitespace in prompt (e.g. from badge extraction leaving empty spaces)
+  const rawPrompt = promptSuffix ? `${params.prompt}, ${promptSuffix}` : params.prompt;
+  const fullPrompt = rawPrompt.replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim();
   
   // Convert pricing model ID to KIE AI model name
   let kieModel = actualModel;
@@ -391,65 +499,71 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   const callbackUrl = params.callbackUrl ?? `${baseUrl}/api/kie-callback?fileId=${createdFileId}`;
   console.log('[triggerImageGeneration] Using callback URL:', callbackUrl);
   
-  // Debug: Log the exact request being sent to KIE AI
+  // Encode URLs to handle filenames with spaces/special characters
+  const encodeUrl = (url?: string) => url ? encodeURI(url).replace(/%25/g, '%') : url;
+  const encodedImageUrl = encodeUrl(params.imageUrl);
+  const encodedMaskUrl = encodeUrl(params.maskUrl);
+  const encodedOriginalImageUrl = encodeUrl(params.originalImageUrl);
+  const encodedReferenceUrls = (params.referenceImageUrls || []).map(u => encodeUrl(u)!);
+
   const requestBody = {
     model: kieModel,
     callBackUrl: callbackUrl,
     input: actualModel === 'ideogram/character-edit' ? {
       prompt: fullPrompt,
-      image_url: params.imageUrl,
-      mask_url: params.maskUrl,
-      reference_image_urls: params.referenceImageUrls || [],
+      image_url: encodedImageUrl,
+      mask_url: encodedMaskUrl,
+      reference_image_urls: encodedReferenceUrls,
       rendering_speed: "BALANCED",
       style: "AUTO",
       expand_prompt: true,
       num_images: "1"
     } : actualModel === 'nano-banana-2' ? {
       prompt: fullPrompt,
-      image_input: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      image_input: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       aspect_ratio: params.aspectRatio || 'auto',
       google_search: false,
       resolution,
       output_format: 'jpg'
     } : actualModel === 'nano-banana-pro' ? {
       prompt: fullPrompt,
-      image_input: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      image_input: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       aspect_ratio: params.aspectRatio || '1:1',
       resolution,
       output_format: 'png'
     } : actualModel === 'google/nano-banana-edit' ? {
       prompt: fullPrompt,
-      image_urls: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      image_urls: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       output_format: 'png',
       image_size: '1:1'
     } : actualModel === 'topaz/image-upscale' ? {
       prompt: fullPrompt,
-      image_url: params.originalImageUrl || params.imageUrl,
+      image_url: encodedOriginalImageUrl || encodedImageUrl,
       upscale_factor: params.quality || "1"
     } : actualModel === 'recraft/crisp-upscale' ? {
       prompt: fullPrompt,
-      image: params.originalImageUrl || params.imageUrl
+      image: encodedOriginalImageUrl || encodedImageUrl
     } : actualModel === 'gpt-image' ? {
       prompt: fullPrompt,
-      input_urls: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      input_urls: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       aspect_ratio: "1:1",
       quality: params.quality || "high"
     } : actualModel?.startsWith('gpt-image') ? {
       prompt: fullPrompt,
-      input_urls: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      input_urls: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       aspect_ratio: "1:1",
       quality: params.quality || "high"
     } : isImageToImageModel ? {
       prompt: fullPrompt,
-      image_input: [params.imageUrl, ...(params.referenceImageUrls || [])].filter(Boolean),
+      image_input: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       aspect_ratio: params.aspectRatio,
       resolution,
     } : {
       prompt: fullPrompt,
       aspect_ratio: params.aspectRatio,
       quality: defaultQuality,
-      image_url: params.imageUrl,
-      reference_image_urls: params.referenceImageUrls || [],
+      image_url: encodedImageUrl,
+      reference_image_urls: encodedReferenceUrls,
     },
   };
   
@@ -502,32 +616,37 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
 
   const data = await res.json();
   console.log('[triggerImageGeneration] Raw KIE AI response:', JSON.stringify(data, null, 2));
-  
-  // Check if there's an error in the response
-  if (data.code && data.code !== 200) {
-    console.error('[triggerImageGeneration] KIE AI returned error:', { code: data.code, msg: data.msg });
-    throw new Error(`KIE AI Error (${data.code}): ${data.msg}`);
+
+  // Use centralized response handler
+  const { handleKieResponse } = await import("./kieResponse");
+  const { responseCode, responseMessage, taskId, isSuccess } = await handleKieResponse({
+    fileId: createdFileId,
+    responseData: data,
+    companyId: params.companyId,
+    creditsUsed: params.creditsUsed,
+    modelName: kieModel,
+  });
+
+  if (!isSuccess) {
+    console.error('[triggerImageGeneration] KIE AI returned error:', { code: responseCode, msg: responseMessage });
+    throw new Error(`KIE AI Error (${responseCode}): ${responseMessage}`);
   }
-  
-  // Extract taskId from various possible locations
-  const taskId = data.data?.taskId || data.data?.recordId || data.taskId || data.recordId || data.data?.id;
-  
-  console.log('[triggerImageGeneration] Extracted taskId:', taskId);
-  console.log('[triggerImageGeneration] data field contents:', JSON.stringify(data.data, null, 2));
-  
+
   if (!taskId) {
-    console.error('[triggerImageGeneration] No taskId found in response. Available fields:', Object.keys(data));
-    console.error('[triggerImageGeneration] Full data structure:', JSON.stringify(data, null, 2));
+    console.error('[triggerImageGeneration] No taskId found in response:', JSON.stringify(data, null, 2));
     throw new Error("No taskId received from KIE AI");
   }
 
-  // Return the result with the fileId we already created
-  const result = { 
-    taskId, 
-    fileId: createdFileId, // Return the created file ID
-    raw: data 
+  console.log('[triggerImageGeneration] Extracted taskId:', taskId);
+
+  const result = {
+    taskId,
+    fileId: createdFileId,
+    raw: data,
+    responseCode,
+    responseMessage,
   };
-  
+
   console.log('[triggerImageGeneration] Returning result:', result);
   return result;
 }

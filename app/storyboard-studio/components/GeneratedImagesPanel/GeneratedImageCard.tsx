@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download } from "lucide-react";
+import { getResponseCodeInfo, getResponseCodeColor } from "@/lib/storyboard/kieResponse";
 
 // Types
 interface GeneratedImageMetadata {
@@ -33,7 +34,10 @@ interface GeneratedImageCardProps {
   onDelete: (image: GeneratedImageCard) => void;
   onRetry: (image: GeneratedImageCard) => void;
   onCompare: (image: GeneratedImageCard) => void;
-  fileId?: string; // Add file ID prop for processing files
+  fileId?: string;
+  responseCode?: number;
+  responseMessage?: string;
+  creditsUsed?: number;
 }
 
 // Helper function to format relative time
@@ -51,14 +55,17 @@ const formatRelativeTime = (date: Date): string => {
   return date.toLocaleDateString();
 };
 
-export function GeneratedImageCard({ 
-  image, 
-  onSelect, 
-  onFavorite, 
-  onDelete, 
-  onRetry, 
+export function GeneratedImageCard({
+  image,
+  onSelect,
+  onFavorite,
+  onDelete,
+  onRetry,
   onCompare,
-  fileId 
+  fileId,
+  responseCode,
+  responseMessage,
+  creditsUsed,
 }: GeneratedImageCardProps) {
   const [showVideoDialog, setShowVideoDialog] = useState(false);
   
@@ -231,15 +238,34 @@ export function GeneratedImageCard({
           <div className="absolute inset-0 bg-red-500/20 flex flex-col items-center justify-center">
             <AlertCircle className="w-6 h-6 text-red-400 mb-2" />
             <div className="text-white text-xs font-medium">Generation Failed</div>
-            {image.metadata.error && (
+            {responseCode !== undefined && (
+              <span
+                className={`px-2 py-0.5 rounded text-xs font-mono font-medium mt-1 cursor-default ${getResponseCodeColor(responseCode)}`}
+                title={`${getResponseCodeInfo(responseCode).label}${responseMessage ? `: ${responseMessage}` : ''}`}
+              >
+                {responseCode} - {getResponseCodeInfo(responseCode).label}
+              </span>
+            )}
+            {image.metadata.error && !responseCode && (
               <div className="text-red-300 text-xs mt-1 text-center px-2">{image.metadata.error}</div>
             )}
-            <button 
-              onClick={() => onRetry(image)}
-              className="mt-2 px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition"
-            >
-              Retry
-            </button>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => onRetry(image)}
+                className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition"
+              >
+                Retry
+              </button>
+              {(creditsUsed === 0 || creditsUsed === undefined) && (
+                <button
+                  onClick={() => onDelete(image)}
+                  className="p-1.5 bg-red-500/80 rounded hover:bg-red-500 transition"
+                  title="Delete failed generation"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-white" />
+                </button>
+              )}
+            </div>
           </div>
         )}
         
@@ -280,14 +306,23 @@ export function GeneratedImageCard({
       {/* Metadata Section */}
       {image.status !== 'completed' && (
         <div className="p-3">
-          {/* Status Badge */}
-          <div className="flex items-center gap-2 mb-2">
+          {/* Status Badge + Response Code */}
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className={`px-2 py-1 rounded text-xs font-medium ${
               image.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
               'bg-red-500/20 text-red-400'
             }`}>
               {image.status === 'processing' ? 'Processing' : 'Failed'}
             </span>
+
+            {responseCode !== undefined && (
+              <span
+                className={`px-2 py-1 rounded text-xs font-mono font-medium cursor-default ${getResponseCodeColor(responseCode)}`}
+                title={`${getResponseCodeInfo(responseCode).label}${responseMessage ? `: ${responseMessage}` : ''}`}
+              >
+                {responseCode}
+              </span>
+            )}
 
             <span className="text-[#6E6E6E] text-xs">
               {formatRelativeTime(image.metadata.timestamp)}

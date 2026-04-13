@@ -172,30 +172,56 @@ export async function uploadToR2(options: UploadOptions): Promise<UploadResult> 
       }
     }
 
-    // Prepare form data
-    const formData = new FormData();
-    if (file) formData.append('file', file);
-    if (category) formData.append('category', category);
-    if (projectId) formData.append('projectId', projectId);
-    if (companyId) formData.append('companyId', companyId);
-    if (userId) formData.append('userId', userId);
-    if (tags && tags.length > 0) formData.append('tags', JSON.stringify(tags));
-    if (sourceUrl) formData.append('sourceUrl', sourceUrl);
-    if (sourceFilename) formData.append('sourceFilename', sourceFilename);
-    if (sourceMimeType) formData.append('sourceMimeType', sourceMimeType);
+    // For large files (>4MB), use presigned URL to bypass Turbopack FormData limit
+    const usePresignedUrl = file && file.size > 4 * 1024 * 1024;
 
-    // Upload to R2 via API route
-    const response = await fetch('/api/storyboard/upload', {
-      method: 'POST',
-      body: formData,
-    });
+    let result: any;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Upload failed: ${response.statusText} - ${errorText}`);
+    if (usePresignedUrl && file) {
+      // Large files: send raw bytes via binary upload route (bypasses FormData parsing)
+      const response = await fetch('/api/storyboard/upload-binary', {
+        method: 'POST',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+          'x-filename': encodeURIComponent(file.name),
+          'x-category': category || 'uploads',
+          'x-company-id': companyId || userId || '',
+          ...(projectId ? { 'x-project-id': projectId } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload failed: ${response.statusText} - ${errorText}`);
+      }
+
+      result = await response.json();
+    } else {
+      // Small files: use FormData upload (original approach)
+      const formData = new FormData();
+      if (file) formData.append('file', file);
+      if (category) formData.append('category', category);
+      if (projectId) formData.append('projectId', projectId);
+      if (companyId) formData.append('companyId', companyId);
+      if (userId) formData.append('userId', userId);
+      if (tags && tags.length > 0) formData.append('tags', JSON.stringify(tags));
+      if (sourceUrl) formData.append('sourceUrl', sourceUrl);
+      if (sourceFilename) formData.append('sourceFilename', sourceFilename);
+      if (sourceMimeType) formData.append('sourceMimeType', sourceMimeType);
+
+      const response = await fetch('/api/storyboard/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Upload failed: ${response.statusText} - ${errorText}`);
+      }
+
+      result = await response.json();
     }
-
-    const result = await response.json();
 
     // Determine file type
     const detectedMimeType = file?.type || sourceMimeType || 'application/octet-stream';
@@ -405,9 +431,10 @@ export async function deleteFromR2(options: DeleteOptions): Promise<DeleteResult
         statusText: convexResponse.statusText
       });
       
-      // Check if it's a "not found" case, which is actually success for us
-      if (body.warning && body.warning.includes('not found')) {
-        console.log('[deleteFromR2] File not found in database - this is expected for files with missing metadata');
+      // Check if it's a "not found" / "nonexistent" case, which is actually success for us
+      const errorStr = JSON.stringify(body).toLowerCase();
+      if ((body.warning && body.warning.includes('not found')) || errorStr.includes('nonexistent') || errorStr.includes('not found')) {
+        console.log('[deleteFromR2] File already deleted from database - treating as success');
         // Don't throw error - this is actually a success case
       } else {
         // Check if graceful mode is enabled (don't throw error, just log and continue)

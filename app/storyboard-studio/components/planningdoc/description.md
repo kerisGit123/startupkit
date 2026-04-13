@@ -46,16 +46,29 @@ Server-side companyId resolution for API routes. Exports `getServerCurrentCompan
 Direct Cloudflare R2 operations using AWS S3Client. Exports `uploadToR2(file, key)` for binary uploads and `getR2PublicUrl(key)` for URL generation. Server-side only — used by API routes and callback handlers.
 
 ### `lib/uploadToR2.ts` — R2 Storage (client, high-level)
-Client-facing R2 wrapper that calls `/api/storyboard/upload` and `/api/storyboard/delete-file` routes. Exports `uploadToR2(options)` with progress/callbacks, `deleteFromR2()`, `uploadMultipleToR2()`, `batchDeleteFromR2()`, and `uploadToR2WithRetry()`. Used by React components (FileBrowser, ElementLibrary, SceneEditor).
+Client-facing R2 wrapper. For small files (≤4MB), calls `/api/storyboard/upload` (FormData). For large files (>4MB), calls `/api/storyboard/upload-binary` (raw bytes via headers) to bypass Turbopack FormData parsing limits. Exports `uploadToR2(options)` with progress/callbacks, `deleteFromR2()`, `uploadMultipleToR2()`, `batchDeleteFromR2()`, and `uploadToR2WithRetry()`. Used by React components (FileBrowser, ElementLibrary, SceneEditor).
 
 ### `lib/storyboard/pricing.ts` — Pricing Formulas + Model Defaults
 Single source of truth for all pricing calculations. Exports `PricingModel` interface, `DEFAULT_PRICING_MODELS` array, and all pricing functions: `getNanoBananaPrice()`, `getTopazUpscale()`, `getSeedance15()`, `getGptImagePrice()`, `getFormulaQualityPrice()`, `getFixedPrice()`, `getKlingMotionControl()`, `getSeedance20()`. The `usePricingData` hook wraps these with database state.
 
-### `lib/storyboard/kieAI.ts` — Image AI Generation
-Image generation via Kie AI API. Exports `triggerImageGeneration()`, `enhancePromptForImage()` (GPT prompt enhancement), `STYLE_PRESETS`, `IMAGE_CREDITS`, `resolveKieApiKey()`, and placeholder record creation. Handles credit deduction, callback URL construction, and file record lifecycle. `resolveKieApiKey()` resolves API key via fallback chain: org_settings.defaultAI record → system default in `storyboard_kie_ai` → `KIE_AI_API_KEY` env var.
+### `lib/storyboard/kieAI.ts` — Image & Video AI Generation
+
+Image and video generation via Kie AI API. Exports `triggerImageGeneration()`, `triggerVideoGeneration()`, `enhancePromptForImage()` (GPT prompt enhancement), `STYLE_PRESETS`, `IMAGE_CREDITS`, `resolveKieApiKey()`, and placeholder record creation. Handles credit balance check, deduction, refund on failure, callback URL construction, URL encoding for filenames with spaces, and file record lifecycle. Skips style suffix for character-edit/upscale models and cleans up whitespace in prompts. `resolveKieApiKey()` resolves API key via fallback chain: org_settings.defaultAI record → system default in `storyboard_kie_ai` → `KIE_AI_API_KEY` env var.
+
+### `components/shared/usePromptEditor.ts` — ContentEditable Prompt Editor Hook
+Shared hook for the drag-and-drop badge prompt editor used by both EditImageAIPanel and VideoImageAIPanel. Exports `usePromptEditor()` which returns `editorRef`, `extractPlainText()`, `extractTextWithBadges()`, `insertBadgeAtCaret()`, `createBadgeElement()`, all editor event handlers (`handleEditorInput`, `handleDrop`, `handleDragOver`, `handleEditorBlur`, `handleKeyDown`, `handleCompositionStart/End`), `setText()`, `clear()`, and `TEXTAREA_MIN_HEIGHT`/`TEXTAREA_MAX_HEIGHT` constants.
+
+### `components/shared/PromptTextarea.tsx` — ContentEditable Textarea Component
+Shared React component that renders the styled ContentEditable div with placeholder text. Used by both AI panels for consistent styling and drag-and-drop badge support.
+
+### `components/shared/AddImageMenu.tsx` — Add Image Menu Component
+Shared "Add Image" slide-out menu with Upload, R2, Elements, Capture, and Generated tabs. Used by EditImageAIPanel and VideoImageAIPanel. The Generated picker has "Current Frame" / "All Project" scope toggle.
+
+### `lib/storyboard/kieResponse.ts` — KIE AI Response Code Utility
+Centralized response code handling for all KIE AI interactions. Exports `extractKieResponse()` (parses code/msg/taskId/state from any KIE AI response format), `handleKieResponse()` (stores response code in file record + auto-refunds on failure), `getResponseCodeInfo()` (human-readable label + severity for a code), `getResponseCodeColor()` (CSS classes for badge display), `isSuccessCode()`, and `KIE_RESPONSE_CODES` (code→label mapping for 200/401/402/404/422/429/455/500/501/505). Used by kieAI.ts, videoAI.ts, kie-callback route, and GeneratedImageCard UI.
 
 ### `lib/storyboard/videoAI.ts` — Video AI Generation
-Video generation via Kie AI API. Exports `generateKlingVideo()` (Kling 3.0), `generateVeoVideo()` (Veo 3.1), `checkVideoJobStatus()`, `calcVideoCredits()`, `VIDEO_MODELS` config, and `VIDEO_CREDITS` rates.
+Video generation via Kie AI API. Exports `generateKlingVideo()` (Kling 3.0), `generateVeoVideo()` (Veo 3.1), `generateKlingMotionControl()` (Kling 3.0 Motion Control), `generateGrokImagineVideo()` (Grok Imagine Image-to-Video), `generateSeedance2()` (Seedance 2.0), `checkVideoJobStatus()`, `calcVideoCredits()`, `VIDEO_MODELS` config, and `VIDEO_CREDITS` rates. All functions call `resolveKieApiKey(companyId)` for per-org API key resolution.
 
 ### `convex/schema.ts` — `storyboard_kie_ai` Table
 Stores KIE AI API keys with fields: `name`, `key`, `isDefault`, `isActive`. Managed via the KIE AI tab in the Pricing Management page. Used by `resolveKieApiKey()` to resolve API keys from the database before falling back to env vars. The `org_settings.defaultAI` field references a record in this table for per-org key assignment.
@@ -84,7 +97,12 @@ Stores KIE AI API keys with fields: `name`, `key`, `isDefault`, `isActive`. Mana
 | KIE AI key management, API key CRUD | `plan_price_management.md` |
 | `resolveKieApiKey()`, defaultAI fallback | `plan_price_management.md` |
 | Kling 3.0 Motion Control, Seedance 2.0 | `image_modelAI.md` |
+| Grok Imagine Image-to-Video | `image_modelAI.md` |
+| Video generation API routes (Kling, Grok, Seedance, Veo) | `plan_ai_panels.md` |
 | VideoImageAIPanel models/refs/toggles | `plan_ai_panels.md` |
+| Rate limiting (generate button cooldown) | `plan_ai_panels.md` |
+| Toast notifications (Sonner) | `plan_ui_components.md` |
+| Binary upload for large files (>4MB) | `plan_files_and_media.md` |
 | Storyboard item prompts, prompt edit | `plan_storyboard.md` |
 | Prompt Library categories, notes | `plan_ui_components.md` |
 | FileBrowser pagination, lazy loading | `plan_files_and_media.md` |

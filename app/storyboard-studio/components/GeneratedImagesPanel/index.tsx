@@ -96,6 +96,7 @@ export function GeneratedImagesPanel({
         const hasR2Key = Boolean(file.r2Key);
         const isProcessing = file.status === "processing" || file.status === "generating";
         const isCompleted = file.status === "completed" || file.status === "ready";
+        const isFailed = file.status === "failed" || file.status === "error";
 
         if (isProcessing) {
           return !hasR2Key;
@@ -105,17 +106,22 @@ export function GeneratedImagesPanel({
           return hasR2Key && Boolean(file.sourceUrl);
         }
 
+        if (isFailed) {
+          return true; // Show failed files so user can see error codes
+        }
+
         return false;
       })
       .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
       .map((file) => {
         const isProcessing = file.status === "processing" || file.status === "generating";
+        const isFailed = file.status === "failed" || file.status === "error";
 
         return {
           id: String(file._id),
           url: file.sourceUrl || "",
           thumbnail: file.sourceUrl || "",
-          fileType: file.fileType as 'image' | 'video', // Pass fileType from storyboard_files
+          fileType: file.fileType as 'image' | 'video',
           metadata: {
             timestamp: new Date(file.createdAt ?? Date.now()),
             model: file.metadata?.model || file.filename || 'Unknown',
@@ -125,12 +131,15 @@ export function GeneratedImagesPanel({
             progress: isProcessing ? file.metadata?.progress : undefined,
             stage: isProcessing ? file.metadata?.stage : undefined,
             estimatedTime: isProcessing ? file.metadata?.estimatedTime : undefined,
-            error: file.metadata?.error
+            error: file.metadata?.error || (isFailed ? file.responseMessage : undefined),
           },
-          status: isProcessing ? 'processing' : 'completed',
+          status: isFailed ? 'error' : (isProcessing ? 'processing' : 'completed'),
           isFavorite: Boolean(file.isFavorite),
           r2Key: file.r2Key,
-        } as GeneratedImageCard;
+          responseCode: file.responseCode,
+          responseMessage: file.responseMessage,
+          creditsUsed: file.creditsUsed,
+        } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number };
       });
   }, [activeShot?.id, projectFiles]);
 
@@ -263,6 +272,9 @@ export function GeneratedImagesPanel({
                       onRetry={onImageRetry}
                       onCompare={onImageCompare}
                       fileId={image.id}
+                      responseCode={(image as any).responseCode}
+                      responseMessage={(image as any).responseMessage}
+                      creditsUsed={(image as any).creditsUsed}
                     />
                   ))}
                 </div>

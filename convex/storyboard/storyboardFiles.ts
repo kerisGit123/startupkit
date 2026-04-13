@@ -136,17 +136,21 @@ export const toggleFavorite = mutation({
 });
 
 export const update = mutation({
-  args: { 
+  args: {
     id: v.id("storyboard_files"),
     category: v.optional(v.string()),
     status: v.optional(v.string()),
+    defaultAI: v.optional(v.id("storyboard_kie_ai")),
+    taskId: v.optional(v.string()),
+    responseCode: v.optional(v.number()),
+    responseMessage: v.optional(v.string()),
   },
-  handler: async (ctx, { id, category, status }) => {
+  handler: async (ctx, { id, category, status, defaultAI, taskId, responseCode, responseMessage }) => {
     const file = await ctx.db.get(id);
     if (!file) {
       throw new Error("File not found");
     }
-    
+
     const updateData: any = {};
     if (category !== undefined) {
       updateData.category = category;
@@ -154,7 +158,19 @@ export const update = mutation({
     if (status !== undefined) {
       updateData.status = status;
     }
-    
+    if (defaultAI !== undefined) {
+      updateData.defaultAI = defaultAI;
+    }
+    if (taskId !== undefined) {
+      updateData.taskId = taskId;
+    }
+    if (responseCode !== undefined) {
+      updateData.responseCode = responseCode;
+    }
+    if (responseMessage !== undefined) {
+      updateData.responseMessage = responseMessage;
+    }
+
     await ctx.db.patch(id, updateData);
     return { success: true };
   },
@@ -415,19 +431,22 @@ export const updateFromCallback = mutation({
     status: v.string(),
     r2Key: v.optional(v.string()),
     metadata: v.optional(v.any()),
-    size: v.optional(v.number()), // Add size field for file size in bytes
+    size: v.optional(v.number()),
+    responseCode: v.optional(v.number()),
+    responseMessage: v.optional(v.string()),
+    creditsUsed: v.optional(v.number()), // Set to 0 after refund
   },
-  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size }) => {
+  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size, responseCode, responseMessage, creditsUsed }) => {
     const updateData: any = { status };
-    
+
     if (sourceUrl) {
       updateData.sourceUrl = sourceUrl;
     }
-    
+
     if (taskId) {
       updateData.taskId = taskId;
     }
-    
+
     if (r2Key) {
       updateData.r2Key = r2Key;
     }
@@ -435,51 +454,31 @@ export const updateFromCallback = mutation({
     if (metadata !== undefined) {
       updateData.metadata = metadata;
     }
-    
+
     if (size !== undefined) {
       updateData.size = size;
     }
-    
+
+    if (responseCode !== undefined) {
+      updateData.responseCode = responseCode;
+    }
+
+    if (responseMessage !== undefined) {
+      updateData.responseMessage = responseMessage;
+    }
+
+    if (creditsUsed !== undefined) {
+      updateData.creditsUsed = creditsUsed;
+    }
+
     await ctx.db.patch(fileId, updateData);
-    console.log('[updateFromCallback] Updated file:', { fileId, status, hasSourceUrl: !!sourceUrl, hasR2Key: !!r2Key, hasMetadata: metadata !== undefined, hasSize: size !== undefined });
+    console.log('[updateFromCallback] Updated file:', { fileId, status, hasSourceUrl: !!sourceUrl, hasR2Key: !!r2Key, hasMetadata: metadata !== undefined, hasSize: size !== undefined, responseCode, responseMessage: responseMessage?.substring(0, 50) });
     return { success: true };
   },
 });
 
-// Migration: Populate creditsUsed from existing credit_usage records
-export const migrateCreditUsage = internalMutation({
-  handler: async (ctx) => {
-    console.log('[migrateCreditUsage] Starting migration...');
-    
-    // Get all generated files
-    const files = await ctx.db
-      .query("storyboard_files")
-      .filter(q => q.eq(q.field("category"), "generated"))
-      .collect();
-    
-    // Get credit usage records
-    const creditRecords = await ctx.db
-      .query("storyboard_credit_usage")
-      .collect();
-    
-    let migratedCount = 0;
-    
-    // Map credits to files
-    for (const file of files) {
-      const credit = creditRecords.find(c => c.itemId === file.categoryId);
-      if (credit && credit.creditsUsed) {
-        await ctx.db.patch(file._id, {
-          creditsUsed: credit.creditsUsed
-        });
-        migratedCount++;
-        console.log(`[migrateCreditUsage] Migrated file ${file._id} with ${credit.creditsUsed} credits`);
-      }
-    }
-    
-    console.log(`[migrateCreditUsage] Migration complete. Migrated ${migratedCount} files.`);
-    return { migratedFiles: migratedCount, totalFiles: files.length };
-  }
-});
+// Removed: migrateCreditUsage — one-time migration that read from the
+// deleted storyboard_credit_usage table. Already run; no longer needed.
 
 // ── Logs: total storage usage by company ─────────────────────────────────
 export const getStorageUsage = query({

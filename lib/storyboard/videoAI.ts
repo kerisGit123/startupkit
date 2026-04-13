@@ -65,7 +65,7 @@ export async function generateKlingVideo(params: {
   });
   if (!res.ok) throw new Error(`Kling API error: ${await res.text()}`);
   const data = await res.json();
-  return { taskId: data.data?.taskId as string | undefined, raw: data };
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }
 
 export async function generateVeoVideo(params: {
@@ -98,7 +98,7 @@ export async function generateVeoVideo(params: {
   });
   if (!res.ok) throw new Error(`Veo API error: ${await res.text()}`);
   const data = await res.json();
-  return { taskId: data.data?.taskId as string | undefined, raw: data };
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }
 
 export async function checkVideoJobStatus(taskId: string, companyId?: string) {
@@ -142,7 +142,7 @@ export async function generateKlingMotionControl(params: {
   });
   if (!res.ok) throw new Error(`Kling Motion Control API error: ${await res.text()}`);
   const data = await res.json();
-  return { taskId: data.data?.taskId as string | undefined, raw: data };
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }
 
 export async function generateSeedance2(params: {
@@ -203,5 +203,39 @@ export async function generateSeedance2(params: {
   });
   if (!res.ok) throw new Error(`Seedance 2.0 API error: ${await res.text()}`);
   const data = await res.json();
-  return { taskId: data.data?.taskId as string | undefined, raw: data };
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}
+
+export async function generateGrokImagineVideo(params: {
+  prompt: string;
+  imageUrls: string[];
+  aspectRatio: string;
+  resolution: string;
+  duration: number;
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "grok-imagine/image-to-video",
+      callBackUrl: params.callbackUrl,
+      input: {
+        prompt: params.prompt,
+        image_urls: params.imageUrls,
+        mode: "normal",
+        duration: String(params.duration),
+        resolution: params.resolution.toLowerCase(),
+        aspect_ratio: params.aspectRatio,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Grok Imagine API error: ${await res.text()}`);
+  const data = await res.json();
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }

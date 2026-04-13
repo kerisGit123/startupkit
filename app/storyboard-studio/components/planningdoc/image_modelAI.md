@@ -409,6 +409,38 @@ const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
 - **Max References**: 9 images, 3 videos (<=15s each), 3 audio (<=15s each)
 - **Toggles**: `web_search`, `generate_audio`
 
+#### **Grok Imagine Image-to-Video**
+
+```typescript
+const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${apiKey}`
+  },
+  body: JSON.stringify({
+    model: 'grok-imagine/image-to-video',
+    callBackUrl: 'https://your-domain.com/api/callback',
+    input: {
+      prompt: 'A penguin sliding on ice @image1',
+      image_urls: ['https://example.com/penguin.png'],  // up to 7 images
+      mode: 'normal',
+      duration: '6',           // 6-30 seconds (string)
+      resolution: '480p',      // 480p | 720p
+      aspect_ratio: '16:9'
+    }
+  })
+});
+```
+
+- **Resolution**: 480p, 720p
+- **Duration**: 6-30 seconds
+- **Max References**: 7 images via `image_urls` (use `@image1 @image2` in prompt)
+- **Formats**: JPEG, PNG, WEBP (max 10MB each)
+- **No `task_id` needed**: Use `image_urls` for external URLs (don't mix with `task_id`)
+- **Pricing**: Formula-based with resolution multiplier
+- **API Route**: `/api/storyboard/generate-grok` → `generateGrokImagineVideo()` in videoAI.ts
+
 ### **4. Upscale Models**
 
 #### **Recraft Crisp Upscale (1 credit)**

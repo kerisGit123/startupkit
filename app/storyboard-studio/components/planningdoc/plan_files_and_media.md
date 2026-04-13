@@ -60,31 +60,39 @@ import { useCurrentCompanyId } from "@/lib/auth-utils";
 
 ### Upload Technique
 
+The `uploadToR2()` client function auto-selects the upload strategy based on file size:
+
+- **Small files (≤4MB)**: Uses `/api/storyboard/upload` with FormData body
+- **Large files (>4MB)**: Uses `/api/storyboard/upload-binary` with raw bytes + metadata in headers (`x-filename`, `x-category`, `x-company-id`, `x-project-id`). This bypasses Turbopack's FormData parsing limit which fails for files over ~4MB.
+
+The binary route reads `request.arrayBuffer()` instead of `request.formData()`, uploads to R2 via server-side S3 SDK, and logs the file to `storyboard_files` database.
+
+Client-side 50MB size check in FileBrowser shows toast error for oversized files.
+
 ```typescript
-// FileBrowser.tsx - handleUpload function
-const handleUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-  const files = Array.from(event.target.files || []);
-  const companyId = useCurrentCompanyId(); // orgId ?? userId
-  
-  for (const file of files) {
-    await uploadToR2({
-      file,
-      category: selectedFilter === "all" ? "uploads" : selectedFilter, // uploads | elements
-      userId: user.id,
-      companyId, // Critical: ensures files belong to correct org/user
-      projectId, // Optional: links to current project
-      tags: [], // File-specific tags
-      onProgress: (percent) => setUploadProgress(percent),
-      onSuccess: (result) => {
-        console.log(`[FileBrowser] Uploaded: ${result.filename} → ${result.r2Key}`);
-        // Convex automatically updates via reactive queries
-      },
-      onError: (error) => {
-        console.error(`[FileBrowser] Upload failed:`, error);
-      }
-    });
-  }
-};
+// lib/uploadToR2.ts - auto-selects upload strategy
+const usePresignedUrl = file && file.size > 4 * 1024 * 1024;
+
+if (usePresignedUrl && file) {
+  // Large files: raw bytes via binary upload route
+  const response = await fetch('/api/storyboard/upload-binary', {
+    method: 'POST',
+    body: file,
+    headers: {
+      'Content-Type': file.type,
+      'x-filename': encodeURIComponent(file.name),
+      'x-category': category || 'uploads',
+      'x-company-id': companyId || userId || '',
+      ...(projectId ? { 'x-project-id': projectId } : {}),
+    },
+  });
+} else {
+  // Small files: FormData upload (original approach)
+  const formData = new FormData();
+  formData.append('file', file);
+  // ... category, projectId, companyId, etc.
+  await fetch('/api/storyboard/upload', { method: 'POST', body: formData });
+}
 ```
 
 ### Delete Technique

@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import sharp from "sharp";
+import { extractKieResponse, getResponseCodeInfo } from "@/lib/storyboard/kieResponse";
 
 function getResultUrl(data: any): string | undefined {
   console.log('[kie-callback] getResultUrl - checking response structure:', {
@@ -238,46 +239,53 @@ export async function POST(request: NextRequest) {
     
     console.log('[kie-callback] Received:', { fileId, data });
     
-    // Debug: Log the full response structure for Veo 3.1
-    if (data.data?.taskId && !data.data?.resultUrl) {
-      console.log('[kie-callback] Veo 3.1 response structure - full data:', JSON.stringify(data, null, 2));
-      console.log('[kie-callback] Veo 3.1 data.data keys:', Object.keys(data.data || {}));
-      console.log('[kie-callback] Veo 3.1 looking for video URL in various locations...');
-    }
-    
     if (!fileId) {
       return NextResponse.json({ error: 'Missing fileId' }, { status: 400 });
     }
 
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
-    const taskId = data.data?.taskId;
-    let state = data.data?.state;
+    // Use centralized response extraction
+    const kieResponse = extractKieResponse(data);
+    const callbackModel = data.data?.model || '';
+    let state = kieResponse.state || data.data?.state;
+    const taskId = kieResponse.taskId || data.data?.taskId;
     let resultUrl = getResultUrl(data);
+
+    // Normalize state
+    if (state === 'fail') state = 'failed';
+
+    console.log('[kie-callback] Parsed completion payload:', {
+      state,
+      taskId,
+      model: callbackModel,
+      resultUrl,
+      responseCode: kieResponse.responseCode,
+      responseMessage: kieResponse.responseMessage,
+      failMsg: data.data?.failMsg,
+    });
 
     if (taskId) {
       await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
         fileId,
         taskId,
         status: state === 'success' && resultUrl ? 'processing' : 'processing',
+        responseCode: kieResponse.responseCode,
+        responseMessage: kieResponse.responseMessage,
       });
     }
 
-    console.log('[kie-callback] Parsed completion payload:', {
-      state,
-      taskId,
-      resultUrl,
-    });
+    // Determine if this is a Veo model (only use Veo fallback for actual Veo models)
+    const isVeoModel = callbackModel.includes('veo') || callbackModel.includes('Veo');
 
-    // Special handling for Veo 3.1: if we have taskId but no resultUrl, query the API
-    if (taskId && !resultUrl) {
+    // Special handling for Veo 3.1 ONLY: if we have taskId but no resultUrl, query the Veo API
+    if (isVeoModel && taskId && !resultUrl && state !== 'failed' && state !== 'error') {
       console.log('[kie-callback] Veo 3.1 detected - querying API for video URL using taskId:', taskId);
-      
+
       try {
-        // Use the Veo 3.1 specific endpoint
         const endpoint = `https://api.kie.ai/api/v1/veo/record-info?taskId=${taskId}`;
         console.log(`[kie-callback] Trying Veo 3.1 specific endpoint: ${endpoint}`);
-        
+
         const kieResponse = await fetch(endpoint, {
           method: 'GET',
           headers: {
@@ -288,11 +296,9 @@ export async function POST(request: NextRequest) {
         if (kieResponse.ok) {
           const kieData = await kieResponse.json();
           console.log('[kie-callback] Veo 3.1 API response:', kieData);
-          
-          // Extract video URL from Veo 3.1 response structure
+
           let videoUrl = null;
-          
-          // Based on your example: data.response.resultUrls array
+
           if (kieData?.data?.response?.resultUrls && Array.isArray(kieData.data.response.resultUrls)) {
             videoUrl = kieData.data.response.resultUrls[0];
           } else if (kieData?.data?.resultUrls && Array.isArray(kieData.data.resultUrls)) {
@@ -304,43 +310,34 @@ export async function POST(request: NextRequest) {
           } else if (kieData?.data?.sourceUrl) {
             videoUrl = kieData.data.sourceUrl;
           }
-          
+
           if (videoUrl) {
             console.log('[kie-callback] Found Veo 3.1 video URL:', videoUrl);
             resultUrl = videoUrl;
-            state = 'success'; // Override state since we have the video
+            state = 'success';
           } else {
             console.log('[kie-callback] No video URL found in Veo 3.1 API response');
-            console.log('[kie-callback] Full response structure:', JSON.stringify(kieData, null, 2));
-            
-            // Check if task is still processing
             if (kieData?.code === 422 || kieData?.msg?.includes('recordInfo is null')) {
-              console.log('[kie-callback] Veo 3.1 task still processing, keeping status as processing');
-              // Don't override state, keep it as 'processing' so it can be retried
+              console.log('[kie-callback] Veo 3.1 task still processing');
             }
           }
         } else {
           console.error('[kie-callback] Failed to query Veo 3.1 API:', kieResponse.status);
           const errorText = await kieResponse.text();
-          console.error('[kie-callback] Error response:', errorText);
-          
-          // If we get a 422 with "recordInfo is null", the task is still processing
           if (kieResponse.status === 422 && errorText?.includes('recordInfo is null')) {
-            console.log('[kie-callback] Veo 3.1 task still processing, keeping status as processing');
-            // Don't override state, keep it as 'processing' so it can be retried
+            console.log('[kie-callback] Veo 3.1 task still processing');
           } else {
-            // For other errors, mark as failed
             state = 'failed';
           }
         }
-        
+
       } catch (error) {
         console.error('[kie-callback] Error querying Veo 3.1 API:', error);
         state = 'failed';
       }
     }
 
-    if (state === 'failed' || state === 'error') {
+    if (state === 'failed' || state === 'error' || state === 'fail') {
       const fileRecord = await convex.query(api.storyboard.storyboardFiles.getById, {
         id: fileId,
       });
@@ -357,6 +354,9 @@ export async function POST(request: NextRequest) {
         fileId,
         taskId,
         status: 'failed',
+        responseCode: kieResponse.responseCode,
+        responseMessage: kieResponse.responseMessage,
+        creditsUsed: 0, // Zero out after refund
       });
 
       return NextResponse.json({
@@ -448,15 +448,17 @@ export async function POST(request: NextRequest) {
         taskId,
         sourceUrl: finalUrl,
         r2Key: finalR2Key,
-        size: fileSizeBytes, // Use standard database field name: size
+        size: fileSizeBytes,
         status: 'completed',
+        responseCode: 200,
+        responseMessage: 'success',
         metadata: {
           ...generationMetadata,
           tempGeneratedImageUrl: tempUrl,
           finalImageUrl: finalUrl,
           processedAt: new Date().toISOString(),
           fileSizeBytes,
-          fileSizeMB: Math.round(fileSizeBytes / (1024 * 1024) * 100) / 100, // Store size in MB with 2 decimal places
+          fileSizeMB: Math.round(fileSizeBytes / (1024 * 1024) * 100) / 100,
         },
       });
 

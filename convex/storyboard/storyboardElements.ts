@@ -141,48 +141,38 @@ export const listByProject = query({
       .order("desc")
       .collect();
 
+    // Filter: current project elements only
     const results = allProjectElements.filter((element) => {
-      if (type && element.type !== type) {
-        return false;
-      }
-
-      // TEMPORARY: Show all project elements regardless of companyId for debugging
-      if (candidateCompanyIds.length > 0) {
-        console.log(`[listByProject] Element "${element.name}":`, {
-          elementCompanyId: element.companyId,
-          elementCreatedBy: element.createdBy,
-          candidateCompanyIds,
-          projectId: element.projectId
-        });
-        
-        // TEMPORARILY include all elements that belong to this project
-        return element.projectId === projectId;
-      }
-
+      if (type && element.type !== type) return false;
       return true;
     });
-    
-    console.log(`[listByProject] === RESULTS ===`);
-    console.log(`[listByProject] Found ${results.length} elements`);
-    if (results.length > 0) {
-      console.log(`[listByProject] Element details:`, results.map(el => ({
-        name: el.name,
-        type: el.type,
-        companyId: el.companyId,
-        projectId: el.projectId
-      })));
-    } else {
-      console.log(`[listByProject] No elements found - checking all elements for debug`);
-      const allElements = await ctx.db.query("storyboard_elements").collect();
-      console.log(`[listByProject] All elements in DB:`, allElements.map(el => ({
-        name: el.name,
-        companyId: el.companyId,
-        projectId: el.projectId,
-        type: el.type
-      })));
+
+    // Also include public/shared elements from OTHER projects within same company
+    let externalElements: typeof results = [];
+    if (candidateCompanyIds.length > 0) {
+      const allCompanyElements = await ctx.db
+        .query("storyboard_elements")
+        .collect();
+
+      externalElements = allCompanyElements.filter((element) => {
+        // Skip elements already in current project
+        if (element.projectId === projectId) return false;
+        // Filter by type if specified
+        if (type && element.type !== type) return false;
+        // Must belong to same company
+        if (!candidateCompanyIds.includes(element.companyId || "")) return false;
+        // Include public elements
+        if (element.visibility === "public") return true;
+        // Include shared elements that include this project
+        if (element.visibility === "shared" && element.sharedWith?.includes(projectId)) return true;
+        return false;
+      });
     }
-    
-    return results;
+
+    const combined = [...results, ...externalElements];
+    console.log(`[listByProject] Found ${results.length} project elements + ${externalElements.length} public/shared elements`);
+
+    return combined;
   },
 });
 

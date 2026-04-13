@@ -1,5 +1,7 @@
 "use client";
 
+import { toast } from "sonner";
+import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { useState, useMemo, useRef } from "react";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -155,6 +157,7 @@ export function FileBrowser({
   const [viewSize, setViewSize]               = useState(140);
   const [uploading, setUploading]             = useState(false);
   const [deletingId, setDeletingId]           = useState<string | null>(null);
+  const [pendingDeleteFile, setPendingDeleteFile] = useState<any>(null);
   const [error, setError]                     = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -180,6 +183,7 @@ export function FileBrowser({
   );
   
   const toggleFavorite = useMutation(api.storyboard.storyboardFiles.toggleFavorite);
+  const removeFile = useMutation(api.storyboard.storyboardFiles.remove);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
 
   // ── Filter (client-side — only element sub-category remains) ──
@@ -231,6 +235,13 @@ export function FileBrowser({
       const uploadCategory = selectedFilter === "all" ? "uploads" : selectedFilter;
       
       for (const file of Array.from(picked)) {
+        // Check file size — API route FormData parsing fails for very large files
+        const maxSize = 50 * 1024 * 1024; // 50MB
+        if (file.size > maxSize) {
+          toast.error(`"${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 50MB.`);
+          continue;
+        }
+
         console.log("[FileBrowser] Starting upload:", {
           fileName: file.name,
           fileSize: file.size,
@@ -269,45 +280,36 @@ export function FileBrowser({
   };
 
   /** Delete a file from R2 + storyboard_files using deleteFromR2 */
-  const handleDelete = async (file: any) => {
-    if (!confirm(`Delete "${file.filename}"?`)) return;
-    
+  const handleDelete = (file: any) => {
+    setPendingDeleteFile(file);
+  };
+
+  const confirmDelete = async () => {
+    const file = pendingDeleteFile;
+    if (!file) return;
+    setPendingDeleteFile(null);
+
     console.log('[FileBrowser] Deleting file:', {
       filename: file.filename,
       fileId: file._id,
       r2Key: file.r2Key,
-      fileIdLength: file._id?.length,
-      fileIdFormat: file._id?.match(/^[a-z0-9]{24,}$/) ? 'valid' : 'invalid',
       category: file.category,
-      status: file.status
     });
-    
+
     setDeletingId(file._id);
     try {
-      // Check if file has R2 storage - if not, just delete the database record
       if (!file.r2Key) {
-        console.log('[FileBrowser] File has no R2 key, deleting only database record');
-        // For files without R2 storage (like uploads, generated files in progress, etc.)
-        // we should just delete the database record
-        const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-        const { api } = await import("@/convex/_generated/api");
-        
-        await convex.mutation(api.storyboard.storyboardFiles.remove, {
-          id: file._id
-        });
-        
-        console.log('[FileBrowser] Successfully deleted file from database only:', file.filename);
+        await removeFile({ id: file._id });
       } else {
-        // File has R2 storage, delete both R2 and database record
         await deleteFromR2({
           r2Key: file.r2Key,
           fileId: file._id,
         });
-        console.log('[FileBrowser] Successfully deleted file from R2 and database:', file.filename);
       }
+      toast.success(`"${file.filename}" deleted`);
     } catch (err) {
       console.error('[FileBrowser] Delete failed:', err);
-      alert(err instanceof Error ? err.message : "Delete failed");
+      toast.error(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setDeletingId(null);
     }
@@ -542,12 +544,12 @@ export function FileBrowser({
                         return (
                           <div key={file._id} className="relative group">
 
-                            {/* Image-selection overlay */}
+                            {/* Image-selection overlay — use pointer-events-none so action buttons underneath remain clickable */}
                             {isImage && imageSelectionMode && onSelectImage && (
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-15 pointer-events-none">
                                 <button
                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelectImage(publicUrl, file.filename, file); }}
-                                  className="rounded-full bg-indigo-500 p-2 text-white hover:bg-indigo-600 transition-colors shadow-lg"
+                                  className="rounded-full bg-indigo-500 p-2 text-white hover:bg-indigo-600 transition-colors shadow-lg pointer-events-auto"
                                   title="Use this image"
                                 >
                                   <Plus className="w-4 h-4" />
@@ -685,6 +687,18 @@ export function FileBrowser({
         {/* Hidden input */}
         <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/wav" className="hidden" onChange={handleFileUpload} />
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!pendingDeleteFile}
+        onCancel={() => setPendingDeleteFile(null)}
+        onConfirm={confirmDelete}
+        title="Delete File"
+        subtitle="This action cannot be undone"
+        message={<>Are you sure you want to delete <span className="text-white font-medium">"{pendingDeleteFile?.filename}"</span>?</>}
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

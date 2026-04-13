@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { usePricingData } from "./usePricingData";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -10,10 +11,13 @@ import { api } from "@/convex/_generated/api";
 import { FileBrowser } from "./storyboard/FileBrowser";
 import { ElementLibrary } from "./storyboard/ElementLibrary";
 import PromptLibrary from "./storyboard/PromptLibrary";
+import { AddImageMenu } from "./shared/AddImageMenu";
+import { usePromptEditor } from "./shared/usePromptEditor";
+import { PromptTextarea } from "./shared/PromptTextarea";
 import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
-  Upload, Download, Save, History, Trash2, BookOpen, FolderOpen, FileText, Camera, Zap,
+  Upload, Download, Save, History, Trash2, BookOpen, FolderOpen, MonitorDown, FolderDown, FileText, Camera, Zap,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
   Eye, EyeOff, Bug, Video,
 } from "lucide-react";
@@ -76,6 +80,7 @@ export interface EditImageAIPanelProps {
   onUploadOverride?: () => void;
   onDownloadCanvas?: () => void;
   onSaveAsOriginal?: () => void;
+  onSaveToUploadFolder?: () => void;
   onAddCanvasElement?: (file: File) => void;
   backgroundImage?: string;
   onZoomIn?: () => void;
@@ -89,7 +94,11 @@ export interface EditImageAIPanelProps {
   onDeleteSelected?: () => void; // Add handler for delete selected element
   onAspectRatioChange?: (aspectRatio: string) => void; // Add handler for aspect ratio changes
   selectedAspectRatio?: string; // Add selected aspect ratio prop
-  onRectangleMaskAspectRatioChange?: (aspectRatio: string) => void; // Add handler for rectangle mask aspect ratio changes
+  onRectangleMaskAspectRatioChange?: (aspectRatio: string) => void;
+  // Generated images for reference selection
+  generatedItemImages?: Array<{ id: string; url: string; filename: string }>;
+  generatedProjectImages?: Array<{ id: string; url: string; filename: string }>;
+  onAddReferenceFromUrl?: (url: string) => void;
 }
 
 // ── Available Models ─────────────────────────────────────────────────
@@ -181,6 +190,7 @@ export default function EditImageAIPanel({
   onUploadOverride,
   onDownloadCanvas,
   onSaveAsOriginal,
+  onSaveToUploadFolder,
   onAddCanvasElement,
   backgroundImage,
   onZoomIn,
@@ -195,6 +205,9 @@ export default function EditImageAIPanel({
   onAspectRatioChange,
   selectedAspectRatio,
   onRectangleMaskAspectRatioChange,
+  generatedItemImages,
+  generatedProjectImages,
+  onAddReferenceFromUrl,
   // NEW: Active shot props
   activeShotDescription,
   activeShotImagePrompt,
@@ -219,6 +232,7 @@ export default function EditImageAIPanel({
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [showGeneratedPicker, setShowGeneratedPicker] = useState(false);
   const [fileBrowserMode, setFileBrowserMode] = useState<'reference' | 'override'>('reference');
   const [contentType, setContentType] = useState("image");
   const { models, loading: pricingLoading, error: pricingError, getModelCredits: hookGetModelCredits } = usePricingData();
@@ -279,169 +293,7 @@ export default function EditImageAIPanel({
     return hookGetModelCredits(modelId, quality);
   }, [hookGetModelCredits, selectedQuality, gptImageQuality]);
 
-  // ── ContentEditable editor helpers ──────────────────────────────────
-
-  // Extract plain text from contentEditable for prompt generation (excluding badges)
-  const extractPlainText = (): string => {
-    const el = editorRef.current;
-    if (!el) return "";
-    const collect = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-      const htmlEl = node as HTMLElement;
-      if (htmlEl.nodeName === "BR") return "\n";
-      
-      // Exclude badge mentions from prompt text - they should not affect the prompt
-      if (htmlEl.dataset?.type === "mention") {
-        return ""; // Don't include badge content in prompt
-      }
-      
-      let result = "";
-      node.childNodes.forEach((child) => { result += collect(child); });
-      if (htmlEl.tagName === "DIV" && node !== el) result += "\n";
-      return result;
-    };
-    return collect(el).replace(/\n$/, "");
-  };
-
-  // Extract text WITH badges for test button display
-  const extractTextWithBadges = (): string => {
-    const el = editorRef.current;
-    if (!el) return "";
-    const collect = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-      const htmlEl = node as HTMLElement;
-      if (htmlEl.nodeName === "BR") return "\n";
-      
-      // Include badge mentions for test display
-      if (htmlEl.dataset?.type === "mention") {
-        // Extract the badge text from the label element
-        const label = htmlEl.querySelector('span[class*="text-cyan-300"]');
-        if (label) {
-          return label.textContent || "";
-        }
-        return "";
-      }
-      
-      let result = "";
-      node.childNodes.forEach((child) => { result += collect(child); });
-      if (htmlEl.tagName === "DIV" && node !== el) result += "\n";
-      return result;
-    };
-    return collect(el).replace(/\n$/, "");
-  };
-
-  // Create a badge DOM element (non-editable, inline)
-  const createBadgeElement = (entry: { id: string; imageUrl: string; imageNumber: number }): HTMLSpanElement => {
-    const span = document.createElement("span");
-    span.contentEditable = "false";
-    span.dataset.type = "mention";
-    span.dataset.mentionId = entry.id;
-    span.setAttribute(
-      "class",
-      "inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/40 rounded px-1.5 py-0.5 align-middle mx-0.5 select-none"
-    );
-    span.style.cursor = "default";
-    span.style.fontSize = "inherit";
-
-    const img = document.createElement("img");
-    img.src = entry.imageUrl;
-    img.alt = `Image ${entry.imageNumber}`;
-    img.setAttribute("class", "w-4 h-4 object-cover rounded");
-
-    const label = document.createElement("span");
-    label.setAttribute("class", "text-cyan-300 text-sm font-medium whitespace-nowrap");
-    label.textContent = entry.source === 'r2' ? `@R2${entry.imageNumber}` : 
-                        entry.source === 'element' ? `@EL${entry.imageNumber}` : 
-                        `@Image${entry.imageNumber}`;
-
-    const closeBtn = document.createElement("button");
-    closeBtn.setAttribute("type", "button");
-    closeBtn.setAttribute("title", "Remove");
-    closeBtn.setAttribute(
-      "class",
-      "ml-0.5 flex items-center justify-center w-3.5 h-3.5 rounded-full text-cyan-400/70 hover:text-white hover:bg-cyan-400/30 transition-colors"
-    );
-    closeBtn.innerHTML =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">` +
-      `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-    closeBtn.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const editor = editorRef.current;
-      span.remove();
-      if (editor) {
-        editor.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    });
-
-    span.appendChild(img);
-    span.appendChild(label);
-    span.appendChild(closeBtn);
-    return span;
-  };
-
-  // Insert a badge at current caret position (or restore saved position)
-  const insertBadgeAtCaret = (entry: { id: string; imageUrl: string; imageNumber: number; source?: string }) => {
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
-    const selection = window.getSelection();
-    if (!selection) return;
-    let range: Range;
-    if (selection.rangeCount > 0) {
-      range = selection.getRangeAt(0);
-      range.deleteContents();
-    } else if (savedSelectionRef.current) {
-      try {
-        range = document.createRange();
-        range.setStart(savedSelectionRef.current.container, savedSelectionRef.current.offset);
-        range.collapse(true);
-        selection.addRange(range);
-      } catch {
-        range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        selection.addRange(range);
-      }
-      range = selection.getRangeAt(0);
-    } else {
-      range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      selection.addRange(range);
-      range = selection.getRangeAt(0);
-    }
-    
-    // Create a space element with non-breaking space to ensure spacing
-    const spaceBefore = document.createTextNode('\u00A0'); // Non-breaking space
-    range.insertNode(spaceBefore);
-    
-    // Insert the badge
-    const badge = createBadgeElement(entry);
-    range.insertNode(badge);
-    
-    // Create a space element with non-breaking space after the badge
-    const spaceAfter = document.createTextNode('\u00A0'); // Non-breaking space
-    range.insertNode(spaceAfter);
-    
-    // Add a regular space as well for better text flow
-    const regularSpace = document.createTextNode(' ');
-    range.insertNode(regularSpace);
-    
-    // Set cursor position after the badge and spaces
-    const newRange = document.createRange();
-    newRange.setStartAfter(regularSpace);
-    newRange.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(newRange);
-    
-    setEditorIsEmpty(false);
-    setTimeout(() => {
-      const plainText = extractPlainText();
-      setCurrentPrompt(plainText);
-      onUserPromptChange?.(plainText);
-    }, 0);
-  };
+  // ── ContentEditable editor helpers (now from shared usePromptEditor hook) ──
 
   // Add image as a new reference image (duplicate functionality)
   const addImageAsReference = (img: any, index: number) => {
@@ -487,14 +339,33 @@ export default function EditImageAIPanel({
     }
   };
 
-  const editorRef = useRef<HTMLDivElement>(null);
+  const promptEditor = usePromptEditor({
+    onPromptChange: (text) => {
+      setCurrentPrompt(text);
+      onUserPromptChange?.(text);
+    },
+  });
+  const {
+    editorRef,
+    editorIsEmpty,
+    setEditorIsEmpty,
+    extractPlainText,
+    extractTextWithBadges,
+    createBadgeElement,
+    insertBadgeAtCaret,
+    handleEditorInput,
+    handleEditorBlur,
+    handleCompositionStart,
+    handleCompositionEnd,
+    handleKeyDown: sharedHandleKeyDown,
+    handleDragOver,
+    handleDrop,
+    savedSelectionRef,
+  } = promptEditor;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
-  const isComposingRef = useRef(false);
-  const savedSelectionRef = useRef<{ container: Node; offset: number } | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState(userPrompt || "");
-  const [editorIsEmpty, setEditorIsEmpty] = useState(!userPrompt);
 
   // Handle output mode toggle and auto-switch to Seedance model for video
   const handleOutputModeToggle = () => {
@@ -528,163 +399,15 @@ export default function EditImageAIPanel({
   const allModelOptions = [...inpaintModelOptions];
   const selectedModelOption = allModelOptions.find((option) => option.value === model) ?? allModelOptions[0];
 
-  // Handle keyboard events for copy and paste
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.ctrlKey || e.metaKey) {
-      switch (e.key) {
-        case 'c':
-          // Copy functionality
-          e.preventDefault();
-          const selection = window.getSelection();
-          if (selection && selection.toString()) {
-            navigator.clipboard.writeText(selection.toString()).then(() => {
-              console.log('Text copied to clipboard');
-            }).catch(err => {
-              console.error('Failed to copy text:', err);
-            });
-          }
-          break;
-        case 'v':
-          // Enhanced paste functionality with proper cursor positioning
-          e.preventDefault();
-          navigator.clipboard.readText().then((text) => {
-            if (text) {
-              const editor = editorRef.current;
-              if (!editor) return;
-              
-              // Get current selection
-              const selection = window.getSelection();
-              if (!selection) return;
-              
-              let range: Range;
-              
-              // Use existing selection range if available
-              if (selection.rangeCount > 0) {
-                range = selection.getRangeAt(0);
-              } else {
-                // Create a new range at the cursor position
-                range = document.createRange();
-                range.selectNodeContents(editor);
-                range.collapse(false); // Collapse to end if no selection
-              }
-              
-              // Check if range is valid and within the editor
-              const rangeContainer = range.commonAncestorContainer;
-              const isWithinEditor = editor.contains(rangeContainer) || rangeContainer === editor;
-              
-              if (!isWithinEditor) {
-                // If range is outside editor, create a new range at the end
-                range = document.createRange();
-                range.selectNodeContents(editor);
-                range.collapse(false);
-              }
-              
-              // Delete any selected content
-              if (!range.collapsed) {
-                range.deleteContents();
-              }
-              
-              // Create a text node with the pasted content
-              const textNode = document.createTextNode(text);
-              
-              // Insert the text at the current cursor position
-              range.insertNode(textNode);
-              
-              // Move cursor to the end of the inserted text
-              range.setStartAfter(textNode);
-              range.collapse(true);
-              
-              // Apply the new range to selection
-              selection.removeAllRanges();
-              selection.addRange(range);
-              
-              // Trigger input event to update state
-              const inputEvent = new Event('input', { bubbles: true });
-              editor.dispatchEvent(inputEvent);
-              
-              console.log('Text pasted at cursor position');
-            }
-          }).catch(err => {
-            console.error('Failed to read clipboard:', err);
-            // Fallback: let the default paste behavior handle it
-            // This should respect cursor position naturally
-            const pasteEvent = new ClipboardEvent('paste', {
-              bubbles: true,
-              cancelable: true,
-              clipboardData: new DataTransfer()
-            });
-            
-            // Try to trigger default paste by dispatching the event
-            if (e.target) {
-              (e.target as HTMLElement).dispatchEvent(pasteEvent);
-            }
-          });
-          break;
-      }
-    }
-  };
+  // handleKeyDown provided by shared usePromptEditor hook (aliased as sharedHandleKeyDown)
 
-  const handleEditorInput = () => {
-    if (isComposingRef.current) return;
-    const el = editorRef.current;
-    if (!el) return;
-    const hasContent = el.innerHTML !== "" && el.innerHTML !== "<br>";
-    setEditorIsEmpty(!hasContent);
-    const plainText = extractPlainText();
-    setCurrentPrompt(plainText);
-    onUserPromptChange?.(plainText);
-  };
-
-  const handleEditorBlur = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      savedSelectionRef.current = { container: range.startContainer, offset: range.startOffset };
-    }
-  };
-
-  const handleCompositionStart = () => {
-    isComposingRef.current = true;
-  };
-
-  const handleCompositionEnd = () => {
-    isComposingRef.current = false;
-    handleEditorInput();
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const imageUrl = e.dataTransfer.getData("imageUrl");
-    const imageIndex = e.dataTransfer.getData("imageIndex");
-    if (!imageUrl || imageIndex === "") return;
-    const imageNumber = parseInt(imageIndex) + 1;
-    let range: Range | null = null;
-    const doc = document as any;
-    if (typeof doc.caretRangeFromPoint === "function") {
-      range = doc.caretRangeFromPoint(e.clientX, e.clientY);
-    } else if (typeof doc.caretPositionFromPoint === "function") {
-      const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
-      if (pos) {
-        range = document.createRange();
-        range.setStart(pos.offsetNode, pos.offset);
-        range.collapse(true);
-      }
-    }
-    if (range) {
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-    insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl, imageNumber });
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-  };
+  // handleEditorInput, handleEditorBlur, handleCompositionStart/End,
+  // handleDrop, handleDragOver — all provided by shared usePromptEditor hook
 
   const requiresPrompt = activeTool === "text-to-image";
-  const canGenerate = mode === "area-edit" && !isGenerating && (!requiresPrompt || !!currentPrompt.trim());
+  const [generateCooldown, setGenerateCooldown] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const canGenerate = mode === "area-edit" && !isGenerating && !generateCooldown && (!requiresPrompt || !!currentPrompt.trim());
   
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
@@ -1442,6 +1165,8 @@ export default function EditImageAIPanel({
       } else {
         onSaveSelectedImage?.();
       }
+    } else if (id === "save-to-uploads") {
+      onSaveToUploadFolder?.();
     } else if (id === "zoom-in") {
       // Handle zoom in functionality
       onZoomIn?.();
@@ -1695,22 +1420,25 @@ export default function EditImageAIPanel({
           </ToolBtn>
         </div>
         
-        {/* Group 1: Upload, Delete */}
+        {/* Group 1: Retrieve, Save to Uploads, Delete */}
         <div className={grp}>
-          <ToolBtn active={false} onClick={() => pick("upload-override")} title="Upload (Override)">
-            <Upload className={ic} />
+          <ToolBtn active={false} onClick={() => pick("upload-override")} title="Retrieve from File Browser">
+            <FolderDown className={ic} />
+          </ToolBtn>
+          <ToolBtn active={false} onClick={() => pick("save-to-uploads")} title="Save to Upload Folder">
+            <Download className={ic} />
           </ToolBtn>
           <ToolBtn danger active={false} onClick={() => pick("delete")} title="Delete">
             <Trash2 className={ic} />
           </ToolBtn>
         </div>
 
-        {/* Group 2: Download, Save */}
+        {/* Group 2: Download, Save to Storyboard */}
         <div className={grp}>
-          <ToolBtn active={false} onClick={() => pick("download")} title="Download">
-            <Download className={ic} />
+          <ToolBtn active={false} onClick={() => pick("download")} title="Download to Desktop">
+            <MonitorDown className={ic} />
           </ToolBtn>
-          <ToolBtn active={false} onClick={() => pick("save")} title="Save">
+          <ToolBtn active={false} onClick={() => pick("save")} title="Save to Storyboard Item Image">
             <Save className={ic} />
           </ToolBtn>
         </div>
@@ -1773,128 +1501,21 @@ export default function EditImageAIPanel({
           </div>
         )})}
         
-        {/* Combined Upload Button with Slide Menu */}
+        {/* Combined Upload Button with Slide Menu (shared component) */}
         {maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
-          <div className="relative">
-            {/* Add Button */}
-            <button
-              onClick={() => {
-                console.log('🔥🔥🔥 ADD BUTTON CLICKED! 🔥🔥🔥');
-                setShowUploadMenu(!showUploadMenu);
-              }}
-              className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-emerald-500/30 hover:border-emerald-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
-              title="Add reference image"
-            >
-              <Plus className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
-              <span className="text-[10px] text-emerald-400 group-hover:text-emerald-300 transition-colors">Add Image</span>
-            </button>
-            
-        
-            
-            {/* Slide-out Menu from Left - Horizontal Layout */}
-            {showUploadMenu && (
-              <>
-                {/* Overlay */}
-                <div 
-                  className="fixed inset-0 bg-black/50 z-40"
-                  onClick={() => setShowUploadMenu(false)}
-                />
-                {/* Slide Menu - Horizontal */}
-                <div className="absolute top-0 left-full ml-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50">
-                  <div className="p-3">
-                    {/* Horizontal Options */}
-                    <div className="flex gap-2">
-                      {/* Upload from computer */}
-                      <button
-                        onClick={() => {
-                          fileInputRef.current?.click();
-                          setShowUploadMenu(false);
-                        }}
-                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                        title="Upload from computer"
-                      >
-                        <Upload className="w-4 h-4 text-emerald-400" />
-                        <span className="text-xs">Upload</span>
-                      </button>
-                      
-                      {/* R2 File Browser */}
-                      <button
-                        onClick={() => {
-                          console.log('R2 button clicked!');
-                          console.log('canOpenFileBrowser():', canOpenFileBrowser());
-                          console.log('projectId:', projectId);
-                          console.log('companyId:', companyId);
-                          console.log('userId:', userId);
-                          console.log('user:', clerkUser);
-                          
-                          if (!canOpenFileBrowser()) {
-                            if (!projectId) {
-                              showToast('Project ID required to browse R2 files', 'error');
-                            } else if (!companyId) {
-                              showToast('Company ID required to browse R2 files', 'error');
-                            } else {
-                              showToast('Project information required to browse R2 files', 'error');
-                            }
-                            return;
-                          }
-                          
-                          console.log('Opening FileBrowser for reference...');
-                          setFileBrowserMode('reference');
-                          setShowFileBrowser(true);
-                          setShowUploadMenu(false);
-                        }}
-                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                        title="Browse R2 files"
-                      >
-                        <FolderOpen className="w-4 h-4 text-blue-400" />
-                        <span className="text-xs">R2</span>
-                      </button>
-                      
-                      {/* Element Library */}
-                      <button
-                        onClick={() => {
-                          if (!canOpenElementLibrary()) {
-                            if (!projectId) {
-                              showToast('Project ID required to browse elements', 'error');
-                            } else if (!userId) {
-                              showToast('User ID required to browse elements', 'error');
-                            } else if (!user) {
-                              showToast('Authentication required to browse elements', 'error');
-                            } else if (!userCompanyId) {
-                              showToast('Company ID required to browse elements', 'error');
-                            } else {
-                              showToast('Project and user information required to browse elements', 'error');
-                            }
-                            return;
-                          }
-                          setShowElementLibrary(true);
-                          setShowUploadMenu(false);
-                        }}
-                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                        title="Browse elements"
-                      >
-                        <FileText className="w-4 h-4 text-purple-400" />
-                        <span className="text-xs">Elements</span>
-                      </button>
-                      
-                      {/* Capture Background */}
-                      <button
-                        onClick={() => {
-                          handleAddBackground();
-                          setShowUploadMenu(false);
-                        }}
-                        className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                        title="Capture background"
-                      >
-                        <Camera className="w-4 h-4 text-orange-400" />
-                        <span className="text-xs">Capture</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+          <AddImageMenu
+            onUploadClick={() => fileInputRef.current?.click()}
+            onR2Click={() => setShowFileBrowser(true)}
+            canOpenR2={canOpenFileBrowser()}
+            onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
+            onElementsClick={() => setShowElementLibrary(true)}
+            canOpenElements={canOpenElementLibrary()}
+            onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
+            onCaptureClick={backgroundImage ? handleAddBackground : undefined}
+            generatedItemImages={generatedItemImages}
+            generatedProjectImages={generatedProjectImages}
+            onSelectGeneratedImage={onAddReferenceFromUrl}
+          />
         )}
       </div>
       <input
@@ -1915,34 +1536,21 @@ export default function EditImageAIPanel({
     return (
       <div className="px-[10px] pt-[10px] pb-0">
         <div className="flex items-start gap-2">
-          {/* Text Area */}
-                <div className="relative flex-1">
-                  <div
-                    ref={editorRef}
-                    contentEditable={true}
-                    suppressContentEditableWarning={true}
-                    onInput={handleEditorInput}
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onBlur={handleEditorBlur}
-                    onCompositionStart={handleCompositionStart}
-                    onCompositionEnd={handleCompositionEnd}
-                    onKeyDown={handleKeyDown}
-                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:border-emerald-500/30 leading-6 text-sm selection:bg-white/20"
-                    style={{
-                      minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
-                      maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
-                      overflowY: "auto",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  />
-                  {editorIsEmpty && (
-                    <div className="absolute top-2 left-3 right-3 text-gray-500 text-sm pointer-events-none select-none leading-6">
-                      character holding flower , need to preserve the surrounding . maintain the background, maintain exact proportions and height.
-                    </div>
-                  )}
-                </div>
+          {/* Text Area (shared component) */}
+                <PromptTextarea
+                  editorRef={editorRef}
+                  editorIsEmpty={editorIsEmpty}
+                  placeholder="Describe your edit... drag & drop reference images here"
+                  minHeight={TEXTAREA_MIN_HEIGHT}
+                  maxHeight={TEXTAREA_MAX_HEIGHT}
+                  onInput={handleEditorInput}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onBlur={handleEditorBlur}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
+                  onKeyDown={sharedHandleKeyDown}
+                />
                 
                 {/* Prompt Actions Button on the Right */}
                 <div className="flex-shrink-0">
@@ -2336,6 +1944,8 @@ export default function EditImageAIPanel({
           {/* Generate Button */}
           <button
             onClick={() => {
+              if (generateCooldown) return;
+
               // Ensure we're calling the n8n-image-proxy route
               if (mode === "area-edit" && onGenerate) {
                 const modelId: string = typeof model === "string" && model.length > 0
@@ -2343,16 +1953,26 @@ export default function EditImageAIPanel({
                   : normalizedModel || "";
                 const qualityToPass = (normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality;
                 const creditsNeeded = getModelCredits(modelId);
-                
+
                 console.log('[EditImageAIPanel] Generate clicked with credits:', creditsNeeded, 'quality:', qualityToPass);
                 console.log('[EditImageAIPanel] Current balance:', getBalance);
-                
+
                 // Check if user has sufficient credits before proceeding
                 if (getBalance !== undefined && getBalance < creditsNeeded) {
-                  alert(`❌ Insufficient credits. You have ${getBalance} credits but need ${creditsNeeded} credits. Please purchase more credits to continue.`);
+                  toast.error(`Insufficient credits. You have ${getBalance} but need ${creditsNeeded}.`);
                   return;
                 }
-                
+
+                // Start cooldown
+                setGenerateCooldown(true);
+                setCooldownSeconds(5);
+                const interval = setInterval(() => {
+                  setCooldownSeconds(prev => {
+                    if (prev <= 1) { clearInterval(interval); setGenerateCooldown(false); return 0; }
+                    return prev - 1;
+                  });
+                }, 1000);
+
                 // Forward both credits and quality to SceneEditor
                 onGenerate?.(creditsNeeded, qualityToPass);
                 onGenerateQuality?.(qualityToPass);
@@ -2374,17 +1994,17 @@ export default function EditImageAIPanel({
                 : undefined
             }
           >
-            {isGenerating ? (
+            {isGenerating || generateCooldown ? (
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            <span className="hidden sm:inline">Generate</span>
-            <span className="text-white/70 text-xs">✦ {(() => {
-              const credits = getSelectedModelCredits();
-              console.log('[DEBUG] Generate button rendering credits:', credits);
-              return credits;
-            })()}</span>
+            <span className="hidden sm:inline">
+              {cooldownSeconds > 0 ? `Wait ${cooldownSeconds}s...` : isGenerating ? "Generating..." : "Generate"}
+            </span>
+            {!generateCooldown && !isGenerating && (
+              <span className="text-white/70 text-xs">+ {getSelectedModelCredits()}</span>
+            )}
           </button>
         </div>
         </div>

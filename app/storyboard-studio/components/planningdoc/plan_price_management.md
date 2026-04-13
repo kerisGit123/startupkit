@@ -22,7 +22,7 @@
 
 - **Image generation/editing**: Nano Banana, GPT image variants, Ideogram, Qwen, Nano Banana Edit
 - **Upscaling/enhancement**: Recraft Crisp, Topaz Upscale
-- **Video generation**: Seedance 1.5 Pro, Kling 3.0 Motion Control, Seedance 2.0
+- **Video generation**: Seedance 1.5 Pro, Kling 3.0 Motion Control, Seedance 2.0, Grok Imagine Image-to-Video, Veo 3.1
 
 
 ## Current Implementation Status: ✅ **IMPLEMENTED WITH DYNAMIC PRICING INTEGRATION (April 2026)**

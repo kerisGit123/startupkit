@@ -1,5 +1,6 @@
 "use client";
 
+import { toast } from "sonner";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { 
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
@@ -12,11 +13,15 @@ import {
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { AddImageMenu } from "../shared/AddImageMenu";
+import { usePromptEditor } from "../shared/usePromptEditor";
+import { PromptTextarea } from "../shared/PromptTextarea";
 import { ConvexHttpClient } from "convex/browser";
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { usePricingData } from "@/app/storyboard-studio/components/usePricingData";
 import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
+import { useSubscription } from "@/hooks/useSubscription";
 import PromptLibrary from "./PromptLibrary";
 import { FileBrowser } from "./FileBrowser";
 import { ElementLibrary } from "./ElementLibrary";
@@ -48,7 +53,7 @@ interface ReferenceImage {
 export interface ImageAIPanelProps {
   mode: ImageAIEditMode;
   onModeChange: (mode: ImageAIEditMode) => void;
-  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string) => void;
+  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[]) => void;
   credits?: number;
   model?: string;
   onModelChange?: (model: string) => void;
@@ -99,6 +104,10 @@ export interface ImageAIPanelProps {
   projectId?: Id<"storyboard_projects">;
   userId?: string;
   user?: any; // Clerk user object
+  // Generated images for reference selection
+  generatedItemImages?: Array<{ id: string; url: string; filename: string }>;
+  generatedProjectImages?: Array<{ id: string; url: string; filename: string }>;
+  onSelectGeneratedImage?: (url: string) => void;
 }
 
 // ── Available Models ─────────────────────────────────────────────────
@@ -198,9 +207,14 @@ export function ImageAIPanel({
   projectId,
   userId,
   user,
+  generatedItemImages,
+  generatedProjectImages,
+  onSelectGeneratedImage,
 }: ImageAIPanelProps) {
   // Get the proper companyId using the auth hook
   const currentCompanyId = useCurrentCompanyId();
+  // Plan drives auto-grant of monthly credits inside deductCredits
+  const { plan: currentPlan } = useSubscription();
   
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
@@ -263,14 +277,33 @@ export function ImageAIPanel({
     }
   };
   
-  const editorRef = useRef<HTMLDivElement>(null);
+  const promptEditor = usePromptEditor({
+    onPromptChange: (text) => {
+      setCurrentPrompt(text);
+      onUserPromptChange?.(text);
+    },
+  });
+  const {
+    editorRef,
+    editorIsEmpty,
+    setEditorIsEmpty,
+    extractPlainText,
+    extractTextWithBadges,
+    createBadgeElement,
+    insertBadgeAtCaret,
+    handleEditorInput,
+    handleEditorBlur,
+    handleCompositionStart,
+    handleCompositionEnd,
+    handleKeyDown,
+    handleDragOver,
+    handleDrop,
+    savedSelectionRef,
+  } = promptEditor;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
-  const isComposingRef = useRef(false);
-  const savedSelectionRef = useRef<{ container: Node; offset: number } | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState(userPrompt ?? "");
-  const [editorIsEmpty, setEditorIsEmpty] = useState(!userPrompt);
 
   // Handle output mode toggle and auto-switch to Seedance model for video
   const handleOutputModeToggle = () => {
@@ -304,8 +337,9 @@ export function ImageAIPanel({
   const videoModelOptions = [
     { value: "bytedance/seedance-1.5-pro", label: "Seedance 1.5 Pro", sub: "Video generation", icon: Film, maxReferenceImages: 2 },
     { value: "bytedance/seedance-2", label: "Seedance 2.0", sub: "480p/720p • Video input", icon: Film, maxReferenceImages: 9 },
-    { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 ref", icon: Film, maxReferenceImages: 1 },
+    { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 img + 1 video", icon: Film, maxReferenceImages: 1 },
     { value: "google/veo-3.1", label: "Veo 3.1", sub: "Google Video generation", icon: Film, maxReferenceImages: 3 },
+    { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7 },
   ];
   // Combine all models for the consolidated dropdown
   const allModelOptions = [...inpaintModelOptions, ...videoModelOptions];
@@ -338,6 +372,12 @@ export function ImageAIPanel({
       ];
     }
     if (selectedModelOption.value === "bytedance/seedance-2") {
+      return [
+        { value: "480P", label: "480p", sub: "854×480", icon: Monitor },
+        { value: "720P", label: "720p", sub: "1280×720", icon: Monitor },
+      ];
+    }
+    if (selectedModelOption.value === "grok-imagine/image-to-video") {
       return [
         { value: "480P", label: "480p", sub: "854×480", icon: Monitor },
         { value: "720P", label: "720p", sub: "1280×720", icon: Monitor },
@@ -483,6 +523,14 @@ export function ImageAIPanel({
         const credits = getModelCredits(selectedModelOption.value, veoQuality);
         return credits;
       })()
+    : selectedModelOption.value === "grok-imagine/image-to-video"
+    ? (() => {
+        const durSec = parseInt(videoDuration.replace('s', '')) || 6;
+        const params = `${resolution}_${durSec}s`;
+        const credits = getModelCredits(selectedModelOption.value, params);
+        console.log("[VideoImageAIPanel] Grok Imagine pricing:", { resolution, durSec, params, credits });
+        return credits;
+      })()
     : credits;
 
   // Dropdown visibility states
@@ -498,6 +546,8 @@ export function ImageAIPanel({
   // Video duration options — model-specific
   const videoDurationOptions = selectedModelOption.value === "bytedance/seedance-2"
     ? Array.from({ length: 12 }, (_, i) => ({ value: `${i + 4}s`, label: `${i + 4}s`, icon: Clock }))
+    : selectedModelOption.value === "grok-imagine/image-to-video"
+    ? Array.from({ length: 25 }, (_, i) => ({ value: `${i + 6}s`, label: `${i + 6}s`, icon: Clock }))
     : [
         { value: "4s", label: "4s", icon: Clock },
         { value: "8s", label: "8s", icon: Clock },
@@ -545,114 +595,11 @@ export function ImageAIPanel({
     onToolSelect?.(tool);
   };
 
-  // ── ContentEditable editor helpers ──────────────────────────────────
-
-  // Extract plain text from contentEditable for prompt generation (excluding badges)
-  const extractPlainText = (): string => {
-    const el = editorRef.current;
-    if (!el) return "";
-    const collect = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-      const htmlEl = node as HTMLElement;
-      if (htmlEl.nodeName === "BR") return "\n";
-      
-      // Exclude badge mentions from prompt text - they should not affect the prompt
-      if (htmlEl.dataset?.type === "mention") {
-        return ""; // Don't include badge content in prompt
-      }
-      
-      let result = "";
-      node.childNodes.forEach((child) => { result += collect(child); });
-      if (htmlEl.tagName === "DIV" && node !== el) result += "\n";
-      return result;
-    };
-    return collect(el).replace(/\n$/, "");
-  };
-
-  // Extract text WITH badges for test button display
-  const extractTextWithBadges = (): string => {
-    const el = editorRef.current;
-    if (!el) return "";
-    const collect = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
-      const htmlEl = node as HTMLElement;
-      if (htmlEl.nodeName === "BR") return "\n";
-      
-      // Include badge mentions for test display
-      if (htmlEl.dataset?.type === "mention") {
-        // Extract the badge text from the label element
-        const label = htmlEl.querySelector('span[class*="text-cyan-300"]');
-        if (label) {
-          return label.textContent || "";
-        }
-        return "";
-      }
-      
-      let result = "";
-      node.childNodes.forEach((child) => { result += collect(child); });
-      if (htmlEl.tagName === "DIV" && node !== el) result += "\n";
-      return result;
-    };
-    return collect(el).replace(/\n$/, "");
-  };
-
-  // Create a badge DOM element (non-editable, inline)
-  const createBadgeElement = (entry: { id: string; imageUrl: string; imageNumber: number }): HTMLSpanElement => {
-    const span = document.createElement("span");
-    span.contentEditable = "false";
-    span.dataset.type = "mention";
-    span.dataset.mentionId = entry.id;
-    span.setAttribute(
-      "class",
-      "inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/40 rounded px-1.5 py-0.5 align-middle mx-0.5 select-none"
-    );
-    span.style.cursor = "default";
-    span.style.fontSize = "inherit";
-
-    const img = document.createElement("img");
-    img.src = entry.imageUrl;
-    img.alt = `Image ${entry.imageNumber}`;
-    img.setAttribute("class", "w-4 h-4 object-cover rounded");
-
-    const label = document.createElement("span");
-    label.setAttribute("class", "text-cyan-300 text-sm font-medium whitespace-nowrap");
-    label.textContent = entry.source === 'r2' ? `@R2${entry.imageNumber}` : 
-                        entry.source === 'element' ? `@EL${entry.imageNumber}` : 
-                        `@Image${entry.imageNumber}`;
-
-    const closeBtn = document.createElement("button");
-    closeBtn.setAttribute("type", "button");
-    closeBtn.setAttribute("title", "Remove");
-    closeBtn.setAttribute(
-      "class",
-      "ml-0.5 flex items-center justify-center w-3.5 h-3.5 rounded-full text-cyan-400/70 hover:text-white hover:bg-cyan-400/30 transition-colors"
-    );
-    closeBtn.innerHTML =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">` +
-      `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
-    closeBtn.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const editor = editorRef.current;
-      span.remove();
-      if (editor) {
-        editor.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    });
-
-    span.appendChild(img);
-    span.appendChild(label);
-    span.appendChild(closeBtn);
-    return span;
-  };
+  // ── ContentEditable editor helpers (now from shared usePromptEditor hook) ──
 
   // Add image as a new reference image (duplicate functionality)
   const addImageAsReference = (img: any, index: number) => {
-    console.log('🎯 Plus icon clicked - adding as reference image!', { img, index });
-    console.log('🎯 Current reference images count:', referenceImages?.length || 0);
-    
     try {
-      // Create a mock element object like ElementLibrary does
       const mockElement = {
         _id: `duplicate-${img.id}-${Date.now()}`,
         name: `Duplicate ${img.source || 'Image'} ${index + 1}`,
@@ -660,88 +607,15 @@ export function ImageAIPanel({
         thumbnailUrl: img.url,
         referenceUrls: [img.url]
       };
-      
-      console.log('🎯 Calling handleImageSelect like ElementLibrary...');
-      // Call the same handleImageSelect function that ElementLibrary uses
       handleImageSelect('element', {
         url: img.url,
         name: mockElement.name,
         source: 'duplicate',
-        metadata: {
-          originalId: img.id,
-          originalSource: img.source,
-          element: mockElement
-        }
+        metadata: { originalId: img.id, originalSource: img.source, element: mockElement }
       });
-      
-      console.log('✅ Reference image added successfully!');
-      
     } catch (error) {
-      console.error('❌ Error adding reference image:', error);
+      console.error('Error adding reference image:', error);
     }
-  };
-
-  // Insert a badge at current caret position (or restore saved position)
-  const insertBadgeAtCaret = (entry: { id: string; imageUrl: string; imageNumber: number; source?: string }) => {
-    const el = editorRef.current;
-    if (!el) return;
-    el.focus();
-    const selection = window.getSelection();
-    if (!selection) return;
-    let range: Range;
-    if (selection.rangeCount > 0) {
-      range = selection.getRangeAt(0);
-      range.deleteContents();
-    } else if (savedSelectionRef.current) {
-      try {
-        range = document.createRange();
-        range.setStart(savedSelectionRef.current.container, savedSelectionRef.current.offset);
-        range.collapse(true);
-        selection.addRange(range);
-      } catch {
-        range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(false);
-        selection.addRange(range);
-      }
-      range = selection.getRangeAt(0);
-    } else {
-      range = document.createRange();
-      range.selectNodeContents(el);
-      range.collapse(false);
-      selection.addRange(range);
-      range = selection.getRangeAt(0);
-    }
-    
-    // Create a space element with non-breaking space to ensure spacing
-    const spaceBefore = document.createTextNode('\u00A0'); // Non-breaking space
-    range.insertNode(spaceBefore);
-    
-    // Insert the badge
-    const badge = createBadgeElement(entry);
-    range.insertNode(badge);
-    
-    // Create a space element with non-breaking space after the badge
-    const spaceAfter = document.createTextNode('\u00A0'); // Non-breaking space
-    range.insertNode(spaceAfter);
-    
-    // Add a regular space as well for better text flow
-    const regularSpace = document.createTextNode(' ');
-    range.insertNode(regularSpace);
-    
-    // Set cursor position after the badge and spaces
-    const newRange = document.createRange();
-    newRange.setStartAfter(regularSpace);
-    newRange.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(newRange);
-    
-    setEditorIsEmpty(false);
-    setTimeout(() => {
-      const plainText = extractPlainText();
-      setCurrentPrompt(plainText);
-      onUserPromptChange?.(plainText);
-    }, 0);
   };
 
   const handleAddReference = (file: File) => {
@@ -1432,124 +1306,8 @@ export function ImageAIPanel({
     });
   };
 
-  const handleEditorInput = () => {
-    if (isComposingRef.current) return;
-    const el = editorRef.current;
-    if (!el) return;
-    const hasContent = el.innerHTML !== "" && el.innerHTML !== "<br>";
-    setEditorIsEmpty(!hasContent);
-    const plainText = extractPlainText();
-    setCurrentPrompt(plainText);
-    onUserPromptChange?.(plainText);
-  };
-
-  const handleCompositionStart = () => { isComposingRef.current = true; };
-
-  const handleCompositionEnd = () => { isComposingRef.current = false; };
-
-  // Handle keyboard events for copy and paste
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.ctrlKey || e.metaKey) {
-      switch (e.key) {
-        case 'c':
-          // Copy functionality
-          e.preventDefault();
-          const selection = window.getSelection();
-          if (selection && selection.toString()) {
-            navigator.clipboard.writeText(selection.toString()).then(() => {
-              console.log('Text copied to clipboard');
-            }).catch(err => {
-              console.error('Failed to copy text:', err);
-            });
-          }
-          break;
-        case 'v':
-          // Enhanced paste functionality with proper cursor positioning
-          e.preventDefault();
-          navigator.clipboard.readText().then((text) => {
-            if (text) {
-              const editor = editorRef.current;
-              if (!editor) return;
-              
-              // Get current selection
-              const selection = window.getSelection();
-              if (!selection) return;
-              
-              let range: Range;
-              
-              // Use existing selection range if available
-              if (selection.rangeCount > 0) {
-                range = selection.getRangeAt(0);
-              } else {
-                // Create a new range at the cursor position
-                range = document.createRange();
-                range.selectNodeContents(editor);
-                range.collapse(false); // Collapse to end if no selection
-              }
-              
-              // Check if range is valid and within the editor
-              const rangeContainer = range.commonAncestorContainer;
-              const isWithinEditor = editor.contains(rangeContainer) || rangeContainer === editor;
-              
-              if (!isWithinEditor) {
-                // If range is outside editor, create a new range at the end
-                range = document.createRange();
-                range.selectNodeContents(editor);
-                range.collapse(false);
-              }
-              
-              // Delete any selected content
-              if (!range.collapsed) {
-                range.deleteContents();
-              }
-              
-              // Create a text node with the pasted content
-              const textNode = document.createTextNode(text);
-              
-              // Insert the text at the current cursor position
-              range.insertNode(textNode);
-              
-              // Move cursor to the end of the inserted text
-              range.setStartAfter(textNode);
-              range.collapse(true);
-              
-              // Apply the new range to selection
-              selection.removeAllRanges();
-              selection.addRange(range);
-              
-              // Trigger input event to update state
-              const inputEvent = new Event('input', { bubbles: true });
-              editor.dispatchEvent(inputEvent);
-              
-              console.log('Text pasted at cursor position');
-            }
-          }).catch(err => {
-            console.error('Failed to read clipboard:', err);
-            // Fallback: let the default paste behavior handle it
-            // This should respect cursor position naturally
-            const pasteEvent = new ClipboardEvent('paste', {
-              bubbles: true,
-              cancelable: true,
-              clipboardData: new DataTransfer()
-            });
-            
-            // Try to trigger default paste by dispatching the event
-            if (e.target) {
-              (e.target as HTMLElement).dispatchEvent(pasteEvent);
-            }
-          });
-          break;
-      }
-    }
-  };
-
-  const handleEditorBlur = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      savedSelectionRef.current = { container: range.startContainer, offset: range.startOffset };
-    }
-  };
+  // handleEditorInput, handleCompositionStart/End, handleKeyDown, handleEditorBlur,
+  // handleDragOver, handleDrop — all provided by shared usePromptEditor hook
 
   useEffect(() => {
     console.log("ElementImageAIPanel - prompt fields changed:", {
@@ -1591,6 +1349,10 @@ export function ImageAIPanel({
       setVideoDuration("8s");
     } else if (model === "google/veo-3.1") {
       // Veo uses quality, not resolution
+    } else if (model === "grok-imagine/image-to-video") {
+      setResolution("480P");
+      setVideoDuration("6s");
+      setAspectRatio("16:9");
     } else if (model.includes("nano-banana")) {
       setResolution("1K");
     }
@@ -1608,37 +1370,7 @@ export function ImageAIPanel({
   };
 
   // Handle drag over
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
-  };
-
-  // Handle drop - use browser caretRangeFromPoint for exact cursor placement
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const imageUrl = e.dataTransfer.getData("imageUrl");
-    const imageIndex = e.dataTransfer.getData("imageIndex");
-    if (!imageUrl || imageIndex === "") return;
-    const imageNumber = parseInt(imageIndex) + 1;
-    let range: Range | null = null;
-    const doc = document as any;
-    if (typeof doc.caretRangeFromPoint === "function") {
-      range = doc.caretRangeFromPoint(e.clientX, e.clientY);
-    } else if (typeof doc.caretPositionFromPoint === "function") {
-      const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
-      if (pos) {
-        range = document.createRange();
-        range.setStart(pos.offsetNode, pos.offset);
-        range.collapse(true);
-      }
-    }
-    if (range) {
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-    insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl, imageNumber });
-  };
+  // handleDragOver and handleDrop provided by shared usePromptEditor hook
 
   const ic = "w-4 h-4";
 
@@ -1655,14 +1387,30 @@ export function ImageAIPanel({
   };
 
   // ── KIE AI Generate Function with Complete Callback Workflow ─────────────────────────────────────────────
+  const [generateCooldown, setGenerateCooldown] = useState(false);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
   const handleKieAIGenerate = async () => {
+    // Rate limit: prevent double-click / rapid submissions
+    if (generateCooldown) return;
+
     // Extract the current prompt with badges from the editor for AI model
     const extractedPrompt = extractTextWithBadges();
-    
+
     if (!extractedPrompt?.trim()) {
-      alert("Please enter a prompt to generate");
+      toast.warning("Please enter a prompt to generate");
       return;
     }
+
+    // Start cooldown immediately
+    setGenerateCooldown(true);
+    setCooldownSeconds(5);
+    const interval = setInterval(() => {
+      setCooldownSeconds(prev => {
+        if (prev <= 1) { clearInterval(interval); setGenerateCooldown(false); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
 
     console.log("🚀 Starting KIE AI generation workflow...");
     console.log("Model:", selectedModelOption.value);
@@ -1674,64 +1422,17 @@ export function ImageAIPanel({
     // Step 1: Check if user has sufficient credits
     const currentCredits = getBalance ?? 0;
     if (currentCredits < displayedCredits) {
-      alert(`Insufficient credits. Need ${displayedCredits} credits, but you only have ${currentCredits} credits.`);
+      toast.error(`Insufficient credits. Need ${displayedCredits} credits, but you only have ${currentCredits}.`);
       return;
     }
     
     console.log("Step 1: Credits check passed");
     
     try {
-      // Step 2: Create placeholder record in storyboard_files (Nano Banana 2 pattern)
-      console.log("Step 2: Creating placeholder record...");
-      
-      const fileId = await logUpload({
-        companyId,
-        userId: userId || "",
-        projectId: projectId || undefined,
-        category: outputMode === "video" ? "generated" : "generated",
-        filename: `${selectedModelOption.value.replace(/\//g, '-')}-${Date.now()}.${outputMode === "video" ? "mp4" : "png"}`,
-        fileType: outputMode === "video" ? "video" : "image",
-        mimeType: outputMode === "video" ? "video/mp4" : "image/png",
-        size: 0,
-        status: "generating",
-        creditsUsed: displayedCredits,
-        categoryId: undefined,
-        sourceUrl: undefined,
-        tags: [],
-        uploadedBy: userId || "",
-        model: selectedModelOption.value, // Store the AI model used
+      // Note: Placeholder record creation and credit deduction are handled downstream
+      // by triggerImageGeneration (for image models) or SceneEditor (for Seedance/Veo).
+      // VideoImageAIPanel only does the balance check and passes parameters to onGenerate.
 
-        // Enhanced AI metadata
-        metadata: {
-          modelId: selectedModelOption.value,
-          modelName: selectedModelOption.label,
-          pricingType: "formula",
-          quality: outputMode === "video" ? `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}` : resolution,
-          creditsConsumed: displayedCredits,
-          generationTimestamp: Date.now(),
-          behavior: {
-            cropped: false,
-            combined: false,
-            referenceImagesUsed: referenceImages.length,
-          },
-          processingTime: 0,
-          success: false,
-        },
-      });
-      
-      console.log("Step 2: Placeholder record created with ID:", fileId);
-      
-      // Step 3: Deduct credits from company balance (Nano Banana 2 pattern)
-      console.log("Step 3: Deducting credits from company balance...");
-      await deductCredits({
-        companyId,
-        tokens: displayedCredits,
-        reason: `AI ${outputMode} generation with ${selectedModelOption.label}`,
-      });
-      
-      console.log("Step 3: Credits deducted successfully");
-      
-      // Update UI to show generating state and pass parameters to parent
       if (onGenerate) {
         const qualityParam = outputMode === "video"
           ? selectedModelOption.value === "bytedance/seedance-2"
@@ -1745,8 +1446,14 @@ export function ImageAIPanel({
         const isVeoModel = selectedModelOption?.value === "google/veo-3.1";
         const veoQualityParam = isVeoModel ? veoQuality : undefined;
         const veoModeParam = isVeoModel ? veoMode : undefined;
-        
-        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioEnabled, extractedPrompt, veoQualityParam, veoModeParam);
+
+        // Include Kling Motion parameters
+        const isKlingMotion = selectedModelOption?.value === "kling-3.0/motion-control";
+        const klingOrientParam = isKlingMotion ? klingOrientation : undefined;
+        const klingSourceParam = isKlingMotion ? klingSource : undefined;
+        const videoUrlsParam = isKlingMotion ? videoRefs.map(v => v.url) : undefined;
+
+        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioEnabled, extractedPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam);
       }
       
     } catch (error) {
@@ -1755,9 +1462,9 @@ export function ImageAIPanel({
       
       // Handle insufficient credits error specifically
       if (errorMessage.includes('Insufficient credits')) {
-        alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating images.`);
+        toast.error(errorMessage);
       } else {
-        alert(`AI generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
+        toast.error(`AI generation failed: ${errorMessage}`);
       }
     }
   };
@@ -1805,111 +1512,19 @@ export function ImageAIPanel({
             
             {/* Combined Upload Button with Slide Menu */}
             {maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
-              <div className="relative">
-                {/* Add Button */}
-                <button
-                  onClick={() => setShowUploadMenu(!showUploadMenu)}
-                  className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-emerald-500/30 hover:border-emerald-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
-                  title="Add reference image"
-                >
-                  <Plus className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
-                  <span className="text-[10px] text-emerald-400 group-hover:text-emerald-300 transition-colors">Add Image</span>
-                </button>
-                
-                {/* Slide-out Menu from Left - Horizontal Layout */}
-                {showUploadMenu && (
-                  <>
-                    {/* Overlay */}
-                    <div 
-                      className="fixed inset-0 bg-black/50 z-40"
-                      onClick={() => setShowUploadMenu(false)}
-                    />
-                    {/* Slide Menu - Horizontal */}
-                    <div className="absolute top-0 left-full ml-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50">
-                      <div className="p-3">
-                        {/* Horizontal Options */}
-                        <div className="flex gap-2">
-                          {/* Upload from computer */}
-                          <button
-                            onClick={() => {
-                              fileInputRef.current?.click();
-                              setShowUploadMenu(false);
-                            }}
-                            className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                            title="Upload from computer"
-                          >
-                            <Upload className="w-4 h-4 text-emerald-400" />
-                            <span className="text-xs">Upload</span>
-                          </button>
-                          
-                          {/* R2 File Browser */}
-                          <button
-                            onClick={() => {
-                              if (!canOpenFileBrowser()) {
-                                if (!projectId) {
-                                  showToast('Project ID required to browse R2 files', 'error');
-                                } else if (!currentCompanyId) {
-                                  showToast('Company ID required to browse R2 files', 'error');
-                                } else {
-                                  showToast('Project information required to browse R2 files', 'error');
-                                }
-                                return;
-                              }
-                              setShowFileBrowser(true);
-                              setShowUploadMenu(false);
-                            }}
-                            className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                            title="Browse R2 files"
-                          >
-                            <FolderOpen className="w-4 h-4 text-blue-400" />
-                            <span className="text-xs">R2</span>
-                          </button>
-                          
-                          {/* Element Library */}
-                          <button
-                            onClick={() => {
-                              if (!canOpenElementLibrary()) {
-                                if (!projectId) {
-                                  showToast('Project ID required to browse elements', 'error');
-                                } else if (!userId) {
-                                  showToast('User ID required to browse elements', 'error');
-                                } else if (!user) {
-                                  showToast('Authentication required to browse elements', 'error');
-                                } else if (!currentCompanyId) {
-                                  showToast('Company ID required to browse elements', 'error');
-                                } else {
-                                  showToast('Project and user information required to browse elements', 'error');
-                                }
-                                return;
-                              }
-                              setShowElementLibrary(true);
-                              setShowUploadMenu(false);
-                            }}
-                            className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                            title="Browse elements"
-                          >
-                            <FileText className="w-4 h-4 text-purple-400" />
-                            <span className="text-xs">Elements</span>
-                          </button>
-                          
-                          {/* Capture Background */}
-                          <button
-                            onClick={() => {
-                              handleAddBackground();
-                              setShowUploadMenu(false);
-                            }}
-                            className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                            title="Capture background"
-                          >
-                            <Camera className="w-4 h-4 text-orange-400" />
-                            <span className="text-xs">Capture</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
+              <AddImageMenu
+                onUploadClick={() => fileInputRef.current?.click()}
+                onR2Click={() => setShowFileBrowser(true)}
+                canOpenR2={canOpenFileBrowser()}
+                onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
+                onElementsClick={() => setShowElementLibrary(true)}
+                canOpenElements={canOpenElementLibrary()}
+                onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
+                onCaptureClick={handleAddBackground}
+                generatedItemImages={generatedItemImages}
+                generatedProjectImages={generatedProjectImages}
+                onSelectGeneratedImage={onSelectGeneratedImage}
+              />
             )}
 
             {/* Seedance 2.0: First Frame & Last Frame slots */}
@@ -1982,34 +1597,21 @@ export function ImageAIPanel({
           {mode !== "describe" ? null : (
             <div className="px-[10px] pt-[10px] pb-0">
               <div className="flex gap-2">
-                {/* Text Area */}
-                <div className="relative flex-1">
-                  <div
-                    ref={editorRef}
-                    contentEditable={true}
-                    suppressContentEditableWarning={true}
-                    onInput={handleEditorInput}
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onBlur={handleEditorBlur}
-                    onCompositionStart={handleCompositionStart}
-                    onCompositionEnd={handleCompositionEnd}
-                    onKeyDown={handleKeyDown}
-                    className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:border-emerald-500/30 leading-6 text-sm selection:bg-white/20"
-                    style={{
-                      minHeight: `${TEXTAREA_MIN_HEIGHT}px`,
-                      maxHeight: `${TEXTAREA_MAX_HEIGHT}px`,
-                      overflowY: "auto",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  />
-                  {editorIsEmpty && (
-                    <div className="absolute top-2 left-3 right-3 text-gray-500 text-sm pointer-events-none select-none leading-6">
-                      Describe your element... drag &amp; drop reference images here
-                    </div>
-                  )}
-                </div>
+                {/* Text Area (shared component) */}
+                <PromptTextarea
+                  editorRef={editorRef}
+                  editorIsEmpty={editorIsEmpty}
+                  placeholder="Describe your element... drag & drop reference images here"
+                  minHeight={TEXTAREA_MIN_HEIGHT}
+                  maxHeight={TEXTAREA_MAX_HEIGHT}
+                  onInput={handleEditorInput}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onBlur={handleEditorBlur}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
+                  onKeyDown={handleKeyDown}
+                />
                 
                 {/* Video & Audio slots — right side, for Kling/Seedance 2.0 */}
                 {(selectedModelOption.value === "kling-3.0/motion-control" || selectedModelOption.value === "bytedance/seedance-2") && (
@@ -2481,6 +2083,10 @@ export function ImageAIPanel({
                             } else if (modelOption.value === "google/veo-3.1") {
                               setVeoQuality("Fast");
                               setVeoMode("TEXT_2_VIDEO");
+                            } else if (modelOption.value === "grok-imagine/image-to-video") {
+                              setResolution("480P");
+                              setVideoDuration("6s");
+                              setAspectRatio("16:9");
                             } else {
                               // Image models
                               setResolution("1K");
@@ -2653,8 +2259,8 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0 */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2"].includes(selectedModelOption.value) && (
+            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0, not Grok */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "grok-imagine/image-to-video"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowAudioDropdown(!showAudioDropdown)}
@@ -2870,21 +2476,21 @@ export function ImageAIPanel({
             {/* Generate Button */}
             <button
               onClick={handleKieAIGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || generateCooldown}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
                 "bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white"
               }`}
             >
-              {isGenerating ? (
+              {isGenerating || generateCooldown ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Generating...
+                  {cooldownSeconds > 0 ? `Wait ${cooldownSeconds}s...` : "Generating..."}
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
                   Generate
-                  <span className="text-xs opacity-75">({displayedCredits} credits)</span>
+                  <span className="text-xs opacity-75">+ {displayedCredits}</span>
                 </>
               )}
             </button>

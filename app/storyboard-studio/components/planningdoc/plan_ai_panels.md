@@ -492,27 +492,79 @@ const enhancedPrompt = await enhancePromptForImage(
 ## VideoImageAIPanel Updates (April 2026)
 
 ### New Models Added
-- **Kling 3.0 Motion Control** (`kling-3.0/motion-control`) — video generation with per-second pricing
+
+- **Kling 3.0 Motion Control** (`kling-3.0/motion-control`) — video generation with 1 image + 1 video reference
+  - API route: `/api/storyboard/generate-kling-motion`
+  - Resolution: 720p / 1080p dropdown
+  - **Image Orient / Video Orient** toggle (`character_orientation: "image" | "video"`)
+  - **Video Source / Image Source** toggle (`background_source: "input_video" | "input_image"`)
+  - Supports JPEG/PNG images, MP4 video (no webp)
 - **Seedance 2.0** (`bytedance/seedance-2`) — video generation with video/audio/image references
+- **Grok Imagine** (`grok-imagine/image-to-video`) — image-to-video generation
+  - API route: `/api/storyboard/generate-grok`
+  - Up to 7 reference images via `image_urls` (use `@image1 @image2` in prompt)
+  - Resolution: 480p / 720p dropdown
+  - Duration: 6-30s range
+  - Aspect ratio from dropdown
+  - No `task_id` needed — external image URLs via `image_urls` field
+- **Veo 3.1** (`google/veo-3.1`) — Google video generation with multiple modes
+
+### Credit Deduction Architecture
+
+- **VideoImageAIPanel only does balance check** — no logUpload or deductCredits
+- All record creation and credit deduction happens downstream:
+  - Image models → `triggerImageGeneration()` in kieAI.ts
+  - Seedance 1.5 Pro / Veo 3.1 → SceneEditor handler + API route
+  - Grok / Kling → SceneEditor handler + dedicated API route
+- On API failure: credits are refunded, file marked "failed"
+- Each route calls `resolveKieApiKey(companyId)` and returns `kieAiId` for tracking
+
+### Rate Limiting
+
+- **5-second cooldown** after clicking Generate to prevent double-click duplicates
+- Button shows spinning loader + `"Wait Xs..."` countdown during cooldown
+- Applied to both VideoImageAIPanel and EditImageAIPanel
+
+### Toast Notifications (Sonner)
+
+- All `alert()` calls replaced with `toast.success/error/warning` from Sonner
+- Non-blocking notifications in bottom-right corner
+- Styled to match dark theme (bg: #2C2C2C, border: #3D3D3D, accent colors per type)
 
 ### Video & Audio Reference Slots
+
 - Video reference slots with duration detection (auto-reads video length)
 - Audio reference slots with duration detection
 - Max 3 videos (<=15s) and 3 audio (<=15s) for Seedance 2.0
 - Max 1 reference video for Kling 3.0 Motion Control
+- Max 7 reference images for Grok Imagine
 
 ### First Frame / Last Frame (Seedance 2.0)
+
 - Dedicated slots for first-frame and last-frame reference images
 - Controls which frame the model uses as the generation anchor
 
 ### Model-Specific Toggles (Seedance 2.0)
+
 - **Web Search** toggle — enables web search context for generation
 - **Generate Audio** toggle — enables audio generation alongside video
 
 ### Model-Specific Options
-- Resolution options vary by model: 720p/1080p (Kling), 480p/720p (Seedance)
-- Duration options: per-second (Kling), 4-15s range (Seedance)
-- Credit calculation wired to `getKlingMotionControl()` and `getSeedance20()` pricing functions
+
+- Resolution options vary by model: 720p/1080p (Kling), 480p/720p (Seedance/Grok)
+- Duration options: per-second (Kling), 4-15s range (Seedance), 6-30s (Grok)
+- Credit calculation wired to pricing functions via `getModelCredits()`
+
+### Video Generation API Routes
+
+All video models use dedicated server-side API routes (required because `resolveKieApiKey` needs server env vars):
+
+| Model | API Route | Function in videoAI.ts |
+| ----- | --------- | ---------------------- |
+| Seedance 1.5 Pro | `/api/storyboard/generate-seedance` | Direct KIE API call |
+| Veo 3.1 | `/api/storyboard/generate-veo` | Direct KIE API call |
+| Grok Imagine | `/api/storyboard/generate-grok` | `generateGrokImagineVideo()` |
+| Kling 3.0 Motion | `/api/storyboard/generate-kling-motion` | `generateKlingMotionControl()` |
 
 ---
 

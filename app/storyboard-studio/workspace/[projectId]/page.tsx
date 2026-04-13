@@ -3,10 +3,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import { useUser, UserButton, OrganizationSwitcher } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
+import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { getCurrentCompanyId } from "@/lib/auth-utils";
+import { getCurrentCompanyId, useCurrentCompanyId } from "@/lib/auth-utils";
 import { FrameFavoriteButton } from "../../components/FrameFavoriteButton";
 import { FramePrimaryImageButton } from "../../components/FramePrimaryImageButton";
 import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExportModal";
@@ -44,7 +46,9 @@ import {
   Trash2, 
   Edit3, 
   MoreVertical, 
-  Copy, 
+  Copy,
+  Pencil,
+  GripVertical,
   Eye, 
   EyeOff, 
   Wand2, 
@@ -101,7 +105,7 @@ import {
   Menu 
 } from "lucide-react";
 
-type Tab = "script" | "storyboard";
+type Tab = "script" | "storyboard" | "table";
 
 export default function StoryboardWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -489,6 +493,8 @@ export default function StoryboardWorkspacePage() {
   const [showAiInput, setShowAiInput] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [tableEditField, setTableEditField] = useState<{ itemId: string; field: string; value: string } | null>(null);
+  const [tableTagEditorId, setTableTagEditorId] = useState<string | null>(null);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [selectedItemForElement, setSelectedItemForElement] = useState<Id<"storyboard_items"> | null>(null);
@@ -859,7 +865,7 @@ export default function StoryboardWorkspacePage() {
   const handleClearStoryboardUrl = () => {
     updateProject({
       id: pid as Id<"storyboard_projects">,
-      imageUrl: undefined, // Clear the image URL
+      imageUrl: "", // Empty string = clear the image URL
     });
   };
 
@@ -943,11 +949,11 @@ export default function StoryboardWorkspacePage() {
         <div className="flex items-center gap-2">
           {/* Tab switcher */}
           <div className="flex bg-(--bg-tertiary) rounded-xl p-0.5 gap-0.5 border border-(--border-primary)">
-            {(["script", "storyboard"] as Tab[]).map((t) => (
+            {(["script", "storyboard", "table"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
-                  ${tab === t ? "bg-(--accent-blue) text-white shadow-lg" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary)"}`}>
-                {t === "script" ? <FileText className="w-3.5 h-3.5" /> : <Grid3x3 className="w-3.5 h-3.5" />}
+                  ${tab === t ? "bg-teal-600 text-white shadow-lg" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary)"}`}>
+                {t === "script" ? <FileText className="w-3.5 h-3.5" /> : t === "table" ? <List className="w-3.5 h-3.5" /> : <Grid3x3 className="w-3.5 h-3.5" />}
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
@@ -1021,7 +1027,7 @@ export default function StoryboardWorkspacePage() {
           )}
 
           {/* Organization Switcher */}
-          <OrganizationSwitcher
+          <OrgSwitcher
             appearance={{
               elements: {
                 rootBox: "flex items-center",
@@ -1125,12 +1131,35 @@ export default function StoryboardWorkspacePage() {
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <Grid3x3 className="w-12 h-12 text-[#6E6E6E] mb-4" />
                 <p className="text-[#A0A0A0] font-medium mb-2">No frames yet</p>
-                <p className="text-[#6E6E6E] text-sm mb-6">Write a script and click "Build Storyboard" to create frames</p>
-                <button onClick={() => setTab("script")}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#4A90E2] hover:bg-[#357ABD] text-white text-sm font-medium rounded-lg transition">
-                  <FileText className="w-4 h-4" />
-                  Go to Script
-                </button>
+                <p className="text-[#6E6E6E] text-sm mb-6">Write a script and click "Build Storyboard", or create frames manually</p>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setTab("script")}
+                    className="flex items-center gap-2 px-4 py-2 bg-[#4A90E2] hover:bg-[#357ABD] text-white text-sm font-medium rounded-lg transition">
+                    <FileText className="w-4 h-4" />
+                    Go to Script
+                  </button>
+                  <button
+                    disabled={isAddingFrame}
+                    onClick={async () => {
+                      if (isAddingFrame) return;
+                      setIsAddingFrame(true);
+                      try {
+                        await createItem({
+                          projectId: pid,
+                          sceneId: `manual-${Date.now()}`,
+                          order: 0,
+                          title: "Frame 1",
+                          description: "",
+                          duration: 5,
+                          generatedBy: user?.id || "unknown"
+                        });
+                      } finally { setIsAddingFrame(false); }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 border border-[#3D3D3D] hover:border-[#4A90E2]/50 hover:bg-[#4A90E2]/10 text-[#A0A0A0] hover:text-white text-sm font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isAddingFrame ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    {isAddingFrame ? "Creating..." : "Create Frame"}
+                  </button>
+                </div>
               </div>
             ) : (
               <>
@@ -1148,7 +1177,7 @@ export default function StoryboardWorkspacePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button onClick={handleRemoveDuplicates}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAAD14]/80 hover:bg-[#FAAD14] text-white text-xs font-medium rounded-lg transition"
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition"
                       title="Remove duplicate storyboard items">
                       <Trash2 className="w-3.5 h-3.5" />
                       Remove Duplicates
@@ -1164,7 +1193,7 @@ export default function StoryboardWorkspacePage() {
                       Elements
                     </button>
                     <button onClick={() => setShowExportModal(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#52C41A]/70 hover:bg-[#52C41A] text-xs text-white rounded-lg transition">
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-xs text-white font-medium rounded-lg transition">
                       Export
                     </button>
                   </div>
@@ -1266,6 +1295,235 @@ export default function StoryboardWorkspacePage() {
             </div>
           </div>
         )}
+
+        {/* ═══ TABLE VIEW ═══ */}
+        {tab === "table" && (
+          <div className="flex-1 overflow-auto p-6">
+            {!items || items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <List className="w-12 h-12 text-[#6E6E6E] mb-4" />
+                <p className="text-[#A0A0A0] font-medium mb-2">No frames yet</p>
+                <div className="flex items-center gap-3 mt-4">
+                  <button onClick={() => setTab("script")} className="flex items-center gap-2 px-4 py-2 bg-[#4A90E2] hover:bg-[#357ABD] text-white text-sm font-medium rounded-lg transition">
+                    <FileText className="w-4 h-4" /> Go to Script
+                  </button>
+                  <button
+                    disabled={isAddingFrame}
+                    onClick={async () => {
+                      if (isAddingFrame) return;
+                      setIsAddingFrame(true);
+                      try {
+                        await createItem({
+                          projectId: pid,
+                          sceneId: `manual-${Date.now()}`,
+                          order: 0,
+                          title: "Frame 1",
+                          description: "",
+                          duration: 5,
+                          generatedBy: user?.id || "unknown"
+                        });
+                      } finally { setIsAddingFrame(false); }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 border border-[#3D3D3D] hover:border-[#4A90E2]/50 hover:bg-[#4A90E2]/10 text-[#A0A0A0] hover:text-white text-sm font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isAddingFrame ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    {isAddingFrame ? "Creating..." : "Create Frame"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse min-w-[1200px]">
+                  <thead>
+                    <tr className="border-b border-[#3D3D3D] text-left">
+                      {["#", "Image", "Title", "Description", "Tags", "Elements", "Image Prompt", "Video Prompt", "Status", "Fav", "Actions"].map(h => (
+                        <th key={h} className="px-3 py-3 text-[11px] font-semibold text-[#6E6E6E] uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredItems.map((item, i) => (
+                      <tr
+                        key={item._id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, item._id)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleDragOver(e, item._id)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, item._id)}
+                        className={`border-b border-[#2C2C2C] hover:bg-[#2C2C2C]/50 transition group cursor-move ${
+                          draggedItem === item._id ? "opacity-40" : ""
+                        } ${dragOverItem === item._id ? "border-t-2 border-t-teal-500" : ""}`}
+                      >
+                        {/* Order + drag handle */}
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-1">
+                            <GripVertical className="w-3 h-3 text-[#4A4A4A] group-hover:text-[#6E6E6E] transition" />
+                            <span className="text-xs font-mono text-[#6E6E6E] w-6">{String(item.order + 1).padStart(2, "0")}</span>
+                            <div className="flex flex-col opacity-0 group-hover:opacity-100 transition">
+                              <button onClick={(e) => { e.stopPropagation(); handleMoveUp(item._id); }} disabled={i === 0} className="text-[#6E6E6E] hover:text-white disabled:opacity-20 p-0.5"><ChevronUp className="w-3 h-3" /></button>
+                              <button onClick={(e) => { e.stopPropagation(); handleMoveDown(item._id); }} disabled={i === filteredItems.length - 1} className="text-[#6E6E6E] hover:text-white disabled:opacity-20 p-0.5"><ChevronDown className="w-3 h-3" /></button>
+                            </div>
+                          </div>
+                        </td>
+                        {/* Image */}
+                        <td className="px-3 py-3">
+                          <div className="w-16 h-10 rounded-lg overflow-hidden bg-[#2C2C2C] border border-[#3D3D3D] cursor-pointer" onClick={() => handleDoubleClick(item)}>
+                            {item.imageUrl ? (
+                              <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-4 h-4 text-[#6E6E6E]" /></div>
+                            )}
+                          </div>
+                        </td>
+                        {/* Title */}
+                        <td className="px-3 py-3 max-w-[160px]">
+                          <input
+                            type="text"
+                            defaultValue={item.title}
+                            onBlur={(e) => handleTitleChange(item._id, e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                            className="w-full bg-transparent text-sm text-white border-b border-transparent hover:border-[#3D3D3D] focus:border-[#4A90E2] outline-none py-0.5 transition"
+                          />
+                        </td>
+                        {/* Description */}
+                        <td className="px-3 py-3 max-w-[220px]">
+                          <button
+                            onClick={() => { setTableEditField({ itemId: item._id, field: "description", value: item.description || "" }); }}
+                            className="w-full text-left text-xs text-[#A0A0A0] hover:text-white transition truncate py-0.5 cursor-text"
+                            title={item.description || "Click to edit"}
+                          >
+                            {item.description ? item.description.slice(0, 60) + (item.description.length > 60 ? "..." : "") : <span className="text-[#4A4A4A] italic">Add description...</span>}
+                          </button>
+                        </td>
+                        {/* Tags — uses same system as FrameCard */}
+                        <td className="px-3 py-3">
+                          <div className="relative">
+                            <div
+                              className="flex flex-wrap gap-1 max-w-[160px] cursor-pointer hover:opacity-80 transition"
+                              onClick={(e) => { e.stopPropagation(); setTableTagEditorId(tableTagEditorId === item._id ? null : item._id); }}
+                            >
+                              {item.tags && item.tags.length > 0 ? (
+                                <>
+                                  {item.tags.slice(0, 3).map((tag: any) => (
+                                    <span
+                                      key={tag.id}
+                                      className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+                                      style={{
+                                        backgroundColor: tag.color + "25",
+                                        color: tag.color,
+                                        border: `1px solid ${tag.color}30`,
+                                      }}
+                                    >
+                                      {tag.name}
+                                    </span>
+                                  ))}
+                                  {item.tags.length > 3 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-700/50 text-gray-400 border border-gray-600/30">
+                                      +{item.tags.length - 3}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-[#6E6E6E] hover:text-[#A0A0A0]">+ Tags</span>
+                              )}
+                            </div>
+                            {tableTagEditorId === item._id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={() => setTableTagEditorId(null)} />
+                                <div className="absolute top-full left-0 mt-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl z-50 shadow-xl w-64">
+                                  <TagEditorInline
+                                    selectedTags={item.tags || []}
+                                    onTagsChange={(tags) => handleTagsChange(item._id, tags)}
+                                    onClose={() => setTableTagEditorId(null)}
+                                  />
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        {/* Elements — supports both elementNames (new) and linkedElements (legacy) */}
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap gap-1 max-w-[170px] items-center">
+                            {/* New format: elementNames */}
+                            {item.elementNames?.characters?.map((name: string, idx: number) => (
+                              <span key={`c-${idx}`} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-purple-600/30 text-purple-300 border border-purple-500/30">{name}</span>
+                            ))}
+                            {item.elementNames?.environments?.map((name: string, idx: number) => (
+                              <span key={`e-${idx}`} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-emerald-600/30 text-emerald-300 border border-emerald-500/30">{name}</span>
+                            ))}
+                            {item.elementNames?.props?.map((name: string, idx: number) => (
+                              <span key={`p-${idx}`} className="px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-blue-600/30 text-blue-300 border border-blue-500/30">{name}</span>
+                            ))}
+                            {/* Legacy format: linkedElements */}
+                            {(item.linkedElements || []).map((el: any) => (
+                              <span key={el.id} className={`px-1.5 py-0.5 rounded-full text-[9px] font-medium border ${
+                                el.type === "character" ? "bg-purple-600/30 text-purple-300 border-purple-500/30" :
+                                el.type === "environment" ? "bg-emerald-600/30 text-emerald-300 border-emerald-500/30" :
+                                "bg-blue-600/30 text-blue-300 border-blue-500/30"
+                              }`}>{el.name}</span>
+                            ))}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleAddElement(item._id); }}
+                              className="text-[10px] text-[#6E6E6E] hover:text-purple-400 transition px-1"
+                              title="Add element"
+                            >
+                              + Add
+                            </button>
+                          </div>
+                        </td>
+                        {/* Image Prompt */}
+                        <td className="px-3 py-3 max-w-[180px]">
+                          <button
+                            onClick={() => { setTableEditField({ itemId: item._id, field: "imagePrompt", value: item.imagePrompt || "" }); }}
+                            className="w-full text-left text-[11px] text-[#A0A0A0] hover:text-white transition truncate py-0.5 font-mono cursor-text"
+                            title={item.imagePrompt || "Click to edit"}
+                          >
+                            {item.imagePrompt ? item.imagePrompt.slice(0, 40) + (item.imagePrompt.length > 40 ? "..." : "") : <span className="text-[#4A4A4A] italic">Image prompt...</span>}
+                          </button>
+                        </td>
+                        {/* Video Prompt */}
+                        <td className="px-3 py-3 max-w-[180px]">
+                          <button
+                            onClick={() => { setTableEditField({ itemId: item._id, field: "videoPrompt", value: item.videoPrompt || "" }); }}
+                            className="w-full text-left text-[11px] text-[#A0A0A0] hover:text-white transition truncate py-0.5 font-mono cursor-text"
+                            title={item.videoPrompt || "Click to edit"}
+                          >
+                            {item.videoPrompt ? item.videoPrompt.slice(0, 40) + (item.videoPrompt.length > 40 ? "..." : "") : <span className="text-[#4A4A4A] italic">Video prompt...</span>}
+                          </button>
+                        </td>
+                        {/* Status */}
+                        <td className="px-3 py-3">
+                          <select
+                            value={item.frameStatus || "draft"}
+                            onChange={(e) => handleStatusChange(item._id, e.target.value)}
+                            className="bg-[#2C2C2C] border border-[#3D3D3D] rounded px-2 py-1 text-[10px] text-[#A0A0A0] outline-none focus:border-[#4A90E2] transition cursor-pointer"
+                          >
+                            <option value="draft">Draft</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                          </select>
+                        </td>
+                        {/* Favorite */}
+                        <td className="px-3 py-3">
+                          <button onClick={() => handleFavoriteToggle(item._id)} className="p-1 transition">
+                            <Star className={`w-3.5 h-3.5 ${item.isFavorite ? "fill-yellow-400 text-yellow-400" : "text-[#6E6E6E] hover:text-yellow-400"}`} />
+                          </button>
+                        </td>
+                        {/* Actions */}
+                        <td className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => handleDuplicateItem(item)} className="p-1.5 text-[#6E6E6E] hover:text-white hover:bg-[#2C2C2C] rounded transition" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleRemoveItem(item._id, item.title)} className="p-1.5 text-[#6E6E6E] hover:text-red-400 hover:bg-red-500/10 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {showElementLibrary && (
         <ElementLibrary
@@ -1345,6 +1603,43 @@ export default function StoryboardWorkspacePage() {
           onClose={() => setShowFileBrowser(false)}
         />
       )}
+      {/* Table Edit Dialog */}
+      {tableEditField && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setTableEditField(null)}>
+          <div className="bg-[#1A1A1A] border border-[#3D3D3D] rounded-2xl w-full max-w-lg mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-[#2C2C2C]">
+              <h3 className="text-sm font-semibold text-white">Edit {tableEditField.field === "imagePrompt" ? "Image Prompt" : tableEditField.field === "videoPrompt" ? "Video Prompt" : "Description"}</h3>
+              <button onClick={() => setTableEditField(null)} className="text-[#6E6E6E] hover:text-white transition"><X className="w-4 h-4" /></button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const form = e.target as HTMLFormElement;
+              const val = (form.elements.namedItem("editValue") as HTMLTextAreaElement).value;
+              const id = tableEditField.itemId as any;
+              if (tableEditField.field === "description") handleDescriptionChange(id, val);
+              else if (tableEditField.field === "imagePrompt") updateItem({ id, imagePrompt: val });
+              else if (tableEditField.field === "videoPrompt") updateItem({ id, videoPrompt: val });
+              setTableEditField(null);
+            }}>
+              <div className="p-5">
+                <textarea
+                  name="editValue"
+                  autoFocus
+                  rows={6}
+                  defaultValue={tableEditField.value}
+                  className="w-full bg-[#2C2C2C] border border-[#3D3D3D] rounded-xl px-4 py-3 text-sm text-white placeholder-[#6E6E6E] outline-none focus:border-[#4A90E2] transition resize-none"
+                  placeholder={`Enter ${tableEditField.field}...`}
+                  onKeyDown={(e) => { if (e.key === "Escape") setTableEditField(null); }}
+                />
+              </div>
+              <div className="flex justify-end gap-3 p-5 border-t border-[#2C2C2C]">
+                <button type="button" onClick={() => setTableEditField(null)} className="px-4 py-2 text-sm text-[#A0A0A0] hover:text-white transition">Cancel</button>
+                <button type="submit" className="px-4 py-2 text-sm font-semibold bg-[#4A90E2] hover:bg-[#357ABD] text-white rounded-lg transition">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {showExportModal && items && project && (
         <WorkspaceExportModal
           projectName={project.name}
@@ -1356,31 +1651,31 @@ export default function StoryboardWorkspacePage() {
       )}
       {showSceneEditor && selectedSceneItem && (
         <SceneEditor
-          shots={[
-            {
-              id: selectedSceneItem._id,
+          key={selectedSceneItem._id}
+          shots={(items || []).map((item) => ({
+              id: item._id,
               scene: 1,
-              shot: Number(selectedSceneItem.order ?? 1),
-              title: selectedSceneItem.title,
-              description: selectedSceneItem.description || "",
+              shot: Number(item.order ?? 1),
+              title: item.title,
+              description: item.description || "",
               ert: "",
               shotSize: "",
               perspective: "",
               movement: "",
               equipment: "",
               focalLength: "",
-              imageUrl: selectedSceneItem.imageUrl,
-              videoUrl: selectedSceneItem.videoUrl,
-              imagePrompt: selectedSceneItem.imagePrompt,
-              videoPrompt: selectedSceneItem.videoPrompt,
-              duration: selectedSceneItem.duration,
+              imageUrl: item.imageUrl,
+              videoUrl: item.videoUrl,
+              imagePrompt: item.imagePrompt,
+              videoPrompt: item.videoPrompt,
+              duration: item.duration,
               aspectRatio: project.settings.frameRatio,
-              order: selectedSceneItem.order,
+              order: item.order,
               dialogue: [],
               cast: [],
               voiceOver: "",
               action: "",
-              bgDescription: selectedSceneItem.description || "",
+              bgDescription: item.description || "",
               characters: [],
               location: "",
               notes: "",
@@ -1400,8 +1695,7 @@ export default function StoryboardWorkspacePage() {
               specialInstructions: "",
               comments: [],
               tags: [],
-            } as Shot
-          ]}
+            } as Shot))}
           initialShotId={selectedSceneItem._id}
           onClose={handleCloseSceneEditor}
           onSaveImageAsElement={({ imageUrl, name, type }) => {
@@ -1428,6 +1722,12 @@ export default function StoryboardWorkspacePage() {
           userId={user?.id}
           user={user}
           userCompanyId={getCurrentCompanyId(user)}
+          onNavigateToShot={(shotId) => {
+            const targetItem = (items || []).find(item => item._id === shotId);
+            if (targetItem) {
+              setSelectedSceneItem(targetItem);
+            }
+          }}
         />
       )}
       
@@ -1651,6 +1951,8 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
   const [newImagePrompt, setNewImagePrompt] = useState(item.imagePrompt || "");
   const [newVideoPrompt, setNewVideoPrompt] = useState(item.videoPrompt || "");
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
+  const companyId = useCurrentCompanyId();
+  const [showFrameFileBrowser, setShowFrameFileBrowser] = useState(false);
 
   // Frame status configuration
   const FRAME_STATUS_CONFIG = {
@@ -1666,12 +1968,12 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
     if (!file) return;
     setUploading(true);
     try {
-      const companyId = getCurrentCompanyId(user);
-      const r2Key = `${companyId}/uploads/${item._id}-${Date.now()}-${file.name}`;
+      const effectiveCompanyId = companyId || userId;
+      const r2Key = `${effectiveCompanyId}/uploads/${item._id}-${Date.now()}-${file.name}`;
       const sigRes = await fetch("/api/storyboard/r2-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: r2Key, contentType: file.type }),
+        body: JSON.stringify({ filename: r2Key, contentType: file.type, companyId: effectiveCompanyId }),
       });
       const { uploadUrl, publicUrl } = await sigRes.json();
       // Debug: Log the upload URL for manual testing
@@ -1782,13 +2084,13 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
               <ImageIcon className="w-6 h-6 text-gray-600" />
             </div>
             <span className="text-xs text-gray-500">No media</span>
-            <label className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/8 rounded-lg cursor-pointer transition-all duration-200">
-              {uploading
-                ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
-                : <Upload className="w-4 h-4 text-gray-400" />}
-              <span className="text-xs text-gray-400">Upload</span>
-              <input type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-            </label>
+            <button
+              onClick={() => setShowFrameFileBrowser(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/8 rounded-lg cursor-pointer transition-all duration-200"
+            >
+              <FolderOpen className="w-4 h-4 text-gray-400" />
+              <span className="text-xs text-gray-400">Browse Files</span>
+            </button>
           </div>
         )}
         
@@ -2353,6 +2655,25 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             </div>
           </div>
         </div>
+      )}
+
+      {/* FileBrowser modal for selecting existing files */}
+      {showFrameFileBrowser && (
+        <FileBrowser
+          projectId={projectId as any}
+          onClose={() => setShowFrameFileBrowser(false)}
+          onSelectFile={(url, type) => {
+            if (type === "image" || type === "video") {
+              onImageUploaded(item._id, url);
+            }
+            setShowFrameFileBrowser(false);
+          }}
+          imageSelectionMode
+          onSelectImage={(imageUrl) => {
+            onImageUploaded(item._id, imageUrl);
+            setShowFrameFileBrowser(false);
+          }}
+        />
       )}
     </div>
   );

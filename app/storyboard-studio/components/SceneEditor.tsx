@@ -1,12 +1,15 @@
 "use client";
 
+import { toast } from "sonner";
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { ConvexHttpClient } from "convex/browser";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save, Video,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save, Video, Layers,
 } from "lucide-react";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
+import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import UseCaseInfoModal from "./UseCaseInfoModal";
 import { FrameInfoDialog } from "./FrameInfoDialog";
 import { FileBrowser } from "./storyboard/FileBrowser";
@@ -27,6 +30,7 @@ import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/VideoImageAIPan
 import { Image as ImageIcon, Box } from "lucide-react";
 import { uploadToR2 } from "@/lib/uploadToR2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
+import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/convex/_generated/api";
 
 type CanvasTool = CanvasActiveTool;
@@ -58,6 +62,7 @@ interface SceneEditorProps {
   onShotsChange: (shots: Shot[]) => void;
   onSaveImageAsElement?: (draft: { imageUrl: string; name?: string; type?: string }) => void;
   onSaveSelectedImageToItem?: (imageUrl: string, itemId: string) => Promise<void> | void;
+  onNavigateToShot?: (shotId: string) => void;
   // New props for R2 and element library
   projectId?: Id<"storyboard_projects">;
   userId?: string;
@@ -65,7 +70,7 @@ interface SceneEditorProps {
   userCompanyId?: string;
 }
 
-export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, onSaveSelectedImageToItem, projectId, userId, user, userCompanyId }: SceneEditorProps) {
+export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, onSaveSelectedImageToItem, onNavigateToShot, projectId, userId, user, userCompanyId }: SceneEditorProps) {
   // Mobile detection
   const { isMobile, isTablet, isDesktop } = useMobileDetection();
   
@@ -92,6 +97,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   
   // Get company ID for R2 uploads - use the standard hook
   const companyId = useCurrentCompanyId();
+  const { plan: currentPlan } = useSubscription();
   
   // Debug companyId values
   console.log('[SceneEditor] Auth debug:', {
@@ -505,8 +511,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     projectId ? { projectId } : "skip"
   );
   const updateStoryboardFile = useMutation(api.storyboard.storyboardFiles.update);
+  const removeStoryboardFile = useMutation(api.storyboard.storyboardFiles.remove);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const deductCredits = useMutation(api.credits.deductCredits);
+  const refundCredits = useMutation(api.credits.refundCredits);
 
   const projectGeneratedImages = useMemo(() => {
     if (!projectFiles) return [] as string[];
@@ -577,7 +585,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   }, [rectangleMaskAspectRatio]);
   
   // Canvas tool panel state - moved here to fix initialization error
-  const [canvasTool, setCanvasTool] = useState<CanvasTool>("inpaint");
+  const [canvasTool, setCanvasTool] = useState<CanvasTool>("canvas-objects");
   
   // Minimal state for removed Closer Look functionality (to prevent build errors)
   const [isAspectRatioAnimating] = useState(false);
@@ -1992,7 +2000,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // ── Generate Image with Bubbles and Text ───────────────────────────────────────────────────────
   const generateImageWithElements = async (): Promise<string | null> => {
+    console.log("[generateImageWithElements] Called. aiEditMode:", aiEditMode, "canvasTool:", canvasTool);
     const imageUrl = backgroundImage || activeShot?.imageUrl;
+    console.log("[generateImageWithElements] imageUrl:", imageUrl ? imageUrl.substring(0, 60) + "..." : "null");
     if (!imageUrl) {
       setInpaintError("No background image available");
       return null;
@@ -2026,7 +2036,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         return null;
       }
       
-      // Use the updated isBrushTool definition
+      // Check if brush inpaint tool is active
+      const isBrushTool = canvasTool === "inpaint";
       if (isBrushTool && aiModel === "ideogram/character-edit") {
         console.log("Brush tool with character-edit model detected, using faceshift logic");
         // Use aiRefImages (ImageAI Panel) instead of imageReferenceImages (left toolbox)
@@ -2077,29 +2088,44 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         throw new Error("No background image available");
       }
       
+      // Convert external image to data URL to avoid CORS tainted canvas
+      let blobUrl: string | null = null;
       if (imageUrl.startsWith('http')) {
         try {
-          const response = await fetch(imageUrl, { mode: 'cors', credentials: 'omit' });
-          if (response.ok) {
-            const blob = await response.blob();
+          // Use our server-side proxy to fetch the image (bypasses CORS completely)
+          const proxyResponse = await fetch(`/api/storyboard/proxy-image?url=${encodeURIComponent(imageUrl)}`);
+          if (proxyResponse.ok) {
+            const blob = await proxyResponse.blob();
             safeImageUrl = await new Promise<string>((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = () => resolve(reader.result as string);
               reader.onerror = reject;
               reader.readAsDataURL(blob);
             });
+            console.log("DEBUG: Image proxied and converted to data URL successfully");
+          } else {
+            console.warn("Proxy failed, trying direct fetch:", proxyResponse.status);
+            // Fallback to direct fetch
+            const response = await fetch(imageUrl);
+            if (response.ok) {
+              const blob = await response.blob();
+              safeImageUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            }
           }
         } catch (fetchError) {
-          console.warn("Failed to fetch external image, trying direct load:", fetchError);
+          console.warn("All image fetch methods failed:", fetchError);
         }
       }
 
       // Load background image to get its natural dimensions
-        const img = document.createElement('img');
+      const img = document.createElement('img');
       await new Promise((resolve, reject) => {
-        img.onload = () => {
-          resolve(undefined);
-        };
+        img.onload = () => resolve(undefined);
         img.onerror = (error) => {
           console.error("DEBUG: Failed to load background image:", error);
           reject(error);
@@ -2324,9 +2350,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         let assetUrl = libItem.url;
         if (assetUrl.startsWith("http")) {
           try {
-            const res = await fetch(assetUrl, { mode: "cors", credentials: "omit" });
-            if (res.ok) {
-              const blob = await res.blob();
+            // Use proxy to bypass CORS
+            const proxyRes = await fetch(`/api/storyboard/proxy-image?url=${encodeURIComponent(assetUrl)}`);
+            if (proxyRes.ok) {
+              const blob = await proxyRes.blob();
               assetUrl = await new Promise<string>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result as string);
@@ -2334,7 +2361,17 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 reader.readAsDataURL(blob);
               });
             } else {
-              console.warn("Failed to fetch asset image, using original URL");
+              console.warn("Proxy failed for asset, trying direct fetch");
+              const res = await fetch(assetUrl);
+              if (res.ok) {
+                const blob = await res.blob();
+                assetUrl = await new Promise<string>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(blob);
+                });
+              }
             }
           } catch (error) {
             console.warn("Error fetching asset image:", error);
@@ -2343,10 +2380,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
         await new Promise<void>((resolve) => {
           const aImg = document.createElement('img');
-          
-          // Set crossOrigin to handle CORS issues
-          aImg.crossOrigin = 'anonymous';
-          
+
           aImg.onload = () => {
             captureCtx.save();
             
@@ -2629,6 +2663,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       // Convert to base64
       const canvasDataUrl = captureCanvas.toDataURL('image/png', 1.0);
       
+      // Clean up blob URL
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+
       // Return the combined image instead of adding to panel
       return canvasDataUrl;
 
@@ -3499,8 +3536,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       // Put the enhanced image data back
       ctx.putImageData(imageData, 0, 0);
       
-      // Convert all images to WebP format like working examples
-      const maskBase64 = maskCanvas.toDataURL("image/webp", 0.8);
+      // Convert mask to PNG (required by ideogram/character-edit)
+      const maskBase64 = maskCanvas.toDataURL("image/png");
       console.log("[brushCharacterEdit] Mask base64 size:", maskBase64.length, "characters");
 
       // Convert main image to WebP
@@ -3750,9 +3787,39 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           <ChevronLeft className="w-4 h-4" /> Back
         </button>
         <div className="w-px h-5 bg-white/10" />
-        <span className="text-white font-semibold text-sm">
-          Screen {String((activeShot.order || 0) + 1).padStart(2, "0")}
-        </span>
+
+        {/* Frame navigation: prev / title / next */}
+        {(() => {
+          const sortedShots = [...shots].sort((a, b) => (a.order || 0) - (b.order || 0));
+          const currentIndex = sortedShots.findIndex(s => s.id === activeShotId);
+          const hasPrev = currentIndex > 0;
+          const hasNext = currentIndex < sortedShots.length - 1;
+          return (
+            <div className="flex items-center gap-1.5">
+              {hasPrev && (
+                <button
+                  onClick={() => onNavigateToShot?.(sortedShots[currentIndex - 1].id)}
+                  className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition"
+                  title="Previous frame"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+              <span className="text-white font-semibold text-sm">
+                {String((activeShot.order || 0) + 1).padStart(2, "0")}{activeShot.title ? ` - ${activeShot.title}` : ""}
+              </span>
+              {hasNext && (
+                <button
+                  onClick={() => onNavigateToShot?.(sortedShots[currentIndex + 1].id)}
+                  className="p-1 rounded text-gray-400 hover:text-white hover:bg-white/10 transition"
+                  title="Next frame"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          );
+        })()}
         {activeShot.tags.map(t => (
           <span key={t.id} className="px-2 py-0.5 rounded text-[10px] font-semibold text-white" style={{ backgroundColor: t.color + "cc" }}>
             {t.name}
@@ -3786,75 +3853,355 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </button>
+        <div className="ml-auto flex items-center gap-3">
+          <OrgSwitcher
+            appearance={{
+              elements: {
+                rootBox: "flex items-center",
+                organizationSwitcherTrigger: "px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white hover:text-gray-200 flex items-center gap-2 text-sm",
+              },
+            }}
+          />
+          <UserButton appearance={{ elements: { avatarBox: "w-7 h-7" } }} />
+        </div>
               </div>
-
-      {/* Top Right Controls */}
-      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
-        <button 
-          onClick={(e) => {
-            console.log('[SceneEditor] Button clicked!', e);
-            handleSaveToR2().catch(err => {
-              console.error('[SceneEditor] Save error:', err);
-            });
-          }}
-          className="px-3 py-1.5 bg-green-600/80 hover:bg-green-700/80 text-white rounded-lg text-sm transition flex items-center gap-1.5 backdrop-blur-sm"
-          title="Save to R2 temps"
-        >
-          <Save className="w-4 h-4" />
-          Save
-        </button>
-      </div>
 
       {/* ── Main area ── */}
       <div className={`flex-1 flex overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
         {/* Center: Canvas Area */}
         <div className={`flex-1 flex flex-col overflow-hidden relative ${isMobile ? 'order-2' : ''}`}>
-          {/* Top Right Controls - Mobile Optimized */}
-          <div className={`absolute top-3 right-3 z-10 ${isMobile ? 'flex flex-row gap-2' : 'flex flex-col gap-2'}`}>
-            {/* Generated Images Button */}
+          {/* Top Right Controls - Compact square buttons matching Hide/Show style */}
+          <div className={`absolute top-4 right-4 z-10 flex ${isMobile ? 'flex-row' : 'flex-col'} gap-1.5`}>
+            {/* Generated Images */}
             <button
-              onClick={() => {
-                setGeneratedImagesPanelOpen(!generatedImagesPanelOpen);
-              }}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
-                generatedImagesPanelOpen ? 'bg-blue-600/80' : 'bg-black/50 hover:bg-black/80'
+              onClick={() => setGeneratedImagesPanelOpen(!generatedImagesPanelOpen)}
+              className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
+                generatedImagesPanelOpen
+                  ? 'bg-blue-500/15 text-blue-300'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
               }`}
               title="View Generated Images"
-              aria-label="View Generated Images"
             >
               <Image className="w-4 h-4" />
-              <span>Generated</span>
+              <span className="text-[8px] font-medium leading-none">Generated</span>
             </button>
-            
-            {/* AI Panel Switcher Button */}
+
+            {/* AI Panel Switcher */}
             <button
               onClick={() => {
                 if (activeAIPanel === 'editimage') {
                   setActiveAIPanel('element');
-                  setAiModel('nano-banana-2'); // Reset to valid VideoImageAIPanel model
+                  setAiModel('nano-banana-2');
                 } else {
                   setActiveAIPanel('editimage');
-                  setAiModel('gpt-image'); // Reset to valid EditImageAIPanel model
+                  setAiModel('gpt-image');
                 }
               }}
-              className={`px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-sm transition backdrop-blur-sm ${
-                activeAIPanel === 'element' ? 'bg-green-600/80' : 
-                'bg-black/50 hover:bg-black/80'
+              className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
+                activeAIPanel === 'element'
+                  ? 'bg-emerald-500/15 text-emerald-300'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
               }`}
-              title={`Switch to ${activeAIPanel === 'editimage' ? 'Edit Image' : 'Image Video'} AI`}
-              aria-label={`Switch to ${activeAIPanel === 'editimage' ? 'Edit Image' : 'Image Video'} AI`}
+              title={`Switch to ${activeAIPanel === 'editimage' ? 'Image Video' : 'Edit Image'} AI`}
             >
               {activeAIPanel === 'editimage' ? (
-                <>
-                  <Box className="w-4 h-4 text-green-400" />
-                  <span>Image Video AI</span>
-                </>
+                <Box className="w-4 h-4" />
               ) : (
-                <>
-                  <ImageIcon className="w-4 h-4 text-cyan-400" />
-                  <span>Edit Image AI</span>
-                </>
+                <ImageIcon className="w-4 h-4" />
               )}
+              <span className="text-[8px] font-medium leading-none">{activeAIPanel === 'editimage' ? 'Video' : 'Edit'}</span>
+            </button>
+
+            {/* Combine Background - merge SVG layers with image via SVG embedding */}
+            <button
+              onClick={async () => {
+                console.log("[SceneEditor] Combine clicked — SVG embed approach");
+                try {
+                  const containerEl = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+                  if (!containerEl) throw new Error("Canvas container not found");
+
+                  const cssW = containerEl.clientWidth;
+                  const cssH = containerEl.clientHeight;
+                  const bgUrl = backgroundImage || activeShot?.imageUrl;
+
+                  // Step 1: Convert background image to data URL via proxy
+                  let bgDataUrl = "";
+                  if (bgUrl) {
+                    try {
+                      const proxyRes = await fetch(`/api/storyboard/proxy-image?url=${encodeURIComponent(bgUrl)}`);
+                      if (proxyRes.ok) {
+                        const blob = await proxyRes.blob();
+                        bgDataUrl = await new Promise<string>((resolve, reject) => {
+                          const reader = new FileReader();
+                          reader.onload = () => resolve(reader.result as string);
+                          reader.onerror = reject;
+                          reader.readAsDataURL(blob);
+                        });
+                      }
+                    } catch (e) {
+                      console.warn("[Combine] Proxy fetch failed:", e);
+                    }
+                  }
+
+                  // Step 2: Build SVG content from canvas state data
+                  let svgContent = "";
+                  const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+                  // Render text elements from state
+                  // CanvasEditor: div at (t.x, t.y), size (t.w, t.h), padding 4px, no textAlign
+                  const activeTexts = canvasState.textElements.filter(t => t.panelId === activeShotId);
+                  const textPadding = 4; // matches CanvasEditor padding:"4px"
+                  for (const t of activeTexts) {
+                    const rotation = t.rotation || 0;
+                    const fontSize = t.fontSize || 16;
+                    const fontFamily = t.fontFamily || "Arial, sans-serif";
+                    const fontWeight = t.fontWeight || 'normal';
+                    const fontStyle = t.fontStyle || 'normal';
+                    const color = t.color || '#000000';
+                    const bgColor = t.backgroundColor || 'transparent';
+                    const text = t.text || '';
+                    const tw = t.w || 200;
+                    const th = t.h || 30;
+                    // Rotation origin = center of box (matches transformOrigin: "center")
+                    const cx = t.x + tw / 2;
+                    const cy = t.y + th / 2;
+                    // Text position: top-left with padding (CanvasEditor uses left-aligned text with padding:4px)
+                    const textX = -tw / 2 + textPadding;
+                    const textY = -th / 2 + textPadding + fontSize; // baseline offset
+
+                    svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
+                    if (bgColor !== 'transparent') {
+                      svgContent += `<rect x="${-tw / 2}" y="${-th / 2}" width="${tw}" height="${th}" fill="${bgColor}" />`;
+                    }
+                    svgContent += `<text x="${textX}" y="${textY}" text-anchor="start" font-size="${fontSize}px" font-family="${escXml(fontFamily)}" font-weight="${fontWeight}" font-style="${fontStyle}" fill="${color}">${escXml(text)}</text>`;
+                    svgContent += `</g>`;
+                  }
+
+                  // Render shapes from state
+                  const activeShapes = canvasState.shapeElements?.filter(s => s.panelId === activeShotId) || [];
+                  for (const s of activeShapes) {
+                    const stroke = s.strokeColor || '#ff0000';
+                    const sw = s.strokeWidth || 2;
+                    const fill = s.fillColor || 'none';
+                    const cx = s.x + s.w / 2;
+                    const cy = s.y + s.h / 2;
+                    const rotation = s.rotation || 0;
+                    svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
+                    if (s.type === 'circle') {
+                      svgContent += `<ellipse cx="0" cy="0" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
+                    } else if (s.type === 'square') {
+                      svgContent += `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
+                    } else if (s.type === 'arrow' || s.type === 'line') {
+                      svgContent += `<line x1="${-s.w / 2}" y1="${-s.h / 2}" x2="${s.w / 2}" y2="${s.h / 2}" stroke="${stroke}" stroke-width="${sw}" />`;
+                      if (s.type === 'arrow') {
+                        const angle = Math.atan2(s.h, s.w);
+                        const headLen = 15;
+                        const ex = s.w / 2;
+                        const ey = s.h / 2;
+                        svgContent += `<line x1="${ex}" y1="${ey}" x2="${ex - headLen * Math.cos(angle - Math.PI / 6)}" y2="${ey - headLen * Math.sin(angle - Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
+                        svgContent += `<line x1="${ex}" y1="${ey}" x2="${ex - headLen * Math.cos(angle + Math.PI / 6)}" y2="${ey - headLen * Math.sin(angle + Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
+                      }
+                    }
+                    svgContent += `</g>`;
+                  }
+
+                  // Render asset images (uploaded images on canvas) from state
+                  const activeAssets = canvasState.assetElements.filter(a => a.panelId === activeShotId);
+                  for (const a of activeAssets) {
+                    const libItem = canvasState.assetLibrary.find(lib => lib.id === a.assetId);
+                    if (!libItem?.url) continue;
+
+                    // Fetch asset image and convert to data URL via proxy
+                    let assetDataUrl = libItem.url;
+                    if (libItem.url.startsWith('http')) {
+                      try {
+                        const proxyRes = await fetch(`/api/storyboard/proxy-image?url=${encodeURIComponent(libItem.url)}`);
+                        if (proxyRes.ok) {
+                          const blob = await proxyRes.blob();
+                          assetDataUrl = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(reader.result as string);
+                            reader.onerror = reject;
+                            reader.readAsDataURL(blob);
+                          });
+                        }
+                      } catch (e) {
+                        console.warn("[Combine] Failed to proxy asset image:", e);
+                      }
+                    }
+
+                    const rotation = a.rotation || 0;
+                    const cx = a.x + a.w / 2;
+                    const cy = a.y + a.h / 2;
+                    const flipX = a.flipX ? -1 : 1;
+                    const flipY = a.flipY ? -1 : 1;
+                    svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation}) scale(${flipX},${flipY})">`;
+                    svgContent += `<image href="${assetDataUrl}" x="${-a.w / 2}" y="${-a.h / 2}" width="${a.w}" height="${a.h}" preserveAspectRatio="xMidYMid meet" />`;
+                    svgContent += `</g>`;
+                  }
+
+                  // Render bubbles from DOM SVG shapes + text from state data
+                  const containerRect = containerEl.getBoundingClientRect();
+                  const activeBubbles = canvasState.bubbles.filter(b => b.panelId === activeShotId);
+
+                  // Grab bubble SVG shapes from DOM
+                  const svgElements = containerEl.querySelectorAll('svg');
+                  svgElements.forEach(svg => {
+                    const clone = svg.cloneNode(true) as SVGElement;
+                    // Remove foreignObject elements (they contain HTML text that won't render in SVG→Canvas)
+                    clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
+                    const rect = svg.getBoundingClientRect();
+                    const offsetX = rect.left - containerRect.left;
+                    const offsetY = rect.top - containerRect.top;
+                    const w = rect.width;
+                    const h = rect.height;
+                    if (w > 0 && h > 0) {
+                      svgContent += `<g transform="translate(${offsetX},${offsetY})">${clone.innerHTML}</g>`;
+                    }
+                  });
+
+                  // Render bubble text from state (since foreignObject doesn't survive SVG→Canvas)
+                  // Import estimateFontSize to match CanvasEditor's auto-fit logic
+                  const { estimateFontSize } = await import("@/app/storyboard-studio/shared/canvas-helpers");
+                  for (const b of activeBubbles) {
+                    if (!b.text || b.text.trim() === '') continue;
+                    const rotation = b.rotation || 0;
+                    const cx = b.x + b.w / 2;
+                    const cy = b.y + b.h / 2;
+                    // Match CanvasEditor: autoFitFont uses estimateFontSize, otherwise b.fontSize
+                    const fontSize = b.autoFitFont ? estimateFontSize(b.text, b.w, b.h) : b.fontSize;
+                    // Match CanvasEditor text color logic
+                    const textColor = b.flippedColors
+                      ? (b.bubbleType === "whisper" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.97)")
+                      : "#1a1a2e";
+                    // Match CanvasEditor font styling per bubble type
+                    const fontWeight = ["sfx", "shout"].includes(b.bubbleType) ? 900 : 400;
+                    const letterSpacing = b.bubbleType === "sfx" ? "0.06em" : b.bubbleType === "shout" ? "0.02em" : "0em";
+                    const fontStyle = b.bubbleType === "whisper" ? "italic" : "normal";
+                    const fontFamily = "'Noto Sans SC', 'Comic Sans MS', 'Bangers', 'Segoe UI', sans-serif";
+                    const lineHeight = fontSize * 1.3;
+                    const lines = b.text.split('\n');
+                    const totalHeight = lines.length * lineHeight;
+                    const startY = -totalHeight / 2 + lineHeight / 2;
+
+                    svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
+                    lines.forEach((line, i) => {
+                      svgContent += `<text x="0" y="${startY + i * lineHeight}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}px" font-family="${escXml(fontFamily)}" font-weight="${fontWeight}" font-style="${fontStyle}" letter-spacing="${letterSpacing}" fill="${textColor}">${escXml(line)}</text>`;
+                    });
+                    svgContent += `</g>`;
+                  }
+
+                  // Step 3: Build combined SVG with embedded background image
+                  const bgImgRatio = bgDataUrl ? await new Promise<number>((resolve) => {
+                    const img = document.createElement('img');
+                    img.onload = () => resolve(img.naturalWidth / img.naturalHeight);
+                    img.onerror = () => resolve(16/9);
+                    img.src = bgDataUrl;
+                  }) : 16/9;
+
+                  // Calculate image fit (object-contain)
+                  const containerRatio = cssW / cssH;
+                  let drawW: number, drawH: number, drawX: number, drawY: number;
+                  if (bgImgRatio > containerRatio) {
+                    drawW = cssW; drawH = cssW / bgImgRatio;
+                    drawX = 0; drawY = (cssH - drawH) / 2;
+                  } else {
+                    drawH = cssH; drawW = cssH * bgImgRatio;
+                    drawX = (cssW - drawW) / 2; drawY = 0;
+                  }
+
+                  const combinedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cssW}" height="${cssH}">
+                    ${bgDataUrl ? `<image href="${bgDataUrl}" x="${drawX}" y="${drawY}" width="${drawW}" height="${drawH}" />` : `<rect width="${cssW}" height="${cssH}" fill="#13131a"/>`}
+                    ${svgContent}
+                  </svg>`;
+
+                  // Step 4: Convert SVG to canvas → PNG
+                  const svgBlob = new Blob([combinedSvg], { type: 'image/svg+xml;charset=utf-8' });
+                  const svgUrl = URL.createObjectURL(svgBlob);
+                  const resultDataUrl = await new Promise<string>((resolve, reject) => {
+                    const img = document.createElement('img');
+                    img.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      canvas.width = cssW * 2; // 2x for quality
+                      canvas.height = cssH * 2;
+                      const ctx = canvas.getContext('2d')!;
+                      ctx.scale(2, 2);
+                      ctx.drawImage(img, 0, 0, cssW, cssH);
+                      URL.revokeObjectURL(svgUrl);
+                      resolve(canvas.toDataURL('image/png'));
+                    };
+                    img.onerror = (e) => {
+                      URL.revokeObjectURL(svgUrl);
+                      reject(e);
+                    };
+                    img.src = svgUrl;
+                  });
+
+                  console.log("[Combine] Success:", resultDataUrl.length, "chars");
+
+                  // Upload combined image to R2 via binary route (no auto-logging)
+                  // Then create a single "generated" record
+                  try {
+                    const blob = await (await fetch(resultDataUrl)).blob();
+                    const timestamp = Date.now();
+                    const filename = `combined-${timestamp}.png`;
+                    const r2Key = `${companyId}/generated/${filename}`;
+                    const r2PublicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${r2Key}`;
+
+                    // Upload raw bytes to R2 via binary route (skips logUpload)
+                    const uploadRes = await fetch('/api/storyboard/upload-binary', {
+                      method: 'POST',
+                      body: blob,
+                      headers: {
+                        'Content-Type': 'image/png',
+                        'x-filename': encodeURIComponent(filename),
+                        'x-category': 'generated',
+                        'x-company-id': companyId || '',
+                        'x-r2-key': r2Key,
+                        'x-skip-log': 'true', // Skip auto database logging
+                      },
+                    });
+
+                    if (uploadRes.ok) {
+                      console.log("[Combine] Uploaded to R2:", r2PublicUrl);
+
+                      // Create single "generated" record linked to current storyboard item
+                      await logUpload({
+                        companyId: companyId || "",
+                        userId: userId || "",
+                        projectId: projectId as any,
+                        category: "generated",
+                        filename,
+                        fileType: "image",
+                        mimeType: "image/png",
+                        size: blob.size,
+                        status: "completed",
+                        tags: [],
+                        uploadedBy: userId || "",
+                        r2Key,
+                        sourceUrl: r2PublicUrl,
+                        categoryId: activeShot?.id as any || null,
+                        model: "combine-layers",
+                      });
+                      console.log("[Combine] Saved to generated panel");
+                    } else {
+                      console.warn("[Combine] Upload failed:", await uploadRes.text());
+                    }
+                  } catch (uploadErr) {
+                    console.warn("[Combine] Upload error:", uploadErr);
+                  }
+
+                  // Open generated panel to show the result
+                  setGeneratedImagesPanelOpen(true);
+                } catch (error) {
+                  console.error("[SceneEditor] Combine failed:", error);
+                }
+              }}
+              className="w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all text-gray-500 hover:text-gray-300 hover:bg-white/5"
+              title="Combine layers with background"
+            >
+              <Layers className="w-4 h-4" />
+              <span className="text-[8px] font-medium leading-none">Combine</span>
             </button>
           </div>
           {/* Debug: Log what's being passed to CanvasArea */}
@@ -3957,12 +4304,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             onImageSelect={switchCanvasImage}
             onImageDelete={async (image) => {
               try {
-                await updateStoryboardFile({
+                await removeStoryboardFile({
                   id: image.id as Id<"storyboard_files">,
-                  status: image.status === "completed" ? "deleted" : "failed",
                 });
               } catch (error) {
-                console.error("Failed to mark generated file as failed:", error);
+                console.error("Failed to delete generated file:", error);
               }
             }}
             onImageRetry={(image) => {
@@ -4173,13 +4519,13 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               });
                             }
                             
-                            // Convert to WebP and save to temps folder for reuse, then use base64 for KIE AI
-                            const maskBase64 = maskCanvas.toDataURL("image/webp", 0.8);
-                            
+                            // Convert mask to PNG (required by ideogram/character-edit and more compatible across models)
+                            const maskBase64 = maskCanvas.toDataURL("image/png");
+
                             // Save mask to temps folder for reuse
                             const maskBlob = await (await fetch(maskBase64)).blob();
                             const maskFormData = new FormData();
-                            maskFormData.append('file', maskBlob, `mask-${Date.now()}.webp`);
+                            maskFormData.append('file', maskBlob, `mask-${Date.now()}.png`);
                             maskFormData.append('useTemp', 'true'); // Use temps folder
                             
                             const maskUploadResponse = await fetch('/api/storyboard/upload', {
@@ -4218,7 +4564,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       
                       // Fast credit balance check before any expensive operations
                       if (!companyId) {
-                        alert('No company ID available for credit check.');
+                        toast.error('No company ID available for credit check.');
                         return;
                       }
 
@@ -4231,7 +4577,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       console.log('[onGenerate] Credit check:', { currentBalance, requiredCredits });
                       
                       if (currentBalance < requiredCredits) {
-                        alert(`❌ Insufficient credits\n\nRequired: ${requiredCredits} credits\nAvailable: ${currentBalance} credits\n\nPlease purchase more credits to continue generating images.`);
+                        toast.error(`Insufficient credits. Need ${requiredCredits} but only have ${currentBalance}.`);
                         return;
                       }
                       
@@ -4377,10 +4723,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         
                         // Task status will be updated automatically via Convex real-time subscriptions
                         
-                        alert(`Generation started! ${result.creditsUsed} credits deducted. File ID: ${result.fileId}`);
+                        toast.success(`Generation started! ${result.creditsUsed} credits deducted.`);
                       } else {
                         console.error("❌ Generation failed");
-                        alert("Generation failed. Please check your credits and try again.");
+                        toast.error("Generation failed. Please check your credits and try again.");
                       }
                     } catch (error) {
                       console.error("[onGenerate] Credit-based generation failed:", error);
@@ -4388,9 +4734,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       // Handle insufficient credits error specifically
                       const errorMessage = error instanceof Error ? error.message : 'Generation failed';
                       if (errorMessage.includes('Insufficient credits')) {
-                        alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating images.`);
+                        toast.error(errorMessage);
                       } else {
-                        alert(`AI generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
+                        toast.error(`AI generation failed: ${errorMessage}`);
                       }
                     }
                   }}
@@ -4406,7 +4752,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   onAddReferenceImage={(file) => {
                     const maxReferenceImages = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
                     if (aiRefImages.length >= maxReferenceImages) {
-                      alert(`Maximum of ${maxReferenceImages} reference images allowed for ${aiModel}.`);
+                      toast.warning(`Maximum of ${maxReferenceImages} reference images allowed for ${aiModel}.`);
                       return;
                     }
 
@@ -4618,12 +4964,39 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   onUploadOverride={() => setShowUploadOverrideBrowser(true)}
                   onDownloadCanvas={undefined}
                   onSaveAsOriginal={undefined}
+                  onSaveToUploadFolder={() => {
+                    handleSaveToR2().catch(err => {
+                      console.error('[SceneEditor] Save to upload folder error:', err);
+                    });
+                  }}
+                  generatedItemImages={
+                    projectFiles
+                      ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image" && String(f.categoryId ?? "") === String(activeShot?.id ?? ""))
+                      .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
+                  }
+                  generatedProjectImages={
+                    projectFiles
+                      ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image")
+                      .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
+                  }
+                  onAddReferenceFromUrl={async (url: string) => {
+                    const maxRefs = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
+                    if (aiRefImages.length >= maxRefs) {
+                      toast.warning(`Maximum of ${maxRefs} reference images allowed.`);
+                      return;
+                    }
+                    setAiRefImages(prev => [...prev, {
+                      id: `gen-${Date.now()}`,
+                      url: url,
+                      filename: `generated-ref-${Date.now()}.png`,
+                    }]);
+                  }}
                 />
                   ) : (
                     <ImageAIPanel
                       mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
-                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string) => {
+                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[]) => {
                         console.log("=== ELEMENT CREDIT-BASED GENERATION CALLED ===");
                         console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
                         console.log("Prompt:", extractedPrompt);
@@ -4742,6 +5115,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               companyId: companyId || "",
                               tokens: creditsUsed,
                               reason: `AI video generation with ${aiModel}`,
+                              plan: currentPlan,
                             });
                             
                             console.log("Seedance 1.5 Pro credits deducted");
@@ -4764,22 +5138,44 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             });
 
                             if (!response.ok) {
+                              // Refund credits and mark file as failed
+                              console.warn("Seedance API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: Seedance 1.5 Pro API failed (${response.status})`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
                               throw new Error(`Seedance API error: ${response.status} ${response.statusText}`);
                             }
 
                             const result = await response.json();
                             console.log("Seedance 1.5 Pro API call successful:", result);
-                            
+
+                            // Store response code and taskId in the file record
+                            const seedanceTaskId = result.data?.taskId || result.data?.recordId || result.taskId;
+                            await updateStoryboardFile({
+                              id: fileId,
+                              status: "processing",
+                              taskId: seedanceTaskId,
+                              responseCode: result.code,
+                              responseMessage: result.msg,
+                            });
+
                             if (result) {
-                              console.log("✅ Seedance 1.5 Pro generation started:", {
+                              console.log("Seedance 1.5 Pro generation started:", {
                                 fileId: fileId,
-                                taskId: result.taskId || result.id,
-                                creditsUsed: creditsUsed
+                                taskId: seedanceTaskId,
+                                creditsUsed: creditsUsed,
+                                responseCode: result.code,
                               });
-                              
-                              alert(`Element generation started! ${creditsUsed} credits deducted. File ID: ${fileId}`);
+
+                              toast.success(`Generation started! ${creditsUsed} credits deducted.`);
                             }
-                            
+
                           } else if (aiModel === "google/veo-3.1") {
                             console.log("Using Veo 3.1 API format...");
                             
@@ -4846,6 +5242,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               companyId: companyId || "",
                               tokens: creditsUsed,
                               reason: `AI video generation with ${aiModel}`,
+                              plan: currentPlan,
                             });
                             
                             console.log("Veo 3.1 credits deducted");
@@ -4869,22 +5266,253 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             });
 
                             if (!response.ok) {
+                              // Refund credits and mark file as failed
+                              console.warn("Veo 3.1 API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: Veo 3.1 API failed (${response.status})`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
                               throw new Error(`Veo 3.1 API error: ${response.status} ${response.statusText}`);
                             }
 
                             const result = await response.json();
                             console.log("Veo 3.1 API call successful:", result);
-                            
+
+                            // Store response code and taskId in the file record
+                            const veoTaskId = result.data?.taskId || result.data?.recordId || result.taskId;
+                            await updateStoryboardFile({
+                              id: fileId,
+                              status: "processing",
+                              taskId: veoTaskId,
+                              responseCode: result.code,
+                              responseMessage: result.msg,
+                            });
+
                             if (result) {
-                              console.log("✅ Veo 3.1 generation started:", {
+                              console.log("Veo 3.1 generation started:", {
                                 fileId: fileId,
-                                taskId: result.taskId || result.id,
-                                creditsUsed: creditsUsed
+                                taskId: veoTaskId,
+                                creditsUsed: creditsUsed,
+                                responseCode: result.code,
                               });
-                              
-                              alert(`Element generation started! ${creditsUsed} credits deducted. File ID: ${fileId}`);
+
+                              toast.success(`Generation started! ${creditsUsed} credits deducted.`);
                             }
-                            
+
+                          } else if (aiModel === "grok-imagine/image-to-video") {
+                            console.log("Using Grok Imagine API format...");
+
+                            const durSec = parseInt(duration.replace('s', '')) || 6;
+
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `grok-imagine-${Date.now()}.mp4`,
+                              fileType: "video",
+                              mimeType: "video/mp4",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId,
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              model: aiModel,
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: "Grok Imagine",
+                                pricingType: "formula",
+                                quality: quality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: {
+                                  cropped: false,
+                                  combined: false,
+                                  referenceImagesUsed: processedReferenceImages.length,
+                                },
+                                processingTime: 0,
+                                success: false,
+                              },
+                            });
+
+                            console.log("Grok Imagine placeholder record created:", fileId);
+
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI video generation with ${aiModel}`,
+                              plan: currentPlan,
+                            });
+
+                            console.log("Grok Imagine credits deducted");
+
+                            // Call Grok Imagine API via server route
+                            try {
+                              const response = await fetch('/api/storyboard/generate-grok', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  prompt: extractedPrompt,
+                                  imageUrls: processedReferenceImages,
+                                  aspectRatio: aspectRatio,
+                                  resolution: quality.split('_')[0] || '480p',
+                                  duration: durSec,
+                                  callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                  companyId: companyId || "",
+                                }),
+                              });
+
+                              if (!response.ok) {
+                                throw new Error(`Grok API error: ${response.status} ${response.statusText}`);
+                              }
+
+                              const result = await response.json();
+                              console.log("Grok Imagine API call successful:", result);
+
+                              // Store kieAiId (defaultAI), taskId, and response code in the file record
+                              if (result.kieAiId || result.taskId) {
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "processing",
+                                  defaultAI: result.kieAiId,
+                                  taskId: result.taskId,
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                              }
+
+                              if (result) {
+                                toast.success(`Generation started! ${creditsUsed} credits deducted.`);
+                              }
+                            } catch (apiError) {
+                              // Refund credits on API failure
+                              console.warn("Grok Imagine API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: Grok Imagine API failed`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
+                              throw apiError;
+                            }
+
+                          } else if (aiModel === "kling-3.0/motion-control") {
+                            console.log("Using Kling 3.0 Motion Control API format...");
+
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `kling-motion-${Date.now()}.mp4`,
+                              fileType: "video",
+                              mimeType: "video/mp4",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId,
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              model: aiModel,
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: "Kling 3.0 Motion Control",
+                                pricingType: "formula",
+                                quality: quality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: {
+                                  cropped: false,
+                                  combined: false,
+                                  referenceImagesUsed: processedReferenceImages.length,
+                                  klingOrientation,
+                                  klingSource,
+                                },
+                                processingTime: 0,
+                                success: false,
+                              },
+                            });
+
+                            console.log("Kling Motion placeholder created:", fileId);
+
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI video generation with ${aiModel}`,
+                              plan: currentPlan,
+                            });
+
+                            console.log("Kling Motion credits deducted");
+
+                            // Call Kling Motion Control API via server route
+                            const modeResolution = quality.split('_')[0]?.toLowerCase() || '720p';
+                            try {
+                              const response = await fetch('/api/storyboard/generate-kling-motion', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  prompt: extractedPrompt,
+                                  inputImageUrl: processedReferenceImages[0],
+                                  videoUrl: videoUrls?.[0],
+                                  mode: modeResolution,
+                                  characterOrientation: klingOrientation || "image",
+                                  backgroundSource: klingSource || "input_video",
+                                  callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                  companyId: companyId || "",
+                                }),
+                              });
+
+                              if (!response.ok) {
+                                throw new Error(`Kling API error: ${response.status} ${response.statusText}`);
+                              }
+
+                              const result = await response.json();
+                              console.log("Kling Motion API call successful:", result);
+
+                              // Store kieAiId (defaultAI), taskId, and response code in the file record
+                              if (result.kieAiId || result.taskId) {
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "processing",
+                                  defaultAI: result.kieAiId,
+                                  taskId: result.taskId,
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                              }
+
+                              if (result) {
+                                toast.success(`Generation started! ${creditsUsed} credits deducted.`);
+                              }
+                            } catch (apiError) {
+                              console.warn("Kling Motion API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: Kling 3.0 Motion Control API failed`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
+                              throw apiError;
+                            }
+
                           } else {
                             // Use the existing generateImageWithCredits function for other models
                             console.log("Using generateImageWithCredits for other models...");
@@ -4930,9 +5558,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                           
                           // Handle insufficient credits error specifically
                           if (errorMessage.includes('Insufficient credits')) {
-                            alert(`❌ ${errorMessage}\n\nPlease purchase more credits to continue generating images.`);
+                            toast.error(errorMessage);
                           } else {
-                            alert(`AI generation failed: ${errorMessage}\n\nPlease try a different prompt or check your credit balance.`);
+                            toast.error(`AI generation failed: ${errorMessage}`);
                           }
                         }
                       }}
@@ -4948,7 +5576,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       onAddReferenceImage={(file) => {
                         const maxReferenceImages = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
                         if (aiRefImages.length >= maxReferenceImages) {
-                          alert(`Maximum of ${maxReferenceImages} reference images allowed for ${aiModel}.`);
+                          toast.warning(`Maximum of ${maxReferenceImages} reference images allowed for ${aiModel}.`);
                           return;
                         }
 
@@ -4998,6 +5626,28 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       activeShotDescription={activeShot?.description}
                       activeShotImagePrompt={activeShot?.imagePrompt}
                       activeShotVideoPrompt={activeShot?.videoPrompt}
+                      generatedItemImages={
+                        projectFiles
+                          ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image" && String(f.categoryId ?? "") === String(activeShot?.id ?? ""))
+                          .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
+                      }
+                      generatedProjectImages={
+                        projectFiles
+                          ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image")
+                          .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
+                      }
+                      onSelectGeneratedImage={(url: string) => {
+                        const maxRefs = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
+                        if (aiRefImages.length >= maxRefs) {
+                          toast.warning(`Maximum of ${maxRefs} reference images allowed.`);
+                          return;
+                        }
+                        setAiRefImages(prev => [...prev, {
+                          id: `gen-${Date.now()}`,
+                          url: url,
+                          filename: `generated-ref-${Date.now()}.png`,
+                        }]);
+                      }}
                       onAddCanvasElement={handleAddCanvasElement}
                       // Brush inpaint props
                       isEraser={isEraser}
@@ -5110,6 +5760,28 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       onZoomOut={handleZoomOut}
                       onFitToScreen={handleFitToScreen}
                       zoomLevel={zoomLevel}
+                      generatedItemImages={
+                        projectFiles
+                          ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image" && String(f.categoryId ?? "") === String(activeShot?.id ?? ""))
+                          .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
+                      }
+                      generatedProjectImages={
+                        projectFiles
+                          ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image")
+                          .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
+                      }
+                      onAddReferenceFromUrl={async (url: string) => {
+                        const maxRefs = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
+                        if (aiRefImages.length >= maxRefs) {
+                          toast.warning(`Maximum of ${maxRefs} reference images allowed.`);
+                          return;
+                        }
+                        setAiRefImages(prev => [...prev, {
+                          id: `gen-${Date.now()}`,
+                          url: url,
+                          filename: `generated-ref-${Date.now()}.png`,
+                        }]);
+                      }}
                     />
                   )}
                 </div>

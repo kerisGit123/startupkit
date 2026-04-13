@@ -58,7 +58,7 @@ interface CanvasEditorProps {
   /** Whether rectangle is in square mode (GPT-1.5) */
   isSquareMode?: boolean;
   onToolSelect?: (tool: CanvasActiveTool) => void;
-  generateImageWithElements?: () => void;
+  generateImageWithElements?: () => Promise<string | null>;
   /** Called when the image loads; receives the fit-to-container scale */
   onImageLoad?: (scale: number) => void;
   /** Called when the user clicks the crop button overlay */
@@ -139,6 +139,45 @@ export function CanvasEditor({
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas" | "shape"; id?: string; submenu?: 'tailDirection' | 'layer' | 'bubbleType' | 'textProperties' | 'shapeProperties' | 'colorPalette'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
   const [copiedObject, setCopiedObject] = useState<{ type: "bubble" | "text" | "asset"; data: any } | null>(null);
+  const [pendingCombine, setPendingCombine] = useState(false); // TODO: Combine Background feature - pending proper implementation
+
+  // Handle deferred combine background (fires after context menu closes)
+  useEffect(() => {
+    if (!pendingCombine) return;
+    setPendingCombine(false);
+    (async () => {
+      try {
+        const target = containerRef.current;
+        if (!target) return;
+        console.log("[CanvasEditor] Combine Background: capturing screenshot...");
+        const html2canvas = (await import("html2canvas")).default;
+        const canvas = await html2canvas(target, {
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          scale: 2,
+          logging: false,
+        });
+        const dataUrl = canvas.toDataURL("image/png");
+        console.log("[CanvasEditor] Screenshot captured:", dataUrl.length, "chars");
+        if (dataUrl) {
+          window.dispatchEvent(new CustomEvent('addCombinedImage', { detail: dataUrl }));
+        }
+      } catch (error) {
+        console.error("[CanvasEditor] Combine failed, trying fallback:", error);
+        if (generateImageWithElements) {
+          try {
+            const result = await generateImageWithElements();
+            if (result) {
+              window.dispatchEvent(new CustomEvent('addCombinedImage', { detail: result }));
+            }
+          } catch (e) {
+            console.error("[CanvasEditor] Fallback also failed:", e);
+          }
+        }
+      }
+    })();
+  }, [pendingCombine, generateImageWithElements]);
 
   // Use controlled selection if provided, else internal
   const selectedBubbleId = selection ? selection.selectedBubbleId : _selectedBubbleId;
@@ -987,8 +1026,8 @@ export function CanvasEditor({
                 onToolSelect?.("canvas-objects");
               }
             }
-          } 
-          setCtxMenu(null); 
+          }
+          setCtxMenu(null);
         }}
         onContextMenu={e => { if (e.target === containerRef.current) { e.preventDefault(); e.stopPropagation(); const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return; setCtxMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, kind: "canvas" }); } }}
       >
@@ -1143,10 +1182,10 @@ export function CanvasEditor({
               onContextMenu={e => { setSelection(null, null, a.id); openCtxMenu(e, "asset", a.id); }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={lib.url} 
-                alt={lib.name} 
-                style={{ 
+              <img
+                src={lib.url}
+                alt={lib.name}
+                style={{
                   width:"100%", 
                   height:"100%", 
                   objectFit:"contain", 
@@ -1667,6 +1706,8 @@ export function CanvasEditor({
               className="absolute z-200 bg-[#1a1a24] border border-white/15 rounded-xl shadow-2xl py-2 w-[200px]"
               style={{ left: adjustedX, top: adjustedY }}
               onMouseDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+              onMouseUp={e => e.stopPropagation()}
             >
             {ctxMenu.kind === "canvas" ? (
               // Canvas context menu - creation options
@@ -1772,46 +1813,6 @@ export function CanvasEditor({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                     <span className="text-[13px] font-medium">Upload Image</span>
-                  </div>
-                </button>
-                
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/8 text-gray-200 hover:text-white transition-colors group"
-                  onClick={() => {
-                    // Use existing Element Combine Background functionality
-                    if (generateImageWithElements) {
-                      try {
-                        const combinedImage = generateImageWithElements();
-                        
-                        // Check if it returned a Promise (async) or a direct value
-                        if (combinedImage instanceof Promise) {
-                          combinedImage.then((imageDataUrl) => {
-                            if (imageDataUrl) {
-                              // Add the combined image to generated images panel
-                              const event = new CustomEvent('addCombinedImage', { detail: imageDataUrl });
-                              window.dispatchEvent(event);
-                            }
-                          }).catch((error) => {
-                            console.error("generateImageWithElements promise failed:", error);
-                          });
-                        } else if (combinedImage) {
-                          // Add the combined image to generated images panel
-                          const event = new CustomEvent('addCombinedImage', { detail: combinedImage });
-                          window.dispatchEvent(event);
-                        }
-                        
-                      } catch (error) {
-                        console.error("generateImageWithElements failed:", error);
-                      }
-                    }
-                    setCtxMenu(null);
-                  }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <svg className="w-4 h-4 text-gray-400 group-hover:text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-[13px] font-medium">Combine Background</span>
                   </div>
                 </button>
                 
@@ -2837,7 +2838,7 @@ export function CanvasEditor({
             </div>
           );
         })()}
-        
+
         {/* Submenu rendering */}
         {ctxMenu && ctxMenu.submenu && ctxMenu.submenu !== 'textProperties' && ctxMenu.submenu !== 'shapeProperties' && ctxMenu.submenu !== 'colorPalette' && (() => {
           const submenuItems = ctxMenu.submenu === 'tailDirection' ? [
