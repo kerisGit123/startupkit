@@ -14,6 +14,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { AddImageMenu } from "../shared/AddImageMenu";
+import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { usePromptEditor } from "../shared/usePromptEditor";
 import { PromptTextarea } from "../shared/PromptTextarea";
 import { ConvexHttpClient } from "convex/browser";
@@ -53,7 +54,7 @@ interface ReferenceImage {
 export interface ImageAIPanelProps {
   mode: ImageAIEditMode;
   onModeChange: (mode: ImageAIEditMode) => void;
-  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[]) => void;
+  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string) => void;
   credits?: number;
   model?: string;
   onModelChange?: (model: string) => void;
@@ -336,7 +337,8 @@ export function ImageAIPanel({
   ];
   const videoModelOptions = [
     { value: "bytedance/seedance-1.5-pro", label: "Seedance 1.5 Pro", sub: "Video generation", icon: Film, maxReferenceImages: 2 },
-    { value: "bytedance/seedance-2", label: "Seedance 2.0", sub: "480p/720p • Video input", icon: Film, maxReferenceImages: 9 },
+    { value: "bytedance/seedance-2", label: "Seedance 2.0", sub: "Quality • 480p/720p", icon: Film, maxReferenceImages: 9 },
+    { value: "bytedance/seedance-2-fast", label: "Seedance 2.0 Fast", sub: "Faster • 480p/720p", icon: Film, maxReferenceImages: 9 },
     { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 img + 1 video", icon: Film, maxReferenceImages: 1 },
     { value: "google/veo-3.1", label: "Veo 3.1", sub: "Google Video generation", icon: Film, maxReferenceImages: 3 },
     { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7 },
@@ -371,7 +373,7 @@ export function ImageAIPanel({
         { value: "1080P", label: "1080p", sub: "1920×1080", icon: Monitor },
       ];
     }
-    if (selectedModelOption.value === "bytedance/seedance-2") {
+    if (selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") {
       return [
         { value: "480P", label: "480p", sub: "854×480", icon: Monitor },
         { value: "720P", label: "720p", sub: "1280×720", icon: Monitor },
@@ -393,15 +395,18 @@ export function ImageAIPanel({
   ];
 
   // State for new dropdowns
-  const [aspectRatio, setAspectRatio] = useState(outputMode === "video" ? "16:9" : "1:1");
+  const [aspectRatio, setAspectRatio] = useState("16:9");
   const [resolution, setResolution] = useState(outputMode === "video" ? "480P" : "1K");
   const [outputFormat, setOutputFormat] = useState("png");
   const [videoDuration, setVideoDuration] = useState("8s");
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [veoQuality, setVeoQuality] = useState("Fast");
   const [veoMode, setVeoMode] = useState("TEXT_2_VIDEO");
-  const [hasVideoInput, setHasVideoInput] = useState(false); // Seedance 2.0: video input toggle
-  const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("image"); // Kling: character orientation
+  const [hasVideoInput, setHasVideoInput] = useState(false); // Legacy (kept for Seedance 1.5 Pro pricing)
+  const [seedanceMode, setSeedanceMode] = useState<"text-to-video" | "first-frame" | "first-last-frame" | "multimodal">("text-to-video");
+  const [seedanceModeOpen, setSeedanceModeOpen] = useState(false);
+  const [promptLengthError, setPromptLengthError] = useState<{ current: number; max: number } | null>(null);
+  const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("video"); // Kling: default video orient
   const [klingSource, setKlingSource] = useState<"input_video" | "input_image">("input_video"); // Kling: background source
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null); // Seedance 2.0: first frame
   const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(null); // Seedance 2.0: last frame
@@ -505,9 +510,15 @@ export function ImageAIPanel({
         });
         return credits;
       })()
-    : selectedModelOption.value === "bytedance/seedance-2"
+    : (selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast")
     ? (() => {
-        const params = `${resolution}_${videoDuration}_${hasVideoInput ? 'video' : 'novideo'}`;
+        // "with video input" = has actual video reference (totalVideoDuration > 0)
+        // "no video input" = text-only OR images-only (no video refs)
+        const outputDur = parseInt(videoDuration.replace('s', '')) || 5;
+        const inputVideoDur = (seedanceMode === "multimodal" && totalVideoDuration > 0) ? totalVideoDuration : 0;
+        const hasVideoRef = inputVideoDur > 0;
+        const totalDur = outputDur + inputVideoDur;
+        const params = `${resolution}_${totalDur}s_${hasVideoRef ? 'video' : 'novideo'}`;
         return getModelCredits(selectedModelOption.value, params);
       })()
     : selectedModelOption.value === "kling-3.0/motion-control"
@@ -544,7 +555,7 @@ export function ImageAIPanel({
   const [showVeoModeDropdown, setShowVeoModeDropdown] = useState(false);
 
   // Video duration options — model-specific
-  const videoDurationOptions = selectedModelOption.value === "bytedance/seedance-2"
+  const videoDurationOptions = (selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast")
     ? Array.from({ length: 12 }, (_, i) => ({ value: `${i + 4}s`, label: `${i + 4}s`, icon: Clock }))
     : selectedModelOption.value === "grok-imagine/image-to-video"
     ? Array.from({ length: 25 }, (_, i) => ({ value: `${i + 6}s`, label: `${i + 6}s`, icon: Clock }))
@@ -700,6 +711,42 @@ export function ImageAIPanel({
     const file = e.target.files?.[0];
     if (file) {
       try {
+        // Validate for Kling 3.0 Motion Control requirements
+        if (selectedModelOption.value === "kling-3.0/motion-control") {
+          // File type: JPEG, PNG, JPG only (no webp)
+          const allowedTypes = ['image/jpeg', 'image/png'];
+          if (!allowedTypes.includes(file.type)) {
+            toast.error('Kling 3.0 Motion requires JPEG or PNG format (no WebP)');
+            e.target.value = '';
+            return;
+          }
+          // Max file size: 10MB
+          if (file.size > 10 * 1024 * 1024) {
+            toast.error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Kling 3.0 Motion max is 10MB.`);
+            e.target.value = '';
+            return;
+          }
+          // Min dimensions: 340px, aspect ratio 2:5 to 5:2
+          const img = document.createElement('img');
+          const imgUrl = URL.createObjectURL(file);
+          const dimensions = await new Promise<{ w: number; h: number }>((resolve) => {
+            img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(imgUrl); };
+            img.onerror = () => { resolve({ w: 0, h: 0 }); URL.revokeObjectURL(imgUrl); };
+            img.src = imgUrl;
+          });
+          if (dimensions.w < 300 || dimensions.h < 300) {
+            toast.error(`Image too small (${dimensions.w}x${dimensions.h}). Minimum 300px on each side.`);
+            e.target.value = '';
+            return;
+          }
+          const ratio = dimensions.w / dimensions.h;
+          if (ratio < 2/5 || ratio > 5/2) {
+            toast.error(`Aspect ratio ${ratio.toFixed(2)} out of range. Kling 3.0 Motion requires 2:5 to 5:2.`);
+            e.target.value = '';
+            return;
+          }
+        }
+
         // Upload to R2 temps folder for stable storage
         const formData = new FormData();
         formData.append('file', file);
@@ -1341,9 +1388,10 @@ export function ImageAIPanel({
     if (!model) return;
     if (model === "kling-3.0/motion-control") {
       setResolution("720P");
-    } else if (model === "bytedance/seedance-2") {
+    } else if (model === "bytedance/seedance-2" || model === "bytedance/seedance-2-fast") {
       setResolution("480P");
       setVideoDuration("5s");
+      setSeedanceMode("text-to-video");
     } else if (model === "bytedance/seedance-1.5-pro") {
       setResolution("480P");
       setVideoDuration("8s");
@@ -1419,6 +1467,13 @@ export function ImageAIPanel({
     console.log("Reference images:", referenceImages);
     console.log("Current company credits:", getBalance);
     
+    // Step 0: Check prompt length for Seedance 2.0 models (max 1536 characters)
+    const isSeedance2Model = selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast";
+    if (isSeedance2Model && extractedPrompt.length > 1536) {
+      setPromptLengthError({ current: extractedPrompt.length, max: 1536 });
+      return;
+    }
+
     // Step 1: Check if user has sufficient credits
     const currentCredits = getBalance ?? 0;
     if (currentCredits < displayedCredits) {
@@ -1434,9 +1489,16 @@ export function ImageAIPanel({
       // VideoImageAIPanel only does the balance check and passes parameters to onGenerate.
 
       if (onGenerate) {
+        const isSeedance2 = selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast";
         const qualityParam = outputMode === "video"
-          ? selectedModelOption.value === "bytedance/seedance-2"
-            ? `${resolution}_${videoDuration}_${hasVideoInput ? 'video' : 'novideo'}`
+          ? isSeedance2
+            ? (() => {
+                const outputDur = parseInt(videoDuration.replace('s', '')) || 5;
+                const inputVideoDur = (seedanceMode === "multimodal" && totalVideoDuration > 0) ? totalVideoDuration : 0;
+                const totalDur = outputDur + inputVideoDur;
+                const hasVideoRef = inputVideoDur > 0;
+                return `${resolution}_${totalDur}s_${hasVideoRef ? 'video' : 'novideo'}${webSearch ? '_ws' : ''}`;
+              })()
             : selectedModelOption.value === "kling-3.0/motion-control"
             ? `${resolution}_${videoDuration}`
             : `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}`
@@ -1451,9 +1513,19 @@ export function ImageAIPanel({
         const isKlingMotion = selectedModelOption?.value === "kling-3.0/motion-control";
         const klingOrientParam = isKlingMotion ? klingOrientation : undefined;
         const klingSourceParam = isKlingMotion ? klingSource : undefined;
-        const videoUrlsParam = isKlingMotion ? videoRefs.map(v => v.url) : undefined;
 
-        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioEnabled, extractedPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam);
+        // Video/audio URLs — Kling uses videoRefs, Seedance uses both video+audio refs
+        const videoUrlsParam = isKlingMotion ? videoRefs.map(v => v.url)
+          : isSeedance2 && seedanceMode === "multimodal" ? videoRefs.map(v => v.url)
+          : undefined;
+        const audioUrlsParam = isSeedance2 && seedanceMode === "multimodal" ? audioRefs.map(a => a.url) : undefined;
+        const seedanceModeParam = isSeedance2 ? seedanceMode : undefined;
+        const firstFrameParam = isSeedance2 && (seedanceMode === "first-frame" || seedanceMode === "first-last-frame") ? firstFrameUrl || undefined : undefined;
+        const lastFrameParam = isSeedance2 && seedanceMode === "first-last-frame" ? lastFrameUrl || undefined : undefined;
+
+        // For Seedance 2.0, pass generateAudio state (not the old audioEnabled)
+        const audioParam = isSeedance2 ? generateAudio : audioEnabled;
+        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, extractedPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, seedanceModeParam, firstFrameParam, lastFrameParam);
       }
       
     } catch (error) {
@@ -1527,8 +1599,8 @@ export function ImageAIPanel({
               />
             )}
 
-            {/* Seedance 2.0: First Frame & Last Frame slots */}
-            {selectedModelOption.value === "bytedance/seedance-2" && (
+            {/* Seedance 2.0: First Frame & Last Frame slots (only in frame modes) */}
+            {(selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (seedanceMode === "first-frame" || seedanceMode === "first-last-frame") && (
               <>
                 {/* First Frame */}
                 <div className="relative flex-shrink-0">
@@ -1555,7 +1627,8 @@ export function ImageAIPanel({
                   )}
                 </div>
 
-                {/* Last Frame */}
+                {/* Last Frame — only show in "first-last-frame" mode */}
+                {seedanceMode === "first-last-frame" && (
                 <div className="relative flex-shrink-0">
                   {lastFrameUrl ? (
                     <div className="relative group">
@@ -1579,6 +1652,7 @@ export function ImageAIPanel({
                     </button>
                   )}
                 </div>
+                )}
               </>
             )}
           </div>
@@ -1613,8 +1687,8 @@ export function ImageAIPanel({
                   onKeyDown={handleKeyDown}
                 />
                 
-                {/* Video & Audio slots — right side, for Kling/Seedance 2.0 */}
-                {(selectedModelOption.value === "kling-3.0/motion-control" || selectedModelOption.value === "bytedance/seedance-2") && (
+                {/* Video & Audio slots — right side, for Kling/Seedance 2.0 multimodal */}
+                {(selectedModelOption.value === "kling-3.0/motion-control" || ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && seedanceMode === "multimodal")) && (
                   <div className="flex-shrink-0 flex items-center gap-1.5">
                     {/* Video refs with duration */}
                     {videoRefs.map((vid, index) => (
@@ -1635,7 +1709,7 @@ export function ImageAIPanel({
                       </div>
                     ))}
                     {((selectedModelOption.value === "kling-3.0/motion-control" && videoRefs.length < 1) ||
-                      (selectedModelOption.value === "bytedance/seedance-2" && videoRefs.length < 3)) && (
+                      ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && videoRefs.length < 3)) && (
                       <button onClick={() => setShowVideoBrowser(true)}
                         className="w-16 h-16 rounded-md border border-dashed border-green-800/50 hover:border-green-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-green-900/10"
                         title="Add Video">
@@ -1645,7 +1719,7 @@ export function ImageAIPanel({
                     )}
 
                     {/* Audio refs with duration — Seedance 2.0 only */}
-                    {selectedModelOption.value === "bytedance/seedance-2" && (
+                    {(selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (
                       <>
                         {audioRefs.map((aud, index) => (
                           <div key={`audio-${index}`} className="relative group">
@@ -1676,7 +1750,7 @@ export function ImageAIPanel({
                     )}
 
                     {/* Total duration warning for Seedance 2.0 */}
-                    {selectedModelOption.value === "bytedance/seedance-2" && (totalVideoDuration > 0 || totalAudioDuration > 0) && (
+                    {(selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (totalVideoDuration > 0 || totalAudioDuration > 0) && (
                       <div className={`text-[9px] px-1.5 py-0.5 rounded-md font-medium ${
                         totalVideoDuration > 15 || totalAudioDuration > 15
                           ? 'bg-red-500/20 text-red-400'
@@ -2066,7 +2140,7 @@ export function ImageAIPanel({
                             if (modelOption.value === "kling-3.0/motion-control") {
                               setResolution("720P");
                               setVideoDuration("4s");
-                            } else if (modelOption.value === "bytedance/seedance-2") {
+                            } else if (modelOption.value === "bytedance/seedance-2" || modelOption.value === "bytedance/seedance-2-fast") {
                               setResolution("480P");
                               setVideoDuration("5s");
                               setHasVideoInput(false);
@@ -2241,26 +2315,8 @@ export function ImageAIPanel({
             )}
 
             {/* Video Input toggle - Only for Seedance 2.0 */}
-            {outputMode === "video" && selectedModelOption.value === "bytedance/seedance-2" && (
-              <div className="relative" style={{ width: "140px" }}>
-                <button
-                  onClick={() => setHasVideoInput(!hasVideoInput)}
-                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
-                    hasVideoInput
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Film className="w-4 h-4" />
-                    <span>{hasVideoInput ? "Video Input" : "No Video"}</span>
-                  </div>
-                </button>
-              </div>
-            )}
-
-            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0, not Grok */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "grok-imagine/image-to-video"].includes(selectedModelOption.value) && (
+            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0/Fast, not Grok */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowAudioDropdown(!showAudioDropdown)}
@@ -2433,9 +2489,51 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Seedance 2.0: Web Search + Generate Audio switches */}
-            {selectedModelOption.value === "bytedance/seedance-2" && (
+            {/* Seedance 2.0/Fast: Mode selector + Web Search + Generate Audio switches */}
+            {(selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (
               <>
+                {/* Mode selector — styled like duration dropdown */}
+                {(() => {
+                  const [showModeDropdown, setShowModeDropdown] = [seedanceModeOpen, setSeedanceModeOpen];
+                  const modeOptions = [
+                    { value: "text-to-video", label: "Text Only" },
+                    { value: "first-frame", label: "First Frame" },
+                    { value: "first-last-frame", label: "First & Last" },
+                    { value: "multimodal", label: "Multimodal Ref" },
+                  ];
+                  return (
+                    <div className="relative">
+                      <button
+                        onClick={() => setSeedanceModeOpen(!seedanceModeOpen)}
+                        className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center gap-2 hover:bg-white/10 transition-colors"
+                      >
+                        <span>{modeOptions.find(o => o.value === seedanceMode)?.label || "Text Only"}</span>
+                        <ChevronDown className="w-3 h-3 text-gray-400" />
+                      </button>
+                      {seedanceModeOpen && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setSeedanceModeOpen(false)} />
+                          <div className="absolute bottom-full mb-1 left-0 bg-[#1a1a24] border border-white/15 rounded-lg shadow-2xl py-1 z-50 min-w-[140px]">
+                            {modeOptions.map(opt => (
+                              <button
+                                key={opt.value}
+                                onClick={() => { setSeedanceMode(opt.value as any); setSeedanceModeOpen(false); }}
+                                className={`w-full px-3 py-2 text-left text-[13px] transition-colors ${
+                                  seedanceMode === opt.value
+                                    ? 'bg-emerald-500/15 text-emerald-400'
+                                    : 'text-gray-300 hover:bg-white/8 hover:text-white'
+                                }`}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <button
                   onClick={() => setWebSearch(!webSearch)}
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
@@ -2651,7 +2749,7 @@ export function ImageAIPanel({
               // Get video duration
               const duration = await getMediaDuration(url, 'video');
               // Validate total ≤15s for Seedance 2.0
-              if (selectedModelOption.value === "bytedance/seedance-2" && totalVideoDuration + duration > 15) {
+              if ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && totalVideoDuration + duration > 15) {
                 alert(`Total video duration would be ${totalVideoDuration + duration}s. Maximum is 15s.`);
                 return;
               }
@@ -2727,6 +2825,26 @@ export function ImageAIPanel({
           }}
         />
       )}
+      {/* Prompt Length Error Dialog for Seedance 2.0 */}
+      <ConfirmDialog
+        isOpen={!!promptLengthError}
+        onCancel={() => setPromptLengthError(null)}
+        onConfirm={() => setPromptLengthError(null)}
+        title="Prompt Too Long"
+        subtitle={`Seedance 2.0 limit: ${promptLengthError?.max || 1536} characters`}
+        message={
+          <>
+            Your prompt is <span className="text-white font-semibold">{promptLengthError?.current || 0}</span> characters,
+            which exceeds the maximum of <span className="text-white font-semibold">{promptLengthError?.max || 1536}</span> characters
+            for Seedance 2.0 models.
+            <br /><br />
+            Please shorten your prompt by <span className="text-red-400 font-semibold">{(promptLengthError?.current || 0) - (promptLengthError?.max || 1536)}</span> characters before generating.
+          </>
+        }
+        confirmText="OK"
+        cancelText="Close"
+        variant="warning"
+      />
     </>
   );
 }

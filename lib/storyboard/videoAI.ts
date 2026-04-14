@@ -147,47 +147,58 @@ export async function generateKlingMotionControl(params: {
 
 export async function generateSeedance2(params: {
   prompt: string;
+  model?: "bytedance/seedance-2" | "bytedance/seedance-2-fast";
+  mode?: "text-to-video" | "first-frame" | "first-last-frame" | "multimodal";
   referenceImages?: string[];
   videoUrls?: string[];
   audioUrls?: string[];
   firstFrameUrl?: string;
   lastFrameUrl?: string;
   resolution: "480p" | "720p";
+  aspectRatio?: string;
   duration: number;
-  hasVideoInput: boolean;
   generateAudio: boolean;
   webSearch: boolean;
   callbackUrl: string;
   companyId?: string;
 }) {
   const { apiKey } = await resolveKieApiKey(params.companyId);
+  const modelId = params.model || "bytedance/seedance-2";
+  const mode = params.mode || "text-to-video";
 
   const input: Record<string, any> = {
     prompt: params.prompt,
-    input_urls: params.referenceImages || [],
     resolution: params.resolution,
-    duration: String(params.duration),
+    aspect_ratio: params.aspectRatio || "16:9",
+    duration: params.duration,
     generate_audio: params.generateAudio,
     web_search: params.webSearch,
+    nsfw_checker: false,
   };
 
-  // Video references (max 3, total ≤15s)
-  if (params.videoUrls && params.videoUrls.length > 0) {
-    input.video_urls = params.videoUrls;
+  // Enforce mutual exclusivity per API docs:
+  // Image-to-Video (First Frame), Image-to-Video (First & Last Frames),
+  // and Multimodal Reference are mutually exclusive
+  if (mode === "first-frame") {
+    if (params.firstFrameUrl) input.first_frame_url = params.firstFrameUrl;
+  } else if (mode === "first-last-frame") {
+    if (params.firstFrameUrl) input.first_frame_url = params.firstFrameUrl;
+    if (params.lastFrameUrl) input.last_frame_url = params.lastFrameUrl;
+  } else if (mode === "multimodal") {
+    // Reference images (max 9)
+    if (params.referenceImages && params.referenceImages.length > 0) {
+      input.reference_image_urls = params.referenceImages;
+    }
+    // Reference videos: max 3, each ≤15s, total ≤15s, format mp4/mov
+    if (params.videoUrls && params.videoUrls.length > 0) {
+      input.reference_video_urls = params.videoUrls;
+    }
+    // Reference audio: max 3, each 2-15s, total ≤15s, max 15MB each, format wav/mp3
+    if (params.audioUrls && params.audioUrls.length > 0) {
+      input.reference_audio_urls = params.audioUrls;
+    }
   }
-
-  // Audio references (max 3, total ≤15s)
-  if (params.audioUrls && params.audioUrls.length > 0) {
-    input.audio_urls = params.audioUrls;
-  }
-
-  // First/last frame
-  if (params.firstFrameUrl) {
-    input.first_frame_url = params.firstFrameUrl;
-  }
-  if (params.lastFrameUrl) {
-    input.last_frame_url = params.lastFrameUrl;
-  }
+  // text-to-video: no additional inputs needed
 
   const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
     method: "POST",
@@ -196,7 +207,7 @@ export async function generateSeedance2(params: {
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "bytedance/seedance-2",
+      model: modelId,
       callBackUrl: params.callbackUrl,
       input,
     }),

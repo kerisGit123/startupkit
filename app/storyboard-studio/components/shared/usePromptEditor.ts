@@ -199,6 +199,42 @@ export function usePromptEditor(opts?: {
   }, [handleEditorInput]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Allow all Ctrl/Cmd shortcuts (copy, paste, cut, select all, undo, redo)
+    if (e.ctrlKey || e.metaKey) {
+      // Handle Ctrl+V paste — insert plain text only
+      if (e.key === 'v') {
+        e.preventDefault();
+        navigator.clipboard.readText().then((text) => {
+          if (!text) return;
+          const el = editorRef.current;
+          if (!el) return;
+          const selection = window.getSelection();
+          if (!selection) return;
+          let range: Range;
+          if (selection.rangeCount > 0) {
+            range = selection.getRangeAt(0);
+          } else {
+            range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+          }
+          if (!range.collapsed) range.deleteContents();
+          const textNode = document.createTextNode(text);
+          range.insertNode(textNode);
+          range.setStartAfter(textNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }).catch(() => {
+          // Fallback: let browser handle it
+        });
+        return;
+      }
+      // Let Ctrl+C, Ctrl+X, Ctrl+A, Ctrl+Z etc. pass through natively
+      return;
+    }
+
     // Allow Enter for new lines (submission is via Generate button, not Enter key)
 
     // Handle Backspace on badge elements

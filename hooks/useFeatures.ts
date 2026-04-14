@@ -12,7 +12,7 @@ export function useFeatures() {
   
   const canUseFeature = (requiredPlan: string) => {
     if (isLoading) return false;
-    const planHierarchy = ["free", "starter", "pro", "business"];
+    const planHierarchy = ["free", "pro_personal", "business"];
     const currentIndex = planHierarchy.indexOf(plan);
     const requiredIndex = planHierarchy.indexOf(requiredPlan);
     return currentIndex >= requiredIndex;

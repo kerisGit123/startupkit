@@ -7,7 +7,10 @@ import {
   PanelLeftClose, PanelLeftOpen, List, Share2, Pencil, Eye, Copy,
   Trash2, Tag, Hash, Grid3x3, Table2, Edit3, ChevronRight, Loader2, FolderOpen, X,
 } from "lucide-react";
-import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
+import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
+import { useSubscription } from "@/hooks/useSubscription";
+import { PLAN_LIMITS } from "@/lib/plan-config";
 import { VISUAL_STYLES, SIMPLE_TAGS, TAG_COLORS } from "../constants";
 import type { Project, Step } from "../types";
 import { TagEditor } from "./storyboard/TagEditor";
@@ -61,7 +64,7 @@ const STATUS_STYLE: Record<Project["status"], string> = {
   "On Hold":    "bg-gray-700/60 text-gray-300",
   "In Progress":"bg-blue-500/20 text-blue-400",
   "Completed":  "bg-green-500/20 text-green-400",
-  "Draft":      "bg-white/5 text-gray-400",
+  "Draft":      "bg-gray-500/20 text-gray-300 border border-gray-500/30",
 };
 
 const normalizeStatusFilter = (value: string): Project["status"] | null => {
@@ -78,6 +81,17 @@ const normalizeStatusFilter = (value: string): Project["status"] | null => {
 export function ProjectsDashboard({
   sidebarOpen, onToggleSidebar, projects, onProjectsChange, onOpenProject, onCreateConvexProject, onDeleteProject, onDuplicateProject, onRemoveImageUrl, onOpenFileBrowser, onOpenGlobalFileBrowser, activeFilter,
 }: ProjectsDashboardProps) {
+  // Plan-aware project limit + lapsed-subscription freeze
+  const { plan: currentPlan, isLapsed } = useSubscription();
+  const maxProjects = PLAN_LIMITS[currentPlan].maxProjects;
+  // Don't count the "Global Files" bucket project against the user's quota
+  const visibleProjectCount = projects.filter(
+    (p) => p.name?.toLowerCase() !== "global files",
+  ).length;
+  const atProjectLimit = visibleProjectCount >= maxProjects;
+  // Frozen state: in an org whose subscription has lapsed (admin cancelled)
+  const createBlocked = atProjectLimit || isLapsed;
+
   const [showNewDropdown, setShowNewDropdown] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newName, setNewName] = useState("");
@@ -303,7 +317,7 @@ export function ProjectsDashboard({
               <MoreHorizontal className="hidden w-4 h-4 shrink-0 cursor-pointer text-gray-500 transition hover:text-white md:block" />
             </div>
             <div className="flex items-center md:hidden">
-              <OrganizationSwitcher
+              <OrgSwitcher
                 appearance={{
                   elements: {
                     rootBox: "flex items-center",
@@ -340,7 +354,7 @@ export function ProjectsDashboard({
               />
               <button
                 onClick={onOpenGlobalFileBrowser}
-                className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-medium text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 md:flex-none md:rounded-lg md:px-4 md:py-2"
+                className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-(--bg-tertiary) border border-(--border-primary) px-3 py-2 text-sm font-medium text-(--text-secondary) transition hover:bg-white/10 hover:text-white md:flex-none md:rounded-lg md:px-4 md:py-2"
               >
                 <FolderOpen className="w-4 h-4" /> All Files
               </button>
@@ -363,7 +377,7 @@ export function ProjectsDashboard({
               <div className="relative">
                 <button
                   onClick={() => setShowNewDropdown(v => !v)}
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 md:rounded-lg md:px-3 md:py-1.5"
+                  className="flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-500 md:rounded-lg md:px-3 md:py-2"
                 >
                   New <ChevronDown className="w-3.5 h-3.5" />
                 </button>
@@ -385,7 +399,7 @@ export function ProjectsDashboard({
                 <Settings className="w-4 h-4" />
               </button>
               <div className="hidden items-center self-end md:flex lg:self-auto">
-                <OrganizationSwitcher
+                <OrgSwitcher
                   appearance={{
                     elements: {
                       rootBox: "flex items-center",
@@ -464,12 +478,6 @@ export function ProjectsDashboard({
                           {p.favourite && (
                             <div className="bg-black/40 backdrop-blur-md rounded-full p-1.5 border border-white/10">
                               <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                            </div>
-                          )}
-                          {/* Image URL Indicator */}
-                          {p.imageUrl && (
-                            <div className="bg-yellow-500/90 backdrop-blur-sm rounded-full p-1.5 border border-white/20 shadow-lg">
-                              <Star className="w-3.5 h-3.5 text-white fill-current" />
                             </div>
                           )}
                         </div>
@@ -591,7 +599,7 @@ export function ProjectsDashboard({
                             <span className="flex items-center gap-2.5"><Hash className="w-3.5 h-3.5" /> Status</span>
                             <ChevronDown className="w-3 h-3 text-(--text-tertiary)" />
                           </button>
-                          <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-full top-0 ml-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl w-36 py-1`}>
+                          <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-full top-0 ml-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-[200] w-36 py-1`}>
                             {(["On Hold", "In Progress", "Completed", "Draft"] as const).map(s => (
                               <button key={s} onClick={(e) => { e.stopPropagation(); handleStatusChange(p.id, s); }} className="w-full px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs text-left transition-all duration-200">{s}</button>
                             ))}
@@ -611,11 +619,33 @@ export function ProjectsDashboard({
                 </div>
               );
             })}
-            <button onClick={() => setShowCreateModal(true)}
-              className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-tertiary) transition hover:border-(--accent-blue) hover:bg-(--bg-secondary) md:min-h-[180px]">
-              <Plus className="w-5 h-5 text-(--text-tertiary)" />
-              <span className="text-(--text-tertiary) text-xs">Add storyboard</span>
-            </button>
+            {isLapsed ? (
+              <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-yellow-500/40 bg-yellow-500/5 px-4 text-center md:min-h-[180px]">
+                <Plus className="w-5 h-5 text-yellow-400/60" />
+                <span className="text-yellow-300 text-xs font-semibold">
+                  Subscription lapsed
+                </span>
+                <span className="text-[10px] text-yellow-200/60">
+                  Resubscribe to create projects
+                </span>
+              </div>
+            ) : atProjectLimit ? (
+              <div className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-tertiary)/50 px-4 text-center md:min-h-[180px]">
+                <Plus className="w-5 h-5 text-(--text-tertiary) opacity-40" />
+                <span className="text-(--text-tertiary) text-xs">
+                  Project limit reached ({visibleProjectCount}/{maxProjects})
+                </span>
+                <span className="text-[10px] text-(--text-tertiary)">
+                  Upgrade to create more projects
+                </span>
+              </div>
+            ) : (
+              <button onClick={() => setShowCreateModal(true)}
+                className="flex min-h-[220px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-tertiary) transition hover:border-(--accent-blue) hover:bg-(--bg-secondary) md:min-h-[180px]">
+                <Plus className="w-5 h-5 text-(--text-tertiary)" />
+                <span className="text-(--text-tertiary) text-xs">Add storyboard</span>
+              </button>
+            )}
           </div>
         ) : (
           /* ── Table view (pic9/pic11) ── */
@@ -629,7 +659,6 @@ export function ProjectsDashboard({
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium">Tags</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium">Status</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium">Aspect Ratio</th>
-                  <th className="px-4 py-3 text-gray-500 text-xs font-medium">Last Update</th>
                   <th className="px-4 py-3 text-gray-500 text-xs font-medium w-24">Actions</th>
                 </tr>
               </thead>
@@ -637,7 +666,7 @@ export function ProjectsDashboard({
                 {finalFilteredProjects.map(p => {
                   const Icon = TYPE_ICON[p.type];
                   return (
-                    <tr className="border-b border-(--border-primary) hover:bg-(--bg-tertiary) transition cursor-pointer" onClick={() => onOpenProject(p, "storyboard")}>
+                    <tr key={p.id} className="border-b border-(--border-primary) hover:bg-(--bg-tertiary) transition cursor-pointer" onClick={() => onOpenProject(p, "storyboard")}>
                       <td className="px-4 py-3">
                         <div className="w-10 h-10 bg-[#1e1e2a] rounded-lg overflow-hidden flex items-center justify-center">
                           {p.imageUrl ? (
@@ -718,7 +747,7 @@ export function ProjectsDashboard({
                          >
                            {p.status}
                          </button>
-                         <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-0 top-full mt-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl z-50 w-32 py-1`}>
+                         <div className={`${statusMenuId === p.id ? "block" : "hidden"} absolute left-0 top-full mt-1 bg-[#1c1c26] border border-white/10 rounded-xl shadow-2xl z-[200] w-32 py-1`}>
                            {(["On Hold", "In Progress", "Completed", "Draft"] as const).map(s => (
                              <button key={s} onClick={e => { e.stopPropagation(); handleStatusChange(p.id, s); }} className="w-full px-3 py-1.5 hover:bg-white/5 text-gray-300 text-xs text-left transition">{s}</button>
                            ))}
@@ -728,28 +757,29 @@ export function ProjectsDashboard({
                       <td className="px-4 py-3">
                         <span className="text-xs text-gray-500 font-mono bg-white/5 px-2 py-1 rounded">{p.settings?.frameRatio || "16:9"}</span>
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{p.dueDate || "—"}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
                           <button onClick={e => { e.stopPropagation(); handleToggleFavourite(p.id); }} className="p-1 transition"><Star className={`w-3.5 h-3.5 ${p.favourite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-500 hover:text-yellow-400'}`} /></button>
                           <button onClick={e => e.stopPropagation()} className="p-1 text-gray-500 hover:text-white transition"><Share2 className="w-3.5 h-3.5" /></button>
-                          <button onClick={e => { 
-                              e.stopPropagation(); 
+                          <div className="relative">
+                            <button onClick={e => {
+                              e.stopPropagation();
                               setStatusMenuId(null);
                               if (contextMenuId === p.id) {
                                 setContextMenuId(null);
                                 setMenuPosition(null);
                               } else {
                                 const rect = e.currentTarget.getBoundingClientRect();
-                                setMenuPosition({ 
-                                  top: rect.bottom + window.scrollY + 4, 
-                                  right: window.innerWidth - rect.right 
+                                setMenuPosition({
+                                  top: rect.bottom + window.scrollY + 4,
+                                  right: window.innerWidth - rect.right
                                 });
                                 setContextMenuId(p.id);
                               }
                             }}
-                            className="p-1 text-gray-500 hover:text-white transition relative">
-                            <MoreHorizontal className="w-3.5 h-3.5" />
+                            className="p-1 text-gray-500 hover:text-white transition">
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </button>
                             {contextMenuId === p.id && menuPosition && (
                               <>
                                 <div className="fixed inset-0 z-40" onClick={ev => { ev.stopPropagation(); setContextMenuId(null); setMenuPosition(null); }} />
@@ -759,7 +789,6 @@ export function ProjectsDashboard({
                                   <button onClick={() => { setEditingProjectId(p.id); setEditName(p.name); setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Pencil className="w-3.5 h-3.5" /> Rename</button>
                                   <button onClick={() => { setContextMenuId(null); setMenuPosition(null); }} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Eye className="w-3.5 h-3.5" /> Visibility</button>
                                   <button onClick={() => handleDuplicate(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--text-secondary) text-xs transition"><Copy className="w-3.5 h-3.5" /> Duplicate storyboard</button>
-                                  {/* Remove ImageUrl Option */}
                                   {p.imageUrl && (
                                     <button onClick={() => handleRemoveImageUrl(p.id)} className="w-full flex items-center gap-2.5 px-4 py-2 hover:bg-(--bg-tertiary) text-(--color-error) text-xs transition"><Trash2 className="w-3.5 h-3.5" /> remove ImageUrl</button>
                                   )}
@@ -768,7 +797,7 @@ export function ProjectsDashboard({
                                 </div>
                               </>
                             )}
-                          </button>
+                          </div>
                         </div>
                       </td>
                     </tr>

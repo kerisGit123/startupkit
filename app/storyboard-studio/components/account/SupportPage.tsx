@@ -7,7 +7,8 @@ import {
   ArrowLeft, Loader2, Tag, Calendar, X,
   ChevronLeft, ChevronRight,
 } from "lucide-react";
-import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
+import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import { useUser } from "@clerk/nextjs";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -180,7 +181,7 @@ export default function SupportPage({ sidebarOpen, onToggleSidebar }: SupportPag
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden items-center self-end md:flex lg:self-auto">
-            <OrganizationSwitcher
+            <OrgSwitcher
               appearance={{
                 elements: {
                   rootBox: "flex items-center",

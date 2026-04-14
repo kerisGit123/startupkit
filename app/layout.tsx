@@ -39,7 +39,24 @@ export default function RootLayout({
         >
           <ConvexClientProvider>
             {children}
-            <Toaster />
+            <Toaster
+              theme="dark"
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: '#2C2C2C',
+                  border: '1px solid #3D3D3D',
+                  color: '#FFFFFF',
+                  fontSize: '13px',
+                },
+                classNames: {
+                  success: '!border-[#52C41A]/30',
+                  error: '!border-[#FF4D4F]/30',
+                  warning: '!border-[#FAAD14]/30',
+                  info: '!border-[#4A90E2]/30',
+                },
+              }}
+            />
           </ConvexClientProvider>
         </ClerkProvider>
       </body>

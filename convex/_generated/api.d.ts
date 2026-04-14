@@ -102,7 +102,6 @@ import type * as setup_seedDatabase from "../setup/seedDatabase.js";
 import type * as smtpConfig from "../smtpConfig.js";
 import type * as soConfig from "../soConfig.js";
 import type * as storyboard_build from "../storyboard/build.js";
-import type * as storyboard_creditUsage from "../storyboard/creditUsage.js";
 import type * as storyboard_fileMetadataHandler from "../storyboard/fileMetadataHandler.js";
 import type * as storyboard_kieAiConfig from "../storyboard/kieAiConfig.js";
 import type * as storyboard_members from "../storyboard/members.js";
@@ -225,7 +224,6 @@ declare const fullApi: ApiFromModules<{
   smtpConfig: typeof smtpConfig;
   soConfig: typeof soConfig;
   "storyboard/build": typeof storyboard_build;
-  "storyboard/creditUsage": typeof storyboard_creditUsage;
   "storyboard/fileMetadataHandler": typeof storyboard_fileMetadataHandler;
   "storyboard/kieAiConfig": typeof storyboard_kieAiConfig;
   "storyboard/members": typeof storyboard_members;

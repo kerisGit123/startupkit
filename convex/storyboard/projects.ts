@@ -1,6 +1,15 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 
+// Per-plan project limits. Keep in sync with lib/plan-config.ts PLAN_LIMITS.
+// Convex mutations can't import from `lib/` directly (different runtime),
+// so this is duplicated. Update both places together.
+const PROJECT_LIMITS: Record<string, number> = {
+  free: 3,
+  pro_personal: Number.MAX_SAFE_INTEGER,
+  business: Number.MAX_SAFE_INTEGER,
+};
+
 export const create = mutation({
   args: {
     name: v.string(),
@@ -14,20 +23,56 @@ export const create = mutation({
       layout: v.string(),
     }),
     isFavorite: v.optional(v.boolean()),
+    // Client-provided plan from useSubscription(). Server re-validates
+    // the project count against PROJECT_LIMITS[plan] so a client that
+    // lies about its plan is still capped at the lowest tier's limit.
+    plan: v.optional(v.string()),
   },
-  handler: async (ctx, { name, description, orgId, ownerId, settings, isFavorite }) => {
+  handler: async (ctx, { name, description, orgId, ownerId, settings, isFavorite, plan }) => {
     // Get user from auth context
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("User not authenticated");
     }
-    
+
     // Get user's organization from auth context
     const userOrganizationId = identity.orgId;
     const userId = identity.subject;
-    
+
     const companyId = (userOrganizationId || userId) as string;
-    
+
+    // ── Server-side lapsed check (defense in depth) ──
+    // Block project creation if the workspace is an org whose
+    // subscription has lapsed. The UI already shows a disabled state,
+    // but this prevents bypassing via direct mutation calls.
+    const isOrg = companyId.startsWith("org_");
+    if (isOrg) {
+      const preCheckBalance = await ctx.db
+        .query("credits_balance")
+        .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+        .first();
+      if (preCheckBalance?.ownerPlan === "free") {
+        throw new Error(
+          "This organization's subscription has lapsed. Resubscribe to create new projects.",
+        );
+      }
+    }
+
+    // Enforce project limit based on plan
+    const effectivePlan = plan && PROJECT_LIMITS[plan] !== undefined ? plan : "free";
+    const maxProjects = PROJECT_LIMITS[effectivePlan];
+
+    const existingProjects = await ctx.db
+      .query("storyboard_projects")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .collect();
+
+    if (existingProjects.length >= maxProjects) {
+      throw new Error(
+        `Project limit reached for ${effectivePlan} plan (${maxProjects} projects). Upgrade to create more.`,
+      );
+    }
+
     return await ctx.db.insert("storyboard_projects", {
       name,
       description,
@@ -108,16 +153,19 @@ export const update = mutation({
       throw new Error("Project not found");
     }
 
-    // Create updated document
+    // Create updated document — spread existing first, then override with provided fields
     const updatedDoc = { ...existing, ...fields, updatedAt: Date.now() };
-    
-    // Handle imageUrl specially: if imageUrl is undefined, remove it from the document
+
+    // Handle imageUrl specially: only update if explicitly provided
+    // undefined = not passed (keep existing), empty string = explicitly clear it
     if (imageUrl !== undefined) {
-      updatedDoc.imageUrl = imageUrl;
-    } else {
-      // Remove imageUrl field entirely
-      delete updatedDoc.imageUrl;
+      if (imageUrl === "") {
+        delete updatedDoc.imageUrl;
+      } else {
+        updatedDoc.imageUrl = imageUrl;
+      }
     }
+    // When imageUrl is undefined (not passed), keep existing imageUrl unchanged
 
     await ctx.db.replace(id, updatedDoc);
   },

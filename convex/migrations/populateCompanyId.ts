@@ -99,25 +99,7 @@ export const populateCompanyId = mutation({
       console.log(`[Migration] Updated file ${file._id} with companyId: ${companyId}`);
     }
 
-    // Update all credit usage records that don't have companyId
-    const creditUsage = await ctx.db
-      .query("storyboard_credit_usage")
-      .collect();
-
-    const creditUsageToUpdate = creditUsage.filter(cu => !cu.companyId);
-    console.log(`[Migration] Found ${creditUsageToUpdate.length} credit usage records to update`);
-
-    for (const usage of creditUsageToUpdate) {
-      // Get the project to inherit companyId
-      const project = await ctx.db.get(usage.projectId);
-      const companyId = project?.orgId || project?.ownerId;
-      
-      await ctx.db.patch(usage._id, {
-        companyId,
-      });
-      
-      console.log(`[Migration] Updated credit usage ${usage._id} with companyId: ${companyId}`);
-    }
+    // Removed: update block for storyboard_credit_usage — table no longer exists.
 
     console.log("[Migration] companyId population completed!");
     
@@ -126,7 +108,6 @@ export const populateCompanyId = mutation({
       elementsUpdated: elementsToUpdate.length,
       itemsUpdated: itemsToUpdate.length,
       filesUpdated: filesToUpdate.length,
-      creditUsageUpdated: creditUsageToUpdate.length,
     };
   },
 });
@@ -158,11 +139,6 @@ export const verifyCompanyIdMigration = query({
         withCompanyId: 0,
         withoutCompanyId: 0,
       },
-      creditUsage: {
-        total: 0,
-        withCompanyId: 0,
-        withoutCompanyId: 0,
-      },
     };
 
     // Check projects
@@ -189,11 +165,7 @@ export const verifyCompanyIdMigration = query({
     results.files.withCompanyId = files.filter(f => f.companyId).length;
     results.files.withoutCompanyId = files.filter(f => !f.companyId).length;
 
-    // Check credit usage
-    const creditUsage = await ctx.db.query("storyboard_credit_usage").collect();
-    results.creditUsage.total = creditUsage.length;
-    results.creditUsage.withCompanyId = creditUsage.filter(cu => cu.companyId).length;
-    results.creditUsage.withoutCompanyId = creditUsage.filter(cu => !cu.companyId).length;
+    // Removed: storyboard_credit_usage check — table no longer exists.
 
     return results;
   },

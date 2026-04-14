@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { UserButton } from "@clerk/nextjs";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { BarChart2, Zap, Image as ImageIcon, Video, FileText, Users } from "lucide-react";
@@ -14,10 +14,16 @@ const ACTION_META: Record<string, { label: string; Icon: React.ElementType; colo
 };
 
 export function UsageDashboard() {
-  const orgId = useCurrentCompanyId() || "personal";
+  const companyId = useCurrentCompanyId() || "";
 
-  const summary = useQuery(api.storyboard.creditUsage.getOrgSummary, { orgId });
-  const recent  = useQuery(api.storyboard.creditUsage.listByOrg, { orgId, limit: 20 });
+  const summary = useQuery(
+    api.credits.getOrgUsageSummary,
+    companyId ? { companyId } : "skip",
+  );
+  const recent = useQuery(
+    api.credits.listOrgUsage,
+    companyId ? { companyId, limit: 20 } : "skip",
+  );
 
   if (!summary) {
     return (
@@ -158,16 +164,18 @@ export function UsageDashboard() {
         ) : (
           <div className="divide-y divide-white/6">
             {recent.map((r) => {
-              const meta = ACTION_META[r.action] ?? { label: r.action, Icon: Zap, color: "text-gray-400" };
+              const action = r.action ?? "unknown";
+              const meta = ACTION_META[action] ?? { label: action, Icon: Zap, color: "text-gray-400" };
+              const creditsUsed = Math.abs(r.tokens);
               return (
                 <div key={r._id} className="flex items-center gap-3 py-2">
                   <meta.Icon className={`w-3.5 h-3.5 ${meta.color} shrink-0`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-300">{meta.label}</p>
-                    <p className="text-[10px] text-gray-600 font-mono truncate">{r.model}</p>
+                    <p className="text-[10px] text-gray-600 font-mono truncate">{r.model ?? ""}</p>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="text-xs text-yellow-400 font-medium">{r.creditsUsed} cr</p>
+                    <p className="text-xs text-yellow-400 font-medium">{creditsUsed} cr</p>
                     <p className="text-[10px] text-gray-600">
                       {new Date(r.createdAt).toLocaleDateString()}
                     </p>

@@ -192,7 +192,7 @@ export function FileBrowser({
 
     return files.filter((file) => {
       // Generated and temps: always show (no project filter)
-      if (file.category === 'generated' || file.category === 'temps') return true;
+      if (file.category === 'generated' || file.category === 'combine' || file.category === 'temps') return true;
 
       // Project filtering for other categories
       const matchesProject = !projectId || file.projectId === projectId ||

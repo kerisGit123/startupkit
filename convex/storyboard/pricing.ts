@@ -19,10 +19,12 @@ export const pricingModels = {
     v.literal("getTopazUpscale"),
     v.literal("getSeedance15"),
     v.literal("getSeedance20"),
+    v.literal("getSeedance20Fast"),
     v.literal("getKlingMotionControl"),
     v.literal("getNanoBananaPrice"),
     v.literal("getGptImagePrice"),
-    v.literal("getVeo31")
+    v.literal("getVeo31"),
+    v.literal("getGrokImageToVideo")
   )),
   
   createdAt: v.number(),
@@ -337,7 +339,7 @@ const DEFAULT_PRICING_MODELS = [
     pricingType: "formula" as const,
     assignedFunction: "getNanoBananaPrice" as const,
     creditCost: 8,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 8,
@@ -357,7 +359,7 @@ const DEFAULT_PRICING_MODELS = [
     pricingType: "formula" as const,
     assignedFunction: "getNanoBananaPrice" as const,
     creditCost: 18,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 18,
@@ -376,7 +378,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "formula" as const,
     creditCost: 7,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 7,
@@ -393,7 +395,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 10,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "ideogram/character-edit",
@@ -402,7 +404,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 5,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "gpt-image/1.5-image-to-image",
@@ -411,7 +413,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "formula" as const,
     creditCost: 4,
-    factor: 1.3,
+    factor: 1.2,
     assignedFunction: "getGptImagePrice" as const,
     formulaJson: JSON.stringify({
       pricing: {
@@ -430,7 +432,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 4,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "flux-2/flex-text-to-image",
@@ -439,7 +441,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 14,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "recraft/crisp-upscale",
@@ -448,7 +450,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 0.5,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "topaz/image-upscale",
@@ -458,7 +460,7 @@ const DEFAULT_PRICING_MODELS = [
     pricingType: "formula" as const,
     assignedFunction: "getTopazUpscale" as const,
     creditCost: 10,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 10,
@@ -466,6 +468,67 @@ const DEFAULT_PRICING_MODELS = [
           { name: "1", cost: 10 },
           { name: "2", cost: 20 },
           { name: "4", cost: 40 },
+        ],
+      },
+    }),
+  },
+  {
+    modelId: "bytedance/seedance-2",
+    modelName: "Seedance 2.0",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getSeedance20",
+    creditCost: 11.5,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "credits_per_second",
+        base_cost: 11.5,
+        resolutions: {
+          "480p": { video_input: 11.5, no_video: 19 },
+          "720p": { video_input: 25, no_video: 41 },
+        },
+        duration_rule: "total_duration = input_duration + output_duration",
+      },
+    }),
+  },
+  {
+    modelId: "bytedance/seedance-2-fast",
+    modelName: "Seedance 2.0 Fast",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getSeedance20Fast",
+    creditCost: 9,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "credits_per_second",
+        base_cost: 15.5,
+        resolutions: {
+          "480p": { video_input: 9, no_video: 15.5 },
+          "720p": { video_input: 20, no_video: 33 },
+        },
+        duration_rule: "total_duration = input_duration + output_duration",
+      },
+    }),
+  },
+  {
+    modelId: "grok-imagine/image-to-video",
+    modelName: "Grok Imagine",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getGrokImageToVideo",
+    creditCost: 1.6,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        base_cost: 1.6,
+        qualities: [
+          { name: "480p", cost: 1.6 },
+          { name: "720p", cost: 3 },
         ],
       },
     }),
@@ -492,5 +555,29 @@ export const resetToDefaults = mutation({
     }
 
     return { deleted: allExisting.length, inserted: DEFAULT_PRICING_MODELS.length };
+  },
+});
+
+// Bulk update the burn-rate `factor` on every pricing model.
+// Used when changing the global markup (e.g. 1.3 → 1.2) without resetting other fields.
+// Run from the Convex dashboard: `storyboard/pricing:updateAllFactors { newFactor: 1.2 }`
+export const updateAllFactors = mutation({
+  args: {
+    newFactor: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const all = await ctx.db.query("storyboard_model_credit").collect();
+    const timestamp = Date.now();
+    let updated = 0;
+
+    for (const record of all) {
+      await ctx.db.patch(record._id, {
+        factor: args.newFactor,
+        updatedAt: timestamp,
+      });
+      updated++;
+    }
+
+    return { updated, newFactor: args.newFactor };
   },
 });

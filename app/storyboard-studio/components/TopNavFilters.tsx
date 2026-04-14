@@ -79,7 +79,7 @@ export function TopNavFilters({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`
-          relative flex items-center gap-2.5 px-4 py-2.5 rounded-xl border
+          relative flex items-center gap-2.5 px-4 py-2 rounded-xl border
           transition-all duration-200 bg-(--bg-tertiary) border-(--border-primary)
           hover:bg-(--bg-primary) hover:border-(--accent-blue) group
           ${hasActiveFilters ? "border-(--accent-blue) bg-(--bg-primary)" : ""}

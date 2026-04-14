@@ -17,7 +17,7 @@ import { PromptTextarea } from "./shared/PromptTextarea";
 import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
-  Upload, Download, Save, History, Trash2, BookOpen, FolderOpen, MonitorDown, FolderDown, FileText, Camera, Zap,
+  Upload, Download, Save, History, Trash2, BookOpen, FolderOpen, MonitorDown, FolderDown, FileText, Camera, Zap, Layers,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
   Eye, EyeOff, Bug, Video,
 } from "lucide-react";
@@ -95,6 +95,8 @@ export interface EditImageAIPanelProps {
   onAspectRatioChange?: (aspectRatio: string) => void; // Add handler for aspect ratio changes
   selectedAspectRatio?: string; // Add selected aspect ratio prop
   onRectangleMaskAspectRatioChange?: (aspectRatio: string) => void;
+  // Combine layers callback
+  onCombine?: () => void;
   // Generated images for reference selection
   generatedItemImages?: Array<{ id: string; url: string; filename: string }>;
   generatedProjectImages?: Array<{ id: string; url: string; filename: string }>;
@@ -205,6 +207,7 @@ export default function EditImageAIPanel({
   onAspectRatioChange,
   selectedAspectRatio,
   onRectangleMaskAspectRatioChange,
+  onCombine,
   generatedItemImages,
   generatedProjectImages,
   onAddReferenceFromUrl,
@@ -1428,6 +1431,11 @@ export default function EditImageAIPanel({
           <ToolBtn active={false} onClick={() => pick("save-to-uploads")} title="Save to Upload Folder">
             <Download className={ic} />
           </ToolBtn>
+          {onCombine && (
+            <ToolBtn active={false} onClick={onCombine} title="Combine Layers">
+              <Layers className={ic} />
+            </ToolBtn>
+          )}
           <ToolBtn danger active={false} onClick={() => pick("delete")} title="Delete">
             <Trash2 className={ic} />
           </ToolBtn>

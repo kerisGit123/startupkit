@@ -6,48 +6,102 @@ import {
   CheckCircle2, Zap, Building2, Download, Eye, Receipt,
   Calendar, TrendingUp, Coins, Crown, Star, ArrowUpRight,
   Info, AlertCircle, Shield, Sparkles, CreditCard as CreditCardIcon,
-  Loader2, FileText, DollarSign, Search,
+  Loader2, FileText, DollarSign, Search, User,
 } from "lucide-react";
-import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import { PricingTable } from "@clerk/nextjs";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
+import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
+import { dark } from "@clerk/ui/themes";
 import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useCompany } from "@/hooks/useCompany";
+import { useSubscription } from "@/hooks/useSubscription";
 import { getCreditPackages } from "@/lib/credit-pricing";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
+import { TransferCreditsDialog } from "./TransferCreditsDialog";
+import { CreditTransactionHistory } from "./CreditTransactionHistory";
 
 interface BillingSubscriptionPageProps {
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
 }
 
+/**
+ * Local display-only plan catalog used by the Overview card.
+ * Actual subscriptions are managed by Clerk Billing via <PricingTable /> —
+ * this array is just for rendering "Your current plan" stats.
+ *
+ * Keys must match the Clerk plan slugs returned by useSubscription().
+ */
 const PLANS = [
   {
     key: "free",
     name: "Free",
-    price: 0,
-    priceLabel: "MYR 0.00/month",
-    features: ["5 AI generations/month", "1 project", "Basic export"],
+    kind: "personal" as const,
+    priceMonthly: 0,
+    priceYearly: 0,
+    priceLabel: "$0 / month",
+    credits: 100,
     maxOrgs: 0,
+    maxSeats: 1,
+    features: ["100 credits/month", "1 project", "PDF export"],
+  },
+  {
+    key: "pro_personal",
+    name: "Pro",
+    kind: "personal" as const,
+    priceMonthly: 39.9,
+    priceYearly: 32, // $384/yr
+    priceLabel: "$39.90 / month",
+    credits: 2500,
+    maxOrgs: 1,
+    maxSeats: 5,
+    features: [
+      "2,500 credits/month",
+      "Unlimited projects",
+      "1 organization, 5 seats",
+      "10 GB storage",
+      "Shared element library",
+    ],
   },
   {
     key: "starter",
-    name: "Starter",
-    price: 19.9,
-    priceLabel: "MYR 19.90/month",
-    features: ["50 AI generations/month", "10 projects", "Organization", "HD export"],
+    name: "Starter Team",
+    kind: "organization" as const,
+    priceMonthly: 39.9,
+    priceYearly: 32, // $384/yr
+    priceLabel: "$39.90 / month",
+    credits: 2500,
     maxOrgs: 1,
-    popular: false,
+    maxSeats: 5,
+    features: [
+      "2,500 credits/month",
+      "1 organization",
+      "5 seats per org",
+      "10 GB storage",
+      "Shared element library",
+    ],
   },
   {
-    key: "pro",
-    name: "Pro",
-    price: 29,
-    priceLabel: "MYR 29.00/month",
-    features: ["200 AI generations/month", "Unlimited projects", "Organization", "AI Summary", "Priority support"],
+    key: "business",
+    name: "Business",
+    kind: "organization" as const,
+    priceMonthly: 79,
+    priceYearly: 63, // $756/yr
+    priceLabel: "$79 / month",
+    credits: 6900,
     maxOrgs: 3,
+    maxSeats: 15,
     popular: true,
+    features: [
+      "Everything in Starter",
+      "6,900 credits/month",
+      "3 organizations",
+      "15 seats per org",
+      "20 GB storage",
+    ],
   },
 ];
 
@@ -69,7 +123,12 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
   const { user } = useUser();
   const { companyId } = useCompany();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
-  const [currentPlan] = useState("starter");
+  // pricingMode removed — all plans are now User Plans, no Personal/Org toggle needed
+  // Plan is derived from the user's subscription (stable across org switches).
+  const { plan: currentPlan } = useSubscription();
+  const currentPlanMeta =
+    PLANS.find((p) => p.key === currentPlan) ??
+    PLANS.find((p) => p.key === "free")!;
   const [activeTab, setActiveTab] = useState<"overview" | "credits" | "plans" | "invoices">("overview");
   const creditPackages = getCreditPackages();
 
@@ -183,7 +242,7 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden items-center self-end md:flex lg:self-auto">
-            <OrganizationSwitcher
+            <OrgSwitcher
               appearance={{
                 elements: {
                   rootBox: "flex items-center",
@@ -281,7 +340,7 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                         </div>
                         <div>
                           <div className="flex items-center gap-3 mb-2">
-                            <h2 className="text-2xl lg:text-3xl font-bold text-white capitalize">{currentPlan} Plan</h2>
+                            <h2 className="text-2xl lg:text-3xl font-bold text-white">{currentPlanMeta.name} Plan</h2>
                             <span className="px-4 py-2 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg">
                               Active
                             </span>
@@ -299,13 +358,13 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                             </div>
                             <div>
                               <p className="text-3xl font-bold text-white mb-1">
-                                {PLANS.find(p => p.key === currentPlan)?.key === 'free' ? '0' : PLANS.find(p => p.key === currentPlan)?.key === 'starter' ? '50' : '200'}
+                                {currentPlanMeta.credits.toLocaleString()}
                               </p>
                               <p className="text-sm text-(--text-secondary) uppercase tracking-wider">Plan Credits/Mo</p>
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
                           <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
@@ -313,13 +372,13 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                             </div>
                             <div>
                               <p className="text-3xl font-bold text-white mb-1">
-                                {currentPlan === 'free' ? '0' : currentPlan === 'starter' ? '1' : '3'}
+                                {currentPlanMeta.maxOrgs}
                               </p>
                               <p className="text-sm text-(--text-secondary) uppercase tracking-wider">Organizations</p>
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
                           <div className="flex items-center gap-3 mb-3">
                             <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
@@ -327,9 +386,9 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                             </div>
                             <div>
                               <p className="text-3xl font-bold text-white mb-1">
-                                {currentPlan === 'free' ? '1' : 'Unlimited'}
+                                {currentPlanMeta.maxSeats}
                               </p>
-                              <p className="text-sm text-(--text-secondary) uppercase tracking-wider">Projects</p>
+                              <p className="text-sm text-(--text-secondary) uppercase tracking-wider">Seats per Org</p>
                             </div>
                           </div>
                         </div>
@@ -408,8 +467,11 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                   Buy Credits
                 </h2>
                 <p className="text-lg text-(--text-secondary) max-w-2xl mx-auto">
-                  Purchase credits anytime for additional AI generations. Credits never expire.
+                  Purchase credits anytime for additional AI generations. Top-up credits valid 12 months from purchase.
                 </p>
+                <div className="mt-4 flex justify-center">
+                  <TransferCreditsDialog defaultFromCompanyId={companyId ?? undefined} />
+                </div>
               </div>
 
               {/* Credit Packages Grid */}
@@ -446,7 +508,7 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                         <p className="text-3xl font-bold text-white mb-2">{pkg.credits}</p>
                         <p className="text-(--text-secondary) uppercase tracking-wider text-sm mb-4">Credits</p>
                         <p className="text-4xl font-bold text-white mb-2">{pkg.price}</p>
-                        <p className="text-emerald-400 text-sm">MYR {(pkg.amountInCents / pkg.credits / 100).toFixed(2)}/credit</p>
+                        <p className="text-emerald-400 text-sm">USD {(pkg.amountInCents / pkg.credits / 100).toFixed(2)}/credit</p>
                       </div>
                       
                       <button 
@@ -466,143 +528,82 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                   </div>
                 ))}
               </div>
+
+              {/* Transaction History */}
+              <div className="max-w-5xl mx-auto mt-10">
+                <CreditTransactionHistory />
+              </div>
             </div>
           )}
 
           {activeTab === "plans" && (
             <div className="space-y-8">
               {/* Plans Header */}
-              <div className="text-center mb-12">
+              <div className="text-center mb-10">
                 <h2 className="text-2xl lg:text-3xl font-bold text-(--text-primary) mb-3 flex items-center justify-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-(--accent-purple)/20 flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-(--accent-purple)" />
+                  <div className="w-12 h-12 rounded-xl bg-teal-500/20 flex items-center justify-center">
+                    <Sparkles className="w-6 h-6 text-teal-400" />
                   </div>
                   Choose Your Plan
                 </h2>
-                <p className="text-lg text-(--text-secondary) max-w-2xl mx-auto mb-8">
+                <p className="text-lg text-(--text-secondary) max-w-2xl mx-auto">
                   Select the perfect plan for your creative workflow
                 </p>
-                
-                {/* Billing Toggle */}
-                <div className="inline-flex items-center gap-2 rounded-2xl bg-(--bg-tertiary) border border-(--border-primary) p-1.5">
-                  <button
-                    onClick={() => setBillingCycle("monthly")}
-                    className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                      billingCycle === "monthly" 
-                        ? "bg-(--accent-purple) text-white shadow-lg" 
-                        : "text-(--text-secondary) hover:text-(--text-primary)"
-                    }`}
-                  >
-                    Monthly
-                  </button>
-                  <button
-                    onClick={() => setBillingCycle("yearly")}
-                    className={`px-6 py-3 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
-                      billingCycle === "yearly" 
-                        ? "bg-(--accent-purple) text-white shadow-lg" 
-                        : "text-(--text-secondary) hover:text-(--text-primary)"
-                    }`}
-                  >
-                    Yearly
-                    <span className="px-2 py-1 bg-emerald-500 text-white text-xs font-bold rounded-full">Save 20%</span>
-                  </button>
-                </div>
               </div>
 
-              {/* Plans Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-                {PLANS.map((plan) => {
-                  const isCurrent = plan.key === currentPlan;
-                  const yearlyPrice = Math.round(plan.price * 12 * 0.8 * 100) / 100;
-                  const displayPrice = billingCycle === "yearly" && plan.price > 0
-                    ? `MYR ${yearlyPrice.toFixed(2)}/year`
-                    : plan.priceLabel;
+              {/* All plans are now User Plans — no Personal/Organization toggle.
+                  Starter Team and Business unlock team features via the
+                  ownerPlan snapshot propagation system. Subscribing is a
+                  direct user action, no org required. */}
 
-                  return (
-                    <div
-                      key={plan.key}
-                      className={`relative group transition-all duration-300 ${
-                        isCurrent ? "transform scale-105" : "hover:transform hover:scale-105"
-                      }`}
-                    >
-                      {/* Background glow for current plan */}
-                      {isCurrent && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-(--accent-purple)/20 to-purple-600/20 rounded-3xl blur-xl"></div>
-                      )}
-                      
-                      <div className={`relative bg-gradient-to-br from-(--bg-secondary) to-(--bg-tertiary) border rounded-3xl p-8 transition-all duration-300 h-full flex flex-col ${
-                        isCurrent
-                          ? "border-(--accent-purple)/50 shadow-2xl"
-                          : "border-(--border-primary) hover:border-(--accent-purple)/50 hover:shadow-xl"
-                      }`}>
-                        {isCurrent && (
-                          <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-2 bg-gradient-to-r from-(--accent-purple) to-purple-600 text-white text-sm font-bold rounded-full shadow-lg">
-                            Current Plan
-                          </span>
-                        )}
-                        
-                        {/* Plan Header */}
-                        <div className="text-center mb-8">
-                          <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
-                            plan.key === 'free' 
-                              ? 'bg-gray-500/20'
-                              : plan.key === 'starter'
-                              ? 'bg-blue-500/20'
-                              : 'bg-purple-500/20'
-                          }`}>
-                            {plan.key === 'free' ? (
-                              <Star className="w-10 h-10 text-gray-400" />
-                            ) : plan.key === 'starter' ? (
-                              <Zap className="w-10 h-10 text-blue-400" />
-                            ) : (
-                              <Crown className="w-10 h-10 text-purple-400" />
-                            )}
-                          </div>
-                          <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-                          <p className="text-3xl font-bold text-white mb-1">{displayPrice}</p>
-                          {plan.price > 0 && billingCycle === "yearly" && (
-                            <p className="text-emerald-400 text-sm">Save 20% vs monthly</p>
-                          )}
-                        </div>
-                        
-                        {/* Features */}
-                        <div className="flex-1 mb-8">
-                          <ul className="space-y-4">
-                            {plan.features.map((feature) => (
-                              <li key={feature} className="flex items-start gap-3 text-(--text-secondary)">
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" />
-                                <span className="text-sm">{feature}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        
-                        {/* CTA */}
-                        <div className="mt-auto">
-                          {isCurrent ? (
-                            <div className="space-y-3">
-                              <button className="w-full py-4 rounded-xl border border-white/20 text-white hover:bg-white/10 transition-all duration-200 font-medium">
-                                Manage Subscription
-                              </button>
-                              <button className="w-full py-3 text-red-400 hover:text-red-300 transition-all duration-200 text-sm">
-                                Cancel Plan
-                              </button>
-                            </div>
-                          ) : plan.price === 0 ? (
-                            <button className="w-full py-4 rounded-xl border border-white/20 text-white cursor-default font-medium">
-                              Free Forever
-                            </button>
-                          ) : (
-                            <button className="w-full py-4 rounded-xl bg-gradient-to-r from-(--accent-purple) to-purple-600 text-white hover:from-purple-600 hover:to-purple-700 transition-all duration-200 font-semibold shadow-lg">
-                              Subscribe
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              {/* Clerk PricingTable */}
+              <div className="storytica-clerk-pricing max-w-5xl mx-auto">
+                <PricingTable
+                  forOrganizations={false}
+                  appearance={{
+                    baseTheme: dark,
+                    variables: {
+                      colorPrimary: "#14b8a6",
+                      colorBackground: "#1a1a1a",
+                      fontFamily: "'Inter', sans-serif",
+                      borderRadius: "0.75rem",
+                    },
+                  }}
+                />
               </div>
+              <style>{`
+                .storytica-clerk-pricing .cl-pricingTableCard,
+                .storytica-clerk-pricing [class*="pricingTableCard"]:not([class*="pricingTableCardFee"]):not([class*="pricingTableCardTitle"]):not([class*="pricingTableCardFeature"]) {
+                  background-color: #1a1a1a !important;
+                  border-color: #2a2a2a !important;
+                  color: #fff !important;
+                }
+                .storytica-clerk-pricing button[class*="pricingTableCardCta"],
+                .storytica-clerk-pricing .cl-button__pricingTableCardCta {
+                  background-color: #0d9488 !important;
+                  color: #fff !important;
+                  border: none !important;
+                  font-weight: 600 !important;
+                }
+                .storytica-clerk-pricing button[class*="pricingTableCardCta"]:hover {
+                  background-color: #14b8a6 !important;
+                }
+                .storytica-clerk-pricing h2,
+                .storytica-clerk-pricing h3,
+                .storytica-clerk-pricing [class*="pricingTableCardTitle"] {
+                  color: #fff !important;
+                }
+                .storytica-clerk-pricing [class*="pricingTableCardFee"] {
+                  color: #fff !important;
+                }
+                .storytica-clerk-pricing [class*="pricingTableCardDescription"],
+                .storytica-clerk-pricing [class*="pricingTableCardFeePeriod"] {
+                  color: #888 !important;
+                }
+                .storytica-clerk-pricing [class*="pricingTableCardFeature"] {
+                  color: #c0c0c0 !important;
+                }
+              `}</style>
             </div>
           )}
 

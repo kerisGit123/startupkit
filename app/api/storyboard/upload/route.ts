@@ -4,6 +4,9 @@ import { uploadToR2, getR2PublicUrl } from '@/lib/r2';
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 
+// Allow large file uploads (videos up to 100MB)
+export const maxDuration = 120;
+
 export async function POST(request: NextRequest) {
   try {
     // Get authenticated user
@@ -47,7 +50,16 @@ export async function POST(request: NextRequest) {
 
     console.log('[Storyboard Upload] Authentication successful, companyId:', companyId);
 
-    const formData = await request.formData();
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch (parseError) {
+      console.error('[Storyboard Upload] Failed to parse FormData:', parseError);
+      return NextResponse.json(
+        { success: false, error: 'Failed to parse body as FormData. The file may be too large (max ~50MB via this route).' },
+        { status: 413 }
+      );
+    }
     let file = formData.get('file') as File | null;
     const useTemp = formData.get('useTemp') as string;
     const projectId = formData.get('projectId') as string;

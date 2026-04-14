@@ -609,22 +609,36 @@ export const listGenerationLogs = query({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    let baseQuery = ctx.db
+    // Query only "generated" category (combine files don't use credits/AI keys)
+    const generatedFiles = await ctx.db
       .query("storyboard_files")
       .withIndex("by_companyId_category", (q) =>
         q.eq("companyId", args.companyId).eq("category", "generated")
-      );
+      )
+      .collect();
 
+    let allFiles = generatedFiles
+      .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+
+    // Filter by status if specified
     if (args.status) {
-      const st = args.status;
-      baseQuery = baseQuery.filter((q) => q.eq(q.field("status"), st));
+      allFiles = allFiles.filter(f => f.status === args.status);
     }
 
-    const results = await baseQuery.order("desc").paginate(args.paginationOpts);
+    // Manual pagination
+    const cursor = args.paginationOpts.cursor;
+    const numItems = args.paginationOpts.numItems;
+    let startIndex = 0;
+    if (cursor) {
+      const cursorIndex = allFiles.findIndex(f => f._id === cursor);
+      if (cursorIndex >= 0) startIndex = cursorIndex + 1;
+    }
+    const page = allFiles.slice(startIndex, startIndex + numItems);
+    const isDone = startIndex + numItems >= allFiles.length;
 
     // Resolve defaultAI references to get key names
     const enriched = await Promise.all(
-      results.page.map(async (file) => {
+      page.map(async (file) => {
         let aiKeyName: string | null = null;
         if (file.defaultAI) {
           const aiKey = await ctx.db.get(file.defaultAI);
@@ -634,7 +648,11 @@ export const listGenerationLogs = query({
       })
     );
 
-    return { ...results, page: enriched };
+    return {
+      page: enriched,
+      isDone,
+      continueCursor: isDone ? null : (page[page.length - 1]?._id ?? null),
+    };
   },
 });
 

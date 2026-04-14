@@ -25,10 +25,12 @@ export interface PricingModel {
     | "getTopazUpscale"
     | "getSeedance15"
     | "getSeedance20"
+    | "getSeedance20Fast"
     | "getKlingMotionControl"
     | "getNanoBananaPrice"
     | "getGptImagePrice"
-    | "getVeo31";
+    | "getVeo31"
+    | "getGrokImageToVideo";
   createdAt?: number;
   updatedAt?: number;
 }
@@ -66,8 +68,8 @@ export function getFormulaQualityPrice(
 
 /**
  * Nano Banana image generation pricing.
- * Examples (base=8, multiplier=1.3):
- *   1K → 11 credits, 2K → 16 credits, 4K → 24 credits
+ * Examples (base=8, multiplier=1.2):
+ *   1K → 10 credits, 2K → 15 credits, 4K → 22 credits
  */
 export function getNanoBananaPrice(
   base: number,
@@ -79,8 +81,8 @@ export function getNanoBananaPrice(
 
 /**
  * Topaz AI upscaling pricing.
- * Examples (base=10, multiplier=1.3):
- *   1x → 13 credits, 2x → 26 credits, 4x → 52 credits
+ * Examples (base=10, multiplier=1.2):
+ *   1x → 12 credits, 2x → 24 credits, 4x → 48 credits
  */
 export function getTopazUpscale(
   base: number,
@@ -92,8 +94,8 @@ export function getTopazUpscale(
 
 /**
  * GPT Image pricing with quality tiers.
- * Examples (base=4, multiplier=1.3):
- *   medium → 6 credits, high → 29 credits
+ * Examples (base=4, multiplier=1.2):
+ *   medium → 5 credits, high → 27 credits
  */
 export function getGptImagePrice(
   base: number,
@@ -116,9 +118,9 @@ export function getGptImagePrice(
  * Audio multiplier: 2 (when enabled)
  * Duration multipliers: 4s=1, 8s=2, 12s=4 (4-second intervals)
  *
- * Examples (base=7, multiplier=1.3):
- *   720p, audio, 8s → 37 credits
- *   1080p, audio, 12s → 73 credits
+ * Examples (base=7, multiplier=1.2):
+ *   720p, audio, 8s → 68 credits
+ *   1080p, audio, 12s → 269 credits
  */
 export function getSeedance15(
   base: number,
@@ -158,9 +160,9 @@ export function getSeedance15(
  * Kling 3.0 Motion Control pricing.
  * Per-second pricing based on resolution quality.
  *
- * Examples (multiplier=1.3):
- *   720P, 5s → 20 * 5 * 1.3 = 130 credits
- *   1080P, 5s → 27 * 5 * 1.3 = 176 credits
+ * Examples (multiplier=1.2):
+ *   720P, 5s → 20 * 5 * 1.2 = 120 credits
+ *   1080P, 5s → 27 * 5 * 1.2 = 162 credits
  */
 export function getKlingMotionControl(
   base: number,
@@ -185,9 +187,21 @@ export function getKlingMotionControl(
  * 720P: 25 credits/s (with video input) / 41 credits/s (no video input)
  * Total duration = input_duration + output_duration
  *
- * Examples (multiplier=1.3):
- *   480P, video input, 5s → 11.5 * 5 * 1.3 = 75 credits
- *   720P, no video, 5s → 41 * 5 * 1.3 = 267 credits
+ * Examples (multiplier=1.2):
+ *   480P, video input, 5s → 11.5 * 5 * 1.2 = 69 credits
+ *   720P, no video, 5s → 41 * 5 * 1.2 = 246 credits
+ */
+/**
+ * Seedance 2.0 pricing.
+ *
+ * KIE pricing (Seedance 2.0):
+ *   480p: 19 credits/s (with input) | 11.5 credits/s (no input / text-to-video)
+ *   720p: 41 credits/s (with input) | 25 credits/s (no input / text-to-video)
+ *
+ * With input: total_duration = input_video_duration + output_duration
+ * No input: total_duration = output_duration only
+ *
+ * @param duration - Total duration (inputVideoDuration + outputDuration for video input, outputDuration for text-to-video)
  */
 export function getSeedance20(
   base: number,
@@ -196,14 +210,74 @@ export function getSeedance20(
   hasVideoInput: boolean,
   duration: number
 ): number {
-  // no_video = cheaper (text-to-video), video_input = more expensive (image/video-to-video)
-  const resolutionCosts: Record<string, { no_video: number; video_input: number }> = {
-    "480p": { no_video: 11.5, video_input: 19 }, "480P": { no_video: 11.5, video_input: 19 },
-    "720p": { no_video: 25, video_input: 41 }, "720P": { no_video: 25, video_input: 41 },
+  const resolutionCosts: Record<string, { with_input: number; no_input: number }> = {
+    "480p": { with_input: 11.5, no_input: 19 }, "480P": { with_input: 11.5, no_input: 19 },
+    "720p": { with_input: 25, no_input: 41 }, "720P": { with_input: 25, no_input: 41 },
   };
 
   const resCost = resolutionCosts[resolution] || resolutionCosts["480p"];
-  const costPerSecond = hasVideoInput ? resCost.video_input : resCost.no_video;
+  const costPerSecond = hasVideoInput ? resCost.with_input : resCost.no_input;
+  return Math.ceil(costPerSecond * duration * multiplier);
+}
+
+/**
+ * Seedance 2.0 Fast pricing.
+ *
+ * KIE pricing (Seedance 2.0 Fast):
+ *   480p: 8 credits/s (with video input) | 15.5 credits/s (no video input / text-to-video)
+ *   720p: 20 credits/s (with video input) | 33 credits/s (no video input / text-to-video)
+ *
+ * With video input: total_duration = input_video_duration + output_duration
+ * No video input: total_duration = output_duration only
+ *
+ * Note: "with video input" = any mode with reference images/videos/frames (cheaper per second but
+ * charges for input video duration too). "no video input" = text-to-video only (higher per second rate).
+ *
+ * @param duration - For display: output duration only. Actual KIE charge includes input video duration.
+ */
+export function getSeedance20Fast(
+  base: number,
+  multiplier: number,
+  resolution: string,
+  hasVideoInput: boolean,
+  duration: number
+): number {
+  // with_input = cheaper per-second rate but total = (input_video_duration + output_duration) × rate
+  // no_input = higher per-second rate but total = output_duration × rate only
+  const resolutionCosts: Record<string, { with_input: number; no_input: number }> = {
+    "480p": { with_input: 9, no_input: 15.5 }, "480P": { with_input: 9, no_input: 15.5 },
+    "720p": { with_input: 20, no_input: 33 }, "720P": { with_input: 20, no_input: 33 },
+  };
+
+  const resCost = resolutionCosts[resolution] || resolutionCosts["480p"];
+  // duration param should already include input video duration when hasVideoInput is true
+  const costPerSecond = hasVideoInput ? resCost.with_input : resCost.no_input;
+  return Math.ceil(costPerSecond * duration * multiplier);
+}
+
+/**
+ * Grok Imagine Image-to-Video pricing.
+ * Per-second pricing based on resolution quality.
+ *
+ * Formula: quality_cost × duration_seconds × factor
+ *
+ * Examples (factor=1.2):
+ *   480p, 6s → 1.6 × 6 × 1.2 = 12 credits
+ *   720p, 6s → 3 × 6 × 1.2 = 22 credits
+ *   720p, 30s → 3 × 30 × 1.2 = 108 credits
+ */
+export function getGrokImageToVideo(
+  base: number,
+  multiplier: number,
+  resolution: string,
+  duration: number
+): number {
+  const resolutionCosts: Record<string, number> = {
+    "480p": 1.6, "480P": 1.6,
+    "720p": 3, "720P": 3,
+  };
+
+  const costPerSecond = resolutionCosts[resolution] || base;
   return Math.ceil(costPerSecond * duration * multiplier);
 }
 
@@ -225,7 +299,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getNanoBananaPrice",
     creditCost: 8,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 8,
@@ -245,7 +319,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getNanoBananaPrice",
     creditCost: 18,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 18,
@@ -265,7 +339,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getSeedance15",
     creditCost: 7,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 7,
@@ -283,7 +357,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getVeo31",
     creditCost: 60,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 60,
@@ -302,7 +376,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getTopazUpscale",
     creditCost: 10,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 10,
@@ -322,7 +396,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getGptImagePrice",
     creditCost: 4,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 4,
@@ -340,7 +414,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     isActive: true,
     pricingType: "fixed",
     creditCost: 4,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "ideogram/character-edit",
@@ -349,7 +423,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     isActive: true,
     pricingType: "fixed",
     creditCost: 5,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "flux-2/pro-text-to-image",
@@ -358,7 +432,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     isActive: true,
     pricingType: "fixed",
     creditCost: 10,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "recraft/crisp-upscale",
@@ -367,7 +441,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     isActive: true,
     pricingType: "fixed",
     creditCost: 0.5,
-    factor: 1.3,
+    factor: 1.2,
   },
   {
     modelId: "kling-3.0/motion-control",
@@ -377,7 +451,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getKlingMotionControl",
     creditCost: 20,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 20,
@@ -389,6 +463,25 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     }),
   },
   {
+  modelId: "grok-imagine/image-to-video",
+  modelName: "Grok Imagine Image to Video",
+  modelType: "video",
+  isActive: true,
+  pricingType: "formula",
+  assignedFunction: "getGrokImageToVideo",
+  creditCost: 1.6,
+  factor: 1.2,
+  formulaJson: JSON.stringify({
+    pricing: {
+      base_cost: 1.6,
+      qualities: [
+        { name: "480p", cost: 1.6 },
+        { name: "720p", cost: 3 }
+      ]
+    }
+  })
+},
+  {
     modelId: "bytedance/seedance-2",
     modelName: "Seedance 2.0",
     modelType: "video",
@@ -396,23 +489,42 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     pricingType: "formula",
     assignedFunction: "getSeedance20",
     creditCost: 11.5,
-    factor: 1.3,
+    factor: 1.2,
     formulaJson: JSON.stringify({
       pricing: {
         unit: "credits_per_second",
-        base_cost: 11.5,
+        base_cost: 19,
         "resolutions": {
         "480p": {
-          "no_video": 11.5,
-          "video_input": 19
-          
+          "video_input": 11.5,
+          "no_video": 19
         },
         "720p": {
-          "no_video": 25,
-          "video_input": 41
-          
+          "video_input": 25,
+          "no_video": 41
         }
       },
+        duration_rule: "total_duration = input_duration + output_duration",
+      },
+    }),
+  },
+  {
+    modelId: "bytedance/seedance-2-fast",
+    modelName: "Seedance 2.0 Fast",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getSeedance20Fast",
+    creditCost: 9,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "credits_per_second",
+        base_cost: 15.5,
+        resolutions: {
+          "480p": { video_input: 9, no_video: 15.5 },
+          "720p": { video_input: 20, no_video: 33 },
+        },
         duration_rule: "total_duration = input_duration + output_duration",
       },
     }),

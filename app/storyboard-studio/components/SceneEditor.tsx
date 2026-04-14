@@ -512,6 +512,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   );
   const updateStoryboardFile = useMutation(api.storyboard.storyboardFiles.update);
   const removeStoryboardFile = useMutation(api.storyboard.storyboardFiles.remove);
+  // Get current default AI key from org_settings for this company
+  const orgSettings = useQuery(api.settings.getSettings, companyId ? { companyId } : "skip");
+  const currentDefaultAI = orgSettings?.defaultAI as string | undefined;
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const deductCredits = useMutation(api.credits.deductCredits);
   const refundCredits = useMutation(api.credits.refundCredits);
@@ -3735,6 +3738,206 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   const allComments = shots.flatMap(s => s.comments);
 
+  // Combine layers handler — extracted so it can be passed as prop
+  const handleCombineLayers = async () => {
+    console.log("[SceneEditor] Combine clicked — SVG embed approach");
+    try {
+      setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: null, selectedShapeId: null });
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const containerEl = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]') as HTMLElement;
+      if (!containerEl) throw new Error("Canvas container not found");
+
+      const cssW = containerEl.clientWidth;
+      const cssH = containerEl.clientHeight;
+      const bgUrl = backgroundImage || activeShot?.imageUrl;
+      const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+      let bgDataUrl = "";
+      if (bgUrl) {
+        try {
+          const proxyRes = await fetch(`/api/storyboard/proxy-image?url=${encodeURIComponent(bgUrl)}`);
+          if (proxyRes.ok) {
+            const blob = await proxyRes.blob();
+            bgDataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+          }
+        } catch (e) { console.warn("[Combine] Proxy fetch failed:", e); }
+      }
+
+      let svgContent = "";
+      const textPadding = 4;
+      const activeTexts = canvasState.textElements.filter(t => t.panelId === activeShotId);
+      for (const t of activeTexts) {
+        const rotation = t.rotation || 0;
+        const fontSize = t.fontSize || 16;
+        const fontFamily = t.fontFamily || "Arial, sans-serif";
+        const fontWeight = t.fontWeight || 'normal';
+        const fontStyle = t.fontStyle || 'normal';
+        const color = t.color || '#000000';
+        const bgColor = t.backgroundColor || 'transparent';
+        const text = t.text || '';
+        const tw = t.w || 200;
+        const th = t.h || 30;
+        const cx = t.x + tw / 2;
+        const cy = t.y + th / 2;
+        const textX = -tw / 2 + textPadding;
+        const textY = -th / 2 + textPadding + fontSize;
+        svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
+        if (bgColor !== 'transparent') svgContent += `<rect x="${-tw / 2}" y="${-th / 2}" width="${tw}" height="${th}" fill="${bgColor}" />`;
+        svgContent += `<text x="${textX}" y="${textY}" text-anchor="start" font-size="${fontSize}px" font-family="${escXml(fontFamily)}" font-weight="${fontWeight}" font-style="${fontStyle}" fill="${color}">${escXml(text)}</text></g>`;
+      }
+
+      const activeShapes = canvasState.shapeElements?.filter(s => s.panelId === activeShotId) || [];
+      for (const s of activeShapes) {
+        const stroke = s.strokeColor || '#ff0000';
+        const sw = s.strokeWidth || 2;
+        const fill = s.fillColor || 'none';
+        const cx = s.x + s.w / 2;
+        const cy = s.y + s.h / 2;
+        const rotation = s.rotation || 0;
+        svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
+        if (s.type === 'circle') svgContent += `<ellipse cx="0" cy="0" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
+        else if (s.type === 'square') svgContent += `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
+        else if (s.type === 'arrow' || s.type === 'line') {
+          svgContent += `<line x1="${-s.w / 2}" y1="${-s.h / 2}" x2="${s.w / 2}" y2="${s.h / 2}" stroke="${stroke}" stroke-width="${sw}" />`;
+          if (s.type === 'arrow') {
+            const angle = Math.atan2(s.h, s.w);
+            const hl = 15;
+            const ex = s.w / 2, ey = s.h / 2;
+            svgContent += `<line x1="${ex}" y1="${ey}" x2="${ex - hl * Math.cos(angle - Math.PI / 6)}" y2="${ey - hl * Math.sin(angle - Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
+            svgContent += `<line x1="${ex}" y1="${ey}" x2="${ex - hl * Math.cos(angle + Math.PI / 6)}" y2="${ey - hl * Math.sin(angle + Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
+          }
+        }
+        svgContent += `</g>`;
+      }
+
+      const activeAssets = canvasState.assetElements.filter(a => a.panelId === activeShotId);
+      for (const a of activeAssets) {
+        const libItem = canvasState.assetLibrary.find(lib => lib.id === a.assetId);
+        if (!libItem?.url) continue;
+        let assetDataUrl = libItem.url;
+        if (libItem.url.startsWith('http')) {
+          try {
+            const proxyRes = await fetch(`/api/storyboard/proxy-image?url=${encodeURIComponent(libItem.url)}`);
+            if (proxyRes.ok) {
+              const blob = await proxyRes.blob();
+              assetDataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            }
+          } catch (e) { console.warn("[Combine] Failed to proxy asset:", e); }
+        }
+        const rotation = a.rotation || 0;
+        const cx = a.x + a.w / 2;
+        const cy = a.y + a.h / 2;
+        const flipX = a.flipX ? -1 : 1;
+        const flipY = a.flipY ? -1 : 1;
+        svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation}) scale(${flipX},${flipY})"><image href="${assetDataUrl}" x="${-a.w / 2}" y="${-a.h / 2}" width="${a.w}" height="${a.h}" preserveAspectRatio="xMidYMid meet" /></g>`;
+      }
+
+      const containerRect = containerEl.getBoundingClientRect();
+      const activeBubbles = canvasState.bubbles.filter(b => b.panelId === activeShotId);
+      const svgElements = containerEl.querySelectorAll('svg');
+      svgElements.forEach(svg => {
+        const clone = svg.cloneNode(true) as SVGElement;
+        clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
+        const rect = svg.getBoundingClientRect();
+        const ox = rect.left - containerRect.left;
+        const oy = rect.top - containerRect.top;
+        if (rect.width > 0 && rect.height > 0) svgContent += `<g transform="translate(${ox},${oy})">${clone.innerHTML}</g>`;
+      });
+
+      const { estimateFontSize } = await import("@/app/storyboard-studio/shared/canvas-helpers");
+      for (const b of activeBubbles) {
+        if (!b.text?.trim()) continue;
+        const rotation = b.rotation || 0;
+        const cx = b.x + b.w / 2;
+        const cy = b.y + b.h / 2;
+        const fontSize = b.autoFitFont ? estimateFontSize(b.text, b.w, b.h) : b.fontSize;
+        const textColor = b.flippedColors ? (b.bubbleType === "whisper" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.97)") : "#1a1a2e";
+        const fontWeight = ["sfx", "shout"].includes(b.bubbleType) ? 900 : 400;
+        const letterSpacing = b.bubbleType === "sfx" ? "0.06em" : b.bubbleType === "shout" ? "0.02em" : "0em";
+        const fStyle = b.bubbleType === "whisper" ? "italic" : "normal";
+        const fFamily = "'Noto Sans SC', 'Comic Sans MS', 'Bangers', 'Segoe UI', sans-serif";
+        const lh = fontSize * 1.3;
+        const lines = b.text.split('\n');
+        const totalH = lines.length * lh;
+        const startY = -totalH / 2 + lh / 2;
+        svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
+        lines.forEach((line, i) => {
+          svgContent += `<text x="0" y="${startY + i * lh}" text-anchor="middle" dominant-baseline="central" font-size="${fontSize}px" font-family="${escXml(fFamily)}" font-weight="${fontWeight}" font-style="${fStyle}" letter-spacing="${letterSpacing}" fill="${textColor}">${escXml(line)}</text>`;
+        });
+        svgContent += `</g>`;
+      }
+
+      const bgImgRatio = bgDataUrl ? await new Promise<number>((resolve) => {
+        const img = document.createElement('img');
+        img.onload = () => resolve(img.naturalWidth / img.naturalHeight);
+        img.onerror = () => resolve(16 / 9);
+        img.src = bgDataUrl;
+      }) : 16 / 9;
+
+      const cr = cssW / cssH;
+      let drawW: number, drawH: number, drawX: number, drawY: number;
+      if (bgImgRatio > cr) { drawW = cssW; drawH = cssW / bgImgRatio; drawX = 0; drawY = (cssH - drawH) / 2; }
+      else { drawH = cssH; drawW = cssH * bgImgRatio; drawX = (cssW - drawW) / 2; drawY = 0; }
+
+      const combinedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cssW}" height="${cssH}">${bgDataUrl ? `<image href="${bgDataUrl}" x="${drawX}" y="${drawY}" width="${drawW}" height="${drawH}" />` : `<rect width="${cssW}" height="${cssH}" fill="#13131a"/>`}${svgContent}</svg>`;
+
+      const svgBlob = new Blob([combinedSvg], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const resultDataUrl = await new Promise<string>((resolve, reject) => {
+        const img = document.createElement('img');
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = cssW * 2;
+          canvas.height = cssH * 2;
+          const ctx = canvas.getContext('2d')!;
+          ctx.scale(2, 2);
+          ctx.drawImage(img, 0, 0, cssW, cssH);
+          URL.revokeObjectURL(svgUrl);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = (e) => { URL.revokeObjectURL(svgUrl); reject(e); };
+        img.src = svgUrl;
+      });
+
+      // Upload to R2
+      try {
+        const blob = await (await fetch(resultDataUrl)).blob();
+        const timestamp = Date.now();
+        const filename = `combined-${timestamp}.png`;
+        const r2Key = `${companyId}/generated/${filename}`;
+        const r2PublicUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${r2Key}`;
+        const uploadRes = await fetch('/api/storyboard/upload-binary', {
+          method: 'POST',
+          body: blob,
+          headers: { 'Content-Type': 'image/png', 'x-filename': encodeURIComponent(filename), 'x-category': 'generated', 'x-company-id': companyId || '', 'x-r2-key': r2Key, 'x-skip-log': 'true' },
+        });
+        if (uploadRes.ok) {
+          await logUpload({
+            companyId: companyId || "", userId: userId || "", projectId: projectId as any,
+            category: "combine", filename, fileType: "image", mimeType: "image/png", size: blob.size,
+            status: "completed", tags: [], uploadedBy: userId || "", r2Key, sourceUrl: r2PublicUrl,
+            categoryId: activeShot?.id as any || null, model: "combine-layers",
+          });
+        }
+      } catch (uploadErr) { console.warn("[Combine] Upload error:", uploadErr); }
+
+      setGeneratedImagesPanelOpen(true);
+    } catch (error) {
+      console.error("[SceneEditor] Combine failed:", error);
+    }
+  };
+
   if (!activeShot) return null;
 
   return (
@@ -3873,18 +4076,36 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           {/* Top Right Controls - Compact square buttons matching Hide/Show style */}
           <div className={`absolute top-4 right-4 z-10 flex ${isMobile ? 'flex-row' : 'flex-col'} gap-1.5`}>
             {/* Generated Images */}
-            <button
-              onClick={() => setGeneratedImagesPanelOpen(!generatedImagesPanelOpen)}
-              className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
-                generatedImagesPanelOpen
-                  ? 'bg-blue-500/15 text-blue-300'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-              }`}
-              title="View Generated Images"
-            >
-              <Image className="w-4 h-4" />
-              <span className="text-[8px] font-medium leading-none">Generated</span>
-            </button>
+            {(() => {
+              const processingCount = projectFiles?.filter(f =>
+                f.category === "generated" &&
+                (f.status === "processing" || f.status === "generating") &&
+                String(f.categoryId ?? "") === String(activeShotId)
+              ).length || 0;
+              return (
+                <button
+                  onClick={() => setGeneratedImagesPanelOpen(!generatedImagesPanelOpen)}
+                  className={`relative w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
+                    generatedImagesPanelOpen
+                      ? 'bg-blue-500/15 text-blue-300'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                  }`}
+                  title="View Generated Images"
+                >
+                  <Image className="w-4 h-4" />
+                  <span className="text-[8px] font-medium leading-none">Generated</span>
+                  {processingCount > 0 && (
+                    <div className="absolute -top-1 -right-1 flex items-center gap-0.5 bg-blue-500 rounded-full px-1.5 py-0.5 shadow-lg">
+                      <svg className="w-2.5 h-2.5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-[9px] text-white font-bold">{processingCount}</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })()}
 
             {/* AI Panel Switcher */}
             <button
@@ -3912,11 +4133,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               <span className="text-[8px] font-medium leading-none">{activeAIPanel === 'editimage' ? 'Video' : 'Edit'}</span>
             </button>
 
-            {/* Combine Background - merge SVG layers with image via SVG embedding */}
-            <button
+            {/* Combine Background - moved to left toolbar in EditImageAIPanel */}
+            {false && activeAIPanel === 'editimage' && <button
               onClick={async () => {
                 console.log("[SceneEditor] Combine clicked — SVG embed approach");
                 try {
+                  // Deselect all elements to hide resize handles before capture
+                  setCanvasSelection({ selectedBubbleId: null, selectedTextId: null, selectedAssetId: null, selectedShapeId: null });
+                  // Wait for React to re-render without selection UI
+                  await new Promise(resolve => setTimeout(resolve, 100));
+
                   const containerEl = canvasContainerRef.current?.querySelector('[data-canvas-editor="true"]') as HTMLElement;
                   if (!containerEl) throw new Error("Canvas container not found");
 
@@ -4170,7 +4396,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         companyId: companyId || "",
                         userId: userId || "",
                         projectId: projectId as any,
-                        category: "generated",
+                        category: "combine",
                         filename,
                         fileType: "image",
                         mimeType: "image/png",
@@ -4202,7 +4428,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             >
               <Layers className="w-4 h-4" />
               <span className="text-[8px] font-medium leading-none">Combine</span>
-            </button>
+            </button>}
           </div>
           {/* Debug: Log what's being passed to CanvasArea */}
        
@@ -4961,6 +5187,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   activeShotDescription={activeShot?.description}
                   activeShotImagePrompt={activeShot?.imagePrompt}
                   activeShotVideoPrompt={activeShot?.videoPrompt}
+                  onCombine={handleCombineLayers}
                   onUploadOverride={() => setShowUploadOverrideBrowser(true)}
                   onDownloadCanvas={undefined}
                   onSaveAsOriginal={undefined}
@@ -4996,7 +5223,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     <ImageAIPanel
                       mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
-                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[]) => {
+                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string) => {
                         console.log("=== ELEMENT CREDIT-BASED GENERATION CALLED ===");
                         console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
                         console.log("Prompt:", extractedPrompt);
@@ -5089,7 +5316,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
-                              model: aiModel, // Store the AI model used
+                              model: aiModel,
+                              defaultAI: currentDefaultAI as any,
 
                               metadata: {
                                 modelId: aiModel,
@@ -5215,7 +5443,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
-                              model: aiModel, // Store the AI model used
+                              model: aiModel,
+                              defaultAI: currentDefaultAI as any,
 
                               metadata: {
                                 modelId: aiModel,
@@ -5326,6 +5555,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               tags: [],
                               uploadedBy: user?.id || "",
                               model: aiModel,
+                              defaultAI: currentDefaultAI as any,
                               metadata: {
                                 modelId: aiModel,
                                 modelName: "Grok Imagine",
@@ -5376,7 +5606,24 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               }
 
                               const result = await response.json();
-                              console.log("Grok Imagine API call successful:", result);
+                              console.log("Grok Imagine API response:", result);
+
+                              // Check if KIE AI returned an error
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({
+                                  companyId: companyId || "",
+                                  tokens: creditsUsed,
+                                  reason: `Refund: Grok Imagine failed (${result.responseCode})`,
+                                });
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "failed",
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                                toast.error(`Grok Imagine failed: ${result.responseMessage || 'Unknown error'}`);
+                                return;
+                              }
 
                               // Store kieAiId (defaultAI), taskId, and response code in the file record
                               if (result.kieAiId || result.taskId) {
@@ -5428,6 +5675,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               tags: [],
                               uploadedBy: user?.id || "",
                               model: aiModel,
+                              defaultAI: currentDefaultAI as any,
                               metadata: {
                                 modelId: aiModel,
                                 modelName: "Kling 3.0 Motion Control",
@@ -5482,7 +5730,25 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               }
 
                               const result = await response.json();
-                              console.log("Kling Motion API call successful:", result);
+                              console.log("Kling Motion API response:", result);
+
+                              // Check if KIE AI returned an error
+                              if (result.responseCode && result.responseCode !== 200) {
+                                // Refund credits and mark file as failed
+                                await refundCredits({
+                                  companyId: companyId || "",
+                                  tokens: creditsUsed,
+                                  reason: `Refund: Kling 3.0 Motion failed (${result.responseCode})`,
+                                });
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "failed",
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                                toast.error(`Kling 3.0 Motion failed: ${result.responseMessage || 'Unknown error'}`);
+                                return;
+                              }
 
                               // Store kieAiId (defaultAI), taskId, and response code in the file record
                               if (result.kieAiId || result.taskId) {
@@ -5505,6 +5771,112 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 companyId: companyId || "",
                                 tokens: creditsUsed,
                                 reason: `Refund: Kling 3.0 Motion Control API failed`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
+                              throw apiError;
+                            }
+
+                          } else if (aiModel === "bytedance/seedance-2" || aiModel === "bytedance/seedance-2-fast") {
+                            console.log("Using Seedance 2.0 API format...");
+
+                            const durSec = parseInt(duration.replace('s', '')) || 5;
+                            // Use seedanceMode from VideoImageAIPanel (passed via onGenerate)
+                            const seedMode = seedanceMode || "text-to-video";
+
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: userId || "",
+                              projectId: projectId as any,
+                              category: "generated",
+                              filename: `seedance2-${Date.now()}.mp4`,
+                              fileType: "video",
+                              mimeType: "video/mp4",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              tags: [],
+                              uploadedBy: userId || "",
+                              model: aiModel,
+                              defaultAI: currentDefaultAI as any,
+                              categoryId: activeShot?.id as any || null,
+                            });
+
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI video generation with ${aiModel}`,
+                              plan: currentPlan,
+                            });
+
+                            try {
+                              const response = await fetch('/api/storyboard/generate-seedance2', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  prompt: extractedPrompt,
+                                  model: aiModel,
+                                  mode: seedMode,
+                                  referenceImages: seedMode === "multimodal" ? processedReferenceImages : [],
+                                  videoUrls: seedMode === "multimodal" ? (videoUrls || []) : [],
+                                  audioUrls: seedMode === "multimodal" ? (audioUrls || []) : [],
+                                  firstFrameUrl: (seedMode === "first-frame" || seedMode === "first-last-frame") ? (firstFrameUrl || processedReferenceImages[0]) : undefined,
+                                  lastFrameUrl: seedMode === "first-last-frame" ? (lastFrameUrl || processedReferenceImages[1]) : undefined,
+                                  resolution: quality.split('_')[0]?.toLowerCase() || '480p',
+                                  aspectRatio: aspectRatio,
+                                  duration: durSec,
+                                  generateAudio: audioEnabled,
+                                  webSearch: quality.includes('_ws'),
+                                  callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                  companyId: companyId || "",
+                                }),
+                              });
+
+                              if (!response.ok) {
+                                throw new Error(`Seedance 2.0 API error: ${response.status}`);
+                              }
+
+                              const result = await response.json();
+                              console.log("Seedance 2.0 API response:", result);
+
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({
+                                  companyId: companyId || "",
+                                  tokens: creditsUsed,
+                                  reason: `Refund: Seedance 2.0 failed (${result.responseCode})`,
+                                });
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "failed",
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                                toast.error(`Seedance 2.0 failed: ${result.responseMessage || 'Unknown error'}`);
+                                return;
+                              }
+
+                              if (result.kieAiId || result.taskId) {
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "processing",
+                                  defaultAI: result.kieAiId,
+                                  taskId: result.taskId,
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                              }
+
+                              toast.success(`Generation started! ${creditsUsed} credits deducted.`);
+                            } catch (apiError) {
+                              console.warn("Seedance 2.0 API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: Seedance 2.0 API failed`,
                               });
                               await updateStoryboardFile({
                                 id: fileId,
@@ -5626,6 +5998,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       activeShotDescription={activeShot?.description}
                       activeShotImagePrompt={activeShot?.imagePrompt}
                       activeShotVideoPrompt={activeShot?.videoPrompt}
+                      onCombine={handleCombineLayers}
                       generatedItemImages={
                         projectFiles
                           ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image" && String(f.categoryId ?? "") === String(activeShot?.id ?? ""))

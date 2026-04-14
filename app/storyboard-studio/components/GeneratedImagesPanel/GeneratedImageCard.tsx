@@ -165,12 +165,22 @@ export function GeneratedImageCard({
             ) : (
               // Image
               <>
-                <img 
-                  src={image.thumbnail} 
+                <img
+                  src={image.thumbnail}
                   alt={image.metadata.prompt || `Generated ${image.id}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
+                {/* Source badge */}
+                {image.metadata.model === 'combine-layers' ? (
+                  <div className="absolute top-2 left-2 bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
+                    COMBINE
+                  </div>
+                ) : (
+                  <div className="absolute top-2 left-2 bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
+                    AI
+                  </div>
+                )}
               </>
             )}
           </div>

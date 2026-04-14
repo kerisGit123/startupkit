@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "@/convex/_generated/api";
 import {
   generateKlingVideo,
   generateVeoVideo,
@@ -11,7 +13,7 @@ const CALLBACK_URL = `${process.env.NEXT_PUBLIC_APP_URL}/api/callback/video`;
 
 export async function POST(req: NextRequest) {
   try {
-    const { model, quality, duration, aspectRatio, prompt, imageUrl, itemId } = await req.json();
+    const { model, quality, duration, aspectRatio, prompt, imageUrl, itemId, companyId, userId } = await req.json();
 
     if (!prompt || !model) {
       return NextResponse.json({ error: "prompt and model required" }, { status: 400 });
@@ -25,27 +27,61 @@ export async function POST(req: NextRequest) {
     const dur = Number(duration ?? 5);
     const credits = calcVideoCredits(m, q, dur);
 
+    // Check and deduct credits if companyId is provided
+    if (companyId) {
+      const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+      const currentBalance = await convex.query(api.credits.getBalance, { companyId });
+      if (currentBalance < credits) {
+        return NextResponse.json(
+          { error: `Insufficient credits. You have ${currentBalance} but need ${credits}.` },
+          { status: 402 }
+        );
+      }
+
+      await convex.mutation(api.credits.deductCredits, {
+        companyId,
+        tokens: credits,
+        reason: `AI Video Generation - ${m} (${q})`,
+      });
+    }
+
     let result: { taskId?: string };
 
-    if (m === "veo-3-1") {
-      result = await generateVeoVideo({
-        quality: q as "fast" | "quality",
-        imageUrl,
-        prompt,
-        aspectRatio: aspectRatio ?? "9:16",
-        duration: dur,
-        callbackUrl: CALLBACK_URL,
-      });
-    } else {
-      result = await generateKlingVideo({
-        tier: q as "std" | "pro",
-        startFrameUrl: imageUrl,
-        audioEnabled: false,
-        duration: dur,
-        aspectRatio: aspectRatio ?? "9:16",
-        prompt,
-        callbackUrl: CALLBACK_URL,
-      });
+    try {
+      if (m === "veo-3-1") {
+        result = await generateVeoVideo({
+          quality: q as "fast" | "quality",
+          imageUrl,
+          prompt,
+          aspectRatio: aspectRatio ?? "9:16",
+          duration: dur,
+          callbackUrl: CALLBACK_URL,
+          companyId,
+        });
+      } else {
+        result = await generateKlingVideo({
+          tier: q as "std" | "pro",
+          startFrameUrl: imageUrl,
+          audioEnabled: false,
+          duration: dur,
+          aspectRatio: aspectRatio ?? "9:16",
+          prompt,
+          callbackUrl: CALLBACK_URL,
+          companyId,
+        });
+      }
+    } catch (apiError) {
+      // Refund credits on API failure
+      if (companyId) {
+        const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+        await convex.mutation(api.credits.refundCredits, {
+          companyId,
+          tokens: credits,
+          reason: `Refund: Video generation API failed - ${m}`,
+        });
+      }
+      throw apiError;
     }
 
     return NextResponse.json({

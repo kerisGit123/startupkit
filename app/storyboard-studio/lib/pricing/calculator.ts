@@ -94,6 +94,38 @@ export class PricingCalculator {
           pricingType: 'fixed',
           creditCost: 5,
           factor: 1.0
+        },
+        'bytedance/seedance-2': {
+          modelId: 'bytedance/seedance-2',
+          modelName: 'Seedance 2.0',
+          modelType: 'video',
+          isActive: true,
+          pricingType: 'formula',
+          formula: {
+            // with_input: (inputVideoDuration + outputDuration) × rate
+            // no_input: outputDuration × rate (text-to-video)
+            type: 'per_second',
+            resolutions: {
+              '480p': { with_input: 11.5, no_input: 19 },
+              '720p': { with_input: 25, no_input: 41 },
+            },
+            duration_rule: 'total = input_video_duration + output_duration',
+          }
+        },
+        'bytedance/seedance-2-fast': {
+          modelId: 'bytedance/seedance-2-fast',
+          modelName: 'Seedance 2.0 Fast',
+          modelType: 'video',
+          isActive: true,
+          pricingType: 'formula',
+          formula: {
+            type: 'per_second',
+            resolutions: {
+              '480p': { with_input: 9, no_input: 15.5 },
+              '720p': { with_input: 20, no_input: 33 },
+            },
+            duration_rule: 'total = input_video_duration + output_duration',
+          }
         }
       };
 

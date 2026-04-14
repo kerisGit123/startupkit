@@ -34,11 +34,7 @@ export const addCompanyIdToMembers = mutation({
   },
 });
 
-export const addCompanyIdToCreditUsage = mutation({
-  handler: async (ctx) => {
-    console.log("Adding companyId to storyboard_credit_usage");
-  },
-});
+// Removed: addCompanyIdToCreditUsage — storyboard_credit_usage table no longer exists.
 
 // Populate companyId from existing relationships
 export const populateCompanyId = mutation({
@@ -104,17 +100,7 @@ export const populateCompanyId = mutation({
         });
       }
       
-      // Update all credit usage in this project
-      const creditUsage = await ctx.db
-        .query("storyboard_credit_usage")
-        .collect()
-        .then(usage => usage.filter(usage => usage.projectId === project._id));
-      
-      for (const usage of creditUsage) {
-        await ctx.db.patch(usage._id, {
-          companyId: mockOrgId
-        });
-      }
+      // Removed: credit usage update — storyboard_credit_usage table no longer exists.
     }
     
     console.log("Populated companyId for all existing records");

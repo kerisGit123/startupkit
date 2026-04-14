@@ -10,7 +10,8 @@ import {
   ChevronDown,
   MoreHorizontal
 } from "lucide-react";
-import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
+import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import PricingManagementDark from "./PricingManagementDark";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
 
@@ -52,7 +53,7 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
 
           {/* User Button */}
           <div className="hidden items-center self-end md:flex lg:self-auto">
-            <OrganizationSwitcher
+            <OrgSwitcher
               appearance={{
                 elements: {
                   rootBox: "flex items-center",
@@ -82,7 +83,7 @@ export default function PricingManagementPage({ sidebarOpen, onToggleSidebar }: 
 
           {/* Mobile menu */}
           <div className="flex items-center md:hidden">
-            <OrganizationSwitcher
+            <OrgSwitcher
               appearance={{
                 elements: {
                   rootBox: "flex items-center",

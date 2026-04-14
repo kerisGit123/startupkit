@@ -90,7 +90,7 @@ export function GeneratedImagesPanel({
 
     return projectFiles
       .filter((file) => {
-        if (file.category !== "generated") return false;
+        if (file.category !== "generated" && file.category !== "combine") return false;
         if (String(file.categoryId ?? "") !== String(activeShot.id)) return false;
 
         const hasR2Key = Boolean(file.r2Key);
@@ -124,7 +124,7 @@ export function GeneratedImagesPanel({
           fileType: file.fileType as 'image' | 'video',
           metadata: {
             timestamp: new Date(file.createdAt ?? Date.now()),
-            model: file.metadata?.model || file.filename || 'Unknown',
+            model: file.model || file.metadata?.model || file.filename || 'Unknown',
             prompt: file.metadata?.prompt || '',
             parameters: file.metadata?.parameters || {},
             generationTime: file.metadata?.generationTime || 0,

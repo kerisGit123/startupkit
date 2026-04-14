@@ -13,7 +13,25 @@
       "Bash(cd /d \"D:\\\\gemini\\\\startupkit\\\\app\\\\storyboard-studio\")",
       "Bash(find:*)",
       "Read(//tmp/**)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('ImageDown' in l, 'ImageUp' in l\\)\")",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('MonitorDown' in l\\)\")",
+      "WebFetch(domain:ltx.studio)",
+      "WebFetch(domain:higgsfield.ai)",
+      "WebFetch(domain:filmora.wondershare.net)",
+      "WebFetch(domain:boords.com)",
+      "WebFetch(domain:storyboarder.ai)",
+      "WebFetch(domain:krock.io)",
+      "Bash(curl -s -L -A \"Mozilla/5.0 \\(Windows NT 10.0; Win64; x64\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" \"https://boords.com/ai-storyboard-generator\")",
+      "Bash(grep -oP '\\(Trusted|Rated|million|1,000|4\\\\.[0-9]|stars?|reviews?\\)[^<]{0,100}')",
+      "Bash(grep -viE 'character|frame|style|reference|storyboard|menu|logo$')",
+      "Bash(grep -oP '\\(1,000,000|50%|4\\\\.8|4\\\\.9\\)[^<\"]{0,50}')",
+      "Bash(node -e \"const c = require\\('@clerk/nextjs'\\); console.log\\('PricingTable' in c\\)\")",
+      "WebFetch(domain:app.storyboarder.ai)",
+      "WebSearch",
+      "Bash(wc -l d:/gemini/startupkit/app/storyboard-studio/workspace/[projectId]/page.tsx)",
+      "Bash(npx convex:*)",
+      "Bash(npm ls:*)"
     ]
   }
 }

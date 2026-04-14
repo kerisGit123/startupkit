@@ -410,6 +410,26 @@ export const usePricingData = () => {
             }
           }
           return Math.ceil(base * factor);
+        case 'getGrokImageToVideo':
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const qualities = formula.pricing?.qualities || [];
+              // Parse resolution and duration from selectedQuality: "480p_6s"
+              const grokResMatch = selectedQuality.match(/^(\d+[pP])/i);
+              const grokDurMatch = selectedQuality.match(/(\d+)s/);
+              const grokRes = grokResMatch ? grokResMatch[1] : "480p";
+              const grokDuration = grokDurMatch ? parseInt(grokDurMatch[1]) : 6;
+              const grokQuality = qualities.find((q: any) => q.name.toLowerCase() === grokRes.toLowerCase());
+              const costPerSec = grokQuality ? grokQuality.cost : base;
+              const result = Math.ceil(costPerSec * grokDuration * factor);
+              console.log("[usePricingData] Grok Imagine pricing:", { modelId, selectedQuality, grokRes, costPerSec, grokDuration, factor, result });
+              return result;
+            } catch (e) {
+              console.error("[usePricingData] Error parsing Grok Imagine formula:", e);
+            }
+          }
+          return Math.ceil(base * factor);
         case 'getSeedance20':
           if (model.formulaJson) {
             try {
@@ -432,6 +452,29 @@ export const usePricingData = () => {
               return result;
             } catch (e) {
               console.error("[usePricingData] Error parsing Seedance 2.0 formula:", e);
+            }
+          }
+          return Math.ceil(base * factor);
+        case 'getSeedance20Fast':
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const resolutions = formula.pricing?.resolutions;
+              const resMatch = selectedQuality.match(/^(\d+[pP])/i);
+              const durMatch = selectedQuality.match(/(\d+)s/);
+              const hasVideo = !selectedQuality.includes('novideo');
+              const rawRes = resMatch ? resMatch[1] : "480p";
+              const duration = durMatch ? parseInt(durMatch[1]) : 5;
+              const resKey = Object.keys(resolutions || {}).find(
+                k => k.toLowerCase() === rawRes.toLowerCase()
+              ) || rawRes;
+              const resCost = resolutions?.[resKey];
+              const costPerSec = resCost ? (hasVideo ? resCost.video_input : resCost.no_video) : base;
+              const result = Math.ceil(costPerSec * duration * factor);
+              console.log("[usePricingData] Seedance 2.0 Fast pricing:", { modelId, selectedQuality, resKey, hasVideo, costPerSec, duration, factor, result });
+              return result;
+            } catch (e) {
+              console.error("[usePricingData] Error parsing Seedance 2.0 Fast formula:", e);
             }
           }
           return Math.ceil(base * factor);

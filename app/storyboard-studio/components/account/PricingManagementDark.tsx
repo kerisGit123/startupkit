@@ -41,7 +41,9 @@ import {
   getTopazUpscale,
   getSeedance15,
   getSeedance20,
+  getSeedance20Fast,
   getKlingMotionControl,
+  getGrokImageToVideo,
 } from "@/lib/storyboard/pricing";
 
 interface Analytics {
@@ -87,7 +89,8 @@ export default function PricingManagementDark() {
     resolution: '720p',
     audio: false,
     duration: 5,
-    upscaleFactor: '2x'
+    upscaleFactor: '2x',
+    inputVideoDuration: 0, // For Seedance 2.0: input video duration in seconds
   });
   const [testResult, setTestResult] = useState<number | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -233,12 +236,41 @@ export default function PricingManagementDark() {
           testParams.resolution,
           testParams.duration
         );
-      } else if (assignedFunction === 'getSeedance20') {
-        result = getSeedance20(
+      } else if (assignedFunction === 'getSeedance20' || assignedFunction === 'getSeedance20Fast') {
+        // Use formulaJson from DB for flexible pricing
+        const totalDur = testParams.audio ? (testParams.inputVideoDuration + testParams.duration) : testParams.duration;
+        if (model.formulaJson) {
+          try {
+            const formula = JSON.parse(model.formulaJson);
+            const resolutions = formula.pricing?.resolutions;
+            const resKey = Object.keys(resolutions || {}).find(
+              k => k.toLowerCase() === testParams.resolution.toLowerCase()
+            ) || testParams.resolution;
+            const resCost = resolutions?.[resKey];
+            const costPerSec = resCost
+              ? (testParams.audio ? resCost.video_input : resCost.no_video)
+              : baseCost;
+            result = Math.ceil(costPerSec * totalDur * factor);
+          } catch (e) {
+            // Fallback to hardcoded function
+            if (assignedFunction === 'getSeedance20') {
+              result = getSeedance20(baseCost, factor, testParams.resolution, testParams.audio, totalDur);
+            } else {
+              result = getSeedance20Fast(baseCost, factor, testParams.resolution, testParams.audio, totalDur);
+            }
+          }
+        } else {
+          if (assignedFunction === 'getSeedance20') {
+            result = getSeedance20(baseCost, factor, testParams.resolution, testParams.audio, totalDur);
+          } else {
+            result = getSeedance20Fast(baseCost, factor, testParams.resolution, testParams.audio, totalDur);
+          }
+        }
+      } else if (assignedFunction === 'getGrokImageToVideo') {
+        result = getGrokImageToVideo(
           baseCost,
           factor,
           testParams.resolution,
-          testParams.audio, // "Include Audio" checkbox = has video input
           testParams.duration
         );
       } else {
@@ -989,8 +1021,9 @@ export default function PricingManagementDark() {
                   const newModel = models?.find(m => m.modelId === newModelId);
                   const fn = (newModel as any)?.assignedFunction;
                   // Reset resolution and duration to valid defaults for the selected model
-                  const defaultRes = fn === 'getKlingMotionControl' ? '720p' : fn === 'getSeedance20' ? '480p' : '720p';
-                  setTestParams({...testParams, modelId: newModelId, resolution: defaultRes, duration: 4, audio: false});
+                  const defaultRes = fn === 'getKlingMotionControl' ? '720p' : fn === 'getSeedance20' ? '480p' : fn === 'getGrokImageToVideo' ? '480p' : '720p';
+                  const defaultDur = fn === 'getGrokImageToVideo' ? 6 : 4;
+                  setTestParams({...testParams, modelId: newModelId, resolution: defaultRes, duration: defaultDur, audio: false});
                 }}
                 className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               >
@@ -1065,7 +1098,7 @@ export default function PricingManagementDark() {
                           const fn = models?.find(m => m.modelId === testParams.modelId)?.assignedFunction;
                           if (fn === 'getKlingMotionControl') {
                             return (<><option value="720p">720p</option><option value="1080p">1080p</option></>);
-                          } else if (fn === 'getSeedance20') {
+                          } else if (fn === 'getSeedance20' || fn === 'getSeedance20Fast' || fn === 'getGrokImageToVideo') {
                             return (<><option value="480p">480p</option><option value="720p">720p</option></>);
                           } else {
                             return (<><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option><option value="4K">4K</option></>);
@@ -1082,11 +1115,22 @@ export default function PricingManagementDark() {
                         onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
                         className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                       >
-                        <option value="4">4 seconds</option>
-                        <option value="8">8 seconds</option>
-                        <option value="12">12 seconds</option>
-                        <option value="16">16 seconds</option>
-                        <option value="20">20 seconds</option>
+                        {(() => {
+                          const fn = models?.find(m => m.modelId === testParams.modelId)?.assignedFunction;
+                          if (fn === 'getSeedance20' || fn === 'getSeedance20Fast') {
+                            return Array.from({ length: 12 }, (_, i) => (
+                              <option key={i + 4} value={i + 4}>{i + 4} seconds</option>
+                            ));
+                          }
+                          if (fn === 'getGrokImageToVideo') {
+                            return Array.from({ length: 25 }, (_, i) => (
+                              <option key={i + 6} value={i + 6}>{i + 6} seconds</option>
+                            ));
+                          }
+                          return [4, 5, 8, 10, 12, 15, 20].map(d => (
+                            <option key={d} value={d}>{d} seconds</option>
+                          ));
+                        })()}
                       </select>
                     </div>
 
@@ -1103,10 +1147,37 @@ export default function PricingManagementDark() {
                               onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
                               className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                             />
-                            {fn === 'getSeedance20' ? 'Include Video Input' : 'Include Audio'}
+                            {(fn === 'getSeedance20' || fn === 'getSeedance20Fast') ? 'Include Video Input' : 'Include Audio'}
                           </label>
                         </div>
                       );
+                    })()}
+
+                    {/* Input Video Duration — only for Seedance 2.0 models when video input is enabled */}
+                    {(() => {
+                      const fn = models?.find(m => m.modelId === testParams.modelId)?.assignedFunction;
+                      if ((fn === 'getSeedance20' || fn === 'getSeedance20Fast') && testParams.audio) {
+                        return (
+                          <div>
+                            <label className="block text-sm font-medium text-(--text-secondary) mb-1">Input Video Duration</label>
+                            <select
+                              value={testParams.inputVideoDuration}
+                              onChange={(e) => setTestParams({...testParams, inputVideoDuration: Number(e.target.value)})}
+                              className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                            >
+                              <option value="0">No video (images only)</option>
+                              <option value="4">4s input video</option>
+                              <option value="6">6s input video</option>
+                              <option value="8">8s input video</option>
+                              <option value="10">10s input video</option>
+                              <option value="12">12s input video</option>
+                              <option value="14">14s input video</option>
+                              <option value="15">15s input video</option>
+                            </select>
+                          </div>
+                        );
+                      }
+                      return null;
                     })()}
                   </>
                 )}
@@ -1274,20 +1345,49 @@ export default function PricingManagementDark() {
               />
             </div>
           )}
-          {/* Show Audio for video models only */}
+          {/* Show Audio/Video Input toggle for video models only */}
           {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
             <div>
-              <label className="flex items-center text-sm text-(--text-secondary) mb-1">
-                <input 
-                  type="checkbox" 
+              <label className="flex items-center gap-2 text-sm text-(--text-secondary) mb-1">
+                <input
+                  type="checkbox"
                   checked={testParams.audio}
                   onChange={(e) => setTestParams({...testParams, audio: e.target.checked})}
                   className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
                 />
-                Include Audio
+                {(() => {
+                  const fn = (models?.find(m => m.modelId === testParams.modelId) as any)?.assignedFunction;
+                  return (fn === 'getSeedance20' || fn === 'getSeedance20Fast') ? 'Include Video Input' : 'Include Audio';
+                })()}
               </label>
             </div>
           )}
+          {/* Input Video Duration for Seedance models */}
+          {(() => {
+            const fn = (models?.find(m => m.modelId === testParams.modelId) as any)?.assignedFunction;
+            if ((fn === 'getSeedance20' || fn === 'getSeedance20Fast') && testParams.audio) {
+              return (
+                <div>
+                  <label className="block text-sm font-medium text-(--text-secondary) mb-1">Input Video Duration</label>
+                  <select
+                    value={testParams.inputVideoDuration}
+                    onChange={(e) => setTestParams({...testParams, inputVideoDuration: Number(e.target.value)})}
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                  >
+                    <option value="0">No video (images only)</option>
+                    <option value="4">4s input video</option>
+                    <option value="6">6s input video</option>
+                    <option value="8">8s input video</option>
+                    <option value="10">10s input video</option>
+                    <option value="12">12s input video</option>
+                    <option value="14">14s input video</option>
+                    <option value="15">15s input video</option>
+                  </select>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
         
         {/* Model Information Display */}
@@ -1713,6 +1813,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                   <option value="getKlingMotionControl">getKlingMotionControl - Video Generation (Kling 3.0)</option>
                   <option value="getVeo31">getVeo31 - Video Generation</option>
                   <option value="getTopazUpscale">getTopazUpscale - AI Upscaling</option>
+                  <option value="getGrokImageToVideo">getGrokImageToVideo - Video Generation (Grok Imagine)</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-2">Assign a specific pricing function. If not set, will auto-detect based on model type.</p>
               </div>

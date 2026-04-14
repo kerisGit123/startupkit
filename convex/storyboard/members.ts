@@ -18,17 +18,9 @@ export const addMember = mutation({
       teamMemberIds: [...project.teamMemberIds, userId],
       updatedAt: Date.now(),
     });
-
-    await ctx.db.insert("storyboard_credit_usage", {
-      orgId: project.orgId,
-      userId: addedBy,
-      projectId,
-      action: "member_added",
-      creditsUsed: 0,
-      model: "",
-      metadata: { memberId: userId, role },
-      createdAt: Date.now(),
-    });
+    // Note: "member_added" used to be logged to storyboard_credit_usage
+    // with creditsUsed: 0. That table is gone and member events are
+    // already tracked by Clerk natively, so the log was removed.
   },
 });
 
@@ -61,23 +53,7 @@ export const listProjectsByMember = query({
   },
 });
 
-export const getOrgUsage = query({
-  args: { orgId: v.string() },
-  handler: async (ctx, { orgId }) => {
-    const usage = await ctx.db
-      .query("storyboard_credit_usage")
-      .withIndex("by_org", (q) => q.eq("orgId", orgId))
-      .collect();
-
-    const totalCredits = usage.reduce((sum, u) => sum + u.creditsUsed, 0);
-    const byMember: Record<string, number> = {};
-    const byAction: Record<string, number> = {};
-
-    for (const u of usage) {
-      byMember[u.userId] = (byMember[u.userId] ?? 0) + u.creditsUsed;
-      byAction[u.action] = (byAction[u.action] ?? 0) + u.creditsUsed;
-    }
-
-    return { totalCredits, byMember, byAction, entries: usage.length };
-  },
-});
+// Removed: getOrgUsage query — used to query the deleted
+// storyboard_credit_usage table. No callers in the codebase.
+// Usage analytics now live in credits.getOrgUsageSummary /
+// credits.listOrgUsage which read from credits_ledger.

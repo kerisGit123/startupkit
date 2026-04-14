@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery } from "convex/react";
+import { useEffect, useRef } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Coins, TrendingUp, TrendingDown } from "lucide-react";
 
 interface CreditBalanceDisplayProps {
@@ -11,23 +12,57 @@ interface CreditBalanceDisplayProps {
 }
 
 export default function CreditBalanceDisplay({ className = "" }: CreditBalanceDisplayProps) {
-  // Get current user's company ID
-  const companyId = useCurrentCompanyId() || "personal";
+  // Get current user's company ID. DO NOT fall back to a literal
+  // "personal" string — that creates orphan rows in credits_balance
+  // unrelated to any real user. Skip queries until companyId is ready.
+  const companyId = useCurrentCompanyId() || "";
+  const { plan: currentPlan, isLoading: planLoading } = useSubscription();
 
-  // Get credit usage summary (like dashboard)
-  const summary = useQuery(api.storyboard.creditUsage.getOrgSummary, { 
-    orgId: companyId 
-  });
+  // Get credit usage summary (for the "Credits Used" subtitle)
+  const summary = useQuery(
+    api.credits.getOrgUsageSummary,
+    companyId ? { companyId } : "skip",
+  );
 
-  // Get current balance from credits table
-  const balance = useQuery(api.credits.getBalance, {
-    companyId: companyId
-  });
+  // Get current balance from credits_balance table.
+  // Balance is already net of every deductCredits call — DO NOT subtract
+  // usage again (that would double-deduct).
+  const balance = useQuery(
+    api.credits.getBalance,
+    companyId ? { companyId } : "skip",
+  );
 
-  // Calculate remaining credits (total - used)
-  const remainingCredits = balance !== undefined && summary !== undefined 
-    ? balance - summary.total 
-    : balance || 0;
+  // ─ Auto-grant monthly credits on mount ────────────────────────────
+  // If the user's current billing cycle hasn't been granted yet,
+  // trigger the grant now. Idempotent — the mutation itself checks
+  // and no-ops if already granted this cycle.
+  //
+  // This handles the "returning user" case: someone who hasn't logged
+  // in for months will see their monthly credits appear in the balance
+  // the moment they open the app, not only when they click Generate.
+  const ensureMonthlyGrant = useMutation(api.credits.ensureMonthlyGrant);
+  const grantAttemptedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (planLoading || !companyId || !currentPlan) return;
+    // Model B: only auto-grant for PERSONAL workspaces.
+    // Orgs receive credits via Transfer Credits dialog only.
+    if (companyId.startsWith("org_")) return;
+    // Only attempt once per (companyId, plan) per component lifetime
+    const key = `${companyId}:${currentPlan}`;
+    if (grantAttemptedRef.current === key) return;
+    grantAttemptedRef.current = key;
+
+    ensureMonthlyGrant({ companyId, plan: currentPlan })
+      .then((result) => {
+        console.log("[CreditBalanceDisplay] ensureMonthlyGrant result", result);
+      })
+      .catch((err) => {
+        console.error("[CreditBalanceDisplay] ensureMonthlyGrant failed", err);
+      });
+  }, [planLoading, companyId, currentPlan, ensureMonthlyGrant]);
+
+  const remainingCredits = balance ?? 0;
 
   const isLoading = balance === undefined || summary === undefined;
 

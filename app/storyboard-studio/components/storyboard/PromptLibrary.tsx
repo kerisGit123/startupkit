@@ -36,6 +36,140 @@ interface PromptLibraryProps {
 
 const DEFAULT_PROMPT_TEMPLATES = [
   {
+    name: 'UGC Character',
+    type: 'character' as const,
+    isPublic: false,
+    notes: 'Character for UGC',
+    prompt: `Create a professional character turnaround and reference sheet based on the reference image. Use the uploaded image as the primary visual reference for the character's identity, proportions, facial features, body shape, hairstyle, and overall design language, while translating it into a clean, neutral, reusable presentation board. The final image should be arranged like a polished concept art sheet on a pure white studio background. Show the same character in four full body views: front view, side profile, back view, and three quarter view. On the right side, include multiple clean detail panels with close ups of the eyes, upper face, lower face, lips, skin texture, hair detail, and one small clothing or material detail. Keep the styling neutral and generic so the sheet can be reused as a base template for future adaptations. Simplify anything overly specific, thematic, fantasy based, branded, culturally tied, or heavily ornamental from the source image into a more universal version while preserving the essence of the character. The outfit should become a clean neutral base outfit with minimal detailing, soft solid tones, and a refined silhouette. No excessive accessories, no dramatic headpieces, no strong lore specific elements, no heavy decoration unless they are essential to the base identity. The character should feel balanced, elegant, realistic, and adaptable. Expression should be calm and neutral. Makeup should be subtle and natural. Lighting should be soft, even, and studio clean. The layout should feel like a premium design presentation board used for model sheets, character development, or production reference. Preserve the core identity from @lmage1, but present it in a simplified, neutral, production ready format that can serve as a universal template for future redesigns.`,
+  },
+  {
+    name: 'Ultra Realistic Photorealistic Character',
+    type: 'character' as const,
+    isPublic: false,
+    notes: '@Image1 = Character reference, @Image2 = Style reference (optional realism tone), @Image3 = Environment (optional). Use @Image1 as the primary identity source. Apply ultra-realistic transformation while preserving identity. Use @Image2 for realism tone (lighting, color grading). Use @Image3 for environment grounding (optional). Strong Negative Prompt: Avoid cartoon style, anime style, CGI/3D render look, plastic skin, over-smooth textures, exaggerated proportions, fantasy stylization, painterly or illustration effects.',
+    prompt: `Transform the provided character into an ultra-realistic, photorealistic version as if captured by a high-end cinema camera.
+
+Maintain 100% identity consistency:
+- facial structure
+- proportions
+- recognizable features
+- expression and personality
+
+Convert all stylized elements into real-world equivalents:
+- realistic skin with pores, fine wrinkles, natural imperfections
+- physically accurate hair strands with flyaways
+- detailed eyes with reflections, moisture, and depth
+- natural lighting interaction with skin and materials
+
+Apply cinematic realism:
+- shot on ARRI Alexa / RED camera look
+- shallow depth of field
+- realistic lens imperfections (bokeh, slight chromatic aberration)
+- global illumination and soft shadows
+
+Ensure material realism:
+- cloth behaves like real fabric (cotton, leather, metal, etc.)
+- physically accurate reflections and roughness
+- no cartoon, no stylization, no CGI look
+
+Style direction:
+- hyper-detailed
+- grounded in reality
+- believable as a real human photographed in real life
+
+Output must look like: a real photograph, not illustration, not 3D render, not concept art.`,
+  },
+  {
+    name: 'Ultra Realistic Photorealistic Character 03',
+    type: 'character' as const,
+    isPublic: false,
+    notes: 'Use @image1 as character reference. Compact: Single character only, no duplicates. All main views must be FULL BODY (head to toe, no cropping). Back view = same subject rotated 180°. 2/3 main views: front, back, left 90°, right 90°, 3/4 (all full body). 1/3 detail panels: eyes, face, skin, hair, tunic, clothing, object (horizontal if long). Ultra-realistic (pores, eyes, lips, hair strands, fabric, metal wear). Clean layout, real photography. No CGI, no cartoon.',
+    prompt: `# Ultra-Realistic Character Identity Sheet v4.3 (Full-Body Enforced)
+
+Create a photorealistic character identity sheet based strictly on the provided reference image. The result must look like a real professional studio identity sheet, with a clean, organized layout, ultra-realistic rendering, and clear separation between full-body views and detail panels.
+
+CRITICAL RULE — SINGLE SUBJECT ONLY:
+- The identity sheet must contain ONLY ONE character
+- All views must represent the SAME individual
+- No duplicated characters
+- Back view = same subject rotated 180°, NOT a second person
+- Must match body, clothing, hair, and proportions exactly
+
+Page Layout (STRICT):
+
+Section A — Main Views (2/3 area):
+Display FULL-BODY views of the SAME character.
+
+Full-Body Requirement (MANDATORY):
+Each view must show the entire character from head to toe:
+- head fully visible (no cropping)
+- feet fully visible (no cropping)
+- full silhouette clearly defined
+- no zoomed-in, half-body, or portrait framing
+The character must fit naturally within frame with proper margins, like a fashion or casting sheet.
+
+Required Views:
+1. Front View (full body, facing camera)
+2. Left Profile (full body, 90° side view)
+3. Right Profile (full body, 90° side view)
+4. Back View (full body, 180° rear view)
+5. 3/4 View (full body, ~45° angle)
+
+Layout Rules: All views must be same scale, aligned and evenly spaced, consistently framed. Clean grid layout, no overlap, consistent lighting across all views.
+
+Section B — Detail Panels (1/3 area):
+Top Row (2 panels): Eyes detail, Face detail.
+Middle Row: Skin texture, Hair texture, Tunic detail, Sash/clothing detail.
+Bottom Row (Adaptive Object Panel): Wide horizontal panel, long objects (e.g. sword) must be horizontal and simplified.
+
+Angle Accuracy Rules:
+- Left/Right = true 90° profiles
+- Back = full 180° rotation
+- Front = direct
+- 3/4 = ~45°
+
+Identity Consistency:
+- Same face, body, proportions
+- Same outfit and materials
+- Same hairstyle and structure
+
+Expression Rules:
+- Front view = primary expression
+- Natural, alive (not blank)
+- Eyes focused, lips natural
+
+Ultra-Realistic Detail:
+- skin pores, fine lines, imperfections
+- realistic eyes (reflections, moisture)
+- real hair strands
+- fabric texture, stitching, folds
+- realistic material behavior
+
+Photography Style:
+- studio lighting (soft key + rim light)
+- natural shadows
+- realistic exposure
+- subtle depth of field
+Must look like real photography.
+
+Strict Negative Constraints — Do NOT produce:
+- cropped body (must be full body)
+- zoomed-in views in main section
+- multiple characters
+- incorrect back view
+- cartoon / anime / CGI style
+- smooth or plastic skin
+
+Output: A single identity sheet image containing 2/3 area full-body multi-angle views, 1/3 area structured detail panels. All views must be complete, consistent, and ultra-realistic, like a professional casting sheet.`,
+  },
+  {
+    name: 'Kling 3.0 Motion Character Prompt',
+    type: 'other' as const,
+    isPublic: false,
+    notes: 'Default prompt for Kling 3.0 Motion',
+    prompt: `No distortion, the character's movements are consistent with the video.`,
+  },
+  {
     name: 'Prompt Edit Image',
     type: 'other' as const,
     isPublic: false,

@@ -48,7 +48,6 @@ export const cleanStoryboardTables = mutation({
       elements: 0,
       items: 0,
       files: 0,
-      creditUsage: 0,
     };
 
     // Clean storyboard_elements
@@ -72,12 +71,7 @@ export const cleanStoryboardTables = mutation({
       results.files++;
     }
 
-    // Clean storyboard_credit_usage
-    const creditUsage = await ctx.db.query("storyboard_credit_usage").collect();
-    for (const usage of creditUsage) {
-      await ctx.db.delete(usage._id);
-      results.creditUsage++;
-    }
+    // Removed: storyboard_credit_usage cleanup — table no longer exists.
 
     // Clean storyboard_projects (keep this for last as others reference it)
     const projects = await ctx.db.query("storyboard_projects").collect();

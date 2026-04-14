@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Film, FolderOpen, Users, Star, Clock, Tag, Check,
-  ChevronDown, ChevronUp, BarChart2, LayoutGrid, Settings,
-  LogOut, DollarSign, CreditCard, Trash2, LifeBuoy, ScrollText,
+  ChevronDown, ChevronUp, LayoutGrid, Settings,
+  LogOut, DollarSign, CreditCard, Trash2, LifeBuoy, ScrollText, FlaskConical,
 } from "lucide-react";
 import type { Project } from "../types";
 import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
@@ -22,7 +22,6 @@ interface SidebarNavProps {
 const TOP_ITEMS = [
   { key: "projects", icon: FolderOpen, label: "Projects",    desc: "Manage storyboard projects" },
   { key: "members",  icon: Users,      label: "Members",     desc: "" },
-  { key: "usage",    icon: BarChart2,  label: "Usage",       desc: "Credit usage analytics" },
 ];
 
 const ORGANIZE_ITEMS = [
@@ -36,6 +35,7 @@ const UNIVERSE_NAV_ITEMS = [
   { key: "support", icon: LifeBuoy, label: "Support" },
   { key: "logs", icon: ScrollText, label: "Logs" },
   { key: "cleaning", icon: Trash2, label: "Cleaning" },
+  { key: "testing", icon: FlaskConical, label: "Testing" },
 ];
 
 const EXTERNAL_LINK_ITEMS = [

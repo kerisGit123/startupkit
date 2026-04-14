@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { useOrganization, useUser, UserButton, OrganizationSwitcher } from "@clerk/nextjs";
+import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
+import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/convex/_generated/api";
 import type { Step, Orientation, ViewMode, Shot, Tag, CommentItem, CastMember, LocationAsset, BoardSettings, Project } from "./types";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -16,6 +17,8 @@ import { SceneEditor }        from "./components/SceneEditor";
 import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./components/WizardSteps";
 import { PdfModal, ShareModal, TagModal } from "./components/Modals";
 import { MembersPage }        from "./components/MembersPage";
+import { TestingPage }        from "./components/TestingPage";
+import { LapsedBanner }       from "./components/LapsedBanner";
 import { UsageDashboard }     from "./components/UsageDashboard";
 import { FileBrowser } from "./components/storyboard/FileBrowser";
 import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
@@ -29,8 +32,9 @@ export default function StoryboardPage() {
   const router = useRouter();
   const { organization } = useOrganization();
   const { user } = useUser();
+  const { plan: currentPlan } = useSubscription();
   const { activeNav, setActiveNav, sidebarOpen, setSidebarOpen } = useStoryboardStudioUI();
-  
+
   // ✅ Use global getCurrentCompanyId function
   const companyId = getCurrentCompanyId(user);
   const currentCompanyId = useCurrentCompanyId();
@@ -185,6 +189,7 @@ export default function StoryboardPage() {
         ownerId: user?.id ?? "unknown",
         // ✅ Remove companyId - calculated on server from auth context
         settings: { frameRatio: "16:9", style: "realistic", layout: "grid" },
+        plan: currentPlan,
       });
     }
 
@@ -290,7 +295,7 @@ export default function StoryboardPage() {
     if (activeNav === "logs") setCurrentStep("logs");
     if (activeNav === "cleaning") setCurrentStep("cleaning");
     if (activeNav === "members") setCurrentStep("members");
-    if (activeNav === "usage") setCurrentStep("usage");
+    if (activeNav === "testing") setCurrentStep("testing");
 
     if (
       activeNav.startsWith("tag:") ||
@@ -317,14 +322,22 @@ export default function StoryboardPage() {
 
   const handleCreateConvexProject = async (name: string, frameRatio: string, style: string) => {
     if (!name.trim()) return;
-    const id = await createConvexProject({
-      name,
-      orgId,
-      ownerId: user?.id ?? "unknown",
-      // ✅ Remove companyId - calculated on server from auth context
-      settings: { frameRatio, style, layout: "grid" },
-    });
-    router.push(`/storyboard-studio/workspace/${id}`);
+    try {
+      const id = await createConvexProject({
+        name,
+        orgId,
+        ownerId: user?.id ?? "unknown",
+        // ✅ Remove companyId - calculated on server from auth context
+        settings: { frameRatio, style, layout: "grid" },
+        // Server enforces project limit based on plan
+        plan: currentPlan,
+      });
+      router.push(`/storyboard-studio/workspace/${id}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create project";
+      alert(message);
+      throw err;
+    }
   };
 
   const handleDeleteConvexProject = async (id: string) => {
@@ -355,7 +368,7 @@ export default function StoryboardPage() {
     try {
       await updateConvexProject({
         id: id as any,
-        imageUrl: undefined
+        imageUrl: ""
       });
       console.log("ImageUrl unset successfully from project");
     } catch (error) {
@@ -446,6 +459,10 @@ export default function StoryboardPage() {
     <div className="flex h-screen bg-[#0d0d12] overflow-hidden">
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* Lapsed subscription banner — shown when in an org whose
+            ownerPlan has dropped to "free" (cancelled subscription) */}
+        <LapsedBanner />
+
         {/* Step nav (wizard steps only) */}
         {(currentStep === "script" || currentStep === "breakdown" || currentStep === "style" || currentStep === "cast") && (
           <StepNav currentStep={currentStep} onStepClick={setCurrentStep} />
@@ -627,6 +644,13 @@ export default function StoryboardPage() {
 
         {currentStep === "cleaning" && (
           <AdminPage
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "testing" && (
+          <TestingPage
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />

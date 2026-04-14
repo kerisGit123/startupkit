@@ -7,7 +7,8 @@ import {
   AlertCircle, CheckCircle2, Copy, Coins,
   TrendingUp, XCircle, HardDrive, BarChart3, ScrollText,
 } from "lucide-react";
-import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import { AppUserButton as UserButton } from "@/components/AppUserButton";
+import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import { useUser } from "@clerk/nextjs";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -94,6 +95,7 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
   const { user } = useUser();
   const companyId = useCurrentCompanyId();
   const [statusFilter, setStatusFilter] = useState("");
+  const [aiKeyFilter, setAiKeyFilter] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<PeriodValue>("current_month");
   const [activeTab, setActiveTab] = useState<"storage" | "generation" | "logs">("storage");
@@ -180,7 +182,7 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden items-center self-end md:flex lg:self-auto">
-            <OrganizationSwitcher appearance={{ elements: { rootBox: "flex items-center", organizationSwitcherTrigger: "px-3 py-2 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-2 text-sm mr-3" } }} />
+            <OrgSwitcher appearance={{ elements: { rootBox: "flex items-center", organizationSwitcherTrigger: "px-3 py-2 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-2 text-sm mr-3" } }} />
             <UserButton appearance={{ elements: { avatarBox: "w-8 h-8" } }} />
           </div>
         </div>
@@ -441,8 +443,8 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
                 </div>
               </div>
 
-              {/* Filter */}
-              <div className="flex items-center gap-3">
+              {/* Filters */}
+              <div className="flex items-center gap-3 flex-wrap">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -450,13 +452,25 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
                 >
                   <option value="">All Status</option>
                   <option value="completed">Completed</option>
-                  <option value="ready">Ready</option>
+                  <option value="processing">Processing</option>
                   <option value="generating">Generating</option>
                   <option value="failed">Failed</option>
                   <option value="error">Error</option>
                 </select>
+                <select
+                  value={aiKeyFilter}
+                  onChange={(e) => setAiKeyFilter(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl text-sm bg-(--bg-tertiary) border border-(--border-primary) text-(--text-primary) focus:outline-none focus:border-(--accent-purple) [color-scheme:dark]"
+                >
+                  <option value="">All AI Keys</option>
+                  {(() => {
+                    const keys = new Set<string>();
+                    results?.forEach((f: any) => { if (f.aiKeyName) keys.add(f.aiKeyName); });
+                    return Array.from(keys).sort().map(k => <option key={k} value={k}>{k}</option>);
+                  })()}
+                </select>
                 <span className="text-sm text-(--text-tertiary)">
-                  {results ? `${results.length} logs loaded` : "Loading..."}
+                  {results ? `${(aiKeyFilter ? results.filter((f: any) => f.aiKeyName === aiKeyFilter) : results).length} logs loaded` : "Loading..."}
                 </span>
               </div>
 
@@ -483,42 +497,59 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
                           <th className="px-5 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">Status</th>
                           <th className="px-5 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">Credits</th>
                           <th className="px-5 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">Size</th>
-                          <th className="px-5 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">Task ID</th>
+                          <th className="px-5 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">AI Key / Task ID</th>
                           <th className="px-5 py-4 text-left text-xs font-semibold text-(--text-secondary) uppercase tracking-wider">Result</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {results.map((file: any, index: number) => {
+                        {results.filter((f: any) => !aiKeyFilter || f.aiKeyName === aiKeyFilter).map((file: any, index: number) => {
                           const model = getModelFromFile(file);
                           const statusStyle = STATUS_STYLES[file.status] || STATUS_STYLES.completed;
                           const statusLabel = file.status === "ready" ? "success" : file.status;
+                          const isFailed = file.status === "failed" || file.status === "error";
                           return (
                             <tr key={file._id} className={`border-b border-(--border-primary) last:border-0 hover:bg-(--bg-tertiary)/30 transition-all duration-200 ${index % 2 === 0 ? "" : "bg-(--bg-primary)/20"}`}>
                               <td className="px-5 py-4">
                                 <div className="space-y-1.5">
                                   <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-(--accent-purple)/20 text-(--accent-purple) border border-(--accent-purple)/30">{model}</span>
                                   <p className="text-xs text-(--text-secondary)">{formatDate(file.createdAt)}</p>
-                                  {file.aiKeyName && <p className="text-xs text-(--text-tertiary)">AI Key: {file.aiKeyName}</p>}
                                   {file.fileType && <p className="text-xs text-(--text-tertiary)">Type: {file.fileType}</p>}
                                 </div>
                               </td>
                               <td className="px-5 py-4">
-                                <div className="flex items-center gap-2">
-                                  <div className={`w-2 h-2 rounded-full ${statusStyle.dot}`} />
-                                  <span className={`text-xs font-medium uppercase ${statusStyle.text}`}>{statusLabel}</span>
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${statusStyle.dot}`} />
+                                    <span className={`text-xs font-medium uppercase ${statusStyle.text}`}>{statusLabel}</span>
+                                  </div>
+                                  {isFailed && file.responseCode && (
+                                    <span
+                                      className="inline-block px-2 py-0.5 rounded text-[10px] font-mono bg-red-500/15 text-red-400 border border-red-500/20 cursor-default w-fit"
+                                      title={file.responseMessage || `Error code: ${file.responseCode}`}
+                                    >
+                                      {file.responseCode}{file.responseMessage ? ` - ${file.responseMessage.substring(0, 40)}${file.responseMessage.length > 40 ? '...' : ''}` : ''}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-5 py-4"><span className="text-sm font-semibold text-white">{file.creditsUsed ?? 0}</span></td>
                               <td className="px-5 py-4"><span className="text-xs text-(--text-secondary)">{file.size ? formatBytes(file.size) : "-"}</span></td>
                               <td className="px-5 py-4">
-                                {file.taskId ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-mono text-(--text-secondary) max-w-[180px] truncate">{file.taskId}</span>
-                                    <button onClick={() => handleCopy(file.taskId, file._id)} className="text-(--text-tertiary) hover:text-white transition-colors shrink-0" title="Copy Task ID">
-                                      {copiedId === file._id ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                    </button>
-                                  </div>
-                                ) : <span className="text-xs text-(--text-tertiary)">-</span>}
+                                <div className="space-y-1.5">
+                                  {file.aiKeyName && (
+                                    <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                                      {file.aiKeyName}
+                                    </span>
+                                  )}
+                                  {file.taskId ? (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-mono text-(--text-tertiary) max-w-[160px] truncate">{file.taskId}</span>
+                                      <button onClick={() => handleCopy(file.taskId, file._id)} className="text-(--text-tertiary) hover:text-white transition-colors shrink-0" title="Copy Task ID">
+                                        {copiedId === file._id ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                      </button>
+                                    </div>
+                                  ) : !file.aiKeyName && <span className="text-xs text-(--text-tertiary)">-</span>}
+                                </div>
                               </td>
                               <td className="px-5 py-4">
                                 {file.sourceUrl ? (

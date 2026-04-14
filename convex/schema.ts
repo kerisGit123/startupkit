@@ -2056,10 +2056,12 @@ export default defineSchema({
       v.literal("getTopazUpscale"),
       v.literal("getSeedance15"),
       v.literal("getSeedance20"),
+      v.literal("getSeedance20Fast"),
       v.literal("getKlingMotionControl"),
       v.literal("getNanoBananaPrice"),
       v.literal("getGptImagePrice"),
-      v.literal("getVeo31")
+      v.literal("getVeo31"),
+      v.literal("getGrokImageToVideo")
     )),
     
     createdAt: v.number(),

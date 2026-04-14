@@ -1,10 +1,20 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-// Get company settings
+// Get company settings for the authenticated user's company
 export const getCompanySettings = query({
   args: {},
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity) {
+      const companyId = identity.orgId || identity.subject;
+      const settings = await ctx.db
+        .query("org_settings")
+        .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+        .first();
+      if (settings) return settings;
+    }
+    // Fallback to first record for backward compatibility
     const settings = await ctx.db.query("org_settings").first();
     return settings;
   },
@@ -37,13 +47,26 @@ export const updateCompanySettings = mutation({
     documentFooter: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const settings = await ctx.db.query("org_settings").first();
-    
+    // Get the authenticated user's companyId
+    const identity = await ctx.auth.getUserIdentity();
+    const companyId = identity?.orgId || identity?.subject || "default";
+
+    // Find settings for this specific company/user
+    let settings = await ctx.db
+      .query("org_settings")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .first();
+
+    // Fallback: check for legacy "default" record
     if (!settings) {
-      // Create new settings if none exist
+      settings = await ctx.db.query("org_settings").first();
+    }
+
+    if (!settings) {
+      // Create new settings with correct companyId
       await ctx.db.insert("org_settings", {
-        companyId: "default",
-        subjectType: "organization",
+        companyId,
+        subjectType: identity?.orgId ? "organization" : "user",
         companyName: args.companyName,
         companyAddress: args.companyAddress,
         companyCountry: args.companyCountry,
@@ -70,8 +93,9 @@ export const updateCompanySettings = mutation({
         updatedBy: "system",
       });
     } else {
-      // Update existing settings
+      // Update existing settings — also fix companyId if it's "default"
       await ctx.db.patch(settings._id, {
+        ...(settings.companyId === "default" ? { companyId } : {}),
         companyName: args.companyName ?? settings.companyName,
         companyAddress: args.companyAddress ?? settings.companyAddress,
         companyCountry: args.companyCountry ?? settings.companyCountry,
