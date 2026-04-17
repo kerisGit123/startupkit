@@ -13,6 +13,7 @@ import { FrameFavoriteButton } from "../../components/FrameFavoriteButton";
 import { FramePrimaryImageButton } from "../../components/FramePrimaryImageButton";
 import { WorkspaceExportModal } from "../../components/storyboard/WorkspaceExportModal";
 import { FileBrowser } from "../../components/storyboard/FileBrowser";
+import { VISUAL_STYLES } from "../../constants";
 import { ElementLibrary } from "../../components/storyboard/ElementLibrary";
 import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
 import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
@@ -499,6 +500,7 @@ export default function StoryboardWorkspacePage() {
   const [scriptDirty, setScriptDirty] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showBuildDialog, setShowBuildDialog] = useState(false);
+  const [showStyleDropdown, setShowStyleDropdown] = useState(false);
   const [isBuilding, setIsBuilding] = useState(false);
   const [isAddingFrame, setIsAddingFrame] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1178,6 +1180,45 @@ export default function StoryboardWorkspacePage() {
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <h2 className="text-sm font-semibold text-[#FFFFFF]">{items.length} Frames</h2>
+                    {/* Style Badge */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowStyleDropdown(!showStyleDropdown)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
+                          project?.settings?.style && project.settings.style !== 'custom'
+                            ? 'bg-purple-500/15 border-purple-500/30 text-purple-300'
+                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-gray-300'
+                        }`}
+                      >
+                        <Palette className="w-3 h-3" />
+                        {project?.settings?.style ? project.settings.style.charAt(0).toUpperCase() + project.settings.style.slice(1) : 'No Style'}
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+                      {showStyleDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setShowStyleDropdown(false)} />
+                          <div className="absolute top-full mt-1 left-0 bg-[#1a1a24] border border-white/15 rounded-lg shadow-2xl py-1 z-50 min-w-[160px] max-h-[300px] overflow-y-auto">
+                            {VISUAL_STYLES.filter(s => s.id !== 'custom').map(style => (
+                              <button
+                                key={style.id}
+                                onClick={() => {
+                                  updateProject({ id: project._id, settings: { ...project.settings, style: style.id } });
+                                  setShowStyleDropdown(false);
+                                }}
+                                className={`w-full px-3 py-1.5 text-left text-[12px] transition-colors flex items-center gap-2 ${
+                                  project?.settings?.style === style.id
+                                    ? 'bg-purple-500/15 text-purple-300'
+                                    : 'text-gray-300 hover:bg-white/8 hover:text-white'
+                                }`}
+                              >
+                                <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${style.gradient}`} />
+                                {style.label}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     {duplicateCount > 0 && (
                       <div className="flex items-center gap-1 px-2 py-1 bg-[#FAAD14]/20 border border-[#FAAD14]/30 rounded-md">
                         <AlertTriangle className="w-3 h-3 text-[#FAAD14]" />
