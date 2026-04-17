@@ -193,12 +193,13 @@ export async function generateSeedance2(params: {
     if (params.videoUrls && params.videoUrls.length > 0) {
       input.reference_video_urls = params.videoUrls;
     }
-    // Reference audio: max 3, each 2-15s, total ≤15s, max 15MB each, format wav/mp3
-    if (params.audioUrls && params.audioUrls.length > 0) {
-      input.reference_audio_urls = params.audioUrls;
-    }
   }
   // text-to-video: no additional inputs needed
+
+  // Audio can be added to ANY mode (lipsync = first-frame + audio)
+  if (params.audioUrls && params.audioUrls.length > 0) {
+    input.reference_audio_urls = params.audioUrls;
+  }
 
   const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
     method: "POST",
