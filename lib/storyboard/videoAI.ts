@@ -196,8 +196,8 @@ export async function generateSeedance2(params: {
   }
   // text-to-video: no additional inputs needed
 
-  // Audio can be added to ANY mode (lipsync = first-frame + audio)
-  if (params.audioUrls && params.audioUrls.length > 0) {
+  // Audio references — only in multimodal mode (lipsync sends as multimodal)
+  if (mode === "multimodal" && params.audioUrls && params.audioUrls.length > 0) {
     input.reference_audio_urls = params.audioUrls;
   }
 

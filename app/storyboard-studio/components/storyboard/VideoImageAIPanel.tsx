@@ -1555,8 +1555,10 @@ export function ImageAIPanel({
           : isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? videoRefs.map(v => v.url)
           : undefined;
         const audioUrlsParam = isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "lipsync") ? audioRefs.map(a => a.url) : undefined;
-        const seedanceModeParam = isSeedance2 ? (seedanceMode === "lipsync" ? "first-frame" : seedanceMode) : undefined;
-        const firstFrameParam = isSeedance2 && (seedanceMode === "first-frame" || seedanceMode === "first-last-frame" || seedanceMode === "lipsync") ? firstFrameUrl || undefined : undefined;
+        // Lipsync sends as multimodal (first_frame_url + audio is invalid — they're mutually exclusive)
+        // Character image goes into referenceImages, audio into audioUrls
+        const seedanceModeParam = isSeedance2 ? (seedanceMode === "lipsync" ? "multimodal" : seedanceMode) : undefined;
+        const firstFrameParam = isSeedance2 && (seedanceMode === "first-frame" || seedanceMode === "first-last-frame") ? firstFrameUrl || undefined : undefined;
         const lastFrameParam = isSeedance2 && seedanceMode === "first-last-frame" ? lastFrameUrl || undefined : undefined;
 
         // For Seedance 2.0, pass generateAudio state — lipsync always enables audio
@@ -1600,8 +1602,11 @@ export function ImageAIPanel({
         // Remove stray @Audio badges from prompt — Seedance uses reference_audio_urls, not prompt text
         finalPrompt = finalPrompt.replace(/@?[Aa]udio\d+/g, '').replace(/\s{2,}/g, ' ').trim();
 
-        const mergedUrls = (seedanceMode === "ugc" || seedanceMode === "showcase") ? ugcImageUrls : undefined;
-        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, (seedanceModeParam === "ugc" || seedanceModeParam === "showcase") ? "multimodal" : seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls);
+        // For lipsync, character image becomes a reference image (multimodal mode)
+        const mergedUrls = seedanceMode === "lipsync" ? (firstFrameUrl ? [firstFrameUrl] : [])
+          : (seedanceMode === "ugc" || seedanceMode === "showcase") ? ugcImageUrls
+          : undefined;
+        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls);
       }
       
     } catch (error) {
