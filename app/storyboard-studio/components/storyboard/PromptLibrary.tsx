@@ -8,7 +8,7 @@ import { Search, Plus, Edit, Trash2, Copy, Star, Grid, List, X, Zap, Clock, Save
 interface Prompt {
   _id: string;
   name: string;
-  type: 'character' | 'environment' | 'prop' | 'design' | 'camera' | 'action' | 'video' | 'other';
+  type: 'character' | 'environment' | 'prop' | 'design' | 'style' | 'camera' | 'action' | 'video' | 'other';
   prompt: string;
   notes?: string;
   companyId: string;
@@ -24,6 +24,7 @@ const PROMPT_CATEGORIES = [
   { key: 'environment', label: 'Environment' },
   { key: 'prop', label: 'Prop' },
   { key: 'design', label: 'Design' },
+  { key: 'style', label: 'Style' },
   { key: 'camera', label: 'Camera' },
   { key: 'action', label: 'Action' },
   { key: 'video', label: 'Video' },
