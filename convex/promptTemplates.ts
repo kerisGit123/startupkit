@@ -118,6 +118,7 @@ export const resetDefaults = mutation({
           v.literal("environment"),
           v.literal("prop"),
           v.literal("design"),
+          v.literal("style"),
           v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom")
         ),
         prompt: v.string(),
