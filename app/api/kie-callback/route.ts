@@ -381,61 +381,77 @@ export async function POST(request: NextRequest) {
 
       const sourceBlob = await sourceResponse.blob();
       const mimeType = sourceBlob.type || 'image/png';
-      const extension = mimeType.includes('webp') ? 'webp' : mimeType.includes('jpeg') ? 'jpg' : 'png';
-      const finalExtension = 'png';
       const timestamp = Date.now();
-      const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer());
       const generationMetadata = fileRecord?.metadata ?? {};
-      console.log('[kie-callback] File metadata:', generationMetadata);
-      console.log('[kie-callback] Should composite check:', {
-        shouldComposite: generationMetadata?.shouldComposite,
-        originalImageUrl: generationMetadata?.originalImageUrl,
-        cropX: generationMetadata?.cropX,
-        cropY: generationMetadata?.cropY,
-        cropWidth: generationMetadata?.cropWidth,
-        cropHeight: generationMetadata?.cropHeight
-      });
+      const isVideo = fileRecord?.fileType === 'video' || mimeType.startsWith('video/') || resultUrl.match(/\.(mp4|webm|mov)(\?|$)/i);
 
-      const tempR2Key = `temps/generated-image-kie-${timestamp}.${extension}`;
-      await uploadToR2(sourceBlob, tempR2Key);
-      const tempUrl = getR2PublicUrl(tempR2Key);
+      console.log('[kie-callback] File type detection:', { fileType: fileRecord?.fileType, mimeType, isVideo, resultUrl: resultUrl.substring(0, 80) });
 
-      let finalBuffer = sourceBuffer;
+      let finalR2Key: string;
+      let finalUrl: string | undefined;
+      let fileSizeBytes: number;
 
-      // Check if we need to composite (like your old code)
-      if (generationMetadata?.originalImageUrl && 
-          generationMetadata.cropX !== undefined && generationMetadata.cropY !== undefined &&
-          generationMetadata.cropWidth !== undefined && generationMetadata.cropHeight !== undefined) {
-        console.log('[kie-callback] Compositing generated image into original using crop coordinates...');
-        
-        try {
-          finalBuffer = await compositeGeneratedIntoOriginal({
-            originalImageUrl: generationMetadata.originalImageUrl,
-            cropX: generationMetadata.cropX,
-            cropY: generationMetadata.cropY,
-            cropWidth: generationMetadata.cropWidth,
-            cropHeight: generationMetadata.cropHeight,
-            generatedBuffer: sourceBuffer,
-          });
-          
-          console.log('[kie-callback] ✅ Compositing successful');
-        } catch (error) {
-          console.error('[kie-callback] ❌ Compositing failed, using generated image as-is:', error);
-          // Fallback to generated image
-          finalBuffer = sourceBuffer;
-        }
+      if (isVideo) {
+        // ── VIDEO: Save directly to {companyId}/generated/ as .mp4 ──
+        const videoExt = mimeType.includes('webm') ? 'webm' : mimeType.includes('mov') ? 'mov' : 'mp4';
+        finalR2Key = `${companyId}/generated/${fileRecord?.filename || `video-${timestamp}.${videoExt}`}`;
+        await uploadToR2(sourceBlob, finalR2Key);
+        finalUrl = getR2PublicUrl(finalR2Key);
+        fileSizeBytes = sourceBlob.size;
+        console.log('[kie-callback] Video saved directly:', { r2Key: finalR2Key, sizeMB: (fileSizeBytes / (1024 * 1024)).toFixed(2) });
       } else {
-        console.log('[kie-callback] No compositing needed or missing crop info, using generated image as-is');
+        // ── IMAGE: Process with optional compositing ──
+        const extension = mimeType.includes('webp') ? 'webp' : mimeType.includes('jpeg') ? 'jpg' : 'png';
+        const finalExtension = 'png';
+        const sourceBuffer = Buffer.from(await sourceBlob.arrayBuffer());
+
+        console.log('[kie-callback] File metadata:', generationMetadata);
+        console.log('[kie-callback] Should composite check:', {
+          shouldComposite: generationMetadata?.shouldComposite,
+          originalImageUrl: generationMetadata?.originalImageUrl,
+          cropX: generationMetadata?.cropX,
+          cropY: generationMetadata?.cropY,
+          cropWidth: generationMetadata?.cropWidth,
+          cropHeight: generationMetadata?.cropHeight
+        });
+
+        const tempR2Key = `temps/generated-image-kie-${timestamp}.${extension}`;
+        await uploadToR2(sourceBlob, tempR2Key);
+
+        let finalBuffer = sourceBuffer;
+
+        // Check if we need to composite
+        if (generationMetadata?.originalImageUrl &&
+            generationMetadata.cropX !== undefined && generationMetadata.cropY !== undefined &&
+            generationMetadata.cropWidth !== undefined && generationMetadata.cropHeight !== undefined) {
+          console.log('[kie-callback] Compositing generated image into original using crop coordinates...');
+
+          try {
+            finalBuffer = await compositeGeneratedIntoOriginal({
+              originalImageUrl: generationMetadata.originalImageUrl,
+              cropX: generationMetadata.cropX,
+              cropY: generationMetadata.cropY,
+              cropWidth: generationMetadata.cropWidth,
+              cropHeight: generationMetadata.cropHeight,
+              generatedBuffer: sourceBuffer,
+            });
+
+            console.log('[kie-callback] ✅ Compositing successful');
+          } catch (error) {
+            console.error('[kie-callback] ❌ Compositing failed, using generated image as-is:', error);
+            finalBuffer = sourceBuffer;
+          }
+        } else {
+          console.log('[kie-callback] No compositing needed or missing crop info, using generated image as-is');
+        }
+
+        const finalBlob = new Blob([finalBuffer], { type: 'image/png' });
+        finalR2Key = `${companyId}/generated/generated-image-final-${timestamp}.${finalExtension}`;
+        await uploadToR2(finalBlob, finalR2Key);
+        finalUrl = getR2PublicUrl(finalR2Key);
+        fileSizeBytes = finalBlob.size;
       }
 
-      const finalBlob = new Blob([finalBuffer], { type: 'image/png' });
-
-      const finalR2Key = `${companyId}/generated/generated-image-final-${timestamp}.${finalExtension}`;
-      await uploadToR2(finalBlob, finalR2Key);
-      const finalUrl = getR2PublicUrl(finalR2Key);
-      
-      // Calculate file size in bytes
-      const fileSizeBytes = finalBlob.size;
       console.log('[kie-callback] Final file details:', {
         r2Key: finalR2Key,
         sizeBytes: fileSizeBytes,
