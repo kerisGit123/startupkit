@@ -12,7 +12,7 @@ export interface BadgeEntry {
   imageUrl: string;
   imageNumber: number;
   source?: string;
-  badgeType?: 'image' | 'product' | 'influencer' | 'presenter' | 'subject' | 'scene'; // UGC/Showcase badge types
+  badgeType?: 'image' | 'product' | 'influencer' | 'presenter' | 'subject' | 'scene' | 'audio'; // UGC/Showcase/Audio badge types
 }
 
 export function usePromptEditor(opts?: {
@@ -50,7 +50,7 @@ export function usePromptEditor(opts?: {
       if (htmlEl.nodeName === "BR") return "\n";
       if (htmlEl.dataset?.type === "mention") {
         // Find label span — supports all badge type colors
-        const label = htmlEl.querySelector('span[class*="text-cyan-300"], span[class*="text-amber-300"], span[class*="text-pink-300"], span[class*="text-purple-300"], span[class*="text-blue-300"], span[class*="text-emerald-300"]');
+        const label = htmlEl.querySelector('span[class*="text-cyan-300"], span[class*="text-amber-300"], span[class*="text-pink-300"], span[class*="text-purple-300"], span[class*="text-blue-300"], span[class*="text-emerald-300"], span[class*="text-violet-300"]');
         return label?.textContent || "";
       }
       let result = "";
@@ -76,6 +76,7 @@ export function usePromptEditor(opts?: {
       presenter: { bg: 'bg-purple-500/20', border: 'border-purple-400/40', text: 'text-purple-300', close: 'text-purple-400/70 hover:bg-purple-400/30' },
       subject: { bg: 'bg-blue-500/20', border: 'border-blue-400/40', text: 'text-blue-300', close: 'text-blue-400/70 hover:bg-blue-400/30' },
       scene: { bg: 'bg-emerald-500/20', border: 'border-emerald-400/40', text: 'text-emerald-300', close: 'text-emerald-400/70 hover:bg-emerald-400/30' },
+      audio: { bg: 'bg-violet-500/20', border: 'border-violet-400/40', text: 'text-violet-300', close: 'text-violet-400/70 hover:bg-violet-400/30' },
     };
     const colors = colorMap[badgeType] || colorMap.image;
 
@@ -86,15 +87,25 @@ export function usePromptEditor(opts?: {
     span.style.cursor = "default";
     span.style.fontSize = "inherit";
 
-    const img = document.createElement("img");
-    img.src = entry.imageUrl;
+    // Audio badges show a speaker icon instead of image thumbnail
+    const isAudio = badgeType === 'audio';
+    const img = document.createElement(isAudio ? "span" : "img");
+    if (isAudio) {
+      img.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-violet-400"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>`;
+      img.setAttribute("class", "flex items-center");
+    } else {
+      (img as HTMLImageElement).src = entry.imageUrl;
+    }
     const badgeLabels: Record<string, string> = {
       product: 'Product', influencer: 'Influencer',
-      presenter: 'Presenter', subject: 'Subject', scene: 'Scene', image: 'Image',
+      presenter: 'Presenter', subject: 'Subject', scene: 'Scene', image: 'Image', audio: 'Audio',
     };
     const badgeName = badgeLabels[badgeType] || 'Image';
     img.alt = `${badgeName} ${entry.imageNumber}`;
-    img.setAttribute("class", "w-4 h-4 object-cover rounded");
+    if (!isAudio) {
+      img.setAttribute("class", "w-4 h-4 object-cover rounded");
+    }
+    img.alt = `${badgeName} ${entry.imageNumber}`;
 
     const label = document.createElement("span");
     label.setAttribute("class", `${colors.text} text-sm font-medium whitespace-nowrap`);
@@ -367,7 +378,7 @@ export function usePromptEditor(opts?: {
     const badgeData = e.dataTransfer.getData("application/x-badge");
     let imageUrl = e.dataTransfer.getData("imageUrl");
     let imageIndex = e.dataTransfer.getData("imageIndex");
-    let badgeType: 'image' | 'product' | 'influencer' | 'presenter' | 'subject' | 'scene' = 'image';
+    let badgeType: 'image' | 'product' | 'influencer' | 'presenter' | 'subject' | 'scene' | 'audio' = 'image';
     let imageNumber = 0;
 
     if (badgeData) {
@@ -375,7 +386,7 @@ export function usePromptEditor(opts?: {
         const parsed = JSON.parse(badgeData);
         imageUrl = parsed.url;
         imageNumber = parsed.index;
-        const validTypes = ['product', 'influencer', 'presenter', 'subject', 'scene'];
+        const validTypes = ['product', 'influencer', 'presenter', 'subject', 'scene', 'audio'];
         badgeType = validTypes.includes(parsed.type) ? parsed.type : 'image';
       } catch { /* ignore parse errors */ }
     } else {
@@ -383,7 +394,8 @@ export function usePromptEditor(opts?: {
       imageNumber = parseInt(imageIndex) + 1;
     }
 
-    if (!imageUrl) return;
+    if (!imageUrl && badgeType !== 'audio') return;
+    if (!imageUrl) imageUrl = ''; // Audio badges don't need imageUrl
 
     let range: Range | null = null;
     const doc = document as any;

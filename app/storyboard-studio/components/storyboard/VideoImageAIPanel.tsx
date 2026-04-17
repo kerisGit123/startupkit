@@ -2098,7 +2098,13 @@ export function ImageAIPanel({
                     {(selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (
                       <>
                         {audioRefs.map((aud, index) => (
-                          <div key={`audio-${index}`} className="relative group">
+                          <div key={`audio-${index}`} className="relative group"
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("text/plain", `@Audio${index + 1}`);
+                              e.dataTransfer.setData("application/x-badge", JSON.stringify({ type: "audio", index: index + 1, url: aud.url }));
+                            }}
+                          >
                             <div className="w-16 h-16 rounded-md border border-purple-500/30 bg-[#1a1a24] flex flex-col items-center justify-center cursor-pointer"
                               onClick={() => setMediaPreview({ type: 'audio', url: aud.url, label: `Audio ${index + 1}` })}
                             >
