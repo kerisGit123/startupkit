@@ -1638,9 +1638,16 @@ export function ImageAIPanel({
                 {/* Character Image (uses firstFrameUrl) */}
                 <div className="relative flex-shrink-0">
                   {firstFrameUrl ? (
-                    <div className="relative group">
-                      <img src={firstFrameUrl} alt="Character" className="w-20 h-20 object-cover rounded-lg border border-purple-500/30" />
-                      <div className="absolute top-1.5 left-1.5 bg-purple-600 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium">Character</div>
+                    <div className="relative group"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", `@Image1`);
+                        e.dataTransfer.setData("imageUrl", firstFrameUrl);
+                        e.dataTransfer.setData("imageIndex", "0");
+                      }}
+                    >
+                      <img src={firstFrameUrl} alt="Character" className="w-20 h-20 object-cover rounded-lg border border-purple-500/30 cursor-move" />
+                      <div className="absolute top-1.5 left-1.5 bg-purple-600 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium pointer-events-none">Character</div>
                       <button
                         onClick={() => setFirstFrameUrl(null)}
                         className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
