@@ -1588,9 +1588,17 @@ export function ImageAIPanel({
         }
 
         // Append clean output suffix for Seedance models
+        // Clean output — skip "no music" if audio refs are provided or generate_audio is on
         if (isSeedance2 && cleanOutput) {
-          finalPrompt = finalPrompt.trimEnd() + '. No subtitles, no music, no text overlays, no watermark.';
+          const hasAudioInput = audioRefs.length > 0 || generateAudio;
+          const cleanSuffix = hasAudioInput
+            ? '. No subtitles, no text overlays, no watermark.'
+            : '. No subtitles, no music, no text overlays, no watermark.';
+          finalPrompt = finalPrompt.trimEnd() + cleanSuffix;
         }
+
+        // Remove stray @Audio badges from prompt — Seedance uses reference_audio_urls, not prompt text
+        finalPrompt = finalPrompt.replace(/@?[Aa]udio\d+/g, '').replace(/\s{2,}/g, ' ').trim();
 
         const mergedUrls = (seedanceMode === "ugc" || seedanceMode === "showcase") ? ugcImageUrls : undefined;
         onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, (seedanceModeParam === "ugc" || seedanceModeParam === "showcase") ? "multimodal" : seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls);
