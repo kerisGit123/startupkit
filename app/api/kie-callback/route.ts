@@ -470,8 +470,7 @@ export async function POST(request: NextRequest) {
         responseMessage: 'success',
         metadata: {
           ...generationMetadata,
-          tempGeneratedImageUrl: tempUrl,
-          finalImageUrl: finalUrl,
+          ...(isVideo ? { videoUrl: finalUrl } : { tempGeneratedImageUrl: finalUrl, finalImageUrl: finalUrl }),
           processedAt: new Date().toISOString(),
           fileSizeBytes,
           fileSizeMB: Math.round(fileSizeBytes / (1024 * 1024) * 100) / 100,
