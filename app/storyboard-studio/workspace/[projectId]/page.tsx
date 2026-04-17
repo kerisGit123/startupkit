@@ -137,6 +137,7 @@ export default function StoryboardWorkspacePage() {
   // Drag and drop state
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
+  const [itemsWithDialogOpen, setItemsWithDialogOpen] = useState<Set<string>>(new Set());
 
   // Safe item deletion with error handling and debouncing
   const handleRemoveItem = async (itemId: Id<"storyboard_items">, sceneTitle?: string) => {
@@ -198,20 +199,25 @@ export default function StoryboardWorkspacePage() {
       const insertPosition = originalIndex >= 0 ? originalIndex + 1 : currentItems.length;
       
       // Create duplicate with updated order for all items
-      await createItem({
+      const newItemId = await createItem({
         projectId: pid,
-        sceneId: itemToDuplicate.sceneId,
+        sceneId: itemToDuplicate.sceneId || `manual-${Date.now()}`,
         title: `${itemToDuplicate.title} (Copy)`,
         order: insertPosition,
         duration: itemToDuplicate.duration,
         description: itemToDuplicate.description,
-        tags: itemToDuplicate.tags,
-        imageUrl: itemToDuplicate.imageUrl,
-        generationStatus: "pending",
-        isFavorite: false,
-        status: "draft",
-        notes: "",
+        generatedBy: user?.id || "unknown",
       });
+
+      // Update with additional fields that create doesn't accept
+      if (newItemId) {
+        await updateItem({
+          id: newItemId,
+          ...(itemToDuplicate.imagePrompt ? { imagePrompt: itemToDuplicate.imagePrompt } : {}),
+          ...(itemToDuplicate.videoPrompt ? { videoPrompt: itemToDuplicate.videoPrompt } : {}),
+          ...(itemToDuplicate.imageUrl ? { imageUrl: itemToDuplicate.imageUrl } : {}),
+        });
+      }
       
       console.log(`[Duplicate Item] Successfully duplicated item: ${itemToDuplicate.title}`);
     } catch (error) {
@@ -251,6 +257,12 @@ export default function StoryboardWorkspacePage() {
 
   // Drag and drop handlers
   const handleDragStart = (e: React.DragEvent, itemId: string) => {
+    // Prevent drag when interacting with textareas, inputs, or contentEditable elements
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable) {
+      e.preventDefault();
+      return;
+    }
     setDraggedItem(itemId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', itemId);
@@ -1211,7 +1223,7 @@ export default function StoryboardWorkspacePage() {
                   {filteredItems.map((item, i) => (
                     <div
                       key={item._id}
-                      draggable
+                      draggable={!itemsWithDialogOpen.has(item._id)}
                       onDragStart={(e) => handleDragStart(e, item._id)}
                       onDragEnd={handleDragEnd}
                       onDragOver={(e) => handleDragOver(e, item._id)}
@@ -1219,7 +1231,7 @@ export default function StoryboardWorkspacePage() {
                       onDrop={(e) => handleDrop(e, item._id)}
                       className={`
                         relative
-                        ${draggedItem === item._id ? 'opacity-50 cursor-grabbing' : 'cursor-grab'}
+                        ${itemsWithDialogOpen.has(item._id) ? 'cursor-default' : draggedItem === item._id ? 'opacity-50 cursor-grabbing' : 'cursor-grab'}
                         ${dragOverItem === item._id ? 'ring-2 ring-[#4A90E2] ring-opacity-50 rounded-xl' : ''}
                         transition-all duration-200
                       `}
@@ -1239,7 +1251,7 @@ export default function StoryboardWorkspacePage() {
                         onImageUploaded={(id, url) => handleImageUploaded(id, url)}
                         onSetPrimaryImage={(id, url) => handleSetPrimaryImage(id, url)}
                         onDoubleClick={() => handleDoubleClick(item)}
-                        onDuplicate={() => handleDuplicateItem(item)}
+                        onDuplicate={() => duplicateItem(item)}
                         onTagsChange={(tags) => handleTagsChange(item._id, tags)}
                         onFavoriteToggle={() => handleFavoriteToggle(item._id)}
                         onStatusChange={(status) => handleStatusChange(item._id, status)}
@@ -1259,6 +1271,14 @@ export default function StoryboardWorkspacePage() {
                         onSetStoryboardUrl={(imageUrl) => handleSetStoryboardUrl(imageUrl)}
                         onClearStoryboardUrl={() => handleClearStoryboardUrl()}
                         projectStoryboardUrl={project?.imageUrl}
+                        onDialogChange={(isOpen) => {
+                          setItemsWithDialogOpen(prev => {
+                            const next = new Set(prev);
+                            if (isOpen) next.add(item._id);
+                            else next.delete(item._id);
+                            return next;
+                          });
+                        }}
                       />
                     </div>
                   ))}
@@ -1512,7 +1532,7 @@ export default function StoryboardWorkspacePage() {
                         {/* Actions */}
                         <td className="px-3 py-3">
                           <div className="flex items-center gap-2">
-                            <button onClick={() => handleDuplicateItem(item)} className="p-1.5 text-[#6E6E6E] hover:text-white hover:bg-[#2C2C2C] rounded transition" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => duplicateItem(item)} className="p-1.5 text-[#6E6E6E] hover:text-white hover:bg-[#2C2C2C] rounded transition" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
                             <button onClick={() => handleRemoveItem(item._id, item.title)} className="p-1.5 text-[#6E6E6E] hover:text-red-400 hover:bg-red-500/10 rounded transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         </td>
@@ -1937,9 +1957,10 @@ interface FrameCardProps {
   onSetStoryboardUrl?: (imageUrl: string) => void;
   onClearStoryboardUrl?: () => void;
   projectStoryboardUrl?: string; // To show if this frame's image is the storyboard URL
+  onDialogChange?: (isOpen: boolean) => void; // Notify parent when a dialog opens/closes (disables drag)
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onSetPrimaryImage, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onImagePromptChange, onVideoPromptChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard, onSetStoryboardUrl, onClearStoryboardUrl, projectStoryboardUrl }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onSetPrimaryImage, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onImagePromptChange, onVideoPromptChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard, onSetStoryboardUrl, onClearStoryboardUrl, projectStoryboardUrl, onDialogChange }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -1950,6 +1971,15 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
   const [newDescription, setNewDescription] = useState(item.description || "");
   const [newImagePrompt, setNewImagePrompt] = useState(item.imagePrompt || "");
   const [newVideoPrompt, setNewVideoPrompt] = useState(item.videoPrompt || "");
+  const [promptTab, setPromptTab] = useState<'image' | 'video'>('image');
+
+  // Notify parent when any dialog is open (to disable drag)
+  const hasDialogOpen = showEditDialog || showPromptDialog || showNotesModal || showTagEditor;
+  const onDialogChangeRef = useRef(onDialogChange);
+  onDialogChangeRef.current = onDialogChange;
+  useEffect(() => {
+    onDialogChangeRef.current?.(hasDialogOpen);
+  }, [hasDialogOpen]);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const companyId = useCurrentCompanyId();
   const [showFrameFileBrowser, setShowFrameFileBrowser] = useState(false);
@@ -2552,8 +2582,18 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
       
       {/* Prompt Edit Dialog */}
       {showPromptDialog && (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
-          <div className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4"
+          draggable={false}
+          onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <div className="bg-(--bg-secondary) rounded-xl border border-(--border-primary) w-full max-w-sm"
+            draggable={false}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between p-3 border-b border-(--border-primary)">
               <h3 className="text-sm font-bold text-(--text-primary) flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
@@ -2565,35 +2605,54 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             </div>
 
             <div className="p-3 space-y-3">
-              {/* Image Prompt */}
-              <div>
-                <label className="text-xs text-(--text-tertiary) font-medium mb-1 flex items-center gap-1.5">
-                  <ImageIcon className="w-3 h-3 text-blue-400" />
+              {/* Tab switcher */}
+              <div className="flex gap-1 bg-white/5 rounded-lg p-0.5">
+                <button
+                  onClick={() => setPromptTab?.('image')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    (promptTab || 'image') === 'image'
+                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      : 'text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  <ImageIcon className="w-3 h-3" />
                   Image Prompt
-                </label>
+                </button>
+                <button
+                  onClick={() => setPromptTab?.('video')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    (promptTab || 'image') === 'video'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  <Video className="w-3 h-3" />
+                  Video Prompt
+                </button>
+              </div>
+
+              {/* Active prompt textarea */}
+              {(promptTab || 'image') === 'image' ? (
                 <textarea
                   value={newImagePrompt}
                   onChange={(e) => setNewImagePrompt(e.target.value)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
                   className="w-full text-sm text-gray-300 bg-white/10 border border-white/20 rounded-lg px-3 py-2 outline-none focus:border-blue-500 resize-none transition-colors"
-                  rows={3}
+                  rows={6}
                   placeholder="Describe the image to generate..."
                 />
-              </div>
-
-              {/* Video Prompt */}
-              <div>
-                <label className="text-xs text-(--text-tertiary) font-medium mb-1 flex items-center gap-1.5">
-                  <Video className="w-3 h-3 text-emerald-400" />
-                  Video Prompt
-                </label>
+              ) : (
                 <textarea
                   value={newVideoPrompt}
                   onChange={(e) => setNewVideoPrompt(e.target.value)}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
                   className="w-full text-sm text-gray-300 bg-white/10 border border-white/20 rounded-lg px-3 py-2 outline-none focus:border-emerald-500 resize-none transition-colors"
-                  rows={3}
+                  rows={6}
                   placeholder="Describe the video to generate..."
                 />
-              </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-2 pt-2">

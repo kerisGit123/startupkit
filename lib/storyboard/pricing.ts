@@ -332,6 +332,15 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     }),
   },
   {
+    modelId: "z-image",
+    modelName: "Z-Image",
+    modelType: "image",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 0.9,
+    factor: 1,
+  },
+  {
     modelId: "bytedance/seedance-1.5-pro",
     modelName: "Seedance 1.5 Pro",
     modelType: "video",

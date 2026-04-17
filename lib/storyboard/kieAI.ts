@@ -214,6 +214,7 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
     creditsUsed: requiredCredits,
     defaultAI: kieAiId,
     model: params.model,
+    prompt: params.prompt,
     tags: [],
     uploadedBy: params.userId,
   });
@@ -342,7 +343,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   // Use the provided model or fall back to STYLE_PRESETS
   const actualModel = params.model || STYLE_PRESETS[params.style]?.model;
   // Skip style suffix for models that work better with clean prompts
-  const skipSuffix = actualModel === 'ideogram/character-edit' || actualModel === 'topaz/image-upscale' || actualModel === 'recraft/crisp-upscale';
+  const skipSuffix = actualModel === 'ideogram/character-edit' || actualModel === 'topaz/image-upscale' || actualModel === 'recraft/crisp-upscale' || actualModel === 'z-image';
   const promptSuffix = skipSuffix ? '' : (STYLE_PRESETS[params.style]?.promptSuffix || '');
   // Clean up extra whitespace in prompt (e.g. from badge extraction leaving empty spaces)
   const rawPrompt = promptSuffix ? `${params.prompt}, ${promptSuffix}` : params.prompt;
@@ -443,6 +444,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     creditsUsed: requiredCredits,
     defaultAI: kieAiId, // Store which KIE AI key was used
     model: kieModel,   // Store the AI model used for generation
+    prompt: fullPrompt, // Store the prompt for traceability
     category: "generated",
     status: "generating",
     filename: `ai-generated-${Date.now()}.${params.outputFormat || 'png'}`,
@@ -518,6 +520,10 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
       style: "AUTO",
       expand_prompt: true,
       num_images: "1"
+    } : actualModel === 'z-image' ? {
+      prompt: fullPrompt,
+      aspect_ratio: params.aspectRatio || '16:9',
+      nsfw_checker: true,
     } : actualModel === 'nano-banana-2' ? {
       prompt: fullPrompt,
       image_input: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),

@@ -41,6 +41,7 @@ interface FileBrowserProps {
   onSelectFile?: (url: string, type: string) => void;
   onSelectImage?: (imageUrl: string, filename: string, file: any) => void;
   imageSelectionMode?: boolean;
+  defaultFileType?: FileType;
 }
 
 type FileType = "all" | "image" | "video" | "audio" | "file";
@@ -147,11 +148,12 @@ export function FileBrowser({
   onSelectFile,
   onSelectImage,
   imageSelectionMode = false,
+  defaultFileType,
 }: FileBrowserProps) {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]           = useState("");
   const [selectedFilter, setSelectedFilter]   = useState<CategoryFilter>("all");
-  const [selectedType, setSelectedType]       = useState<FileType>("all");
+  const [selectedType, setSelectedType]       = useState<FileType>(defaultFileType || "all");
   const [selectedElementCategory, setSelectedElementCategory] = useState<string>("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [viewSize, setViewSize]               = useState(140);
@@ -685,7 +687,7 @@ export function FileBrowser({
         </div>
 
         {/* Hidden input */}
-        <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/wav" className="hidden" onChange={handleFileUpload} />
+        <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,audio/mpeg,audio/wav,audio/x-wav,audio/aac,audio/mp4,audio/ogg,.mp3,.wav,.aac,.ogg,.m4a,.mpeg,.mpg,.flac,.wma" className="hidden" onChange={handleFileUpload} />
       </div>
 
       {/* Delete Confirmation Dialog */}

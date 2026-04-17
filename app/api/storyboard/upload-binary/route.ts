@@ -40,9 +40,9 @@ export async function POST(request: NextRequest) {
       : uploadedKey;
 
     // Determine file type
-    const fileType = contentType.startsWith('video/') ? 'video'
-      : contentType.startsWith('audio/') ? 'audio'
+    const fileType = contentType.startsWith('audio/') ? 'audio'
       : contentType.startsWith('image/') ? 'image'
+      : contentType.startsWith('video/') ? 'video'
       : 'file';
 
     // Log upload to storyboard_files database (unless skipLog is set)

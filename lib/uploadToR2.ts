@@ -82,12 +82,24 @@ export function validateFile(
     };
   }
 
-  // Check file type
+  // Check file type — also check extension as fallback for misidentified MIME types
   if (allowedTypes && !allowedTypes.includes(file.type)) {
-    return {
-      valid: false,
-      error: `File type "${file.type}" is not allowed. Allowed types: ${allowedTypes.join(', ')}`,
+    const ext = file.name?.toLowerCase().split('.').pop() || '';
+    const knownExtensions: Record<string, string> = {
+      'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg',
+      'aac': 'audio/aac', 'm4a': 'audio/mp4', 'flac': 'audio/flac',
+      'mpeg': 'audio/mpeg', 'mpg': 'audio/mpeg', 'wma': 'audio/x-ms-wma',
+      'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime',
+      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+      'webp': 'image/webp', 'gif': 'image/gif',
     };
+    const mappedType = knownExtensions[ext];
+    if (!mappedType || !allowedTypes.includes(mappedType)) {
+      return {
+        valid: false,
+        error: `File type "${file.type}" is not allowed. Allowed types: ${allowedTypes.join(', ')}`,
+      };
+    }
   }
 
   return { valid: true };
@@ -162,8 +174,16 @@ export async function uploadToR2(options: UploadOptions): Promise<UploadResult> 
           'image/gif',
           'video/mp4',
           'video/webm',
-          'audio/mpeg',
-          'audio/wav',
+          'video/mpeg',       // .mpeg files — browser may report as video/mpeg even for audio
+          'video/quicktime',  // .mov files
+          'audio/mpeg',       // .mp3
+          'audio/wav',        // .wav
+          'audio/x-wav',      // .wav (alternative MIME)
+          'audio/aac',        // .aac
+          'audio/mp4',        // .m4a
+          'audio/ogg',        // .ogg
+          'audio/flac',       // .flac
+          'audio/x-m4a',      // .m4a (alternative MIME)
         ],
       });
 

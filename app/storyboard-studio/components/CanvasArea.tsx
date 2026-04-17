@@ -71,7 +71,7 @@ interface CanvasAreaProps {
   mode?: "describe" | "area-edit" | "annotate";
   
   // Video AI Props
-  activeAIPanel?: 'editimage' | 'video' | 'element';
+  activeAIPanel?: 'editimage' | 'videoimage';
   videoState?: any;
   onVideoClick?: (videoUrl: string) => void;
   

@@ -5,11 +5,13 @@ import type { Id } from "./_generated/dataModel";
 export const create = mutation({
   args: {
     name: v.string(),
-    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom")),
+    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("design"), v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom")),
     prompt: v.string(),
     notes: v.optional(v.string()),
     companyId: v.string(),
     isPublic: v.boolean(),
+    isSystem: v.optional(v.boolean()),
+    tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -29,10 +31,11 @@ export const update = mutation({
   args: {
     id: v.id("promptTemplates"),
     name: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom"))),
+    type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("design"), v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom"))),
     prompt: v.optional(v.string()),
     notes: v.optional(v.string()),
     isPublic: v.optional(v.boolean()),
+    tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -76,7 +79,7 @@ export const getByCompany = query({
 });
 
 export const getPublicTemplates = query({
-  args: { type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom"))) },
+  args: { type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("design"), v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom"))) },
   handler: async (ctx, args) => {
     let query = ctx.db
       .query("promptTemplates")
@@ -114,12 +117,14 @@ export const resetDefaults = mutation({
           v.literal("character"),
           v.literal("environment"),
           v.literal("prop"),
-          v.literal("style"),
-          v.literal("camera"), v.literal("action"), v.literal("other"), v.literal("custom")
+          v.literal("design"),
+          v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom")
         ),
         prompt: v.string(),
         notes: v.optional(v.string()),
         isPublic: v.boolean(),
+        isSystem: v.optional(v.boolean()),
+        tags: v.optional(v.array(v.string())),
       })
     ),
   },
@@ -149,6 +154,8 @@ export const resetDefaults = mutation({
         notes: prompt.notes,
         companyId: args.companyId,
         isPublic: prompt.isPublic,
+        isSystem: prompt.isSystem,
+        tags: prompt.tags,
         usageCount: 0,
         createdAt: Date.now(),
       });

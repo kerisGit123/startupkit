@@ -110,6 +110,117 @@
 - **Header**: Clean header with rounded top corners, no border conflicts
 - **Content**: Subtle divider between header and content (`h-px bg-(--border-primary)`)
 
+### **🖼️ **Media Preview Popups**
+
+Full-screen preview dialogs for video, audio, and image files. Used in Generated Images panel and VideoImageAIPanel reference inputs.
+
+**Structure:**
+```
+┌─────────────────────────────────────────────────┐
+│  [Title]                              [X Close] │  ← Header
+├─────────────────────────────────────────────────┤
+│                                                 │
+│        [Video / Image / Audio Player]           │  ← Content
+│                                                 │
+├─────────────────────────────────────────────────┤
+│  Model: bytedance/seedance-2-fast               │  ← Footer
+│  [Download]                [Use as Background]  │
+└─────────────────────────────────────────────────┘
+```
+
+**Overlay:**
+- `position: fixed; inset: 0` — full viewport coverage
+- `background: rgba(0, 0, 0, 0.8)` — matches `--overlay` convention
+- `z-index: 99999` — above all panels, toolbars, and context menus
+- Click outside to close (overlay `onClick` → dismiss)
+
+**Container:**
+- `background: var(--bg-primary)` → `#1A1A1A`
+- `border-radius: 0.75rem` (12px) → `rounded-xl`
+- `max-width: 56rem` (896px) → `max-w-4xl`
+- `max-height: 90vh` → prevents overflow on small screens
+- `overflow: hidden` — clean edges
+
+**Header:**
+- `padding: 1rem` → `p-4`
+- `border-bottom: 1px solid var(--border-primary)` → `border-b border-[#3D3D3D]`
+- Title: `text-white font-medium`
+- Close button: `text-gray-400 hover:text-white`
+
+**Content:**
+- `padding: 1rem` → `p-4`
+- Video: `width: 100%; max-height: 70vh; border-radius: 0.5rem` + native `controls` + `autoPlay`
+- Image: `max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 0.5rem`
+- Audio: centered icon (`Volume2`, purple) + native `<audio controls>` below
+
+**Footer:**
+- `padding: 1rem` → `p-4`
+- `border-top: 1px solid var(--border-primary)` → `border-t border-[#3D3D3D]`
+- Model/prompt info: `text-sm text-gray-400`
+- Action buttons: "Download" (secondary) + "Use as Background" (emerald primary)
+
+**Rendering:** Uses `createPortal(jsx, document.body)` to escape panel overflow/stacking context constraints. Essential when popup is triggered from inside a scrollable panel like Generated Images.
+
+**Hover-to-Preview (Video/Audio ref cards in VideoImageAIPanel):**
+- No auto-play on hover
+- Hover shows play icon overlay (white circle + triangle, centered, `bg-black/30` overlay)
+- Click opens the full-screen preview popup
+- Delete button uses `stopPropagation` to avoid triggering preview
+
+---
+
+### **🔔 **Toast Notifications (Sonner)**
+
+Non-blocking notifications using the Sonner library, styled to match LTX dark theme.
+
+**Configuration:**
+```tsx
+<Toaster position="bottom-right" theme="dark" toastOptions={{
+  style: { background: '#2C2C2C', border: '1px solid #3D3D3D', color: '#FFFFFF' }
+}} />
+```
+
+**Types:**
+- `toast.success(msg)` — green accent, used for: credit deduction, file upload, generation started
+- `toast.error(msg)` — red accent, used for: insufficient credits, upload failed, API errors
+- `toast.warning(msg)` — yellow accent, used for: approaching limits, validation warnings
+
+**Usage:** Replaces all `alert()` calls in storyboard studio. Import `toast` from `"sonner"`.
+
+---
+
+### **⚠️ **Confirm Dialog (ConfirmDialog)**
+
+Reusable modal confirmation dialog for destructive or important actions.
+
+**File:** `app/storyboard-studio/components/shared/ConfirmDialog.tsx`
+
+**Props:**
+```tsx
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText?: string;   // default: "Confirm"
+  cancelText?: string;    // default: "Cancel"
+  variant?: 'danger' | 'warning' | 'info';  // button color
+}
+```
+
+**Styling:**
+- Overlay: `bg-black/70 backdrop-blur-sm`
+- Container: `bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl max-w-md`
+- Danger confirm button: `bg-red-600 hover:bg-red-500`
+- Warning confirm button: `bg-amber-600 hover:bg-amber-500`
+- Info confirm button: `bg-blue-600 hover:bg-blue-500`
+- Cancel button: `bg-white/10 hover:bg-white/20`
+
+**Used by:** FileBrowser (delete file), GeneratedImageCard (delete failed), prompt length validation.
+
+---
+
 ### **📝 **Input Fields**
 - **Background**: `var(--bg-primary)` or `var(--bg-secondary)`
 - **Border**: `1px solid var(--border-primary)`

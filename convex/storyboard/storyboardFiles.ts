@@ -31,6 +31,7 @@ export const logUpload = mutation({
     metadata: v.optional(v.any()),         // Generation metadata for compositing
     defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used
     model: v.optional(v.string()),                    // AI model used for generation
+    prompt: v.optional(v.string()),                   // AI generation prompt used
   },
   handler: async (ctx, args) => {
     // Since we're calling from API route with auth, we can work without auth context

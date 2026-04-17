@@ -404,12 +404,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         // Horizontal swipe - switch AI panels
         if (deltaX > 0) {
           setActiveAIPanel(prev => {
-            if (prev === 'element') { setAiModel('gpt-image'); return 'editimage'; }
+            if (prev === 'videoimage') { setAiModel('gpt-image'); return 'editimage'; }
             return prev;
           });
         } else {
           setActiveAIPanel(prev => {
-            if (prev === 'editimage') { setAiModel('nano-banana-2'); return 'element'; }
+            if (prev === 'editimage') { setAiModel('nano-banana-2'); return 'videoimage'; }
             return prev;
           });
         }
@@ -480,7 +480,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const generatedImageRef = useRef<HTMLImageElement>(null);
-  const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'element'>('editimage');
+  const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'videoimage'>('videoimage');
   const [showUploadOverrideBrowser, setShowUploadOverrideBrowser] = useState(false);
   const [showMask, setShowMask] = useState(true); // Add mask visibility state
   
@@ -607,7 +607,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // ImageAI Panel state
   const [aiEditMode, setAiEditMode] = useState<AIEditMode>("area-edit");
-  const [aiModel, setAiModel] = useState("gpt-image");
+  const [aiModel, setAiModel] = useState("nano-banana-2");
   const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string; filename?: string }[]>([]);
   const [selectedQuality, setSelectedQuality] = useState("standard"); // Store selected quality from EditImageAIPanel
 
@@ -1871,7 +1871,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   };
 
   // Reset video state when switching between Image, Video, and Element AI
-  const handleAIPanelSwitch = (panel: 'editimage' | 'element') => {
+  const handleAIPanelSwitch = (panel: 'editimage' | 'videoimage') => {
     setActiveAIPanel(panel);
     // Reset video state when switching to image (no longer needed but kept for safety)
     setVideoState({
@@ -3804,14 +3804,21 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         if (s.type === 'circle') svgContent += `<ellipse cx="0" cy="0" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
         else if (s.type === 'square') svgContent += `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
         else if (s.type === 'arrow' || s.type === 'line') {
-          svgContent += `<line x1="${-s.w / 2}" y1="${-s.h / 2}" x2="${s.w / 2}" y2="${s.h / 2}" stroke="${stroke}" stroke-width="${sw}" />`;
+          // Arrows/lines use absolute coords: head at (x,y), tail at (endX,endY)
+          // Don't use translate+center approach — draw using absolute positions instead
+          svgContent += `</g>`; // Close the translate group early
+          const x1 = s.x;
+          const y1 = s.y;
+          const x2 = s.endX ?? (s.x + s.w);
+          const y2 = s.endY ?? (s.y + s.h);
+          svgContent += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${sw}" />`;
           if (s.type === 'arrow') {
-            const angle = Math.atan2(s.h, s.w);
+            const angle = Math.atan2(y2 - y1, x2 - x1);
             const hl = 15;
-            const ex = s.w / 2, ey = s.h / 2;
-            svgContent += `<line x1="${ex}" y1="${ey}" x2="${ex - hl * Math.cos(angle - Math.PI / 6)}" y2="${ey - hl * Math.sin(angle - Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
-            svgContent += `<line x1="${ex}" y1="${ey}" x2="${ex - hl * Math.cos(angle + Math.PI / 6)}" y2="${ey - hl * Math.sin(angle + Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
+            svgContent += `<line x1="${x2}" y1="${y2}" x2="${x2 - hl * Math.cos(angle - Math.PI / 6)}" y2="${y2 - hl * Math.sin(angle - Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
+            svgContent += `<line x1="${x2}" y1="${y2}" x2="${x2 - hl * Math.cos(angle + Math.PI / 6)}" y2="${y2 - hl * Math.sin(angle + Math.PI / 6)}" stroke="${stroke}" stroke-width="${sw}" />`;
           }
+          svgContent += `<g>`; // Re-open a dummy group so the closing </g> below doesn't break
         }
         svgContent += `</g>`;
       }
@@ -3952,7 +3959,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setActiveAIPanel(prev => {
-                  if (prev === 'editimage') { setAiModel('nano-banana-2'); return 'element'; }
+                  if (prev === 'editimage') { setAiModel('nano-banana-2'); return 'videoimage'; }
                   setAiModel('gpt-image'); return 'editimage';
                 })}
                 className="px-3 py-1.5 bg-(--accent-blue) text-white rounded-lg text-xs font-medium transition"
@@ -4111,7 +4118,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             <button
               onClick={() => {
                 if (activeAIPanel === 'editimage') {
-                  setActiveAIPanel('element');
+                  setActiveAIPanel('videoimage');
                   setAiModel('nano-banana-2');
                 } else {
                   setActiveAIPanel('editimage');
@@ -4119,7 +4126,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 }
               }}
               className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
-                activeAIPanel === 'element'
+                activeAIPanel === 'videoimage'
                   ? 'bg-emerald-500/15 text-emerald-300'
                   : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
               }`}
@@ -5223,7 +5230,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     <ImageAIPanel
                       mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
-                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string) => {
+                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string, ugcImageUrls?: string[]) => {
                         console.log("=== ELEMENT CREDIT-BASED GENERATION CALLED ===");
                         console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
                         console.log("Prompt:", extractedPrompt);
@@ -5317,6 +5324,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               tags: [],
                               uploadedBy: user?.id || "",
                               model: aiModel,
+                              prompt: extractedPrompt,
                               defaultAI: currentDefaultAI as any,
 
                               metadata: {
@@ -5444,6 +5452,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               tags: [],
                               uploadedBy: user?.id || "",
                               model: aiModel,
+                              prompt: extractedPrompt,
                               defaultAI: currentDefaultAI as any,
 
                               metadata: {
@@ -5555,6 +5564,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               tags: [],
                               uploadedBy: user?.id || "",
                               model: aiModel,
+                              prompt: extractedPrompt,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
                                 modelId: aiModel,
@@ -5675,6 +5685,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               tags: [],
                               uploadedBy: user?.id || "",
                               model: aiModel,
+                              prompt: extractedPrompt,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
                                 modelId: aiModel,
@@ -5801,6 +5812,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               tags: [],
                               uploadedBy: userId || "",
                               model: aiModel,
+                              prompt: extractedPrompt,
                               defaultAI: currentDefaultAI as any,
                               categoryId: activeShot?.id as any || null,
                             });
@@ -5821,7 +5833,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                   prompt: extractedPrompt,
                                   model: aiModel,
                                   mode: seedMode,
-                                  referenceImages: seedMode === "multimodal" ? processedReferenceImages : [],
+                                  referenceImages: seedMode === "multimodal" ? (ugcImageUrls && ugcImageUrls.length > 0 ? ugcImageUrls : processedReferenceImages) : [],
                                   videoUrls: seedMode === "multimodal" ? (videoUrls || []) : [],
                                   audioUrls: seedMode === "multimodal" ? (audioUrls || []) : [],
                                   firstFrameUrl: (seedMode === "first-frame" || seedMode === "first-last-frame") ? (firstFrameUrl || processedReferenceImages[0]) : undefined,

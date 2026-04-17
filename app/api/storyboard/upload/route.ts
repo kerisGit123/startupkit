@@ -208,9 +208,17 @@ export async function POST(request: NextRequest) {
         userId: userId, // Add userId from auth
         r2Key,
         filename: file.name,
-        fileType: file.type.startsWith('image/') ? 'image' : 
-                file.type.startsWith('video/') ? 'video' : 
-                file.type.startsWith('audio/') ? 'audio' : 'file',
+        fileType: (() => {
+          const mime = file.type.toLowerCase();
+          const ext = file.name.toLowerCase().split('.').pop() || '';
+          const audioExtensions = ['mp3', 'wav', 'ogg', 'aac', 'm4a', 'flac', 'wma'];
+          if (mime.startsWith('audio/') || audioExtensions.includes(ext)) return 'audio';
+          if (mime.startsWith('image/')) return 'image';
+          if (mime.startsWith('video/') || ext === 'mp4' || ext === 'webm' || ext === 'mov') return 'video';
+          // MPEG can be audio or video — check extension
+          if (ext === 'mpeg' || ext === 'mpg') return mime.includes('audio') ? 'audio' : 'audio';
+          return 'file';
+        })(),
         mimeType: file.type,
         size: file.size,
         category,

@@ -54,7 +54,7 @@ interface ReferenceImage {
 export interface ImageAIPanelProps {
   mode: ImageAIEditMode;
   onModeChange: (mode: ImageAIEditMode) => void;
-  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string) => void;
+  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string, ugcImageUrls?: string[]) => void;
   credits?: number;
   model?: string;
   onModelChange?: (model: string) => void;
@@ -115,6 +115,7 @@ export interface ImageAIPanelProps {
 const MODELS = [
   { id: "nano-banana-2", label: "Nano Banana 2", icon: "G" },
   { id: "nano-banana-1", label: "Nano Banana 1", icon: "G" },
+  { id: "z-image", label: "Z-Image", icon: "Z" },
   { id: "stable-diffusion", label: "Stable Diffusion", icon: "S" },
   { id: "gpt-image-1-5-text-to-image", label: "GPT Image 1.5 Text", icon: "🟦" },
   { id: "nano-banana-edit", label: "Nano Banana Edit", icon: "🟩" },
@@ -334,6 +335,7 @@ export function ImageAIPanel({
   const inpaintModelOptions = [
     { value: "nano-banana-2", label: "Nano Banana 2", sub: "General purpose", maxReferenceImages: 13, icon: Zap },
     { value: "nano-banana-pro", label: "Nano Banana Pro", sub: "Higher quality • Max 8 refs", maxReferenceImages: 8, icon: Camera },
+    { value: "z-image", label: "Z-Image", sub: "Text-to-image • Fixed price", maxReferenceImages: 0, icon: Zap },
   ];
   const videoModelOptions = [
     { value: "bytedance/seedance-1.5-pro", label: "Seedance 1.5 Pro", sub: "Video generation", icon: Film, maxReferenceImages: 2 },
@@ -403,15 +405,30 @@ export function ImageAIPanel({
   const [veoQuality, setVeoQuality] = useState("Fast");
   const [veoMode, setVeoMode] = useState("TEXT_2_VIDEO");
   const [hasVideoInput, setHasVideoInput] = useState(false); // Legacy (kept for Seedance 1.5 Pro pricing)
-  const [seedanceMode, setSeedanceMode] = useState<"text-to-video" | "first-frame" | "first-last-frame" | "multimodal">("text-to-video");
+  const [seedanceMode, setSeedanceMode] = useState<"text-to-video" | "first-frame" | "first-last-frame" | "multimodal" | "ugc" | "showcase">("text-to-video");
+  // UGC mode: separate product and influencer image arrays
+  const [productImages, setProductImages] = useState<ReferenceImage[]>([]);
+  const [influencerImages, setInfluencerImages] = useState<ReferenceImage[]>([]);
+  const [showProductBrowser, setShowProductBrowser] = useState(false);
+  const [showInfluencerBrowser, setShowInfluencerBrowser] = useState(false);
+  // Showcase mode: presenter, subject, scene image arrays
+  const [presenterImages, setPresenterImages] = useState<ReferenceImage[]>([]);
+  const [subjectImages, setSubjectImages] = useState<ReferenceImage[]>([]);
+  const [sceneImages, setSceneImages] = useState<ReferenceImage[]>([]);
+  const [showPresenterBrowser, setShowPresenterBrowser] = useState(false);
+  const [showSubjectBrowser, setShowSubjectBrowser] = useState(false);
+  const [showSceneBrowser, setShowSceneBrowser] = useState(false);
   const [seedanceModeOpen, setSeedanceModeOpen] = useState(false);
   const [promptLengthError, setPromptLengthError] = useState<{ current: number; max: number } | null>(null);
+  const [nsfwChecker, setNsfwChecker] = useState(true); // Z-Image: NSFW checker (default on)
   const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("video"); // Kling: default video orient
   const [klingSource, setKlingSource] = useState<"input_video" | "input_image">("input_video"); // Kling: background source
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null); // Seedance 2.0: first frame
   const [lastFrameUrl, setLastFrameUrl] = useState<string | null>(null); // Seedance 2.0: last frame
   const [showFirstFrameBrowser, setShowFirstFrameBrowser] = useState(false);
   const [showLastFrameBrowser, setShowLastFrameBrowser] = useState(false);
+  // Media preview popup
+  const [mediaPreview, setMediaPreview] = useState<{ type: 'video' | 'audio'; url: string; label: string } | null>(null);
   // Video references: Kling (1 video), Seedance 2.0 (max 3 videos, total ≤15s)
   const [videoRefs, setVideoRefs] = useState<Array<{ url: string; duration: number }>>([]);
   const [showVideoBrowser, setShowVideoBrowser] = useState(false);
@@ -421,6 +438,7 @@ export function ImageAIPanel({
   // Seedance 2.0 toggles
   const [webSearch, setWebSearch] = useState(false);
   const [generateAudio, setGenerateAudio] = useState(true);
+  const [cleanOutput, setCleanOutput] = useState(true); // Appends "no subtitles, no music, no text" for cleaner output
 
   // Get media duration from URL
   const getMediaDuration = (url: string, type: 'video' | 'audio'): Promise<number> => {
@@ -515,7 +533,7 @@ export function ImageAIPanel({
         // "with video input" = has actual video reference (totalVideoDuration > 0)
         // "no video input" = text-only OR images-only (no video refs)
         const outputDur = parseInt(videoDuration.replace('s', '')) || 5;
-        const inputVideoDur = (seedanceMode === "multimodal" && totalVideoDuration > 0) ? totalVideoDuration : 0;
+        const inputVideoDur = ((seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") && totalVideoDuration > 0) ? totalVideoDuration : 0;
         const hasVideoRef = inputVideoDur > 0;
         const totalDur = outputDur + inputVideoDur;
         const params = `${resolution}_${totalDur}s_${hasVideoRef ? 'video' : 'novideo'}`;
@@ -541,6 +559,11 @@ export function ImageAIPanel({
         const credits = getModelCredits(selectedModelOption.value, params);
         console.log("[VideoImageAIPanel] Grok Imagine pricing:", { resolution, durSec, params, credits });
         return credits;
+      })()
+    : selectedModelOption.value === "z-image"
+    ? (() => {
+        const credits = getModelCredits("z-image", "fixed");
+        return credits > 0 ? credits : 1; // Fallback to 1 credit if DB not loaded
       })()
     : credits;
 
@@ -600,6 +623,14 @@ export function ImageAIPanel({
   useEffect(() => {
     // No cleanup needed since we only have describe mode
   }, [mode, referenceImages, onRemoveReferenceImage]);
+
+  // UGC/Showcase mode: expose merged image URLs for SceneEditor
+  // Order matches @Image(n) numbering at generate time
+  const ugcImageUrls = seedanceMode === "ugc"
+    ? [...productImages.map(p => p.url), ...influencerImages.map(i => i.url)]
+    : seedanceMode === "showcase"
+    ? [...subjectImages.map(s => s.url), ...presenterImages.map(p => p.url), ...sceneImages.map(s => s.url)]
+    : undefined;
 
   const pick = (tool: string) => {
     setActiveTool(tool);
@@ -1467,10 +1498,15 @@ export function ImageAIPanel({
     console.log("Reference images:", referenceImages);
     console.log("Current company credits:", getBalance);
     
-    // Step 0: Check prompt length for Seedance 2.0 models (max 1536 characters)
+    // Step 0: Check prompt length limits
     const isSeedance2Model = selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast";
+    const isZImage = selectedModelOption.value === "z-image";
     if (isSeedance2Model && extractedPrompt.length > 1536) {
       setPromptLengthError({ current: extractedPrompt.length, max: 1536 });
+      return;
+    }
+    if (isZImage && extractedPrompt.length > 1000) {
+      setPromptLengthError({ current: extractedPrompt.length, max: 1000 });
       return;
     }
 
@@ -1494,7 +1530,7 @@ export function ImageAIPanel({
           ? isSeedance2
             ? (() => {
                 const outputDur = parseInt(videoDuration.replace('s', '')) || 5;
-                const inputVideoDur = (seedanceMode === "multimodal" && totalVideoDuration > 0) ? totalVideoDuration : 0;
+                const inputVideoDur = ((seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") && totalVideoDuration > 0) ? totalVideoDuration : 0;
                 const totalDur = outputDur + inputVideoDur;
                 const hasVideoRef = inputVideoDur > 0;
                 return `${resolution}_${totalDur}s_${hasVideoRef ? 'video' : 'novideo'}${webSearch ? '_ws' : ''}`;
@@ -1516,16 +1552,48 @@ export function ImageAIPanel({
 
         // Video/audio URLs — Kling uses videoRefs, Seedance uses both video+audio refs
         const videoUrlsParam = isKlingMotion ? videoRefs.map(v => v.url)
-          : isSeedance2 && seedanceMode === "multimodal" ? videoRefs.map(v => v.url)
+          : isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? videoRefs.map(v => v.url)
           : undefined;
-        const audioUrlsParam = isSeedance2 && seedanceMode === "multimodal" ? audioRefs.map(a => a.url) : undefined;
+        const audioUrlsParam = isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? audioRefs.map(a => a.url) : undefined;
         const seedanceModeParam = isSeedance2 ? seedanceMode : undefined;
         const firstFrameParam = isSeedance2 && (seedanceMode === "first-frame" || seedanceMode === "first-last-frame") ? firstFrameUrl || undefined : undefined;
         const lastFrameParam = isSeedance2 && seedanceMode === "first-last-frame" ? lastFrameUrl || undefined : undefined;
 
         // For Seedance 2.0, pass generateAudio state (not the old audioEnabled)
         const audioParam = isSeedance2 ? generateAudio : audioEnabled;
-        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, extractedPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, seedanceModeParam, firstFrameParam, lastFrameParam);
+
+        // UGC/Showcase mode: convert custom badges to @Image(n) and merge images
+        let finalPrompt = extractedPrompt;
+        if (seedanceMode === "ugc") {
+          const productCount = productImages.length;
+          for (let i = 1; i <= productCount; i++) {
+            finalPrompt = finalPrompt.replace(new RegExp(`@Product${i}`, 'g'), `@Image${i}`);
+          }
+          for (let i = 1; i <= influencerImages.length; i++) {
+            finalPrompt = finalPrompt.replace(new RegExp(`@Influencer${i}`, 'g'), `@Image${productCount + i}`);
+          }
+        } else if (seedanceMode === "showcase") {
+          // Order: Subject(1-6) → Presenter(1) → Scene(1-2)
+          const subjectCount = subjectImages.length;
+          const presenterCount = presenterImages.length;
+          for (let i = 1; i <= subjectCount; i++) {
+            finalPrompt = finalPrompt.replace(new RegExp(`@Subject${i}`, 'g'), `@Image${i}`);
+          }
+          for (let i = 1; i <= presenterCount; i++) {
+            finalPrompt = finalPrompt.replace(new RegExp(`@Presenter${i}`, 'g'), `@Image${subjectCount + i}`);
+          }
+          for (let i = 1; i <= sceneImages.length; i++) {
+            finalPrompt = finalPrompt.replace(new RegExp(`@Scene${i}`, 'g'), `@Image${subjectCount + presenterCount + i}`);
+          }
+        }
+
+        // Append clean output suffix for Seedance models
+        if (isSeedance2 && cleanOutput) {
+          finalPrompt = finalPrompt.trimEnd() + '. No subtitles, no music, no text overlays, no watermark.';
+        }
+
+        const mergedUrls = (seedanceMode === "ugc" || seedanceMode === "showcase") ? ugcImageUrls : undefined;
+        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, (seedanceModeParam === "ugc" || seedanceModeParam === "showcase") ? "multimodal" : seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls);
       }
       
     } catch (error) {
@@ -1551,52 +1619,339 @@ export function ImageAIPanel({
 
     return (
     <div className="absolute bottom-0 left-0 right-0 mx-[20px] mb-[20px] flex flex-col gap-3">
-        {/* Reference Images Panel */}
+        {/* Reference Images Panel — hidden for text-only models like z-image */}
+        {selectedModelOption.value !== "z-image" && (
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
-            {referenceImages.map((img, index) => (
-              <div key={img.id} className="relative flex-shrink-0 group">
-                <img
-                  src={img.url}
-                  alt={`Reference ${index + 1}`}
-                  className="w-20 h-20 object-cover rounded-lg border border-white/10 cursor-move relative z-10"
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, img.url, index)}
-                />
-                <div className={`absolute top-1.5 right-1.5 text-white text-[10px] px-1 rounded-full z-20 ${
-                  img.source === 'r2' ? 'bg-blue-500' : 
-                  img.source === 'element' ? 'bg-purple-500' : 
-                  'bg-emerald-500'
-                }`}>
-                  {img.source === 'r2' ? 'R2' : 
-                   img.source === 'element' ? 'EL' : 
-                   `Image ${index + 1}`}
-                </div>
-                <button
-                  onClick={() => onRemoveReferenceImage?.(img.id)}
-                  className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
-                >
-                  <X className="w-2.5 h-2.5 text-white" />
-                </button>
-              </div>
-            ))}
-            
-            {/* Combined Upload Button with Slide Menu */}
-            {maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
-              <AddImageMenu
-                onUploadClick={() => fileInputRef.current?.click()}
-                onR2Click={() => setShowFileBrowser(true)}
-                canOpenR2={canOpenFileBrowser()}
-                onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
-                onElementsClick={() => setShowElementLibrary(true)}
-                canOpenElements={canOpenElementLibrary()}
-                onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
-                onCaptureClick={handleAddBackground}
-                generatedItemImages={generatedItemImages}
-                generatedProjectImages={generatedProjectImages}
-                onSelectGeneratedImage={onSelectGeneratedImage}
-              />
+            {/* UGC Mode: Product & Influencer image slots */}
+            {seedanceMode === "ugc" ? (
+              <>
+                {/* Product Images */}
+                {productImages.map((img, index) => (
+                  <div key={img.id} className="relative flex-shrink-0 group">
+                    <img
+                      src={img.url}
+                      alt={`Product ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded-lg border border-amber-500/30 cursor-move relative z-10"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", `@Product${index + 1}`);
+                        e.dataTransfer.setData("application/x-badge", JSON.stringify({ type: "product", index: index + 1, url: img.url }));
+                        e.dataTransfer.setData("imageUrl", img.url);
+                        e.dataTransfer.setData("imageIndex", String(index));
+                      }}
+                    />
+                    <div className="absolute top-1.5 right-1.5 bg-amber-500 text-white text-[10px] px-1 rounded-full z-20">
+                      Product {index + 1}
+                    </div>
+                    <button
+                      onClick={() => setProductImages(prev => prev.filter(p => p.id !== img.id))}
+                      className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {productImages.length < 3 && (
+                  <AddImageMenu
+                    label="Product"
+                    onUploadClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const url = URL.createObjectURL(file);
+                        setProductImages(prev => [...prev, { id: `product-${Date.now()}`, url, source: 'upload', name: file.name }]);
+                      };
+                      input.click();
+                    }}
+                    onR2Click={() => setShowProductBrowser(true)}
+                    canOpenR2={canOpenFileBrowser()}
+                    onR2Unavailable={() => showToast('Project and company info required', 'error')}
+                    onElementsClick={() => setShowElementLibrary(true)}
+                    canOpenElements={canOpenElementLibrary()}
+                    onElementsUnavailable={() => showToast('Project info required', 'error')}
+                    onCaptureClick={handleAddBackground}
+                    generatedItemImages={generatedItemImages}
+                    generatedProjectImages={generatedProjectImages}
+                    onSelectGeneratedImage={(url) => {
+                      setProductImages(prev => [...prev, { id: `product-${Date.now()}`, url, source: 'upload', name: 'product' }]);
+                    }}
+                  />
+                )}
+
+                {/* Divider */}
+                <div className="w-px h-16 bg-white/10 self-center mx-1" />
+
+                {/* Influencer Images */}
+                {influencerImages.map((img, index) => (
+                  <div key={img.id} className="relative flex-shrink-0 group">
+                    <img
+                      src={img.url}
+                      alt={`Influencer ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded-lg border border-pink-500/30 cursor-move relative z-10"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", `@Influencer${index + 1}`);
+                        e.dataTransfer.setData("application/x-badge", JSON.stringify({ type: "influencer", index: index + 1, url: img.url }));
+                        e.dataTransfer.setData("imageUrl", img.url);
+                        e.dataTransfer.setData("imageIndex", String(index));
+                      }}
+                    />
+                    <div className="absolute top-1.5 right-1.5 bg-pink-500 text-white text-[10px] px-1 rounded-full z-20">
+                      Influencer {index + 1}
+                    </div>
+                    <button
+                      onClick={() => setInfluencerImages(prev => prev.filter(p => p.id !== img.id))}
+                      className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {influencerImages.length < 3 && (
+                  <AddImageMenu
+                    label="Influencer"
+                    onUploadClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const url = URL.createObjectURL(file);
+                        setInfluencerImages(prev => [...prev, { id: `influencer-${Date.now()}`, url, source: 'upload', name: file.name }]);
+                      };
+                      input.click();
+                    }}
+                    onR2Click={() => setShowInfluencerBrowser(true)}
+                    canOpenR2={canOpenFileBrowser()}
+                    onR2Unavailable={() => showToast('Project and company info required', 'error')}
+                    onElementsClick={() => setShowElementLibrary(true)}
+                    canOpenElements={canOpenElementLibrary()}
+                    onElementsUnavailable={() => showToast('Project info required', 'error')}
+                    onCaptureClick={handleAddBackground}
+                    generatedItemImages={generatedItemImages}
+                    generatedProjectImages={generatedProjectImages}
+                    onSelectGeneratedImage={(url) => {
+                      setInfluencerImages(prev => [...prev, { id: `influencer-${Date.now()}`, url, source: 'upload', name: 'influencer' }]);
+                    }}
+                  />
+                )}
+              </>
+            ) : seedanceMode === "showcase" ? (
+              <>
+                {/* Showcase Mode: Presenter + Subject + Scene image slots */}
+                {/* Presenter (purple, max 1) */}
+                {presenterImages.map((img, index) => (
+                  <div key={img.id} className="relative flex-shrink-0 group">
+                    <img
+                      src={img.url}
+                      alt={`Presenter ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded-lg border border-purple-500/30 cursor-move relative z-10"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", `@Presenter${index + 1}`);
+                        e.dataTransfer.setData("application/x-badge", JSON.stringify({ type: "presenter", index: index + 1, url: img.url }));
+                        e.dataTransfer.setData("imageUrl", img.url);
+                        e.dataTransfer.setData("imageIndex", String(index));
+                      }}
+                    />
+                    <div className="absolute top-1.5 right-1.5 bg-purple-500 text-white text-[9px] px-1 rounded-full z-20">Presenter</div>
+                    <button
+                      onClick={() => setPresenterImages(prev => prev.filter(p => p.id !== img.id))}
+                      className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {presenterImages.length < 1 && (
+                  <AddImageMenu
+                    label="Presenter"
+                    onUploadClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file'; input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        const url = URL.createObjectURL(file);
+                        setPresenterImages([{ id: `presenter-${Date.now()}`, url, source: 'upload', name: file.name }]);
+                      };
+                      input.click();
+                    }}
+                    onR2Click={() => setShowPresenterBrowser(true)}
+                    canOpenR2={canOpenFileBrowser()}
+                    onR2Unavailable={() => showToast('Project info required', 'error')}
+                    onElementsClick={() => setShowElementLibrary(true)}
+                    canOpenElements={canOpenElementLibrary()}
+                    onElementsUnavailable={() => showToast('Project info required', 'error')}
+                    onCaptureClick={handleAddBackground}
+                    generatedItemImages={generatedItemImages}
+                    generatedProjectImages={generatedProjectImages}
+                    onSelectGeneratedImage={(url) => {
+                      setPresenterImages([{ id: `presenter-${Date.now()}`, url, source: 'upload', name: 'presenter' }]);
+                    }}
+                  />
+                )}
+
+                <div className="w-px h-16 bg-white/10 self-center mx-1" />
+
+                {/* Subject (blue, max 6) */}
+                {subjectImages.map((img, index) => (
+                  <div key={img.id} className="relative flex-shrink-0 group">
+                    <img
+                      src={img.url}
+                      alt={`Subject ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded-lg border border-blue-500/30 cursor-move relative z-10"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", `@Subject${index + 1}`);
+                        e.dataTransfer.setData("application/x-badge", JSON.stringify({ type: "subject", index: index + 1, url: img.url }));
+                        e.dataTransfer.setData("imageUrl", img.url);
+                        e.dataTransfer.setData("imageIndex", String(index));
+                      }}
+                    />
+                    <div className="absolute top-1.5 right-1.5 bg-blue-500 text-white text-[9px] px-1 rounded-full z-20">Subject {index + 1}</div>
+                    <button
+                      onClick={() => setSubjectImages(prev => prev.filter(p => p.id !== img.id))}
+                      className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {subjectImages.length < 6 && (
+                  <AddImageMenu
+                    label="Subject"
+                    onUploadClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file'; input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        const url = URL.createObjectURL(file);
+                        setSubjectImages(prev => [...prev, { id: `subject-${Date.now()}`, url, source: 'upload', name: file.name }]);
+                      };
+                      input.click();
+                    }}
+                    onR2Click={() => setShowSubjectBrowser(true)}
+                    canOpenR2={canOpenFileBrowser()}
+                    onR2Unavailable={() => showToast('Project info required', 'error')}
+                    onElementsClick={() => setShowElementLibrary(true)}
+                    canOpenElements={canOpenElementLibrary()}
+                    onElementsUnavailable={() => showToast('Project info required', 'error')}
+                    onCaptureClick={handleAddBackground}
+                    generatedItemImages={generatedItemImages}
+                    generatedProjectImages={generatedProjectImages}
+                    onSelectGeneratedImage={(url) => {
+                      setSubjectImages(prev => [...prev, { id: `subject-${Date.now()}`, url, source: 'upload', name: 'subject' }]);
+                    }}
+                  />
+                )}
+
+                <div className="w-px h-16 bg-white/10 self-center mx-1" />
+
+                {/* Scene (green, max 2, optional) */}
+                {sceneImages.map((img, index) => (
+                  <div key={img.id} className="relative flex-shrink-0 group">
+                    <img
+                      src={img.url}
+                      alt={`Scene ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded-lg border border-emerald-500/30 cursor-move relative z-10"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", `@Scene${index + 1}`);
+                        e.dataTransfer.setData("application/x-badge", JSON.stringify({ type: "scene", index: index + 1, url: img.url }));
+                        e.dataTransfer.setData("imageUrl", img.url);
+                        e.dataTransfer.setData("imageIndex", String(index));
+                      }}
+                    />
+                    <div className="absolute top-1.5 right-1.5 bg-emerald-500 text-white text-[9px] px-1 rounded-full z-20">Scene {index + 1}</div>
+                    <button
+                      onClick={() => setSceneImages(prev => prev.filter(p => p.id !== img.id))}
+                      className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+                {sceneImages.length < 2 && (
+                  <AddImageMenu
+                    label="Scene"
+                    onUploadClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file'; input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files?.[0]; if (!file) return;
+                        const url = URL.createObjectURL(file);
+                        setSceneImages(prev => [...prev, { id: `scene-${Date.now()}`, url, source: 'upload', name: file.name }]);
+                      };
+                      input.click();
+                    }}
+                    onR2Click={() => setShowSceneBrowser(true)}
+                    canOpenR2={canOpenFileBrowser()}
+                    onR2Unavailable={() => showToast('Project info required', 'error')}
+                    onElementsClick={() => setShowElementLibrary(true)}
+                    canOpenElements={canOpenElementLibrary()}
+                    onElementsUnavailable={() => showToast('Project info required', 'error')}
+                    onCaptureClick={handleAddBackground}
+                    generatedItemImages={generatedItemImages}
+                    generatedProjectImages={generatedProjectImages}
+                    onSelectGeneratedImage={(url) => {
+                      setSceneImages(prev => [...prev, { id: `scene-${Date.now()}`, url, source: 'upload', name: 'scene' }]);
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                {/* Standard reference images (non-UGC/Showcase modes) */}
+                {referenceImages.map((img, index) => (
+                  <div key={img.id} className="relative flex-shrink-0 group">
+                    <img
+                      src={img.url}
+                      alt={`Reference ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded-lg border border-white/10 cursor-move relative z-10"
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, img.url, index)}
+                    />
+                    <div className={`absolute top-1.5 right-1.5 text-white text-[10px] px-1 rounded-full z-20 ${
+                      img.source === 'r2' ? 'bg-blue-500' :
+                      img.source === 'element' ? 'bg-purple-500' :
+                      'bg-emerald-500'
+                    }`}>
+                      {img.source === 'r2' ? 'R2' :
+                       img.source === 'element' ? 'EL' :
+                       `Image ${index + 1}`}
+                    </div>
+                    <button
+                      onClick={() => onRemoveReferenceImage?.(img.id)}
+                      className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Combined Upload Button with Slide Menu */}
+                {maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
+                  <AddImageMenu
+                    onUploadClick={() => fileInputRef.current?.click()}
+                    onR2Click={() => setShowFileBrowser(true)}
+                    canOpenR2={canOpenFileBrowser()}
+                    onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
+                    onElementsClick={() => setShowElementLibrary(true)}
+                    canOpenElements={canOpenElementLibrary()}
+                    onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
+                    onCaptureClick={handleAddBackground}
+                    generatedItemImages={generatedItemImages}
+                    generatedProjectImages={generatedProjectImages}
+                    onSelectGeneratedImage={onSelectGeneratedImage}
+                  />
+                )}
+              </>
             )}
 
             {/* Seedance 2.0: First Frame & Last Frame slots (only in frame modes) */}
@@ -1658,12 +2013,25 @@ export function ImageAIPanel({
           </div>
           </div>
 
-          {referenceImages.length === 0 && (
+          {seedanceMode === "ugc" ? (
+            productImages.length === 0 && influencerImages.length === 0 && (
+              <p className="text-xs text-gray-500">
+                Add product and influencer images, then drag them into your prompt as @Product1, @Influencer1, etc.
+              </p>
+            )
+          ) : seedanceMode === "showcase" ? (
+            subjectImages.length === 0 && presenterImages.length === 0 && (
+              <p className="text-xs text-gray-500">
+                Add presenter, subject (room/car/item), and scene images. Drag into prompt as @Presenter1, @Subject1, @Scene1.
+              </p>
+            )
+          ) : referenceImages.length === 0 && (
             <p className="text-xs text-gray-500">
               Click to add reference images from computer, R2 storage, or element library for consistent characters and props
             </p>
           )}
         </div>
+        )}
 
         {/* Main Panel */}
         <div className="bg-[#0a0a0f]/98 backdrop-blur-md rounded-2xl border border-white/10">
@@ -1688,21 +2056,29 @@ export function ImageAIPanel({
                 />
                 
                 {/* Video & Audio slots — right side, for Kling/Seedance 2.0 multimodal */}
-                {(selectedModelOption.value === "kling-3.0/motion-control" || ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && seedanceMode === "multimodal")) && (
+                {(selectedModelOption.value === "kling-3.0/motion-control" || ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase"))) && (
                   <div className="flex-shrink-0 flex items-center gap-1.5">
                     {/* Video refs with duration */}
                     {videoRefs.map((vid, index) => (
                       <div key={`video-${index}`} className="relative group">
-                        <div className="w-16 h-16 rounded-md border border-green-500/30 bg-[#1a1a24] overflow-hidden">
-                          <video src={vid.url} className="w-full h-full object-cover" muted />
+                        <div className="w-16 h-16 rounded-md border border-green-500/30 bg-[#1a1a24] overflow-hidden cursor-pointer"
+                          onClick={() => setMediaPreview({ type: 'video', url: vid.url, label: `Video ${index + 1}` })}
+                        >
+                          <video src={vid.url} className="w-full h-full object-cover" muted preload="metadata" />
+                          {/* Play icon overlay on hover */}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
+                              <div className="w-0 h-0 border-l-[8px] border-l-black border-y-[5px] border-y-transparent ml-0.5" />
+                            </div>
+                          </div>
                         </div>
-                        <div className="absolute -top-1.5 -left-1 bg-green-800 text-green-200 text-[11px] px-1.5 py-0.5 rounded-full z-20 font-medium">Video {index + 1}</div>
+                        <div className="absolute -top-1.5 -left-1 bg-green-800 text-green-200 text-[11px] px-1.5 py-0.5 rounded-full z-20 font-medium pointer-events-none">Video {index + 1}</div>
                         {vid.duration > 0 && (
-                          <div className="absolute -bottom-1.5 left-0 right-0 text-center z-20">
+                          <div className="absolute -bottom-1.5 left-0 right-0 text-center z-20 pointer-events-none">
                             <span className="text-[11px] bg-green-800 text-green-200 px-1.5 py-0.5 rounded-full font-medium">{vid.duration}s</span>
                           </div>
                         )}
-                        <button onClick={() => setVideoRefs(prev => prev.filter((_, i) => i !== index))}
+                        <button onClick={(e) => { e.stopPropagation(); setVideoRefs(prev => prev.filter((_, i) => i !== index)); }}
                           className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20">
                           <X className="w-2 h-2 text-white" />
                         </button>
@@ -1723,16 +2099,24 @@ export function ImageAIPanel({
                       <>
                         {audioRefs.map((aud, index) => (
                           <div key={`audio-${index}`} className="relative group">
-                            <div className="w-16 h-16 rounded-md border border-purple-500/30 bg-[#1a1a24] flex flex-col items-center justify-center">
+                            <div className="w-16 h-16 rounded-md border border-purple-500/30 bg-[#1a1a24] flex flex-col items-center justify-center cursor-pointer"
+                              onClick={() => setMediaPreview({ type: 'audio', url: aud.url, label: `Audio ${index + 1}` })}
+                            >
                               <Volume2 className="w-5 h-5 text-purple-400" />
+                              {/* Play icon overlay on hover */}
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                                <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
+                                  <div className="w-0 h-0 border-l-[8px] border-l-purple-600 border-y-[5px] border-y-transparent ml-0.5" />
+                                </div>
+                              </div>
                             </div>
-                            <div className="absolute -top-1.5 -left-1 bg-purple-800 text-purple-200 text-[11px] px-1.5 py-0.5 rounded-full z-20 font-medium">Audio {index + 1}</div>
+                            <div className="absolute -top-1.5 -left-1 bg-purple-800 text-purple-200 text-[11px] px-1.5 py-0.5 rounded-full z-20 font-medium pointer-events-none">Audio {index + 1}</div>
                             {aud.duration > 0 && (
-                              <div className="absolute -bottom-1.5 left-0 right-0 text-center z-20">
+                              <div className="absolute -bottom-1.5 left-0 right-0 text-center z-20 pointer-events-none">
                                 <span className="text-[11px] bg-purple-800 text-purple-200 px-1.5 py-0.5 rounded-full font-medium">{aud.duration}s</span>
                               </div>
                             )}
-                            <button onClick={() => setAudioRefs(prev => prev.filter((_, i) => i !== index))}
+                            <button onClick={(e) => { e.stopPropagation(); setAudioRefs(prev => prev.filter((_, i) => i !== index)); }}
                               className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20">
                               <X className="w-2 h-2 text-white" />
                             </button>
@@ -2201,8 +2585,8 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Resolution Select Box - Only show when not Veo 3.1 */}
-            {selectedModelOption.value !== "google/veo-3.1" && (
+            {/* Resolution Select Box - Hide for Veo 3.1 and Z-Image */}
+            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowResolutionDropdown(!showResolutionDropdown)}
@@ -2447,8 +2831,8 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Output Format Select Box - Only show in image mode */}
-            {outputMode === "image" && (
+            {/* Output Format Select Box - Only show in image mode, hide for z-image */}
+            {outputMode === "image" && selectedModelOption.value !== "z-image" && (
               <div className="relative" style={{ width: "80px" }}>
                 <button
                   onClick={() => setShowOutputFormatDropdown(!showOutputFormatDropdown)}
@@ -2500,6 +2884,8 @@ export function ImageAIPanel({
                     { value: "first-frame", label: "First Frame" },
                     { value: "first-last-frame", label: "First & Last" },
                     { value: "multimodal", label: "Multimodal Ref" },
+                    { value: "ugc", label: "UGC" },
+                    { value: "showcase", label: "Showcase" },
                   ];
                   return (
                     <div className="relative">
@@ -2562,7 +2948,39 @@ export function ImageAIPanel({
                   </div>
                   Audio
                 </button>
+                <button
+                  onClick={() => setCleanOutput(!cleanOutput)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
+                    cleanOutput
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  }`}
+                  title="Clean Output — appends 'no subtitles, no music, no text overlays' to prompt"
+                >
+                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${cleanOutput ? 'bg-emerald-500' : 'bg-gray-600'}`}>
+                    <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${cleanOutput ? 'left-3' : 'left-0.5'}`} />
+                  </div>
+                  Clean
+                </button>
               </>
+            )}
+
+            {/* Z-Image: NSFW Checker switch */}
+            {selectedModelOption.value === "z-image" && (
+              <button
+                onClick={() => setNsfwChecker(!nsfwChecker)}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
+                  nsfwChecker
+                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                    : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                }`}
+                title="NSFW Content Filter"
+              >
+                <div className={`w-6 h-3.5 rounded-full relative transition-colors ${nsfwChecker ? 'bg-emerald-500' : 'bg-gray-600'}`}>
+                  <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${nsfwChecker ? 'left-3' : 'left-0.5'}`} />
+                </div>
+                NSFW
+              </button>
             )}
 
             {/* Credits Display */}
@@ -2734,6 +3152,111 @@ export function ImageAIPanel({
         />
       )}
 
+      {/* UGC: Product Image FileBrowser */}
+      {showProductBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowProductBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl) => {
+            if (productImages.length < 3) {
+              setProductImages(prev => [...prev, { id: `product-${Date.now()}`, url: imageUrl, source: 'r2' as const, name: 'product' }]);
+            }
+            setShowProductBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image' && productImages.length < 3) {
+              setProductImages(prev => [...prev, { id: `product-${Date.now()}`, url, source: 'r2' as const, name: 'product' }]);
+              setShowProductBrowser(false);
+            }
+          }}
+        />
+      )}
+
+      {/* UGC: Influencer Image FileBrowser */}
+      {showInfluencerBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowInfluencerBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl) => {
+            if (influencerImages.length < 3) {
+              setInfluencerImages(prev => [...prev, { id: `influencer-${Date.now()}`, url: imageUrl, source: 'r2' as const, name: 'influencer' }]);
+            }
+            setShowInfluencerBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image' && influencerImages.length < 3) {
+              setInfluencerImages(prev => [...prev, { id: `influencer-${Date.now()}`, url, source: 'r2' as const, name: 'influencer' }]);
+              setShowInfluencerBrowser(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Showcase: Presenter Image FileBrowser */}
+      {showPresenterBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowPresenterBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl) => {
+            if (presenterImages.length < 1) {
+              setPresenterImages([{ id: `presenter-${Date.now()}`, url: imageUrl, source: 'r2' as const, name: 'presenter' }]);
+            }
+            setShowPresenterBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image' && presenterImages.length < 1) {
+              setPresenterImages([{ id: `presenter-${Date.now()}`, url, source: 'r2' as const, name: 'presenter' }]);
+              setShowPresenterBrowser(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Showcase: Subject Image FileBrowser */}
+      {showSubjectBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowSubjectBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl) => {
+            if (subjectImages.length < 6) {
+              setSubjectImages(prev => [...prev, { id: `subject-${Date.now()}`, url: imageUrl, source: 'r2' as const, name: 'subject' }]);
+            }
+            setShowSubjectBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image' && subjectImages.length < 6) {
+              setSubjectImages(prev => [...prev, { id: `subject-${Date.now()}`, url, source: 'r2' as const, name: 'subject' }]);
+              setShowSubjectBrowser(false);
+            }
+          }}
+        />
+      )}
+
+      {/* Showcase: Scene Image FileBrowser */}
+      {showSceneBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowSceneBrowser(false)}
+          imageSelectionMode={true}
+          onSelectImage={(imageUrl) => {
+            if (sceneImages.length < 2) {
+              setSceneImages(prev => [...prev, { id: `scene-${Date.now()}`, url: imageUrl, source: 'r2' as const, name: 'scene' }]);
+            }
+            setShowSceneBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image' && sceneImages.length < 2) {
+              setSceneImages(prev => [...prev, { id: `scene-${Date.now()}`, url, source: 'r2' as const, name: 'scene' }]);
+              setShowSceneBrowser(false);
+            }
+          }}
+        />
+      )}
+
       {/* Video Reference FileBrowser */}
       {showVideoBrowser && projectId && (
         <FileBrowser
@@ -2764,6 +3287,7 @@ export function ImageAIPanel({
       {showAudioBrowser && projectId && (
         <FileBrowser
           projectId={projectId}
+          defaultFileType="audio"
           onClose={() => setShowAudioBrowser(false)}
           onSelectFile={async (url, type) => {
             if (type === 'audio' || type === 'file') {
@@ -2783,6 +3307,54 @@ export function ImageAIPanel({
             }
           }}
         />
+      )}
+
+      {/* Media Preview Popup */}
+      {mediaPreview && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }}
+          onClick={() => setMediaPreview(null)}
+        >
+          <div className="bg-[#1A1A1A] rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-[#3D3D3D]">
+              <h3 className="text-white font-medium">{mediaPreview.type === 'video' ? 'Video Preview' : 'Audio Preview'}</h3>
+              <button onClick={() => setMediaPreview(null)}
+                className="text-gray-400 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            {/* Content */}
+            <div className="p-4">
+              {mediaPreview.type === 'video' ? (
+                <video
+                  src={mediaPreview.url}
+                  controls
+                  autoPlay
+                  className="w-full rounded-lg"
+                  style={{ maxHeight: '70vh' }}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-6 py-8">
+                  <div className="w-24 h-24 rounded-full bg-purple-500/20 border border-purple-400/40 flex items-center justify-center">
+                    <Volume2 className="w-12 h-12 text-purple-400" />
+                  </div>
+                  <audio
+                    src={mediaPreview.url}
+                    controls
+                    autoPlay
+                    className="w-full max-w-lg"
+                  />
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="p-4 border-t border-[#3D3D3D]">
+              <div className="text-sm text-gray-400">{mediaPreview.label}</div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Element Library Modal */}

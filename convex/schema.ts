@@ -1917,6 +1917,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),     // Soft delete timestamp
     defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used for generation
     model: v.optional(v.string()),         // AI model used for generation (e.g. "nano-banana-2", "kling-3.0")
+    prompt: v.optional(v.string()),        // AI generation prompt used (stored for traceability/re-generation)
     responseCode: v.optional(v.number()),  // KIE AI response code (200=success, 401/402/404/422/429/455/500/501/505)
     responseMessage: v.optional(v.string()), // KIE AI response message (e.g. "success", "internal error, please try again later.")
   })
@@ -2019,9 +2020,10 @@ export default defineSchema({
       v.literal("character"),
       v.literal("environment"),
       v.literal("prop"),
-      v.literal("style"),
+      v.literal("design"),
       v.literal("camera"),
       v.literal("action"),
+      v.literal("video"),
       v.literal("other"),
       v.literal("custom")
     ),
@@ -2029,6 +2031,8 @@ export default defineSchema({
     notes: v.optional(v.string()),
     companyId: v.string(),
     isPublic: v.boolean(),
+    isSystem: v.optional(v.boolean()),
+    tags: v.optional(v.array(v.string())),
     usageCount: v.number(),
     createdAt: v.number(),
   })

@@ -12,6 +12,7 @@ export interface BadgeEntry {
   imageUrl: string;
   imageNumber: number;
   source?: string;
+  badgeType?: 'image' | 'product' | 'influencer' | 'presenter' | 'subject' | 'scene'; // UGC/Showcase badge types
 }
 
 export function usePromptEditor(opts?: {
@@ -48,7 +49,8 @@ export function usePromptEditor(opts?: {
       const htmlEl = node as HTMLElement;
       if (htmlEl.nodeName === "BR") return "\n";
       if (htmlEl.dataset?.type === "mention") {
-        const label = htmlEl.querySelector('span[class*="text-cyan-300"]');
+        // Find label span — supports all badge type colors
+        const label = htmlEl.querySelector('span[class*="text-cyan-300"], span[class*="text-amber-300"], span[class*="text-pink-300"], span[class*="text-purple-300"], span[class*="text-blue-300"], span[class*="text-emerald-300"]');
         return label?.textContent || "";
       }
       let result = "";
@@ -65,21 +67,39 @@ export function usePromptEditor(opts?: {
     span.contentEditable = "false";
     span.dataset.type = "mention";
     span.dataset.mentionId = entry.id;
+    // Badge colors based on type
+    const badgeType = entry.badgeType || 'image';
+    const colorMap: Record<string, { bg: string; border: string; text: string; close: string }> = {
+      image: { bg: 'bg-cyan-500/20', border: 'border-cyan-400/40', text: 'text-cyan-300', close: 'text-cyan-400/70 hover:bg-cyan-400/30' },
+      product: { bg: 'bg-amber-500/20', border: 'border-amber-400/40', text: 'text-amber-300', close: 'text-amber-400/70 hover:bg-amber-400/30' },
+      influencer: { bg: 'bg-pink-500/20', border: 'border-pink-400/40', text: 'text-pink-300', close: 'text-pink-400/70 hover:bg-pink-400/30' },
+      presenter: { bg: 'bg-purple-500/20', border: 'border-purple-400/40', text: 'text-purple-300', close: 'text-purple-400/70 hover:bg-purple-400/30' },
+      subject: { bg: 'bg-blue-500/20', border: 'border-blue-400/40', text: 'text-blue-300', close: 'text-blue-400/70 hover:bg-blue-400/30' },
+      scene: { bg: 'bg-emerald-500/20', border: 'border-emerald-400/40', text: 'text-emerald-300', close: 'text-emerald-400/70 hover:bg-emerald-400/30' },
+    };
+    const colors = colorMap[badgeType] || colorMap.image;
+
     span.setAttribute(
       "class",
-      "inline-flex items-center gap-1 bg-cyan-500/20 border border-cyan-400/40 rounded px-1.5 py-0.5 align-middle mx-0.5 select-none"
+      `inline-flex items-center gap-1 ${colors.bg} border ${colors.border} rounded px-1.5 py-0.5 align-middle mx-0.5 select-none`
     );
     span.style.cursor = "default";
     span.style.fontSize = "inherit";
 
     const img = document.createElement("img");
     img.src = entry.imageUrl;
-    img.alt = `Image ${entry.imageNumber}`;
+    const badgeLabels: Record<string, string> = {
+      product: 'Product', influencer: 'Influencer',
+      presenter: 'Presenter', subject: 'Subject', scene: 'Scene', image: 'Image',
+    };
+    const badgeName = badgeLabels[badgeType] || 'Image';
+    img.alt = `${badgeName} ${entry.imageNumber}`;
     img.setAttribute("class", "w-4 h-4 object-cover rounded");
 
     const label = document.createElement("span");
-    label.setAttribute("class", "text-cyan-300 text-sm font-medium whitespace-nowrap");
-    label.textContent = entry.source === 'r2' ? `@R2${entry.imageNumber}` :
+    label.setAttribute("class", `${colors.text} text-sm font-medium whitespace-nowrap`);
+    label.textContent = badgeType !== 'image' ? `@${badgeName}${entry.imageNumber}` :
+                        entry.source === 'r2' ? `@R2${entry.imageNumber}` :
                         entry.source === 'element' ? `@EL${entry.imageNumber}` :
                         `@Image${entry.imageNumber}`;
 
@@ -88,7 +108,7 @@ export function usePromptEditor(opts?: {
     closeBtn.setAttribute("title", "Remove");
     closeBtn.setAttribute(
       "class",
-      "ml-0.5 flex items-center justify-center w-3.5 h-3.5 rounded-full text-cyan-400/70 hover:text-white hover:bg-cyan-400/30 transition-colors"
+      `ml-0.5 flex items-center justify-center w-3.5 h-3.5 rounded-full ${colors.close} hover:text-white transition-colors`
     );
     closeBtn.innerHTML =
       `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">` +
@@ -342,10 +362,28 @@ export function usePromptEditor(opts?: {
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    const imageUrl = e.dataTransfer.getData("imageUrl");
-    const imageIndex = e.dataTransfer.getData("imageIndex");
-    if (!imageUrl || imageIndex === "") return;
-    const imageNumber = parseInt(imageIndex) + 1;
+
+    // Check for UGC badge data (product/influencer)
+    const badgeData = e.dataTransfer.getData("application/x-badge");
+    let imageUrl = e.dataTransfer.getData("imageUrl");
+    let imageIndex = e.dataTransfer.getData("imageIndex");
+    let badgeType: 'image' | 'product' | 'influencer' | 'presenter' | 'subject' | 'scene' = 'image';
+    let imageNumber = 0;
+
+    if (badgeData) {
+      try {
+        const parsed = JSON.parse(badgeData);
+        imageUrl = parsed.url;
+        imageNumber = parsed.index;
+        const validTypes = ['product', 'influencer', 'presenter', 'subject', 'scene'];
+        badgeType = validTypes.includes(parsed.type) ? parsed.type : 'image';
+      } catch { /* ignore parse errors */ }
+    } else {
+      if (!imageUrl || imageIndex === "") return;
+      imageNumber = parseInt(imageIndex) + 1;
+    }
+
+    if (!imageUrl) return;
 
     let range: Range | null = null;
     const doc = document as any;
@@ -364,7 +402,7 @@ export function usePromptEditor(opts?: {
       selection?.removeAllRanges();
       selection?.addRange(range);
     }
-    insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl, imageNumber });
+    insertBadgeAtCaret({ id: `mention-${Date.now()}`, imageUrl, imageNumber, badgeType });
   }, [insertBadgeAtCaret]);
 
   // ── Set text programmatically ──────────────────────────────────────

@@ -1035,39 +1035,50 @@ export default function PricingManagementDark() {
               </select>
             </div>
             
-            {/* Show Quality for image models */}
-            {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'image' && (
-              <div>
-                <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
-                <select 
-                  value={testParams.quality}
-                  onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
-                  className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-                >
-                  {(() => {
-                    const selectedTestingModel = models?.find(m => m.modelId === testParams.modelId);
-                    if (!selectedTestingModel?.formulaJson) {
-                      return (
-                        <></>
-                      );
-                    }
+            {/* Show Quality/Resolution/Fixed based on model type */}
+            {(() => {
+              const testModel = models?.find(m => m.modelId === testParams.modelId);
+              const isFixedPrice = testModel?.pricingType === 'fixed' || (!testModel?.formulaJson && testModel?.modelType === 'image');
 
-                    try {
-                      const formula = JSON.parse(selectedTestingModel.formulaJson);
-                      const qualities = formula.pricing?.qualities ?? [];
-                      return qualities.map((quality: { name: string }) => (
-                        <option key={quality.name} value={quality.name}>{quality.name}</option>
-                      ));
-                    } catch {
-                      return (
-                        <></>
-                      );
-                    }
-                  })()}
-                </select>
-              </div>
-            )}
-            
+              if (isFixedPrice) {
+                return (
+                  <div>
+                    <label className="block text-sm font-medium text-(--text-secondary) mb-1">Price</label>
+                    <div className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary)">
+                      {testModel?.creditCost ?? 1} credits (fixed)
+                    </div>
+                  </div>
+                );
+              }
+
+              if (testModel?.modelType === 'image') {
+                return (
+                  <div>
+                    <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
+                    <select
+                      value={testParams.quality}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTestParams({...testParams, quality: e.target.value})}
+                      className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                    >
+                      {(() => {
+                        if (!testModel?.formulaJson) return null;
+                        try {
+                          const formula = JSON.parse(testModel.formulaJson);
+                          const qualities = formula.pricing?.qualities ?? [];
+                          return qualities.map((q: { name: string }) => (
+                            <option key={q.name} value={q.name}>{q.name}</option>
+                          ));
+                        } catch { return null; }
+                      })()}
+                    </select>
+                  </div>
+                );
+              }
+
+              // Video models — handled below
+              return null;
+            })()}
+
             {/* Show Resolution for video models */}
             {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
               <>
@@ -1285,52 +1296,63 @@ export default function PricingManagementDark() {
               ))}
             </select>
           </div>
-          {/* Show Quality for image models, Resolution for video models */}
-          {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'image' ? (
-            <div>
-              <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
-              <select 
-                value={testParams.quality}
-                onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
-                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-              >
-                {(() => {
-                  const selectedTestingModel = models?.find(m => m.modelId === testParams.modelId);
-                  if (!selectedTestingModel?.formulaJson) {
-                    return (
-                      <></>
-                    );
-                  }
+          {/* Show Quality for formula image models, Resolution for video models, Fixed price for fixed models */}
+          {(() => {
+            const testModel = models?.find(m => m.modelId === testParams.modelId);
+            const isFixedPrice = testModel?.pricingType === 'fixed' || (!testModel?.formulaJson && testModel?.modelType === 'image');
 
-                  try {
-                    const formula = JSON.parse(selectedTestingModel.formulaJson);
-                    const qualities = formula.pricing?.qualities ?? [];
-                    return qualities.map((quality: { name: string }) => (
-                      <option key={quality.name} value={quality.name}>{quality.name}</option>
-                    ));
-                  } catch {
-                    return (
-                      <></>
-                    );
-                  }
-                })()}
-              </select>
+            if (isFixedPrice) {
+              return (
+                <div>
+                  <label className="block text-sm font-medium text-(--text-secondary) mb-1">Price</label>
+                  <div className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary)">
+                {models?.find(m => m.modelId === testParams.modelId)?.creditCost ?? 1} credits (fixed)
+              </div>
             </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
-              <select 
-                value={testParams.resolution}
-                onChange={(e) => setTestParams({...testParams, resolution: e.target.value})}
-                className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
-              >
-                <option value="480p">480p</option>
-                <option value="720p">720p</option>
-                <option value="1080p">1080p</option>
-                <option value="4K">4K</option>
-              </select>
-            </div>
-          )}
+              );
+            }
+
+            if (testModel?.modelType === 'video') {
+              return (
+                <div>
+                  <label className="block text-sm font-medium text-(--text-secondary) mb-1">Resolution</label>
+                  <select
+                    value={testParams.resolution}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTestParams({...testParams, resolution: e.target.value})}
+                    className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                  >
+                    <option value="480p">480p</option>
+                    <option value="720p">720p</option>
+                    <option value="1080p">1080p</option>
+                    <option value="4K">4K</option>
+                  </select>
+                </div>
+              );
+            }
+
+            // Formula-based image models — show quality dropdown
+            return (
+              <div>
+                <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
+                <select
+                  value={testParams.quality}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setTestParams({...testParams, quality: e.target.value})}
+                  className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                >
+                  {(() => {
+                    if (!testModel?.formulaJson) return null;
+                    try {
+                      const formula = JSON.parse(testModel.formulaJson);
+                      const qualities = formula.pricing?.qualities ?? [];
+                      return qualities.map((q: { name: string }) => (
+                        <option key={q.name} value={q.name}>{q.name}</option>
+                      ));
+                    } catch { return null; }
+                  })()}
+                </select>
+              </div>
+            );
+          })()}
           {/* Show Duration for video models only */}
           {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
             <div>
