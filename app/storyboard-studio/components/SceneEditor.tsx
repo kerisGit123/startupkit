@@ -5835,7 +5835,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                   mode: seedMode,
                                   referenceImages: seedMode === "multimodal" ? (ugcImageUrls && ugcImageUrls.length > 0 ? ugcImageUrls : processedReferenceImages) : [],
                                   videoUrls: seedMode === "multimodal" ? (videoUrls || []) : [],
-                                  audioUrls: seedMode === "multimodal" ? (audioUrls || []) : [],
+                                  audioUrls: (seedMode === "multimodal" || (audioUrls && audioUrls.length > 0)) ? (audioUrls || []) : [],
                                   firstFrameUrl: (seedMode === "first-frame" || seedMode === "first-last-frame") ? (firstFrameUrl || processedReferenceImages[0]) : undefined,
                                   lastFrameUrl: seedMode === "first-last-frame" ? (lastFrameUrl || processedReferenceImages[1]) : undefined,
                                   resolution: quality.split('_')[0]?.toLowerCase() || '480p',
