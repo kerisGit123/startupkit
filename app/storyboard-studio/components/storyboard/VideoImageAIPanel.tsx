@@ -405,7 +405,7 @@ export function ImageAIPanel({
   const [veoQuality, setVeoQuality] = useState("Fast");
   const [veoMode, setVeoMode] = useState("TEXT_2_VIDEO");
   const [hasVideoInput, setHasVideoInput] = useState(false); // Legacy (kept for Seedance 1.5 Pro pricing)
-  const [seedanceMode, setSeedanceMode] = useState<"text-to-video" | "first-frame" | "first-last-frame" | "multimodal" | "ugc" | "showcase">("text-to-video");
+  const [seedanceMode, setSeedanceMode] = useState<"text-to-video" | "first-frame" | "first-last-frame" | "multimodal" | "ugc" | "showcase" | "lipsync">("text-to-video");
   // UGC mode: separate product and influencer image arrays
   const [productImages, setProductImages] = useState<ReferenceImage[]>([]);
   const [influencerImages, setInfluencerImages] = useState<ReferenceImage[]>([]);
@@ -1554,13 +1554,13 @@ export function ImageAIPanel({
         const videoUrlsParam = isKlingMotion ? videoRefs.map(v => v.url)
           : isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? videoRefs.map(v => v.url)
           : undefined;
-        const audioUrlsParam = isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? audioRefs.map(a => a.url) : undefined;
-        const seedanceModeParam = isSeedance2 ? seedanceMode : undefined;
-        const firstFrameParam = isSeedance2 && (seedanceMode === "first-frame" || seedanceMode === "first-last-frame") ? firstFrameUrl || undefined : undefined;
+        const audioUrlsParam = isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "lipsync") ? audioRefs.map(a => a.url) : undefined;
+        const seedanceModeParam = isSeedance2 ? (seedanceMode === "lipsync" ? "first-frame" : seedanceMode) : undefined;
+        const firstFrameParam = isSeedance2 && (seedanceMode === "first-frame" || seedanceMode === "first-last-frame" || seedanceMode === "lipsync") ? firstFrameUrl || undefined : undefined;
         const lastFrameParam = isSeedance2 && seedanceMode === "first-last-frame" ? lastFrameUrl || undefined : undefined;
 
-        // For Seedance 2.0, pass generateAudio state (not the old audioEnabled)
-        const audioParam = isSeedance2 ? generateAudio : audioEnabled;
+        // For Seedance 2.0, pass generateAudio state — lipsync always enables audio
+        const audioParam = isSeedance2 ? (seedanceMode === "lipsync" ? true : generateAudio) : audioEnabled;
 
         // UGC/Showcase mode: convert custom badges to @Image(n) and merge images
         let finalPrompt = extractedPrompt;
@@ -1632,8 +1632,87 @@ export function ImageAIPanel({
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
-            {/* UGC Mode: Product & Influencer image slots */}
-            {seedanceMode === "ugc" ? (
+            {/* Lipsync Mode: Character image + Audio slot */}
+            {seedanceMode === "lipsync" ? (
+              <>
+                {/* Character Image (uses firstFrameUrl) */}
+                <div className="relative flex-shrink-0">
+                  {firstFrameUrl ? (
+                    <div className="relative group">
+                      <img src={firstFrameUrl} alt="Character" className="w-20 h-20 object-cover rounded-lg border border-purple-500/30" />
+                      <div className="absolute top-1.5 left-1.5 bg-purple-600 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium">Character</div>
+                      <button
+                        onClick={() => setFirstFrameUrl(null)}
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <AddImageMenu
+                      label="Character"
+                      onUploadClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = (e: any) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const url = URL.createObjectURL(file);
+                          setFirstFrameUrl(url);
+                        };
+                        input.click();
+                      }}
+                      onR2Click={() => setShowFirstFrameBrowser(true)}
+                      canOpenR2={canOpenFileBrowser()}
+                      onR2Unavailable={() => showToast('Project info required', 'error')}
+                      onElementsClick={() => setShowElementLibrary(true)}
+                      canOpenElements={canOpenElementLibrary()}
+                      onElementsUnavailable={() => showToast('Project info required', 'error')}
+                      onCaptureClick={handleAddBackground}
+                      generatedItemImages={generatedItemImages}
+                      generatedProjectImages={generatedProjectImages}
+                      onSelectGeneratedImage={(url) => setFirstFrameUrl(url)}
+                    />
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="w-px h-16 bg-white/10 self-center mx-1" />
+
+                {/* Audio Slot */}
+                <div className="relative flex-shrink-0">
+                  {audioRefs.length > 0 ? (
+                    <div className="relative group">
+                      <div className="w-20 h-20 rounded-lg border border-violet-500/30 bg-[#1a1a24] flex flex-col items-center justify-center cursor-pointer"
+                        onClick={() => setMediaPreview({ type: 'audio', url: audioRefs[0].url, label: 'Audio' })}
+                      >
+                        <Volume2 className="w-6 h-6 text-violet-400" />
+                        {audioRefs[0].duration > 0 && (
+                          <span className="text-[10px] text-violet-300 mt-1">{audioRefs[0].duration}s</span>
+                        )}
+                      </div>
+                      <div className="absolute top-1.5 left-1.5 bg-violet-600 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium">Audio</div>
+                      <button
+                        onClick={() => setAudioRefs([])}
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowAudioBrowser(true)}
+                      className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-violet-500/30 hover:border-violet-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
+                      title="Add audio for lipsync"
+                    >
+                      <Volume2 className="w-5 h-5 text-violet-400 group-hover:text-violet-300 transition-colors" />
+                      <span className="text-[9px] text-violet-400 group-hover:text-violet-300 transition-colors leading-tight text-center">Audio</span>
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : seedanceMode === "ugc" ? (
               <>
                 {/* Product Images */}
                 {productImages.map((img, index) => (
@@ -2021,7 +2100,13 @@ export function ImageAIPanel({
           </div>
           </div>
 
-          {seedanceMode === "ugc" ? (
+          {seedanceMode === "lipsync" ? (
+            !firstFrameUrl && audioRefs.length === 0 && (
+              <p className="text-xs text-gray-500">
+                Add a character image and audio file. The AI will animate the character to match the audio (lip-sync).
+              </p>
+            )
+          ) : seedanceMode === "ugc" ? (
             productImages.length === 0 && influencerImages.length === 0 && (
               <p className="text-xs text-gray-500">
                 Add product and influencer images, then drag them into your prompt as @Product1, @Influencer1, etc.
@@ -2900,6 +2985,7 @@ export function ImageAIPanel({
                     { value: "multimodal", label: "Multimodal Ref" },
                     { value: "ugc", label: "UGC" },
                     { value: "showcase", label: "Showcase" },
+                    { value: "lipsync", label: "Lipsync" },
                   ];
                   return (
                     <div className="relative">
