@@ -2021,6 +2021,7 @@ export default defineSchema({
       v.literal("environment"),
       v.literal("prop"),
       v.literal("design"),
+      v.literal("style"),
       v.literal("camera"),
       v.literal("action"),
       v.literal("video"),
