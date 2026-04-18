@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download } from "lucide-react";
+import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download, FileText, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { getResponseCodeInfo, getResponseCodeColor } from "@/lib/storyboard/kieResponse";
 
 // Types
@@ -35,10 +36,15 @@ interface GeneratedImageCardProps {
   onDelete: (image: GeneratedImageCard) => void;
   onRetry: (image: GeneratedImageCard) => void;
   onCompare: (image: GeneratedImageCard) => void;
+  onShare?: (image: GeneratedImageCard) => void;
+  isShared?: boolean;
+  r2Key?: string;
+  category?: string;
   fileId?: string;
   responseCode?: number;
   responseMessage?: string;
   creditsUsed?: number;
+  prompt?: string;
 }
 
 // Helper function to format relative time
@@ -63,10 +69,15 @@ export function GeneratedImageCard({
   onDelete,
   onRetry,
   onCompare,
+  onShare,
+  isShared,
+  r2Key,
+  category,
   fileId,
   responseCode,
   responseMessage,
   creditsUsed,
+  prompt,
 }: GeneratedImageCardProps) {
   const [showVideoDialog, setShowVideoDialog] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
@@ -149,14 +160,16 @@ export function GeneratedImageCard({
                 {/* Dark overlay for better text visibility */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                 
-                {/* Video overlay for video files */}
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Play className="w-8 h-8 text-white drop-shadow-lg" />
-                </div>
-                
-                {/* Video badge */}
-                <div className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow-lg">
-                  VIDEO
+                {/* Video overlay removed — hover actions handled below */}
+
+                {/* AI + Video badges — top left */}
+                <div className="absolute top-2 left-2 flex items-center gap-1">
+                  <div className="bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
+                    AI
+                  </div>
+                  <div className="bg-red-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
+                    VIDEO
+                  </div>
                 </div>
                 
                 {/* Duration indicator */}
@@ -281,11 +294,20 @@ export function GeneratedImageCard({
           </div>
         )}
         
+        {/* Shared indicator — top-right, small icon so it doesn't cover the AI badge */}
+        {isShared && image.status === 'completed' && (
+          <div className="absolute top-1.5 right-1.5 z-10">
+            <div className="w-5 h-5 rounded-full bg-green-600/90 flex items-center justify-center" title="Shared to Gallery">
+              <Share2 className="w-3 h-3 text-white" />
+            </div>
+          </div>
+        )}
+
         {/* Hover Actions (only for completed images) */}
         {image.status === 'completed' && (
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
             {image.fileType === 'video' ? (
-              // Video: Show play, download, and delete buttons
+              // Video: Show play, download, copy prompt, and delete buttons
               <>
                 <button onClick={handleImageClick} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Play video">
                   <Play className="w-4 h-4 text-white" />
@@ -293,20 +315,53 @@ export function GeneratedImageCard({
                 <button onClick={handleDownload} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Download video">
                   <Download className="w-4 h-4 text-white" />
                 </button>
+                {prompt && (
+                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy prompt">
+                    <FileText className="w-4 h-4 text-white" />
+                  </button>
+                )}
+                {onShare && r2Key && category !== "combine" && (
+                  isShared ? (
+                    <button disabled className="p-2 bg-white/10 rounded-lg cursor-default" title="Already shared">
+                      <Share2 className="w-4 h-4 text-gray-500" />
+                    </button>
+                  ) : (
+                    <button onClick={() => onShare(image)} className="p-2 bg-green-500/80 rounded-lg hover:bg-green-500" title="Share to Gallery">
+                      <Share2 className="w-4 h-4 text-white" />
+                    </button>
+                  )
+                )}
                 <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete video">
                   <Trash2 className="w-4 h-4 text-white" />
                 </button>
               </>
             ) : (
-              // Image: Show existing icons
+              // Image: Show preview, copy prompt, and delete icons
               <>
-                <button onClick={() => onSelect(image)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30">
+                <button onClick={() => onSelect(image)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Preview">
                   <Eye className="w-4 h-4 text-white" />
                 </button>
-                <button onClick={() => navigator.clipboard.writeText(fileId || image.id)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30">
-                  <Copy className="w-4 h-4 text-white" />
-                </button>
-                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500">
+                {prompt ? (
+                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy prompt">
+                    <FileText className="w-4 h-4 text-white" />
+                  </button>
+                ) : (
+                  <button onClick={() => navigator.clipboard.writeText(fileId || image.id)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy file ID">
+                    <Copy className="w-4 h-4 text-white" />
+                  </button>
+                )}
+                {onShare && r2Key && category !== "combine" && (
+                  isShared ? (
+                    <button disabled className="p-2 bg-white/10 rounded-lg cursor-default" title="Already shared">
+                      <Share2 className="w-4 h-4 text-gray-500" />
+                    </button>
+                  ) : (
+                    <button onClick={() => onShare(image)} className="p-2 bg-green-500/80 rounded-lg hover:bg-green-500" title="Share to Gallery">
+                      <Share2 className="w-4 h-4 text-white" />
+                    </button>
+                  )
+                )}
+                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete">
                   <Trash2 className="w-4 h-4 text-white" />
                 </button>
               </>

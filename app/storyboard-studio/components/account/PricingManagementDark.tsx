@@ -39,6 +39,7 @@ import {
   getFormulaQualityPrice,
   getNanoBananaPrice,
   getTopazUpscale,
+  getTopazVideoUpscale,
   getSeedance15,
   getSeedance20,
   getSeedance20Fast,
@@ -271,6 +272,13 @@ export default function PricingManagementDark() {
           baseCost,
           factor,
           testParams.resolution,
+          testParams.duration
+        );
+      } else if (assignedFunction === 'getTopazVideoUpscale') {
+        result = getTopazVideoUpscale(
+          baseCost,
+          factor,
+          testParams.quality,
           testParams.duration
         );
       } else {
@@ -1022,8 +1030,9 @@ export default function PricingManagementDark() {
                   const fn = (newModel as any)?.assignedFunction;
                   // Reset resolution and duration to valid defaults for the selected model
                   const defaultRes = fn === 'getKlingMotionControl' ? '720p' : fn === 'getSeedance20' ? '480p' : fn === 'getGrokImageToVideo' ? '480p' : '720p';
-                  const defaultDur = fn === 'getGrokImageToVideo' ? 6 : 4;
-                  setTestParams({...testParams, modelId: newModelId, resolution: defaultRes, duration: defaultDur, audio: false});
+                  const defaultDur = fn === 'getGrokImageToVideo' ? 6 : fn === 'getTopazVideoUpscale' ? 10 : 4;
+                  const defaultQuality = fn === 'getTopazVideoUpscale' ? '2' : '1K';
+                  setTestParams({...testParams, modelId: newModelId, resolution: defaultRes, duration: defaultDur, audio: false, quality: defaultQuality});
                 }}
                 className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
               >
@@ -1083,10 +1092,37 @@ export default function PricingManagementDark() {
             {models?.find(m => m.modelId === testParams.modelId)?.modelType === 'video' && (
               <>
                 {/* Check if it's Veo 3.1 model */}
-                {models?.find(m => m.modelId === testParams.modelId)?.assignedFunction === 'getVeo31' ? (
+                {models?.find(m => m.modelId === testParams.modelId)?.assignedFunction === 'getTopazVideoUpscale' ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-(--text-secondary) mb-1">Upscale Factor</label>
+                      <select
+                        value={testParams.quality}
+                        onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
+                        className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                      >
+                        <option value="1">1x (8 cr/s)</option>
+                        <option value="2">2x (8 cr/s)</option>
+                        <option value="4">4x (14 cr/s)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-(--text-secondary) mb-1">Video Duration (seconds)</label>
+                      <select
+                        value={testParams.duration}
+                        onChange={(e) => setTestParams({...testParams, duration: Number(e.target.value)})}
+                        className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                      >
+                        {[5, 10, 15, 20, 30, 45, 60, 90, 120].map(d => (
+                          <option key={d} value={d}>{d} seconds</option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                ) : models?.find(m => m.modelId === testParams.modelId)?.assignedFunction === 'getVeo31' ? (
                   <div>
                     <label className="block text-sm font-medium text-(--text-secondary) mb-1">Quality</label>
-                    <select 
+                    <select
                       value={testParams.quality}
                       onChange={(e) => setTestParams({...testParams, quality: e.target.value})}
                       className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
@@ -1834,7 +1870,8 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                   <option value="getSeedance20">getSeedance20 - Video Generation (Seedance 2.0)</option>
                   <option value="getKlingMotionControl">getKlingMotionControl - Video Generation (Kling 3.0)</option>
                   <option value="getVeo31">getVeo31 - Video Generation</option>
-                  <option value="getTopazUpscale">getTopazUpscale - AI Upscaling</option>
+                  <option value="getTopazUpscale">getTopazUpscale - Image AI Upscaling</option>
+                  <option value="getTopazVideoUpscale">getTopazVideoUpscale - Video AI Upscaling</option>
                   <option value="getGrokImageToVideo">getGrokImageToVideo - Video Generation (Grok Imagine)</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-2">Assign a specific pricing function. If not set, will auto-detect based on model type.</p>

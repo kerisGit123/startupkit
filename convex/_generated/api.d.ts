@@ -103,6 +103,7 @@ import type * as smtpConfig from "../smtpConfig.js";
 import type * as soConfig from "../soConfig.js";
 import type * as storyboard_build from "../storyboard/build.js";
 import type * as storyboard_fileMetadataHandler from "../storyboard/fileMetadataHandler.js";
+import type * as storyboard_gallery from "../storyboard/gallery.js";
 import type * as storyboard_kieAiConfig from "../storyboard/kieAiConfig.js";
 import type * as storyboard_members from "../storyboard/members.js";
 import type * as storyboard_moveItems from "../storyboard/moveItems.js";
@@ -225,6 +226,7 @@ declare const fullApi: ApiFromModules<{
   soConfig: typeof soConfig;
   "storyboard/build": typeof storyboard_build;
   "storyboard/fileMetadataHandler": typeof storyboard_fileMetadataHandler;
+  "storyboard/gallery": typeof storyboard_gallery;
   "storyboard/kieAiConfig": typeof storyboard_kieAiConfig;
   "storyboard/members": typeof storyboard_members;
   "storyboard/moveItems": typeof storyboard_moveItems;

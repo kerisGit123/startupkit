@@ -112,6 +112,18 @@ export async function POST(req: NextRequest) {
           });
           break;
 
+        case 'getTopazVideoUpscale': {
+          // Per-second pricing: upscale factor cost * duration * factor
+          // 1x/2x = 8 credits/s, 4x = 14 credits/s
+          const topazFactorCosts: Record<string, number> = { '1': 8, '1x': 8, '2': 8, '2x': 8, '4': 14, '4x': 14 };
+          const topazCostPerSec = topazFactorCosts[upscaleFactor] || (model.creditCost || 8);
+          credits = Math.ceil(topazCostPerSec * duration * (model.factor || 1));
+          console.log("[pricing-calc] Topaz Video Upscale formula:", {
+            upscaleFactor, costPerSec: topazCostPerSec, duration, factor: model.factor, result: credits
+          });
+          break;
+        }
+
         case 'getKlingMotionControl': {
           // Per-second pricing: resolution cost * duration * factor
           // 720p = 20 credits/s, 1080p = 27 credits/s

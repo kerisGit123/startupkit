@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Film, FolderOpen, Users, Star, Clock, Tag, Check,
+  Film, FolderOpen, Users, Star, Clock, Tag, Check, Globe,
   ChevronDown, ChevronUp, LayoutGrid, Settings,
   LogOut, DollarSign, CreditCard, Trash2, LifeBuoy, ScrollText, FlaskConical,
 } from "lucide-react";
@@ -21,6 +21,7 @@ interface SidebarNavProps {
 
 const TOP_ITEMS = [
   { key: "projects", icon: FolderOpen, label: "Projects",    desc: "Manage storyboard projects" },
+  { key: "gallery",  icon: Globe,      label: "Gallery",     desc: "Community shared creations" },
   { key: "members",  icon: Users,      label: "Members",     desc: "" },
 ];
 

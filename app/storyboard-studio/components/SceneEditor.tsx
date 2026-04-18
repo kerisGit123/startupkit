@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { ConvexHttpClient } from "convex/browser";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save, Video, Layers,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save, Video, Layers, Coins,
 } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
@@ -97,6 +97,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   
   // Get company ID for R2 uploads - use the standard hook
   const companyId = useCurrentCompanyId();
+  const creditBalance = useQuery(api.credits.getBalance, { companyId: companyId || "personal" });
   const { plan: currentPlan } = useSubscription();
   
   // Debug companyId values
@@ -1892,6 +1893,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       'qwen/image-to-image': 5,
       'recraft/crisp-upscale': 8,
       'topaz/image-upscale': 12,
+      'topaz/video-upscale': 10,
       // Add more models as needed
     };
     
@@ -4064,6 +4066,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           </svg>
         </button>
         <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2 py-1.5 text-[11px]">
+            <Coins className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-white font-medium">{typeof creditBalance === 'number' ? creditBalance.toLocaleString() : '...'}</span>
+          </div>
           <OrgSwitcher
             appearance={{
               elements: {
@@ -5325,6 +5331,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               uploadedBy: user?.id || "",
                               model: aiModel,
                               prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
 
                               metadata: {
@@ -5364,6 +5371,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               },
                               body: JSON.stringify({
                                 prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                                 input_urls: processedReferenceImages,
                                 aspect_ratio: aspectRatio,
                                 resolution: resolution,
@@ -5453,6 +5461,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               uploadedBy: user?.id || "",
                               model: aiModel,
                               prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
 
                               metadata: {
@@ -5493,6 +5502,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               },
                               body: JSON.stringify({
                                 prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                                 imageUrls: veoMode === "TEXT_2_VIDEO" ? [] : processedReferenceImages,
                                 model: `veo3_${veoQuality.toLowerCase()}`,
                                 callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
@@ -5542,6 +5552,135 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               toast.success(`Generation started! ${creditsUsed} credits deducted.`);
                             }
 
+                          } else if (aiModel === "topaz/video-upscale") {
+                            console.log("Using Topaz Video Upscale API format...");
+
+                            // Extract upscale factor and video URL from quality param: "2_10s"
+                            const topazUpscaleFactor = quality.split('_')[0] || '2';
+                            const topazVideoUrl = videoUrls && videoUrls.length > 0 ? videoUrls[0] : '';
+
+                            if (!topazVideoUrl) {
+                              toast.error("Topaz Video Upscale requires a video reference");
+                              return;
+                            }
+
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `topaz-video-upscale-${Date.now()}.mp4`,
+                              fileType: "video",
+                              mimeType: "video/mp4",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId,
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              model: aiModel,
+                              prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
+                              defaultAI: currentDefaultAI as any,
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: "Topaz Video Upscale",
+                                pricingType: "formula",
+                                quality: quality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: {
+                                  cropped: false,
+                                  combined: false,
+                                  referenceImagesUsed: 0,
+                                },
+                                processingTime: 0,
+                                success: false,
+                              },
+                            });
+
+                            console.log("Topaz Video Upscale placeholder record created:", fileId);
+
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI video upscale with ${aiModel}`,
+                              plan: currentPlan,
+                            });
+
+                            console.log("Topaz Video Upscale credits deducted");
+
+                            // Call Topaz Video Upscale API via server route
+                            try {
+                              const response = await fetch('/api/storyboard/generate-topaz-video', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  videoUrl: topazVideoUrl,
+                                  upscaleFactor: topazUpscaleFactor,
+                                  nsfwChecker: true,
+                                  callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                  companyId: companyId || "",
+                                }),
+                              });
+
+                              if (!response.ok) {
+                                throw new Error(`Topaz API error: ${response.status} ${response.statusText}`);
+                              }
+
+                              const result = await response.json();
+                              console.log("Topaz Video Upscale API response:", result);
+
+                              // Check if KIE AI returned an error
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({
+                                  companyId: companyId || "",
+                                  tokens: creditsUsed,
+                                  reason: `Refund: Topaz Video Upscale failed (${result.responseCode})`,
+                                });
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "failed",
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                                toast.error(`Topaz Video Upscale failed: ${result.responseMessage || 'Unknown error'}`);
+                                return;
+                              }
+
+                              // Store kieAiId, taskId, and response code in the file record
+                              if (result.kieAiId || result.taskId) {
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "processing",
+                                  defaultAI: result.kieAiId,
+                                  taskId: result.taskId,
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                              }
+
+                              if (result) {
+                                toast.success(`Generation started! ${creditsUsed} credits deducted.`);
+                              }
+                            } catch (apiError) {
+                              // Refund credits on API failure
+                              console.warn("Topaz Video Upscale API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: Topaz Video Upscale API failed`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
+                              throw apiError;
+                            }
+
                           } else if (aiModel === "grok-imagine/image-to-video") {
                             console.log("Using Grok Imagine API format...");
 
@@ -5565,6 +5704,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               uploadedBy: user?.id || "",
                               model: aiModel,
                               prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
                                 modelId: aiModel,
@@ -5602,6 +5742,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                                   imageUrls: processedReferenceImages,
                                   aspectRatio: aspectRatio,
                                   resolution: quality.split('_')[0] || '480p',
@@ -5686,6 +5827,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               uploadedBy: user?.id || "",
                               model: aiModel,
                               prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
                                 modelId: aiModel,
@@ -5726,6 +5868,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                                   inputImageUrl: processedReferenceImages[0],
                                   videoUrl: videoUrls?.[0],
                                   mode: modeResolution,
@@ -5813,6 +5956,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               uploadedBy: userId || "",
                               model: aiModel,
                               prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
                               categoryId: activeShot?.id as any || null,
                             });
@@ -5831,6 +5975,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
                                   model: aiModel,
                                   mode: seedMode,
                                   referenceImages: seedMode === "multimodal" ? (ugcImageUrls && ugcImageUrls.length > 0 ? ugcImageUrls : processedReferenceImages) : [],

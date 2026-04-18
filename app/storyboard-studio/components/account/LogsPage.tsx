@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import {
   PanelLeftClose, PanelLeftOpen, ChevronDown,
   Loader2, ExternalLink, Clock, Image as ImageIcon,
@@ -514,6 +515,24 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
                                   <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-(--accent-purple)/20 text-(--accent-purple) border border-(--accent-purple)/30">{model}</span>
                                   <p className="text-xs text-(--text-secondary)">{formatDate(file.createdAt)}</p>
                                   {file.fileType && <p className="text-xs text-(--text-tertiary)">Type: {file.fileType}</p>}
+                                  {file.prompt && (
+                                    <div className="flex items-start gap-1 mt-1">
+                                      <p className="text-[10px] text-(--text-tertiary) leading-tight line-clamp-2 max-w-[200px]" title={file.prompt}>
+                                        {file.prompt.substring(0, 80)}{file.prompt.length > 80 ? '...' : ''}
+                                      </p>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigator.clipboard.writeText(file.prompt);
+                                          toast.success('Prompt copied!');
+                                        }}
+                                        className="flex-shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors"
+                                        title="Copy prompt"
+                                      >
+                                        <Copy className="w-3 h-3 text-(--text-tertiary)" />
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-5 py-4">

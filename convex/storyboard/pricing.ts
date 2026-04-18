@@ -17,6 +17,7 @@ export const pricingModels = {
   formulaJson: v.optional(v.string()),     // JSON string with pricing formula
   assignedFunction: v.optional(v.union(    // Function mapping for formula types
     v.literal("getTopazUpscale"),
+    v.literal("getTopazVideoUpscale"),
     v.literal("getSeedance15"),
     v.literal("getSeedance20"),
     v.literal("getSeedance20Fast"),
@@ -43,12 +44,15 @@ export const createPricingModel = mutation({
     formulaJson: v.optional(v.string()),
     assignedFunction: v.optional(v.union(
       v.literal("getTopazUpscale"),
+      v.literal("getTopazVideoUpscale"),
       v.literal("getSeedance15"),
       v.literal("getSeedance20"),
+      v.literal("getSeedance20Fast"),
       v.literal("getKlingMotionControl"),
       v.literal("getNanoBananaPrice"),
       v.literal("getGptImagePrice"),
-      v.literal("getVeo31")
+      v.literal("getVeo31"),
+      v.literal("getGrokImageToVideo")
     )),
   },
   handler: async (ctx, args) => {
@@ -94,12 +98,15 @@ export const updatePricingModel = mutation({
     formulaJson: v.optional(v.string()),
     assignedFunction: v.optional(v.union(
       v.literal("getTopazUpscale"),
+      v.literal("getTopazVideoUpscale"),
       v.literal("getSeedance15"),
       v.literal("getSeedance20"),
+      v.literal("getSeedance20Fast"),
       v.literal("getKlingMotionControl"),
       v.literal("getNanoBananaPrice"),
       v.literal("getGptImagePrice"),
-      v.literal("getVeo31")
+      v.literal("getVeo31"),
+      v.literal("getGrokImageToVideo")
     )),
   },
   handler: async (ctx, args) => {
@@ -520,6 +527,27 @@ const DEFAULT_PRICING_MODELS = [
           "720p": { video_input: 20, no_video: 33 },
         },
         duration_rule: "total_duration = input_duration + output_duration",
+      },
+    }),
+  },
+  {
+    modelId: "topaz/video-upscale",
+    modelName: "Topaz Video Upscale",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getTopazVideoUpscale",
+    creditCost: 8,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "credits_per_second",
+        base_cost: 8,
+        qualities: [
+          { name: "1", cost: 8 },
+          { name: "2", cost: 8 },
+          { name: "4", cost: 14 },
+        ],
       },
     }),
   },

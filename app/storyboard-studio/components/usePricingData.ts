@@ -430,6 +430,26 @@ export const usePricingData = () => {
             }
           }
           return Math.ceil(base * factor);
+        case 'getTopazVideoUpscale':
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const qualities = formula.pricing?.qualities || [];
+              // Parse upscale factor and duration from selectedQuality: "2_10s"
+              const topazFactorMatch = selectedQuality.match(/^(\d+)/);
+              const topazDurMatch = selectedQuality.match(/(\d+)s/);
+              const topazFactor = topazFactorMatch ? topazFactorMatch[1] : "2";
+              const topazDuration = topazDurMatch ? parseInt(topazDurMatch[1]) : 0;
+              const topazQuality = qualities.find((q: any) => q.name === topazFactor);
+              const costPerSec = topazQuality ? topazQuality.cost : base;
+              const result = Math.ceil(costPerSec * topazDuration * factor);
+              console.log("[usePricingData] Topaz Video Upscale pricing:", { modelId, selectedQuality, topazFactor, costPerSec, topazDuration, factor, result });
+              return result;
+            } catch (e) {
+              console.error("[usePricingData] Error parsing Topaz Video Upscale formula:", e);
+            }
+          }
+          return Math.ceil(base * factor);
         case 'getSeedance20':
           if (model.formulaJson) {
             try {

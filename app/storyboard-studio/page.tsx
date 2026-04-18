@@ -18,6 +18,7 @@ import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./com
 import { PdfModal, ShareModal, TagModal } from "./components/Modals";
 import { MembersPage }        from "./components/MembersPage";
 import { TestingPage }        from "./components/TestingPage";
+import { GalleryPage }        from "./components/gallery/GalleryPage";
 import { LapsedBanner }       from "./components/LapsedBanner";
 import { UsageDashboard }     from "./components/UsageDashboard";
 import { FileBrowser } from "./components/storyboard/FileBrowser";
@@ -295,6 +296,7 @@ export default function StoryboardPage() {
     if (activeNav === "logs") setCurrentStep("logs");
     if (activeNav === "cleaning") setCurrentStep("cleaning");
     if (activeNav === "members") setCurrentStep("members");
+    if (activeNav === "gallery") setCurrentStep("gallery");
     if (activeNav === "testing") setCurrentStep("testing");
 
     if (
@@ -320,17 +322,17 @@ export default function StoryboardPage() {
     if (step === "storyboard") setViewMode("grid");
   };
 
-  const handleCreateConvexProject = async (name: string, frameRatio: string, style: string) => {
+  const handleCreateConvexProject = async (name: string, frameRatio: string, style: string, stylePrompt?: string) => {
     if (!name.trim()) return;
     try {
       const id = await createConvexProject({
         name,
         orgId,
         ownerId: user?.id ?? "unknown",
-        // ✅ Remove companyId - calculated on server from auth context
         settings: { frameRatio, style, layout: "grid" },
-        // Server enforces project limit based on plan
         plan: currentPlan,
+        style,
+        stylePrompt: stylePrompt || "",
       });
       router.push(`/storyboard-studio/workspace/${id}`);
     } catch (err: unknown) {
@@ -419,6 +421,7 @@ export default function StoryboardPage() {
     if (
       currentStep === "image-maker" ||
       currentStep === "members" ||
+      currentStep === "gallery" ||
       currentStep === "usage" ||
       currentStep === "price-management" ||
       currentStep === "billing" ||
@@ -606,6 +609,13 @@ export default function StoryboardPage() {
 
         {currentStep === "members" && (
           <MembersPage />
+        )}
+
+        {currentStep === "gallery" && (
+          <GalleryPage
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
         )}
 
         {currentStep === "usage" && (

@@ -5,10 +5,15 @@ import {
   Star, MoreHorizontal, Search, Filter, Settings, Users, ChevronDown,
   Plus, Image as ImageIcon, LayoutGrid, Folder, FileText, Link2,
   PanelLeftClose, PanelLeftOpen, List, Share2, Pencil, Eye, Copy,
-  Trash2, Tag, Hash, Grid3x3, Table2, Edit3, ChevronRight, Loader2, FolderOpen, X,
+  Trash2, Tag, Hash, Grid3x3, Table2, Edit3, ChevronRight, Loader2, FolderOpen, X, Coins,
 } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
+import { Palette, Check } from "lucide-react";
+import { toast } from "sonner";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_LIMITS } from "@/lib/plan-config";
 import { VISUAL_STYLES, SIMPLE_TAGS, TAG_COLORS } from "../constants";
@@ -44,7 +49,7 @@ interface ProjectsDashboardProps {
   projects: Project[];
   onProjectsChange: (projects: Project[]) => void;
   onOpenProject: (project: Project, step: Step) => void;
-  onCreateConvexProject?: (name: string, frameRatio: string, style: string) => Promise<void>;
+  onCreateConvexProject?: (name: string, frameRatio: string, style: string, stylePrompt?: string) => Promise<void>;
   onDeleteProject?: (id: string) => Promise<void>;
   onDuplicateProject?: (id: string) => Promise<void>;
   onRemoveImageUrl?: (id: string) => Promise<void>;
@@ -81,6 +86,10 @@ const normalizeStatusFilter = (value: string): Project["status"] | null => {
 export function ProjectsDashboard({
   sidebarOpen, onToggleSidebar, projects, onProjectsChange, onOpenProject, onCreateConvexProject, onDeleteProject, onDuplicateProject, onRemoveImageUrl, onOpenFileBrowser, onOpenGlobalFileBrowser, activeFilter,
 }: ProjectsDashboardProps) {
+  // Credit balance for header display
+  const dashboardCompanyId = useCurrentCompanyId() || "personal";
+  const creditBalance = useQuery(api.credits.getBalance, { companyId: dashboardCompanyId });
+
   // Plan-aware project limit + lapsed-subscription freeze
   const { plan: currentPlan, isLapsed } = useSubscription();
   const maxProjects = PLAN_LIMITS[currentPlan].maxProjects;
@@ -105,6 +114,17 @@ export function ProjectsDashboard({
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
+
+  // Custom style state
+  const [showCustomStyleForm, setShowCustomStyleForm] = useState(false);
+  const [customStyleName, setCustomStyleName] = useState("");
+  const [customStylePrompt, setCustomStylePrompt] = useState("");
+  const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
+  const allCustomTemplates = useQuery(api.promptTemplates.getByCompany, { companyId: dashboardCompanyId }) ?? [];
+  const customStyleTemplates = allCustomTemplates.filter(t => t.type === "style");
+  const createPromptTemplate = useMutation(api.promptTemplates.create);
+  const updatePromptTemplate = useMutation(api.promptTemplates.update);
+  const deletePromptTemplate = useMutation(api.promptTemplates.remove);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -164,7 +184,11 @@ export function ProjectsDashboard({
     setIsCreating(true);
     try {
       if (newType === "board" && onCreateConvexProject) {
-        await onCreateConvexProject(newName, newFrameRatio, newArtStyle);
+        // Resolve stylePrompt: check custom styles first, then built-in STYLE_PROMPTS
+        const customMatch = customStyleTemplates.find(s => s.name === newArtStyle);
+        const { STYLE_PROMPTS } = await import("../constants");
+        const resolvedStylePrompt = customMatch?.prompt || STYLE_PROMPTS[newArtStyle] || "";
+        await onCreateConvexProject(newName, newFrameRatio, newArtStyle, resolvedStylePrompt);
       } else {
         const p: Project = {
           id: `p${Date.now()}`, name: newName, type: newType,
@@ -398,7 +422,11 @@ export function ProjectsDashboard({
               <button className="hidden p-1.5 text-gray-400 transition hover:text-white lg:inline-flex">
                 <Settings className="w-4 h-4" />
               </button>
-              <div className="hidden items-center self-end md:flex lg:self-auto">
+              <div className="hidden items-center self-end md:flex lg:self-auto gap-2">
+                <div className="flex items-center gap-1.5 px-2 py-1.5 text-[11px]">
+                  <Coins className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-white font-medium">{typeof creditBalance === 'number' ? creditBalance.toLocaleString() : '...'}</span>
+                </div>
                 <OrgSwitcher
                   appearance={{
                     elements: {
@@ -874,11 +902,69 @@ export function ProjectsDashboard({
               </div>
             </div>
 
-            {/* Art style picker with preview images - 6 columns, 3 rows, no scroll */}
+            {/* Art style picker with preview images */}
             <div className="mb-6">
-              <label className="text-[#A0A0A0] text-sm mb-3 block">Art style</label>
-              <div className="grid grid-cols-6 gap-2">
-                {VISUAL_STYLES.map(style => (
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-[#A0A0A0] text-sm block">Art style</label>
+                <button
+                  onClick={() => { setEditingStyleId(null); setCustomStyleName(""); setCustomStylePrompt(""); setShowCustomStyleForm(!showCustomStyleForm); }}
+                  className="flex items-center gap-1 text-[11px] text-[#4A90E2] hover:text-white transition px-2 py-1 rounded-lg border border-[#3D3D3D] hover:border-[#4A90E2]/30"
+                >
+                  <Plus className="w-3 h-3" /> Custom
+                </button>
+              </div>
+
+              {/* Custom Style Create / Edit Form */}
+              {showCustomStyleForm && (
+                <div className="mb-3 p-3 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg space-y-2">
+                  <p className="text-[11px] text-[#A0A0A0] font-medium">{editingStyleId ? "Edit Custom Style" : "Create Custom Style"}</p>
+                  <input
+                    type="text"
+                    placeholder="Style name (e.g. My Cinematic)"
+                    value={customStyleName}
+                    onChange={(e) => setCustomStyleName(e.target.value)}
+                    className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50"
+                  />
+                  <textarea
+                    placeholder="Style prompt (describe the visual style...)"
+                    value={customStylePrompt}
+                    onChange={(e) => setCustomStylePrompt(e.target.value)}
+                    rows={4}
+                    className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50 resize-none"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => { setShowCustomStyleForm(false); setEditingStyleId(null); setCustomStyleName(""); setCustomStylePrompt(""); }}
+                      className="px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={!customStyleName.trim() || !customStylePrompt.trim()}
+                      onClick={async () => {
+                        try {
+                          if (editingStyleId) {
+                            await updatePromptTemplate({ id: editingStyleId as any, name: customStyleName.trim(), prompt: customStylePrompt.trim() });
+                            toast.success(`Style "${customStyleName}" updated`);
+                          } else {
+                            await createPromptTemplate({ name: customStyleName.trim(), type: "style", prompt: customStylePrompt.trim(), companyId: dashboardCompanyId, isPublic: false, tags: ["custom-style"] });
+                            setNewArtStyle(customStyleName.trim());
+                            toast.success(`Custom style "${customStyleName}" created`);
+                          }
+                          setCustomStyleName(""); setCustomStylePrompt(""); setEditingStyleId(null); setShowCustomStyleForm(false);
+                        } catch (err: any) { toast.error(err.message || "Failed to save style"); }
+                      }}
+                      className="px-3 py-1.5 text-xs text-white bg-[#4A90E2] hover:bg-[#357ABD] rounded-lg transition font-medium disabled:opacity-40"
+                    >
+                      {editingStyleId ? "Update" : "Create"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-6 gap-2 max-h-[280px] overflow-y-auto pr-1">
+                {/* Built-in styles */}
+                {VISUAL_STYLES.filter(s => s.id !== 'custom').map(style => (
                   <button
                     key={style.id}
                     onClick={() => setNewArtStyle(style.id)}
@@ -886,8 +972,8 @@ export function ProjectsDashboard({
                       newArtStyle === style.id ? "border-[#4A90E2]" : "border-[#3D3D3D] hover:border-[#4A90E2]/50"
                     }`}
                   >
-                    <img 
-                      src={style.preview} 
+                    <img
+                      src={style.preview}
                       alt={style.label}
                       className="absolute inset-0 w-full h-full object-cover"
                       loading="lazy"
@@ -898,13 +984,73 @@ export function ProjectsDashboard({
                     </div>
                     {newArtStyle === style.id && (
                       <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A90E2] rounded-full flex items-center justify-center">
-                        <svg className="w-2.5 h-2.5 text-[#FFFFFF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
+                        <Check className="w-2.5 h-2.5 text-white" />
                       </div>
                     )}
                   </button>
                 ))}
+
+                {/* Custom styles from promptTemplates */}
+                {customStyleTemplates.map(style => (
+                  <button
+                    key={style._id}
+                    onClick={() => setNewArtStyle(style.name)}
+                    className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
+                      newArtStyle === style.name
+                        ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
+                        : 'border-[#3D3D3D] hover:border-white/20'
+                    }`}
+                  >
+                    <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
+                      <Palette className="w-6 h-6 text-purple-400/50" />
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg truncate px-1">
+                      {style.name}
+                    </span>
+                    {newArtStyle === style.name && (
+                      <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                    {/* Edit button */}
+                    <div
+                      role="button"
+                      onClick={(e) => {
+                        e.stopPropagation(); e.preventDefault();
+                        setEditingStyleId(style._id);
+                        setCustomStyleName(style.name);
+                        setCustomStylePrompt(style.prompt);
+                        setShowCustomStyleForm(true);
+                      }}
+                      className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                    >
+                      <Edit3 className="w-2.5 h-2.5 text-white" />
+                    </div>
+                    {/* Delete button */}
+                    <div
+                      role="button"
+                      onClick={(e) => {
+                        e.stopPropagation(); e.preventDefault();
+                        deletePromptTemplate({ id: style._id });
+                        if (newArtStyle === style.name) setNewArtStyle(VISUAL_STYLES[0].id);
+                        toast.success(`Style "${style.name}" deleted`);
+                      }}
+                      className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                    >
+                      <X className="w-2.5 h-2.5 text-white" />
+                    </div>
+                  </button>
+                ))}
+
+                {/* Add Custom card */}
+                <button
+                  onClick={() => { setEditingStyleId(null); setCustomStyleName(""); setCustomStylePrompt(""); setShowCustomStyleForm(true); }}
+                  className="relative aspect-[4/3] rounded-lg border-2 border-dashed border-[#3D3D3D] hover:border-[#4A90E2]/50 transition flex flex-col items-center justify-center gap-1"
+                >
+                  <Plus className="w-5 h-5 text-[#6E6E6E]" />
+                  <span className="text-[10px] text-[#6E6E6E]">Add Custom</span>
+                </button>
               </div>
             </div>
 

@@ -516,6 +516,8 @@ export default defineSchema({
         v.literal("refund"),           // Credits added back (refund)
         v.literal("transfer_out"),     // Sent to another owned org
         v.literal("transfer_in"),      // Received from another owned org
+        v.literal("donation_out"),     // Credits donated to gallery file owner
+        v.literal("donation_in"),      // Credits received from gallery donation
         v.literal("admin_adjustment"), // Manual support adjustment (excluded from ownership)
       ),
     ),
@@ -1767,6 +1769,8 @@ export default defineSchema({
     scriptType: v.optional(v.string()), // "ANIMATED_STORIES" | "KIDS_ANIMATED_STORIES" | etc.
     
     isFavorite: v.optional(v.boolean()),
+    style: v.optional(v.string()), // "cinematic" | "sketch" | "anime" | "cartoon" | etc. — top-level project theme
+    stylePrompt: v.optional(v.string()), // The actual style prompt text appended to all generations in this project
     tags: v.array(v.string()),
     script: v.string(),
     scenes: v.array(v.object({
@@ -1784,7 +1788,7 @@ export default defineSchema({
     })),
     settings: v.object({
       frameRatio: v.string(), // "9:16" | "16:9" | "1:1"
-      style: v.string(),       // "realistic" | "cartoon" | "anime" | "cinematic"
+      style: v.string(),       // DEPRECATED: use top-level style field instead
       layout: v.string(),      // "grid" | "timeline" | "comic"
     }),
     metadata: v.object({
@@ -1920,13 +1924,53 @@ export default defineSchema({
     prompt: v.optional(v.string()),        // AI generation prompt used (stored for traceability/re-generation)
     responseCode: v.optional(v.number()),  // KIE AI response code (200=success, 401/402/404/422/429/455/500/501/505)
     responseMessage: v.optional(v.string()), // KIE AI response message (e.g. "success", "internal error, please try again later.")
+
+    // File dimensions
+    aspectRatio: v.optional(v.string()),      // "16:9" | "9:16" | "1:1" | "4:3" etc.
+
+    // Gallery sharing fields — once isShared=true, permanently public
+    isShared: v.optional(v.boolean()),        // true = visible in community gallery (permanent)
+    sharedAt: v.optional(v.number()),         // timestamp when shared
+    sharedBy: v.optional(v.string()),         // userId who shared it
+    thumbsUp: v.optional(v.number()),         // thumbs up count
+    thumbsDown: v.optional(v.number()),       // thumbs down count
+    totalDonations: v.optional(v.number()),   // total credits received via gallery donations
   })
     .index("by_project", ["projectId"])
     .index("by_category", ["projectId", "category"])
     .index("by_r2Key", ["r2Key"])
     .index("by_categoryId", ["categoryId"]) // For efficient cleanup by parent entity
     .index("by_companyId", ["companyId"]) // For company-wide file listing
-    .index("by_companyId_category", ["companyId", "category"]), // For filtered file listing
+    .index("by_companyId_category", ["companyId", "category"]) // For filtered file listing
+    .index("by_isShared", ["isShared", "sharedAt"]) // Gallery listing sorted by share date
+    .index("by_isShared_model", ["isShared", "model"]), // Gallery filter by model
+
+  // ============================================
+  // STORYBOARD STUDIO: Gallery Ratings (one vote per user per file)
+  // ============================================
+  storyboard_gallery_ratings: defineTable({
+    fileId: v.id("storyboard_files"),
+    userId: v.string(),
+    rating: v.union(v.literal("up"), v.literal("down")),
+    createdAt: v.number(),
+  })
+    .index("by_file_user", ["fileId", "userId"])
+    .index("by_fileId", ["fileId"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Gallery Donations (credit tips to file owners)
+  // ============================================
+  storyboard_gallery_donations: defineTable({
+    fileId: v.id("storyboard_files"),
+    fromCompanyId: v.string(),
+    fromUserId: v.string(),
+    toCompanyId: v.string(),
+    amount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_fileId", ["fileId"])
+    .index("by_fromUserId", ["fromUserId"])
+    .index("by_toCompanyId", ["toCompanyId"]),
 
   // ============================================
   // STORYBOARD STUDIO: Elements (LTX-style reusable assets)
@@ -2059,6 +2103,7 @@ export default defineSchema({
     formulaJson: v.optional(v.string()),     // JSON string with pricing formula
     assignedFunction: v.optional(v.union(    // Function mapping for formula types
       v.literal("getTopazUpscale"),
+      v.literal("getTopazVideoUpscale"),
       v.literal("getSeedance15"),
       v.literal("getSeedance20"),
       v.literal("getSeedance20Fast"),

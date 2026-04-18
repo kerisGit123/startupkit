@@ -477,6 +477,30 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Auto-share for free plan users — patch directly since callback has no auth context
+      try {
+        if (fileRecord?.companyId && fileRecord?.category === 'generated' && fileRecord?.prompt && (fileRecord?.creditsUsed ?? 0) > 0) {
+          const ownerPlanData = await convex.query(api.credits.getOwnerPlan, { companyId: fileRecord.companyId });
+          const ownerPlan = ownerPlanData?.ownerPlan;
+          if (ownerPlan === 'free') {
+            // Use updateFromCallback to set sharing fields (no auth needed)
+            await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+              fileId,
+              isShared: true,
+              sharedAt: Date.now(),
+              sharedBy: fileRecord.userId || 'system',
+              thumbsUp: 0,
+              thumbsDown: 0,
+              totalDonations: 0,
+            });
+            console.log('[kie-callback] Auto-shared file for free plan user:', fileId);
+          }
+        }
+      } catch (autoShareError) {
+        // Non-critical — don't fail the callback if auto-share fails
+        console.warn('[kie-callback] Auto-share failed (non-critical):', autoShareError);
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Task completed and file stored to R2 successfully',
@@ -484,8 +508,6 @@ export async function POST(request: NextRequest) {
         taskId,
         sourceUrl: finalUrl,
         r2Key: finalR2Key,
-        tempSourceUrl: tempUrl,
-        tempR2Key,
       });
     }
     

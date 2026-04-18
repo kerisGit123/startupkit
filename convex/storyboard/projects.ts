@@ -23,12 +23,14 @@ export const create = mutation({
       layout: v.string(),
     }),
     isFavorite: v.optional(v.boolean()),
+    style: v.optional(v.string()),
+    stylePrompt: v.optional(v.string()),
     // Client-provided plan from useSubscription(). Server re-validates
     // the project count against PROJECT_LIMITS[plan] so a client that
     // lies about its plan is still capped at the lowest tier's limit.
     plan: v.optional(v.string()),
   },
-  handler: async (ctx, { name, description, orgId, ownerId, settings, isFavorite, plan }) => {
+  handler: async (ctx, { name, description, orgId, ownerId, settings, isFavorite, style, stylePrompt, plan }) => {
     // Get user from auth context
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -82,6 +84,8 @@ export const create = mutation({
       teamMemberIds: [],
       status: "draft",
       isFavorite: isFavorite ?? false,
+      style: style || settings.style || "cinematic",
+      stylePrompt: stylePrompt || "",
       tags: [],
       script: "",
       scenes: [],
@@ -124,6 +128,8 @@ export const update = mutation({
     description: v.optional(v.string()),
     status: v.optional(v.string()),
     isFavorite: v.optional(v.boolean()),
+    style: v.optional(v.string()), // Top-level project theme: "cinematic" | "sketch" | "anime" | etc.
+    stylePrompt: v.optional(v.string()), // Actual style prompt text appended to generations
     tags: v.optional(v.array(v.string())),
     script: v.optional(v.string()),
     imageUrl: v.optional(v.string()), // NEW: Image URL for project's main image
@@ -140,6 +146,11 @@ export const update = mutation({
         action: v.array(v.string()),
       })),
     }))),
+    settings: v.optional(v.object({
+      frameRatio: v.string(),
+      style: v.string(),
+      layout: v.string(),
+    })),
     metadata: v.optional(v.object({
       sceneCount: v.number(),
       estimatedDuration: v.number(),

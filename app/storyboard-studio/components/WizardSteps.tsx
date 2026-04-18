@@ -3,10 +3,14 @@
 import { useState } from "react";
 import {
   Upload, Sparkles, ChevronRight, Check, X, Pencil, Trash2,
-  GripVertical, Plus, Image as ImageIcon,
+  GripVertical, Plus, Image as ImageIcon, Palette, Edit3,
 } from "lucide-react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
+import { toast } from "sonner";
 import type { Step, Orientation, Shot, CastMember, LocationAsset } from "../types";
-import { VISUAL_STYLES } from "../constants";
+import { VISUAL_STYLES, STYLE_PROMPTS } from "../constants";
 
 const WIZARD_ART_STYLES = [
   { id: "Manga (Shonen)",            desc: "Action-packed, bold lines, speed effects",    emoji: "🔥" },
@@ -344,31 +348,136 @@ interface StyleSelectionProps {
   onNext: () => void;
 }
 export function StyleSelection({ selectedStyle, onStyleChange, onBack, onNext }: StyleSelectionProps) {
+  const companyId = useCurrentCompanyId() || "personal";
+  const customStyles = useQuery(api.promptTemplates.getByCompany, { companyId });
+  const customStyleTemplates = customStyles?.filter(t => t.type === "style") ?? [];
+  const createPromptTemplate = useMutation(api.promptTemplates.create);
+  const updatePromptTemplate = useMutation(api.promptTemplates.update);
+  const deletePromptTemplate = useMutation(api.promptTemplates.remove);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formPrompt, setFormPrompt] = useState("");
+
+  const resetForm = () => { setShowForm(false); setEditingId(null); setFormName(""); setFormPrompt(""); };
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d12]">
-      <div className="px-6 py-4 border-b border-white/6 shrink-0">
+      <div className="px-6 py-4 border-b border-white/6 shrink-0 flex items-center justify-between">
         <h3 className="text-white text-lg font-bold">Choose a Visual Style</h3>
+        <button
+          onClick={() => { resetForm(); setShowForm(!showForm); }}
+          className="flex items-center gap-1 text-[11px] text-[#4A90E2] hover:text-white transition px-2.5 py-1.5 rounded-lg border border-[#3D3D3D] hover:border-[#4A90E2]/30"
+        >
+          <Plus className="w-3 h-3" /> Custom
+        </button>
       </div>
+
       <div className="flex-1 overflow-y-auto p-6">
+        {/* Custom Style Form */}
+        {showForm && (
+          <div className="mb-4 p-3 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg space-y-2">
+            <p className="text-[11px] text-[#A0A0A0] font-medium">{editingId ? "Edit Custom Style" : "Create Custom Style"}</p>
+            <input
+              type="text"
+              placeholder="Style name"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50"
+            />
+            <textarea
+              placeholder="Style prompt (describe the visual style...)"
+              value={formPrompt}
+              onChange={(e) => setFormPrompt(e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50 resize-none"
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={resetForm} className="px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg transition">Cancel</button>
+              <button
+                disabled={!formName.trim() || !formPrompt.trim()}
+                onClick={async () => {
+                  try {
+                    if (editingId) {
+                      await updatePromptTemplate({ id: editingId as any, name: formName.trim(), prompt: formPrompt.trim() });
+                      toast.success(`Style "${formName}" updated`);
+                    } else {
+                      await createPromptTemplate({ name: formName.trim(), type: "style", prompt: formPrompt.trim(), companyId, isPublic: false, tags: ["custom-style"] });
+                      onStyleChange(formName.trim());
+                      toast.success(`Style "${formName}" created`);
+                    }
+                    resetForm();
+                  } catch (err: any) {
+                    toast.error(err.message || "Failed to save style");
+                  }
+                }}
+                className="px-3 py-1.5 text-xs text-white bg-[#4A90E2] hover:bg-[#357ABD] rounded-lg transition font-medium disabled:opacity-40"
+              >
+                {editingId ? "Update" : "Create & Apply"}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {VISUAL_STYLES.map(style => (
+          {/* Built-in styles */}
+          {VISUAL_STYLES.filter(s => s.id !== 'custom').map(style => (
             <button key={style.id} onClick={() => onStyleChange(style.id)}
               className={`group relative aspect-4/3 rounded-xl overflow-hidden border-2 transition ${
                 selectedStyle === style.id ? "border-pink-500 ring-2 ring-pink-500/30" : "border-transparent hover:border-white/20"
               }`}>
-              <div className={`absolute inset-0 bg-linear-to-br ${style.gradient}`} />
-              <div className="absolute inset-0 bg-black/30 flex items-end p-3">
-                <span className="text-white text-sm font-bold">{style.label}</span>
-              </div>
+              <img src={style.preview} alt={style.label} className="w-full h-full object-cover" loading="lazy" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              <span className="absolute bottom-2 left-0 right-0 text-center text-[11px] font-medium text-white drop-shadow-lg">{style.label}</span>
               {selectedStyle === style.id && (
-                <div className="absolute top-2 right-2 w-6 h-6 bg-pink-500 rounded-full flex items-center justify-center">
-                  <Check className="w-3.5 h-3.5 text-white" />
+                <div className="absolute top-2 right-2 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
+                  <Check className="w-3 h-3 text-white" />
                 </div>
               )}
             </button>
           ))}
+
+          {/* Custom styles */}
+          {customStyleTemplates.map(style => (
+            <button key={style._id} onClick={() => onStyleChange(style.name)}
+              className={`group relative aspect-4/3 rounded-xl overflow-hidden border-2 transition ${
+                selectedStyle === style.name ? "border-pink-500 ring-2 ring-pink-500/30" : "border-[#3D3D3D] hover:border-white/20"
+              }`}>
+              <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
+                <Palette className="w-6 h-6 text-purple-400/50" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              <span className="absolute bottom-2 left-0 right-0 text-center text-[11px] font-medium text-white drop-shadow-lg truncate px-1">{style.name}</span>
+              {selectedStyle === style.name && (
+                <div className="absolute top-2 right-2 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
+                  <Check className="w-3 h-3 text-white" />
+                </div>
+              )}
+              {/* Edit */}
+              <div role="button" onClick={(e) => { e.stopPropagation(); setEditingId(style._id); setFormName(style.name); setFormPrompt(style.prompt); setShowForm(true); }}
+                className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
+                <Edit3 className="w-2.5 h-2.5 text-white" />
+              </div>
+              {/* Delete */}
+              <div role="button" onClick={(e) => { e.stopPropagation(); deletePromptTemplate({ id: style._id }); toast.success(`Deleted "${style.name}"`); }}
+                className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
+                <X className="w-2.5 h-2.5 text-white" />
+              </div>
+            </button>
+          ))}
+
+          {/* + Add Custom card */}
+          <button onClick={() => { resetForm(); setShowForm(true); }}
+            className="group relative aspect-4/3 rounded-xl overflow-hidden border-2 border-dashed border-[#3D3D3D] hover:border-[#4A90E2]/50 transition flex items-center justify-center">
+            <div className="flex flex-col items-center gap-1">
+              <Plus className="w-5 h-5 text-[#6E6E6E] group-hover:text-[#4A90E2] transition" />
+              <span className="text-[10px] text-[#6E6E6E] group-hover:text-[#4A90E2] font-medium transition">Add Custom</span>
+            </div>
+          </button>
         </div>
       </div>
+
       <div className="px-6 py-3 border-t border-white/6 flex items-center justify-between shrink-0">
         <button onClick={onBack} className="px-5 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-sm transition">BACK</button>
         <button onClick={onNext} disabled={!selectedStyle}

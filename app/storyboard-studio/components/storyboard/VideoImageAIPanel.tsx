@@ -8,7 +8,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -246,6 +246,7 @@ export function ImageAIPanel({
   const getBalance = useQuery(api.credits.getBalance, {
     companyId: companyId
   });
+  const projectData = useQuery(api.storyboard.projects.get, projectId ? { id: projectId } : "skip");
   const { getModelCredits } = usePricingData();
   
   // Debug: Log when company ID changes and getBalance result
@@ -344,6 +345,7 @@ export function ImageAIPanel({
     { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 img + 1 video", icon: Film, maxReferenceImages: 1 },
     { value: "google/veo-3.1", label: "Veo 3.1", sub: "Google Video generation", icon: Film, maxReferenceImages: 3 },
     { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7 },
+    { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • video only", icon: ArrowUp, maxReferenceImages: 0 },
   ];
   // Combine all models for the consolidated dropdown
   const allModelOptions = [...inpaintModelOptions, ...videoModelOptions];
@@ -420,7 +422,8 @@ export function ImageAIPanel({
   const [showSceneBrowser, setShowSceneBrowser] = useState(false);
   const [seedanceModeOpen, setSeedanceModeOpen] = useState(false);
   const [promptLengthError, setPromptLengthError] = useState<{ current: number; max: number } | null>(null);
-  const [nsfwChecker, setNsfwChecker] = useState(true); // Z-Image: NSFW checker (default on)
+  const [nsfwChecker, setNsfwChecker] = useState(true); // Z-Image / Topaz: NSFW checker (default on)
+  const [topazUpscaleFactor, setTopazUpscaleFactor] = useState<"1" | "2" | "4">("2"); // Topaz Video Upscale factor
   const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("video"); // Kling: default video orient
   const [klingSource, setKlingSource] = useState<"input_video" | "input_image">("input_video"); // Kling: background source
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null); // Seedance 2.0: first frame
@@ -558,6 +561,15 @@ export function ImageAIPanel({
         const params = `${resolution}_${durSec}s`;
         const credits = getModelCredits(selectedModelOption.value, params);
         console.log("[VideoImageAIPanel] Grok Imagine pricing:", { resolution, durSec, params, credits });
+        return credits;
+      })()
+    : selectedModelOption.value === "topaz/video-upscale"
+    ? (() => {
+        // Topaz Video Upscale: cost per second × video duration
+        const vidDur = videoRefs.length > 0 ? videoRefs[0].duration : 0;
+        const params = `${topazUpscaleFactor}_${vidDur}s`;
+        const credits = getModelCredits(selectedModelOption.value, params);
+        console.log("[VideoImageAIPanel] Topaz Video Upscale pricing:", { topazUpscaleFactor, vidDur, params, credits });
         return credits;
       })()
     : selectedModelOption.value === "z-image"
@@ -1432,6 +1444,8 @@ export function ImageAIPanel({
       setResolution("480P");
       setVideoDuration("6s");
       setAspectRatio("16:9");
+    } else if (model === "topaz/video-upscale") {
+      setTopazUpscaleFactor("2");
     } else if (model.includes("nano-banana")) {
       setResolution("1K");
     }
@@ -1537,6 +1551,8 @@ export function ImageAIPanel({
               })()
             : selectedModelOption.value === "kling-3.0/motion-control"
             ? `${resolution}_${videoDuration}`
+            : selectedModelOption.value === "topaz/video-upscale"
+            ? `${topazUpscaleFactor}_${videoRefs.length > 0 ? videoRefs[0].duration : 0}s`
             : `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}`
           : resolution;
         
@@ -1550,8 +1566,10 @@ export function ImageAIPanel({
         const klingOrientParam = isKlingMotion ? klingOrientation : undefined;
         const klingSourceParam = isKlingMotion ? klingSource : undefined;
 
-        // Video/audio URLs — Kling uses videoRefs, Seedance uses both video+audio refs
+        // Video/audio URLs — Kling uses videoRefs, Seedance uses both video+audio refs, Topaz uses single video
+        const isTopazVideo = selectedModelOption?.value === "topaz/video-upscale";
         const videoUrlsParam = isKlingMotion ? videoRefs.map(v => v.url)
+          : isTopazVideo ? videoRefs.map(v => v.url)
           : isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? videoRefs.map(v => v.url)
           : undefined;
         const audioUrlsParam = isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "lipsync") ? audioRefs.map(a => a.url) : undefined;
@@ -1632,8 +1650,52 @@ export function ImageAIPanel({
 
     return (
     <div className="absolute bottom-0 left-0 right-0 mx-[20px] mb-[20px] flex flex-col gap-3">
-        {/* Reference Images Panel — hidden for text-only models like z-image */}
-        {selectedModelOption.value !== "z-image" && (
+        {/* Topaz Video Upscale — standalone video input area */}
+        {selectedModelOption.value === "topaz/video-upscale" && (
+          <div className="mb-[0px]">
+            <div className="px-0 py-0">
+              <div className="flex items-start gap-2.5">
+                <div className="flex-shrink-0 flex items-center gap-1.5">
+                  {videoRefs.map((vid, index) => (
+                    <div key={`topaz-video-${index}`} className="relative group">
+                      <div className="w-16 h-16 rounded-md border border-green-500/30 bg-[#1a1a24] overflow-hidden cursor-pointer"
+                        onClick={() => setMediaPreview({ type: 'video', url: vid.url, label: `Video` })}
+                      >
+                        <video src={vid.url} className="w-full h-full object-cover" muted preload="metadata" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
+                            <div className="w-0 h-0 border-l-[8px] border-l-black border-y-[5px] border-y-transparent ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                      {vid.duration > 0 && (
+                        <div className="absolute -bottom-1.5 left-0 right-0 text-center z-20 pointer-events-none">
+                          <span className="text-[11px] bg-green-800 text-green-200 px-1.5 py-0.5 rounded-full font-medium">{vid.duration}s</span>
+                        </div>
+                      )}
+                      <button onClick={(e) => { e.stopPropagation(); setVideoRefs(prev => prev.filter((_, i) => i !== index)); }}
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20">
+                        <X className="w-2 h-2 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                  {videoRefs.length < 1 && (
+                    <button onClick={() => setShowVideoBrowser(true)}
+                      className="w-16 h-16 rounded-md border border-dashed border-green-800/50 hover:border-green-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-green-900/10"
+                      title="Add Video to Upscale">
+                      <Film className="w-4 h-4 text-green-600 group-hover:text-green-400" />
+                      <span className="text-[11px] text-green-600 group-hover:text-green-400">Video</span>
+                    </button>
+                  )}
+                </div>
+                <span className="text-[11px] text-gray-500 self-center">Upload a video to upscale</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reference Images Panel — hidden for text-only models like z-image and Topaz Video Upscale (video-only) */}
+        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && (
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
@@ -2140,8 +2202,8 @@ export function ImageAIPanel({
 
         {/* Main Panel */}
         <div className="bg-[#0a0a0f]/98 backdrop-blur-md rounded-2xl border border-white/10">
-          {/* User Prompt Area */}
-          {mode !== "describe" ? null : (
+          {/* User Prompt Area — hidden for Topaz Video Upscale (no prompt needed) */}
+          {mode !== "describe" || selectedModelOption.value === "topaz/video-upscale" ? null : (
             <div className="px-[10px] pt-[10px] pb-0">
               <div className="flex gap-2">
                 {/* Text Area (shared component) */}
@@ -2160,8 +2222,8 @@ export function ImageAIPanel({
                   onKeyDown={handleKeyDown}
                 />
                 
-                {/* Video & Audio slots — right side, for Kling/Seedance 2.0 multimodal */}
-                {(selectedModelOption.value === "kling-3.0/motion-control" || ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase"))) && (
+                {/* Video & Audio slots — right side, for Kling/Seedance 2.0 multimodal/Topaz Video Upscale */}
+                {(selectedModelOption.value === "kling-3.0/motion-control" || selectedModelOption.value === "topaz/video-upscale" || ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase"))) && (
                   <div className="flex-shrink-0 flex items-center gap-1.5">
                     {/* Video refs with duration */}
                     {videoRefs.map((vid, index) => (
@@ -2190,6 +2252,7 @@ export function ImageAIPanel({
                       </div>
                     ))}
                     {((selectedModelOption.value === "kling-3.0/motion-control" && videoRefs.length < 1) ||
+                      (selectedModelOption.value === "topaz/video-upscale" && videoRefs.length < 1) ||
                       ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && videoRefs.length < 3)) && (
                       <button onClick={() => setShowVideoBrowser(true)}
                         className="w-16 h-16 rounded-md border border-dashed border-green-800/50 hover:border-green-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-green-900/10"
@@ -2414,6 +2477,34 @@ export function ImageAIPanel({
                             <span>Load Video Prompt</span>
                           </button>
                           
+                          {/* Load Style */}
+                          <button
+                            onClick={() => {
+                              const stylePrompt = projectData?.stylePrompt;
+                              if (stylePrompt) {
+                                const el = editorRef.current;
+                                if (el) {
+                                  // Append style to existing prompt
+                                  const existing = el.textContent || "";
+                                  const combined = existing ? `${existing}\n\n${stylePrompt}` : stylePrompt;
+                                  el.textContent = combined;
+                                  setEditorIsEmpty(false);
+                                  setCurrentPrompt(combined);
+                                  onUserPromptChange?.(combined);
+                                  toast.success(`Style "${projectData?.style || 'project'}" loaded`);
+                                }
+                              } else {
+                                toast.error("No style set for this project");
+                              }
+                              setShowPromptActions(false);
+                            }}
+                            disabled={!projectData?.stylePrompt}
+                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+                          >
+                            <Palette className="w-4 h-4 text-purple-400" />
+                            <span>Load Style</span>
+                          </button>
+
                           {/* Prompt Library */}
                           <button
                             onClick={() => {
@@ -2542,8 +2633,8 @@ export function ImageAIPanel({
             {/* Spacer to push model and generate to right */}
             <div className="flex-1" />
 
-            {/* Aspect Ratio Select Box - Hide for Kling Motion */}
-            {selectedModelOption.value !== "kling-3.0/motion-control" && (
+            {/* Aspect Ratio Select Box - Hide for Kling Motion and Topaz Video Upscale */}
+            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && (
             <div className="relative" style={{ width: "80px" }}>
               <button
                 onClick={() => setShowAspectRatioDropdown(!showAspectRatioDropdown)}
@@ -2696,8 +2787,8 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Resolution Select Box - Hide for Veo 3.1 and Z-Image */}
-            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && (
+            {/* Resolution Select Box - Hide for Veo 3.1, Z-Image, and Topaz Video Upscale */}
+            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowResolutionDropdown(!showResolutionDropdown)}
@@ -2769,8 +2860,51 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Video Duration Select Box - Hide for Veo 3.1 and Kling Motion */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control"].includes(selectedModelOption.value) && (
+            {/* Topaz Video Upscale: Upscale Factor dropdown */}
+            {selectedModelOption.value === "topaz/video-upscale" && (
+              <div className="relative" style={{ width: "100px" }}>
+                <button
+                  onClick={() => {
+                    const factors: Array<"1" | "2" | "4"> = ["1", "2", "4"];
+                    const idx = factors.indexOf(topazUpscaleFactor);
+                    setTopazUpscaleFactor(factors[(idx + 1) % factors.length]);
+                  }}
+                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
+                    topazUpscaleFactor === "4"
+                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span>{topazUpscaleFactor}x Upscale</span>
+                </button>
+              </div>
+            )}
+
+            {/* Topaz Video Upscale: NSFW Checker toggle */}
+            {selectedModelOption.value === "topaz/video-upscale" && (
+              <div className="relative" style={{ width: "100px" }}>
+                <button
+                  onClick={() => setNsfwChecker(!nsfwChecker)}
+                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
+                    nsfwChecker
+                      ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                      : 'bg-red-500/10 border-red-500/30 text-red-400'
+                  }`}
+                >
+                  <span>NSFW {nsfwChecker ? "On" : "Off"}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Topaz Video Upscale: Video duration display (from video ref) */}
+            {selectedModelOption.value === "topaz/video-upscale" && videoRefs.length > 0 && (
+              <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-[13px] text-gray-400">
+                {videoRefs[0].duration}s video
+              </div>
+            )}
+
+            {/* Video Duration Select Box - Hide for Veo 3.1, Kling Motion, and Topaz Video Upscale */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "100px" }}>
                 <button
                   onClick={() => setShowVideoDurationDropdown(!showVideoDurationDropdown)}
@@ -2810,8 +2944,8 @@ export function ImageAIPanel({
             )}
 
             {/* Video Input toggle - Only for Seedance 2.0 */}
-            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0/Fast, not Grok */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video"].includes(selectedModelOption.value) && (
+            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0/Fast, not Grok, not Topaz */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video", "topaz/video-upscale"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowAudioDropdown(!showAudioDropdown)}
@@ -3095,9 +3229,9 @@ export function ImageAIPanel({
               </button>
             )}
 
-            {/* Credits Display */}
-            <div className="flex items-center gap-2 text-[12px] text-gray-400">
-              <span className="text-blue-400">⚡</span>
+            {/* Cost per generation */}
+            <div className="flex items-center gap-1.5 text-[12px] text-gray-400">
+              <Zap className="w-3.5 h-3.5 text-blue-400" />
               <span>{displayedCredits} credits</span>
             </div>
 
@@ -3123,15 +3257,6 @@ export function ImageAIPanel({
               )}
             </button>
 
-            {/* DEBUG: Test getBalance button */}
-            {process.env.NODE_ENV === 'development' && (
-              <button
-                onClick={testGetBalance}
-                className="flex items-center gap-2 px-3 py-1 rounded-lg transition font-medium text-[11px] bg-purple-500 hover:bg-purple-600 text-white"
-              >
-                Test Balance
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -3376,7 +3501,7 @@ export function ImageAIPanel({
           onClose={() => setShowVideoBrowser(false)}
           onSelectFile={async (url, type) => {
             if (type === 'video') {
-              const maxVideos = selectedModelOption.value === "kling-3.0/motion-control" ? 1 : 3;
+              const maxVideos = (selectedModelOption.value === "kling-3.0/motion-control" || selectedModelOption.value === "topaz/video-upscale") ? 1 : 3;
               if (videoRefs.length >= maxVideos) {
                 setShowVideoBrowser(false);
                 return;

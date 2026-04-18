@@ -32,6 +32,7 @@ export const logUpload = mutation({
     defaultAI: v.optional(v.id("storyboard_kie_ai")), // Which KIE AI key was used
     model: v.optional(v.string()),                    // AI model used for generation
     prompt: v.optional(v.string()),                   // AI generation prompt used
+    aspectRatio: v.optional(v.string()),              // "16:9" | "9:16" | "1:1" etc.
   },
   handler: async (ctx, args) => {
     // Since we're calling from API route with auth, we can work without auth context
@@ -436,8 +437,16 @@ export const updateFromCallback = mutation({
     responseCode: v.optional(v.number()),
     responseMessage: v.optional(v.string()),
     creditsUsed: v.optional(v.number()), // Set to 0 after refund
+    // Gallery sharing fields (auto-share for free users)
+    isShared: v.optional(v.boolean()),
+    sharedAt: v.optional(v.number()),
+    sharedBy: v.optional(v.string()),
+    thumbsUp: v.optional(v.number()),
+    thumbsDown: v.optional(v.number()),
+    totalDonations: v.optional(v.number()),
+    aspectRatio: v.optional(v.string()),
   },
-  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size, responseCode, responseMessage, creditsUsed }) => {
+  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size, responseCode, responseMessage, creditsUsed, isShared, sharedAt, sharedBy, thumbsUp, thumbsDown, totalDonations, aspectRatio }) => {
     const updateData: any = { status };
 
     if (sourceUrl) {
@@ -471,6 +480,15 @@ export const updateFromCallback = mutation({
     if (creditsUsed !== undefined) {
       updateData.creditsUsed = creditsUsed;
     }
+
+    // Gallery sharing fields
+    if (isShared !== undefined) updateData.isShared = isShared;
+    if (sharedAt !== undefined) updateData.sharedAt = sharedAt;
+    if (sharedBy !== undefined) updateData.sharedBy = sharedBy;
+    if (thumbsUp !== undefined) updateData.thumbsUp = thumbsUp;
+    if (thumbsDown !== undefined) updateData.thumbsDown = thumbsDown;
+    if (totalDonations !== undefined) updateData.totalDonations = totalDonations;
+    if (aspectRatio !== undefined) updateData.aspectRatio = aspectRatio;
 
     await ctx.db.patch(fileId, updateData);
     console.log('[updateFromCallback] Updated file:', { fileId, status, hasSourceUrl: !!sourceUrl, hasR2Key: !!r2Key, hasMetadata: metadata !== undefined, hasSize: size !== undefined, responseCode, responseMessage: responseMessage?.substring(0, 50) });

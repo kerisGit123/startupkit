@@ -80,6 +80,7 @@ export default function StorticaLanding() {
             <a href="#features" className="text-[#888] hover:text-white transition-colors">Features</a>
             <a href="#how-it-works" className="text-[#888] hover:text-white transition-colors">How It Works</a>
             <a href="#pricing" className="text-[#888] hover:text-white transition-colors">Pricing</a>
+            <a href="/community" className="text-[#888] hover:text-white transition-colors">Community</a>
           </div>
           <div className="hidden md:flex items-center gap-3">
             <a href="/sign-in" className="text-[13px] text-[#888] hover:text-white px-3 py-1.5">Log In</a>
@@ -90,6 +91,7 @@ export default function StorticaLanding() {
         {nav && (
           <div className="md:hidden bg-[#111111] border-t border-[#222222] px-6 py-5 space-y-3">
             {["Features", "How It Works", "Pricing"].map(l => <a key={l} href={`#${l.toLowerCase().replace(/ /g, "-")}`} onClick={() => setNav(false)} className="block text-sm text-[#888]">{l}</a>)}
+            <a href="/community" onClick={() => setNav(false)} className="block text-sm text-[#888]">Community</a>
             <a href="/sign-up" className="block text-sm font-semibold bg-teal-500 text-[#111111] px-4 py-2.5 rounded-lg text-center mt-3">Start Free</a>
           </div>
         )}

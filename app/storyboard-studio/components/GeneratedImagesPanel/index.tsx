@@ -1,5 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { X, Search, Eye, Star, GitCompare, Trash2, AlertCircle, Loader2, Clock, Cpu, Image } from "lucide-react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import { toast } from "sonner";
 import { GeneratedImageCard } from "./GeneratedImageCard";
 import { FilterControls } from "./FilterControls";
 import { ComparisonView } from "./ComparisonView";
@@ -78,6 +82,8 @@ export function GeneratedImagesPanel({
     statuses: [],
     sortBy: 'date'
   });
+  const [shareCandidate, setShareCandidate] = useState<any>(null);
+  const shareFileMutation = useMutation(api.storyboard.gallery.shareFile);
   
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'comparison'>('grid');
   const [comparisonPair, setComparisonPair] = useState<[string, string] | undefined>();
@@ -139,7 +145,10 @@ export function GeneratedImagesPanel({
           responseCode: file.responseCode,
           responseMessage: file.responseMessage,
           creditsUsed: file.creditsUsed,
-        } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number };
+          prompt: file.prompt || file.metadata?.prompt || '',
+          isShared: file.isShared || false,
+          category: file.category || "generated",
+        } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number; prompt?: string; isShared?: boolean; category?: string };
       });
   }, [activeShot?.id, projectFiles]);
 
@@ -275,6 +284,11 @@ export function GeneratedImagesPanel({
                       responseCode={(image as any).responseCode}
                       responseMessage={(image as any).responseMessage}
                       creditsUsed={(image as any).creditsUsed}
+                      prompt={(image as any).prompt}
+                      isShared={(image as any).isShared}
+                      r2Key={(image as any).r2Key}
+                      category={(image as any).category}
+                      onShare={(img) => setShareCandidate(img)}
                     />
                   ))}
                 </div>
@@ -294,6 +308,70 @@ export function GeneratedImagesPanel({
           images={comparisonPair.map(id => processedImages.find(img => img.id === id)!).filter(Boolean)}
           onClose={() => setComparisonPair(undefined)}
         />
+      )}
+
+      {/* Share Confirmation — gallery-style dialog with image preview */}
+      {shareCandidate && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={() => setShareCandidate(null)}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div
+            className="relative bg-[#1A1A1A] rounded-2xl w-[440px] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] border border-[#3D3D3D]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Image preview */}
+            {shareCandidate.url && (
+              <div className="w-full h-[200px] overflow-hidden bg-black">
+                {shareCandidate.fileType === 'video' ? (
+                  <video src={shareCandidate.url} className="w-full h-full object-cover" muted preload="metadata" />
+                ) : (
+                  <img src={shareCandidate.url} alt="Share preview" className="w-full h-full object-cover" />
+                )}
+              </div>
+            )}
+
+            {/* Content */}
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-[#4A90E2]/15 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-[#4A90E2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-[15px]">Share to Gallery</h3>
+                  <p className="text-[#6E6E6E] text-xs">{shareCandidate.metadata?.model || 'AI Generated'}</p>
+                </div>
+              </div>
+
+              <p className="text-[#A0A0A0] text-sm leading-relaxed mb-5">
+                Once shared, this file will be permanently visible in the Community Gallery. Other users can view, rate, and donate credits to you. This cannot be undone.
+              </p>
+
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShareCandidate(null)}
+                  className="px-5 py-2.5 text-sm text-[#A0A0A0] hover:text-white bg-[#2C2C2C] hover:bg-[#3D3D3D] border border-[#3D3D3D] rounded-lg transition font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await shareFileMutation({ fileId: shareCandidate.id as Id<"storyboard_files"> });
+                      toast.success("File shared to gallery!");
+                    } catch (err: any) {
+                      toast.error(err.message || "Failed to share file");
+                    }
+                    setShareCandidate(null);
+                  }}
+                  className="px-5 py-2.5 text-sm text-white bg-[#4A90E2] hover:bg-[#357ABD] rounded-lg transition font-semibold"
+                >
+                  Share
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

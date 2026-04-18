@@ -8,7 +8,7 @@ import { Search, Plus, Edit, Trash2, Copy, Star, Grid, List, X, Zap, Clock, Save
 interface Prompt {
   _id: string;
   name: string;
-  type: 'character' | 'environment' | 'prop' | 'design' | 'style' | 'camera' | 'action' | 'video' | 'other';
+  type: 'character' | 'environment' | 'prop' | 'design' | 'camera' | 'action' | 'video' | 'other';
   prompt: string;
   notes?: string;
   companyId: string;
@@ -24,7 +24,6 @@ const PROMPT_CATEGORIES = [
   { key: 'environment', label: 'Environment' },
   { key: 'prop', label: 'Prop' },
   { key: 'design', label: 'Design' },
-  { key: 'style', label: 'Style' },
   { key: 'camera', label: 'Camera' },
   { key: 'action', label: 'Action' },
   { key: 'video', label: 'Video' },
@@ -175,268 +174,348 @@ Strict Negative Constraints — Do NOT produce:
 Output: A single identity sheet image containing 2/3 area full-body multi-angle views, 1/3 area structured detail panels. All views must be complete, consistent, and ultra-realistic, like a professional casting sheet.`,
   },
   {
-    name: 'V01 - Kling 3.0 Motion Character',
-    type: 'video' as const,
+    name: 'C04 - Ultra-Realistic Robot Identity Sheet v4.3 (Full-Body Enforced)',
+    type: 'character' as const,
     isSystem: true,
-    tags: ['kling', 'motion'],
+    tags: ['photorealistic', 'reference-sheet', 'robot', 'mecha'],
     isPublic: false,
-    notes: 'Default prompt for Kling 3.0 Motion',
-    prompt: `No distortion, the character's movements are consistent with the video.`,
+    notes: 'Use @image1 as robot reference. Compact: Single robot only, no duplicates. All main views must be FULL BODY (highest point to feet, no cropping). Back view = same robot rotated 180°. 2/3 main views: front, back, left 90°, right 90°, 3/4 (all full body). 1/3 detail panels: cockpit, armor, hydraulics, weapons, object (horizontal if long). Ultra-realistic (metal wear, scratches, dents, glass reflections, paint chipping). Clean layout, real photography. No CGI, no cartoon.',
+    prompt: `# Ultra-Realistic Robot Identity Sheet v4.3 (Full-Body Enforced)
+
+Create a photorealistic robot identity sheet based strictly on the provided reference image. The result must look like a real professional studio identity sheet, with a clean, organized layout, ultra-realistic rendering, and clear separation between full-body views and detail panels.
+
+CRITICAL RULE — SINGLE SUBJECT ONLY:
+- The identity sheet must contain ONLY ONE robot
+- All views must represent the SAME robot
+- No duplicated robots
+- Back view = same robot rotated 180°, NOT a second robot
+- Must match armor, colors, cockpit, weapons, and proportions exactly as shown in the reference image
+
+Page Layout (STRICT):
+
+Section A — Main Views (2/3 area):
+Display FULL-BODY views of the SAME robot.
+
+Full-Body Requirement (MANDATORY):
+Each view must show the entire robot from highest point to feet:
+- highest point (head OR glass cockpit) fully visible (no cropping)
+- feet fully visible (no cropping)
+- full silhouette clearly defined
+- no zoomed-in, half-body, or portrait framing
+The robot must fit naturally within frame with proper margins, like a military mecha specification sheet.
+
+Required Views:
+1. Front View (full body, facing camera)
+2. Left Profile (full body, 90° side view)
+3. Right Profile (full body, 90° side view)
+4. Back View (full body, 180° rear view)
+5. 3/4 View (full body, ~45° angle)
+
+Layout Rules: All views must be same scale, aligned and evenly spaced, consistently framed. Clean grid layout, no overlap, consistent lighting across all views.
+
+Section B — Detail Panels (1/3 area):
+Top Row (2 panels): Cockpit detail, Pilot or interior detail (if visible).
+Middle Row: Armor texture detail, Hydraulic/joint detail, Primary weapon detail, Secondary weapon or shield detail.
+Bottom Row (Adaptive Object Panel): Wide horizontal panel for long objects (e.g. cannon, machine gun, sword, or ammo belt) — must be horizontal and simplified.
+
+Angle Accuracy Rules:
+- Left/Right = true 90° profiles
+- Back = full 180° rotation
+- Front = direct
+- 3/4 = ~45°
+
+Identity Consistency:
+- Same robot, same armor, same colors
+- Same weapons and equipment
+- Same cockpit/head design
+
+Ultra-Realistic Detail:
+- metal wear, scratches, dents, imperfections
+- realistic glass reflections (if cockpit present)
+- realistic paint chipping and material behavior
+- hydraulic fluid stains, carbon fiber or metal weave
+- fabric texture if pilot visible
+
+Photography Style:
+- studio lighting (soft key + rim light)
+- natural shadows
+- realistic exposure
+- subtle depth of field
+Must look like real photography of a physical robot or mecha model.
+
+Strict Negative Constraints — Do NOT produce:
+- cropped body (must be full body)
+- zoomed-in views in main section
+- multiple robots
+- incorrect back view
+- cartoon / anime / CGI style
+- smooth or plastic-looking metal
+
+Output: A single identity sheet image containing 2/3 area full-body multi-angle views, 1/3 area structured detail panels. All views must be complete, consistent, and ultra-realistic, like a professional military mecha specification sheet.`,
   },
   {
-    name: 'V02a - Property Tour: Exterior & Arrival',
+    name: 'V01 - Kling 3.0 Motion Character (Arc Shot)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['kling', 'motion', 'arc', 'character'],
     isPublic: false,
-    notes: 'Frame 1 of property tour. Presenter = agent, Subject = building exterior/facade, Scene = street/neighborhood. Use as opening shot.',
-    prompt: `@Presenter1 stands confidently on the curb in @Scene1 the quiet tree-lined neighborhood street. She smiles at the camera and gestures toward @Subject1 the elegant property facade behind her. Camera pulls back to reveal the full exterior — manicured front lawn, modern architectural lines, and a welcoming entrance. She walks up the front path, opens the gate, and approaches the front door. Drone-style establishing shot that transitions to eye-level follow. Professional real estate video, golden hour warm lighting, smooth gimbal movement.`,
+    notes: 'Kling 3.0 Motion Control mode. Upload character image + motion video reference. Camera: smooth arc orbit around character. Maintains identity consistency with natural body movement.',
+    prompt: `The character stands in a natural pose, weight on one leg, relaxed and present. Camera performs a slow smooth arc orbit around the character at eye level — moving from front 3/4 angle around to the side profile, capturing the full silhouette and clothing detail. The character shifts weight naturally, turns their head slightly to follow the camera, blinks, breathes. Subtle environmental motion: hair or fabric moving gently in a light breeze. Consistent identity throughout — same face, same proportions, same outfit. No distortion, no morphing, no unnatural limb positions. Soft key light from the front with a warm rim light from behind, creating depth and separation from the background. Smooth continuous motion, cinematic quality, natural human movement.`,
   },
   {
-    name: 'V02b - Property Tour: Entrance & Living Room',
+    name: 'V02a - Property Tour: Exterior & Arrival (Pedestal Down + Dolly)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'pedestal', 'dolly'],
     isPublic: false,
-    notes: 'Frame 2 of property tour. Presenter = agent, Subject = living room, Scene = entrance foyer.',
-    prompt: `@Presenter1 pushes open the front door and steps into @Scene1 the bright entrance foyer. She pauses, smiles, and sweeps her arm toward @Subject1 the spacious open-plan living room. Camera follows as she walks into the living area, pointing out the high ceilings, large windows flooding the room with natural light, and the premium hardwood flooring. She runs her hand along the feature wall, then turns to camera with a warm, inviting expression. Steady gimbal tracking, natural daylight, luxury property video aesthetic.`,
+    notes: 'Showcase mode. Frame 1 of property tour. Presenter = agent, Subject = facade, Scene = street. Camera: pedestal down from aerial establishing to ground-level dolly follow as agent walks to front door.',
+    prompt: `Camera begins at drone height showing @Subject1 the property facade and @Scene1 the tree-lined neighborhood from above, then pedestals down smoothly to eye level where @Presenter1 stands on the curb. As the camera reaches her, she smiles and gestures toward the property, then turns and walks up the front path. Camera transitions into a steady dolly follow behind her as she approaches the front door. Golden hour warm side-lighting sculpts the facade. Manicured lawn, architectural lines, and welcoming entrance visible throughout the descent. Single continuous pedestal-to-dolly shot, professional real estate cinematography.`,
   },
   {
-    name: 'V02c - Property Tour: Kitchen & Dining',
+    name: 'V02b - Property Tour: Entrance & Living Room (Dolly Through)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'dolly'],
     isPublic: false,
-    notes: 'Frame 3 of property tour. Presenter = agent, Subject1 = kitchen, Subject2 = dining area.',
-    prompt: `@Presenter1 walks through from the living area into @Subject1 the modern kitchen. She runs her hand along the marble island countertop, opens a cabinet to show the soft-close mechanism, and gestures to the premium stainless-steel appliances. Camera pans smoothly to reveal @Subject2 the adjacent dining area with floor-to-ceiling windows overlooking the garden. The presenter stands at the island and speaks enthusiastically about the entertaining potential. Professional property tour, warm kitchen lighting, smooth tracking shots.`,
+    notes: 'Showcase mode. Frame 2. Presenter = agent, Subject = living room, Scene = foyer. Camera: dolly forward through doorway into the living space reveal.',
+    prompt: `@Presenter1 pushes open the front door. Camera dollies forward from behind her shoulder, crossing the threshold into @Scene1 the bright entrance foyer. She sweeps her arm toward @Subject1 the spacious open-plan living room as the camera continues its slow dolly forward into the space — revealing high ceilings, large windows flooding the room with natural light, premium hardwood flooring. She walks alongside the camera, running her hand along the feature wall, then turns to face the lens with a warm, inviting expression. Lighting transitions from exterior daylight to warm interior ambient as the camera crosses the doorway. Single continuous dolly-through, gimbal-smooth, luxury property reveal.`,
   },
   {
-    name: 'V02d - Property Tour: Master Bedroom',
+    name: 'V02c - Property Tour: Kitchen & Dining (Truck + Pan)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'truck', 'pan'],
     isPublic: false,
-    notes: 'Frame 4 of property tour. Presenter = agent, Subject1 = master bedroom, Subject2 = walk-in wardrobe or ensuite.',
-    prompt: `@Presenter1 opens the door and reveals @Subject1 the luxurious master bedroom suite. Camera follows her inside as morning light streams through sheer curtains. She gestures to the spacious layout, the designer lighting fixtures, and the peaceful ambiance. She walks to @Subject2 the walk-in wardrobe, slides open the doors to show the generous storage space, then peeks into the ensuite bathroom highlighting the rainfall shower and freestanding bathtub. Soft natural lighting, slow cinematic reveal, luxury property aesthetic.`,
+    notes: 'Showcase mode. Frame 3. Presenter = agent, Subject1 = kitchen, Subject2 = dining area. Camera: lateral truck along the kitchen island, panning to reveal the dining area.',
+    prompt: `Camera trucks laterally along @Subject1 the marble kitchen island as @Presenter1 walks alongside it, running her fingertips across the countertop. She pauses at the appliances and the camera pans smoothly past her to reveal @Subject2 the adjacent dining area with floor-to-ceiling windows overlooking the garden — natural light flooding the space. She steps into the pan's frame at the island, gesturing toward the entertaining layout. Warm kitchen lighting from overhead pendants mixing with natural window light. Single continuous truck-to-pan, smooth and unhurried, professional property cinematography.`,
   },
   {
-    name: 'V02e - Property Tour: Children Bedroom',
+    name: 'V02d - Property Tour: Master Bedroom (Dolly Through + Pan)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'dolly', 'pan'],
     isPublic: false,
-    notes: 'Frame 5 of property tour. Presenter = agent, Subject = children bedroom(s).',
-    prompt: `@Presenter1 opens the door to @Subject1 a bright and cheerful children's bedroom. She points out the generous size, the large window letting in natural light, and the built-in storage shelving. Camera follows as she moves to @Subject2 the second bedroom next door, showing it is equally spacious with a different colour palette. She emphasizes how both rooms have their own personality while maintaining the same premium finish throughout. Warm, family-friendly energy, gentle camera movement, inviting atmosphere.`,
+    notes: 'Showcase mode. Frame 4. Presenter = agent, Subject1 = bedroom, Subject2 = wardrobe/ensuite. Camera: dolly through doorway into bedroom, pan to reveal wardrobe and ensuite.',
+    prompt: `@Presenter1 opens the door to @Subject1 the master bedroom. Camera dollies forward through the doorway as morning light streams through sheer curtains, revealing the spacious bed, designer lighting fixtures, and peaceful atmosphere. She steps inside and the camera pans smoothly to follow her toward @Subject2 the walk-in wardrobe — she slides open the doors revealing the generous storage space. The pan continues to the ensuite entrance, catching a glimpse of the rainfall shower and freestanding bathtub. Soft diffused morning light throughout, warm linen tones. Single continuous dolly-through-and-pan, slow cinematic reveal, luxury property aesthetic.`,
   },
   {
-    name: 'V02f - Property Tour: Bathroom',
+    name: 'V02e - Property Tour: Children Bedroom (Dolly + Tilt Down)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'dolly', 'tilt'],
     isPublic: false,
-    notes: 'Frame 6 of property tour. Presenter = agent, Subject = main bathroom.',
-    prompt: `@Presenter1 steps into @Subject1 the main family bathroom. She highlights the floor-to-ceiling tiles, the frameless glass shower, and the floating vanity with dual basins. Camera captures close-up details — the brushed nickel fixtures, the stone benchtop texture, the recessed lighting creating a spa-like atmosphere. The presenter turns on the tap briefly, showing the quality fittings, then looks at the camera with an appreciative nod. Clean, bright bathroom lighting, detail-oriented shots, premium finish showcase.`,
+    notes: 'Showcase mode. Frame 5. Presenter = agent, Subject1 = first child bedroom, Subject2 = second bedroom. Camera: dolly into room with gentle tilt down to show scale.',
+    prompt: `@Presenter1 opens the door to @Subject1 a bright children's bedroom. Camera dollies forward into the room, with a gentle tilt down from the ceiling height showing the generous space — large window flooding natural light, built-in storage shelving, cheerful colour palette. She gestures warmly at the room's features. Camera continues its dolly through the connecting doorway to @Subject2 the second bedroom, equally spacious with a different personality. She emphasizes the premium finish consistent throughout. Warm natural daylight, family-friendly atmosphere, gentle unhurried camera movement. Single continuous dolly-through connecting both rooms.`,
   },
   {
-    name: 'V02g - Property Tour: Backyard & Garden',
+    name: 'V02f - Property Tour: Bathroom (Slow Zoom In on Details)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'zoom'],
     isPublic: false,
-    notes: 'Frame 7 of property tour. Presenter = agent, Subject = backyard/garden/pool, Scene = outdoor area.',
-    prompt: `@Presenter1 slides open the glass doors and steps out into @Subject1 the private backyard. Camera follows from inside to outside, revealing the covered patio, manicured lawn, and mature landscaping. She walks across @Scene1 the entertainment deck, gesturing to the built-in barbecue area and the outdoor dining space. If there is a pool, she walks alongside it. She stands at the edge of the garden, arms open, showcasing the private outdoor oasis. Bright daylight, wide-angle establishing shots transitioning to medium follow shots.`,
+    notes: 'Showcase mode. Frame 6. Presenter = agent, Subject = bathroom. Camera: slow zoom in from wide to tight detail — floor-to-ceiling tiles, fixtures, finishes.',
+    prompt: `Camera starts on a wide shot of @Subject1 the main bathroom as @Presenter1 steps into frame. She gestures across the space — floor-to-ceiling tiles, frameless glass shower, floating vanity with dual basins. The camera begins a slow zoom in, tightening from the full room to the detail level — brushed nickel fixtures, stone benchtop texture, recessed lighting casting a spa-like glow. She turns on the tap briefly, water catching the light, showing the quality fittings. The zoom settles on the fixture detail as she looks at the camera with an appreciative nod. Clean bright bathroom lighting with warm fill, single continuous zoom shot from context to craftsmanship.`,
   },
   {
-    name: 'V02h - Property Tour: Closing & Call to Action',
+    name: 'V02g - Property Tour: Backyard & Garden (Dolly Through Door)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'real-estate', 'property-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'dolly'],
     isPublic: false,
-    notes: 'Frame 8 of property tour. Final frame. Presenter = agent, Subject = property exterior (same as Frame 1), Scene = street.',
-    prompt: `@Presenter1 stands in front of @Subject1 the property exterior, the same angle as the opening shot but now at a slightly different time of day. She faces the camera directly, speaks with confidence and warmth, summarizing the key highlights — the location, the space, the lifestyle. She gestures toward the home one final time, smiles genuinely, and delivers the call to action. Camera slowly pulls back to a wide shot of the property in @Scene1 the beautiful neighborhood setting. Professional closing shot, warm golden light, confident and personable delivery.`,
+    notes: 'Showcase mode. Frame 7. Presenter = agent, Subject = backyard/pool, Scene = outdoor area. Camera: dolly through glass door from interior to exterior reveal.',
+    prompt: `@Presenter1 slides open the glass doors. Camera dollies forward from the interior through the doorway and into @Subject1 the private backyard — the covered patio, manicured lawn, and mature landscaping reveal as the camera crosses the threshold. Lighting transitions dramatically from warm interior to bright natural daylight. She walks ahead into @Scene1 the entertainment deck, gesturing at the barbecue area and outdoor dining. Camera continues its slow dolly forward, taking in the full outdoor space. She opens her arms at the garden's edge, presenting the private oasis. Wide-angle lens emphasising the garden depth. Single continuous dolly-through from inside to outside, the signature property tour reveal shot.`,
   },
   {
-    name: 'V05a - Car Tour: First Impression & Exterior',
+    name: 'V02h - Property Tour: Closing & CTA (Zoom Out + Pedestal Up)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'car', 'car-tour'],
+    tags: ['showcase', 'real-estate', 'property-tour', 'zoom', 'pedestal'],
     isPublic: false,
-    notes: 'Frame 1 of car showcase. Presenter = female host, Subject = car exterior, Scene = showroom or outdoor location. Opening reveal shot.',
-    prompt: `@Presenter1 walks into frame in @Scene1 a sleek modern showroom with dramatic spotlighting. She stops beside @Subject1 the car, places one hand on the roof, and turns to camera with a confident smile. Camera circles around the vehicle in a slow 180-degree arc, capturing the body lines, paint finish, and wheel design. She traces her fingers along the front fender, crouches to show the low stance and aggressive front grille. She stands back up, flips her hair, and says her opening line to camera. Cinematic automotive reveal, dramatic lighting with reflections on the paint, slow glamour shots.`,
+    notes: 'Showcase mode. Frame 8 (final). Presenter = agent, Subject = property exterior, Scene = street. Camera: medium close-up of agent delivering CTA, then zoom out + pedestal up to reveal full property in golden light.',
+    prompt: `Camera holds a medium close-up on @Presenter1 as she stands in front of @Subject1 the property exterior in @Scene1 the neighborhood. She faces the camera directly, speaking with confidence and warmth — summarizing key highlights. She gestures toward the home one final time with a genuine smile. The camera begins a slow zoom out combined with a gentle pedestal up, pulling back and rising to reveal the full property and street setting in warm golden hour light. Her figure becomes small against the elegant facade. The shot completes as a wide establishing view — the same framing as the opening but now bathed in sunset warmth. Bookend symmetry with Frame 1. Professional closing, warm confident delivery.`,
   },
   {
-    name: 'V05b - Car Tour: Exterior Walkaround',
+    name: 'V05a - Car Tour: First Impression (Arc Shot 180°)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'car', 'car-tour'],
+    tags: ['showcase', 'car', 'car-tour', 'arc'],
     isPublic: false,
-    notes: 'Frame 2 of car showcase. Presenter = female host, Subject1 = front design, Subject2 = rear design.',
-    prompt: `@Presenter1 begins at the front of the car, crouching to showcase @Subject1 the LED headlight signature, the sculpted hood lines, and the air intake design. She runs her hand along the side profile as camera tracks alongside her. At the rear, she highlights @Subject2 the tail light design, the quad exhaust tips, the integrated rear spoiler, and the badge. She opens the boot briefly to show the cargo space. Camera captures tight detail shots intercut with her medium shots. Premium automotive commercial style, soft ambient lighting with specular highlights on chrome and paint.`,
+    notes: 'Showcase mode. Frame 1. Presenter = host, Subject = car exterior, Scene = showroom/location. Camera: 180° arc orbit around car with presenter, the hero reveal.',
+    prompt: `@Presenter1 stands beside @Subject1 the car in @Scene1 a sleek showroom with dramatic spotlighting, one hand resting on the roof. Camera performs a slow 180-degree arc orbit around the vehicle at hip height — starting from the front 3/4, sweeping past the presenter and along the side profile, capturing body lines, paint reflections, and wheel design in a single continuous circular movement. She traces her fingers along the fender as the camera passes, crouches briefly to show the low aggressive stance. The arc reveals the full car from every angle without cutting. Dramatic directional lighting creates specular highlights that travel across the paint surface as the camera orbits. Single continuous arc shot, cinematic automotive reveal, slow and deliberate.`,
   },
   {
-    name: 'V05c - Car Tour: Interior & Cockpit',
+    name: 'V05b - Car Tour: Exterior Walkaround (Truck Shot)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'car', 'car-tour'],
+    tags: ['showcase', 'car', 'car-tour', 'truck'],
     isPublic: false,
-    notes: 'Frame 3 of car showcase. Presenter = female host, Subject1 = interior cabin, Subject2 = dashboard/infotainment.',
-    prompt: `@Presenter1 opens the driver door with a smooth pull. Camera follows from outside to inside, revealing @Subject1 the premium leather interior — the quilted seat stitching, the contrast piping, the aluminium trim accents. She slides into the driver seat, adjusts the mirrors, and pans her hand across @Subject2 the digital dashboard, the floating infotainment screen, and the ambient lighting strip. Close-ups of the gear selector, the steering wheel controls, and the centre console storage. She looks impressed and nods approvingly at camera. Interior automotive photography style, warm ambient cabin lighting, detail macro shots.`,
+    notes: 'Showcase mode. Frame 2. Presenter = host, Subject1 = front design, Subject2 = rear. Camera: lateral truck alongside presenter as she walks the car length, front to rear.',
+    prompt: `Camera trucks laterally at low angle alongside @Presenter1 as she walks the length of the car from front to rear. She begins crouching at @Subject1 the front — LED headlight signature, sculpted hood lines, air intake design illuminated by dramatic side-lighting. She stands and runs her hand along the side profile as the camera tracks smoothly with her at the same pace. She reaches @Subject2 the rear, highlighting tail lights, exhaust tips, spoiler, and badge. Her fingertip traces the brand emblem. Specular highlights travel across chrome and paint as the camera's angle shifts during the truck. Single continuous lateral truck from front to rear, low camera height emphasising the car's presence, premium automotive commercial lighting.`,
   },
   {
-    name: 'V05d - Car Tour: Engine & Performance',
+    name: 'V05c - Car Tour: Interior & Cockpit (Dolly Through Door)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'car', 'car-tour'],
+    tags: ['showcase', 'car', 'car-tour', 'dolly'],
     isPublic: false,
-    notes: 'Frame 4 of car showcase. Presenter = female host, Subject = engine bay.',
-    prompt: `@Presenter1 stands at the front of the car and lifts the hood to reveal @Subject1 the engine bay. The camera begins on her face — the moment of reveal reflected in her expression — then slowly pushes forward and tilts down in one continuous movement, drifting past her shoulder and descending into the engine bay. The push continues deeper, gliding over the engine cover branding, across the carbon fibre intake, and settling into a tight close-up of the engineering centrepiece. She rests one hand on the strut tower brace and glances into the bay with quiet appreciation. One slow unbroken camera push from portrait to mechanical detail, industrial automotive style, sharp focus, dramatic side-lighting that sculpts every component in shadow and highlight.`,
+    notes: 'Showcase mode. Frame 3. Presenter = host, Subject1 = interior, Subject2 = dashboard. Camera: dolly from exterior through open door into cabin.',
+    prompt: `@Presenter1 opens the driver door with a smooth pull. Camera dollies forward from outside through the open door into @Subject1 the premium leather interior — quilted stitching, contrast piping, and aluminium trim revealed as the lens crosses the threshold. She slides into the driver seat. The camera continues its dolly deeper into the cabin, settling on @Subject2 the digital dashboard, floating infotainment screen, and ambient lighting strip. Her hand sweeps across the controls, fingertips tracing the gear selector and steering wheel. Lighting transitions from bright exterior to warm amber cabin ambience as the camera enters the car. Single continuous dolly-through, interior automotive cinematography, shallow depth of field on material details.`,
   },
   {
-    name: 'V05e - Car Tour: Driving Experience',
+    name: 'V05d - Car Tour: Engine Bay (Dolly + Tilt Down)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'car', 'car-tour'],
+    tags: ['showcase', 'car', 'car-tour', 'dolly', 'tilt'],
     isPublic: false,
-    notes: 'Frame 5 of car showcase. Presenter = female driver, Subject = steering/controls, Scene = scenic road.',
-    prompt: `@Presenter1 sits in the driver seat of the car on @Scene1 a scenic mountain road. The camera is mounted inside the cabin on a dashboard rig, holding a steady cockpit-perspective shot. She grips @Subject1 the steering wheel and guides the car through a long sweeping curve — hands making a smooth correction, eyes tracking the road ahead, a relaxed smile of genuine driving pleasure crossing her face. The mountain landscape scrolls continuously past the windscreen and side windows throughout the shot. Wind from her cracked window moves her hair gently. One continuous interior cockpit shot, driver and landscape in frame together, cinematic cabin lighting, golden hour sun streaming through the windscreen.`,
+    notes: 'Showcase mode. Frame 4. Presenter = host, Subject = engine bay. Camera: continuous dolly forward past presenter shoulder, tilting down into engine bay detail. One unbroken portrait-to-mechanical shot.',
+    prompt: `@Presenter1 lifts the hood to reveal @Subject1 the engine bay. Camera begins on her face — the reveal reflected in her expression — then dollies forward slowly past her shoulder while tilting down in one continuous movement, descending into the engine bay. The dolly continues deeper, gliding over engine cover branding, across carbon fibre intake, settling into a tight close-up of the engineering centrepiece. She rests one hand on the strut tower brace. Dramatic side-lighting sculpts every component in shadow and highlight. Single unbroken dolly-tilt from portrait to mechanical macro detail, industrial automotive cinematography, sharp focus throughout.`,
   },
   {
-    name: 'V05f - Car Tour: Performance & Manoeuvres',
+    name: 'V05e - Car Tour: Driving Experience (Static Cockpit Rig)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'car', 'car-tour'],
+    tags: ['showcase', 'car', 'car-tour', 'static', 'cockpit'],
     isPublic: false,
-    notes: 'Frame 6 of car showcase. Presenter = female driver, Subject = car in action, Scene = track or open road.',
-    prompt: `@Presenter1 pushes @Subject1 the car hard through a sweeping curve on @Scene1 an open track or empty coastal road. A single low-angle side-tracking shot follows the car continuously from entry to exit of the bend — tyres gripping the asphalt, the body rolling slightly under lateral load, tyre smoke curling off the rear. The camera pans smoothly with the car's momentum, holding the full vehicle in frame as it accelerates out of the curve and pulls away toward the horizon. Adrenaline automotive content, one continuous fluid tracking shot, tyre smoke and engine roar, cinematic wide-angle perspective, golden hour side-light raking across the bodywork.`,
+    notes: 'Showcase mode. Frame 5. Presenter = driver, Subject = steering/controls, Scene = scenic road. Camera: locked dashboard rig — static interior with moving landscape outside.',
+    prompt: `Camera locked on a dashboard rig inside the cabin holding a steady cockpit-perspective shot. @Presenter1 sits in the driver seat on @Scene1 a scenic mountain road, gripping @Subject1 the steering wheel. She guides the car through a long sweeping curve — hands making a smooth correction, eyes tracking the road, a relaxed smile of genuine driving pleasure. The mountain landscape scrolls continuously past the windscreen and side windows, creating parallax depth. Wind from the cracked window moves her hair gently. Golden hour sun streams through the windscreen, flaring softly. One continuous static interior shot — the stillness of the locked camera contrasts with the moving world outside. Cinematic warm cabin lighting, driver and landscape in frame together.`,
   },
   {
-    name: 'V05g - Car Tour: Closing & Verdict',
+    name: 'V05f - Car Tour: Performance (Low-Angle Tracking Shot)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'car', 'car-tour'],
+    tags: ['showcase', 'car', 'car-tour', 'tracking', 'low-angle'],
     isPublic: false,
-    notes: 'Frame 7 of car showcase. Final frame. Presenter = female host, Subject = car parked hero shot, Scene = sunset location.',
-    prompt: `@Presenter1 leans against @Subject1 the car, now parked at @Scene1 a scenic overlook at sunset. The golden light reflects off the paint and her expression is relaxed, satisfied. She faces the camera directly and delivers her final verdict — the highlights, the driving feel, who this car is for. She taps the roof twice, steps away, and the camera pulls back to a wide cinematic hero shot of the car silhouetted against the sunset sky. Final lingering close-up of the badge catching the last light. Premium automotive conclusion, warm sunset tones, confident and personal delivery, hero framing.`,
+    notes: 'Showcase mode. Frame 6. Presenter = driver, Subject = car in action, Scene = track/road. Camera: low-angle lateral tracking shot following car through a bend.',
+    prompt: `Single low-angle tracking shot following @Subject1 the car as @Presenter1 pushes it hard through a sweeping curve on @Scene1 an open track or coastal road. Camera holds at knee height, trucking laterally with the car's momentum — tyres gripping asphalt, body rolling under lateral load, tyre smoke curling off the rear. The tracking continues smoothly as the car accelerates out of the curve and pulls away toward the horizon, the camera panning to hold the vehicle in frame. Golden hour side-light rakes across the bodywork, creating long shadows and specular highlights on the paint. One continuous fluid tracking shot, wide-angle lens emphasising speed and proximity, adrenaline automotive cinematography.`,
   },
   {
-    name: 'V06a - Fashion Lookbook: Opening Walk',
+    name: 'V05g - Car Tour: Closing (Zoom Out to Hero Silhouette)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'lookbook'],
+    tags: ['showcase', 'car', 'car-tour', 'zoom', 'silhouette'],
     isPublic: false,
-    notes: 'Frame 1 of fashion lookbook. Presenter = model, Subject = outfit 1 (full look), Scene = location (studio/street/boutique).',
-    prompt: `@Presenter1 the model steps into frame in @Scene1 a minimalist white studio with dramatic directional lighting. She wears @Subject1 a bold statement outfit — the hero look. Camera captures her full body from head to toe as she walks confidently toward the lens, then pauses. Close-up of the fabric texture, the silhouette catching the light. She does a slow 360 turn, arms slightly out, letting the camera capture every angle of the outfit. Her walk is powerful, editorial — chin up, shoulders back, owning the space. The lighting shifts subtly between warm and cool as she moves. High fashion editorial video, clean minimalist backdrop, runway energy with editorial intimacy.`,
+    notes: 'Showcase mode. Frame 7 (final). Presenter = host, Subject = car hero shot, Scene = sunset location. Camera: medium on presenter, slow zoom out to reveal car silhouetted against sunset.',
+    prompt: `Camera holds a medium shot on @Presenter1 as she leans against @Subject1 the car at @Scene1 a scenic overlook. Golden sunset light reflects off the paint and her expression is relaxed, satisfied. She delivers her final verdict directly to camera — confident, personal. She taps the roof twice and steps away. The camera begins a slow zoom out, revealing the full car silhouetted against the sunset sky, growing smaller in frame until it becomes a hero-framed automotive silhouette against layers of orange and purple. The last light catches the badge. Single continuous zoom out from intimate presenter close-up to epic automotive hero shot. Warm sunset colour grading, the emotional bookend.`,
   },
   {
-    name: 'V06b - Fashion Lookbook: Casual Daywear',
+    name: 'V06a - Fashion Lookbook: Opening Walk (Dolly Back + Arc)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'lookbook'],
+    tags: ['showcase', 'fashion', 'lookbook', 'dolly', 'arc'],
     isPublic: false,
-    notes: 'Frame 2 of fashion lookbook. Presenter = model, Subject = casual daytime outfit, Scene = street/cafe.',
-    prompt: `@Presenter1 walks down @Scene1 a sun-drenched European cobblestone street wearing @Subject1 a chic casual daywear look. Camera follows from across the street, shooting through passing pedestrians for a candid, lived-in feel. She stops at a cafe, sits down, crosses her legs — the camera catches the shoe detail, the handbag placement, the way the fabric drapes when seated. She flips her hair, laughs naturally, adjusts her sunglasses. Golden hour side lighting creates warm highlights on the fabric. Cut to a slow-motion walking shot from behind showing the outfit silhouette against the warm street light. Street-style fashion video, documentary candid energy, warm European tones.`,
+    notes: 'Showcase mode. Frame 1. Presenter = model, Subject = hero outfit, Scene = studio/location. Camera: dolly backward as model walks toward lens, transitioning to arc as she pauses.',
+    prompt: `@Presenter1 wearing @Subject1 the hero outfit walks confidently toward the camera in @Scene1 a minimalist white studio with dramatic directional lighting. Camera dollies backward at her walking pace, maintaining a full-body frame from head to toe. She moves with powerful editorial energy — chin up, shoulders back. As she reaches her mark, the dolly stops and transitions into a slow arc orbit around her as she pauses with arms slightly out. The arc captures the silhouette, fabric texture, and construction from every angle. Dramatic key light shifts across the outfit as the camera orbits. Single continuous dolly-back-to-arc, high fashion editorial cinematography, clean minimalist backdrop, runway energy.`,
   },
   {
-    name: 'V06c - Fashion Lookbook: Evening & Glamour',
+    name: 'V06b - Fashion Lookbook: Casual Daywear (Telephoto Truck)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'lookbook'],
+    tags: ['showcase', 'fashion', 'lookbook', 'truck', 'telephoto'],
     isPublic: false,
-    notes: 'Frame 3 of fashion lookbook. Presenter = model, Subject = evening dress/gown, Scene = upscale venue.',
-    prompt: `@Presenter1 descends a grand staircase in @Scene1 an opulent hotel lobby or gallery space, wearing @Subject1 an elegant evening gown or cocktail dress. The fabric flows with each step — silk catching the chandelier light, sequins sparkling, the cut revealing and refined. Camera shoots from below looking up as she descends, then transitions to a tracking shot at eye level. She reaches the bottom, pauses at a mirror, adjusts an earring — the reflection creates a beautiful double composition. Close-up of jewellery details, the neckline, the heel. She turns and walks away from camera, the back of the dress revealed in full. Luxurious, cinematic, old Hollywood glamour meets modern fashion film.`,
+    notes: 'Showcase mode. Frame 2. Presenter = model, Subject = casual outfit, Scene = street/cafe. Camera: telephoto truck from across the street — compressed background bokeh, street-style candid energy.',
+    prompt: `Camera trucks laterally from across the street on a telephoto lens, following @Presenter1 as she walks down @Scene1 a sun-drenched European cobblestone street wearing @Subject1 a chic casual daywear look. The long lens compresses the background into a beautiful bokeh of passing pedestrians and warm shopfronts. She walks naturally, adjusts her sunglasses, the fabric catching golden hour side-light. She pauses at a cafe — the camera holds its telephoto distance as she sits and crosses her legs, catching shoe detail, handbag placement, and fabric drape in a candid, observed style. Street-style fashion cinematography — the model is photographed, not directed. Single continuous telephoto truck, warm European colour grading.`,
   },
   {
-    name: 'V06d - Fashion Lookbook: Activewear & Movement',
+    name: 'V06c - Fashion Lookbook: Evening Glamour (Low-Angle Tilt Up)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'lookbook', 'activewear'],
+    tags: ['showcase', 'fashion', 'lookbook', 'tilt', 'low-angle'],
     isPublic: false,
-    notes: 'Frame 4 of fashion lookbook. Presenter = model, Subject = activewear/athleisure, Scene = outdoor/urban.',
-    prompt: `@Presenter1 jogs toward the camera on @Scene1 a rooftop or urban park at sunrise, wearing @Subject1 a sleek activewear set. Camera captures the outfit in motion — the leggings stretching, the sports bra supporting, the jacket unzipped and flowing. She stops, stretches, the camera circles around her at waist height showing the outfit from every angle during the stretch. Quick cuts: close-up of the mesh panel detail, the reflective logo, the waistband fit. She does a powerful pose — hands on hips, sunrise behind her creating a silhouette with rim light. The energy is empowering, athletic, aspirational. Shot handheld for dynamic energy, golden sunrise tones, fitness-meets-fashion aesthetic.`,
+    notes: 'Showcase mode. Frame 3. Presenter = model, Subject = evening dress, Scene = upscale venue. Camera: low-angle tilt up from heels to face as model descends staircase — the classic glamour reveal.',
+    prompt: `Camera holds a low angle at the base of a grand staircase in @Scene1 an opulent hotel lobby or gallery. @Presenter1 descends wearing @Subject1 an elegant evening gown. The camera tilts slowly upward from the heels on marble steps, up the flowing fabric — silk catching chandelier light, sequins sparkling — past the waist and neckline, arriving at her face as she reaches the bottom step. She pauses, the camera now at eye level, holding on her composed expression. She adjusts an earring, the gesture reflected in a nearby mirror creating a double composition. She turns and walks away from camera — the back of the dress revealed in full. Single continuous low-angle tilt-up to eye-level hold. Old Hollywood glamour lighting — warm practicals from chandeliers, cool fill from architectural windows. Luxurious, cinematic, editorial.`,
   },
   {
-    name: 'V06e - Fashion Lookbook: Closing Montage',
+    name: 'V06d - Fashion Lookbook: Activewear (Arc Shot + Rim Light)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'lookbook'],
+    tags: ['showcase', 'fashion', 'lookbook', 'activewear', 'arc'],
     isPublic: false,
-    notes: 'Frame 5 of fashion lookbook. Final frame — montage of all looks. Presenter = model.',
+    notes: 'Showcase mode. Frame 4. Presenter = model, Subject = activewear, Scene = rooftop/urban. Camera: slow arc orbit during stretch pose, sunrise rim light behind — empowering athletic energy.',
+    prompt: `@Presenter1 wearing @Subject1 a sleek activewear set stands on @Scene1 a rooftop at sunrise, pausing mid-stretch with one arm overhead. Camera performs a slow arc orbit at waist height, circling around her during the held pose — capturing the leggings, sports bra, and jacket from every angle as sunrise rim light blazes behind her silhouette. The fabric catches the warm directional light, showing mesh panel detail, reflective elements, and the body's form within the athletic cut. As the arc completes, she shifts into a powerful stance — hands on hips, facing the sun, the camera settling on her determined profile against the golden sky. Single continuous arc shot, sunrise warmth creating strong rim lighting and long shadows, empowering athletic cinematography.`,
+  },
+  {
+    name: 'V06e - Fashion Lookbook: Closing (Dolly Forward Push-In)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['showcase', 'fashion', 'lookbook', 'dolly', 'push-in'],
+    isPublic: false,
+    notes: 'Showcase mode. Frame 5 (final). Presenter = model, Subject = closing look, Scene = studio. Camera: single continuous dolly forward push-in from full-body wide to face close-up.',
     prompt: `@Presenter1 wearing @Subject1 the closing look begins a slow, confident walk directly toward the camera from the far end of @Scene1 the studio. The camera holds a single low wide shot as she closes the distance — her full outfit visible, each step deliberate and unhurried. As she gets closer the frame gradually tightens, moving from full-body to mid-shot to chest-up, the camera moving smoothly forward to meet her. Just before she fills the frame she breaks into a genuine, warm smile that cuts through the editorial cool. The shot ends on a tight close-up of her face, relaxed and present. One continuous forward push with the camera, editorial confidence giving way to human warmth, soft studio lighting, the collection's identity carried in a single unbroken take.`,
   },
   {
-    name: 'V07a - Fashion Haul: Try-On Reveal',
+    name: 'V07a - Fashion Haul: Try-On Reveal (Static + Jump Cut)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'haul', 'tiktok', 'influencer'],
+    tags: ['showcase', 'fashion', 'haul', 'tiktok', 'influencer', 'static'],
     isPublic: false,
-    notes: 'TikTok/YouTube fashion haul - outfit reveal moment. Presenter = influencer, Subject = outfit. Best for the "before/after" transition style.',
+    notes: 'UGC mode. Static locked camera, jump cut transition reveal. Presenter = influencer, Subject = outfit. TikTok before/after style.',
     prompt: `@Presenter1 stands in front of @Scene1 a clean, bright bedroom or dressing room with a full-length mirror and ring light visible. She starts in a casual oversized hoodie, holds up @Subject1 the new outfit on a hanger to show it to camera, eyes wide with excitement. Quick jump cut — she now wears the outfit, doing a confident spin. Camera captures the full look from head to toe. She adjusts the belt, smooths the fabric, checks herself in the mirror with a satisfied nod. Natural and warm lighting from the ring light creates flattering soft shadows. She does the classic TikTok "show and tell" — pointing at details, the tag, the material. Genuine excitement, relatable energy, bright airy bedroom aesthetic with soft warm tones. Shot at eye level, slightly wide to show the full outfit.`,
   },
   {
-    name: 'V07b - Fashion Haul: Outfit of the Day',
+    name: 'V07b - Fashion Haul: OOTD (Static Full-Body)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'haul', 'ootd', 'influencer'],
+    tags: ['showcase', 'fashion', 'haul', 'ootd', 'influencer', 'static'],
     isPublic: false,
-    notes: 'OOTD style video. Presenter = influencer, Subject = complete outfit, Scene = aesthetic background.',
+    notes: 'UGC mode. Static full-body camera, model walks into frame and poses. Presenter = influencer, Subject = outfit, Scene = aesthetic wall.',
     prompt: `@Presenter1 walks out from behind @Scene1 a neutral beige curtain or clean white wall into frame wearing @Subject1 a carefully styled outfit. She does the viral "outfit check" walk — stepping forward confidently, camera tilted slightly upward for a flattering angle. She pauses, does a slow turn showing front, side, and back. Close-up cuts: shoes with a foot tap, bag detail, necklace layering, watch or bracelet close-up. She pairs the outfit with two accessory options, holding each up to camera for comparison. Final shot: full-body mirror selfie angle showing the complete look. Bright, even lighting with no harsh shadows. The space is Instagram-perfect — minimal clutter, soft textured backgrounds, a plant or candle adding warmth. Trendy, aspirational but achievable, the kind of content that makes viewers screenshot the outfit details.`,
   },
   {
-    name: 'V07c - Fashion Haul: Multiple Outfits Quick Change',
+    name: 'V07c - Fashion Haul: Outfit Orbit (180° Arc)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'haul', 'tiktok', 'influencer'],
+    tags: ['showcase', 'fashion', 'haul', 'tiktok', 'influencer', 'arc'],
     isPublic: false,
-    notes: 'Quick-change fashion haul with 3 outfits. Presenter = influencer, Subject1-3 = different outfits. TikTok transition style.',
+    notes: 'Showcase mode. Single slow 180° orbit around influencer in one outfit — captures every angle. Presenter = influencer, Subject = outfit, Scene = bright room.',
     prompt: `@Presenter1 wearing @Subject1 the hero outfit stands centred in @Scene1 a bright room with large window light flooding in from the side. The camera performs a single slow 180-degree orbit around her — starting from a three-quarter front angle, moving around her side to reveal the back of the outfit in full detail, then continuing around to arrive at the opposite three-quarter front angle. She moves naturally with the camera, shifting weight, adjusting her jacket, glancing over her shoulder mid-orbit with a playful smile. The continuous circular movement showcases every angle of the outfit — fabric texture, fit across the shoulders, silhouette from behind, styling details at the front. Bright even lighting with soft golden window undertones, flattering and shadow-free, shoppable energy in one unbroken revolving shot.`,
   },
   {
-    name: 'V07d - Fashion Haul: Seasonal Collection Review',
+    name: 'V07d - Fashion Haul: Collection Review (Static Talking Head)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'haul', 'youtube', 'influencer'],
+    tags: ['showcase', 'fashion', 'haul', 'youtube', 'influencer', 'static'],
     isPublic: false,
-    notes: 'YouTube-style longer format fashion review. Presenter = influencer, Subject = clothing item close-ups, Scene = well-lit room.',
+    notes: 'UGC mode. Static camera on bed/couch, influencer holds up and tries on items. YouTube sit-down review format. Presenter = influencer, Subject = clothing items, Scene = cosy room.',
     prompt: `@Presenter1 sits cross-legged on a bed or couch in @Scene1 a beautifully styled room with soft ambient lighting — fairy lights in the background, a neatly arranged clothing rack visible behind her. She holds up @Subject1 a folded clothing item, unfolds it toward the camera showing the fabric, the print, the details. She describes the material, touches it to show the texture. Cut to her wearing it — she stands in front of the mirror, adjusting the fit, showing how it looks tucked in versus left out. She gives an honest reaction — nodding approvingly or scrunching her nose playfully. Close-up detail shots: the stitching quality, the label, how the fabric catches light. The room has warm, cosy lighting — a mix of natural daylight and warm lamp light creating a golden, inviting atmosphere. YouTube creator aesthetic — personal, authentic, well-lit but not over-produced. The viewer feels like they are getting honest advice from a friend.`,
   },
   {
-    name: 'V07e - Fashion Haul: Street Style Lookbook',
+    name: 'V07e - Fashion Haul: Street Style (Telephoto + Slow-Mo)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'fashion', 'haul', 'street-style', 'influencer'],
+    tags: ['showcase', 'fashion', 'haul', 'street-style', 'influencer', 'telephoto'],
     isPublic: false,
-    notes: 'Outdoor street style fashion video. Presenter = influencer, Subject = outfit, Scene = urban location.',
+    notes: 'Showcase mode. Telephoto from across street with compressed bokeh, slow-motion walking. Premium street-style campaign feel. Presenter = influencer, Subject = outfit, Scene = urban street.',
     prompt: `@Presenter1 steps out of a doorway onto @Scene1 a photogenic urban street — colourful shopfronts, warm brick walls, or a trendy neighbourhood with character. She wears @Subject1 a street-style outfit and walks naturally down the pavement. Camera shoots from across the street in a long telephoto compression shot creating beautiful background blur of the street life behind her. She stops at a wall, leans casually, one foot up — the classic influencer street photo pose but in motion. The wind catches her hair and jacket naturally. Cut to a slow-motion walking shot from the front, eye-level, warm afternoon sunlight creating a golden rim light on one side. Close-up of the sneakers on pavement, the bag swinging, the sunglasses reflecting the street scene. The video feels like a premium street-style campaign — effortlessly cool, natural movement, real-world environment with beautiful light. Golden hour warmth, shallow depth of field, cinematic yet authentic.`,
   },
   {
-    name: 'V08 - Showcase Makeup Tutorial',
+    name: 'V08 - Makeup Tutorial (Zoom In Macro + Static)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'tutorial', 'beauty'],
+    tags: ['showcase', 'tutorial', 'beauty', 'zoom', 'macro'],
     isPublic: false,
-    notes: 'Showcase mode for makeup/beauty tutorials. Presenter = model, Subject = step photos (bare face, foundation, final look), Scene = vanity/studio.',
+    notes: 'Showcase mode. Static medium with zoom-in to macro detail for application technique. Presenter = model, Subject1-3 = bare face/process/reveal, Scene = vanity.',
     prompt: `@Presenter1 sits close to the camera in front of @Scene1 a well-lit vanity station — ring light creating perfect catchlights in her eyes, warm LED strips along the mirror casting a flattering glow. She leans in and shows @Subject1 her bare, clean face — no makeup, natural skin texture visible, being vulnerable and real. She picks up a beauty blender, dips it into foundation, and begins dabbing across her cheek — camera zooms into an extreme close-up of the blending technique, the product melting into skin. Time-lapse of contour lines being drawn and blended. She builds the look layer by layer: concealer under the eyes, setting powder with a satisfying cloud of dust, @Subject2 the eye look — brushes sweeping colour across the lid, each stroke deliberate and artistic. Mascara application with the classic open-mouth expression. She pauses, examines herself in the mirror, does one final touch-up, then turns to camera for @Subject3 the full reveal — dramatic before-and-after energy. She tilts her head side to side showing the glow from every angle, runs her fingers through her hair, gives a confident knowing look. The transformation is stunning. Warm vanity lighting, macro lens detail shots intercut with medium beauty shots, ASMR-satisfying product textures.`,
   },
   {
-    name: 'V09 - Showcase Cooking Recipe',
+    name: 'V09 - Cooking Recipe (Overhead + Arc Plate)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'tutorial', 'cooking'],
+    tags: ['showcase', 'tutorial', 'cooking', 'overhead', 'arc'],
     isPublic: false,
-    notes: 'Showcase mode for cooking tutorials. Presenter = chef, Subject = dish stages (ingredients, cooking, plated), Scene = kitchen.',
+    notes: 'Showcase mode. Overhead for prep, eye-level for cooking drama, slow arc around final plate. Presenter = chef, Subject1-3 = ingredients/cooking/plated, Scene = kitchen.',
     prompt: `@Presenter1 stands behind a marble island in @Scene1 a bright, modern kitchen flooded with natural window light. She gestures to @Subject1 the fresh ingredients arranged in a beautiful mise en place — vibrant vegetables, herbs, spices in small bowls, raw protein on a cutting board. Overhead camera captures her hands as she chops — the knife rhythm is confident and satisfying, close-up of the blade slicing through a tomato, juice and seeds glistening. She sweeps ingredients into a hot pan — dramatic sizzle, steam billowing up, caught by the backlight from the window. She tosses the pan, flames briefly lick upward. @Subject2 the cooking process in full swing — stirring, tasting with a wooden spoon, adding a pinch of salt from height. The colours in the pan are rich and appetising. She plates with precision, using tweezers for a micro-herb garnish, a drizzle of sauce in an artistic pattern. Final reveal: @Subject3 the finished dish on a beautiful ceramic plate, camera slowly orbiting around it at table height. She steps back, wipes her hands on her apron, picks up a fork, takes a bite and closes her eyes in satisfaction. Warm kitchen tones, golden natural light, food photography angles — overhead prep shots, eye-level sizzle shots, macro texture close-ups.`,
   },
   {
-    name: 'V10 - Showcase DIY Repair',
+    name: 'V10 - DIY Repair (Macro Hands + Dolly Push)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'tutorial', 'diy'],
+    tags: ['showcase', 'tutorial', 'diy', 'macro', 'dolly'],
     isPublic: false,
-    notes: 'Showcase mode for repair/DIY tutorials. Presenter = technician, Subject = repair steps, Scene = workshop.',
+    notes: 'Showcase mode. Macro close-ups on hands and tools, slow dolly push from medium to tight detail. Presenter = technician, Subject1-3 = broken/repair/fixed, Scene = workshop.',
     prompt: `@Presenter1 stands at a sturdy workbench in @Scene1 a well-organised garage workshop — pegboard wall of tools behind him, work lamp casting focused light on the bench, faint sawdust in the air. He holds up @Subject1 the broken item, rotating it to show the damage — a crack, a loose part, a worn component. He sets it down, reaches for the right tool from the wall with practised confidence. Camera follows his hands in extreme close-up as he carefully disassembles — screws turning, components separating, the satisfying click of parts coming apart. He examines @Subject2 the internal mechanism, points to the problem area for the camera, explains with a knowing nod. Detailed shots of the repair: soldering iron tip meeting contact points with a wisp of smoke, adhesive being applied with precision, a new part clicking into place. He reassembles methodically, each piece fitting back together. The moment of truth — he powers it on or tests the function. @Subject3 the repaired item works perfectly. He holds it up triumphantly, gives the camera a satisfied grin. Workshop ambient lighting with focused task lamp, macro detail shots of hands and tools, the ASMR-satisfying sounds of mechanical work.`,
   },
   {
-    name: 'V11 - UGC Product Unboxing',
+    name: 'V11 - UGC Product Unboxing (Selfie Static)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'product'],
@@ -445,7 +524,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 sits cross-legged on her bed, phone propped up selfie-style, filming herself. A branded delivery box sits on her lap — she reads the label out loud with building anticipation. She slices the tape with her finger, pulls back the flaps, pushes aside the tissue paper. She reaches in and lifts out @Product1, her face lighting up with genuine surprise — mouth drops open, she squeals and holds it up to the camera. She turns it around slowly showing every detail: the packaging, the texture, the weight in her hands. She unboxes any accessories, laying them out neatly on the bedsheets. She holds the product next to her face for scale, examines the craftsmanship close-up. She puts it down, leans back, looks at the camera and mouths "wow." Bedroom setting with warm afternoon light from a window, fairy lights in the background, messy-but-aesthetic bed setup. Smartphone vertical format, authentic unboxing energy, the kind of genuine reaction that makes viewers want to order immediately.`,
   },
   {
-    name: 'V12 - UGC Skincare Review',
+    name: 'V12 - UGC Skincare Review (Close-Up + Macro)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'beauty', 'product'],
@@ -454,7 +533,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 appears fresh-faced in a bathroom or vanity setup, natural morning light mixing with a soft ring light. She holds up @Product1 the skincare product close to the camera — the label fills the frame, she taps it twice for emphasis. She opens the cap, squeezes a small amount onto her fingertips — close-up of the product texture, the consistency, the colour. She dots it across her cheeks, forehead, and chin, then begins to massage it in with upward circular motions. Extreme close-up of the product absorbing into skin, the dewy glow appearing in real-time. She pats gently under her eyes, tilts her face left and right to show the even application. She touches her cheek and gives a genuine reaction — soft skin, no residue, impressed expression. Before-and-after split: one side bare skin, one side with the product applied showing the difference. She holds the product next to her glowing face, gives an honest, warm smile to camera. Bathroom natural light with soft ring light fill, macro skin texture shots, dewy-skin aesthetic, authentic and trustworthy energy.`,
   },
   {
-    name: 'V13 - UGC App Review: Travel/Lifestyle',
+    name: 'V13 - UGC App Review (Handheld Selfie POV)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'app', 'travel', 'testimonial'],
@@ -463,7 +542,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 films a candid selfie-style video in @Scene1 a busy airport terminal, bright overhead fluorescent lighting, crowds moving behind her. She looks slightly frazzled at first, glancing down at her phone. She holds up @Product1 the phone screen showing the app interface toward the camera. Her expression shifts to relieved and excited. She taps the screen a few times demonstrating the app, then looks directly into the camera with a natural, genuine smile. The footage has a raw, slightly shaky smartphone quality — vertical format, slight motion blur, real ambient airport noise feel. No professional lighting setup, just the natural overhead terminal lights creating realistic shadows under the eyes. She speaks animatedly, gesturing with one hand. Authentic UGC testimonial style, not polished, not scripted-looking — the kind of content that feels real and trustworthy.`,
   },
   {
-    name: 'V14 - UGC Gym Shoes: Workout Review',
+    name: 'V14 - UGC Gym Shoes (Handheld + Low-Angle)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'fitness', 'shoes', 'product'],
@@ -472,7 +551,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 is in @Scene1 a busy, gritty powerlifting gym — rubber flooring, chalk dust in the air, weights clanking in the background. They are slightly sweaty, wearing a faded gym tee and shorts. Camera is handheld smartphone vertical format with slight shake for authenticity. They step back from a squat rack, the camera pans down to their feet showing @Product1 the training shoes — tapping their toe and planting their foot flat on the rubber floor. Cut to a low-angle B-roll shot from the ground: they perform a slow, heavy barbell back squat, camera focused on the shoe sole gripping the floor, the flat base stable under load. Back to selfie angle — they look directly at camera, breathing naturally between sets, genuine enthusiasm on their face. Raw gym lighting — harsh overhead fluorescents with some warm spots. No filters, no colour grading, real sweat, real iron. The kind of review that makes gym bros immediately check the link in bio.`,
   },
   {
-    name: 'V15 - UGC Gym Tour: Facility Introduction',
+    name: 'V15 - UGC Gym Tour (Walking Selfie + Pan)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'fitness', 'gym', 'tour'],
@@ -481,7 +560,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 walks backward through @Scene1 the gym entrance, filming selfie-style, big smile and high energy. They gesture behind them showing the front desk and check-in area. Quick walk-through: they pan the phone to show @Subject1 the main floor — rows of equipment, people working out, motivating atmosphere. They jog over to the free weights section, pick up a dumbbell to show the quality. Walk past the cardio machines, the stretching area. They push open a door to reveal the group fitness studio, spin their phone around to show the mirrors and sound system. End at the smoothie bar or lounge area, they grab a shake and cheers the camera. The whole video has energetic walking pace, natural gym lighting mixing warm and cool zones, real members in the background creating authentic atmosphere. Smartphone vertical format, casual and inviting, the feeling of a friend showing you their favourite gym.`,
   },
   {
-    name: 'V16 - UGC Building/Property: Lifestyle Tour',
+    name: 'V16 - UGC Building Tour (Selfie Walk-Through)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'property', 'building', 'lifestyle'],
@@ -490,7 +569,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 stands outside @Scene1 a modern residential building or condo complex, filming selfie-style in natural daylight. They gesture excitedly at the facade behind them, then walk through the lobby — marble floors, concierge desk, designer furniture. They step into the elevator, press the button, quick cut to the doors opening on a high floor. They walk down a bright hallway and push open the door to @Subject1 the apartment or unit — camera reveals the view through floor-to-ceiling windows. They spin the phone around showing the open kitchen, the living space, the balcony with city or garden views. They step onto the balcony, the wind catches their hair, they lean on the railing showing the panorama. Back to selfie: genuine wow expression, can barely contain their excitement. Natural lighting throughout — lobby warm, apartment bright with daylight, balcony golden hour glow. Smartphone vertical format, raw and authentic, the kind of tour that makes people DM asking for the building name.`,
   },
   {
-    name: 'V17 - UGC Drink/Beverage: Taste Test',
+    name: 'V17 - UGC Drink Taste Test (Static + Close-Up)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'food', 'drink', 'product'],
@@ -499,7 +578,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 sits at @Scene1 a cosy cafe table or kitchen counter with warm ambient lighting. They hold up @Product1 the drink bottle or cup to the camera, rotating it to show the label and branding. They crack it open or take the lid off — close-up of the pour, the colour, the fizz or steam rising. They take the first sip, eyes closing momentarily, then open with a surprised, delighted expression. They nod enthusiastically, take another sip, then hold the drink beside their face giving a genuine thumbs up. Camera alternates between tight close-ups of the drink — the condensation on the bottle, the ice clinking, the liquid colour in the light — and medium selfie shots of their authentic reactions. Warm, inviting cafe lighting or natural kitchen window light creating a golden, cosy mood. Smartphone vertical format, no professional setup visible. The kind of content where the genuine reaction sells the product more than any scripted ad ever could.`,
   },
   {
-    name: 'V18 - UGC Food: Restaurant Visit',
+    name: 'V18 - UGC Restaurant Visit (Overhead + Reaction)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'food', 'restaurant'],
@@ -508,7 +587,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 walks into @Scene1 a trendy restaurant with moody ambient lighting — exposed brick, warm Edison bulbs, candles on tables. They do a quick pan showing the vibe and decor. Sitting down, the waiter places @Subject1 the first dish on the table. Close-up overhead shot: the plating, the colours, steam rising. They pick up a fork, take the first bite — eyes widen, they cover their mouth in delight, genuine foodgasm reaction. Quick montage of more dishes arriving: @Subject2 a signature cocktail being poured, @Subject3 the dessert with a dramatic presentation. Each dish gets a beauty shot followed by their authentic tasting reaction. The lighting is warm and flattering — candle glow on the face, ambient restaurant warmth creating a romantic food-content atmosphere. Smartphone filming with occasional stabilised B-roll shots of the food close-ups. The content makes the viewer immediately want to book a table.`,
   },
   {
-    name: 'V19 - UGC Lip Product: Car Casual Review',
+    name: 'V19 - UGC Lip Product (Car Selfie + Natural Light)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'beauty', 'lips', 'product'],
@@ -517,7 +596,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 sits in the driver seat of her parked car, hair in a messy bun, wearing an oversized sweater. She holds up her phone filming selfie-style in vertical format, natural daylight streaming through the windshield creating soft, flattering light on her face. She casually holds up @Product1 the lip product tube between two fingers, turning it so the camera catches the brand name and shade. She uncaps it, leans into the rearview mirror, and applies it to her bottom lip first — camera catches the close-up of the colour gliding on. She presses her lips together, smacks them lightly, then turns back to camera. She pouts, tilts her chin up and down to show the finish in different light — the sheer tint, the subtle gloss, the natural berry tone. She touches her lips with a fingertip to demonstrate the texture — not sticky, hydrating. She holds the product next to her face one final time, gives an honest, slightly obsessed expression and nods slowly. Car interior with natural window light, slightly shaky handheld smartphone feel, candid and unfiltered. The authentic "I just found my new favourite product" energy that gets saved and shared.`,
   },
   {
-    name: 'V20 - UGC Dentist: Professional Product Endorsement',
+    name: 'V20 - UGC Dentist Endorsement (Static Medium)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'dental', 'medical', 'professional', 'product'],
@@ -526,7 +605,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 a dentist in a clean white coat stands in @Scene1 a bright, modern dental clinic — treatment chair visible in the background, overhead dental lamp, clean white walls with a calming accent colour. She holds @Product1 the dental product at chest height, label facing camera. She speaks directly to camera with calm, professional authority but warm and approachable — not stiff or salesy. She picks up a dental model or opens the product to demonstrate how it works — squeezing the toothpaste on a brush to show the consistency, or demonstrating a whitening strip application technique. Close-up of her hands showing the product details: the active ingredients on the label, the texture, the application. She puts on gloves, picks up a dental mirror, and briefly shows her own teeth as an example of results — bright, confident smile under the clinical lighting. She removes the gloves, holds the product one more time, and gives her professional recommendation with a reassuring nod. Clean clinical lighting — bright, even, professional white with subtle warm fill to avoid looking too sterile. The combination of medical authority and genuine personal endorsement that builds trust instantly.`,
   },
   {
-    name: 'V21 - UGC Dentist: Product Demo',
+    name: 'V21 - UGC Dentist Demo (Static Close-Up)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'dental', 'medical', 'product'],
@@ -535,7 +614,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 a male dentist in scrubs and a white coat sits on the edge of @Scene1 a dental treatment chair in his clinic, filmed at eye level in vertical smartphone format. He holds up @Product1 the dental product close to camera — the label fills the frame. He rotates it slowly, taps the key ingredient on the label with his finger. He uncaps it and squeezes a small amount onto a toothbrush or his gloved fingertip, showing the texture and consistency to camera. He points to a dental model jaw on the counter beside him, demonstrates the correct application technique — gentle circular brushing on the gum line, working the product between the teeth. He sets the model down, looks directly at camera and gives a calm, confident nod of recommendation. Bright clinical overhead lighting with a warm fill from the window to keep it approachable. The energy is a trusted professional casually sharing his go-to product — not a commercial, more like a friend who happens to be a dentist giving you honest advice.`,
   },
   {
-    name: 'V22 - UGC Dentist: Gum Care Education',
+    name: 'V22 - UGC Dentist Education (Talking Head + Model Demo)',
     type: 'video' as const,
     isSystem: true,
     tags: ['ugc', 'dental', 'medical', 'education', 'gum-care'],
@@ -544,53 +623,53 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `@Influencer1 a dentist in a white coat sits behind his desk in @Scene1 a clean, modern dental office. He looks into camera with a warm, concerned expression — the kind of look that says "I see this problem every day." He picks up @Subject1 a dental jaw model and holds it at camera level. With a dental probe, he gently points to the gum line area, tracing where plaque builds up if not cleaned properly. He demonstrates the correct brushing angle — 45 degrees toward the gum line — moving the brush in small gentle strokes. He flips the model to show the inner gum side that most people miss. He sets down the brush and holds up three fingers, counting off the key habits: brushing technique, daily flossing, and regular check-ups. He places the model down, leans slightly forward toward camera with a reassuring expression and gives a final encouraging message. Bright, clean clinic lighting, calm and educational tone, the doctor is genuinely passionate about preventing gum disease. Smartphone vertical format, the kind of dental advice video that gets millions of views because it is clear, visual, and immediately actionable.`,
   },
   {
-    name: 'V23a - Travel: Destination Arrival',
+    name: 'V23a - Travel: Destination Arrival (Pedestal Down + Dolly)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'travel', 'destination'],
+    tags: ['showcase', 'travel', 'destination', 'pedestal', 'dolly'],
     isPublic: false,
-    notes: 'Frame 1 of travel showcase. Presenter = travel host/agent, Subject = landmark or arrival point, Scene = destination overview. Opening frame of a destination video.',
-    prompt: `@Presenter1 steps out of a vehicle or walks through an arrivals gate into @Scene1 a stunning destination — a tropical beachfront, a historic European plaza, or a bustling Asian night market. She pauses, takes a deep breath, spreads her arms wide and takes in the view. Camera starts tight on her face showing the genuine wonder, then pulls back dramatically to reveal the full panorama of @Subject1 the iconic landmark or scenic vista behind her. She turns to camera, sunlight catching her hair, and begins walking toward the location. Drone-style establishing shot that descends into a ground-level follow as she enters the scene. Golden hour travel photography, vivid saturated colours, the cinematic "arrival moment" that every travel video needs as its hook.`,
+    notes: 'Showcase mode. Presenter = travel host, Subject = landmark, Scene = destination. Camera: pedestal down from aerial into ground-level dolly follow. The "arrival reveal" hook shot.',
+    prompt: `@Presenter1 steps forward into @Scene1 the destination, arms opening wide as she takes in the view. Camera begins high (pedestal down) descending smoothly from an aerial angle to eye level, revealing @Subject1 the landmark or scenic vista expanding behind her. As the camera reaches ground level, it transitions into a slow dolly forward following her as she walks toward the location. She glances back at the camera with genuine wonder. Golden hour key light from behind the landmark creates a warm rim light on her silhouette. Shallow depth of field shifts from her face to the background as the reveal completes. Single continuous shot, cinematic 24fps, warm saturated travel colour grading.`,
   },
   {
-    name: 'V23b - Travel: Cultural Experience',
+    name: 'V23b - Travel: Cultural Experience (Truck + Pan)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'travel', 'culture', 'experience'],
+    tags: ['showcase', 'travel', 'culture', 'experience', 'truck', 'pan'],
     isPublic: false,
-    notes: 'Frame 2 of travel showcase. Presenter = host, Subject = cultural activity or local experience, Scene = authentic local setting.',
-    prompt: `@Presenter1 immerses herself in @Scene1 an authentic local setting — a traditional market, a street food alley, a temple courtyard, or a local artisan workshop. She interacts with a vendor, watches @Subject1 a cultural activity in action — food being prepared, crafts being made, a performance unfolding. She tries the local food, her reaction genuine and delighted. She picks up a handmade souvenir, examines it with curiosity. Camera captures the vibrant textures, colours, and energy of the surroundings — spices piled high, lanterns glowing, fabric patterns, the faces of local people going about their day. She walks through the crowd, the camera weaving through with her, capturing the sensory overload. Handheld travel documentary style, warm ambient local lighting, rich saturated colours, the energy of discovery and cultural connection.`,
+    notes: 'Showcase mode. Presenter = host, Subject = cultural activity, Scene = local setting (market/temple/workshop). Camera: lateral truck following presenter, with pans to capture details.',
+    prompt: `Camera trucks laterally alongside @Presenter1 as she walks through @Scene1 a vibrant local setting — market stalls, temple courtyard, or artisan workshop. She pauses at @Subject1 a cultural activity in action, and the camera pans from her curious expression to the detail of what she is watching — hands preparing food, tools shaping craft, or a performance unfolding. She reaches out to interact — picking up an item, tasting food, her reaction genuine. The camera holds on her face for the emotional beat, then pans back to the environment. Warm ambient lighting from lanterns, bulbs, and natural sun filtering through canopy. Rich local colour palette — spices, fabrics, painted surfaces. Handheld stabilised energy, documentary intimacy. Single continuous truck-and-pan shot with natural pauses.`,
   },
   {
-    name: 'V23c - Travel: Hotel & Accommodation',
+    name: 'V23c - Travel: Hotel & Accommodation (Dolly Through + Tilt)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'travel', 'hotel', 'accommodation'],
+    tags: ['showcase', 'travel', 'hotel', 'accommodation', 'dolly', 'tilt'],
     isPublic: false,
-    notes: 'Frame 3 of travel showcase. Presenter = host, Subject = hotel room or villa, Scene = resort/hotel grounds.',
-    prompt: `@Presenter1 walks through @Scene1 the hotel lobby or resort entrance — lush tropical landscaping, infinity pool glimpsed through glass walls, a dramatic chandelier overhead. She checks in, receives a key, walks down an elegant corridor. She pushes open the door to @Subject1 the room or villa — camera follows from behind her shoulder as the space is revealed: a king bed with pristine white linens, floor-to-ceiling windows with a breathtaking view, a private balcony or plunge pool. She runs her hand across the bed fabric, opens the bathroom to show the rain shower and freestanding tub. She steps onto the balcony, leans on the railing, and the camera captures @Subject2 the view — ocean, mountains, city skyline, or jungle canopy stretching to the horizon. She turns back with a blissful expression. Luxury travel content style, warm golden lighting mixing with natural daylight, smooth gimbal movement through doorways and reveals.`,
+    notes: 'Showcase mode. Presenter = host, Subject1 = room/villa, Subject2 = the view, Scene = hotel/resort. Camera: dolly forward through doorway reveal, tilt up to the view.',
+    prompt: `@Presenter1 pushes open the door to @Subject1 the hotel room or villa. Camera dollies forward from behind her shoulder, crossing the threshold into the space as it reveals — king bed with pristine linens, warm afternoon light pouring through floor-to-ceiling windows. She steps inside, runs her fingertips across the bed fabric. Camera continues its slow dolly forward toward the windows, passing her as she moves to the balcony. She opens the glass door and steps out. Camera follows through onto the terrace and tilts up to reveal @Subject2 the view — ocean, mountains, or skyline stretching to the horizon in @Scene1. She leans on the railing, wind in her hair, a blissful expression. Camera holds on the wide vista. Lighting transitions from warm interior ambient to bright natural exterior golden hour. Gimbal-smooth continuous dolly-through, luxury real estate cinematography style.`,
   },
   {
-    name: 'V23d - Travel: Adventure & Activity',
+    name: 'V23d - Travel: Adventure & Activity (Truck + Zoom In)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'travel', 'adventure', 'activity'],
+    tags: ['showcase', 'travel', 'adventure', 'activity', 'truck', 'zoom'],
     isPublic: false,
-    notes: 'Frame 4 of travel showcase. Presenter = host, Subject = adventure activity, Scene = outdoor location.',
-    prompt: `@Presenter1 hikes along @Subject1 a dramatic cliff-edge trail in @Scene1 the natural landscape, the vast terrain stretching behind her. The camera tracks alongside her in a single continuous side-dolly shot — keeping her at the left of the frame while the epic backdrop scrolls behind. She walks with confident energy, glancing out at the view, then turning to camera with a breathless, elated smile. Midway through the shot she pauses, planting her feet and taking in the panorama — the camera slowly pushing in toward her face as the landscape settles behind her. Her expression shifts from exhilaration to quiet awe. One continuous tracking shot moving to a slow push-in, adventure travel content, wide-angle lens emphasising the scale of the landscape, golden natural light, handheld energy with smooth stabilisation.`,
+    notes: 'Showcase mode. Presenter = host, Subject = trail/activity, Scene = natural landscape. Camera: lateral truck alongside presenter, transitioning to slow zoom in as she pauses at the viewpoint.',
+    prompt: `Camera trucks laterally alongside @Presenter1 as she hikes along @Subject1 a dramatic trail in @Scene1 the vast natural landscape. She is frame-left, the epic terrain scrolling behind her — mountains, ocean, canyon, or forest canopy. Wide-angle lens exaggerates the scale between her and the environment. She walks with confident energy, glancing at the view. Midway she pauses, plants her feet, and turns to face the panorama. The camera stops trucking and begins a slow zoom in on her face as she absorbs the moment — expression shifting from exhilaration to quiet awe. Background softens into bokeh as the zoom tightens. Golden hour side-key light sculpts her profile against the landscape. Single continuous shot: truck to zoom transition, adventure travel cinematography, warm natural colour grading.`,
   },
   {
-    name: 'V23e - Travel: Sunset & Closing Reflection',
+    name: 'V23e - Travel: Sunset & Closing (Arc Shot + Pedestal Up)',
     type: 'video' as const,
     isSystem: true,
-    tags: ['showcase', 'travel', 'sunset', 'closing'],
+    tags: ['showcase', 'travel', 'sunset', 'closing', 'arc', 'pedestal'],
     isPublic: false,
-    notes: 'Frame 5 of travel showcase. Final frame — sunset closing shot. Presenter = host, Subject = scenic sunset location, Scene = destination landmark revisited.',
-    prompt: `@Presenter1 sits at @Scene1 a beautiful sunset viewpoint — a beach blanket, a rooftop bar, a cliff edge, or a boat deck. The golden hour light paints everything warm. She holds a drink, watching @Subject1 the sun sinking toward the horizon, painting the sky in layers of orange, pink, and purple. Camera captures her silhouette against the sky, then moves to face her. She looks into the camera one final time, relaxed and reflective, the glow on her face. She shares her parting thoughts about the destination — what surprised her, what she will remember, why someone should visit. The camera slowly pulls back to a wide shot showing her small figure against the vast, beautiful landscape as the last light fades. Gentle drone ascent revealing the full scope of the destination in its most beautiful moment. Warm, emotional, the perfect ending that makes viewers immediately start searching for flights. Golden hour cinematography, slow contemplative pacing, rich sunset tones, the feeling of a journey well-lived.`,
+    notes: 'Showcase mode. Presenter = host, Subject = sunset vista, Scene = viewpoint location. Camera: slow arc around presenter silhouette, then pedestal up to reveal the full landscape. The emotional closing shot.',
+    prompt: `@Presenter1 sits at @Scene1 a sunset viewpoint — beach blanket, cliff edge, rooftop, or boat deck. Golden hour light paints everything warm amber. Camera begins a slow arc shot circling around her silhouette against @Subject1 the sunset sky — moving from a profile angle to reveal the vast landscape and the sun sinking toward the horizon. Layers of orange, pink, and purple fill the sky. As the arc completes, the camera pedestals up smoothly, rising above her to reveal the full scope of the destination in its most beautiful moment — her small figure against the enormous landscape. She is still, reflective, at peace. Warm rim light outlines her silhouette. Lighting transitions from golden hour warmth to early blue hour cool tones during the shot. Slow, contemplative pacing. Rich sunset colour grading. The final shot that makes the viewer feel they have been on this journey.`,
   },
   // ── Lipsync Prompts ──────────────────────────────────────────────
   {
-    name: 'V24 - Lipsync: Singing Performance',
+    name: 'V24 - Lipsync: Singing (Static Close-Up)',
     type: 'video' as const,
     isSystem: true,
     tags: ['lipsync', 'singing', 'music-video'],
@@ -599,7 +678,7 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `The character sings passionately, lips moving naturally in perfect sync with the audio. Expressive facial movements — eyes closing on emotional notes, subtle head tilts, natural breathing between phrases. Close-up to medium shot, soft studio lighting, shallow depth of field. The performance feels intimate and genuine.`,
   },
   {
-    name: 'V25 - Lipsync: Talking Head / Vlog',
+    name: 'V25 - Lipsync: Talking Head (Static Medium)',
     type: 'video' as const,
     isSystem: true,
     tags: ['lipsync', 'talking', 'vlog'],
@@ -608,13 +687,193 @@ Output: A single identity sheet image containing 2/3 area full-body multi-angle 
     prompt: `The character speaks directly to camera in a natural, conversational tone. Realistic lip movements matching the audio perfectly. Natural micro-expressions — eyebrow raises, slight nods, hand gestures near the face. Medium close-up framing, warm indoor lighting, slightly blurred background. Casual vlog style, authentic and engaging.`,
   },
   {
-    name: 'V26 - Lipsync: Narration / Voiceover',
+    name: 'V26 - Lipsync: Narration (Static Medium + Key Light)',
     type: 'video' as const,
     isSystem: true,
     tags: ['lipsync', 'narration', 'voiceover'],
     isPublic: false,
     notes: 'Lipsync mode for narration. Character speaks with authority, professional delivery.',
     prompt: `The character delivers a professional narration, speaking clearly with confident lip movements synced to the audio. Slight head movements and controlled expressions convey authority and warmth. Clean studio backdrop, professional lighting with soft key and rim light. The delivery is polished, measured, trustworthy — like a news anchor or documentary narrator.`,
+  },
+  // ── Travel & Hospitality — Single-Shot Cinematic Prompts ──────────────
+  // Each prompt = ONE camera move, 5-15 seconds. Combine shots to build a sequence.
+  // Use first-frame mode (upload location photo) to bring a static image to life.
+  {
+    name: 'V27 - Airbnb: Dolly Through Room Reveal',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['airbnb', 'property', 'hotel', 'interior', 'dolly', 'travel'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a room photo as first frame to bring it to life. Camera: slow dolly forward through space. No presenter. For presenter-led tours, use V02 series or V23c.',
+    prompt: `Slow dolly forward through a beautifully styled accommodation interior. Camera at waist height, gimbal-smooth, moving through the space at walking pace. Warm afternoon light pours through windows, casting soft golden patches across the floor and furniture. The camera glides past textured cushions, a steaming coffee cup, layered linens on the bed. Dust motes float in the sunbeams. Curtains drift gently in a breeze from an open window. The dolly continues toward the balcony or window, the exterior view gradually filling the frame — landscape, ocean, or garden glowing in golden hour warmth. Lighting transitions from warm interior ambient to bright natural exterior as the camera approaches the window. Static objects brought to life through subtle environmental motion: steam rising, fabric swaying, light shifting. Real estate cinematography, warm inviting colour grading.`,
+  },
+  {
+    name: 'V28 - Walking Tour: Dolly Forward POV',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['tour', 'walking', 'pov', 'street', 'dolly', 'travel'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a street or location photo. Camera: steady dolly forward at eye level (POV walk). No presenter visible. For presenter-led tours, use V23b.',
+    prompt: `Steady dolly forward at eye level through a vibrant street or pathway, moving at natural walking pace. The camera pushes through the scene as life unfolds on both sides — vendors arranging produce, locals chatting at doorways, children passing by. Architecture frames the shot: weathered stone walls, colourful shuttered windows, hand-painted signage. Steam rises from a food stall. A cat watches from a windowsill. Light filters through overhead canopy or between buildings, creating dappled patterns on the cobblestones. The dolly continues forward, the path opening into a wider square or viewpoint ahead. Foreground elements pass close to the lens, creating natural parallax depth. Morning clarity or warm late-afternoon light. Real surface textures: worn stone, peeling paint, polished brass. POV immersion — the viewer IS the walker.`,
+  },
+  {
+    name: 'V29 - Zoo Wildlife: Static to Life + Slow Zoom',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['zoo', 'wildlife', 'animals', 'zoom', 'static-to-life', 'travel'],
+    isPublic: false,
+    notes: 'First-frame mode — upload an animal or exhibit photo to bring it to life. Camera: starts static, then slow zoom in as the animal moves. Nature documentary style.',
+    prompt: `A still, contemplative shot of an animal in a naturalistic habitat — lush vegetation, natural substrate, dappled sunlight filtering through canopy. The scene begins almost static, like a photograph coming to life. Then subtle motion emerges: the animal blinks, shifts its weight, turns its head. Leaves rustle in a gentle breeze. Water ripples at the edge of a pool. The camera begins a very slow zoom in, tightening from a medium-wide to a close-up as the animal becomes more active — stretching, yawning, or making eye contact with the lens. Fur, feather, or scale texture becomes visible in detail. The eyes catch the light. A moment of connection between viewer and animal. Soft natural lighting, shallow depth of field on the close-up. Nature documentary cinematography — patient, respectful, awe-filled. Warm natural colour grading.`,
+  },
+  {
+    name: 'V30 - Museum: Dolly + Tilt Up (Grand Reveal)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['museum', 'gallery', 'art', 'dolly', 'tilt', 'travel'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a museum or gallery photo. Camera: slow dolly forward through gallery, with a tilt up to reveal grand architecture. Reverent pacing.',
+    prompt: `Slow dolly forward through a grand museum or gallery hall at a reverent pace. Polished marble floors reflect overhead gallery lights. The camera passes paintings in gilded frames, sculptures casting long shadows, artefacts behind glass cases with soft spotlighting. Dust motes float in natural light beams from skylights above. As the dolly reaches a central atrium or rotunda, the camera begins a smooth tilt up — rising from floor-level exhibits up past ornate wall details, ascending columns, and finally revealing the soaring ceiling with its skylight pouring dramatic natural light downward. The tilt holds on the architectural grandeur above. Visitors move softly in the background, slightly blurred by the slow deliberate pacing. Lighting transitions from warm focused gallery spots to cool diffused skylight. Sophisticated muted colour grading: warm gallery tones mixing with cool marble blues.`,
+  },
+  {
+    name: 'V31 - Night Market: Truck Shot + Rack Focus',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['street-food', 'night-market', 'food', 'truck', 'travel'],
+    isPublic: false,
+    notes: 'First-frame or multimodal mode — upload market or food stall photos. Camera: lateral truck past food stalls with rack focus between foreground food and background atmosphere.',
+    prompt: `Camera trucks laterally past a row of night market food stalls at close range. Bare bulbs and neon signs glow overhead, creating warm hazy atmosphere. Steam and smoke rise from cooking stations, catching the light. The focus racks between foreground and background — sharp on sizzling wok with flames erupting around tossed noodles, then pulling focus to the bustling lane of customers and lanterns behind. Truck continues past the next stall: skewers rotating over glowing coals, focus shifts to a vendor's hands folding dumplings with practiced precision. Condensation glistens on cold bottles. Chili oil catches the light like amber. The camera moves at walking pace, smooth and steady, pulling the viewer through the sensory experience. Warm saturated colour grading: rich oranges, deep reds, golden highlights against blue-black night sky. Every frame should make the viewer hungry.`,
+  },
+  {
+    name: 'V32 - Nature Epic: Pedestal Up (Landscape Reveal)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['nature', 'adventure', 'landscape', 'pedestal', 'epic', 'travel'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a landscape photo. Camera: pedestal up from ground detail to epic wide landscape reveal. For presenter-led adventure, use V23d instead.',
+    prompt: `Camera begins at ground level on a natural detail — boots on rocky trail, grass swaying in wind, water flowing over smooth stones, or wildflowers nodding in a breeze. The scene is intimate, close, textured. Then the camera begins a slow pedestal up, rising steadily and revealing more of the landscape with each moment. First the immediate terrain — trail, meadow, riverbank. Then the middle distance — forest canopy, valley floor, distant ridgeline. Finally the full epic vista fills the frame — mountain range layered in atmospheric haze, coastline curving to the horizon, or canyon dropping away into mist below. A lone figure stands small against the enormity — a hiker on a ridge, silhouetted against the sky. Golden hour side-lighting sculpts the terrain with long shadows. The pedestal holds at the apex, letting the viewer absorb the scale. Lighting transitions from shadowed ground detail to warm open-sky exposure. Cinematic dramatic colour grading: earth tones warming into golden hour amber. Nature documentary grandeur.`,
+  },
+  {
+    name: 'V33 - Travel: Arc Shot Around Subject',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['showcase', 'travel', 'arc', 'subject', 'cinematic'],
+    isPublic: false,
+    notes: 'Showcase mode. Presenter = host/model, Subject = landmark or feature, Scene = destination. Camera: 180° arc shot orbiting the presenter with the landmark revealed behind. Hero shot for any destination.',
+    prompt: `Smooth 180-degree arc shot orbiting around @Presenter1 who stands facing the camera at @Scene1 the destination. The camera circles from a front 3/4 angle, moving steadily around to their side, then behind — revealing @Subject1 the landmark, vista, or scenic feature expanding into view as the presenter moves out of frame. The arc continues until the subject fills the frame entirely. The presenter's hair and clothing move naturally in the wind as the camera passes. Golden hour light creates a warm rim light on their profile during the arc. Background transitions from bokeh to sharp as the landmark takes focus. Smooth gimbal or drone orbit at eye level. The arc captures both the human connection and the destination grandeur in a single unbroken movement. Cinematic travel colour grading, warm and aspirational.`,
+  },
+  {
+    name: 'V34 - Travel: Dolly Zoom (Vertigo Effect)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['travel', 'dolly-zoom', 'vertigo', 'cinematic', 'dramatic'],
+    isPublic: false,
+    notes: 'First-frame mode or text-to-video. Camera: dolly zoom (Vertigo/Hitchcock effect) — background expands while subject stays same size. Creates dramatic "awe" moment at viewpoints, cliff edges, or grand interiors.',
+    prompt: `Dolly zoom (Vertigo effect) on a dramatic viewpoint scene. A figure stands at the edge — cliff, balcony railing, or observation deck — looking out at a vast landscape. The camera dollies backward while simultaneously zooming in, keeping the figure the same size in frame while the background dramatically expands and flattens. The landscape behind them — mountains, ocean, cityscape, or canyon — stretches and warps with an unsettling, awe-inducing perspective shift. The effect is slow and deliberate, building over the full duration of the shot. The figure remains still, grounded, while the world behind them transforms. Golden hour light, atmospheric haze enhancing the depth compression. This is the "moment of realisation" shot — used at the emotional peak of a travel film when the destination's scale hits the viewer. Cinematic, dramatic, unforgettable.`,
+  },
+  {
+    name: 'V35 - Travel: Static to Life (Photo Animation)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['static-to-life', 'first-frame', 'photo-animation', 'travel', 'cinematic'],
+    isPublic: false,
+    notes: 'First-frame mode — upload ANY travel photo. Brings a still image to life with subtle environmental motion. The most versatile travel prompt — works with any location photo.',
+    prompt: `A photorealistic scene that appears to be a still photograph slowly coming to life. The composition holds steady — no camera movement. Instead, the world within the frame begins to animate with subtle, natural motion: water ripples and flows, clouds drift slowly across the sky, leaves and grass sway gently in the wind, flags or fabric flutter, steam or mist drifts across the scene. If people are present, they shift their weight slightly, turn their heads, or take a slow step. Birds glide across the background. Sunlight shifts subtly, a shaft of light moving across a wall or floor. Reflections shimmer on wet surfaces or glass. The effect is dreamlike and mesmerising — a frozen moment gently unfreezing. No dramatic camera moves. The magic is in the environmental animation bringing depth and life to what appeared static. Natural lighting, photorealistic quality, warm cinematic colour grading matching the mood of the original scene.`,
+  },
+  // ── Car Ads — Presenter-Less Automotive Cinematography ────────────────
+  // Each prompt = ONE shot, no presenter. Upload car photo as first frame.
+  // Designed for dealership ads, social media, listing videos.
+  {
+    name: 'V36 - Car Ad: Hero Reveal (Arc Shot 360°)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['car', 'automotive', 'ad', 'arc', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a car photo. Camera: full 360° arc orbit around the car. No presenter. The classic hero automotive ad shot. Works in studio or outdoor setting.',
+    prompt: `Camera performs a slow, smooth 360-degree arc orbit around the car at hip height. The vehicle stands alone — no people, no distractions. As the camera circles, dramatic lighting travels across the paint surface — specular highlights rolling along the body lines, reflections shifting in the glass, chrome catching directional light. Each angle reveals a new design element: aggressive front grille, sculpted fender, flowing roofline, muscular rear haunches, wheel design. The car sits on a wet reflective surface that mirrors the underside and lights. The orbit is perfectly smooth and continuous, never stopping. Dramatic studio lighting with a single strong key light and subtle warm fill. Dark moody background that isolates the vehicle. Premium automotive commercial — the kind of shot that opens a Super Bowl car ad.`,
+  },
+  {
+    name: 'V37 - Car Ad: Body Line Detail (Slow Truck)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['car', 'automotive', 'ad', 'truck', 'detail', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a car side profile photo. Camera: ultra-slow lateral truck along the body, macro-close to paint surface. Detail and craftsmanship shot.',
+    prompt: `Camera trucks laterally at extreme close range along the car body — just inches from the paint surface. The movement is ultra-slow, gliding from the front headlight along the character line, across the door handle, past the rear quarter panel to the tail light. At this proximity, every detail becomes monumental: the depth of the metallic paint layers, the precision of the panel gaps, the machined aluminium trim, the LED light elements inside the headlamp cluster. Reflections of the environment slide across the curved surfaces as the camera travels. Shallow depth of field isolates each detail in turn. Dramatic side-lighting rakes across the body, emphasising every curve and crease. No people, no context — pure design appreciation. Single continuous truck, automotive macro cinematography, dark moody colour grading with warm metal highlights.`,
+  },
+  {
+    name: 'V38 - Car Ad: Static to Life (Paint Reflections)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['car', 'automotive', 'ad', 'static-to-life', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload ANY car photo. Brings a static car image to life with environmental motion — reflections, light movement, rain, steam. Most versatile car ad prompt.',
+    prompt: `The car sits perfectly still in a dramatic setting — the camera does not move. Instead, the world around the car comes alive. Light shifts slowly across the paint — a cloud passing overhead, a neon sign cycling colours, or golden hour sun creeping across the body. Reflections in the glass and paint animate with the moving environment: trees swaying in the wind mirror across the windscreen, city lights pulse in the lacquer finish. If the surface is wet, water droplets catch the light and shimmer. A subtle heat haze rises from the hood after the engine has been running. Brake light glow pulses once. Exhaust note implied by a tiny tremor of heat distortion at the tailpipe. The car is a sculpture responding to its environment. No camera movement — the stillness of the vehicle contrasts with the living world reflected in its surfaces. Dramatic lighting, photorealistic quality, premium automotive mood.`,
+  },
+  {
+    name: 'V39 - Car Ad: Rolling Shot (Truck Alongside)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['car', 'automotive', 'ad', 'truck', 'rolling', 'motion', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a car photo. Camera: lateral truck matching the car speed on a road — the classic rolling shot. Background motion-blurred, car sharp. For driving lifestyle ads.',
+    prompt: `Camera trucks laterally at the exact speed of the car as it drives along a scenic road. The vehicle is perfectly sharp and centred in frame while the background streaks past in smooth horizontal motion blur — mountains, trees, coastline, or city lights. The camera holds at door height, showing the full side profile of the car in motion. Wheels are spinning, suspension working over subtle road imperfections. The paint catches shifting light from the passing environment — sun through trees creating a strobe effect, or city neon washing across the body in colour waves. No driver visible through the tinted glass — the car is the star. Golden hour or blue hour lighting for maximum drama. Single continuous rolling truck shot, the signature automotive commercial technique. Cinematic motion blur, sharp subject, premium colour grading.`,
+  },
+  {
+    name: 'V40 - Car Ad: Front Approach (Dolly Back Low-Angle)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['car', 'automotive', 'ad', 'dolly', 'low-angle', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a car front photo. Camera: low-angle dolly backward as the car approaches — headlights growing, grille filling the frame. The intimidation shot.',
+    prompt: `Camera holds a low angle at road level as the car approaches head-on, headlights blazing. The camera dollies backward slowly, slightly slower than the car — so the vehicle gradually fills the frame, growing larger and more imposing with each moment. The grille, badge, and hood expand toward the lens. Headlight beams flare across the camera creating cinematic lens flares. The low perspective exaggerates the car's height and aggression. Road surface texture races beneath the camera. The car's shadow stretches forward, reaching the lens. The approach continues until the grille nearly fills the entire frame — overwhelming, powerful, dominant. Dramatic front-lighting from the headlamps mixed with ambient golden hour from behind the camera. Single continuous low-angle dolly back, the power shot used in every premium car launch commercial.`,
+  },
+  {
+    name: 'V41 - Car Ad: Interior Cockpit (Static + Light Sweep)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['car', 'automotive', 'ad', 'interior', 'static', 'lighting', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a car interior photo. Camera: static interior shot with light sweeping across the cabin — dashboard, leather, ambient lighting coming alive. Luxury detail shot.',
+    prompt: `Camera holds perfectly still inside the car cabin, framing the dashboard, steering wheel, centre console, and windscreen. The interior is empty — no driver. The scene begins in near-darkness, then light slowly sweeps through the cabin as if the car is passing through a tunnel exit or sunrise is breaking through the windscreen. The light travels across the leather seats revealing the quilted stitching texture, moves across the brushed aluminium trim, catches the glass of the infotainment screen, and illuminates the ambient LED strips that glow to life along the door panels and dashboard. Materials respond to the light — leather gains depth, metal surfaces sparkle, carbon fibre weave becomes visible. The digital dashboard illuminates, gauges sweeping to life. The light sweep completes and the interior settles into warm, inviting ambient glow. No camera movement — all drama comes from the lighting transition. Interior automotive luxury, material showcase, ASMR-satisfying detail.`,
+  },
+  {
+    name: 'V42 - Car Ad: Wheel & Brake (Zoom In Macro)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['car', 'automotive', 'ad', 'zoom', 'macro', 'detail', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload a car wheel close-up. Camera: slow zoom in from full wheel to brake caliper macro detail. Engineering precision showcase.',
+    prompt: `Camera begins on the full wheel and tyre in frame — alloy design catching dramatic side-light, tyre sidewall lettering visible, the arc of the fender above. The camera begins a slow, steady zoom in — tightening from the full wheel to the spoke pattern, past the wheel bolts, through the spoke gaps to the brake caliper behind. The zoom continues to macro level: the caliper's machined surface, the brand logo engraved in the metal, the brake disc ventilation slots, the pad material visible at the edge. At this magnification, the engineering precision is breathtaking — CNC machining marks on aluminium, the heat-discoloured edge of the disc, a faint dusting of brake dust on the caliper. Dramatic directional lighting sculpts every machined edge in sharp shadow. Single continuous zoom from product shot to engineering detail, no camera movement beyond the zoom. Automotive engineering cinematography, dark background isolating the component, warm metallic colour grading.`,
+  },
+  // ── TV Commercial / Product Ad — Broadcast Quality ────────────────────
+  // No presenter. Product is the hero. Upload product photo as first frame.
+  // These are the shots that run between TV shows, on YouTube pre-roll, and Instagram Reels.
+  {
+    name: 'V43 - TV Ad: Product Hero Reveal (Pedestal Up + Light Burst)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['ad', 'commercial', 'product', 'tv', 'pedestal', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload product photo. The classic TV commercial money shot. Camera: pedestal up from base to full product, dramatic light burst as the hero is revealed. Works for ANY product — perfume, skincare, tech, food, supplements, toothpaste.',
+    prompt: `The scene opens in darkness. A single shaft of light descends from above, striking the surface below and spreading outward in a soft pool. The product sits at the centre — but only the base is visible. Camera begins at surface level, just millimetres above the glossy reflective plane, the product towering above like a monolith. The camera begins a slow pedestal up — rising smoothly from the base, past the body of the product, revealing the label, the texture, the form. As the camera reaches the top, a dramatic light burst blooms behind the product — warm and golden, or cool and clinical depending on the brand — creating a halo effect and illuminating the full hero silhouette. Particles drift through the light beam — dust motes for luxury, water droplets for freshness, golden sparkles for premium. The product now stands fully revealed, perfectly lit, commanding the frame. The reflective surface below mirrors the product and the light. Camera holds on the final hero composition. Single continuous pedestal up with timed light burst at the apex. This is the last 3 seconds of every television commercial — the shot the viewer remembers. Studio-grade lighting, flawless product surface, broadcast-quality colour grading.`,
+  },
+  {
+    name: 'V44 - TV Ad: Product in Action (Macro Slow-Motion)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['ad', 'commercial', 'product', 'tv', 'macro', 'slow-motion', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload product photo. The "sensory proof" shot. Camera: macro slow-motion of the product being used — cream spreading, liquid pouring, tablet dissolving, bristles bending. Proves quality through texture and motion. Works for skincare, food, beverages, cleaning, dental, pharma.',
+    prompt: `Extreme macro slow-motion capturing the product in the moment of use. The camera holds static at macro distance — the product fills 80% of the frame. Then the action begins in ultra slow-motion: cream being squeezed from a tube, the thick luxurious texture curling as it emerges, catching studio light on its glossy surface. Or: liquid being poured in a perfect arc, the stream catching light like liquid gold, splashing into a glass with a crown of droplets frozen mid-air. Or: toothpaste meeting bristles, the paste sitting perfectly shaped on the brush head, the bristles bending as they press against a surface showing flexibility and precision. Or: serum dropping from a pipette, the droplet stretching, separating, landing on skin and spreading outward in a satisfying radial pattern. The macro lens reveals what the naked eye cannot — the texture, the viscosity, the quality of ingredients made visible. Every surface is hyper-detailed: product label sharp in the background bokeh, the material behaviour proving premium formulation. Studio lighting with a strong key light creating dimensional shadows on the product texture. High-speed cinematography feel (240fps equivalent), the product in slow-motion glory. This is the shot that makes viewers believe the product works before they even read the claims.`,
+  },
+  {
+    name: 'V45 - TV Ad: Lifestyle Context (Dolly + Rack Focus)',
+    type: 'video' as const,
+    isSystem: true,
+    tags: ['ad', 'commercial', 'product', 'tv', 'dolly', 'rack-focus', 'lifestyle', 'first-frame'],
+    isPublic: false,
+    notes: 'First-frame mode — upload product photo. The "desire" shot. Camera: slow dolly forward through a lifestyle scene, rack focus from environment to product in the foreground. Places the product in an aspirational context — bathroom, kitchen, gym bag, desk, bedside table. The product belongs in YOUR life.',
+    prompt: `Camera begins on a soft, out-of-focus lifestyle scene — a sunlit bathroom counter, a minimalist kitchen shelf, a stylish bedside table, or a gym bag with morning light streaming across it. The environment is aspirational but attainable: clean surfaces, warm natural tones, curated but not sterile. One or two contextual props set the scene (a folded towel, a coffee cup, a succulent, a pair of glasses). The camera dollies forward slowly, moving toward the product which sits prominently in the foreground, currently soft and undefined. As the dolly continues, the focus racks smoothly from the background environment to the product — which snaps into crisp, sharp detail. The label is readable. The packaging catches the light. The product texture is visible. The background falls into a creamy bokeh that still communicates "this is a beautiful place." The camera holds on the sharp product for the final beat, perfectly framed in its lifestyle context. The message is clear without words: this product belongs in this life, and this life could be yours. Warm natural lighting (window light preferred), single continuous dolly with rack focus, aspirational lifestyle commercial, the kind of product placement that feels editorial, not salesy. Works for skincare, supplements, tech accessories, home goods, beverages, dental care, any consumer product.`,
   },
   {
     name: 'O01 - Prompt Edit Image',
@@ -1044,6 +1303,15 @@ Lock morphology and surface pattern across all views."
 `,
   },
   {
+    name: 'C08 - Enhanced Image Realistic',
+    type: 'character' as const,
+    isSystem: true,
+    tags: ['photorealistic', 'realistic', 'camera', 'film'],
+    isPublic: false,
+    notes: 'Append this to any character prompt for ultra-realistic film photography look. Uses Mamiya RZ67 + Kodak Portra 800 film simulation with detailed skin rendering parameters.',
+    prompt: '{ "camera": { "model": "Mamiya RZ67", "lens": "110mm f/2.8" }, "film": { "type": "Kodak Portra 800" }, "skin_details": { "pores": "visible fine pores", "texture": "natural micro-relief skin texture", "vellus_hair": "subtle", "freckles": "natural" }, "shading": { "subsurface_scattering": "melanin-based", "roughness": { "cheeks": "slightly higher", "t_zone": "slightly lower" }, "specular": { "model": "GGX", "ior": 1.48 } }, "geometry_detail": { "micro_displacement": true, "normal_map": "high-resolution" }, "lighting": { "key_light": "soft 45-degree", "fill_light": "low intensity" }, "post_processing": { "plastic_skin": false, "over_retouching": false, "noise_reduction": "minimal" } }, professional photography, cinematic lighting, high detail',
+  },
+  {
     name: 'E02 - Photorealistic Environment Identity Sheet',
     type: 'environment' as const,
     isSystem: true,
@@ -1326,6 +1594,669 @@ Must NOT resemble:
 Use the wide corner shot as master layout.
 Maintain identical geometry, furniture placement, and lighting direction across all views."
 `,
+  },
+
+  // ── Travel & Hospitality Prompts ─────────────────────────────────────
+  {
+    name: 'E04 - Cinematic Travel Destination',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['travel', 'cinematic', 'destination', 'tourism', 'photorealistic'],
+    isPublic: false,
+    notes: 'Versatile travel prompt for any destination — beach, mountain, city, landmark. Describe the location after the prompt. Produces cinematic establishing shots with consistent mood and color grading. Works with @image1 as location reference.',
+    prompt: `# Cinematic Travel Destination — Photorealistic Scene
+
+Create a **photorealistic travel scene** that captures the essence of the described destination. The result must feel like **real cinematic travel footage** — not CGI, not a stock photo, not an illustration.
+
+---
+
+## Visual Identity (Soft Lock)
+
+Maintain across all generated shots:
+- **Same color grading** — warm, natural, cinematic palette
+- **Same mood and atmosphere** — immersive, inviting, aspirational
+- **Same time of day and lighting tone** — golden hour preferred, or match the described setting
+- **Same camera language** — cinematic, deliberate, storytelling-driven
+
+Allow natural variation in:
+- Composition and framing
+- Camera angle and distance
+- Foreground/background elements
+- Human activity and motion
+
+---
+
+## Camera & Cinematography
+
+- **Lens**: 24mm–85mm equivalent (wide establishing to medium portrait of place)
+- **Style**: Cinematic travel documentary — smooth, intentional framing
+- **Movement feel**: Slow drone glide, steady tracking, or locked tripod — NO handheld shake
+- **Depth of field**: Natural, moderate — environment is the subject, keep it sharp
+- **Aspect ratio**: 16:9 widescreen preferred
+
+---
+
+## Lighting & Atmosphere
+
+- Golden hour warmth OR moody blue hour — match the destination's character
+- Natural light only — sunlight, cloud diffusion, ambient glow
+- Realistic atmospheric effects — haze, mist, light rays through trees/buildings
+- No artificial studio lighting
+- Shadows must be soft and directional
+
+---
+
+## Environment Realism
+
+- Real-world materials — stone, water, sand, foliage, architecture
+- Weather-appropriate details — wet surfaces after rain, dust in arid locations, condensation in humid settings
+- Human presence is optional but if included: natural poses, local clothing, candid — NOT posed stock photo people
+- Animals and wildlife: natural behavior, not staged
+
+---
+
+## Shot Composition Guide
+
+Generate shots that tell a visual story:
+1. **Hero Wide** — Establishing shot, full destination reveal, dramatic scale
+2. **Immersive Medium** — Viewer feels present, walking through or arriving at the location
+3. **Intimate Detail** — Texture, local element, food, signage, or cultural artifact
+4. **Human Scale** — Person or silhouette that gives the scene emotional weight
+5. **Departure/Transition** — Looking back, path ahead, or fading light — cinematic closure
+
+---
+
+## Mood Anchors
+
+The image must evoke ONE of these moods (match to destination):
+- **Peaceful luxury** — resort, beach, vineyard
+- **Awe and wonder** — mountain, canyon, ancient ruin
+- **Vibrant energy** — market, festival, street scene
+- **Quiet discovery** — hidden alley, forest trail, small village
+- **Epic scale** — aerial, coastline, skyline at sunset
+
+---
+
+## Strict Negative Constraints
+
+Do NOT produce:
+- Stock photo aesthetic (overly clean, fake smiles, staged poses)
+- HDR over-processing or oversaturated colors
+- CGI or 3D render appearance
+- Drone shots that look like Google Earth
+- Text overlays, watermarks, or UI elements
+- Anime, illustration, or painterly style
+
+---
+
+## AI Control Instruction
+
+"Prioritize mood, lighting, and realism. Do not enforce strict geometry consistency. Allow natural variation while maintaining visual coherence across all shots. Every frame should feel like it belongs in the same travel film."
+
+---
+
+## Output
+
+Produce a **single photorealistic image** that looks like a frame from a high-end travel documentary or luxury tourism campaign.`,
+  },
+  {
+    name: 'E05 - Airbnb & Property Showcase',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['airbnb', 'property', 'hotel', 'interior', 'real-estate', 'photorealistic', 'travel'],
+    isPublic: false,
+    notes: 'For Airbnb listings, hotel room marketing, vacation rental photos. Produces warm, inviting interior/exterior shots that make spaces look aspirational. Use @image1 as property reference photo.',
+    prompt: `# Airbnb & Property Showcase — Photorealistic Marketing Shot
+
+Create a **photorealistic property showcase image** that makes the space feel warm, inviting, and aspirational — like the best Airbnb listing photo or a boutique hotel campaign shot.
+
+The result must look like **real professional property photography**, not CGI or virtual staging.
+
+---
+
+## Visual Style — "I Want to Stay Here"
+
+The image must trigger an emotional booking impulse:
+- **Warm and inviting** — cozy lighting, lived-in but pristine
+- **Aspirational but attainable** — luxury without intimidation
+- **Lifestyle-focused** — show how it FEELS to be in this space, not just what it looks like
+
+---
+
+## Photography Style
+
+- **Lens**: 16mm–35mm wide angle (interior) or 35mm–85mm (exterior/detail)
+- **Camera height**: Low tripod (~waist height) for interiors — makes rooms feel spacious
+- **Lighting**: Natural window light + warm ambient. Golden hour for exteriors
+- **Color grading**: Warm whites, soft shadows, no harsh contrast
+- **Post-processing feel**: Edited but natural — like a professional Airbnb photographer
+
+---
+
+## Interior Shot Rules
+
+When generating interior views:
+- Shoot from corners or doorways to maximize visible space
+- Include at least one window with natural light streaming in
+- Bed/sofa must look freshly made with textured linens
+- Add lifestyle touches: open book, coffee cup, fresh flowers, soft throw blanket
+- Floor must be visible — grounds the perspective
+- No clutter, but not sterile — "curated casual"
+
+---
+
+## Exterior Shot Rules
+
+When generating exterior views:
+- Show the property within its environment (garden, street, view)
+- Include outdoor living space if applicable (patio, balcony, pool)
+- Time of day: golden hour or blue hour preferred
+- Landscaping should look maintained but natural
+
+---
+
+## Detail Shot Guide
+
+- Bathroom: fluffy towels, rainfall shower, natural toiletries
+- Kitchen: clean counters, one styled element (fruit bowl, herb pot, espresso machine)
+- Bedroom: layered textiles, reading lamp glow, view through window
+- Living area: cushions arranged, soft lighting, sense of comfort
+- Unique feature: fireplace, hot tub, hammock, view from balcony
+
+---
+
+## Consistency Rules (Soft Lock)
+
+Maintain across all shots of the same property:
+- Same color temperature and warmth
+- Same time of day / lighting direction
+- Same level of styling (don't mix minimal with cluttered)
+- Same architectural style and materials
+
+---
+
+## Strict Negative Constraints
+
+Do NOT produce:
+- Empty, cold, sterile rooms
+- Fish-eye lens distortion
+- Virtual staging that looks fake
+- Stock photo people in the space
+- Over-saturated or HDR look
+- Dark, underexposed rooms
+- CGI or 3D render aesthetic
+
+---
+
+## AI Control Instruction
+
+"Create a space that makes someone immediately want to book it. Prioritize warmth, natural light, and lifestyle appeal. The space should feel real, photographed, and emotionally inviting."
+
+---
+
+## Output
+
+Produce a **single photorealistic image** that looks like a professional Airbnb Superhost or boutique hotel marketing photograph.`,
+  },
+  {
+    name: 'E06 - Guided Tour Experience (Zoo / Museum / Area)',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['tour', 'zoo', 'museum', 'walking-tour', 'experience', 'photorealistic', 'travel'],
+    isPublic: false,
+    notes: 'For tour operators, museums, zoos, theme parks, walking tours. Generates immersive POV-style shots that make viewers feel like they are ON the tour. Describe the tour type and location after the prompt.',
+    prompt: `# Guided Tour Experience — Immersive POV Scene
+
+Create a **photorealistic tour experience image** that makes the viewer feel like they are physically present — walking through, exploring, and discovering. The result must feel like a real moment captured during an actual visit.
+
+This is NOT a brochure photo. This is a **"you are here"** moment.
+
+---
+
+## Experience Types (match to your description)
+
+### Zoo / Wildlife Park
+- Animals in naturalistic enclosures, not cages
+- Visitor perspective: looking through glass, over railings, along pathways
+- Include environmental context: signage, pathways, other visitors (background)
+- Animals in natural behavior: feeding, resting, playing, moving
+- Close encounter moments: animal looking at camera, feeding station
+
+### Museum / Gallery
+- Perspective: standing in front of exhibits, walking through halls
+- Dramatic gallery lighting on exhibits
+- Include architectural details: high ceilings, polished floors, display cases
+- Other visitors as background context (not focus)
+- Mix of wide gallery shots and close exhibit detail
+
+### Walking Tour / Area Tour
+- Street-level perspective, following a path or route
+- Local architecture, signage, street life
+- Guided group optional: seen from behind, following a leader
+- Seasonal/weather appropriate: umbrellas, sunlight, autumn leaves
+- Discovery moments: turning a corner, arriving at a viewpoint
+
+### Food & Market Tour
+- Market stalls with colorful produce, spices, local goods
+- Street food preparation: steam, flame, motion
+- Tasting moments: hands holding food, close-up plates
+- Vendor interaction: natural, candid, not posed
+- Sensory richness: textures, colors, steam, condensation
+
+---
+
+## Camera Style — "First Person Travel"
+
+- **Lens**: 24mm–50mm (immersive but not distorted)
+- **Height**: Eye level — viewer's natural perspective
+- **Style**: Documentary / travel vlog aesthetic
+- **Depth of field**: Moderate — environment stays readable
+- **Motion**: Implied through composition — someone is walking, looking, discovering
+
+---
+
+## Storytelling Beat Structure
+
+Each image should feel like one beat in a tour narrative:
+1. **Arrival** — First glimpse, entrance, gate, threshold
+2. **Discovery** — "Wow" moment — main attraction reveal
+3. **Immersion** — Deep inside the experience, surrounded by it
+4. **Detail** — Close-up of something fascinating, unique, or beautiful
+5. **Memory** — The shot you'd share on Instagram — the defining moment
+
+---
+
+## Atmosphere & Mood
+
+- **Curious and engaged** — viewer is actively exploring
+- **Natural imperfection** — real crowds, real weather, real light
+- **Sensory immersion** — you can almost hear/smell the scene
+- Lighting: match real conditions (indoor = artificial/mixed, outdoor = natural)
+
+---
+
+## Human Element Rules
+
+- People as context, not subjects (unless describing a guide)
+- Natural crowd density — not empty, not packed
+- Diverse, realistic visitors
+- No one looking at camera (candid only)
+- Guide (if present): gesturing, explaining, leading — seen from participant's POV
+
+---
+
+## Strict Negative Constraints
+
+Do NOT produce:
+- Brochure / stock photo aesthetic
+- Empty, sterile environments
+- Posed group photos
+- Birds-eye or satellite views
+- Cartoon or illustrated style
+- Over-saturated or HDR processing
+- Text overlays or UI elements
+
+---
+
+## AI Control Instruction
+
+"Generate from the visitor's perspective. The viewer should feel physically present in the scene. Prioritize immersion, natural lighting, and authentic atmosphere. Allow imperfection — real tours have real conditions."
+
+---
+
+## Output
+
+Produce a **single photorealistic image** that feels like an authentic moment captured during a real guided tour experience.`,
+  },
+  {
+    name: 'E07 - Luxury Resort & Hotel Marketing',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['hotel', 'resort', 'luxury', 'spa', 'hospitality', 'photorealistic', 'travel'],
+    isPublic: false,
+    notes: 'For luxury hotel, resort, and spa marketing. Produces aspirational, magazine-quality shots of pools, lobbies, dining, spa, and suites. Premium feel with warm, inviting atmosphere.',
+    prompt: `# Luxury Resort & Hotel Marketing — Premium Campaign Shot
+
+Create a **photorealistic luxury hospitality image** suitable for a 5-star hotel marketing campaign, resort website hero image, or luxury travel magazine spread.
+
+The result must feel like it was shot by a **professional hospitality photographer** — aspirational, warm, and effortlessly elegant.
+
+---
+
+## Visual Identity — "Effortless Luxury"
+
+- **Tone**: Warm, sophisticated, serene
+- **Feel**: You can almost feel the temperature, hear the water, smell the lobby
+- **Style**: Editorial luxury — somewhere between Condé Nast Traveller and Aman Resorts
+- **NOT**: Cold corporate, sterile showroom, or over-the-top gaudy
+
+---
+
+## Scene Categories (match to description)
+
+### Infinity Pool & Water Features
+- Pool edge meeting horizon (ocean, jungle, mountains)
+- Turquoise water with realistic caustics and reflections
+- Towels, sun loungers, cocktails as styling elements
+- Golden hour or blue hour lighting preferred
+- Steam/mist on heated pools at dawn
+
+### Lobby & Public Spaces
+- Grand entrance with natural light
+- Architectural drama: high ceilings, statement lighting, natural materials
+- Fresh flowers, subtle fragrance implied through visual cues
+- One or two guests in background (never crowded)
+
+### Suite & Bedroom
+- King bed with premium layered linens
+- View through floor-to-ceiling windows
+- Turndown service styling: robe, slippers, welcome amenity
+- Warm bedside lighting, twilight through window
+
+### Restaurant & Dining
+- Plated dish as art — chef's presentation
+- Table setting with candles, linen, glassware
+- View from the table (ocean, garden, city skyline)
+- Warm candlelight mixed with ambient twilight
+
+### Spa & Wellness
+- Treatment room: warm stones, oil, candles, folded towels
+- Natural materials: wood, stone, water features
+- Outdoor spa with nature backdrop
+- Steam, soft focus, tranquility
+
+### Grounds & Exterior
+- Manicured gardens, pathways lit at dusk
+- Architecture that blends with landscape
+- Arrival experience: car pulling up, doorman, entrance reveal
+
+---
+
+## Photography Rules
+
+- **Lens**: 24mm (wide architectural) to 85mm (detail/dining)
+- **Lighting**: Natural + warm ambient. Never harsh flash
+- **Color**: Warm neutrals, earth tones, with one accent color from the environment
+- **Shadows**: Soft, directional, adding depth
+- **Post-processing**: Clean, warm, subtle contrast — magazine editorial grade
+
+---
+
+## Lifestyle Touches (Critical)
+
+Every shot must include at least ONE human-scale lifestyle element:
+- An open book by the pool
+- A half-drunk cocktail on the balcony railing
+- Steam rising from a coffee cup at sunrise
+- A robe draped over a chair
+- Bare footprints in sand leading to the water
+
+These details transform a "property photo" into a "lifestyle story."
+
+---
+
+## Strict Negative Constraints
+
+Do NOT produce:
+- Empty, uninviting spaces
+- Harsh overhead lighting
+- Crowded tourist scenes
+- Budget hotel aesthetic
+- Over-processed HDR
+- Stock photo people with fake smiles
+- CGI or 3D render look
+- Cold, blue-tinted color grading
+
+---
+
+## AI Control Instruction
+
+"Create an image that belongs in a luxury travel magazine. Prioritize warmth, atmosphere, and lifestyle storytelling. The viewer should feel the invitation — 'I need to go there.' Natural, editorial, aspirational."
+
+---
+
+## Output
+
+Produce a **single photorealistic image** that looks like a professional luxury hospitality campaign photograph — warm, inviting, and magazine-ready.`,
+  },
+  {
+    name: 'E08 - Street & Cultural Explorer',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['street', 'culture', 'market', 'food', 'local', 'photorealistic', 'travel'],
+    isPublic: false,
+    notes: 'For cultural travel content — street markets, local food, traditional neighborhoods, festivals, daily life. Captures the authentic energy of a place. Describe the culture/location after the prompt.',
+    prompt: `# Street & Cultural Explorer — Authentic Local Scene
+
+Create a **photorealistic street-level cultural scene** that captures the authentic energy, texture, and soul of a real place. The result must feel like a candid travel photograph taken by someone who truly understands and respects the location.
+
+This is NOT tourism marketing. This is **real travel photography** — raw, beautiful, honest.
+
+---
+
+## Visual Style — "The Real Place"
+
+- **Tone**: Authentic, warm, alive
+- **Feel**: Documentary travel photography meets Instagram travel creator
+- **Influence**: Steve McCurry meets modern travel vlogger
+- **NOT**: Stock photo, tourist brochure, or poverty tourism
+
+---
+
+## Scene Categories (match to description)
+
+### Street Market / Bazaar
+- Overhead spice displays, colorful produce, stacked goods
+- Vendor hands preparing, measuring, packaging
+- Narrow aisles, hanging fabrics, layered visual depth
+- Mixed lighting: sunlight through canopy + bare bulbs
+- Steam, smoke from cooking, dust particles in light
+
+### Street Food Scene
+- Chef/vendor actively cooking — flame, wok toss, steam
+- Close-up of finished dish with authentic presentation (NOT fine dining plating)
+- Condiments, sauces, chopsticks, paper plates — real street food context
+- Queue or crowd in background — popular spot indicator
+- Night market glow: neon, lanterns, bare bulbs
+
+### Traditional Neighborhood
+- Narrow streets, balconies, laundry lines, potted plants
+- Weathered walls with character — peeling paint, old tile, patina
+- Local residents going about daily life (NOT posing)
+- Cats, motorcycles, bicycles — lived-in details
+- Morning light or late afternoon warmth
+
+### Temple / Sacred Space
+- Respectful distance, architectural grandeur
+- Incense smoke, candle light, flower offerings
+- Devotees in natural worship (NOT staged)
+- Stone texture, carved detail, weathered surfaces
+- Quiet atmosphere — even in a busy place
+
+### Festival / Celebration
+- Color explosion: costumes, decorations, face paint
+- Motion blur on dancers, sharp on spectators
+- Confetti, flowers, powder, water — festival elements
+- Crowd energy without chaos
+- Night celebrations with fire, lanterns, light trails
+
+---
+
+## Camera Style — "Street Photographer"
+
+- **Lens**: 35mm–50mm (classic street photography)
+- **Style**: Candid, decisive moment, never staged
+- **Depth of field**: Moderate — subject in context, not isolated
+- **Color**: Rich but natural — local color palette, not graded to a trend
+- **Grain**: Subtle film grain is acceptable — adds authenticity
+
+---
+
+## Authenticity Rules (Critical)
+
+- Local materials, real architecture, real textures
+- Food must look like REAL local food, not westernized versions
+- Clothing must be culturally accurate
+- Signage in local language (if visible)
+- Weather appropriate: humidity haze, dry heat shimmer, monsoon wet streets
+- Imperfections are features: cracked pavement, tangled wires, mismatched chairs
+
+---
+
+## Human Element
+
+- People are part of the scene, not the subject
+- Natural activity: shopping, eating, praying, chatting, working
+- No one looking at camera
+- Diverse age groups
+- Culturally respectful representation
+
+---
+
+## Strict Negative Constraints
+
+Do NOT produce:
+- Western/tourist perspective clichés
+- Poverty exploitation imagery
+- Overly clean or sanitized version of real places
+- Stock photo diversity casting
+- Instagram filter over-processing
+- Cartoon, illustration, or painterly style
+- Empty streets (unless dawn/specific context)
+
+---
+
+## AI Control Instruction
+
+"Capture the authentic spirit of this place. Prioritize real textures, real light, real life. The image should smell like the place. Allow natural imperfection — this is what makes travel photography powerful."
+
+---
+
+## Output
+
+Produce a **single photorealistic image** that feels like an authentic street-level travel photograph — alive, textured, and culturally rich.`,
+  },
+  {
+    name: 'E09 - Nature & Adventure Landscape',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['nature', 'adventure', 'landscape', 'outdoor', 'hiking', 'safari', 'photorealistic', 'travel'],
+    isPublic: false,
+    notes: 'For outdoor adventure content — hiking, safari, diving, mountains, forests, waterfalls, coastlines. Epic landscape with human scale. Describe the specific environment after the prompt.',
+    prompt: `# Nature & Adventure Landscape — Epic Outdoor Scene
+
+Create a **photorealistic nature and adventure scene** that captures the raw grandeur and emotional power of the natural world. The result must feel like a **National Geographic photograph** or a frame from a premium nature documentary.
+
+---
+
+## Visual Identity — "Earth is the Subject"
+
+- **Tone**: Awe-inspiring, vast, humbling
+- **Scale**: The landscape dominates — humans are small within it
+- **Light**: Natural, dramatic, weather-dependent
+- **NOT**: Desktop wallpaper cliché, oversaturated postcard, or fantasy landscape
+
+---
+
+## Scene Categories (match to description)
+
+### Mountain & Alpine
+- Snow-capped peaks with cloud interaction
+- Hiking trail with lone figure for scale
+- Alpine meadow, glacial lake, rocky ridge
+- Dramatic weather: clearing storm, first light on summit
+- Altitude atmosphere: thin air clarity, blue shadows
+
+### Tropical & Coastal
+- Turquoise water with realistic wave patterns
+- Coral reef (underwater): natural light penetration, marine life
+- Jungle canopy: light filtering through layers
+- Beach: footprints, tide line, driftwood, shell details
+- Cliff coastline: sea spray, dramatic erosion
+
+### Safari & Wildlife
+- Animals in natural habitat — not zoo, not staged
+- African savanna: golden grass, acacia trees, dust
+- Vehicle perspective: through open safari truck window
+- Golden hour or dramatic storm light
+- Animal behavior: herd movement, predator stalking, watering hole
+
+### Forest & Woodland
+- Light rays through canopy (god rays)
+- Mossy forest floor, fallen trees, mushrooms
+- River/stream with realistic water flow
+- Seasonal variation: autumn color, winter frost, spring bloom
+- Trail disappearing into depth — mystery and invitation
+
+### Desert & Arid
+- Sand dune patterns, wind-sculpted rock
+- Extreme light contrast: bright sun, deep shade
+- Oasis or water feature as focal point
+- Star trails or milky way (if night scene)
+- Heat shimmer on horizon
+
+### Waterfall & River
+- Long exposure feel: silky water texture
+- Mist and spray catching light (rainbow possible)
+- Wet rock surfaces with realistic reflections
+- Surrounding vegetation with water droplets
+- Scale reference: person, bridge, or recognizable object
+
+---
+
+## Camera Style — "Adventure Photographer"
+
+- **Lens**: 16mm–24mm ultra-wide for landscape, 200mm+ for wildlife
+- **Style**: National Geographic editorial
+- **Tripod stability**: Sharp foreground-to-background
+- **Golden hour**: Preferred for most landscapes
+- **Blue hour**: For moody, atmospheric scenes
+
+---
+
+## Human Element (Optional but Powerful)
+
+When a person appears:
+- Small in frame — establishes SCALE of the landscape
+- Wearing appropriate gear (hiking boots, backpack, wetsuit)
+- Looking INTO the scene, not at camera
+- Standing at viewpoint, edge, or trail
+- Silhouette against dramatic sky is very effective
+
+---
+
+## Technical Realism
+
+- Real weather patterns (not always perfect blue sky)
+- Accurate geology and vegetation for the biome
+- Water behavior: currents, foam patterns, clarity
+- Sky: real cloud formations, atmospheric perspective
+- Wildlife: accurate species, natural behavior, real proportions
+
+---
+
+## Strict Negative Constraints
+
+Do NOT produce:
+- Fantasy landscapes (floating islands, impossible geology)
+- Over-saturated "screensaver" images
+- Perfect symmetry (nature is asymmetric)
+- Cartoon or illustrated style
+- HDR processing artifacts
+- Animals in unnatural settings or poses
+- Multiple focal points competing for attention
+
+---
+
+## AI Control Instruction
+
+"Let nature be dramatic on its own terms. Do not over-enhance. Real weather, real light, real scale. One clear subject within a vast environment. The viewer should feel small and amazed."
+
+---
+
+## Output
+
+Produce a **single photorealistic image** that feels like a professional nature/adventure photograph — dramatic, authentic, and emotionally powerful.`,
   },
   {
     name: 'P01 - Photorealistic Prop Identity Sheet',
@@ -2210,207 +3141,9 @@ Lock geometry, material, and branding exactly."
     prompt: `Create a square 1:1 album cover artwork. @Image1 the artist is shot in a stylized portrait — not a standard photo but an artistic interpretation. The treatment combines photorealism with abstract elements: one half of the face dissolves into paint splashes, digital glitch artifacts, or liquid chrome. The background is a deep, moody gradient — midnight blue to black — with subtle floating elements: rose petals, shattered glass particles, smoke wisps, or abstract light trails. The lighting is dramatic and editorial — strong side light creating deep shadows, with a single colour accent reflecting on the skin (warm amber or cool purple). The composition is tight — face fills most of the frame, slightly off-centre. The overall mood is introspective, raw, and artistic. Reference the visual language of iconic album covers — The Weeknd's moody neon, Drake's intimate portraits, SZA's dreamlike aesthetics. Premium, gallery-worthy, immediate emotional impact.`,
   },
   // ══════════════════════════════════════════════════════════════
-  // STYLE PROMPTS — Visual style presets for image/video generation
+  // STYLE PROMPTS — Moved to constants.ts STYLE_PROMPTS map
+  // S01-S22 removed — now managed as fixed Art Styles in VISUAL_STYLES + STYLE_PROMPTS
   // ══════════════════════════════════════════════════════════════
-  {
-    name: 'S01 - Cinematic',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['cinematic', 'film', 'dramatic'],
-    isPublic: false,
-    notes: 'Append to any prompt for cinematic film look. Works with all image models.',
-    prompt: `Cinematic film look. Shot on ARRI Alexa with anamorphic lenses. Warm color grading with teal shadows and amber highlights. Shallow depth of field with natural bokeh. Dramatic side lighting with soft fill. Film grain texture. 2.39:1 widescreen composition. Rich contrast, lifted blacks, desaturated midtones. Professional color science reminiscent of Roger Deakins cinematography.`,
-  },
-  {
-    name: 'S02 - Anime',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['anime', 'japanese', 'cel-shading'],
-    isPublic: false,
-    notes: 'Japanese anime style. Works best with character and scene prompts.',
-    prompt: `Japanese anime art style. Clean cel-shaded rendering with bold outlines. Vibrant saturated colors with smooth gradients. Large expressive eyes with detailed highlights. Dynamic hair with individual strand detail. Soft ambient occlusion shading. Studio Ghibli-inspired background painting with watercolor sky. Clean line art, consistent stroke weight. Dramatic speed lines for action. Beautiful lighting with rim highlights and color bounce.`,
-  },
-  {
-    name: 'S03 - Watercolor',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['watercolor', 'painting', 'artistic'],
-    isPublic: false,
-    notes: 'Soft watercolor painting effect. Great for environments and portraits.',
-    prompt: `Traditional watercolor painting style. Soft translucent washes with visible paper texture showing through. Wet-on-wet blending with organic color bleeding at edges. Limited palette with harmonious color mixing. Loose brushwork with confident strokes. White paper preserved as highlights. Subtle granulation in darker tones. Natural paint drips and splatter marks. Atmospheric perspective with lighter, cooler distant elements. Hand-painted quality with artistic imperfection.`,
-  },
-  {
-    name: 'S04 - Oil Painting',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['oil-painting', 'classical', 'fine-art'],
-    isPublic: false,
-    notes: 'Classical oil painting texture. Rich, museum-quality feel.',
-    prompt: `Classical oil painting style. Rich impasto brushstrokes with visible texture and paint thickness. Deep, luminous color with layered glazing technique. Chiaroscuro lighting with dramatic light-dark contrast. Warm undertones in shadows, cool highlights. Canvas weave texture visible in thin areas. Renaissance-inspired composition with golden ratio. Rembrandt lighting on faces. Baroque richness in color saturation. Museum-quality fine art presentation.`,
-  },
-  {
-    name: 'S05 - Noir',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['noir', 'black-white', 'dramatic'],
-    isPublic: false,
-    notes: 'High contrast black and white film noir. Perfect for dramatic scenes.',
-    prompt: `Film noir style. High contrast black and white with deep pure blacks and bright whites. Dramatic hard shadows from venetian blinds, streetlamps, or single light sources. Expressionistic angles and Dutch tilts. Fog, rain, and wet reflective surfaces. Silhouettes and rim lighting. 1940s aesthetic with fedora hats and long coats. Gritty urban atmosphere. Cigarette smoke catching the light. Harsh shadows cutting across faces. Moody, mysterious, dangerous atmosphere.`,
-  },
-  {
-    name: 'S06 - Pop Art',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['pop-art', 'bold', 'graphic'],
-    isPublic: false,
-    notes: 'Bold pop art style inspired by Warhol and Lichtenstein.',
-    prompt: `Pop art style inspired by Andy Warhol and Roy Lichtenstein. Bold flat colors — primary red, blue, yellow with black outlines. Ben-Day dot halftone pattern on skin and backgrounds. High contrast with no subtle gradients. Thick comic-book outlines. Bright saturated palette. Repetitive grid layout option. Speech bubbles and onomatopoeia text. Screen-print aesthetic with slight color misregistration. Bold, graphic, immediate visual impact.`,
-  },
-  {
-    name: 'S07 - Pixel Art',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['pixel-art', 'retro', '8-bit'],
-    isPublic: false,
-    notes: 'Retro pixel art game aesthetic. Best at lower resolutions.',
-    prompt: `Retro pixel art style. Crisp square pixels with no anti-aliasing. Limited 16-32 color palette with careful dithering for gradients. Clean readable silhouettes. 16-bit era aesthetic with detailed sprite work. Isometric or side-view perspective. Bright saturated colors on dark backgrounds. Pixel-perfect placement with no sub-pixel rendering. Nostalgic video game aesthetic reminiscent of SNES/Genesis era. Clean, deliberate, each pixel intentionally placed.`,
-  },
-  {
-    name: 'S08 - Comic Book',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['comic-book', 'marvel', 'graphic-novel'],
-    isPublic: false,
-    notes: 'Western comic book style with bold inks and dynamic composition.',
-    prompt: `Western comic book style. Bold black ink outlines with confident line weight variation — thick for contours, thin for detail. Flat cel colors with dramatic shadows. Cross-hatching for texture and depth. Dynamic foreshortened poses with extreme perspective. Speed lines and motion blur for action. Panel-style composition. Rich saturated colors — primary palette. Strong chins, defined muscles, heroic proportions. Marvel/DC inspired visual language with kinetic energy.`,
-  },
-  {
-    name: 'S09 - Sketch / Pencil Drawing',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['sketch', 'pencil', 'drawing'],
-    isPublic: false,
-    notes: 'Hand-drawn pencil sketch effect. Raw, artistic quality.',
-    prompt: `Hand-drawn pencil sketch style. Graphite on textured paper with visible tooth. Loose gestural strokes for form, tighter rendering for focal areas. Cross-hatching and stippling for shadows. Visible construction lines and guide marks. Soft HB pencil for light areas, dark 6B for deep shadows. Smudged edges for atmospheric depth. Paper texture visible throughout. Artistic imperfection — eraser marks, finger smudges, overlapping strokes. Raw, immediate, sketchbook quality.`,
-  },
-  {
-    name: 'S10 - Vintage / Retro',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['vintage', 'retro', 'film'],
-    isPublic: false,
-    notes: 'Faded vintage film look. 1970s-80s nostalgia.',
-    prompt: `Vintage retro film style. Faded colors with heavy warm cast — yellowed highlights, orange midtones, teal shadows. Heavy film grain with light leaks and lens flare. Slightly overexposed with blown-out highlights. Soft focus with chromatic aberration at edges. Kodak Portra or Fuji Superia color science. Vignetting at corners. Muted pastel palette. 1970s-80s aesthetic. Polaroid-like color shift. Nostalgic, dreamy, sun-drenched atmosphere.`,
-  },
-  {
-    name: 'S11 - Japanese Ink (Sumi-e)',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['japanese-ink', 'sumi-e', 'traditional'],
-    isPublic: false,
-    notes: 'Traditional Japanese ink wash painting. Minimalist and elegant.',
-    prompt: `Traditional Japanese sumi-e ink wash painting. Black ink on rice paper with varying ink density — from pale grey washes to deep saturated black. Minimalist composition with intentional empty space (ma). Confident single-stroke brushwork — each stroke deliberate and unrepeated. Bamboo brush texture visible in dry-brush passages. Subtle ink bleeding into wet paper. Zen aesthetic — simplicity, asymmetry, natural flow. Seasonal nature themes. Seal stamp in red ink. Meditative, elegant, effortless mastery.`,
-  },
-  {
-    name: 'S12 - 3D Animation / Pixar',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['3d', 'pixar', 'animation'],
-    isPublic: false,
-    notes: 'Pixar/Disney 3D animation style. Family-friendly, polished.',
-    prompt: `Pixar/Disney 3D animation style. Clean subsurface scattering on skin with warm glow. Large expressive eyes with detailed iris reflections. Stylized proportions — slightly oversized heads, expressive hands. Smooth plastic-like surfaces with subtle texture. Volumetric studio lighting — warm key light, cool fill, subtle rim. Rich saturated color palette. Hair rendered as soft clumps, not individual strands. Clean, family-friendly aesthetic. Professional render quality with ambient occlusion and global illumination.`,
-  },
-  {
-    name: 'S13 - Photorealistic Studio',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['photorealistic', 'studio', 'professional'],
-    isPublic: false,
-    notes: 'Clean professional studio photography. Product and portrait use.',
-    prompt: `Professional studio photography. Shot on medium format Hasselblad with 80mm lens. Clean white or grey seamless backdrop. Three-point lighting — key, fill, and hair light. Crisp focus with shallow depth of field. Natural skin texture with pores visible. Accurate color reproduction — no heavy grading. Clean catchlights in eyes. Soft shadows with gentle falloff. Magazine-quality retouching — blemish removal but preserving texture. Color-accurate white balance. Commercial photography standard.`,
-  },
-  {
-    name: 'S14 - Cyberpunk / Neon',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['cyberpunk', 'neon', 'sci-fi'],
-    isPublic: false,
-    notes: 'Futuristic cyberpunk with neon lighting. Blade Runner inspired.',
-    prompt: `Cyberpunk neon aesthetic. Rain-soaked streets reflecting pink, blue, and purple neon signs. Dense urban environment with holographic advertisements. Atmospheric haze and volumetric fog catching colored light. High contrast between deep shadows and vibrant neon highlights. Chrome and glass surfaces with complex reflections. Blade Runner 2049 inspired color palette — orange, teal, magenta. Lens flare from neon sources. Gritty dystopian atmosphere with high-tech elements. Night scene with artificial lighting only.`,
-  },
-  {
-    name: 'S15 - Golden Hour / Magic Hour',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['golden-hour', 'sunset', 'warm'],
-    isPublic: false,
-    notes: 'Warm sunset/sunrise golden hour lighting. Universal style modifier.',
-    prompt: `Golden hour photography. Warm directional sunlight at 15-degree angle, casting long dramatic shadows. Rich amber and honey tones flooding the scene. Backlit subjects with glowing rim light and lens flare. Soft diffused light with no harsh shadows on faces. Warm color temperature (3200K). Sun-kissed skin tones. Atmospheric haze creating depth and dimension. Light rays visible through trees or windows. Everything bathed in warm golden glow. Magical, romantic, ethereal quality.`,
-  },
-  {
-    name: 'S16 - Dark Moody / Low Key',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['dark', 'moody', 'low-key'],
-    isPublic: false,
-    notes: 'Dark dramatic low-key lighting. Intense, mysterious atmosphere.',
-    prompt: `Low-key dramatic lighting. Predominantly dark with selective illumination revealing only key elements. Single hard light source creating deep shadows. Chiaroscuro contrast — near-black shadows, bright focused highlights. Matte black negative space dominating the frame. Smoke or atmospheric haze catching the light beam. Cool blue or warm amber accent light. Minimal fill light — shadows are deep and pure. Mysterious, intense, theatrical atmosphere. Subjects emerging from darkness.`,
-  },
-  // ── Camera Medium Presets (for realistic AI video) ──────────────────
-  {
-    name: 'S17 - VHS Camcorder',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['vhs', 'retro', 'camcorder', 'camera-medium'],
-    isPublic: false,
-    notes: 'Mimics 1990s home video. Adds authentic imperfections that trick viewers into thinking footage is real.',
-    prompt: `VHS camcorder footage from the 1990s. Analog video artifacts — scan lines, tracking noise, slight color bleed between channels. Warm oversaturated colors shifting toward red and yellow. Soft focus with slight blur. Interlacing artifacts on motion. Low resolution with visible noise. Date/time stamp overlay in bottom corner. Auto-exposure adjustments causing brightness shifts. Slight barrel distortion from cheap lens. Home video feel — raw, unpolished, authentic.`,
-  },
-  {
-    name: 'S18 - Smartphone Video',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['smartphone', 'iphone', 'mobile', 'camera-medium'],
-    isPublic: false,
-    notes: 'Modern iPhone/smartphone look. Perfect for UGC and social media content.',
-    prompt: `Smartphone video shot on iPhone. Slightly shaky handheld movement with digital stabilization corrections. Natural auto-exposure and auto-white-balance shifts. Vertical or horizontal framing. High dynamic range with slightly over-processed HDR look. Natural compression artifacts. Tap-to-focus with occasional focus hunting. Built-in lens characteristics — wide angle slight distortion, no optical zoom. Natural ambient lighting — no professional lights. Casual, spontaneous, authentic social media quality.`,
-  },
-  {
-    name: 'S19 - Webcam Footage',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['webcam', 'stream', 'video-call', 'camera-medium'],
-    isPublic: false,
-    notes: 'Webcam/video call aesthetic. Great for interview or talking-head content.',
-    prompt: `Webcam footage, 720p resolution. Fixed camera angle, slightly above eye level. Flat, unflattering indoor lighting from overhead fluorescents or desk lamp. Slight motion blur at 30fps. Auto-exposure creating washed-out skin tones. Compression artifacts especially in dark areas. Narrow depth of field from small sensor. Slight lag and frame drops. Background slightly out of focus. Ring light reflection in eyes optional. Video call aesthetic — zoom meeting, YouTube vlog, live stream quality.`,
-  },
-  {
-    name: 'S20 - DSLR Handheld',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['dslr', 'handheld', 'documentary', 'camera-medium'],
-    isPublic: false,
-    notes: 'Professional DSLR with handheld movement. Documentary/indie film look.',
-    prompt: `DSLR handheld footage. Shallow depth of field with beautiful natural bokeh from fast 50mm lens. Subtle organic camera shake — professional but not stabilized. Accurate color reproduction with slight warmth. Full-frame sensor look with clean high-ISO performance. Natural rack focus between subjects. Slight breathing of the lens during focus pulls. Motion cadence of 24fps for cinematic feel. Available light photography — no artificial lighting rigs. Documentary style, intimate, observational.`,
-  },
-  {
-    name: 'S21 - Surveillance CCTV',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['cctv', 'surveillance', 'security', 'camera-medium'],
-    isPublic: false,
-    notes: 'Security camera aesthetic. Great for thriller/mystery scenes.',
-    prompt: `Surveillance CCTV security camera footage. Wide-angle fisheye lens distortion. Fixed overhead or corner-mounted camera position. Low resolution with heavy compression artifacts. Harsh infrared or fluorescent lighting. Timestamp and camera ID overlay text. Monochrome green-tinted night vision or washed-out daytime colors. Motion detection artifacts. Frame rate drops creating slight stutter. No audio. Clinical, voyeuristic, unsettling perspective. Found footage aesthetic.`,
-  },
-  {
-    name: 'S22 - 35mm Film Stock',
-    type: 'style' as const,
-    isSystem: true,
-    tags: ['35mm', 'film', 'analog', 'camera-medium'],
-    isPublic: false,
-    notes: 'Authentic 35mm film look. Organic texture that makes AI video feel real.',
-    prompt: `Shot on 35mm film stock. Organic film grain with natural density variation — heavier in shadows, lighter in highlights. Kodak Vision3 500T color science — warm skin tones, rich shadows, subtle halation around bright lights. Natural lens flare from anamorphic glass. Slight gate weave and frame jitter. Color dye layers creating natural cross-contamination between channels. Highlight rolloff that blooms naturally instead of clipping digitally. Mechanical shutter creating natural motion blur at 180-degree angle. The unmistakable organic texture of real celluloid.`,
-  },
 ];
 
 const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: PromptLibraryProps) => {
@@ -3008,7 +3741,6 @@ const PromptEditorModal = ({ template, isOpen, onClose, onSave }: any) => {
               <option value="character">Character</option>
               <option value="environment">Environment</option>
               <option value="prop">Prop</option>
-              <option value="style">Style</option>
               <option value="camera">Camera</option>
               <option value="action">Action</option>
               <option value="other">Other</option>

@@ -35,6 +35,7 @@ import {
   Wand2,
   Sparkles,
   BadgePlus,
+  ShieldAlert,
 } from "lucide-react";
 
 interface TestingPageProps {
@@ -51,6 +52,7 @@ interface TestingPageProps {
  *   - "Force monthly grant" (idempotent check)
  *   - "Seed N credits" (to test deductCredits / transferCredits)
  *   - Subscription + workspace diagnostics panel
+ *   - Invited member stress test (cross-workspace credit flows)
  *
  * Remove this page or gate behind an admin check before production.
  */
@@ -97,6 +99,7 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
   const restoreOrgPlan = useMutation(api.credits.restoreOrgPlanForTesting);
   const propagatePlanChange = useMutation(api.credits.propagateOwnerPlanChange);
   const nuclearReset = useMutation(api.credits.nuclearResetForTesting);
+  const transferCredits = useMutation(api.credits.transferCredits);
 
   // Clerk org list — used for "Create Test Org" button and transfer dialog test
   const {
@@ -182,7 +185,7 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
   }
 
   // ── Automated test runner ──────────────────────────────────────────
-  // Runs through 9 scenarios end-to-end and records pass/fail for each.
+  // Runs through 14 scenarios end-to-end and records pass/fail for each.
   // Uses mutation return values (not reactive queries) to avoid race
   // conditions between mutation commits and query re-subscriptions.
   async function runAllTests() {
@@ -548,6 +551,217 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
       setStatus({
         kind: failed === 0 ? "success" : "error",
         text: `Tests complete: ${passed} passed, ${failed} failed out of ${results.length}`,
+      });
+    }
+  }
+
+  // ── Invited Member Stress Test ─────────────────────────────────────
+  // Exercises the invited-member flow end-to-end across both personal
+  // and org workspace contexts WITHOUT switching Clerk context.
+  //
+  // Phase A (1-7): read-only identity + plan inheritance checks
+  // Phase B (8-11): destructive on PERSONAL only (reset + regrant + deduct 10)
+  // Phase C (12-17): org behavior (deduct 5, 3 forbidden actions, auto-refund)
+  // Phase D (18): ledger reconciliation (advisory)
+  // Net cost: -10 personal credits, -5 org credits.
+  async function runInvitedMemberStressTest() {
+    setIsRunningTests(true);
+    setStatus(null);
+    setTestResults([]);
+
+    const results: TestResult[] = [];
+    const recordResult = (r: TestResult) => {
+      results.push(r);
+      setTestResults([...results]);
+    };
+
+    const runStep = async (
+      name: string,
+      fn: () => Promise<TestResult> | TestResult,
+    ) => {
+      const start = Date.now();
+      recordResult({ name, status: "running" });
+      try {
+        const result = await fn();
+        results.pop();
+        recordResult({ ...result, durationMs: Date.now() - start });
+      } catch (err) {
+        results.pop();
+        recordResult({
+          name,
+          status: "fail",
+          error: err instanceof Error ? err.message : String(err),
+          durationMs: Date.now() - start,
+        });
+      }
+    };
+
+    const personalCompanyId = user?.id ?? "";
+    const orgCompanyId = orgId ?? "";
+
+    try {
+      // ═══════════ PHASE A — Identity & inheritance (read-only) ═══════════
+
+      await runStep("[A1] Identity loaded", () => {
+        if (!user?.id) return { name: "[A1] Identity loaded", status: "fail", error: "user.id is empty" };
+        if (!personalCompanyId) return { name: "[A1] Identity loaded", status: "fail", error: "personalCompanyId empty" };
+        return { name: "[A1] Identity loaded", status: "pass", details: `user=${user.id.slice(0, 16)}…, email=${user.primaryEmailAddress?.emailAddress ?? "?"}` };
+      });
+
+      await runStep("[A2] User is member (not admin) of an org", () => {
+        if (!orgId) return { name: "[A2] User is member (not admin) of an org", status: "fail", error: "No active org context. Switch into an org via OrgSwitcher first." };
+        if (orgRole === "org:admin" || orgRole === "admin") return { name: "[A2] User is member (not admin) of an org", status: "fail", error: `Role is '${orgRole}'. This test expects a non-admin member.` };
+        return { name: "[A2] User is member (not admin) of an org", status: "pass", details: `role='${orgRole}', owns ${ownedOrgs.length} org(s)` };
+      });
+
+      await runStep("[A3] Personal workspace plan resolves", () => {
+        if (planLoading) return { name: "[A3] Personal workspace plan resolves", status: "fail", error: "useSubscription still loading" };
+        if (!userPlan) return { name: "[A3] Personal workspace plan resolves", status: "fail", error: "userPlan is empty" };
+        return { name: "[A3] Personal workspace plan resolves", status: "pass", details: `userPlan='${userPlan}'` };
+      });
+
+      await runStep("[A4] Active org context exists", () => {
+        if (!orgCompanyId) return { name: "[A4] Active org context exists", status: "fail", error: "orgId empty despite passing A2" };
+        return { name: "[A4] Active org context exists", status: "pass", details: `orgId=${orgCompanyId.slice(0, 20)}…, name='${activeOrg?.name ?? "?"}'` };
+      });
+
+      await runStep("[A5] Owner snapshot is someone else", () => {
+        if (ownerSnapshot === undefined) return { name: "[A5] Owner snapshot is someone else", status: "fail", error: "ownerSnapshot still loading" };
+        if (!ownerSnapshot || !ownerSnapshot.ownerPlan) return { name: "[A5] Owner snapshot is someone else", status: "fail", error: "No ownerPlan snapshot for this org." };
+        if (!ownerSnapshot.creatorUserId) return { name: "[A5] Owner snapshot is someone else", status: "fail", error: "Snapshot has ownerPlan but no creatorUserId." };
+        if (ownerSnapshot.creatorUserId === user?.id) return { name: "[A5] Owner snapshot is someone else", status: "fail", error: "creatorUserId matches current user — you're the OWNER." };
+        return { name: "[A5] Owner snapshot is someone else", status: "pass", details: `creator=${ownerSnapshot.creatorUserId.slice(0, 16)}… (not current user ✓), ownerPlan='${ownerSnapshot.ownerPlan}'` };
+      });
+
+      await runStep("[A6] Effective plan inherits from owner", () => {
+        if (!ownerSnapshot?.ownerPlan) return { name: "[A6] Effective plan inherits from owner", status: "skip", details: "No snapshot (A5 dependency)" };
+        if (effectivePlan !== ownerSnapshot.ownerPlan) return { name: "[A6] Effective plan inherits from owner", status: "fail", error: `effective='${effectivePlan}' but snapshot='${ownerSnapshot.ownerPlan}'. Inheritance broken.` };
+        if (effectivePlan === userPlan) return { name: "[A6] Effective plan inherits from owner", status: "pass", details: `effective='${effectivePlan}' matches snapshot. Note: userPlan also '${userPlan}' so inheritance is a no-op.` };
+        return { name: "[A6] Effective plan inherits from owner", status: "pass", details: `effective='${effectivePlan}' (inherited) != userPlan='${userPlan}' — inheritance verified ✓` };
+      });
+
+      await runStep("[A7] Entitlements match inherited plan", () => {
+        const expected = PLAN_LIMITS[effectivePlan];
+        if (!expected) return { name: "[A7] Entitlements match inherited plan", status: "fail", error: `No PLAN_LIMITS for '${effectivePlan}'` };
+        if (entitlements.monthlyCredits !== expected.monthlyCredits) return { name: "[A7] Entitlements match inherited plan", status: "fail", error: `monthlyCredits=${entitlements.monthlyCredits}, expected ${expected.monthlyCredits}` };
+        return { name: "[A7] Entitlements match inherited plan", status: "pass", details: `monthlyCredits=${entitlements.monthlyCredits}, maxMembers=${entitlements.maxMembersPerOrg}. Note: this is the owner's allowance, NOT credits the member receives.` };
+      });
+
+      // ═══════════ PHASE B — Personal round-trip (destructive) ═══════════
+
+      await runStep("[B8] Reset personal balance to 0", async () => {
+        const result = await resetCredits({ companyId: personalCompanyId });
+        if (result.newBalance !== 0) return { name: "[B8] Reset personal balance to 0", status: "fail", error: `newBalance=${result.newBalance}, expected 0` };
+        return { name: "[B8] Reset personal balance to 0", status: "pass", details: `Deleted ${result.deletedSubscriptionEntries} this-month sub entries; balance=0` };
+      });
+
+      const expectedPersonalGrant = PLAN_LIMITS[userPlan]?.monthlyCredits ?? 0;
+      let personalGrantResult: { granted: boolean; amount?: number; reason?: string } | null = null;
+      await runStep("[B9] Force monthly grant for personal", async () => {
+        personalGrantResult = await ensureMonthlyGrant({ companyId: personalCompanyId, plan: userPlan });
+        if (!personalGrantResult.granted) return { name: "[B9] Force monthly grant for personal", status: "fail", error: `granted=false after reset. reason='${personalGrantResult.reason ?? "?"}'.` };
+        if (personalGrantResult.amount !== expectedPersonalGrant) return { name: "[B9] Force monthly grant for personal", status: "fail", error: `amount=${personalGrantResult.amount}, expected ${expectedPersonalGrant}` };
+        return { name: "[B9] Force monthly grant for personal", status: "pass", details: `Granted ${personalGrantResult.amount} credits for '${userPlan}'` };
+      });
+
+      await runStep("[B10] Second grant is idempotent no-op", async () => {
+        const result = await ensureMonthlyGrant({ companyId: personalCompanyId, plan: userPlan });
+        if (result.granted) return { name: "[B10] Second grant is idempotent no-op", status: "fail", error: "granted=true on second call — not idempotent" };
+        return { name: "[B10] Second grant is idempotent no-op", status: "pass", details: `granted=false, reason='${result.reason ?? "?"}' ✓` };
+      });
+
+      await runStep("[B11] Deduct 10 from personal", async () => {
+        const before = personalGrantResult?.amount ?? expectedPersonalGrant;
+        await deductCredits({ companyId: personalCompanyId, tokens: 10, type: "usage", reason: "stress_test_personal_deduct", model: "stress-test", action: "image_generation", plan: userPlan });
+        return { name: "[B11] Deduct 10 from personal", status: "pass", details: `Deducted 10. Expected: ${before} → ${before - 10}. Verify via Credit Balance card.` };
+      });
+
+      // ═══════════ PHASE C — Org workspace behavior ═══════════
+
+      const orgStartBalance = balance ?? 0;
+
+      await runStep("[C12] Org auto-grant blocked (Model B)", async () => {
+        const result = await ensureMonthlyGrant({ companyId: orgCompanyId, plan: effectivePlan });
+        if (result.granted) return { name: "[C12] Org auto-grant blocked (Model B)", status: "fail", error: `🚨 CRITICAL: org received auto-grant of ${result.amount} credits. Model B guard failed.` };
+        if (result.reason !== "orgs_receive_credits_via_transfer_only") return { name: "[C12] Org auto-grant blocked (Model B)", status: "fail", error: `granted=false but reason='${result.reason ?? "?"}'. Expected 'orgs_receive_credits_via_transfer_only'.` };
+        return { name: "[C12] Org auto-grant blocked (Model B)", status: "pass", details: `granted=false, reason='${result.reason}' ✓` };
+      });
+
+      let c13_deductionSucceeded = false;
+      await runStep("[C13] Member can deduct from org shared pool", async () => {
+        if (orgStartBalance < 5) return { name: "[C13] Member can deduct from org shared pool", status: "skip", details: `Org balance ${orgStartBalance} < 5` };
+        try {
+          await deductCredits({ companyId: orgCompanyId, tokens: 5, type: "usage", reason: "stress_test_org_deduct", model: "stress-test", action: "image_generation", plan: effectivePlan });
+          c13_deductionSucceeded = true;
+          return { name: "[C13] Member can deduct from org shared pool", status: "pass", details: `Deducted 5. Expected: ${orgStartBalance} → ${orgStartBalance - 5}. Ledger userId=${user?.id?.slice(0, 12)}…` };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { name: "[C13] Member can deduct from org shared pool", status: "fail", error: `Error: ${msg}` };
+        }
+      });
+
+      await runStep("[C14] Member blocked from transfer OUT of org", async () => {
+        try {
+          await transferCredits({ fromCompanyId: orgCompanyId, toCompanyId: personalCompanyId, tokens: 1, reason: "stress_test_forbidden_transfer_out" });
+          return { name: "[C14] Member blocked from transfer OUT of org", status: "fail", error: "🚨 SECURITY: transferCredits succeeded. Member drained 1 credit from org they don't own." };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.toLowerCase().includes("not the owner")) return { name: "[C14] Member blocked from transfer OUT of org", status: "pass", details: `Blocked: "${msg}" ✓` };
+          return { name: "[C14] Member blocked from transfer OUT of org", status: "fail", error: `Blocked with unexpected msg: "${msg}"` };
+        }
+      });
+
+      await runStep("[C15] Member blocked from transfer INTO org", async () => {
+        try {
+          await transferCredits({ fromCompanyId: personalCompanyId, toCompanyId: orgCompanyId, tokens: 1, reason: "stress_test_forbidden_transfer_in" });
+          return { name: "[C15] Member blocked from transfer INTO org", status: "fail", error: "🚨 SECURITY: Member deposited 1 credit into org they don't own." };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.toLowerCase().includes("not the owner")) return { name: "[C15] Member blocked from transfer INTO org", status: "pass", details: `Blocked: "${msg}" ✓` };
+          return { name: "[C15] Member blocked from transfer INTO org", status: "fail", error: `Blocked with unexpected msg: "${msg}"` };
+        }
+      });
+
+      let c16_seedSucceeded = false;
+      await runStep("[C16] 🚨 Member cannot seed org (security)", async () => {
+        try {
+          await seedCredits({ amount: 1, companyId: orgCompanyId });
+          c16_seedSucceeded = true;
+          return { name: "[C16] 🚨 Member cannot seed org (security)", status: "fail", error: "🚨 REAL SECURITY BUG: seedCreditsForTesting has no ownership check. Non-owner member added 1 credit. FIX: add resolveCompanyCreator() check. Auto-refunding in C17." };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { name: "[C16] 🚨 Member cannot seed org (security)", status: "pass", details: `Blocked: "${msg}" ✓` };
+        }
+      });
+
+      await runStep("[C17] Auto-refund seeded credit", async () => {
+        if (!c16_seedSucceeded) return { name: "[C17] Auto-refund seeded credit", status: "skip", details: "C16 blocked, nothing to refund" };
+        try {
+          await deductCredits({ companyId: orgCompanyId, tokens: 1, type: "admin_adjustment", reason: "stress_test_c16_security_check_refund", plan: effectivePlan });
+          return { name: "[C17] Auto-refund seeded credit", status: "pass", details: "Refunded 1 via deductCredits(admin_adjustment). Net C16+C17 = 0." };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { name: "[C17] Auto-refund seeded credit", status: "fail", error: `Refund failed: ${msg}. Org +1 over expected.` };
+        }
+      });
+
+      // ═══════════ PHASE D — Reconciliation (advisory) ═══════════
+
+      await runStep("[D18] Ledger reconciliation (advisory)", () => {
+        if (!ledger || ledger.length === 0) return { name: "[D18] Ledger reconciliation (advisory)", status: "skip", details: "No ledger rows" };
+        const sum = ledger.reduce((acc, row) => acc + row.tokens, 0);
+        const live = balance ?? 0;
+        const expectedDelta = -(c13_deductionSucceeded ? 5 : 0);
+        return { name: "[D18] Ledger reconciliation (advisory)", status: "pass", details: `Ledger(last 20) sum=${sum}, live balance=${live}, expected org delta: ${expectedDelta}. Expected final: ${orgStartBalance + expectedDelta}. Refresh to confirm.` };
+      });
+    } finally {
+      setIsRunningTests(false);
+      const passed = results.filter((r) => r.status === "pass").length;
+      const failed = results.filter((r) => r.status === "fail").length;
+      const skipped = results.filter((r) => r.status === "skip").length;
+      setStatus({
+        kind: failed === 0 ? "success" : "error",
+        text: `Invited Member Stress Test: ${passed} passed, ${failed} failed, ${skipped} skipped of ${results.length}`,
       });
     }
   }
@@ -1457,26 +1671,37 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
                   Automated Test Runner
                 </h2>
               </div>
-              <button
-                onClick={runAllTests}
-                disabled={isRunningTests || busy !== null}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 transition-colors text-sm font-semibold disabled:opacity-50"
-              >
-                {isRunningTests ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Play className="w-4 h-4" />
-                )}
-                Run All Tests
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={runAllTests}
+                  disabled={isRunningTests || busy !== null}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 transition-colors text-sm font-semibold disabled:opacity-50"
+                >
+                  {isRunningTests ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  Run All Tests
+                </button>
+                <button
+                  onClick={runInvitedMemberStressTest}
+                  disabled={isRunningTests || busy !== null}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-300 hover:bg-orange-500/20 transition-colors text-sm font-semibold disabled:opacity-50"
+                >
+                  {isRunningTests ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4" />
+                  )}
+                  Invited Member Stress Test
+                </button>
+              </div>
             </div>
             <p className="text-xs text-(--text-tertiary) mb-4">
-              Runs 14 scenarios end-to-end: identity → plan → slug →
-              entitlements → reset → grant → idempotent grant → seed → gating →
-              simulated deduct → transfer dialog state → org context → owner
-              snapshot consistency → billing permission. Uses mutation return values to avoid race conditions.
-              <strong className="text-(--text-primary)"> Note:</strong> this
-              will reset your credits balance and leave it at (monthly grant + 50 seed − 10 simulated deduct).
+              <strong className="text-purple-300">Run All Tests</strong> — 14 scenarios: identity, plan, slug, entitlements, reset, grant, idempotent grant, seed, gating, deduct, transfer dialog, org context, snapshot, billing permission.
+              <br />
+              <strong className="text-orange-300">Invited Member Stress Test</strong> — 18 scenarios for invited members: plan inheritance (A1-A7), personal credit round-trip (B8-B11, destructive: resets personal balance), org credit behavior (C12-C17: deducts 5, tests 3 forbidden actions + security check), ledger reconciliation (D18). <strong className="text-(--text-primary)">Requires:</strong> be logged in as a non-admin member inside an org you were invited to.
             </p>
 
             {testResults.length > 0 && (
@@ -1716,6 +1941,18 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
                   <li>Click "Generate Report" above</li>
                   <li>Paste the auto-copied report into the Claude chat</li>
                   <li>Claude reads the exact state and can diagnose precisely instead of guessing</li>
+                </ol>
+              </div>
+              <div>
+                <div className="font-semibold text-(--text-primary) mb-1">
+                  5. Test invited member flow
+                </div>
+                <ol className="list-decimal list-inside space-y-1 text-xs text-(--text-tertiary) ml-2">
+                  <li>Log in as an invited member (not the org admin)</li>
+                  <li>Switch to the org you were invited to via OrgSwitcher</li>
+                  <li>Click &quot;Invited Member Stress Test&quot; above</li>
+                  <li>Review results — Phase A checks inheritance, Phase B tests personal credits, Phase C tests org security boundaries, Phase D reconciles the ledger</li>
+                  <li>Expected: C16 will FAIL (security finding — seedCreditsForTesting has no ownership check)</li>
                 </ol>
               </div>
             </div>

@@ -23,6 +23,7 @@ export interface PricingModel {
   formulaJson?: string;
   assignedFunction?:
     | "getTopazUpscale"
+    | "getTopazVideoUpscale"
     | "getSeedance15"
     | "getSeedance20"
     | "getSeedance20Fast"
@@ -90,6 +91,32 @@ export function getTopazUpscale(
   quality: string
 ): number {
   return getFormulaQualityPrice(undefined, multiplier, quality, base);
+}
+
+/**
+ * Topaz Video Upscale pricing.
+ * Per-second pricing based on upscale factor.
+ *
+ * 1x/2x: 8 credits/s, 4x: 14 credits/s
+ *
+ * Examples (multiplier=1.2):
+ *   2x, 10s → 8 * 10 * 1.2 = 96 credits
+ *   4x, 10s → 14 * 10 * 1.2 = 168 credits
+ */
+export function getTopazVideoUpscale(
+  base: number,
+  multiplier: number,
+  upscaleFactor: string,
+  duration: number
+): number {
+  const factorCosts: Record<string, number> = {
+    "1": 8, "1x": 8,
+    "2": 8, "2x": 8,
+    "4": 14, "4x": 14,
+  };
+
+  const costPerSecond = factorCosts[upscaleFactor] || base;
+  return Math.ceil(costPerSecond * duration * multiplier);
 }
 
 /**
@@ -393,6 +420,27 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
           { name: "1", cost: 10 },
           { name: "2", cost: 12 },
           { name: "4", cost: 15 },
+        ],
+      },
+    }),
+  },
+  {
+    modelId: "topaz/video-upscale",
+    modelName: "Topaz Video Upscale",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getTopazVideoUpscale",
+    creditCost: 8,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "credits_per_second",
+        base_cost: 8,
+        qualities: [
+          { name: "1", cost: 8 },
+          { name: "2", cost: 8 },
+          { name: "4", cost: 14 },
         ],
       },
     }),

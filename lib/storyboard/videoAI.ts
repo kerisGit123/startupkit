@@ -218,6 +218,35 @@ export async function generateSeedance2(params: {
   return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }
 
+export async function generateTopazVideoUpscale(params: {
+  videoUrl: string;
+  upscaleFactor: "1" | "2" | "4";
+  nsfwChecker?: boolean;
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "topaz/video-upscale",
+      callBackUrl: params.callbackUrl,
+      input: {
+        video_url: params.videoUrl,
+        upscale_factor: params.upscaleFactor,
+        nsfw_checker: params.nsfwChecker ?? true,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`Topaz Video Upscale API error: ${await res.text()}`);
+  const data = await res.json();
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}
+
 export async function generateGrokImagineVideo(params: {
   prompt: string;
   imageUrls: string[];
