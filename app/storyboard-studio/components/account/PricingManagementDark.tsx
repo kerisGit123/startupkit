@@ -31,7 +31,7 @@ import {
   EyeOff,
   Shield
 } from "lucide-react";
-import { usePricingData } from "../usePricingData";
+import { usePricingData } from "../shared/usePricingData";
 import {
   type PricingModel,
   getFixedPrice,

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Download, Share2, FileText, Image, Film, Settings, HelpCircle } from "lucide-react";
 import { Project, StoryboardItem } from "../../types/storyboard";
+import { DarkModal } from "../shared/DarkModal";
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -47,21 +48,14 @@ export function ExportModal({ isOpen, onClose, project, selectedItems = [] }: Ex
   const itemsToExport = selectedItems.length > 0 ? selectedItems : project.storyboard;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+    <DarkModal isOpen={isOpen} onClose={onClose} maxWidth="max-w-2xl" noPadding>
         {/* Header */}
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold text-white mb-2">Export Project</h2>
-              <p className="text-sm text-gray-400">Export "{project.name}" in various formats</p>
+              <p className="text-sm text-gray-400">Export &quot;{project.name}&quot; in various formats</p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-lg transition text-gray-400 hover:text-white"
-            >
-              ×
-            </button>
           </div>
         </div>
 
@@ -260,7 +254,6 @@ export function ExportModal({ isOpen, onClose, project, selectedItems = [] }: Ex
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }

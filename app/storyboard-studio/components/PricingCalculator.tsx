@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { CreditCard, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
-import { usePricingData } from "./usePricingData";
+import { usePricingData } from "./shared/usePricingData";
 
 interface PricingCalculatorProps {
   modelId: string;

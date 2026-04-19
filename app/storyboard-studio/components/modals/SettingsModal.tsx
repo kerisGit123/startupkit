@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { X, Settings, Building2, Key } from "lucide-react";
+import { Settings, Building2, Key } from "lucide-react";
+import { DarkModal } from "../shared/DarkModal";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -107,8 +108,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     : defaultKieKey;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
-      <div className="bg-[#13131a] rounded-2xl p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-white/10">
+    <DarkModal isOpen={isOpen} onClose={onClose} maxWidth="max-w-2xl" overlayOpacity={85} className="bg-[#13131a]">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -120,12 +120,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <p className="text-sm text-gray-400">Manage your company and AI configuration</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Tabs */}
@@ -297,7 +291,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </>
           )}
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }

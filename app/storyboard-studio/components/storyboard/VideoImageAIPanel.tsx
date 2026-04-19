@@ -19,7 +19,7 @@ import { usePromptEditor } from "../shared/usePromptEditor";
 import { PromptTextarea } from "../shared/PromptTextarea";
 import { ConvexHttpClient } from "convex/browser";
 import { useUser, useOrganization } from "@clerk/nextjs";
-import { usePricingData } from "@/app/storyboard-studio/components/usePricingData";
+import { usePricingData } from "@/app/storyboard-studio/components/shared/usePricingData";
 import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";

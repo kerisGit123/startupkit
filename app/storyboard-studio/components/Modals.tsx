@@ -1,8 +1,9 @@
 "use client";
 
-import { X, Lock, Copy, Check } from "lucide-react";
+import { Lock, Copy, Check } from "lucide-react";
 import { useState } from "react";
 import type { BoardSettings } from "../types";
+import { DarkModal } from "./shared/DarkModal";
 
 // ── PDF Export Modal ──────────────────────────────────────────────────────────
 interface PdfModalProps {
@@ -14,11 +15,9 @@ export function PdfModal({ onClose, boardSettings }: PdfModalProps) {
   const [layout, setLayout] = useState("three-up");
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#1c1c26] border border-white/10 rounded-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+    <DarkModal isOpen={true} onClose={onClose} maxWidth="max-w-lg" noPadding>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
           <h3 className="text-white font-bold text-base">Download PDF</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-6 space-y-5">
           {/* Orientation */}
@@ -70,8 +69,7 @@ export function PdfModal({ onClose, boardSettings }: PdfModalProps) {
             Download PDF
           </button>
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }
 
@@ -96,11 +94,9 @@ export function ShareModal({ onClose, projectName }: ShareModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#1c1c26] border border-white/10 rounded-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+    <DarkModal isOpen={true} onClose={onClose} maxWidth="max-w-md" noPadding>
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/8">
           <h3 className="text-white font-bold text-base">Share</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-6 space-y-4">
           {/* Share link */}
@@ -166,8 +162,7 @@ export function ShareModal({ onClose, projectName }: ShareModalProps) {
             Copy link
           </button>
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }
 
@@ -183,8 +178,7 @@ export function TagModal({ onClose, onAdd }: TagModalProps) {
   const [color, setColor] = useState(TAG_COLORS[0]);
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-[#1c1c26] border border-white/10 rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+    <DarkModal isOpen={true} onClose={onClose} maxWidth="max-w-sm" showCloseButton={false}>
         <h3 className="text-white font-bold text-base mb-4">New Tag</h3>
         <div className="mb-4">
           <label className="text-gray-400 text-xs mb-1.5 block">Tag name</label>
@@ -209,7 +203,6 @@ export function TagModal({ onClose, onAdd }: TagModalProps) {
             Add Tag
           </button>
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }

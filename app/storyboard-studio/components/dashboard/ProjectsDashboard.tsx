@@ -22,6 +22,8 @@ import { TagEditor } from "../storyboard/TagEditor";
 import { TopNavSearch } from "./TopNavSearch";
 import { TopNavFilters } from "./TopNavFilters";
 import { CreditBadge } from "../shared/CreditBadge";
+import { DarkModal } from "../shared/DarkModal";
+import { DarkInput, DarkTextarea, DarkSelect } from "../shared/DarkInput";
 
 type ProjectTagOption = {
   id: string;
@@ -840,36 +842,27 @@ export function ProjectsDashboard({
       </div>
 
       {/* Create modal (pic12) */}
-      {showCreateModal && (
-        <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-          onClick={() => setShowCreateModal(false)}
-        >
-          <div
-            className="bg-[#2C2C2C] border border-[#3D3D3D] rounded-2xl w-full max-w-3xl p-6"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header with X button */}
+      <DarkModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        maxWidth="max-w-3xl"
+        overlayOpacity={70}
+        className="bg-[#2C2C2C]"
+      >
+            {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-[#FFFFFF] text-lg font-semibold">Create new</h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-[#A0A0A0] hover:text-[#FFFFFF] transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
             
             {/* Files name, Files type, and Frame ratio row */}
             <div className="flex gap-4 mb-5">
               <div className="flex-1">
                 <label className="text-[#A0A0A0] text-xs mb-1.5 block">Files name</label>
-                <input
+                <DarkInput
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && handleCreate()}
                   placeholder="ex. Animation"
-                  className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg px-3 py-2.5 text-[#FFFFFF] text-sm focus:outline-none focus:border-[#4A90E2] focus:ring-2 focus:ring-[#4A90E2]/20"
                   autoFocus
                 />
                 <div className="text-[10px] text-[#6E6E6E] mt-1">{newName.length} / 50</div>
@@ -883,15 +876,15 @@ export function ProjectsDashboard({
               <div className="w-36">
                 <label className="text-[#A0A0A0] text-xs mb-1.5 block">Frame ratio</label>
                 <div className="relative">
-                  <select
+                  <DarkSelect
                     value={newFrameRatio}
                     onChange={(e) => setNewFrameRatio(e.target.value)}
-                    className="w-full bg-[#1A1A1A] border border-[#3D3D3D] rounded-full px-4 py-2.5 text-[#FFFFFF] text-sm appearance-none cursor-pointer hover:bg-[#2C2C2C] transition focus:outline-none focus:border-[#4A90E2] focus:ring-2 focus:ring-[#4A90E2]/20"
+                    className="!rounded-full !px-4"
                   >
                     <option value="9:16">TikTok</option>
                     <option value="16:9">YouTube</option>
                     <option value="1:1">Square</option>
-                  </select>
+                  </DarkSelect>
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[#A0A0A0] text-xs">{newFrameRatio}</span>
                   <ChevronDown className="w-4 h-4 text-[#A0A0A0] absolute right-10 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
@@ -914,19 +907,19 @@ export function ProjectsDashboard({
               {showCustomStyleForm && (
                 <div className="mb-3 p-3 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg space-y-2">
                   <p className="text-[11px] text-[#A0A0A0] font-medium">{editingStyleId ? "Edit Custom Style" : "Create Custom Style"}</p>
-                  <input
+                  <DarkInput
                     type="text"
                     placeholder="Style name (e.g. My Cinematic)"
                     value={customStyleName}
                     onChange={(e) => setCustomStyleName(e.target.value)}
-                    className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50"
+                    size="xs"
                   />
-                  <textarea
+                  <DarkTextarea
                     placeholder="Style prompt (describe the visual style...)"
                     value={customStylePrompt}
                     onChange={(e) => setCustomStylePrompt(e.target.value)}
                     rows={4}
-                    className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50 resize-none"
+                    size="xs"
                   />
                   <div className="flex gap-2 justify-end">
                     <button
@@ -1071,9 +1064,7 @@ export function ProjectsDashboard({
                 Create step
               </button>
             </div>
-          </div>
-        </div>
-      )}
+      </DarkModal>
 
       {/* TagEditor Modal for Projects */}
       {showTagEditor && selectedProjectId && (

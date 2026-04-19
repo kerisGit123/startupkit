@@ -1,4 +1,5 @@
 import React from 'react';
+import { DarkModal } from './shared/DarkModal';
 
 interface UseCaseInfoModalProps {
   isOpen: boolean;
@@ -88,20 +89,9 @@ export default function UseCaseInfoModal({ isOpen, onClose, useCaseLabel, useCas
   const badge = refModeBadge[refMode];
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl w-full max-w-md mx-4">
-        <div className="p-6">
+    <DarkModal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md" overlayOpacity={50}>
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-white">Use Case Guide</h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18"/>
-                <path d="M6 6l12 12"/>
-              </svg>
-            </button>
           </div>
           
           <div className="space-y-4">
@@ -166,8 +156,6 @@ export default function UseCaseInfoModal({ isOpen, onClose, useCaseLabel, useCas
               Got it
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }

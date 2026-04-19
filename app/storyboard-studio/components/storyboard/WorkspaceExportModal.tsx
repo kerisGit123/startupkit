@@ -1,6 +1,7 @@
 "use client";
 
-import { X, Printer, Download } from "lucide-react";
+import { Printer, Download } from "lucide-react";
+import { DarkModal } from "../shared/DarkModal";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface ExportItem {
@@ -123,16 +124,12 @@ export function WorkspaceExportModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[#1a1a24] rounded-2xl border border-white/10 w-full max-w-md">
+    <DarkModal isOpen={true} onClose={onClose} maxWidth="max-w-md" noPadding>
         <div className="flex items-center justify-between p-5 border-b border-white/8">
           <div>
             <h2 className="text-base font-bold text-white">Export Storyboard</h2>
             <p className="text-xs text-gray-500 mt-0.5">{items.length} frames · {projectName}</p>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/8 rounded-lg transition">
-            <X className="w-4 h-4 text-gray-400" />
-          </button>
         </div>
 
         <div className="p-5 space-y-3">
@@ -158,7 +155,6 @@ export function WorkspaceExportModal({
             </div>
           </button>
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }

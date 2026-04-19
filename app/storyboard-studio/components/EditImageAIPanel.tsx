@@ -2,7 +2,7 @@
 
 import { toast } from "sonner";
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { usePricingData } from "./usePricingData";
+import { usePricingData } from "./shared/usePricingData";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { useUser, useOrganization } from "@clerk/nextjs";

@@ -1,6 +1,7 @@
 "use client";
 
-import { X, User, Mountain, Grid, FileText, Crop } from "lucide-react";
+import { User, Mountain, Grid, FileText, Crop } from "lucide-react";
+import { DarkModal } from "../shared/DarkModal";
 
 interface AIGenerationModalProps {
   isOpen: boolean;
@@ -64,8 +65,7 @@ export function AIGenerationModal({ isOpen, onClose, onSelectOption }: AIGenerat
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
-      <div className="bg-[#1a1a24] rounded-2xl p-8 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-white/10">
+    <DarkModal isOpen={isOpen} onClose={onClose} maxWidth="max-w-3xl" overlayOpacity={85} className="p-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -77,12 +77,6 @@ export function AIGenerationModal({ isOpen, onClose, onSelectOption }: AIGenerat
               <p className="text-sm text-gray-400">Choose what to generate</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 bg-white/5 hover:bg-white/10 rounded-lg flex items-center justify-center text-gray-400 hover:text-white transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Options Grid */}
@@ -114,7 +108,6 @@ export function AIGenerationModal({ isOpen, onClose, onSelectOption }: AIGenerat
             );
           })}
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }

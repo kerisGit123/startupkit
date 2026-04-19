@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Image, Video, FileText, MessageSquare, Tag } from "lucide-react";
+import { Image, Video, FileText, MessageSquare, Tag } from "lucide-react";
 import type { Shot } from "../types";
+import { DarkModal } from "./shared/DarkModal";
 
 interface FrameInfoDialogProps {
   isOpen: boolean;
@@ -41,18 +42,11 @@ export function FrameInfoDialog({
   ] as const;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="bg-[#2C2C2C] border border-[#3D3D3D] rounded-2xl shadow-2xl max-w-4xl w-full mx-4">
+    <DarkModal isOpen={isOpen} onClose={onClose} maxWidth="max-w-4xl" overlayOpacity={80} noPadding className="bg-[#2C2C2C]">
         {/* Header */}
         <div className="px-6 py-4 border-b border-[#3D3D3D] rounded-t-2xl">
           <div className="flex items-center justify-between">
             <h3 className="text-xl font-bold text-white">Frame Information</h3>
-            <button 
-              onClick={() => onClose()}
-              className="text-[#A0A0A0] hover:text-white transition-colors p-2 hover:bg-[#3D3D3D] rounded-lg"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
         </div>
         
@@ -252,7 +246,6 @@ export function FrameInfoDialog({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </DarkModal>
   );
 }
