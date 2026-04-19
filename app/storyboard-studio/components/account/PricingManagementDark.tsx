@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   Image,
   Film,
+  Music,
   Check,
   Circle,
   Key,
@@ -695,11 +696,13 @@ export default function PricingManagementDark() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
-                    model.modelType === 'image' 
-                      ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
+                    model.modelType === 'audio'
+                      ? 'bg-purple-500/20 text-purple-400 border-purple-500/40'
+                      : model.modelType === 'image'
+                      ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40'
                       : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
                   }`}>
-                    {model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
+                    {model.modelType === 'audio' ? <Music className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
                     <span className="font-medium">{model.modelType}</span>
                   </span>
                 </td>
@@ -812,11 +815,13 @@ export default function PricingManagementDark() {
                 <div className="flex items-center justify-between">
                   <span className="text-(--text-secondary) text-sm">Type</span>
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
-                    model.modelType === 'image' 
-                      ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40' 
+                    model.modelType === 'audio'
+                      ? 'bg-purple-500/20 text-purple-400 border-purple-500/40'
+                      : model.modelType === 'image'
+                      ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40'
                       : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
                   }`}>
-                    {model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
+                    {model.modelType === 'audio' ? <Music className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
                     <span className="font-medium">{model.modelType}</span>
                   </span>
                 </div>

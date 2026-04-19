@@ -2064,7 +2064,7 @@ export default defineSchema({
   storyboard_model_credit: defineTable({
     modelId: v.string(),                    // "nano-banana-2", "seedance-1.5-pro"
     modelName: v.string(),                  // "Nano Banana 2", "Seedance 1.5 Pro"
-    modelType: v.union(v.literal("image"), v.literal("video")),
+    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio")),
     isActive: v.boolean(),                   // true = available, false = disabled
     pricingType: v.union(v.literal("fixed"), v.literal("formula")),
     

@@ -310,3 +310,39 @@ export async function generateInfinitalkFromAudio(params: {
   const data = await res.json();
   return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }
+
+export async function generateMusic(params: {
+  prompt: string;
+  style?: string;
+  title?: string;
+  instrumental?: boolean;
+  model?: "V4" | "V5";
+  negativeTags?: string;
+  vocalGender?: "m" | "f";
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  // Music API uses /api/v1/generate (different from /api/v1/jobs/createTask)
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      prompt: params.prompt,
+      customMode: true,
+      instrumental: params.instrumental ?? true,
+      model: params.model || "V4",
+      callBackUrl: params.callbackUrl,
+      ...(params.style && { style: params.style }),
+      ...(params.title && { title: params.title }),
+      ...(params.negativeTags && { negativeTags: params.negativeTags }),
+      ...(params.vocalGender && !params.instrumental && { vocalGender: params.vocalGender }),
+    }),
+  });
+  if (!res.ok) throw new Error(`Music API error: ${await res.text()}`);
+  const data = await res.json();
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}

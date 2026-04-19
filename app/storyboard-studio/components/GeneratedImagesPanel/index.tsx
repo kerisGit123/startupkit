@@ -164,7 +164,7 @@ export function GeneratedImagesPanel({
           id: String(file._id),
           url: file.sourceUrl || "",
           thumbnail: file.sourceUrl || "",
-          fileType: file.fileType as 'image' | 'video',
+          fileType: file.fileType as 'image' | 'video' | 'audio',
           metadata: {
             timestamp: new Date(file.createdAt ?? Date.now()),
             model: file.model || file.metadata?.model || file.filename || 'Unknown',

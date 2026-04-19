@@ -70,7 +70,9 @@
       "Bash(do ls:*)",
       "Bash(sort -k2)",
       "Bash(xargs wc:*)",
-      "Bash(ls -1 /d/gemini/startupkit/app/api/*/route.ts)"
+      "Bash(ls -1 /d/gemini/startupkit/app/api/*/route.ts)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)"
     ],
     "additionalDirectories": [
       "d:\\gemini\\startupkit\\.next"

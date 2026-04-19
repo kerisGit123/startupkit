@@ -27,19 +27,22 @@
 
 ### **⚫ **Primary & Neutral Colors**
 ```css
-/* Backgrounds */
---bg-primary: #1A1A1A;      /* Main app background */
---bg-secondary: #2C2C2C;    /* Cards, panels, and secondary surfaces */
---bg-tertiary: #3D3D3D;     /* UI controls, borders, hover states */
+/* Backgrounds — ultra-dark blacks inspired by ImagineArt */
+--bg-primary: #0A0A0E;      /* Main app background (near pure black, cool undertone) */
+--bg-secondary: #141418;    /* Cards, panels, sidebar (barely lifted from black) */
+--bg-tertiary: #1E1E24;     /* UI controls, input fields, hover states */
+--bg-elevated: #1A1A1E;     /* Modals, dropdowns, elevated surfaces */
+--bg-surface: #222228;      /* Upload zones, active input areas, code blocks */
 
 /* Text */
---text-primary: #FFFFFF;       /* Primary text, headings */
---text-secondary: #A0A0A0;     /* Secondary text, labels, descriptions */
---text-tertiary: #6E6E6E;      /* Tertiary text, placeholders, disabled states */
+--text-primary: #EAEAEA;       /* Primary text, headings (soft white, not harsh) */
+--text-secondary: #8A8A8A;     /* Secondary text, labels, descriptions */
+--text-tertiary: #5A5A5A;      /* Tertiary text, placeholders, disabled states */
 
-/* Borders */
---border-primary: #3D3D3D;     /* Default border color */
---border-secondary: #4A4A4A;   /* Subtle borders */
+/* Borders — ultra-subtle, barely visible */
+--border-primary: #1F1F25;     /* Default border (blends into background) */
+--border-secondary: #2A2A32;   /* Stronger borders, dividers, card outlines */
+--border-hover: #3A3A45;       /* Hover state borders, focus rings */
 ```
 
 ### **🔵 **Accent Colors**
@@ -52,10 +55,13 @@
 --accent-teal: #4A9E8E;         /* Secondary buttons or highlights */
 --accent-teal-hover: #378B7C;   /* Hover state for teal elements */
 
+/* Credit / Gold Accent */
+--accent-gold: #FAAD14;         /* Credit balance, premium indicators */
+
 /* Semantic Colors */
---color-success: #52C41A;       /* Success messages, confirmation */
---color-warning: #FAAD14;       /* Warnings, alerts */
---color-error: #FF4D4F;         /* Error messages, destructive actions */
+--color-success: #52C41A;       /* Success messages, credits earned, confirmation */
+--color-warning: #FAAD14;       /* Warnings, alerts, transfers */
+--color-error: #FF4D4F;         /* Error messages, credits used, destructive actions */
 ```
 
 ---

@@ -113,10 +113,17 @@ export function NotificationBellDark() {
                     n.read ? "opacity-50" : ""
                   }`}
                 >
-                  {/* Unread dot */}
+                  {/* Color-coded dot — LTX palette */}
                   <div className="mt-1.5 shrink-0">
                     {!n.read ? (
-                      <div className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                      <div className={`w-1.5 h-1.5 rounded-full`} style={{
+                        backgroundColor:
+                          n.type === 'credit_usage' || n.type === 'subscription_canceled' ? '#FF4D4F'
+                          : n.type === 'credit_purchase' || n.type === 'credit_reward' ? '#52C41A'
+                          : n.type === 'new_subscription' ? '#4A90E2'
+                          : n.type === 'transfer' ? '#FAAD14'
+                          : '#8B5CF6'
+                      }} />
                     ) : (
                       <div className="w-1.5 h-1.5" />
                     )}
@@ -124,7 +131,14 @@ export function NotificationBellDark() {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-xs font-medium text-white truncate">{n.title}</span>
+                      <span className="text-xs font-medium truncate" style={{
+                        color:
+                          n.type === 'credit_usage' || n.type === 'subscription_canceled' ? '#FF4D4F'
+                          : n.type === 'credit_purchase' || n.type === 'credit_reward' ? '#52C41A'
+                          : n.type === 'new_subscription' ? '#4A90E2'
+                          : n.type === 'transfer' ? '#FAAD14'
+                          : '#FFFFFF'
+                      }}>{n.title}</span>
                       <span className="text-[10px] text-gray-500 shrink-0 ml-2">{formatTimeAgo(n.time)}</span>
                     </div>
                     <p className="text-[11px] text-gray-400 truncate">{n.description}</p>

@@ -50,6 +50,7 @@
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.0.0",
     "lucide-react": "^0.562.0",
+    "mp4-muxer": "^5.2.2",
     "next": "^16.1.6",
     "nodemailer": "^8.0.1",
     "openai": "^6.29.0",

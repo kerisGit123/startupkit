@@ -15,7 +15,7 @@ export interface PricingModel {
   _id?: string;
   modelId: string;
   modelName: string;
-  modelType: "image" | "video";
+  modelType: "image" | "video" | "audio";
   isActive: boolean;
   pricingType: "fixed" | "formula";
   creditCost?: number;
@@ -631,6 +631,24 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
           "720p": 12,
         },
         max_duration: 15,
+      },
+    }),
+  },
+  {
+    modelId: "ai-music-api/generate",
+    modelName: "AI Music Generator",
+    modelType: "audio",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 12,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 12,
+        factor: 1.2,
+        charged: 15,
+        note: "Generates up to 4 minutes of music (2 variations) per request. KIE AI cost: 12 credits.",
       },
     }),
   },

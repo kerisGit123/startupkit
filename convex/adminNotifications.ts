@@ -65,16 +65,21 @@ export const getNotifications = query({
     for (const purchase of purchases) {
       const purchaseId = purchase._id.toString();
       const isPaid = purchase.amountPaid && purchase.amountPaid > 0;
-      const title = isPaid 
-        ? `Credit Purchase - ${purchase.tokens} credits`
-        : `Credit Reward - ${purchase.tokens} credits`;
-      const description = isPaid 
+      const absTokens = Math.abs(purchase.tokens);
+      const isPositive = purchase.tokens > 0;
+      const title = isPaid
+        ? `Credit Purchase +${absTokens}`
+        : isPositive
+        ? `Credit Earned +${absTokens}`
+        : `Credit Used ${absTokens}`;
+      const description = isPaid
         ? `MYR ${purchase.amountPaid}`
-        : "Referral/Signup Bonus";
-      
+        : isPositive ? "Referral/Signup Bonus" : purchase.reason || "AI Generation";
+      const type = isPaid ? "credit_purchase" : isPositive ? "credit_reward" : "credit_usage";
+
       notifications.push({
         id: purchaseId,
-        type: isPaid ? "credit_purchase" : "credit_reward",
+        type,
         title,
         description,
         time: purchase.createdAt,

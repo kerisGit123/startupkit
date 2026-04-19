@@ -591,6 +591,24 @@ const DEFAULT_PRICING_MODELS = [
       },
     }),
   },
+  {
+    modelId: "ai-music-api/generate",
+    modelName: "AI Music Generator",
+    modelType: "audio",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 12,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 12,
+        factor: 1.2,
+        charged: 15,
+        note: "Generates up to 4 minutes of music (2 variations) per request. KIE AI cost: 12 credits.",
+      },
+    }),
+  },
 ];
 
 // Reset all pricing models to factory defaults (clears everything and re-seeds)

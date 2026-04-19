@@ -10,6 +10,8 @@ function getResultUrl(data: any): string | undefined {
     'response array': Array.isArray(data) ? data.length + ' items' : 'not array',
     'data.data?.resultUrl': data?.data?.resultUrl,
     'data.data?.videoUrl': data?.data?.videoUrl,
+    'data.data?.audioUrl': data?.data?.audioUrl,
+    'data.data?.audio_url': data?.data?.audio_url,
     'data.data?.sourceUrl': data?.data?.sourceUrl,
     'data.data?.result?.videoUrl': data?.data?.result?.videoUrl,
     'data.data?.result?.resultUrl': data?.data?.result?.resultUrl,
@@ -18,23 +20,38 @@ function getResultUrl(data: any): string | undefined {
     'data.data?.resultJson': data?.data?.resultJson ? 'exists' : 'missing',
     'data.data?.info': data?.data?.info ? 'exists' : 'missing'
   });
+
+  // Handle music/audio API responses
+  if (data?.data?.audioUrl) {
+    console.log('[kie-callback] Found audioUrl in data.data.audioUrl');
+    return data.data.audioUrl;
+  }
+  if (data?.data?.audio_url) {
+    console.log('[kie-callback] Found audio_url in data.data.audio_url');
+    return data.data.audio_url;
+  }
   
-  // Check if the video URL is in the top-level response array (Veo 3.1 specific)
+  // Check if the URL is in the top-level response array (Veo 3.1, Suno music)
   if (Array.isArray(data) && data.length > 0) {
-    console.log('[kie-callback] Checking response array for video URL:', data);
-    // Look for URL patterns in the response array
+    console.log('[kie-callback] Checking response array for media URL:', data);
     for (const item of data) {
-      if (typeof item === 'string' && item.includes('.mp4')) {
-        console.log('[kie-callback] Found video URL in response array:', item);
+      if (typeof item === 'string' && item.match(/\.(mp4|mp3|wav|webm|mov|ogg|m4a)(\?|$)/i)) {
+        console.log('[kie-callback] Found media URL in response array:', item);
         return item;
       }
-      // Check if item is an object with URL property
       if (typeof item === 'object' && item !== null) {
-        const possibleUrl = item.url || item.videoUrl || item.sourceUrl || item.resultUrl;
-        if (possibleUrl && typeof possibleUrl === 'string' && possibleUrl.includes('.mp4')) {
-          console.log('[kie-callback] Found video URL in response object:', possibleUrl);
+        const possibleUrl = item.url || item.videoUrl || item.audioUrl || item.sourceUrl || item.resultUrl;
+        if (possibleUrl && typeof possibleUrl === 'string' && possibleUrl.match(/\.(mp4|mp3|wav|webm|mov|ogg|m4a)(\?|$)/i)) {
+          console.log('[kie-callback] Found media URL in response object:', possibleUrl);
           return possibleUrl;
         }
+      }
+    }
+    // Fallback: if array contains any string URLs, take the first one
+    for (const item of data) {
+      if (typeof item === 'string' && item.startsWith('http')) {
+        console.log('[kie-callback] Found URL string in response array (fallback):', item);
+        return item;
       }
     }
   }
@@ -367,6 +384,64 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // If we have a result URL but no state (e.g. music API returns bare array of URLs), treat as success
+    if (!state && resultUrl) {
+      console.log('[kie-callback] No state field but resultUrl found — treating as success');
+      state = 'success';
+    }
+
+    // Handle multiple result URLs (e.g. Suno music returns 2 songs per request)
+    // Save additional URLs as separate storyboard_files records (0 credits — already paid)
+    if (state === 'success' && Array.isArray(data) && data.length > 1) {
+      const extraUrls = data.filter((item: any) => typeof item === 'string' && item.startsWith('http')).slice(1); // skip first (handled by main flow)
+      if (extraUrls.length > 0) {
+        console.log(`[kie-callback] Found ${extraUrls.length} additional result URLs, creating extra file records`);
+        const originalFileRecord = await convex.query(api.storyboard.storyboardFiles.getById, { id: fileId });
+
+        for (let i = 0; i < extraUrls.length; i++) {
+          const extraUrl = extraUrls[i];
+          try {
+            const extraResponse = await fetch(extraUrl);
+            if (!extraResponse.ok) continue;
+            const extraBlob = await extraResponse.blob();
+            const extraMime = extraBlob.type || 'audio/mpeg';
+            const extraExt = extraUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'mp3';
+            const extraCompanyId = originalFileRecord?.companyId ?? 'unknown';
+            const extraR2Key = `${extraCompanyId}/generated/ai-music-${Date.now()}-v${i + 2}.${extraExt}`;
+
+            await uploadToR2(extraBlob, extraR2Key);
+            const extraPublicUrl = getR2PublicUrl(extraR2Key);
+
+            // Create a new file record with 0 credits (already charged on the first one)
+            await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
+              companyId: extraCompanyId,
+              userId: originalFileRecord?.uploadedBy || '',
+              projectId: originalFileRecord?.projectId,
+              category: 'generated',
+              filename: `ai-music-${Date.now()}-v${i + 2}.${extraExt}`,
+              fileType: 'audio',
+              mimeType: extraMime,
+              size: extraBlob.size,
+              status: 'completed',
+              creditsUsed: 0, // No extra charge — already paid
+              categoryId: originalFileRecord?.categoryId,
+              sourceUrl: extraPublicUrl,
+              r2Key: extraR2Key,
+              tags: [],
+              uploadedBy: originalFileRecord?.uploadedBy || '',
+              model: originalFileRecord?.model || 'ai-music-api/generate',
+              prompt: originalFileRecord?.prompt || '',
+              aspectRatio: undefined,
+            });
+
+            console.log(`[kie-callback] Extra audio ${i + 2} saved:`, { r2Key: extraR2Key, sizeMB: (extraBlob.size / (1024 * 1024)).toFixed(2) });
+          } catch (extraErr) {
+            console.error(`[kie-callback] Failed to save extra audio ${i + 2}:`, extraErr);
+          }
+        }
+      }
+    }
+
     if (state === 'success' && resultUrl) {
       const fileRecord = await convex.query(api.storyboard.storyboardFiles.getById, {
         id: fileId,
@@ -384,14 +459,23 @@ export async function POST(request: NextRequest) {
       const timestamp = Date.now();
       const generationMetadata = fileRecord?.metadata ?? {};
       const isVideo = fileRecord?.fileType === 'video' || mimeType.startsWith('video/') || resultUrl.match(/\.(mp4|webm|mov)(\?|$)/i);
+      const isAudio = fileRecord?.fileType === 'audio' || mimeType.startsWith('audio/') || resultUrl.match(/\.(mp3|wav|m4a|ogg|aac)(\?|$)/i);
 
-      console.log('[kie-callback] File type detection:', { fileType: fileRecord?.fileType, mimeType, isVideo, resultUrl: resultUrl.substring(0, 80) });
+      console.log('[kie-callback] File type detection:', { fileType: fileRecord?.fileType, mimeType, isVideo, isAudio, resultUrl: resultUrl.substring(0, 80) });
 
       let finalR2Key: string;
       let finalUrl: string | undefined;
       let fileSizeBytes: number;
 
-      if (isVideo) {
+      if (isAudio) {
+        // ── AUDIO: Save directly to {companyId}/generated/ as .mp3 ──
+        const audioExt = mimeType.includes('wav') ? 'wav' : mimeType.includes('ogg') ? 'ogg' : mimeType.includes('m4a') ? 'm4a' : 'mp3';
+        finalR2Key = `${companyId}/generated/${fileRecord?.filename || `audio-${timestamp}.${audioExt}`}`;
+        await uploadToR2(sourceBlob, finalR2Key);
+        finalUrl = getR2PublicUrl(finalR2Key);
+        fileSizeBytes = sourceBlob.size;
+        console.log('[kie-callback] Audio saved directly:', { r2Key: finalR2Key, sizeMB: (fileSizeBytes / (1024 * 1024)).toFixed(2) });
+      } else if (isVideo) {
         // ── VIDEO: Save directly to {companyId}/generated/ as .mp4 ──
         const videoExt = mimeType.includes('webm') ? 'webm' : mimeType.includes('mov') ? 'mov' : 'mp4';
         finalR2Key = `${companyId}/generated/${fileRecord?.filename || `video-${timestamp}.${videoExt}`}`;

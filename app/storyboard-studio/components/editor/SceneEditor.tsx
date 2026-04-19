@@ -5848,6 +5848,111 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               throw apiError;
                             }
 
+                          } else if (aiModel === "ai-music-api/generate") {
+                            console.log("Using AI Music API format...");
+
+                            // Parse quality param: "music_instrumental_Cinematic_V4_none"
+                            const musicParts = quality.split('_');
+                            const isInstrumental = musicParts[1] === 'instrumental';
+                            const musicStyleParam = musicParts[2] !== 'any' ? musicParts[2] : undefined;
+                            const musicModelVersion = (musicParts[3] || 'V4') as "V4" | "V5";
+                            const musicVocalGender = musicParts[4] !== 'none' ? musicParts[4] as "m" | "f" : undefined;
+
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `ai-music-${Date.now()}.mp3`,
+                              fileType: "audio",
+                              mimeType: "audio/mpeg",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId,
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              model: aiModel,
+                              prompt: extractedPrompt,
+                              aspectRatio: undefined,
+                              defaultAI: currentDefaultAI as any,
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: "AI Music Generator",
+                                pricingType: "fixed",
+                                quality: quality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: { cropped: false, combined: false, referenceImagesUsed: 0 },
+                                processingTime: 0,
+                                success: false,
+                              },
+                            });
+
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI music generation`,
+                              plan: currentPlan,
+                            });
+
+                            try {
+                              const { generateMusic } = await import("@/lib/storyboard/videoAI");
+                              const result = await generateMusic({
+                                prompt: extractedPrompt,
+                                style: musicStyleParam,
+                                instrumental: isInstrumental,
+                                model: musicModelVersion,
+                                callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                companyId: companyId || "",
+                                ...(musicVocalGender && { vocalGender: musicVocalGender }),
+                              });
+
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({
+                                  companyId: companyId || "",
+                                  tokens: creditsUsed,
+                                  reason: `Refund: Music generation failed (${result.responseCode})`,
+                                });
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "failed",
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                                toast.error(`Music generation failed: ${result.responseMessage || 'Unknown error'}`);
+                                return;
+                              }
+
+                              if (result.taskId) {
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "processing",
+                                  defaultAI: result.raw?.data?.id,
+                                  taskId: result.taskId,
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                              }
+
+                              toast.success(`Music generation started! ${creditsUsed} credits deducted.`);
+                            } catch (apiError) {
+                              console.warn("Music API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: Music API failed`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
+                              throw apiError;
+                            }
+
                           } else if (aiModel === "kling-3.0/motion-control") {
                             console.log("Using Kling 3.0 Motion Control API format...");
 

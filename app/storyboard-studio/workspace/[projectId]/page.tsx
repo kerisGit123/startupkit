@@ -24,6 +24,7 @@ import { DisplayFilters } from "../../components/storyboard/DisplayFilters";
 import { TopNavSearch } from "../../components/dashboard/TopNavSearch";
 import { TopNavFilters } from "../../components/dashboard/TopNavFilters";
 import { CreditBadge } from "../../components/shared/CreditBadge";
+import { VideoEditor } from "../../components/editor/VideoEditor";
 import { parseScriptScenes } from "@/lib/storyboard/sceneParser";
 import type { Shot } from "../../types";
 import { 
@@ -107,9 +108,10 @@ import {
   Briefcase, 
   Menu,
   Check,
+  Film,
 } from "lucide-react";
 
-type Tab = "script" | "storyboard" | "table";
+type Tab = "script" | "storyboard" | "table" | "video";
 
 export default function StoryboardWorkspacePage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -975,11 +977,11 @@ export default function StoryboardWorkspacePage() {
         <div className="flex items-center gap-2">
           {/* Tab switcher */}
           <div className="flex bg-(--bg-tertiary) rounded-xl p-0.5 gap-0.5 border border-(--border-primary)">
-            {(["script", "storyboard", "table"] as Tab[]).map((t) => (
+            {(["script", "storyboard", "table", "video"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
                   ${tab === t ? "bg-teal-600 text-white shadow-lg" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary)"}`}>
-                {t === "script" ? <FileText className="w-3.5 h-3.5" /> : t === "table" ? <List className="w-3.5 h-3.5" /> : <Grid3x3 className="w-3.5 h-3.5" />}
+                {t === "script" ? <FileText className="w-3.5 h-3.5" /> : t === "table" ? <List className="w-3.5 h-3.5" /> : t === "video" ? <Film className="w-3.5 h-3.5" /> : <Grid3x3 className="w-3.5 h-3.5" />}
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
@@ -1769,6 +1771,8 @@ export default function StoryboardWorkspacePage() {
             )}
           </div>
         )}
+
+        {/* ── Video Tab (full-screen, hides workspace header) ── */}
       </div>
       {showElementLibrary && (
         <ElementLibrary
@@ -2012,6 +2016,13 @@ export default function StoryboardWorkspacePage() {
           console.log("Build started successfully!");
         }}
       />
+
+      {/* Video Editor — full-screen overlay */}
+      {tab === "video" && (
+        <div className="fixed inset-0 z-[100]">
+          <VideoEditor projectId={pid} onClose={() => setTab("storyboard")} projectName={project?.name} />
+        </div>
+      )}
     </div>
   );
 }
@@ -2959,6 +2970,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           }}
         />
       )}
+
     </div>
   );
 }

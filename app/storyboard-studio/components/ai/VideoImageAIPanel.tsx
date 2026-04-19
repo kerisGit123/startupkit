@@ -8,7 +8,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -233,7 +233,7 @@ export function ImageAIPanel({
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [showPromptActions, setShowPromptActions] = useState(false);
-  const [outputMode, setOutputMode] = useState<"image" | "video">("image");
+  const [outputMode, setOutputMode] = useState<"image" | "video" | "music">("image");
   const createTemplate = useMutation(api.promptTemplates.create);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const deductCredits = useMutation(api.credits.deductCredits);
@@ -347,6 +347,7 @@ export function ImageAIPanel({
     { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7 },
     { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • MP4, MOV, WEBM, M4V, GIF", icon: ArrowUp, maxReferenceImages: 0 },
     { value: "infinitalk/from-audio", label: "InfiniteTalk", sub: "Lip sync • image + audio • 480p/720p", icon: Mic, maxReferenceImages: 1 },
+    { value: "ai-music-api/generate", label: "AI Music", sub: "Generate music • up to 4min", icon: Music, maxReferenceImages: 0 },
   ];
   // Combine all models for the consolidated dropdown
   const allModelOptions = [...inpaintModelOptions, ...videoModelOptions];
@@ -427,6 +428,12 @@ export function ImageAIPanel({
   const [topazUpscaleFactor, setTopazUpscaleFactor] = useState<"1" | "2" | "4">("2"); // Topaz Video Upscale factor
   const [infinitalkResolution, setInfinitalkResolution] = useState<"480p" | "720p">("480p"); // InfiniteTalk: resolution
   const [infinitalkAudioUrl, setInfinitalkAudioUrl] = useState<string>(""); // InfiniteTalk: audio URL
+  const [musicInstrumental, setMusicInstrumental] = useState(true); // Music: instrumental only (no vocals)
+  const [musicStyle, setMusicStyle] = useState(""); // Music: genre/style tag
+  const [musicVocalGender, setMusicVocalGender] = useState<"m" | "f">("f"); // Music: vocal gender
+  const [musicModel, setMusicModel] = useState<"V4" | "V5">("V4"); // Music: model version
+  const [musicNegativeTags, setMusicNegativeTags] = useState(""); // Music: styles to exclude
+  const [showMusicStyleDropdown, setShowMusicStyleDropdown] = useState(false); // Music: style dropdown
   const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("video"); // Kling: default video orient
   const [klingSource, setKlingSource] = useState<"input_video" | "input_image">("input_video"); // Kling: background source
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null); // Seedance 2.0: first frame
@@ -583,10 +590,15 @@ export function ImageAIPanel({
         console.log("[VideoImageAIPanel] InfiniteTalk pricing:", { infinitalkResolution, itDur, params, itCredits });
         return itCredits;
       })()
+    : selectedModelOption.value === "ai-music-api/generate"
+    ? (() => {
+        const musicCredits = getModelCredits("ai-music-api/generate", "fixed");
+        return musicCredits > 0 ? musicCredits : 15;
+      })()
     : selectedModelOption.value === "z-image"
     ? (() => {
         const credits = getModelCredits("z-image", "fixed");
-        return credits > 0 ? credits : 1; // Fallback to 1 credit if DB not loaded
+        return credits > 0 ? credits : 1;
       })()
     : credits;
 
@@ -1591,6 +1603,8 @@ export function ImageAIPanel({
             ? `${topazUpscaleFactor}_${videoRefs.length > 0 ? videoRefs[0].duration : 0}s`
             : selectedModelOption.value === "infinitalk/from-audio"
             ? `${infinitalkResolution}_${audioRefs.length > 0 ? audioRefs[0].duration : parseInt(videoDuration.replace('s', '')) || 5}s`
+            : selectedModelOption.value === "ai-music-api/generate"
+            ? `music_${musicInstrumental ? 'instrumental' : 'vocal'}_${musicStyle || 'any'}_${musicModel}_${musicInstrumental ? 'none' : musicVocalGender}`
             : `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}`
           : resolution;
         
@@ -1826,7 +1840,7 @@ export function ImageAIPanel({
         )}
 
         {/* Reference Images Panel — hidden for text-only models like z-image and Topaz Video Upscale (video-only) */}
-        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && (
+        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && (
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
@@ -2333,6 +2347,30 @@ export function ImageAIPanel({
 
         {/* Main Panel */}
         <div className="bg-[#0a0a0f]/98 backdrop-blur-md rounded-2xl border border-white/10">
+          {/* Lyrics format guide — only when Music + Vocals mode */}
+          {selectedModelOption.value === "ai-music-api/generate" && !musicInstrumental && (
+            <div className="px-[10px] pt-[10px] pb-0">
+              <details className="group">
+                <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-purple-400 hover:text-purple-300 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="1.5"/><path strokeLinecap="round" strokeWidth="1.5" d="M12 16v-4m0-4h.01"/></svg>
+                  <span>How to write lyrics — click to see format guide</span>
+                </summary>
+                <div className="mt-2 p-3 bg-[#141418] border border-[#2A2A32] rounded-lg text-[11px] text-gray-400 leading-relaxed">
+                  <p className="text-[#EAEAEA] font-medium mb-1.5">Use section tags to structure your song:</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                    <span><span className="text-purple-400">[Verse]</span> — Storytelling, softer delivery</span>
+                    <span><span className="text-purple-400">[Chorus]</span> — Catchy, louder, repeated hook</span>
+                    <span><span className="text-purple-400">[Bridge]</span> — Transition, contrast moment</span>
+                    <span><span className="text-purple-400">[Outro]</span> — Fade out / ending</span>
+                  </div>
+                  <p className="mt-2 text-gray-500 border-t border-[#2A2A32] pt-2">
+                    Example: <span className="text-purple-400">[Verse 1]</span> Walking through the city lights / Every shadow tells a story <span className="text-purple-400">[Chorus]</span> We are the midnight runners / Chasing stars across the sky
+                  </p>
+                </div>
+              </details>
+            </div>
+          )}
+
           {/* User Prompt Area — hidden for Topaz Video Upscale (no prompt needed) */}
           {mode !== "describe" || selectedModelOption.value === "topaz/video-upscale" ? null : (
             <div className="px-[10px] pt-[10px] pb-0">
@@ -2341,7 +2379,13 @@ export function ImageAIPanel({
                 <PromptTextarea
                   editorRef={editorRef}
                   editorIsEmpty={editorIsEmpty}
-                  placeholder="Describe your element... drag & drop reference images here"
+                  placeholder={
+                    selectedModelOption.value === "ai-music-api/generate"
+                      ? musicInstrumental
+                        ? "Describe the music mood, tempo, instruments... e.g. calm piano with soft melodies, 80bpm"
+                        : "Write your lyrics here... use [Verse], [Chorus], [Bridge] to structure"
+                      : "Describe your element... drag & drop reference images here"
+                  }
                   minHeight={TEXTAREA_MIN_HEIGHT}
                   maxHeight={TEXTAREA_MAX_HEIGHT}
                   onInput={handleEditorInput}
@@ -2764,8 +2808,8 @@ export function ImageAIPanel({
             {/* Spacer to push model and generate to right */}
             <div className="flex-1" />
 
-            {/* Aspect Ratio Select Box - Hide for Kling Motion, Topaz Video Upscale, and InfiniteTalk */}
-            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && (
+            {/* Aspect Ratio Select Box - Hide for Kling Motion, Topaz Video Upscale, InfiniteTalk, and Music */}
+            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && (
             <div className="relative" style={{ width: "80px" }}>
               <button
                 onClick={() => setShowAspectRatioDropdown(!showAspectRatioDropdown)}
@@ -2819,9 +2863,10 @@ export function ImageAIPanel({
                     {selectedModelOption?.icon && <selectedModelOption.icon className="w-4 h-4" />}
                     <span>{selectedModelOption?.label || "Nano Banana 2"}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded ${
-                      outputMode === "image" ? "bg-cyan-500/20 text-cyan-300" : "bg-green-500/20 text-green-300"
+                      selectedModelOption.value === "ai-music-api/generate" ? "bg-purple-500/20 text-purple-300"
+                      : outputMode === "image" ? "bg-cyan-500/20 text-cyan-300" : "bg-green-500/20 text-green-300"
                     }`}>
-                      {outputMode === "image" ? "Image" : "Video"}
+                      {selectedModelOption.value === "ai-music-api/generate" ? "Music" : outputMode === "image" ? "Image" : "Video"}
                     </span>
                   </div>
                   <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
@@ -2835,7 +2880,8 @@ export function ImageAIPanel({
                           key={modelOption.value}
                           onClick={() => {
                             // Determine the output mode based on model type
-                            const modelOutputMode = videoModelOptions.some(m => m.value === modelOption.value) ? "video" : "image";
+                            const modelOutputMode = modelOption.value === "ai-music-api/generate" ? "music" as const
+                              : videoModelOptions.some(m => m.value === modelOption.value) ? "video" as const : "image" as const;
                             
                             // Switch output mode if different
                             if (modelOutputMode !== outputMode) {
@@ -2899,11 +2945,13 @@ export function ImageAIPanel({
                             </div>
                             <div className="flex items-center gap-2">
                               <span className={`text-[10px] px-2 py-0.5 rounded ${
-                                videoModelOptions.some(m => m.value === modelOption.value) 
-                                  ? "bg-green-500/20 text-green-300" 
+                                modelOption.value === "ai-music-api/generate"
+                                  ? "bg-purple-500/20 text-purple-300"
+                                  : videoModelOptions.some(m => m.value === modelOption.value)
+                                  ? "bg-green-500/20 text-green-300"
                                   : "bg-cyan-500/20 text-cyan-300"
                               }`}>
-                                {videoModelOptions.some(m => m.value === modelOption.value) ? "Video" : "Image"}
+                                {modelOption.value === "ai-music-api/generate" ? "Music" : videoModelOptions.some(m => m.value === modelOption.value) ? "Video" : "Image"}
                               </span>
                             </div>
                           </div>
@@ -2919,7 +2967,7 @@ export function ImageAIPanel({
             )}
 
             {/* Resolution Select Box - Hide for Veo 3.1, Z-Image, Topaz Video Upscale, and InfiniteTalk */}
-            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && (
+            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowResolutionDropdown(!showResolutionDropdown)}
@@ -3051,8 +3099,88 @@ export function ImageAIPanel({
             )}
 
 
+            {/* AI Music: Instrumental / Vocals toggle */}
+            {selectedModelOption.value === "ai-music-api/generate" && (
+              <button
+                onClick={() => setMusicInstrumental(!musicInstrumental)}
+                className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors ${
+                  musicInstrumental
+                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                    : 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                }`}
+              >
+                <Music className="w-3.5 h-3.5" />
+                <span>{musicInstrumental ? "Instrumental" : "Vocals"}</span>
+              </button>
+            )}
+
+            {/* AI Music: Vocal Gender — only when vocals enabled */}
+            {selectedModelOption.value === "ai-music-api/generate" && !musicInstrumental && (
+              <button
+                onClick={() => setMusicVocalGender(musicVocalGender === "f" ? "m" : "f")}
+                className="px-3 py-2 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#EAEAEA] flex items-center gap-1.5 hover:bg-[#2A2A35] transition-colors"
+              >
+                <span>{musicVocalGender === "f" ? "♀ Female" : "♂ Male"}</span>
+              </button>
+            )}
+
+            {/* AI Music: Style/Genre selector — custom dropdown */}
+            {selectedModelOption.value === "ai-music-api/generate" && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowMusicStyleDropdown(!showMusicStyleDropdown)}
+                  className="px-3 py-2 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#EAEAEA] flex items-center gap-1.5 hover:bg-[#2A2A35] transition-colors"
+                  style={{ width: "110px" }}
+                >
+                  <span className="flex-1 text-left truncate">{musicStyle || "Any Style"}</span>
+                  <ChevronDown className="w-3 h-3 text-gray-400" />
+                </button>
+                {showMusicStyleDropdown && (
+                  <div className="absolute bottom-full left-0 mb-1 w-[140px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
+                    {[
+                      { value: "", label: "Any Style" },
+                      { value: "Cinematic", label: "Cinematic" },
+                      { value: "Electronic", label: "Electronic" },
+                      { value: "Lo-fi", label: "Lo-fi" },
+                      { value: "Ambient", label: "Ambient" },
+                      { value: "Jazz", label: "Jazz" },
+                      { value: "Rock", label: "Rock" },
+                      { value: "Classical", label: "Classical" },
+                      { value: "Pop", label: "Pop" },
+                      { value: "Hip Hop", label: "Hip Hop" },
+                      { value: "R&B", label: "R&B" },
+                      { value: "Country", label: "Country" },
+                      { value: "Folk", label: "Folk" },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setMusicStyle(opt.value); setShowMusicStyleDropdown(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-[13px] transition-colors ${
+                          musicStyle === opt.value
+                            ? 'bg-[#4A90E2]/15 text-[#4A90E2]'
+                            : 'text-[#EAEAEA] hover:bg-[#1E1E24]'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* AI Music: Model version */}
+            {selectedModelOption.value === "ai-music-api/generate" && (
+              <button
+                onClick={() => setMusicModel(musicModel === "V4" ? "V5" : "V4")}
+                className="px-3 py-2 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#EAEAEA] hover:bg-[#2A2A35] transition-colors"
+              >
+                {musicModel}
+              </button>
+            )}
+
             {/* Video Duration Select Box - Hide for Veo 3.1, Kling Motion, Topaz Video Upscale, and InfiniteTalk */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && (
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale", "infinitalk/from-audio", "ai-music-api/generate"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "100px" }}>
                 <button
                   onClick={() => setShowVideoDurationDropdown(!showVideoDurationDropdown)}

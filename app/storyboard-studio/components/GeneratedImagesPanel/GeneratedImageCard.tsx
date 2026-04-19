@@ -27,7 +27,7 @@ interface GeneratedImageCard {
   metadata: GeneratedImageMetadata;
   status: 'processing' | 'completed' | 'error';
   isFavorite: boolean;
-  fileType?: 'image' | 'video'; // Add fileType to distinguish between images and videos
+  fileType?: 'image' | 'video' | 'audio'; // Add fileType to distinguish between images, videos, and audio
 }
 
 interface GeneratedImageCardProps {
@@ -151,7 +151,7 @@ export function GeneratedImageCard({
       // Fallback to direct link
       const link = document.createElement('a');
       link.href = image.url;
-      link.download = `${image.metadata.model}-${image.id}.${image.fileType === 'video' ? 'mp4' : 'png'}`;
+      link.download = `${image.metadata.model}-${image.id}.${image.fileType === 'video' ? 'mp4' : image.fileType === 'audio' ? 'mp3' : 'png'}`;
       link.target = '_blank'; // Open in new tab as fallback
       document.body.appendChild(link);
       link.click();
@@ -171,7 +171,30 @@ export function GeneratedImageCard({
             className="relative w-full h-full cursor-pointer group"
             onClick={handleImageClick}
           >
-            {image.fileType === 'video' ? (
+            {image.fileType === 'audio' ? (
+              // Audio card with waveform-style display
+              <>
+                <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-[#141418] flex flex-col items-center justify-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+                  </div>
+                  <span className="text-[10px] text-purple-300 font-medium">{image.metadata.model || 'AI Music'}</span>
+                </div>
+                {/* Audio player */}
+                <div className="absolute bottom-0 left-0 right-0 px-2 pb-2">
+                  <audio src={image.url} controls className="w-full h-7" style={{ filter: 'invert(1) hue-rotate(180deg)', opacity: 0.7 }} />
+                </div>
+                {/* AI + MUSIC badges */}
+                <div className="absolute top-2 left-2 flex items-center gap-1">
+                  <div className="bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
+                    AI
+                  </div>
+                  <div className="bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
+                    MUSIC
+                  </div>
+                </div>
+              </>
+            ) : image.fileType === 'video' ? (
               // Video thumbnail with overlay
               <>
                 <video
@@ -186,7 +209,7 @@ export function GeneratedImageCard({
                 />
                 {/* Dark overlay for better text visibility */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                
+
                 {/* Video overlay removed — hover actions handled below */}
 
                 {/* AI + Video badges — top left */}
@@ -198,7 +221,7 @@ export function GeneratedImageCard({
                     VIDEO
                   </div>
                 </div>
-                
+
                 {/* Duration indicator */}
                 <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
                   {image.metadata.parameters?.duration ? `${image.metadata.parameters.duration}s` : '4s'}
@@ -350,7 +373,22 @@ export function GeneratedImageCard({
         {/* Hover Actions (only for completed images) */}
         {image.status === 'completed' && (
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            {image.fileType === 'video' ? (
+            {image.fileType === 'audio' ? (
+              // Audio: Show play (handled by embedded player), download, copy prompt, delete
+              <>
+                <button onClick={handleDownload} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Download audio">
+                  <Download className="w-4 h-4 text-white" />
+                </button>
+                {prompt && (
+                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy prompt">
+                    <FileText className="w-4 h-4 text-white" />
+                  </button>
+                )}
+                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete audio">
+                  <Trash2 className="w-4 h-4 text-white" />
+                </button>
+              </>
+            ) : image.fileType === 'video' ? (
               // Video: Show play, download, copy prompt, and delete buttons
               <>
                 <button onClick={handleImageClick} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Play video">
