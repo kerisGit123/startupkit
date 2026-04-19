@@ -699,9 +699,7 @@ export default function StoryboardWorkspacePage() {
         return;
       }
       
-      // ✅ Use global getCurrentCompanyId function
-      const frontendCompanyId = getCurrentCompanyId(user);
-      console.log(`[Build Storyboard Frontend] Using companyId: "${frontendCompanyId}"`);
+      const frontendCompanyId = currentCompanyId;
       
       let result;
       if (config.buildType === "enhanced") {
@@ -1968,7 +1966,7 @@ export default function StoryboardWorkspacePage() {
           projectId={pid}
           userId={user?.id}
           user={user}
-          userCompanyId={getCurrentCompanyId(user)}
+          userCompanyId={currentCompanyId}
           onNavigateToShot={(shotId) => {
             const targetItem = (items || []).find(item => item._id === shotId);
             if (targetItem) {

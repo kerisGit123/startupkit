@@ -157,13 +157,13 @@ export default function PricingPage() {
                 {isCurrentPlan ? (
                   <div className="space-y-2">
                     <Link
-                      href="/dashboard/billing"
+                      href="/storyboard-studio"
                       className="w-full py-2.5 px-6 rounded-xl font-medium transition-all bg-gray-100 text-gray-700 hover:bg-gray-200 block text-center text-sm"
                     >
                       Manage Subscription
                     </Link>
                     <Link
-                      href="/dashboard/billing"
+                      href="/storyboard-studio"
                       className="w-full py-2 px-6 rounded-xl font-medium transition-colors text-red-500 hover:text-red-600 block text-center text-xs"
                     >
                       Cancel Plan

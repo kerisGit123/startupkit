@@ -31,7 +31,8 @@ export interface PricingModel {
     | "getNanoBananaPrice"
     | "getGptImagePrice"
     | "getVeo31"
-    | "getGrokImageToVideo";
+    | "getGrokImageToVideo"
+    | "getInfinitalkFromAudio";
   createdAt?: number;
   updatedAt?: number;
 }
@@ -302,6 +303,32 @@ export function getGrokImageToVideo(
   const resolutionCosts: Record<string, number> = {
     "480p": 1.6, "480P": 1.6,
     "720p": 3, "720P": 3,
+  };
+
+  const costPerSecond = resolutionCosts[resolution] || base;
+  return Math.ceil(costPerSecond * duration * multiplier);
+}
+
+/**
+ * InfiniteTalk From-Audio lip sync pricing.
+ * Per-second pricing based on resolution.
+ *
+ * Formula: resolution_cost × duration_seconds × factor
+ *
+ * Pricing: 3 credits/s for 480p, 12 credits/s for 720p
+ * Examples (factor=1.2):
+ *   480p, 10s → 3 × 10 × 1.2 = 36 credits
+ *   720p, 10s → 12 × 10 × 1.2 = 144 credits
+ */
+export function getInfinitalkFromAudio(
+  base: number,
+  multiplier: number,
+  resolution: string,
+  duration: number
+): number {
+  const resolutionCosts: Record<string, number> = {
+    "480p": 3, "480P": 3,
+    "720p": 12, "720P": 12,
   };
 
   const costPerSecond = resolutionCosts[resolution] || base;
@@ -583,6 +610,27 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
           "720p": { video_input: 20, no_video: 33 },
         },
         duration_rule: "total_duration = input_duration + output_duration",
+      },
+    }),
+  },
+  {
+    modelId: "infinitalk/from-audio",
+    modelName: "InfiniteTalk From Audio",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getInfinitalkFromAudio",
+    creditCost: 3,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "credits_per_second",
+        base_cost: 3,
+        resolutions: {
+          "480p": 3,
+          "720p": 12,
+        },
+        max_duration: 15,
       },
     }),
   },

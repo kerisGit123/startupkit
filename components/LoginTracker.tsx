@@ -12,26 +12,19 @@ export function LoginTracker() {
 
   useEffect(() => {
     const trackUserLogin = async () => {
-      console.log("LoginTracker: useEffect triggered", { isLoaded, hasUser: !!user, hasTracked: hasTracked.current });
-      
       if (!isLoaded) {
-        console.log("LoginTracker: User not loaded yet");
         return;
       }
       
       if (!user) {
-        console.log("LoginTracker: No user found");
         return;
       }
       
       if (hasTracked.current) {
-        console.log("LoginTracker: Already tracked this session");
         return;
       }
 
       try {
-        console.log("LoginTracker: Starting to track login for user:", user.id);
-        
         // Track login and sync user data from Clerk
         const syncResult = await trackLogin({
           clerkUserId: user.id,
@@ -55,7 +48,6 @@ export function LoginTracker() {
         }
 
         hasTracked.current = true;
-        console.log("✅ Login tracked successfully!", syncResult);
       } catch (error) {
         console.error("❌ Failed to track login:", error);
       }

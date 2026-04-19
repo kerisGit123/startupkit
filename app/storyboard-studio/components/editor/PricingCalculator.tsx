@@ -89,6 +89,12 @@ export function PricingCalculatorComponent({ modelId, onCostCalculated, disabled
               }
               break;
               
+            case 'getInfinitalkFromAudio': {
+              const itCosts: Record<string, number> = { "480p": 3, "720p": 12 };
+              const itCostPerSec = itCosts[resolution] || base;
+              calculatedCost = Math.ceil(itCostPerSec * duration * factor);
+              break;
+            }
             default:
               calculatedCost = Math.ceil((model.creditCost || 0) * (model.factor || 1));
           }

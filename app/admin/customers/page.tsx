@@ -242,7 +242,7 @@ export default function CustomersPage() {
                 {filteredCustomers.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((customer) => (
                   <div
                     key={customer._id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    className="flex items-center justify-between p-4 border border-border/40 rounded-lg hover:bg-muted/50 transition-all"
                   >
                     <div className="flex items-start gap-4 flex-1">
                       <div className={`p-2 rounded-lg ${customer.customerType === "saas" ? "bg-blue-100" : "bg-emerald-100"}`}>

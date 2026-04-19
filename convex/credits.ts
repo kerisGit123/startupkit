@@ -19,8 +19,6 @@ import { mutation, query } from "./_generated/server";
  *   refund           Credits added back via refund.
  *   transfer_out     Credits sent to another owned org (paired with transfer_in).
  *   transfer_in      Credits received from another owned org (paired with transfer_out).
- *   donation_out     Credits donated to a gallery file owner.
- *   donation_in      Credits received from a gallery donation.
  *   admin_adjustment Manual support tweak — EXCLUDED from ownership derivation.
  *
  * Ownership of a company is derived by getCompanyCreator:
@@ -39,8 +37,6 @@ const LedgerTypeValidator = v.union(
   v.literal("refund"),
   v.literal("transfer_out"),
   v.literal("transfer_in"),
-  v.literal("donation_out"),    // Credits donated to a gallery file owner
-  v.literal("donation_in"),     // Credits received from a gallery donation
   v.literal("admin_adjustment"),
 );
 

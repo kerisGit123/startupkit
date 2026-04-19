@@ -14,17 +14,12 @@ export function AlertBanner() {
   );
   const dismissAlert = useMutation(api.alerts.dismissAlert);
 
-  // Debug logging
-  console.log("AlertBanner - Current user ID:", user?.id);
-  console.log("AlertBanner - Alerts received:", alerts);
-
   const handleDismiss = async (alertId: string) => {
     if (!user?.id) return;
     await dismissAlert({ alertId: alertId as any, userId: user.id });
   };
 
   if (!alerts || alerts.length === 0) {
-    console.log("AlertBanner - No alerts to display");
     return null;
   }
 

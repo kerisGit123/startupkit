@@ -570,6 +570,27 @@ const DEFAULT_PRICING_MODELS = [
       },
     }),
   },
+  {
+    modelId: "infinitalk/from-audio",
+    modelName: "InfiniteTalk From Audio",
+    modelType: "video",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getInfinitalkFromAudio" as const,
+    creditCost: 3,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "credits_per_second",
+        base_cost: 3,
+        resolutions: {
+          "480p": 3,
+          "720p": 12,
+        },
+        max_duration: 15,
+      },
+    }),
+  },
 ];
 
 // Reset all pricing models to factory defaults (clears everything and re-seeds)

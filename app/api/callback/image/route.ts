@@ -54,14 +54,12 @@ export async function POST(req: NextRequest) {
         generationStatus: "completed",
       });
 
-      console.log("[image callback] Success:", { taskId, publicUrl, companyId });
     } else if (status === "failed") {
       await convex.mutation(api.storyboard.storyboardItems.updateByTaskId, {
         taskId,
         generationStatus: "failed",
       });
       
-      console.log("[image callback] Failed:", taskId);
     }
 
     return NextResponse.json({ received: true });

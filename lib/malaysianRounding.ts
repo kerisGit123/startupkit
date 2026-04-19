@@ -108,21 +108,3 @@ export function calculateTotalsWithRounding(
     needsRounding: roundingResult.needsRounding,
   };
 }
-
-/**
- * Test examples for Malaysian rounding
- * Uncomment to verify implementation
- */
-/*
-console.log("Malaysian Rounding Test Cases:");
-console.log("82.01 →", applyMalaysianRounding(82.01)); // Should be 82.00
-console.log("82.02 →", applyMalaysianRounding(82.02)); // Should be 82.00
-console.log("82.03 →", applyMalaysianRounding(82.03)); // Should be 82.05
-console.log("82.04 →", applyMalaysianRounding(82.04)); // Should be 82.05
-console.log("82.05 →", applyMalaysianRounding(82.05)); // Should be 82.05 (no change)
-console.log("82.06 →", applyMalaysianRounding(82.06)); // Should be 82.05
-console.log("82.07 →", applyMalaysianRounding(82.07)); // Should be 82.05
-console.log("82.08 →", applyMalaysianRounding(82.08)); // Should be 82.10
-console.log("82.09 →", applyMalaysianRounding(82.09)); // Should be 82.10
-console.log("82.10 →", applyMalaysianRounding(82.10)); // Should be 82.10 (no change)
-*/

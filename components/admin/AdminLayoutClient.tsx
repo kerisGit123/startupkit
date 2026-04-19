@@ -86,7 +86,7 @@ export default function AdminLayoutClient({
       <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4" suppressHydrationWarning>
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border/40 px-4" suppressHydrationWarning>
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           
@@ -116,7 +116,7 @@ export default function AdminLayoutClient({
               <input
                 type="text"
                 placeholder="Search..."
-                className="w-44 pl-8 pr-3 py-1.5 bg-muted/50 border border-border rounded-md text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring transition-all"
+                className="w-44 pl-8 pr-3 py-1.5 bg-muted/50 border border-border/40 rounded-md text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring focus:border-ring transition-all"
               />
             </div>
             <PanelSwitcher />

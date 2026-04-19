@@ -95,7 +95,6 @@ export async function handleKieResponse(params: {
       tokens: params.creditsUsed,
       reason: `AI Generation Failed (${responseCode}) - ${responseMessage || params.modelName || "Unknown"}`,
     });
-    console.log(`[handleKieResponse] Refunded ${params.creditsUsed} credits for failed generation (code: ${responseCode})`);
   }
 
   // Update file record with response info + zero out creditsUsed if refunded

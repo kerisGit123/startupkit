@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download, FileText, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { getResponseCodeInfo, getResponseCodeColor } from "@/lib/storyboard/kieResponse";
+import { FileContextMenu, getTagColor } from "../shared/FileContextMenu";
 
 // Types
 interface GeneratedImageMetadata {
@@ -37,6 +38,7 @@ interface GeneratedImageCardProps {
   onRetry: (image: GeneratedImageCard) => void;
   onCompare: (image: GeneratedImageCard) => void;
   onShare?: (image: GeneratedImageCard) => void;
+  onUnshare?: (image: GeneratedImageCard) => void;
   isShared?: boolean;
   r2Key?: string;
   category?: string;
@@ -45,6 +47,10 @@ interface GeneratedImageCardProps {
   responseMessage?: string;
   creditsUsed?: number;
   prompt?: string;
+  tags?: string[];
+  onTagToggle?: (tag: string) => void;
+  size?: number;
+  categoryId?: string;
 }
 
 // Helper function to format relative time
@@ -78,9 +84,27 @@ export function GeneratedImageCard({
   responseMessage,
   creditsUsed,
   prompt,
+  tags = [],
+  onTagToggle,
+  onUnshare,
+  size,
+  categoryId,
 }: GeneratedImageCardProps) {
   const [showVideoDialog, setShowVideoDialog] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const structuredTags = tags.filter(t => t.includes(":"));
+
+  // Eligibility: tags and share/unshare only for category=generated, categoryId not empty, size>0
+  const isEligible = category === "generated" && !!categoryId && (size ?? 0) > 0;
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (image.status !== "completed" || !onTagToggle || !isEligible) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
   
   const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -136,7 +160,10 @@ export function GeneratedImageCard({
   };
 
   return (
-    <div className="group relative bg-[#1A1A1A] rounded-xl border border-[#3D3D3D] overflow-hidden transition-all hover:border-[#4A90E2] hover:shadow-lg">
+    <div
+      className="group relative bg-[#1A1A1A] rounded-xl border border-[#3D3D3D] overflow-hidden transition-all hover:border-[#4A90E2] hover:shadow-lg"
+      onContextMenu={handleContextMenu}
+    >
       {/* Image Container */}
       <div className="relative h-[100px] bg-[#0A0A0A]">
         {image.status === 'completed' && image.thumbnail ? (
@@ -294,12 +321,29 @@ export function GeneratedImageCard({
           </div>
         )}
         
-        {/* Shared indicator — top-right, small icon so it doesn't cover the AI badge */}
-        {isShared && image.status === 'completed' && (
-          <div className="absolute top-1.5 right-1.5 z-10">
-            <div className="w-5 h-5 rounded-full bg-green-600/90 flex items-center justify-center" title="Shared to Gallery">
-              <Share2 className="w-3 h-3 text-white" />
-            </div>
+        {/* Top-right: tag badges + shared indicator */}
+        {image.status === 'completed' && (structuredTags.length > 0 || isShared) && (
+          <div className="absolute top-1.5 right-1.5 z-10 flex flex-col items-end gap-1">
+            {isShared && (
+              <div className="w-5 h-5 rounded-full bg-green-600/90 flex items-center justify-center" title="Shared to Gallery">
+                <Share2 className="w-3 h-3 text-white" />
+              </div>
+            )}
+            {structuredTags.map(tag => {
+              const parts = tag.split(":");
+              const category = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+              const sub = parts[1] ? parts[1].split("-").map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ") : "";
+              return (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold backdrop-blur-sm shadow-sm"
+                  style={{ backgroundColor: `${getTagColor(tag)}CC`, color: "#fff" }}
+                  title={`${category}: ${sub}`}
+                >
+                  {sub}
+                </span>
+              );
+            })}
           </div>
         )}
 
@@ -320,17 +364,6 @@ export function GeneratedImageCard({
                     <FileText className="w-4 h-4 text-white" />
                   </button>
                 )}
-                {onShare && r2Key && category !== "combine" && (
-                  isShared ? (
-                    <button disabled className="p-2 bg-white/10 rounded-lg cursor-default" title="Already shared">
-                      <Share2 className="w-4 h-4 text-gray-500" />
-                    </button>
-                  ) : (
-                    <button onClick={() => onShare(image)} className="p-2 bg-green-500/80 rounded-lg hover:bg-green-500" title="Share to Gallery">
-                      <Share2 className="w-4 h-4 text-white" />
-                    </button>
-                  )
-                )}
                 <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete video">
                   <Trash2 className="w-4 h-4 text-white" />
                 </button>
@@ -349,17 +382,6 @@ export function GeneratedImageCard({
                   <button onClick={() => navigator.clipboard.writeText(fileId || image.id)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy file ID">
                     <Copy className="w-4 h-4 text-white" />
                   </button>
-                )}
-                {onShare && r2Key && category !== "combine" && (
-                  isShared ? (
-                    <button disabled className="p-2 bg-white/10 rounded-lg cursor-default" title="Already shared">
-                      <Share2 className="w-4 h-4 text-gray-500" />
-                    </button>
-                  ) : (
-                    <button onClick={() => onShare(image)} className="p-2 bg-green-500/80 rounded-lg hover:bg-green-500" title="Share to Gallery">
-                      <Share2 className="w-4 h-4 text-white" />
-                    </button>
-                  )
                 )}
                 <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete">
                   <Trash2 className="w-4 h-4 text-white" />
@@ -428,6 +450,22 @@ export function GeneratedImageCard({
         </div>
       )}
       
+
+      {/* Tag + Share Context Menu */}
+      {contextMenu && onTagToggle && (
+        <FileContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          fileId={fileId}
+          currentTags={tags}
+          onTagToggle={onTagToggle}
+          onClose={() => setContextMenu(null)}
+          isShared={isShared}
+          onShare={onShare && r2Key ? () => onShare(image) : undefined}
+          onUnshare={onUnshare ? () => onUnshare(image) : undefined}
+        />
+      )}
+
       {/* Image Preview Popup — rendered via portal to escape panel overflow */}
       {showImagePreview && image.fileType !== 'video' && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }}

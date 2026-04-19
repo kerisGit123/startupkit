@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
-import { ClerkProvider } from "@clerk/nextjs";
-import { dark } from "@clerk/ui/themes";
 import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { SidebarNav } from "./components/dashboard/SidebarNav";
 import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
+import { ChatWidget } from "@/components/ChatWidget";
+import { useUser } from "@clerk/nextjs";
 import type { Project } from "./types";
 import "./globals.css";
 
@@ -19,9 +19,11 @@ export default function StoryboardStudioLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { user } = useUser();
   const orgId = useCurrentCompanyId() || "personal";
   const hideStudioSidebar = pathname?.startsWith("/storyboard-studio/projects") ||
     pathname?.startsWith("/storyboard-studio/workspace");
+  const showChatWidget = !pathname?.startsWith("/storyboard-studio/workspace");
 
   const [showSettings, setShowSettings] = useState(false);
   const [activeNav, setActiveNav] = useState("projects");
@@ -54,39 +56,34 @@ export default function StoryboardStudioLayout({
   })) ?? [];
 
   return (
-    <ClerkProvider 
-      dynamic
-      appearance={{
-        theme: dark,
-      }}
-    >
-      <div className="flex h-screen bg-(--bg-primary) overflow-hidden">
-        <StoryboardStudioUIProvider
-          value={{
-            activeNav,
-            setActiveNav,
-            sidebarOpen,
-            setSidebarOpen,
-            sidebarProjects,
-            openNewEpisode: () => {},
-            openStoryManager: () => {},
-          }}
-        >
-          {!hideStudioSidebar && (
-            <SidebarNav
-              open={sidebarOpen}
-              activeNav={activeNav}
-              onNavChange={setActiveNav}
-              projects={sidebarProjects}
-              onOpenSettings={() => setShowSettings(true)}
-            />
-          )}
+    <div className="flex h-screen bg-(--bg-primary) overflow-hidden">
+      <StoryboardStudioUIProvider
+        value={{
+          activeNav,
+          setActiveNav,
+          sidebarOpen,
+          setSidebarOpen,
+          sidebarProjects,
+          openNewEpisode: () => {},
+          openStoryManager: () => {},
+        }}
+      >
+        {!hideStudioSidebar && (
+          <SidebarNav
+            open={sidebarOpen}
+            activeNav={activeNav}
+            onNavChange={setActiveNav}
+            projects={sidebarProjects}
+            onOpenSettings={() => setShowSettings(true)}
+          />
+        )}
 
-          <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
+        <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
 
-          <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
-        </StoryboardStudioUIProvider>
-      </div>
-    </ClerkProvider>
+        <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
+      </StoryboardStudioUIProvider>
+
+      {showChatWidget && <ChatWidget type="user_panel" userId={user?.id} />}
+    </div>
   );
 }

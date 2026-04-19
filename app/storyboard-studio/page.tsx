@@ -20,6 +20,7 @@ import { MembersPage }        from "./components/pages/MembersPage";
 import { TestingPage }        from "./components/pages/TestingPage";
 import { GalleryPage }        from "./components/gallery/GalleryPage";
 import { LapsedBanner }       from "./components/pages/LapsedBanner";
+import { AlertBannerDark }    from "./components/shared/AlertBannerDark";
 import { UsageDashboard }     from "./components/pages/UsageDashboard";
 import { FileBrowser } from "./components/ai/FileBrowser";
 import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
@@ -28,6 +29,8 @@ import BillingSubscriptionPage from "./components/account/BillingSubscriptionPag
 import SupportPage from "./components/account/SupportPage";
 import LogsPage from "./components/account/LogsPage";
 import AdminPage from "./components/account/AdminPage";
+import InvoicesPage from "./components/account/InvoicesPage";
+import ReferralsPage from "./components/account/ReferralsPage";
 
 export default function StoryboardPage() {
   const router = useRouter();
@@ -36,9 +39,8 @@ export default function StoryboardPage() {
   const { plan: currentPlan } = useSubscription();
   const { activeNav, setActiveNav, sidebarOpen, setSidebarOpen } = useStoryboardStudioUI();
 
-  // ✅ Use global getCurrentCompanyId function
-  const companyId = getCurrentCompanyId(user);
   const currentCompanyId = useCurrentCompanyId();
+  const companyId = currentCompanyId;
   const orgId = currentCompanyId || "personal";
 
   // ── Convex project data ─────────────────────────────────────────────────────
@@ -81,15 +83,7 @@ export default function StoryboardPage() {
   // Update shots when Convex data loads
   useEffect(() => {
     if (storyboardItems) {
-      console.log("Convex raw data:", storyboardItems);
-      console.log("First item fields:", storyboardItems[0] ? Object.keys(storyboardItems[0]) : 'no items');
-      
       setShots(storyboardItems.map(item => {
-        console.log("Mapping item:", item);
-        console.log("Item fields:", Object.keys(item));
-        console.log("imagePrompt:", item.imagePrompt);
-        console.log("videoPrompt:", item.videoPrompt);
-        
         return {
           id: item._id,
           scene: item.scene || 1,
@@ -233,7 +227,6 @@ export default function StoryboardPage() {
         status: "ready",
       });
       
-      console.log(`[Files Upload] Uploaded to global: ${file.name}`);
     } catch (err) {
       console.error("[Files Upload Error]", err);
     } finally {
@@ -298,6 +291,8 @@ export default function StoryboardPage() {
     if (activeNav === "members") setCurrentStep("members");
     if (activeNav === "gallery") setCurrentStep("gallery");
     if (activeNav === "testing") setCurrentStep("testing");
+    if (activeNav === "invoices") setCurrentStep("invoices");
+    if (activeNav === "referrals") setCurrentStep("referrals");
 
     if (
       activeNav.startsWith("tag:") ||
@@ -345,7 +340,6 @@ export default function StoryboardPage() {
   const handleDeleteConvexProject = async (id: string) => {
     try {
       await removeConvexProject({ id: id as Parameters<typeof removeConvexProject>[0]["id"] });
-      console.log(`[delete project] Successfully deleted project: ${id}`);
     } catch (err) {
       console.error("[delete project]", err);
       
@@ -372,7 +366,6 @@ export default function StoryboardPage() {
         id: id as any,
         imageUrl: ""
       });
-      console.log("ImageUrl unset successfully from project");
     } catch (error) {
       console.error("Failed to unset ImageUrl:", error);
     }
@@ -427,7 +420,9 @@ export default function StoryboardPage() {
       currentStep === "billing" ||
       currentStep === "support" ||
       currentStep === "logs" ||
-      currentStep === "cleaning"
+      currentStep === "cleaning" ||
+      currentStep === "invoices" ||
+      currentStep === "referrals"
     ) return null;
     const crumbs: { label: string; step: Step }[] = [
       { label: "Projects", step: "dashboard" },
@@ -661,6 +656,20 @@ export default function StoryboardPage() {
 
         {currentStep === "testing" && (
           <TestingPage
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "invoices" && (
+          <InvoicesPage
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "referrals" && (
+          <ReferralsPage
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />

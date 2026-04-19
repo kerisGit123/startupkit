@@ -44,7 +44,6 @@ export async function storeFileMetadata(params: {
       tags: params.tags || [],
     });
     
-    console.log(`✅ File metadata stored: ${params.filename} -> ${result.fileId}`);
     return result;
   } catch (error) {
     console.error(`❌ Failed to store file metadata:`, error);
@@ -73,7 +72,6 @@ export async function updateFileMetadata(params: {
   try {
     const result = await convex.mutation(api.storyboard.fileMetadataHandler.updateFileMetadata, params);
     
-    console.log(`✅ File metadata updated: ${params.fileId}`);
     return result;
   } catch (error) {
     console.error(`❌ Failed to update file metadata:`, error);
@@ -93,7 +91,6 @@ export async function deleteFileMetadata(params: {
   try {
     const result = await convex.mutation(api.storyboard.fileMetadataHandler.deleteFileMetadata, params);
     
-    console.log(`✅ File metadata deleted: ${params.fileId}`);
     return result;
   } catch (error) {
     console.error(`❌ Failed to delete file metadata:`, error);
@@ -115,7 +112,6 @@ export async function logFileUsage(params: {
   try {
     const result = await convex.mutation(api.storyboard.fileMetadataHandler.logFileUsage, params);
     
-    console.log(`✅ File usage logged: ${params.usageType}`);
     return result;
   } catch (error) {
     console.error(`❌ Failed to log file usage:`, error);

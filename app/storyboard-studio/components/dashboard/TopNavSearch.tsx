@@ -8,7 +8,7 @@ interface TopNavSearchProps {
 
 export function TopNavSearch({ 
   onSearch, 
-  placeholder = "Search projects, tags, status..." 
+  placeholder = "Search projects, tags, status...  (Ctrl+K)"
 }: TopNavSearchProps) {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
@@ -86,13 +86,6 @@ export function TopNavSearch({
           </button>
         )}
       </div>
-      
-      {/* Keyboard shortcut hint */}
-      {!query && !isFocused && (
-        <div className="absolute -bottom-6 left-0 text-xs text-gray-500">
-          Ctrl+K
-        </div>
-      )}
     </div>
   );
 }

@@ -157,7 +157,7 @@ export async function sendWelcomeEmail(to: string, username: string): Promise<Se
           Thank you for signing up! We're excited to have you on board.
         </p>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" 
+          <a href="${process.env.NEXT_PUBLIC_APP_URL}/storyboard-studio" 
              style="background-color: #5469d4; color: white; padding: 14px 28px; 
                     text-decoration: none; border-radius: 4px; display: inline-block;">
             Get Started
@@ -226,7 +226,7 @@ export async function sendPaymentNotification(to: string, subject: string, messa
         <h2 style="color: #333;">${subject}</h2>
         <p style="color: #666; font-size: 16px; line-height: 1.6;">${message}</p>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/billing" style="background-color: #5469d4; color: white; padding: 14px 28px; text-decoration: none; border-radius: 4px; display: inline-block;">View Billing</a>
+          <a href="${process.env.NEXT_PUBLIC_APP_URL}/storyboard-studio" style="background-color: #5469d4; color: white; padding: 14px 28px; text-decoration: none; border-radius: 4px; display: inline-block;">View Billing</a>
         </div>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="color: #999; font-size: 12px;">This is an automated notification from ${fromName}.</p>
@@ -250,7 +250,7 @@ export async function sendUsageAlert(to: string, subject: string, message: strin
         <h2 style="color: #ff9800;">${subject}</h2>
         <p style="color: #666; font-size: 16px; line-height: 1.6;">${message}</p>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" style="background-color: #5469d4; color: white; padding: 14px 28px; text-decoration: none; border-radius: 4px; display: inline-block;">View Dashboard</a>
+          <a href="${process.env.NEXT_PUBLIC_APP_URL}/storyboard-studio" style="background-color: #5469d4; color: white; padding: 14px 28px; text-decoration: none; border-radius: 4px; display: inline-block;">View Dashboard</a>
         </div>
         <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
         <p style="color: #999; font-size: 12px;">This is an automated alert from ${fromName}.</p>

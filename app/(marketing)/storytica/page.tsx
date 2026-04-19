@@ -8,8 +8,9 @@ import {
   Minus, Plus, Layers, Zap, MessageSquare,
   Image, Camera, Brush, Box, User, Building2,
 } from "lucide-react";
-import { PricingTable } from "@clerk/nextjs";
+import { PricingTable, useUser } from "@clerk/nextjs";
 import { dark } from "@clerk/ui/themes";
+import { ChatWidget } from "@/components/ChatWidget";
 
 /* ─── reveal ─────────────────────────────────────────────────────────── */
 function useRv(t = 0.1) {
@@ -45,6 +46,7 @@ function Faq({ q, a }: { q: string; a: string }) {
 
 /* ═════════════════════════════════════════════════════════════════════ */
 export default function StorticaLanding() {
+  const { user } = useUser();
   const [nav, setNav] = useState(false);
   const [ready, setReady] = useState(false);
   const [pricingMode, setPricingMode] = useState<"personal" | "organization">("personal");
@@ -443,6 +445,8 @@ export default function StorticaLanding() {
           </div>
         </div>
       </footer>
+
+      <ChatWidget type="frontend" userId={user?.id} />
     </div>
   );
 }

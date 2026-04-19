@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     // Model B: ALL inflows land in the user's personal workspace.
     const depositCompanyId = userId;
 
-    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard?success=true`;
+    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/storyboard-studio?success=true`;
     const cancelUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/pricing?canceled=true`;
 
     const session = await stripe.checkout.sessions.create({

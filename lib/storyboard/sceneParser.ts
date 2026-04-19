@@ -148,9 +148,6 @@ export function parseScriptScenes(content: string): SceneParseResult {
     warnings.push(`Found ${duplicates.length} duplicate scene(s): ${duplicates.map(d => `Scene ${d.sceneNumber}`).join(', ')}`);
   }
 
-  console.log(`[parseScriptScenes] Parsed ${uniqueScenes.length} unique scenes from ${scenes.length} total matches`);
-  console.log(`[parseScriptScenes] Duplicates found:`, duplicates);
-  
   return {
     scenes: uniqueScenes,
     duplicates,

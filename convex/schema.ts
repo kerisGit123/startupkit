@@ -516,8 +516,6 @@ export default defineSchema({
         v.literal("refund"),           // Credits added back (refund)
         v.literal("transfer_out"),     // Sent to another owned org
         v.literal("transfer_in"),      // Received from another owned org
-        v.literal("donation_out"),     // Credits donated to gallery file owner
-        v.literal("donation_in"),      // Credits received from gallery donation
         v.literal("admin_adjustment"), // Manual support adjustment (excluded from ownership)
       ),
     ),
@@ -1932,10 +1930,11 @@ export default defineSchema({
     isShared: v.optional(v.boolean()),        // true = visible in community gallery (permanent)
     sharedAt: v.optional(v.number()),         // timestamp when shared
     sharedBy: v.optional(v.string()),         // userId who shared it
-    thumbsUp: v.optional(v.number()),         // thumbs up count
-    thumbsDown: v.optional(v.number()),       // thumbs down count
-    totalDonations: v.optional(v.number()),   // total credits received via gallery donations
-  })
+    // Deprecated — kept for backwards compatibility with existing data
+    thumbsUp: v.optional(v.number()),
+    thumbsDown: v.optional(v.number()),
+    totalDonations: v.optional(v.number()),
+})
     .index("by_project", ["projectId"])
     .index("by_category", ["projectId", "category"])
     .index("by_r2Key", ["r2Key"])
@@ -1945,32 +1944,6 @@ export default defineSchema({
     .index("by_isShared", ["isShared", "sharedAt"]) // Gallery listing sorted by share date
     .index("by_isShared_model", ["isShared", "model"]), // Gallery filter by model
 
-  // ============================================
-  // STORYBOARD STUDIO: Gallery Ratings (one vote per user per file)
-  // ============================================
-  storyboard_gallery_ratings: defineTable({
-    fileId: v.id("storyboard_files"),
-    userId: v.string(),
-    rating: v.union(v.literal("up"), v.literal("down")),
-    createdAt: v.number(),
-  })
-    .index("by_file_user", ["fileId", "userId"])
-    .index("by_fileId", ["fileId"]),
-
-  // ============================================
-  // STORYBOARD STUDIO: Gallery Donations (credit tips to file owners)
-  // ============================================
-  storyboard_gallery_donations: defineTable({
-    fileId: v.id("storyboard_files"),
-    fromCompanyId: v.string(),
-    fromUserId: v.string(),
-    toCompanyId: v.string(),
-    amount: v.number(),
-    createdAt: v.number(),
-  })
-    .index("by_fileId", ["fileId"])
-    .index("by_fromUserId", ["fromUserId"])
-    .index("by_toCompanyId", ["toCompanyId"]),
 
   // ============================================
   // STORYBOARD STUDIO: Elements (LTX-style reusable assets)
@@ -2111,7 +2084,8 @@ export default defineSchema({
       v.literal("getNanoBananaPrice"),
       v.literal("getGptImagePrice"),
       v.literal("getVeo31"),
-      v.literal("getGrokImageToVideo")
+      v.literal("getGrokImageToVideo"),
+      v.literal("getInfinitalkFromAudio")
     )),
     
     createdAt: v.number(),

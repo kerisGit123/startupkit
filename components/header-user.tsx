@@ -57,9 +57,9 @@ export function HeaderUser() {
             <IconSettings className="mr-2 h-4 w-4" />
             <span>Settings</span>
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+          <DropdownMenuItem onClick={() => router.push("/storyboard-studio")}>
             <IconLayoutDashboard className="mr-2 h-4 w-4" />
-            <span>User Dashboard</span>
+            <span>Storyboard Studio</span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

@@ -52,6 +52,8 @@ interface GeneratedImagesPanelProps {
   onImageFavorite: (image: GeneratedImageCard) => void;
   onImageCompare: (image: GeneratedImageCard) => void;
   openSceneImageContextMenu: (event: React.MouseEvent, url: string, title: string, type: string) => void;
+  currentPlan?: string;
+  companyId?: string;
 }
 
 interface FilterState {
@@ -76,7 +78,9 @@ export function GeneratedImagesPanel({
   onImageRetry,
   onImageFavorite,
   onImageCompare,
-  openSceneImageContextMenu
+  openSceneImageContextMenu,
+  currentPlan,
+  companyId,
 }: GeneratedImagesPanelProps) {
   const [filters, setFilters] = useState<FilterState>({
     statuses: [],
@@ -84,6 +88,38 @@ export function GeneratedImagesPanel({
   });
   const [shareCandidate, setShareCandidate] = useState<any>(null);
   const shareFileMutation = useMutation(api.storyboard.gallery.shareFile);
+  const unshareFileMutation = useMutation(api.storyboard.gallery.unshareFile);
+  const updateTagsMutation = useMutation(api.storyboard.storyboardFiles.updateFileTags);
+
+  // Free personal users cannot unshare
+  const isPersonalFree = !companyId?.startsWith("org_") && currentPlan === "free";
+  const canUnshare = !isPersonalFree;
+
+  const handleTagToggle = async (fileId: string, tag: string) => {
+    try {
+      await updateTagsMutation({ fileId: fileId as Id<"storyboard_files">, tag });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update tag");
+    }
+  };
+
+  const handleShare = async (image: any) => {
+    try {
+      await shareFileMutation({ fileId: image.id as Id<"storyboard_files"> });
+      toast.success("File shared to gallery!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to share");
+    }
+  };
+
+  const handleUnshare = async (image: any) => {
+    try {
+      await unshareFileMutation({ fileId: image.id as Id<"storyboard_files"> });
+      toast.success("File unshared from gallery");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to unshare");
+    }
+  };
   
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'comparison'>('grid');
   const [comparisonPair, setComparisonPair] = useState<[string, string] | undefined>();
@@ -98,6 +134,7 @@ export function GeneratedImagesPanel({
       .filter((file) => {
         if (file.category !== "generated" && file.category !== "combine") return false;
         if (String(file.categoryId ?? "") !== String(activeShot.id)) return false;
+        if (file.status === "deleted") return false;
 
         const hasR2Key = Boolean(file.r2Key);
         const isProcessing = file.status === "processing" || file.status === "generating";
@@ -148,7 +185,10 @@ export function GeneratedImagesPanel({
           prompt: file.prompt || file.metadata?.prompt || '',
           isShared: file.isShared || false,
           category: file.category || "generated",
-        } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number; prompt?: string; isShared?: boolean; category?: string };
+          tags: file.tags || [],
+          size: file.size || 0,
+          categoryId: file.categoryId ? String(file.categoryId) : "",
+        } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number; prompt?: string; isShared?: boolean; category?: string; tags?: string[]; size?: number; categoryId?: string };
       });
   }, [activeShot?.id, projectFiles]);
 
@@ -288,7 +328,12 @@ export function GeneratedImagesPanel({
                       isShared={(image as any).isShared}
                       r2Key={(image as any).r2Key}
                       category={(image as any).category}
-                      onShare={(img) => setShareCandidate(img)}
+                      tags={(image as any).tags || []}
+                      size={(image as any).size}
+                      categoryId={(image as any).categoryId}
+                      onTagToggle={(tag) => handleTagToggle(image.id, tag)}
+                      onShare={handleShare}
+                      onUnshare={canUnshare ? handleUnshare : undefined}
                     />
                   ))}
                 </div>

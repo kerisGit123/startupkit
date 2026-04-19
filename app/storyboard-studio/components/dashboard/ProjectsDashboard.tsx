@@ -24,6 +24,7 @@ import { TopNavFilters } from "./TopNavFilters";
 import { CreditBadge } from "../shared/CreditBadge";
 import { DarkModal } from "../shared/DarkModal";
 import { DarkInput, DarkTextarea, DarkSelect } from "../shared/DarkInput";
+import { AlertBannerDark } from "../shared/AlertBannerDark";
 
 type ProjectTagOption = {
   id: string;
@@ -456,6 +457,9 @@ export function ProjectsDashboard({
           </div>
         </div>
       </div>
+
+      {/* System alerts */}
+      <AlertBannerDark />
 
       {/* Main content area */}
       <div className="flex-1 overflow-y-auto p-3 md:p-6">

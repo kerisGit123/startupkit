@@ -26,7 +26,6 @@ export async function resolveKieApiKey(companyId?: string): Promise<{ apiKey: st
       // Step 2: Fetch the KIE AI key record
       const kieRecord = await convex.query(api.storyboard.kieAiConfig.getKeyById, { id: settings.defaultAI });
       if (kieRecord?.apiKey && kieRecord.isActive) {
-        console.log("[resolveKieApiKey] Using database key:", kieRecord.name);
         return { apiKey: kieRecord.apiKey, kieAiId: kieRecord._id };
       }
     }
@@ -34,7 +33,6 @@ export async function resolveKieApiKey(companyId?: string): Promise<{ apiKey: st
     // Step 2b: No defaultAI in org_settings — try the system default key
     const defaultKey = await convex.query(api.storyboard.kieAiConfig.getDefaultKey);
     if (defaultKey?.apiKey && defaultKey.isActive) {
-      console.log("[resolveKieApiKey] Using system default key:", defaultKey.name);
       return { apiKey: defaultKey.apiKey, kieAiId: defaultKey._id };
     }
   } catch (e) {
@@ -83,9 +81,6 @@ async function createPlaceholderRecord(params: {
   }
   
   const result = await convex.mutation(api.storyboard.storyboardFiles.logUpload, uploadData);
-  
-  console.log('[createPlaceholderRecord] Convex result:', result);
-  console.log('[createPlaceholderRecord] FileId:', result.fileId);
   
   return result.fileId;
 }
@@ -165,15 +160,6 @@ export interface TriggerVideoGenerationParams {
 }
 
 export async function triggerVideoGeneration(params: TriggerVideoGenerationParams) {
-  console.log('[triggerVideoGeneration] Called with params:', {
-    model: params.model,
-    aspectRatio: params.aspectRatio,
-    resolution: params.resolution,
-    duration: params.duration,
-    audio: params.audio,
-    referenceImagesCount: params.referenceImages?.length || 0,
-  });
-
   // Initialize Convex client for credit operations
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
   const { api } = await import("../../convex/_generated/api");
@@ -186,8 +172,6 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
     const currentBalance = await convex.query(api.credits.getBalance, {
       companyId: params.companyId,
     });
-
-    console.log('[triggerVideoGeneration] Current balance:', currentBalance, 'Credits needed:', requiredCredits);
 
     if (currentBalance < requiredCredits) {
       throw new Error(
@@ -221,13 +205,11 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
 
   // Step 3: Deduct credits
   if (params.companyId && requiredCredits) {
-    console.log('[triggerVideoGeneration] Deducting credits:', requiredCredits);
     await convex.mutation(api.credits.deductCredits, {
       companyId: params.companyId,
       tokens: requiredCredits,
       reason: `AI Video Generation - ${params.model}`,
     });
-    console.log('[triggerVideoGeneration] Credits deducted successfully');
   }
 
   // Update file status to processing
@@ -256,8 +238,6 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
       nsfw_checker: false,
     },
   };
-
-  console.log('[triggerVideoGeneration] Request body:', JSON.stringify(requestBody, null, 2));
 
   let response: Response;
 
@@ -304,7 +284,6 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
   }
 
   const result = await response.json();
-  console.log('[triggerVideoGeneration] KIE AI response:', result);
 
   // Use centralized response handler
   const { handleKieResponse } = await import("./kieResponse");
@@ -326,20 +305,6 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
 }
 
 export async function triggerImageGeneration(params: TriggerImageGenerationParams) {
-  console.log('[triggerImageGeneration] Called with params:', {
-    ...params,
-    cropX: params.cropX,
-    cropY: params.cropY,
-    cropWidth: params.cropWidth,
-    cropHeight: params.cropHeight,
-    originalImageUrl: params.originalImageUrl,
-    shouldComposite: !!params.originalImageUrl && 
-                    params.cropX !== undefined && 
-                    params.cropY !== undefined && 
-                    params.cropWidth !== undefined && 
-                    params.cropHeight !== undefined
-  });
-
   // Use the provided model or fall back to STYLE_PRESETS
   const actualModel = params.model || STYLE_PRESETS[params.style]?.model;
   // Skip style suffix for models that work better with clean prompts
@@ -355,13 +320,6 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     kieModel = 'gpt-image/1.5-image-to-image';
   }
   
-  console.log('[triggerImageGeneration] Model details:', {
-    providedModel: params.model,
-    style: params.style,
-    actualModel,
-    kieModel,
-    fullPrompt: fullPrompt.substring(0, 100) + '...'
-  });
   const resolution = actualModel === 'nano-banana-2'
     ? (params.quality === "1K" || params.quality === "2K" || params.quality === "4K"
         ? params.quality
@@ -374,29 +332,11 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   const defaultQuality = params.quality === "high" ? "high" : "standard";
   const isImageToImageModel = !!params.imageUrl;
   
-  console.log('[triggerImageGeneration] Model details:', {
-    providedModel: params.model,
-    style: params.style,
-    actualModel,
-    fullPrompt: fullPrompt.substring(0, 100) + '...'
-  });
-  console.log('[triggerImageGeneration] Image URLs:', { 
-    imageUrl: params.imageUrl?.substring(0, 50) + '...', 
-    maskUrl: params.maskUrl?.substring(0, 50) + '...',
-    referenceImageUrls: params.referenceImageUrls?.length 
-  });
-
   // Note: We'll create the file record after getting the taskId from KIE AI
   // This ensures the file record is created with the actual taskId and proper credit tracking
 
   // Step 2: Enhanced KIE AI call with fileId in callback
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-  console.log('[triggerImageGeneration] Environment check:', { 
-    NEXT_PUBLIC_APP_URL: baseUrl,
-    hasEnvVar: !!baseUrl,
-    envVarLength: baseUrl?.length 
-  });
-  
   // Initialize Convex client for server-side operations
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
   const { api } = await import("../../convex/_generated/api");
@@ -404,17 +344,10 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
 
   // Step 1: Check if company has sufficient credits before proceeding
   if (params.companyId && requiredCredits) {
-    console.log('[triggerImageGeneration] Checking credit balance:', {
-      companyId: params.companyId,
-      creditsUsed: requiredCredits
-    });
-    
     // Get current company credit balance
     const currentBalance = await convex.query(api.credits.getBalance, {
       companyId: params.companyId
     });
-    
-    console.log('[triggerImageGeneration] Current balance:', currentBalance, 'Credits needed:', requiredCredits);
     
     if (currentBalance < requiredCredits) {
       console.warn('[triggerImageGeneration] Insufficient credits:', {
@@ -426,15 +359,12 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
       throw new Error(`Insufficient credits. You have ${currentBalance} credits but need ${requiredCredits} credits. Please purchase more credits to continue.`);
     }
     
-    console.log('[triggerImageGeneration] Sufficient credits available, proceeding with generation');
   } else {
     console.warn('[triggerImageGeneration] Missing companyId or creditsUsed, cannot check balance');
   }
 
   // Resolve API key early: need kieAiId for placeholder record
   const { apiKey: resolvedImageKey, kieAiId } = await resolveKieApiKey(params.companyId);
-  console.log('[triggerImageGeneration] Resolved API key:', { hasKey: !!resolvedImageKey, kieAiId });
-
   // Step 2: Create placeholder record
   const createdFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
     companyId: params.companyId,
@@ -472,19 +402,12 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   
   // Step 3: Deduct credits from COMPANY credit balance
   if (params.companyId && requiredCredits) {
-    console.log('[triggerImageGeneration] Deducting credits:', {
-      companyId: params.companyId,
-      creditsUsed: requiredCredits,
-      reason: `AI Image Generation - ${params.categoryId || 'General'}`
-    });
-    
     await convex.mutation(api.credits.deductCredits, {
       companyId: params.companyId,
       tokens: requiredCredits,
       reason: `AI Image Generation - ${params.categoryId || 'General'}`,
     });
     
-    console.log('[triggerImageGeneration] Credits deducted successfully');
   } else {
     console.warn('[triggerImageGeneration] Missing companyId or creditsUsed, skipping deduction');
   }
@@ -495,11 +418,8 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     status: 'processing',
   });
   
-  console.log('[triggerImageGeneration] Created file record:', { fileId: createdFileId });
-  
   // Now create the KIE AI task with the callback URL
   const callbackUrl = params.callbackUrl ?? `${baseUrl}/api/kie-callback?fileId=${createdFileId}`;
-  console.log('[triggerImageGeneration] Using callback URL:', callbackUrl);
   
   // Encode URLs to handle filenames with spaces/special characters
   const encodeUrl = (url?: string) => url ? encodeURI(url).replace(/%25/g, '%') : url;
@@ -573,8 +493,6 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     },
   };
   
-  console.log('[triggerImageGeneration] Sending to KIE AI:', JSON.stringify(requestBody, null, 2));
-
   let res: Response;
 
   try {
@@ -621,7 +539,6 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   }
 
   const data = await res.json();
-  console.log('[triggerImageGeneration] Raw KIE AI response:', JSON.stringify(data, null, 2));
 
   // Use centralized response handler
   const { handleKieResponse } = await import("./kieResponse");
@@ -643,8 +560,6 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     throw new Error("No taskId received from KIE AI");
   }
 
-  console.log('[triggerImageGeneration] Extracted taskId:', taskId);
-
   const result = {
     taskId,
     fileId: createdFileId,
@@ -653,7 +568,6 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     responseMessage,
   };
 
-  console.log('[triggerImageGeneration] Returning result:', result);
   return result;
 }
 

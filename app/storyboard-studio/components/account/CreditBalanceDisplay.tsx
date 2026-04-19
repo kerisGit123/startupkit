@@ -1,54 +1,51 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
-import { Coins, TrendingUp, TrendingDown } from "lucide-react";
+import { Coins } from "lucide-react";
 
 interface CreditBalanceDisplayProps {
   className?: string;
 }
 
+type UsageView = "month" | "today" | "total";
+
+const VIEW_LABELS: Record<UsageView, string> = {
+  month: "This Month",
+  today: "Today",
+  total: "All Time",
+};
+
 export default function CreditBalanceDisplay({ className = "" }: CreditBalanceDisplayProps) {
-  // Get current user's company ID. DO NOT fall back to a literal
-  // "personal" string — that creates orphan rows in credits_balance
-  // unrelated to any real user. Skip queries until companyId is ready.
   const companyId = useCurrentCompanyId() || "";
   const { plan: currentPlan, isLoading: planLoading } = useSubscription();
+  const [usageView, setUsageView] = useState<UsageView>("month");
 
-  // Get credit usage summary (for the "Credits Used" subtitle)
   const summary = useQuery(
     api.credits.getOrgUsageSummary,
     companyId ? { companyId } : "skip",
   );
 
-  // Get current balance from credits_balance table.
-  // Balance is already net of every deductCredits call — DO NOT subtract
-  // usage again (that would double-deduct).
   const balance = useQuery(
     api.credits.getBalance,
     companyId ? { companyId } : "skip",
   );
 
-  // ─ Auto-grant monthly credits on mount ────────────────────────────
-  // If the user's current billing cycle hasn't been granted yet,
-  // trigger the grant now. Idempotent — the mutation itself checks
-  // and no-ops if already granted this cycle.
-  //
-  // This handles the "returning user" case: someone who hasn't logged
-  // in for months will see their monthly credits appear in the balance
-  // the moment they open the app, not only when they click Generate.
+  // Get recent usage for time-filtered views
+  const recentUsage = useQuery(
+    api.credits.listOrgUsage,
+    companyId ? { companyId } : "skip",
+  );
+
   const ensureMonthlyGrant = useMutation(api.credits.ensureMonthlyGrant);
   const grantAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (planLoading || !companyId || !currentPlan) return;
-    // Model B: only auto-grant for PERSONAL workspaces.
-    // Orgs receive credits via Transfer Credits dialog only.
     if (companyId.startsWith("org_")) return;
-    // Only attempt once per (companyId, plan) per component lifetime
     const key = `${companyId}:${currentPlan}`;
     if (grantAttemptedRef.current === key) return;
     grantAttemptedRef.current = key;
@@ -63,24 +60,46 @@ export default function CreditBalanceDisplay({ className = "" }: CreditBalanceDi
   }, [planLoading, companyId, currentPlan, ensureMonthlyGrant]);
 
   const remainingCredits = balance ?? 0;
-
   const isLoading = balance === undefined || summary === undefined;
 
-  // Calculate trend based on usage (if usage increased recently, trend is down)
-  const trend = summary && summary.total > 0 ? "down" : "neutral";
+  // Calculate usage for different time periods
+  const usageAmount = (() => {
+    if (usageView === "total") return summary?.total ?? 0;
+    if (!recentUsage) return 0;
+
+    const now = new Date();
+    let cutoff: number;
+
+    if (usageView === "today") {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      cutoff = startOfDay.getTime();
+    } else {
+      // "month" — start of current month
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      cutoff = startOfMonth.getTime();
+    }
+
+    return recentUsage
+      .filter((r: any) => r._creationTime >= cutoff)
+      .reduce((sum: number, r: any) => sum + Math.abs(r.tokens), 0);
+  })();
+
+  const cycleUsageView = () => {
+    const views: UsageView[] = ["month", "today", "total"];
+    const idx = views.indexOf(usageView);
+    setUsageView(views[(idx + 1) % views.length]);
+  };
 
   if (isLoading) {
     return (
       <div className={`bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-4 ${className}`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-(--bg-tertiary) rounded-full flex items-center justify-center">
-              <Coins className="w-5 h-5 text-(--text-tertiary)" />
-            </div>
-            <div>
-              <p className="text-(--text-tertiary) text-xs">Credit Balance</p>
-              <div className="w-16 h-4 bg-(--bg-tertiary) rounded animate-pulse"></div>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-(--bg-tertiary) rounded-full flex items-center justify-center">
+            <Coins className="w-5 h-5 text-(--text-tertiary)" />
+          </div>
+          <div>
+            <p className="text-(--text-tertiary) text-xs">Credit Balance</p>
+            <div className="w-16 h-4 bg-(--bg-tertiary) rounded animate-pulse"></div>
           </div>
         </div>
       </div>
@@ -89,59 +108,34 @@ export default function CreditBalanceDisplay({ className = "" }: CreditBalanceDi
 
   return (
     <div className={`bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-4 ${className}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-            remainingCredits && remainingCredits > 100 
-              ? 'bg-(--accent-green)/20' 
-              : remainingCredits && remainingCredits > 10 
-              ? 'bg-(--accent-yellow)/20' 
-              : 'bg-(--accent-red)/20'
-          }`}>
-            <Coins className={`w-5 h-5 ${
-              remainingCredits && remainingCredits > 100 
-                ? 'text-(--accent-green)' 
-                : remainingCredits && remainingCredits > 10 
-                ? 'text-(--accent-yellow)' 
-                : 'text-(--accent-red)'
-            }`} />
-          </div>
-          <div>
-            <p className="text-(--text-tertiary) text-xs">Credit Balance</p>
-            <p className="text-xl font-bold text-(--text-primary)">
-              {remainingCredits.toLocaleString()}
-            </p>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-yellow-500/20">
+          <Coins className="w-5 h-5 text-yellow-400" />
         </div>
-        
-        <div className="flex items-center gap-2">
-          {trend && (
-            <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${
-              trend === 'up' 
-                ? 'bg-(--accent-green)/10 text-(--accent-green)' 
-                : trend === 'down' 
-                ? 'bg-(--accent-red)/10 text-(--accent-red)' 
-                : 'bg-(--bg-tertiary) text-(--text-tertiary)'
-            }`}>
-              {trend === 'up' && <TrendingUp className="w-3 h-3" />}
-              {trend === 'down' && <TrendingDown className="w-3 h-3" />}
-              {trend === 'up' && <span>+250</span>}
-              {trend === 'down' && <span>-{summary?.total || 0}</span>}
-              {trend === 'neutral' && <span>0</span>}
-            </div>
-          )}
+        <div>
+          <p className="text-(--text-tertiary) text-xs">Credit Balance</p>
+          <p className="text-xl font-bold text-(--text-primary)">
+            {remainingCredits.toLocaleString()}
+          </p>
         </div>
       </div>
-      
-      {/* Quick Stats */}
+
+      {/* Usage Stats — click badge to cycle period */}
       {summary !== null && (
-        <div className="mt-3 pt-3 border-t border-(--border-primary)">
+        <div className="mt-3 pt-3 border-t border-(--border-primary) space-y-1.5">
           <div className="flex items-center justify-between text-xs">
             <span className="text-(--text-tertiary)">Credits Used</span>
-            <span className="text-(--text-secondary)">
-              {summary.total.toLocaleString()}
+            <span className="text-(--text-secondary) font-medium">
+              {usageAmount.toLocaleString()}
             </span>
           </div>
+          <button
+            onClick={cycleUsageView}
+            className="px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 text-[10px] font-medium hover:bg-yellow-500/25 transition-colors cursor-pointer"
+            title="Click to switch: This Month → Today → All Time"
+          >
+            {VIEW_LABELS[usageView]}
+          </button>
         </div>
       )}
     </div>

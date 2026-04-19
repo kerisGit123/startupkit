@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ThumbsUp, ThumbsDown, Film, Image } from "lucide-react";
+import { Film, Image } from "lucide-react";
 
 const R2_PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "";
 
@@ -13,9 +13,6 @@ interface GalleryCardProps {
     fileType: string;
     model?: string;
     prompt?: string;
-    thumbsUp?: number;
-    thumbsDown?: number;
-    totalDonations?: number;
     sharedAt?: number;
     aspectRatio?: string;
     userName: string;
@@ -34,7 +31,6 @@ export function GalleryCard({ file, onClick }: GalleryCardProps) {
       onClick={onClick}
       className="group relative w-full rounded-xl overflow-hidden text-left transition-all hover:shadow-lg hover:shadow-black/30 hover:scale-[1.01] focus:outline-none bg-[#111]"
     >
-      {/* Image at natural aspect ratio — masonry handles the height */}
       {isVideo ? (
         <video
           src={imageUrl}
@@ -68,7 +64,6 @@ export function GalleryCard({ file, onClick }: GalleryCardProps) {
       {/* Bottom overlay — visible on hover */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-b-xl">
         <div className="flex items-end justify-between p-3 pt-8">
-          {/* User info */}
           <div className="flex items-center gap-2 min-w-0">
             {file.userAvatar ? (
               <img src={file.userAvatar} alt={file.userName} className="w-6 h-6 rounded-full object-cover ring-1 ring-white/20" />
@@ -78,18 +73,6 @@ export function GalleryCard({ file, onClick }: GalleryCardProps) {
               </div>
             )}
             <span className="text-[11px] text-white/90 font-medium truncate">{file.userName}</span>
-          </div>
-
-          {/* Thumbs */}
-          <div className="flex items-center gap-2 text-[11px] text-white/70">
-            <span className="flex items-center gap-0.5">
-              <ThumbsUp className="w-3 h-3" />
-              {file.thumbsUp ?? 0}
-            </span>
-            <span className="flex items-center gap-0.5">
-              <ThumbsDown className="w-3 h-3" />
-              {file.thumbsDown ?? 0}
-            </span>
           </div>
         </div>
       </div>

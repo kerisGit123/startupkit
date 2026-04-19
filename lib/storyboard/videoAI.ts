@@ -221,7 +221,6 @@ export async function generateSeedance2(params: {
 export async function generateTopazVideoUpscale(params: {
   videoUrl: string;
   upscaleFactor: "1" | "2" | "4";
-  nsfwChecker?: boolean;
   callbackUrl: string;
   companyId?: string;
 }) {
@@ -238,7 +237,6 @@ export async function generateTopazVideoUpscale(params: {
       input: {
         video_url: params.videoUrl,
         upscale_factor: params.upscaleFactor,
-        nsfw_checker: params.nsfwChecker ?? true,
       },
     }),
   });
@@ -277,6 +275,38 @@ export async function generateGrokImagineVideo(params: {
     }),
   });
   if (!res.ok) throw new Error(`Grok Imagine API error: ${await res.text()}`);
+  const data = await res.json();
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}
+
+export async function generateInfinitalkFromAudio(params: {
+  imageUrl: string;
+  audioUrl: string;
+  prompt: string;
+  resolution: "480p" | "720p";
+  nsfwChecker?: boolean;
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "infinitalk/from-audio",
+      callBackUrl: params.callbackUrl,
+      input: {
+        image_url: params.imageUrl,
+        audio_url: params.audioUrl,
+        prompt: params.prompt,
+        resolution: params.resolution.toLowerCase(),
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`InfiniteTalk API error: ${await res.text()}`);
   const data = await res.json();
   return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }

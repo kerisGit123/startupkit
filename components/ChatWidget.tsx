@@ -146,7 +146,6 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
           lastMessages: messages.slice(-4).map(m => ({ role: m.role, content: m.content })),
         }),
       });
-      console.log("\u2705 Escalation stored");
     } catch (error) {
       console.error("Escalation error:", error);
     }
@@ -348,8 +347,6 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
     }
 
     try {
-      console.log("Submitting rating:", { sessionId, rating, hasComment: !!ratingComment });
-      
       const response = await fetch("/api/chat/rating", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -361,7 +358,6 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
       });
 
       const data = await response.json();
-      console.log("Rating response:", data);
 
       if (response.ok) {
         setShowRating(false);
@@ -375,7 +371,6 @@ export function ChatWidget({ type, userId }: ChatWidgetProps) {
           timestamp: Date.now(),
         };
         setMessages((prev) => [...prev, thankYouMsg]);
-        console.log("\u2705 Rating submitted successfully");
       } else {
         console.error("❌ Rating submission failed:", data.error);
         alert("Failed to submit rating. Please try again.");

@@ -498,6 +498,18 @@ export const usePricingData = () => {
             }
           }
           return Math.ceil(base * factor);
+        case 'getInfinitalkFromAudio': {
+          // Parse resolution and duration from selectedQuality: "480p_10s"
+          const itResMatch = selectedQuality.match(/^(\d+[pP])/i);
+          const itDurMatch = selectedQuality.match(/(\d+)s/);
+          const itRes = itResMatch ? itResMatch[1].toLowerCase() : "480p";
+          const itDuration = itDurMatch ? parseInt(itDurMatch[1]) : 5;
+          const itCosts: Record<string, number> = { "480p": 3, "720p": 12 };
+          const itCostPerSec = itCosts[itRes] || base;
+          const itResult = Math.ceil(itCostPerSec * itDuration * factor);
+          console.log("[usePricingData] InfiniteTalk pricing:", { modelId, selectedQuality, itRes, itCostPerSec, itDuration, factor, result: itResult });
+          return itResult;
+        }
         default:
           console.log("[usePricingData] Unknown assigned function, using fallback");
           return Math.ceil((model.creditCost || 0) * (model.factor || 1));

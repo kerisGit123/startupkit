@@ -3,15 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 export const POST = async (request: NextRequest) => {
   try {
     const body = await request.json();
-    console.log("[Flux Flex Callback] Received:", body);
 
     // Extract task result from callback
     const { taskId, status, result, error } = body;
 
     if (status === "completed" && result) {
-      console.log("[Flux Flex Callback] Task completed:", taskId);
-      console.log("[Flux Flex Callback] Result URL:", result.url);
-      
       // Here you would typically:
       // 1. Store the result in your database
       // 2. Notify the client via WebSocket or polling

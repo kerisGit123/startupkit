@@ -8,7 +8,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -345,7 +345,8 @@ export function ImageAIPanel({
     { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 img + 1 video", icon: Film, maxReferenceImages: 1 },
     { value: "google/veo-3.1", label: "Veo 3.1", sub: "Google Video generation", icon: Film, maxReferenceImages: 3 },
     { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7 },
-    { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • video only", icon: ArrowUp, maxReferenceImages: 0 },
+    { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • MP4, MOV, WEBM, M4V, GIF", icon: ArrowUp, maxReferenceImages: 0 },
+    { value: "infinitalk/from-audio", label: "InfiniteTalk", sub: "Lip sync • image + audio • 480p/720p", icon: Mic, maxReferenceImages: 1 },
   ];
   // Combine all models for the consolidated dropdown
   const allModelOptions = [...inpaintModelOptions, ...videoModelOptions];
@@ -424,6 +425,8 @@ export function ImageAIPanel({
   const [promptLengthError, setPromptLengthError] = useState<{ current: number; max: number } | null>(null);
   const [nsfwChecker, setNsfwChecker] = useState(true); // Z-Image / Topaz: NSFW checker (default on)
   const [topazUpscaleFactor, setTopazUpscaleFactor] = useState<"1" | "2" | "4">("2"); // Topaz Video Upscale factor
+  const [infinitalkResolution, setInfinitalkResolution] = useState<"480p" | "720p">("480p"); // InfiniteTalk: resolution
+  const [infinitalkAudioUrl, setInfinitalkAudioUrl] = useState<string>(""); // InfiniteTalk: audio URL
   const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("video"); // Kling: default video orient
   const [klingSource, setKlingSource] = useState<"input_video" | "input_image">("input_video"); // Kling: background source
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null); // Seedance 2.0: first frame
@@ -571,6 +574,14 @@ export function ImageAIPanel({
         const credits = getModelCredits(selectedModelOption.value, params);
         console.log("[VideoImageAIPanel] Topaz Video Upscale pricing:", { topazUpscaleFactor, vidDur, params, credits });
         return credits;
+      })()
+    : selectedModelOption.value === "infinitalk/from-audio"
+    ? (() => {
+        const itDur = audioRefs.length > 0 ? audioRefs[0].duration : parseInt(videoDuration.replace('s', '')) || 5;
+        const params = `${infinitalkResolution}_${itDur}s`;
+        const itCredits = getModelCredits("infinitalk/from-audio", params);
+        console.log("[VideoImageAIPanel] InfiniteTalk pricing:", { infinitalkResolution, itDur, params, itCredits });
+        return itCredits;
       })()
     : selectedModelOption.value === "z-image"
     ? (() => {
@@ -1446,6 +1457,9 @@ export function ImageAIPanel({
       setAspectRatio("16:9");
     } else if (model === "topaz/video-upscale") {
       setTopazUpscaleFactor("2");
+    } else if (model === "infinitalk/from-audio") {
+      setInfinitalkResolution("480p");
+      setInfinitalkAudioUrl("");
     } else if (model.includes("nano-banana")) {
       setResolution("1K");
     }
@@ -1490,9 +1504,31 @@ export function ImageAIPanel({
     // Extract the current prompt with badges from the editor for AI model
     const extractedPrompt = extractTextWithBadges();
 
-    if (!extractedPrompt?.trim()) {
+    // Topaz Video Upscale doesn't need a prompt — skip prompt validation
+    const noPromptModels = ["topaz/video-upscale"];
+    if (!noPromptModels.includes(selectedModelOption.value) && !extractedPrompt?.trim()) {
       toast.warning("Please enter a prompt to generate");
       return;
+    }
+
+    // Topaz Video Upscale validation: needs a video reference
+    if (selectedModelOption.value === "topaz/video-upscale") {
+      if (videoRefs.length === 0) {
+        toast.warning("Topaz Video Upscale requires a video reference");
+        return;
+      }
+    }
+
+    // InfiniteTalk validation: needs image + audio
+    if (selectedModelOption.value === "infinitalk/from-audio") {
+      if (referenceImages.length === 0) {
+        toast.warning("InfiniteTalk requires an image reference");
+        return;
+      }
+      if (audioRefs.length === 0) {
+        toast.warning("InfiniteTalk requires an audio file");
+        return;
+      }
     }
 
     // Start cooldown immediately
@@ -1553,6 +1589,8 @@ export function ImageAIPanel({
             ? `${resolution}_${videoDuration}`
             : selectedModelOption.value === "topaz/video-upscale"
             ? `${topazUpscaleFactor}_${videoRefs.length > 0 ? videoRefs[0].duration : 0}s`
+            : selectedModelOption.value === "infinitalk/from-audio"
+            ? `${infinitalkResolution}_${audioRefs.length > 0 ? audioRefs[0].duration : parseInt(videoDuration.replace('s', '')) || 5}s`
             : `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}`
           : resolution;
         
@@ -1572,7 +1610,8 @@ export function ImageAIPanel({
           : isTopazVideo ? videoRefs.map(v => v.url)
           : isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? videoRefs.map(v => v.url)
           : undefined;
-        const audioUrlsParam = isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "lipsync") ? audioRefs.map(a => a.url) : undefined;
+        const isInfinitalk = selectedModelOption.value === "infinitalk/from-audio";
+        const audioUrlsParam = (isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "lipsync")) || isInfinitalk ? audioRefs.map(a => a.url) : undefined;
         // Lipsync sends as multimodal (first_frame_url + audio is invalid — they're mutually exclusive)
         // Character image goes into referenceImages, audio into audioUrls
         const seedanceModeParam = isSeedance2 ? (seedanceMode === "lipsync" ? "multimodal" : seedanceMode) : undefined;
@@ -1688,14 +1727,106 @@ export function ImageAIPanel({
                     </button>
                   )}
                 </div>
-                <span className="text-[11px] text-gray-500 self-center">Upload a video to upscale</span>
+                <span className="text-[11px] text-gray-500 self-center">Upload a video to upscale<br /><span className="text-gray-600">MP4, MOV, WEBM, M4V, GIF</span></span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* InfiniteTalk — image + audio input area */}
+        {selectedModelOption.value === "infinitalk/from-audio" && (
+          <div className="mb-[0px]">
+            <div className="px-0 py-0">
+              <div className="flex items-start gap-2.5">
+                {/* Image reference slot */}
+                <div className="flex-shrink-0">
+                  {referenceImages.length > 0 ? (
+                    <div className="relative group">
+                      <img src={referenceImages[0].url} alt="Reference" className="w-20 h-20 object-cover rounded-lg border border-blue-500/30 cursor-pointer"
+                        onClick={() => setMediaPreview({ type: 'image', url: referenceImages[0].url, label: 'Reference Image' })}
+                      />
+                      <div className="absolute top-1.5 left-1.5 bg-blue-600 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium pointer-events-none">Image</div>
+                      <button onClick={() => {
+                        onRemoveReferenceImage?.(referenceImages[0].id);
+                      }} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20">
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <AddImageMenu
+                      label="Image"
+                      onUploadClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (!file) return;
+                          onAddReferenceImage?.(file);
+                        };
+                        input.click();
+                      }}
+                      onR2Click={() => setShowFileBrowser(true)}
+                      canOpenElements={canOpenElementLibrary()}
+                      onElementsClick={() => setShowElementLibrary(true)}
+                      onElementsUnavailable={() => showToast('Project info required', 'error')}
+                      onCaptureClick={handleAddBackground}
+                      generatedItemImages={generatedItemImages}
+                      generatedProjectImages={generatedProjectImages}
+                      onSelectGeneratedImage={(url) => {
+                        // Create a File-like object from the URL for the callback
+                        fetch(url).then(r => r.blob()).then(blob => {
+                          const file = new File([blob], `ref-${Date.now()}.png`, { type: blob.type });
+                          onAddReferenceImage?.(file);
+                        });
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="w-px h-16 bg-white/10 self-center mx-1" />
+
+                {/* Audio Slot */}
+                <div className="relative flex-shrink-0">
+                  {audioRefs.length > 0 ? (
+                    <div className="relative group">
+                      <div className="w-20 h-20 rounded-lg border border-violet-500/30 bg-[#1a1a24] flex flex-col items-center justify-center cursor-pointer"
+                        onClick={() => setMediaPreview({ type: 'audio', url: audioRefs[0].url, label: 'Audio' })}
+                      >
+                        <Volume2 className="w-6 h-6 text-violet-400" />
+                        {audioRefs[0].duration > 0 && (
+                          <span className="text-[10px] text-violet-300 mt-1">{audioRefs[0].duration}s</span>
+                        )}
+                      </div>
+                      <div className="absolute top-1.5 left-1.5 bg-violet-600 text-white text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium">Audio</div>
+                      <button
+                        onClick={() => setAudioRefs([])}
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2.5 h-2.5 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowAudioBrowser(true)}
+                      className="w-20 h-20 rounded-lg border-2 border-dashed border-violet-500/30 hover:border-violet-500/50 flex flex-col items-center justify-center gap-1 group transition-colors"
+                      title="Add audio for lip sync"
+                    >
+                      <Volume2 className="w-5 h-5 text-violet-400 group-hover:text-violet-300 transition-colors" />
+                      <span className="text-[9px] text-violet-400 group-hover:text-violet-300 transition-colors leading-tight text-center">Audio</span>
+                    </button>
+                  )}
+                </div>
+
+                <span className="text-[11px] text-gray-500 self-center">Upload image + audio for lip sync</span>
               </div>
             </div>
           </div>
         )}
 
         {/* Reference Images Panel — hidden for text-only models like z-image and Topaz Video Upscale (video-only) */}
-        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && (
+        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && (
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
@@ -2633,8 +2764,8 @@ export function ImageAIPanel({
             {/* Spacer to push model and generate to right */}
             <div className="flex-1" />
 
-            {/* Aspect Ratio Select Box - Hide for Kling Motion and Topaz Video Upscale */}
-            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && (
+            {/* Aspect Ratio Select Box - Hide for Kling Motion, Topaz Video Upscale, and InfiniteTalk */}
+            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && (
             <div className="relative" style={{ width: "80px" }}>
               <button
                 onClick={() => setShowAspectRatioDropdown(!showAspectRatioDropdown)}
@@ -2787,8 +2918,8 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Resolution Select Box - Hide for Veo 3.1, Z-Image, and Topaz Video Upscale */}
-            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && (
+            {/* Resolution Select Box - Hide for Veo 3.1, Z-Image, Topaz Video Upscale, and InfiniteTalk */}
+            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowResolutionDropdown(!showResolutionDropdown)}
@@ -2903,8 +3034,25 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Video Duration Select Box - Hide for Veo 3.1, Kling Motion, and Topaz Video Upscale */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale"].includes(selectedModelOption.value) && (
+            {/* InfiniteTalk: Resolution dropdown */}
+            {selectedModelOption.value === "infinitalk/from-audio" && (
+              <div className="relative" style={{ width: "100px" }}>
+                <button
+                  onClick={() => setInfinitalkResolution(infinitalkResolution === "480p" ? "720p" : "480p")}
+                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
+                    infinitalkResolution === "720p"
+                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                  }`}
+                >
+                  <span>{infinitalkResolution}</span>
+                </button>
+              </div>
+            )}
+
+
+            {/* Video Duration Select Box - Hide for Veo 3.1, Kling Motion, Topaz Video Upscale, and InfiniteTalk */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "100px" }}>
                 <button
                   onClick={() => setShowVideoDurationDropdown(!showVideoDurationDropdown)}
@@ -2945,7 +3093,7 @@ export function ImageAIPanel({
 
             {/* Video Input toggle - Only for Seedance 2.0 */}
             {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0/Fast, not Grok, not Topaz */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video", "topaz/video-upscale"].includes(selectedModelOption.value) && (
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowAudioDropdown(!showAudioDropdown)}

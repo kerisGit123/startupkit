@@ -153,6 +153,14 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        case 'getInfinitalkFromAudio': {
+          const itCosts: Record<string, number> = { "480p": 3, "480P": 3, "720p": 12, "720P": 12 };
+          const itCostPerSec = itCosts[resolution] || model.creditCost || 3;
+          credits = Math.ceil(itCostPerSec * duration * (model.factor || 1));
+          console.log("[pricing-calc] InfiniteTalk formula:", { resolution, costPerSec: itCostPerSec, duration, factor: model.factor, result: credits });
+          break;
+        }
+
         default:
           console.log("[pricing-calc] Unknown formula function, using simple calculation");
           // Fallback to simple calculation

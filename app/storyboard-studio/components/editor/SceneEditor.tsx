@@ -102,14 +102,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   // Credit balance now handled by CreditBadge component
   const { plan: currentPlan } = useSubscription();
   
-  // Debug companyId values
-  console.log('[SceneEditor] Auth debug:', {
-    useCurrentCompanyId: useCurrentCompanyId(),
-    userCompanyId,
-    userId,
-    finalCompanyId: companyId,
-    companyIdType: companyId === userId ? 'personal' : 'organization'
-  });
 
   const sanitizeCompanyId = useCallback((value?: string | null) => {
     if (!value) {
@@ -4468,6 +4460,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             onImageSelect={switchCanvasImage}
             onImageDelete={async (image) => {
               try {
+                // Delete R2 file first (if it has one)
+                const fileData = projectFiles?.find(f => String(f._id) === image.id);
+                if (fileData?.r2Key) {
+                  await fetch("/api/storyboard/delete-file", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ r2Key: fileData.r2Key }),
+                  });
+                }
+                // Soft delete the record (keeps credit audit trail)
                 await removeStoryboardFile({
                   id: image.id as Id<"storyboard_files">,
                 });
@@ -4491,6 +4493,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               // Implementation would go here
             }}
             openSceneImageContextMenu={openSceneImageContextMenu}
+            currentPlan={currentPlan}
+            companyId={companyId}
           />
 
           {sceneImageContextMenu && (
@@ -5723,6 +5727,119 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 companyId: companyId || "",
                                 tokens: creditsUsed,
                                 reason: `Refund: Grok Imagine API failed`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
+                              throw apiError;
+                            }
+
+                          } else if (aiModel === "infinitalk/from-audio") {
+                            console.log("Using InfiniteTalk From Audio API format...");
+
+                            // Extract resolution from quality param: "480p_5s"
+                            const itRes = quality.split('_')[0] || '480p';
+                            const itImageUrl = processedReferenceImages.length > 0 ? processedReferenceImages[0] : '';
+                            const itAudioUrl = audioUrls && audioUrls.length > 0 ? audioUrls[0] : '';
+
+                            if (!itImageUrl) {
+                              toast.error("InfiniteTalk requires an image reference");
+                              return;
+                            }
+                            if (!itAudioUrl) {
+                              toast.error("InfiniteTalk requires an audio file");
+                              return;
+                            }
+
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `infinitalk-lipsync-${Date.now()}.mp4`,
+                              fileType: "video",
+                              mimeType: "video/mp4",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId,
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              model: aiModel,
+                              prompt: extractedPrompt,
+                              aspectRatio: aspectRatio || undefined,
+                              defaultAI: currentDefaultAI as any,
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: "InfiniteTalk From Audio",
+                                pricingType: "formula",
+                                quality: quality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: { cropped: false, combined: false, referenceImagesUsed: 1 },
+                                processingTime: 0,
+                                success: false,
+                              },
+                            });
+
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `AI lip sync with ${aiModel}`,
+                              plan: currentPlan,
+                            });
+
+                            // Call InfiniteTalk API directly using videoAI function
+                            try {
+                              const { generateInfinitalkFromAudio } = await import("@/lib/storyboard/videoAI");
+                              const result = await generateInfinitalkFromAudio({
+                                imageUrl: itImageUrl,
+                                audioUrl: itAudioUrl,
+                                prompt: extractedPrompt,
+                                resolution: itRes as "480p" | "720p",
+                                nsfwChecker: true,
+                                callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                companyId: companyId || "",
+                              });
+
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({
+                                  companyId: companyId || "",
+                                  tokens: creditsUsed,
+                                  reason: `Refund: InfiniteTalk failed (${result.responseCode})`,
+                                });
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "failed",
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                                toast.error(`InfiniteTalk failed: ${result.responseMessage || 'Unknown error'}`);
+                                return;
+                              }
+
+                              if (result.taskId) {
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "processing",
+                                  defaultAI: result.raw?.data?.id,
+                                  taskId: result.taskId,
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                              }
+
+                              toast.success(`Lip sync started! ${creditsUsed} credits deducted.`);
+                            } catch (apiError) {
+                              console.warn("InfiniteTalk API failed, refunding credits:", creditsUsed);
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: InfiniteTalk API failed`,
                               });
                               await updateStoryboardFile({
                                 id: fileId,

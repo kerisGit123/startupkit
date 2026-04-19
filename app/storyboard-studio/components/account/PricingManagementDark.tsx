@@ -45,6 +45,7 @@ import {
   getSeedance20Fast,
   getKlingMotionControl,
   getGrokImageToVideo,
+  getInfinitalkFromAudio,
 } from "@/lib/storyboard/pricing";
 
 interface Analytics {
@@ -279,6 +280,13 @@ export default function PricingManagementDark() {
           baseCost,
           factor,
           testParams.quality,
+          testParams.duration
+        );
+      } else if (assignedFunction === 'getInfinitalkFromAudio') {
+        result = getInfinitalkFromAudio(
+          baseCost,
+          factor,
+          testParams.resolution,
           testParams.duration
         );
       } else {
@@ -1030,7 +1038,7 @@ export default function PricingManagementDark() {
                   const fn = (newModel as any)?.assignedFunction;
                   // Reset resolution and duration to valid defaults for the selected model
                   const defaultRes = fn === 'getKlingMotionControl' ? '720p' : fn === 'getSeedance20' ? '480p' : fn === 'getGrokImageToVideo' ? '480p' : '720p';
-                  const defaultDur = fn === 'getGrokImageToVideo' ? 6 : fn === 'getTopazVideoUpscale' ? 10 : 4;
+                  const defaultDur = fn === 'getGrokImageToVideo' ? 6 : fn === 'getTopazVideoUpscale' ? 10 : fn === 'getInfinitalkFromAudio' ? 10 : 4;
                   const defaultQuality = fn === 'getTopazVideoUpscale' ? '2' : '1K';
                   setTestParams({...testParams, modelId: newModelId, resolution: defaultRes, duration: defaultDur, audio: false, quality: defaultQuality});
                 }}
@@ -1145,7 +1153,7 @@ export default function PricingManagementDark() {
                           const fn = models?.find(m => m.modelId === testParams.modelId)?.assignedFunction;
                           if (fn === 'getKlingMotionControl') {
                             return (<><option value="720p">720p</option><option value="1080p">1080p</option></>);
-                          } else if (fn === 'getSeedance20' || fn === 'getSeedance20Fast' || fn === 'getGrokImageToVideo') {
+                          } else if (fn === 'getSeedance20' || fn === 'getSeedance20Fast' || fn === 'getGrokImageToVideo' || fn === 'getInfinitalkFromAudio') {
                             return (<><option value="480p">480p</option><option value="720p">720p</option></>);
                           } else {
                             return (<><option value="480p">480p</option><option value="720p">720p</option><option value="1080p">1080p</option><option value="4K">4K</option></>);
@@ -1873,6 +1881,7 @@ function DarkEditModal({ model, formData, onSave, onCancel, setFormData }) {
                   <option value="getTopazUpscale">getTopazUpscale - Image AI Upscaling</option>
                   <option value="getTopazVideoUpscale">getTopazVideoUpscale - Video AI Upscaling</option>
                   <option value="getGrokImageToVideo">getGrokImageToVideo - Video Generation (Grok Imagine)</option>
+                  <option value="getInfinitalkFromAudio">getInfinitalkFromAudio - Lip Sync (InfiniteTalk)</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-2">Assign a specific pricing function. If not set, will auto-detect based on model type.</p>
               </div>

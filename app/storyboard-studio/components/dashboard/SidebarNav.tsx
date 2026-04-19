@@ -4,12 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   Film, FolderOpen, Users, Star, Clock, Tag, Check, Globe,
-  ChevronDown, ChevronUp, LayoutGrid, Settings,
+  ChevronDown, ChevronUp, LayoutGrid, Settings, ShieldCheck,
   LogOut, DollarSign, CreditCard, Trash2, LifeBuoy, ScrollText, FlaskConical,
+  FileText, Gift,
 } from "lucide-react";
 import type { Project } from "../../types";
 import { useStoryboardStudioUI } from "../../StoryboardStudioUIContext";
 import CreditBalanceDisplay from "../account/CreditBalanceDisplay";
+import { NotificationBellDark } from "../shared/NotificationBellDark";
 
 interface SidebarNavProps {
   open: boolean;
@@ -192,7 +194,19 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
 
         {UNIVERSE_NAV_ITEMS.map(item => navBtn(item.key, item.icon, item.label))}
 
-        {/* External links section removed - no manga editor links */}
+        {/* Admin link */}
+        <div className="pt-3 pb-1 px-3">
+          <span className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">Admin</span>
+        </div>
+        <Link
+          href="/admin"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all duration-200 text-white hover:text-gray-200 hover:bg-(--bg-tertiary)"
+        >
+          <ShieldCheck className="w-4 h-4 shrink-0" />
+          Admin
+        </Link>
+        {navBtn("invoices", FileText, "Invoices")}
+        {navBtn("referrals", Gift, "Referrals")}
       </nav>
 
       <div className="border-t border-(--border-primary) p-2 shrink-0">
@@ -207,18 +221,21 @@ export function SidebarNav({ open, activeNav, onNavChange, projects = [], onOpen
             logout
           </button>
 
-          <button
-            onClick={() => {
-              onOpenSettings?.();
-              if (typeof window !== "undefined" && window.innerWidth < 768) {
-                setSidebarOpen(false);
-              }
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all duration-200 text-white hover:text-gray-200 hover:bg-(--bg-tertiary)"
-          >
-            <Settings className="w-4 h-4 shrink-0" />
-            Setting
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                onOpenSettings?.();
+                if (typeof window !== "undefined" && window.innerWidth < 768) {
+                  setSidebarOpen(false);
+                }
+              }}
+              className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-all duration-200 text-white hover:text-gray-200 hover:bg-(--bg-tertiary)"
+            >
+              <Settings className="w-4 h-4 shrink-0" />
+              Setting
+            </button>
+            <NotificationBellDark />
+          </div>
         </div>
       </div>
       </aside>

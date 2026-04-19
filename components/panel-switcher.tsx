@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, Shield } from "lucide-react";
+import { Film, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,9 +26,9 @@ export function PanelSwitcher() {
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel>Switch Panel</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push("/dashboard")} className="gap-2">
-          <LayoutDashboard className="h-4 w-4" />
-          <span>User Dashboard</span>
+        <DropdownMenuItem onClick={() => router.push("/storyboard-studio")} className="gap-2">
+          <Film className="h-4 w-4" />
+          <span>Storyboard Studio</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push("/admin")} className="gap-2">
           <Shield className="h-4 w-4" />

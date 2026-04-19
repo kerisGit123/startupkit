@@ -21,13 +21,6 @@ const BUCKET = process.env.R2_BUCKET_NAME ?? "storyboardbucket";
  */
 export async function uploadToR2(file: File | Blob, key: string): Promise<string> {
   try {
-    console.log('[R2 Upload] Starting upload:', {
-      fileName: file instanceof File ? file.name : 'blob',
-      fileSize: file.size,
-      key,
-      bucket: BUCKET
-    });
-
     // Convert file to buffer
     const buffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(buffer);
@@ -43,12 +36,6 @@ export async function uploadToR2(file: File | Blob, key: string): Promise<string
     // Upload to R2
     const result = await r2.send(command);
     
-    console.log('[R2 Upload] Upload successful:', {
-      key,
-      etag: result.ETag,
-      requestId: result.$metadata.requestId
-    });
-
     return key;
   } catch (error) {
     console.error('[R2 Upload] Error:', error);

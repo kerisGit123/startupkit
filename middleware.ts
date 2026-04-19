@@ -7,7 +7,7 @@ const isPublicRoute = createRouteMatcher([
   "/storytica(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
-  "/dashboard/users(.*)",
+
   "/api/clerk/webhook(.*)",
   "/api/stripe/webhook(.*)",
   "/api/n8n/callback(.*)",

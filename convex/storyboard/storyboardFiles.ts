@@ -35,29 +35,11 @@ export const logUpload = mutation({
     aspectRatio: v.optional(v.string()),              // "16:9" | "9:16" | "1:1" etc.
   },
   handler: async (ctx, args) => {
-    // Since we're calling from API route with auth, we can work without auth context
-    // The API route is already authenticated via Clerk
-    console.log('[logUpload] Called from API route with args:', {
-      hasCompanyId: !!args.companyId,
-      hasUserId: !!args.userId,
-      companyId: args.companyId?.substring(0, 10) + '...',
-      userId: args.userId?.substring(0, 10) + '...'
-    });
-    
-    // Use the companyId and userId from args (no auth context needed)
     const { companyId, userId, ...restArgs } = args;
-    
+
     if (!companyId) {
-      console.error('[logUpload] No companyId provided');
       throw new Error("Company ID is required");
     }
-    
-    // userId is now optional - log if missing but don't throw error
-    if (!userId) {
-      console.warn('[logUpload] No userId provided, but continuing with companyId:', companyId);
-    }
-    
-    console.log('[logUpload] Using provided companyId:', companyId);
     
     const insertData: any = {
       ...restArgs,
@@ -106,7 +88,20 @@ export const getById = query({
 export const remove = mutation({
   args: { id: v.id("storyboard_files") },
   handler: async (ctx, { id }) => {
-    await ctx.db.delete(id);
+    const file = await ctx.db.get(id);
+    if (!file) return;
+
+    // Soft delete — keep record for credit audit trail
+    await ctx.db.patch(id, {
+      r2Key: "",
+      sourceUrl: "",
+      status: "deleted",
+      deletedAt: Date.now(),
+      size: 0,
+      isShared: false,
+      tags: [],
+      isFavorite: false,
+    });
   },
 });
 
@@ -441,12 +436,9 @@ export const updateFromCallback = mutation({
     isShared: v.optional(v.boolean()),
     sharedAt: v.optional(v.number()),
     sharedBy: v.optional(v.string()),
-    thumbsUp: v.optional(v.number()),
-    thumbsDown: v.optional(v.number()),
-    totalDonations: v.optional(v.number()),
     aspectRatio: v.optional(v.string()),
   },
-  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size, responseCode, responseMessage, creditsUsed, isShared, sharedAt, sharedBy, thumbsUp, thumbsDown, totalDonations, aspectRatio }) => {
+  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size, responseCode, responseMessage, creditsUsed, isShared, sharedAt, sharedBy, aspectRatio }) => {
     const updateData: any = { status };
 
     if (sourceUrl) {
@@ -485,13 +477,9 @@ export const updateFromCallback = mutation({
     if (isShared !== undefined) updateData.isShared = isShared;
     if (sharedAt !== undefined) updateData.sharedAt = sharedAt;
     if (sharedBy !== undefined) updateData.sharedBy = sharedBy;
-    if (thumbsUp !== undefined) updateData.thumbsUp = thumbsUp;
-    if (thumbsDown !== undefined) updateData.thumbsDown = thumbsDown;
-    if (totalDonations !== undefined) updateData.totalDonations = totalDonations;
     if (aspectRatio !== undefined) updateData.aspectRatio = aspectRatio;
 
     await ctx.db.patch(fileId, updateData);
-    console.log('[updateFromCallback] Updated file:', { fileId, status, hasSourceUrl: !!sourceUrl, hasR2Key: !!r2Key, hasMetadata: metadata !== undefined, hasSize: size !== undefined, responseCode, responseMessage: responseMessage?.substring(0, 50) });
     return { success: true };
   },
 });
@@ -503,11 +491,19 @@ export const updateFromCallback = mutation({
 export const getStorageUsage = query({
   args: { companyId: v.string() },
   handler: async (ctx, args) => {
-    const files = await ctx.db
+    const allFiles = await ctx.db
       .query("storyboard_files")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .collect();
+
+    // Exclude deleted files from storage calculation
+    // Shared files excluded — they are gallery content hosted by platform
+    const files = allFiles.filter(f => {
+      if (f.deletedAt || f.status === "deleted") return false;
+      if ((f.size ?? 0) <= 0) return false;
+      if (f.isShared === true) return false;
+      return true;
+    });
 
     let totalSize = 0;
     const byCategory: Record<string, { count: number; size: number }> = {};
@@ -672,6 +668,45 @@ export const listGenerationLogs = query({
       isDone,
       continueCursor: isDone ? null : (page[page.length - 1]?._id ?? null),
     };
+  },
+});
+
+// ─── Update Tags ────────────────────────────────────────────────────────
+// Toggle a tag on/off for a file. Validates ownership.
+
+export const updateFileTags = mutation({
+  args: {
+    fileId: v.id("storyboard_files"),
+    tag: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const file = await ctx.db.get(args.fileId);
+    if (!file) throw new Error("File not found");
+
+    // Validate ownership
+    const callerCompanyId = (identity.orgId || identity.subject) as string;
+    if (file.companyId !== callerCompanyId && file.userId !== identity.subject) {
+      throw new Error("You can only tag your own files");
+    }
+
+    // Eligibility: only generated files with categoryId and size > 0
+    if (file.category !== "generated") throw new Error("Only generated files can be tagged");
+    if (!file.categoryId) throw new Error("File must belong to a storyboard item");
+    if ((file.size ?? 0) <= 0) throw new Error("File must have content");
+
+    const currentTags = file.tags || [];
+    const hasTag = currentTags.includes(args.tag);
+
+    const newTags = hasTag
+      ? currentTags.filter(t => t !== args.tag)
+      : [...currentTags, args.tag];
+
+    await ctx.db.patch(args.fileId, { tags: newTags });
+
+    return { tags: newTags, action: hasTag ? "removed" : "added" };
   },
 });
 

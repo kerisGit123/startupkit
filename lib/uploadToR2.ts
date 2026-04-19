@@ -346,7 +346,6 @@ export async function uploadToR2WithRetry(
       if (attempt < maxRetries) {
         // Wait before retrying (exponential backoff)
         const waitTime = Math.pow(2, attempt) * 1000;
-        console.log(`Retrying in ${waitTime / 1000} seconds...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
@@ -426,14 +425,10 @@ export async function deleteFromR2(options: DeleteOptions): Promise<DeleteResult
       body: JSON.stringify({ fileId }),
     });
 
-    console.log('[deleteFromR2] API Response status:', convexResponse.status);
-    console.log('[deleteFromR2] API Response headers:', Object.fromEntries(convexResponse.headers.entries()));
-
     if (!convexResponse.ok) {
       let body: any = {};
       try {
         const responseText = await convexResponse.text();
-        console.log('[deleteFromR2] Raw response text:', responseText);
         body = JSON.parse(responseText);
       } catch (jsonError) {
         console.error('[deleteFromR2] Failed to parse JSON response:', jsonError);
@@ -454,17 +449,11 @@ export async function deleteFromR2(options: DeleteOptions): Promise<DeleteResult
       // Check if it's a "not found" / "nonexistent" case, which is actually success for us
       const errorStr = JSON.stringify(body).toLowerCase();
       if ((body.warning && body.warning.includes('not found')) || errorStr.includes('nonexistent') || errorStr.includes('not found')) {
-        console.log('[deleteFromR2] File already deleted from database - treating as success');
         // Don't throw error - this is actually a success case
       } else {
         // Check if graceful mode is enabled (don't throw error, just log and continue)
-        console.log('[deleteFromR2] Checking graceful mode:', { graceful: options?.graceful, options });
         if (options?.graceful !== true) {
-          console.log('[deleteFromR2] Graceful mode disabled - throwing error');
           throw new Error(`Metadata removal failed: ${body.error ?? convexResponse.statusText}`);
-        } else {
-          console.log('[deleteFromR2] Graceful mode enabled - continuing despite metadata removal failure');
-          console.log('[deleteFromR2] This is expected for files with missing metadata due to upload authentication issues');
         }
       }
     }

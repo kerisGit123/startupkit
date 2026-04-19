@@ -53,17 +53,13 @@ export function getCurrentCompanyId(user: ExtendedUserOrNull): string {
     if (orgMembership.organization) {
       // User is in an organization
       const orgId = orgMembership.organization.id;
-      console.log("[AuthUtils] Using organization ID from Clerk (first membership):", orgId);
-      console.log("[AuthUtils] WARNING: Consider using useOrganization() hook for active organization detection");
       return orgId;
     } else {
       // User has membership but no organization (edge case)
-      console.log("[AuthUtils] User has membership but no organization, falling back to user ID");
       return user.id;
     }
   } else {
     // User has no organization memberships (personal account)
-    console.log("[AuthUtils] Using personal account ID from Clerk:", user.id);
     return user.id;
   }
 }
@@ -82,13 +78,11 @@ export function useCurrentCompanyId(): string {
   // ✅ KEY FIX: Check if user has actually selected an organization
   // If organization is null, user is in personal mode
   if (organization) {
-    console.log("[AuthUtils] Using active organization ID:", organization.id);
     return organization.id;
   }
   
   // Otherwise, user is in personal mode - use user ID
   if (user) {
-    console.log("[AuthUtils] Using personal account ID (no active organization):", user.id);
     return user.id;
   }
   
@@ -154,7 +148,6 @@ export function getUserType(user: ExtendedUserOrNull): string {
  */
 export function requireAuth(auth: { userId?: string | null }, redirectUrl: string = "/"): void {
   if (!auth.userId) {
-    console.log("[AuthUtils] User not authenticated, redirecting to:", redirectUrl);
     // In a real Next.js app, this would be used in middleware
     // For now, this is a placeholder for the logic
     throw new Error("Authentication required");
@@ -198,19 +191,6 @@ export function getUserEmail(user: ExtendedUserOrNull): string {
  */
 export function logUserInfo(user: ExtendedUserOrNull, context: string, currentCompanyId?: string): void {
   if (!user) {
-    console.log(`[${context}] No user available from Clerk`);
     return;
   }
-
-  console.log(`[${context}] Clerk User Info:`, {
-    id: user.id,
-    email: getUserEmail(user),
-    displayName: getUserDisplayName(user),
-    companyId: currentCompanyId || getCurrentCompanyId(user), // Use provided companyId or fallback
-    userType: getUserType(user),
-    hasOrganization: !!user.organizationMemberships?.length,
-    organizationCount: user.organizationMemberships?.length || 0,
-    primaryOrganization: user.organizationMemberships?.[0]?.organization?.id || "None",
-    authenticationSource: "Clerk"
-  });
 }

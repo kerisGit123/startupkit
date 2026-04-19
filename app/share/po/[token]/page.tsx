@@ -29,11 +29,9 @@ export default function SharedPOPage() {
             jsPDFScript.onload = resolve;
             jsPDFScript.onerror = reject;
           });
-          console.log('jsPDF loaded');
         }
 
         setPdfLibLoaded(true);
-        console.log('PDF library loaded successfully');
       } catch (error) {
         console.error('Failed to load jsPDF:', error);
         toast.error('Failed to load PDF library');
@@ -108,7 +106,6 @@ export default function SharedPOPage() {
     }
 
     setIsGeneratingPDF(true);
-    console.log('Starting PDF generation with html2canvas-pro...');
 
     // Inject black & white CSS to override all colors
     const styleOverride = document.createElement('style');
@@ -146,8 +143,6 @@ export default function SharedPOPage() {
         height: element.scrollHeight
       });
 
-      console.log('Canvas created with html2canvas-pro, size:', canvas.width, 'x', canvas.height);
-
       // Get the image data
       const imgData = canvas.toDataURL('image/png');
 
@@ -181,7 +176,6 @@ export default function SharedPOPage() {
 
       // Save the PDF
       pdf.save(`PO-${po.poNo}.pdf`);
-      console.log('PDF saved successfully');
       toast.success('PDF downloaded successfully!');
     } catch (error) {
       console.error('PDF generation error:', error);

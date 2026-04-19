@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, ThumbsUp, ThumbsDown, Coins, Copy, Download, Cpu, Zap, Calendar, Heart, ChevronDown, MoreHorizontal } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { X, Copy, Download, Cpu, Coins, Calendar, ChevronDown, MoreHorizontal } from "lucide-react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -51,12 +51,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
   const file = useQuery(api.storyboard.gallery.getFileWithUser, {
     fileId: fileId as Id<"storyboard_files">,
   });
-  const rateMutation = useMutation(api.storyboard.gallery.rateFile);
-  const donateMutation = useMutation(api.storyboard.gallery.donateToFile);
 
-  const [donationAmount, setDonationAmount] = useState(5);
-  const [isDonating, setIsDonating] = useState(false);
-  const [isRating, setIsRating] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [palette, setPalette] = useState<string[]>([]);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -77,33 +72,6 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
   const sharedDate = file.sharedAt ? new Date(file.sharedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }) : "";
   const modelShort = file.model?.split("/").pop() || file.model || "AI";
   const promptPreview = file.prompt ? (file.prompt.length > 150 ? file.prompt.slice(0, 150) + "..." : file.prompt) : "";
-  const totalLikes = file.thumbsUp ?? 0;
-
-  const handleRate = async (rating: "up" | "down") => {
-    if (isRating) return;
-    setIsRating(true);
-    try {
-      await rateMutation({ fileId: fileId as Id<"storyboard_files">, rating });
-    } catch (err: any) {
-      toast.error(err.message || "Failed to rate");
-    }
-    setIsRating(false);
-  };
-
-  const handleDonate = async () => {
-    if (donationAmount <= 0 || donationAmount > 100) {
-      toast.error("Donation must be between 1 and 100 credits");
-      return;
-    }
-    setIsDonating(true);
-    try {
-      await donateMutation({ fileId: fileId as Id<"storyboard_files">, amount: donationAmount });
-      toast.success(`Donated ${donationAmount} credits!`);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to donate");
-    }
-    setIsDonating(false);
-  };
 
   const handleCopyPrompt = () => {
     if (file.prompt) {
@@ -143,16 +111,14 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
   if (file.category) tags.push(file.category);
 
   return createPortal(
-    /* LTX overlay: rgba(0,0,0,0.8) with backdrop blur */
     <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
 
-      {/* Modal: imagine.art dark frame style */}
       <div
         className="relative bg-[#1A1A1A] rounded-xl max-w-[1200px] w-full mx-3 max-h-[92vh] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] border border-[#3D3D3D] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Header ──────────────────────────────────── */}
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <div className="flex items-center gap-3">
             {file.userAvatar ? (
@@ -169,18 +135,6 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
               <MoreHorizontal className="w-5 h-5" />
             </button>
             <button
-              onClick={() => handleRate("up")}
-              disabled={isRating}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-sm font-medium transition ${
-                file.callerRating === "up"
-                  ? "border-[#FF4D4F]/40 bg-[#FF4D4F]/10 text-[#FF4D4F]"
-                  : "border-[#3D3D3D] text-[#A0A0A0] hover:text-white hover:border-[#4A4A4A]"
-              }`}
-            >
-              {totalLikes}
-              <Heart className={`w-4 h-4 ${file.callerRating === "up" ? "fill-[#FF4D4F]" : ""}`} />
-            </button>
-            <button
               onClick={handleDownload}
               className="flex items-center gap-2 px-5 py-1.5 rounded-full bg-white text-black text-sm font-semibold hover:bg-gray-100 transition"
             >
@@ -193,10 +147,10 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
           </div>
         </div>
 
-        {/* ── Content ─────────────────────────────────── */}
+        {/* Content */}
         <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
 
-          {/* Left: Image — flush edges like imagine.art */}
+          {/* Left: Image */}
           <div className="flex-1 flex items-center justify-center overflow-hidden bg-[#1A1A1A]">
             {isVideo ? (
               <video src={imageUrl} controls autoPlay className="w-full h-full max-h-[calc(92vh-52px)] object-contain" />
@@ -210,7 +164,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
             )}
           </div>
 
-          {/* Right: Sidebar — bg-primary, border-l #3D3D3D */}
+          {/* Right: Sidebar */}
           <div className="lg:w-[380px] border-t lg:border-t-0 lg:border-l border-[#3D3D3D] overflow-y-auto bg-[#1A1A1A]">
             <div className="p-5 space-y-5">
 
@@ -252,71 +206,6 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
                     </span>
                   ))}
                 </div>
-              </div>
-
-              {/* Stats */}
-              <div className="flex items-center gap-5 text-sm">
-                <span><span className="text-[#52C41A] font-bold">{file.thumbsUp ?? 0}</span> <span className="text-[#6E6E6E]">Likes</span></span>
-                <span><span className="text-white font-bold">{file.thumbsDown ?? 0}</span> <span className="text-[#6E6E6E]">Dislikes</span></span>
-                <span><span className="text-[#FAAD14] font-bold">{file.totalDonations ?? 0}</span> <span className="text-[#6E6E6E]">Donated</span></span>
-              </div>
-
-              {/* Rate — bg-secondary #2C2C2C card */}
-              <div className="bg-[#2C2C2C] rounded-xl border border-[#3D3D3D] p-4">
-                <h4 className="text-sm text-white font-bold mb-2.5">Rate this creation</h4>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleRate("up")}
-                    disabled={isRating}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition ${
-                      file.callerRating === "up"
-                        ? "bg-[#52C41A]/15 text-[#52C41A] border border-[#52C41A]/30"
-                        : "bg-[#1A1A1A] text-[#A0A0A0] hover:text-white border border-[#3D3D3D] hover:bg-[#3D3D3D]"
-                    }`}
-                  >
-                    <ThumbsUp className="w-4 h-4" /> Like
-                  </button>
-                  <button
-                    onClick={() => handleRate("down")}
-                    disabled={isRating}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition ${
-                      file.callerRating === "down"
-                        ? "bg-[#FF4D4F]/15 text-[#FF4D4F] border border-[#FF4D4F]/30"
-                        : "bg-[#1A1A1A] text-[#A0A0A0] hover:text-white border border-[#3D3D3D] hover:bg-[#3D3D3D]"
-                    }`}
-                  >
-                    <ThumbsDown className="w-4 h-4" /> Dislike
-                  </button>
-                </div>
-              </div>
-
-              {/* Donate — bg-secondary #2C2C2C card */}
-              <div className="bg-[#2C2C2C] rounded-xl border border-[#3D3D3D] p-4">
-                <h4 className="text-sm text-white font-bold mb-2.5">Donate Credits</h4>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Coins className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#FAAD14]" />
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={donationAmount}
-                      onChange={(e) => setDonationAmount(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
-                      className="w-full pl-10 pr-3 py-2.5 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-sm text-white focus:outline-none focus:border-[#FAAD14]/50 focus:ring-1 focus:ring-[#FAAD14]/20"
-                    />
-                  </div>
-                  <button
-                    onClick={handleDonate}
-                    disabled={isDonating}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-[#FAAD14] hover:bg-[#D4940F] disabled:opacity-50 text-black text-sm font-bold rounded-lg transition"
-                  >
-                    <Zap className="w-4 h-4" />
-                    {isDonating ? "..." : "Donate"}
-                  </button>
-                </div>
-                {(file.totalDonations ?? 0) > 0 && (
-                  <p className="text-xs text-[#FAAD14] mt-2">{file.totalDonations} credits received total</p>
-                )}
               </div>
 
               {/* Creation Actions */}
