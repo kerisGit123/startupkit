@@ -11,10 +11,10 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS, SIMPLE_TAGS, TAG_COLORS } from "./constants";
 import { getCurrentCompanyId, useCurrentCompanyId } from "@/lib/auth-utils";
 
-import { ProjectsDashboard }  from "./components/ProjectsDashboard";
+import { ProjectsDashboard }  from "./components/dashboard/ProjectsDashboard";
 import { BoardView }          from "./components/BoardView";
 import { SceneEditor }        from "./components/SceneEditor";
-import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./components/WizardSteps";
+import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./components/dashboard/WizardSteps";
 import { PdfModal, ShareModal, TagModal } from "./components/Modals";
 import { MembersPage }        from "./components/MembersPage";
 import { TestingPage }        from "./components/TestingPage";

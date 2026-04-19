@@ -21,8 +21,9 @@ import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyb
 import { SceneEditor } from "../../components/SceneEditor";
 import { TagEditor } from "../../components/storyboard/TagEditor";
 import { DisplayFilters } from "../../components/storyboard/DisplayFilters";
-import { TopNavSearch } from "../../components/TopNavSearch";
-import { TopNavFilters } from "../../components/TopNavFilters";
+import { TopNavSearch } from "../../components/dashboard/TopNavSearch";
+import { TopNavFilters } from "../../components/dashboard/TopNavFilters";
+import { CreditBadge } from "../../components/shared/CreditBadge";
 import { parseScriptScenes } from "@/lib/storyboard/sceneParser";
 import type { Shot } from "../../types";
 import { 
@@ -106,7 +107,6 @@ import {
   Briefcase, 
   Menu,
   Check,
-  Coins
 } from "lucide-react";
 
 type Tab = "script" | "storyboard" | "table";
@@ -121,7 +121,7 @@ export default function StoryboardWorkspacePage() {
   const project = useQuery(api.storyboard.projects.get, { id: pid });
   const items = useQuery(api.storyboard.moveItems.getStoryboardItemsOrdered, { projectId: pid });
   const currentCompanyId = useCurrentCompanyId() || "personal";
-  const creditBalance = useQuery(api.credits.getBalance, { companyId: currentCompanyId });
+  // Credit balance now handled by CreditBadge component
   const customStyles = useQuery(api.promptTemplates.getByCompany, { companyId: currentCompanyId });
   const customStyleTemplates = customStyles?.filter(t => t.type === "style") ?? [];
 
@@ -1055,10 +1055,7 @@ export default function StoryboardWorkspacePage() {
           )}
 
           {/* Credit Balance */}
-          <div className="flex items-center gap-1.5 px-2 py-1.5 bg-(--bg-primary) rounded-lg text-[11px]">
-            <Coins className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-white font-medium">{typeof creditBalance === 'number' ? creditBalance.toLocaleString() : '...'}</span>
-          </div>
+          <CreditBadge />
 
           {/* Organization Switcher */}
           <OrgSwitcher

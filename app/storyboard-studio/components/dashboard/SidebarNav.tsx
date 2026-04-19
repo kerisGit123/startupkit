@@ -7,9 +7,9 @@ import {
   ChevronDown, ChevronUp, LayoutGrid, Settings,
   LogOut, DollarSign, CreditCard, Trash2, LifeBuoy, ScrollText, FlaskConical,
 } from "lucide-react";
-import type { Project } from "../types";
-import { useStoryboardStudioUI } from "../StoryboardStudioUIContext";
-import CreditBalanceDisplay from "./account/CreditBalanceDisplay";
+import type { Project } from "../../types";
+import { useStoryboardStudioUI } from "../../StoryboardStudioUIContext";
+import CreditBalanceDisplay from "../account/CreditBalanceDisplay";
 
 interface SidebarNavProps {
   open: boolean;

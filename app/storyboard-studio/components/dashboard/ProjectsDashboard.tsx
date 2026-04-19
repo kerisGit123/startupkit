@@ -5,7 +5,7 @@ import {
   Star, MoreHorizontal, Search, Filter, Settings, Users, ChevronDown,
   Plus, Image as ImageIcon, LayoutGrid, Folder, FileText, Link2,
   PanelLeftClose, PanelLeftOpen, List, Share2, Pencil, Eye, Copy,
-  Trash2, Tag, Hash, Grid3x3, Table2, Edit3, ChevronRight, Loader2, FolderOpen, X, Coins,
+  Trash2, Tag, Hash, Grid3x3, Table2, Edit3, ChevronRight, Loader2, FolderOpen, X,
 } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
@@ -16,11 +16,12 @@ import { Palette, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_LIMITS } from "@/lib/plan-config";
-import { VISUAL_STYLES, SIMPLE_TAGS, TAG_COLORS } from "../constants";
-import type { Project, Step } from "../types";
-import { TagEditor } from "./storyboard/TagEditor";
+import { VISUAL_STYLES, SIMPLE_TAGS, TAG_COLORS } from "../../constants";
+import type { Project, Step } from "../../types";
+import { TagEditor } from "../storyboard/TagEditor";
 import { TopNavSearch } from "./TopNavSearch";
 import { TopNavFilters } from "./TopNavFilters";
+import { CreditBadge } from "../shared/CreditBadge";
 
 type ProjectTagOption = {
   id: string;
@@ -88,8 +89,6 @@ export function ProjectsDashboard({
 }: ProjectsDashboardProps) {
   // Credit balance for header display
   const dashboardCompanyId = useCurrentCompanyId() || "personal";
-  const creditBalance = useQuery(api.credits.getBalance, { companyId: dashboardCompanyId });
-
   // Plan-aware project limit + lapsed-subscription freeze
   const { plan: currentPlan, isLapsed } = useSubscription();
   const maxProjects = PLAN_LIMITS[currentPlan].maxProjects;
@@ -186,7 +185,7 @@ export function ProjectsDashboard({
       if (newType === "board" && onCreateConvexProject) {
         // Resolve stylePrompt: check custom styles first, then built-in STYLE_PROMPTS
         const customMatch = customStyleTemplates.find(s => s.name === newArtStyle);
-        const { STYLE_PROMPTS } = await import("../constants");
+        const { STYLE_PROMPTS } = await import("../../constants");
         const resolvedStylePrompt = customMatch?.prompt || STYLE_PROMPTS[newArtStyle] || "";
         await onCreateConvexProject(newName, newFrameRatio, newArtStyle, resolvedStylePrompt);
       } else {
@@ -423,10 +422,7 @@ export function ProjectsDashboard({
                 <Settings className="w-4 h-4" />
               </button>
               <div className="hidden items-center self-end md:flex lg:self-auto gap-2">
-                <div className="flex items-center gap-1.5 px-2 py-1.5 text-[11px]">
-                  <Coins className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-white font-medium">{typeof creditBalance === 'number' ? creditBalance.toLocaleString() : '...'}</span>
-                </div>
+                <CreditBadge />
                 <OrgSwitcher
                   appearance={{
                     elements: {

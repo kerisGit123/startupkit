@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { ConvexHttpClient } from "convex/browser";
 import {
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X, Send, MoreHorizontal, Square, MessageSquare, Eye, EyeOff, Trash2, Paintbrush, Eraser, Upload,
-  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save, Video, Layers, Coins,
+  Pencil, ZoomIn, ZoomOut, Play, Tag, Hash, Type, RotateCcw, RotateCw, Sparkles, List, Mic, Check, Image, Clock, Info, Save, Video, Layers,
 } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
@@ -27,6 +27,7 @@ import type { BubbleType, TailDir, FontFamily } from "../shared/canvas-types";
 import { AIGeneratorModal } from "./storyboard/AIGeneratorModal";
 import EditImageAIPanel, { type AIEditMode } from "./EditImageAIPanel";
 import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/VideoImageAIPanel";
+import { CreditBadge } from "./shared/CreditBadge";
 import { Image as ImageIcon, Box } from "lucide-react";
 import { uploadToR2 } from "@/lib/uploadToR2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
@@ -97,7 +98,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   
   // Get company ID for R2 uploads - use the standard hook
   const companyId = useCurrentCompanyId();
-  const creditBalance = useQuery(api.credits.getBalance, { companyId: companyId || "personal" });
+  // Credit balance now handled by CreditBadge component
   const { plan: currentPlan } = useSubscription();
   
   // Debug companyId values
@@ -4066,10 +4067,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           </svg>
         </button>
         <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-2 py-1.5 text-[11px]">
-            <Coins className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-white font-medium">{typeof creditBalance === 'number' ? creditBalance.toLocaleString() : '...'}</span>
-          </div>
+          <CreditBadge />
           <OrgSwitcher
             appearance={{
               elements: {

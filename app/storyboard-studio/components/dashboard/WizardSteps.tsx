@@ -9,8 +9,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { toast } from "sonner";
-import type { Step, Orientation, Shot, CastMember, LocationAsset } from "../types";
-import { VISUAL_STYLES, STYLE_PROMPTS } from "../constants";
+import type { Step, Orientation, Shot, CastMember, LocationAsset } from "../../types";
+import { VISUAL_STYLES, STYLE_PROMPTS } from "../../constants";
 
 const WIZARD_ART_STYLES = [
   { id: "Manga (Shonen)",            desc: "Action-packed, bold lines, speed effects",    emoji: "🔥" },

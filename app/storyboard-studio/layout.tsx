@@ -7,7 +7,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/ui/themes";
 import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
-import { SidebarNav } from "./components/SidebarNav";
+import { SidebarNav } from "./components/dashboard/SidebarNav";
 import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
 import type { Project } from "./types";
