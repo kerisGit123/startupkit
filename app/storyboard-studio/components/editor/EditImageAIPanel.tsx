@@ -2,18 +2,18 @@
 
 import { toast } from "sonner";
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { usePricingData } from "./shared/usePricingData";
+import { usePricingData } from "../shared/usePricingData";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { api } from "@/convex/_generated/api";
-import { FileBrowser } from "./storyboard/FileBrowser";
-import { ElementLibrary } from "./storyboard/ElementLibrary";
-import PromptLibrary from "./storyboard/PromptLibrary";
-import { AddImageMenu } from "./shared/AddImageMenu";
-import { usePromptEditor } from "./shared/usePromptEditor";
-import { PromptTextarea } from "./shared/PromptTextarea";
+import { FileBrowser } from "../ai/FileBrowser";
+import { ElementLibrary } from "../ai/ElementLibrary";
+import PromptLibrary from "../ai/PromptLibrary";
+import { AddImageMenu } from "../shared/AddImageMenu";
+import { usePromptEditor } from "../shared/usePromptEditor";
+import { PromptTextarea } from "../shared/PromptTextarea";
 import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,

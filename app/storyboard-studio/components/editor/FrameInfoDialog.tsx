@@ -2,8 +2,8 @@
 
 import React, { useState } from "react";
 import { Image, Video, FileText, MessageSquare, Tag } from "lucide-react";
-import type { Shot } from "../types";
-import { DarkModal } from "./shared/DarkModal";
+import type { Shot } from "../../types";
+import { DarkModal } from "../shared/DarkModal";
 
 interface FrameInfoDialogProps {
   isOpen: boolean;

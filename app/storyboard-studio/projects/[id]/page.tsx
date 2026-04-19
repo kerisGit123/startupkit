@@ -3,9 +3,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Settings, Download, Share, Plus, Sparkles, Layers, FileText, Grid3x3, Eye, Zap, BarChart3 } from "lucide-react";
-import { AIGeneratorModal } from "../../components/storyboard/AIGeneratorModal";
+import { AIGeneratorModal } from "../../components/ai/AIGeneratorModal";
 import { TimelineView } from "../../components/storyboard/TimelineView";
-import { ExportModal } from "../../components/storyboard/ExportModal";
+import { ExportModal } from "../../components/modals/ExportModal";
 import { MetadataManager } from "../../components/storyboard/MetadataManager";
 import { ScriptView, StoryboardView, SingleModeView } from "../../components/storyboard/ViewComponents";
 

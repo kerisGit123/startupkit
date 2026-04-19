@@ -7,7 +7,7 @@ import {
   Sparkles, Upload, Send, GripVertical, StickyNote, FileText,
   Play, Camera, Lightbulb, RotateCcw, CheckSquare,
 } from "lucide-react";
-import type { Shot, ViewMode, BoardSettings, Project } from "../types";
+import type { Shot, ViewMode, BoardSettings, Project } from "../../types";
 
 interface BoardViewProps {
   sidebarOpen: boolean;

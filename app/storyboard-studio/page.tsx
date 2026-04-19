@@ -12,16 +12,16 @@ import { SAMPLE_SHOTS, SAMPLE_CAST, SAMPLE_LOCATIONS, SIMPLE_TAGS, TAG_COLORS } 
 import { getCurrentCompanyId, useCurrentCompanyId } from "@/lib/auth-utils";
 
 import { ProjectsDashboard }  from "./components/dashboard/ProjectsDashboard";
-import { BoardView }          from "./components/BoardView";
-import { SceneEditor }        from "./components/SceneEditor";
+import { BoardView }          from "./components/editor/BoardView";
+import { SceneEditor }        from "./components/editor/SceneEditor";
 import { StepNav, ScriptInput, Breakdown, StyleSelection, CastStep } from "./components/dashboard/WizardSteps";
-import { PdfModal, ShareModal, TagModal } from "./components/Modals";
-import { MembersPage }        from "./components/MembersPage";
-import { TestingPage }        from "./components/TestingPage";
+import { PdfModal, ShareModal, TagModal } from "./components/modals/Modals";
+import { MembersPage }        from "./components/pages/MembersPage";
+import { TestingPage }        from "./components/pages/TestingPage";
 import { GalleryPage }        from "./components/gallery/GalleryPage";
-import { LapsedBanner }       from "./components/LapsedBanner";
-import { UsageDashboard }     from "./components/UsageDashboard";
-import { FileBrowser } from "./components/storyboard/FileBrowser";
+import { LapsedBanner }       from "./components/pages/LapsedBanner";
+import { UsageDashboard }     from "./components/pages/UsageDashboard";
+import { FileBrowser } from "./components/ai/FileBrowser";
 import { useStoryboardStudioUI } from "./StoryboardStudioUIContext";
 import PricingManagementPage from "./components/account/PricingManagementPage";
 import BillingSubscriptionPage from "./components/account/BillingSubscriptionPage";

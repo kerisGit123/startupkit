@@ -2,8 +2,8 @@
 
 import { Lock, Copy, Check } from "lucide-react";
 import { useState } from "react";
-import type { BoardSettings } from "../types";
-import { DarkModal } from "./shared/DarkModal";
+import type { BoardSettings } from "../../types";
+import { DarkModal } from "../shared/DarkModal";
 
 // ── PDF Export Modal ──────────────────────────────────────────────────────────
 interface PdfModalProps {

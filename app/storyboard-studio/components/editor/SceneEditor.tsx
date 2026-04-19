@@ -10,24 +10,24 @@ import {
 } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
-import UseCaseInfoModal from "./UseCaseInfoModal";
+import UseCaseInfoModal from "../modals/UseCaseInfoModal";
 import { FrameInfoDialog } from "./FrameInfoDialog";
-import { FileBrowser } from "./storyboard/FileBrowser";
+import { FileBrowser } from "../ai/FileBrowser";
 import { CanvasArea } from "./CanvasArea";
-import { GeneratedImagesPanel } from "./GeneratedImagesPanel/index";
-import type { Shot, CommentItem, Tag as TagType } from "../types";
+import { GeneratedImagesPanel } from "../GeneratedImagesPanel/index";
+import type { Shot, CommentItem, Tag as TagType } from "../../types";
 import type { Id } from "@/convex/_generated/dataModel";
-import { TAG_COLORS } from "../constants";
+import { TAG_COLORS } from "../../constants";
 import {
   CanvasEditor, emptyCanvasState,
   type CanvasEditorState, type CanvasActiveTool, type CanvasSelection,
-} from "../shared/CanvasEditor";
-import { makeId, bubbleEllipse, cloudPath, tailPath, rectTailPath, rectOutlinePathWithGap, burstPoints, roughEllipsePath, estimateFontSize } from "../shared/canvas-helpers";
-import type { BubbleType, TailDir, FontFamily } from "../shared/canvas-types";
-import { AIGeneratorModal } from "./storyboard/AIGeneratorModal";
+} from "../../shared/CanvasEditor";
+import { makeId, bubbleEllipse, cloudPath, tailPath, rectTailPath, rectOutlinePathWithGap, burstPoints, roughEllipsePath, estimateFontSize } from "../../shared/canvas-helpers";
+import type { BubbleType, TailDir, FontFamily } from "../../shared/canvas-types";
+import { AIGeneratorModal } from "../ai/AIGeneratorModal";
 import EditImageAIPanel, { type AIEditMode } from "./EditImageAIPanel";
-import { ImageAIPanel, type ImageAIEditMode } from "./storyboard/VideoImageAIPanel";
-import { CreditBadge } from "./shared/CreditBadge";
+import { ImageAIPanel, type ImageAIEditMode } from "../ai/VideoImageAIPanel";
+import { CreditBadge } from "../shared/CreditBadge";
 import { SceneEditorHeader } from "./SceneEditorHeader";
 import { Image as ImageIcon, Box } from "lucide-react";
 import { uploadToR2 } from "@/lib/uploadToR2";
@@ -4734,7 +4734,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
                       console.log('[onGenerate] Checking credit balance before generation...');
                       const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-                      const { api } = await import("../../../convex/_generated/api");
+                      const { api } = await import("../../../../convex/_generated/api");
                       const currentBalance = await convex.query(api.credits.getBalance, { companyId });
                       const requiredCredits = creditsUsed;
                       

@@ -1,5 +1,5 @@
 import React from 'react';
-import { DarkModal } from './shared/DarkModal';
+import { DarkModal } from '../shared/DarkModal';
 
 interface UseCaseInfoModalProps {
   isOpen: boolean;

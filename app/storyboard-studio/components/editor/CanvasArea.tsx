@@ -6,7 +6,7 @@ import {
   CanvasEditor,
   type CanvasEditorState,
   type CanvasActiveTool,
-} from "../shared/CanvasEditor";
+} from "../../shared/CanvasEditor";
 
 // ── Types ─────────────────────────────────────────────────────────────
 interface CanvasAreaProps {

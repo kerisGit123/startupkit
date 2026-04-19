@@ -3,8 +3,8 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
-import { CreditBadge } from "./shared/CreditBadge";
-import type { Shot } from "../types";
+import { CreditBadge } from "../shared/CreditBadge";
+import type { Shot } from "../../types";
 
 interface SceneEditorHeaderProps {
   shots: Shot[];
