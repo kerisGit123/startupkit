@@ -241,20 +241,60 @@ function ProfileSection({
     if (!printableRef.current) return;
     setPdfLoading(true);
     try {
-      const html2pdf = (await import("html2pdf.js")).default;
-      await html2pdf()
-        .from(printableRef.current)
-        .set({
-          margin: 10,
-          filename: `dispute-evidence-${profile.user.email ?? profile.user.clerkUserId}-${new Date().toISOString().slice(0, 10)}.pdf`,
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak: { mode: ["css", "legacy"] },
-        })
-        .save();
+      // Use html2canvas-pro (supports oklch/lab/color-mix — Tailwind v4
+      // emits these) + jsPDF. The default html2canvas shipped with
+      // html2pdf.js throws on lab() colors.
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas-pro"),
+        import("jspdf"),
+      ]);
+
+      const canvas = await html2canvas(printableRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      // Fit canvas to A4 width, preserve aspect ratio, paginate vertically
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const contentWidth = pdfWidth - margin * 2;
+      const contentHeight = (canvas.height * contentWidth) / canvas.width;
+
+      let remainingHeight = contentHeight;
+      let yOffset = 0;
+      const pageContentHeight = pdfHeight - margin * 2;
+
+      while (remainingHeight > 0) {
+        pdf.addImage(
+          imgData,
+          "PNG",
+          margin,
+          margin - yOffset,
+          contentWidth,
+          contentHeight,
+        );
+        remainingHeight -= pageContentHeight;
+        yOffset += pageContentHeight;
+        if (remainingHeight > 0) pdf.addPage();
+      }
+
+      const filename = `dispute-evidence-${profile.user.email ?? profile.user.clerkUserId}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      pdf.save(filename);
     } catch (e) {
       console.error("PDF export failed", e);
-      alert("PDF export failed — check console. You can still use 'Copy as markdown'.");
+      alert(
+        "PDF export failed — check console. You can still use 'Copy as markdown' as a fallback.",
+      );
     } finally {
       setPdfLoading(false);
     }
