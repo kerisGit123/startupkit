@@ -277,6 +277,81 @@ export const getUserBillingProfile = query({
       );
     }
 
+    // ── Risk verdict (merchant-perspective dispute score) ──────────────
+    // Score: 0 = weak defense (chargeback likely legitimate)
+    //       100 = strong defense (chargeback likely fraud/abuse)
+    let score = 50;
+    const scoreReasons: { sign: "+" | "-"; points: number; text: string }[] = [];
+
+    if (usagePercent >= 80) {
+      score += 30;
+      scoreReasons.push({ sign: "+", points: 30, text: `Used ${usagePercent}% of credits — strong "received the service" argument` });
+    } else if (usagePercent >= 50) {
+      score += 20;
+      scoreReasons.push({ sign: "+", points: 20, text: `Used ${usagePercent}% of credits` });
+    } else if (usagePercent >= 20) {
+      score += 10;
+      scoreReasons.push({ sign: "+", points: 10, text: `Used ${usagePercent}% of credits` });
+    }
+
+    if (fileCount > 50) {
+      score += 20;
+      scoreReasons.push({ sign: "+", points: 20, text: `${fileCount} generations delivered (concrete proof of service)` });
+    } else if (fileCount > 10) {
+      score += 10;
+      scoreReasons.push({ sign: "+", points: 10, text: `${fileCount} generations delivered` });
+    } else if (fileCount > 0) {
+      score += 5;
+      scoreReasons.push({ sign: "+", points: 5, text: `${fileCount} generation(s) delivered` });
+    }
+
+    if (accountAgeDays >= 90) {
+      score += 15;
+      scoreReasons.push({ sign: "+", points: 15, text: `Account ${accountAgeDays} days old — sustained legitimate use` });
+    } else if (accountAgeDays >= 30) {
+      score += 10;
+      scoreReasons.push({ sign: "+", points: 10, text: `Account ${accountAgeDays} days old` });
+    }
+
+    if (accountAgeDays < 7 && totalPurchasedAmountCents > 5000) {
+      score -= 25;
+      scoreReasons.push({ sign: "-", points: 25, text: `Account <7 days old with >$50 purchase — possible carding` });
+    }
+    if (purchases.length >= 3 && accountAgeDays < 14) {
+      score -= 20;
+      scoreReasons.push({ sign: "-", points: 20, text: `${purchases.length} purchases in ${accountAgeDays} days — rapid spending` });
+    }
+    if (refunds.length > purchases.length && purchases.length > 0) {
+      score -= 15;
+      scoreReasons.push({ sign: "-", points: 15, text: `More refunds than purchases — abuse pattern` });
+    }
+    if (usagePercent < 5 && totalPurchasedAmountCents >= 1000) {
+      score -= 20;
+      scoreReasons.push({ sign: "-", points: 20, text: `Paid ≥$10 but used <5% — weak "received service" argument` });
+    }
+
+    score = Math.max(0, Math.min(100, score));
+
+    let verdictLevel: "strong" | "moderate" | "weak";
+    let verdictLabel: string;
+    let verdictAdvice: string;
+    if (score >= 70) {
+      verdictLevel = "strong";
+      verdictLabel = "Strong dispute defense — likely chargeback abuse";
+      verdictAdvice =
+        "The user consumed the service. A chargeback here is likely abuse. Submit this evidence to Stripe to fight the dispute. Consider suspending the account if confirmed.";
+    } else if (score >= 40) {
+      verdictLevel = "moderate";
+      verdictLabel = "Moderate dispute defense — review manually";
+      verdictAdvice =
+        "Mixed signals. Some evidence supports fighting the dispute, some doesn't. Consider reviewing recent activity manually, or offering the user a partial refund to resolve amicably before Stripe decides.";
+    } else {
+      verdictLevel = "weak";
+      verdictLabel = "Weak dispute defense — may be legitimate complaint";
+      verdictAdvice =
+        "The user paid but barely used the service. A chargeback here has a reasonable basis. Consider accepting the chargeback rather than fighting it. If there's a pattern of this (buy, dispute, repeat), treat as fraud and suspend.";
+    }
+
     return {
       found: true,
       user: {
@@ -331,6 +406,13 @@ export const getUserBillingProfile = query({
       })),
       redFlags,
       positiveSignals,
+      verdict: {
+        score,
+        level: verdictLevel,
+        label: verdictLabel,
+        advice: verdictAdvice,
+        reasons: scoreReasons,
+      },
     };
   },
 });

@@ -1,10 +1,13 @@
 "use client";
 
-import { Component, useState, type ReactNode } from "react";
+import { Component, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
-import { AlertCircle, CheckCircle2, Copy, Search, Shield } from "lucide-react";
+import {
+  AlertCircle, CheckCircle2, Copy, Download, Search, Shield,
+  ShieldAlert, ShieldCheck, ShieldX,
+} from "lucide-react";
 
 /**
  * Error boundary that catches the "Forbidden — super_admin" throw from
@@ -195,7 +198,12 @@ function ProfileSection({
   copied: boolean;
   setCopied: (v: boolean) => void;
 }) {
+  // All hooks MUST be called unconditionally on every render, above any
+  // early returns. React's rules-of-hooks enforces this.
   const profile = useQuery(api.fraudCheck.getUserBillingProfile, { identifier });
+  const [timeRangeDays, setTimeRangeDays] = useState<30 | 60 | 90 | 0>(30);
+  const printableRef = useRef<HTMLDivElement>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   if (profile === undefined) {
     return <div className="text-zinc-600 text-sm">Loading…</div>;
@@ -210,15 +218,174 @@ function ProfileSection({
     );
   }
 
-  const evidenceMarkdown = buildEvidenceMarkdown(profile);
+  const cutoff = timeRangeDays === 0 ? 0 : Date.now() - timeRangeDays * 24 * 60 * 60 * 1000;
+  const filteredLedger = profile.recentLedger.filter((r: any) => r.createdAt >= cutoff);
+  const filteredStripe = profile.stripeIds.filter((s: any) => s.createdAt >= cutoff);
+
+  // Categorized abnormal areas — turn flat flags into domain buckets so
+  // reviewers can spot WHICH aspect of the account looks fishy.
+  const abnormalAreas = computeAbnormalAreas(profile);
+
+  const evidenceMarkdown = buildEvidenceMarkdown(profile, {
+    filteredLedger,
+    filteredStripe,
+    timeRangeDays,
+    abnormalAreas,
+  });
   const handleCopy = async () => {
     await navigator.clipboard.writeText(evidenceMarkdown);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+  const handleDownloadPdf = async () => {
+    if (!printableRef.current) return;
+    setPdfLoading(true);
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+      await html2pdf()
+        .from(printableRef.current)
+        .set({
+          margin: 10,
+          filename: `dispute-evidence-${profile.user.email ?? profile.user.clerkUserId}-${new Date().toISOString().slice(0, 10)}.pdf`,
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"] },
+        })
+        .save();
+    } catch (e) {
+      console.error("PDF export failed", e);
+      alert("PDF export failed — check console. You can still use 'Copy as markdown'.");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const verdict = profile.verdict;
+  const verdictStyles =
+    verdict.level === "strong"
+      ? { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-900", accent: "text-emerald-700", Icon: ShieldCheck }
+      : verdict.level === "moderate"
+      ? { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-900", accent: "text-amber-700", Icon: ShieldAlert }
+      : { bg: "bg-rose-50", border: "border-rose-300", text: "text-rose-900", accent: "text-rose-700", Icon: ShieldX };
+  const { Icon: VerdictIcon } = verdictStyles;
 
   return (
     <div className="space-y-4">
+          {/* Action bar — PDF download sits outside the printable div.
+              Time range filters transactions + ledger shown below AND
+              written into the PDF. */}
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-zinc-600">Transactions window:</span>
+              {[30, 60, 90, 0].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setTimeRangeDays(d as 0 | 30 | 60 | 90)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    timeRangeDays === d
+                      ? "bg-zinc-900 text-white"
+                      : "bg-white border border-zinc-300 text-zinc-700 hover:bg-zinc-50"
+                  }`}
+                >
+                  {d === 0 ? "All time" : `${d} days`}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopy}
+                className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white text-sm font-medium hover:bg-zinc-50 flex items-center gap-1.5 text-zinc-900"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                {copied ? "Copied!" : "Copy as markdown"}
+              </button>
+              <button
+                onClick={handleDownloadPdf}
+                disabled={pdfLoading}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" />
+                {pdfLoading ? "Building PDF…" : "Download PDF (for Stripe)"}
+              </button>
+            </div>
+          </div>
+
+          {/* Everything inside this ref goes into the PDF */}
+          <div ref={printableRef} className="space-y-4 bg-white p-4">
+
+          {/* Verdict banner — color-coded traffic light based on risk score */}
+          <div className={`rounded-xl border-2 ${verdictStyles.border} ${verdictStyles.bg} p-5`}>
+            <div className="flex items-start gap-4">
+              <VerdictIcon className={`w-10 h-10 shrink-0 ${verdictStyles.accent}`} />
+              <div className="flex-1">
+                <div className="flex items-baseline gap-3 mb-1">
+                  <span className={`text-3xl font-bold ${verdictStyles.text}`}>
+                    {verdict.score}<span className="text-lg text-zinc-500">/100</span>
+                  </span>
+                  <span className={`text-lg font-semibold ${verdictStyles.text}`}>
+                    {verdict.label}
+                  </span>
+                </div>
+                <p className={`text-sm ${verdictStyles.text} mb-3`}>
+                  {verdict.advice}
+                </p>
+                {verdict.reasons.length > 0 && (
+                  <details className="text-sm">
+                    <summary className={`cursor-pointer font-medium ${verdictStyles.accent}`}>
+                      How the score was calculated ({verdict.reasons.length} factors)
+                    </summary>
+                    <ul className="mt-2 space-y-1">
+                      {verdict.reasons.map((r, i) => (
+                        <li key={i} className={`${verdictStyles.text}`}>
+                          <span className={`font-mono font-bold ${r.sign === "+" ? "text-emerald-700" : "text-rose-700"}`}>
+                            {r.sign}{r.points}
+                          </span>
+                          {" "}— {r.text}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Abnormal areas — categorized risk by domain */}
+          <Card title="Abnormal areas (per-domain risk assessment)">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {abnormalAreas.map((area) => (
+                <div
+                  key={area.domain}
+                  className={`rounded-lg border p-3 ${
+                    area.status === "high"
+                      ? "border-rose-200 bg-rose-50"
+                      : area.status === "medium"
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-emerald-200 bg-emerald-50"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-zinc-900">
+                      {area.domain}
+                    </span>
+                    <span
+                      className={`text-xs font-mono uppercase ${
+                        area.status === "high"
+                          ? "text-rose-700"
+                          : area.status === "medium"
+                          ? "text-amber-700"
+                          : "text-emerald-700"
+                      }`}
+                    >
+                      {area.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-700">{area.finding}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
           {/* User header */}
           <Card title="User">
             <Row label="Email" value={profile.user.email ?? "—"} />
@@ -298,9 +465,9 @@ function ProfileSection({
             )}
           </Card>
 
-          {/* Stripe IDs */}
-          {profile.stripeIds.length > 0 && (
-            <Card title="Stripe payment references">
+          {/* Stripe IDs — filtered by selected time window */}
+          {filteredStripe.length > 0 && (
+            <Card title={`Stripe payment references (${filteredStripe.length} in ${timeRangeDays === 0 ? "all time" : `last ${timeRangeDays}d`}; ${profile.stripeIds.length} total)`}>
               <div className="overflow-x-auto -mx-2">
                 <table className="w-full text-xs">
                   <thead>
@@ -313,7 +480,7 @@ function ProfileSection({
                     </tr>
                   </thead>
                   <tbody className="font-mono text-zinc-800">
-                    {profile.stripeIds.map((s, i) => (
+                    {filteredStripe.map((s: any, i: number) => (
                       <tr key={i} className="border-t border-zinc-200">
                         <td className="px-2 py-1">
                           {new Date(s.createdAt).toISOString().slice(0, 10)}
@@ -338,8 +505,8 @@ function ProfileSection({
             </Card>
           )}
 
-          {/* Recent ledger */}
-          <Card title={`Recent ledger (last ${Math.min(30, profile.recentLedger.length)} of all activity)`}>
+          {/* Recent ledger — filtered by selected time window */}
+          <Card title={`Ledger activity (${filteredLedger.length} in ${timeRangeDays === 0 ? "all time" : `last ${timeRangeDays}d`}; last 30 of total ${profile.recentLedger.length} shown)`}>
             <div className="overflow-x-auto -mx-2">
               <table className="w-full text-xs">
                 <thead>
@@ -351,7 +518,7 @@ function ProfileSection({
                   </tr>
                 </thead>
                 <tbody className="text-zinc-800">
-                  {profile.recentLedger.map((row, i) => (
+                  {filteredLedger.map((row: any, i: number) => (
                     <tr key={i} className="border-t border-zinc-200">
                       <td className="px-2 py-1">
                         {new Date(row.createdAt).toISOString().slice(0, 16).replace("T", " ")}
@@ -371,17 +538,11 @@ function ProfileSection({
             </div>
           </Card>
 
-          {/* Evidence package */}
-          <Card title="Evidence package (paste into Stripe dispute submission)">
-            <div className="flex justify-end mb-2">
-              <button
-                onClick={handleCopy}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 flex items-center gap-1.5"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                {copied ? "Copied!" : "Copy as markdown"}
-              </button>
-            </div>
+          </div>{/* ── end printable ── */}
+
+          {/* Evidence package (markdown preview) — outside the PDF
+              because html2pdf already includes the rendered cards above */}
+          <Card title="Evidence markdown (for Stripe dispute UI or email)">
             <pre className="text-xs font-mono bg-zinc-50 border border-zinc-200 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap text-zinc-800 max-h-96 overflow-y-auto">
               {evidenceMarkdown}
             </pre>
@@ -418,11 +579,175 @@ function Row({
   );
 }
 
-function buildEvidenceMarkdown(profile: any): string {
+type AbnormalArea = {
+  domain: string;
+  status: "low" | "medium" | "high";
+  finding: string;
+};
+
+function computeAbnormalAreas(profile: any): AbnormalArea[] {
+  const s = profile.summary;
+  const areas: AbnormalArea[] = [];
+
+  // 1. Account velocity — new account + large purchase fast
+  if (
+    profile.user.accountAgeDays < 7 &&
+    s.totalPurchasedAmountCents > 5000
+  ) {
+    areas.push({
+      domain: "Account velocity",
+      status: "high",
+      finding: `Account only ${profile.user.accountAgeDays} days old with $${(s.totalPurchasedAmountCents / 100).toFixed(2)} purchased — unusual for new account.`,
+    });
+  } else if (
+    s.daysFromSignupToFirstPurchase !== null &&
+    s.daysFromSignupToFirstPurchase < 1
+  ) {
+    areas.push({
+      domain: "Account velocity",
+      status: "medium",
+      finding: `First purchase within 24h of signup. Common for legitimate but also fraud pattern — cross-reference IP/device.`,
+    });
+  } else {
+    areas.push({
+      domain: "Account velocity",
+      status: "low",
+      finding: `Account ${profile.user.accountAgeDays} days old; first purchase ${s.daysFromSignupToFirstPurchase ?? "n/a"} days after signup. Normal.`,
+    });
+  }
+
+  // 2. Usage patterns — purchased credits actually used?
+  if (s.totalPurchasedAmountCents >= 1000 && s.usagePercent < 5) {
+    areas.push({
+      domain: "Usage pattern",
+      status: "high",
+      finding: `Paid $${(s.totalPurchasedAmountCents / 100).toFixed(2)} but used only ${s.usagePercent}% of credits. Weak "received service" defense.`,
+    });
+  } else if (s.usagePercent < 20) {
+    areas.push({
+      domain: "Usage pattern",
+      status: "medium",
+      finding: `${s.usagePercent}% of credits used. Moderate service consumption.`,
+    });
+  } else {
+    areas.push({
+      domain: "Usage pattern",
+      status: "low",
+      finding: `${s.usagePercent}% of credits used (${s.usageEventCount} generations). Clear service consumption.`,
+    });
+  }
+
+  // 3. Refund patterns
+  if (s.refundEventCount > s.purchaseCount && s.purchaseCount > 0) {
+    areas.push({
+      domain: "Refund pattern",
+      status: "high",
+      finding: `${s.refundEventCount} refunds vs ${s.purchaseCount} purchases — abnormal; possible refund abuse.`,
+    });
+  } else if (
+    s.purchaseCount > 0 &&
+    s.refundEventCount / Math.max(1, s.purchaseCount) > 0.3
+  ) {
+    areas.push({
+      domain: "Refund pattern",
+      status: "medium",
+      finding: `${s.refundEventCount} refunds across ${s.purchaseCount} purchases (${Math.round((s.refundEventCount / Math.max(1, s.purchaseCount)) * 100)}%). Higher than typical.`,
+    });
+  } else {
+    areas.push({
+      domain: "Refund pattern",
+      status: "low",
+      finding: `${s.refundEventCount} refunds, ${s.purchaseCount} purchases. Normal.`,
+    });
+  }
+
+  // 4. Payment pattern — rapid repeated purchases?
+  if (s.purchaseCount >= 5 && profile.user.accountAgeDays < 14) {
+    areas.push({
+      domain: "Payment pattern",
+      status: "high",
+      finding: `${s.purchaseCount} purchases in ${profile.user.accountAgeDays} days. Rapid spending pattern — watch for stolen card use.`,
+    });
+  } else if (s.purchaseCount >= 3 && profile.user.accountAgeDays < 30) {
+    areas.push({
+      domain: "Payment pattern",
+      status: "medium",
+      finding: `${s.purchaseCount} purchases in ${profile.user.accountAgeDays} days.`,
+    });
+  } else {
+    areas.push({
+      domain: "Payment pattern",
+      status: "low",
+      finding: `${s.purchaseCount} purchase(s) over ${profile.user.accountAgeDays} days. Normal cadence.`,
+    });
+  }
+
+  // 5. Subscription churn — frequent plan changes?
+  // Count subscription grants as a proxy for plan changes
+  const subGrants = profile.recentLedger.filter((r: any) => r.type === "subscription").length;
+  const adminAdj = s.adminAdjustmentCount;
+  if (subGrants >= 3 && profile.user.accountAgeDays < 30) {
+    areas.push({
+      domain: "Subscription churn",
+      status: "high",
+      finding: `${subGrants} subscription grants in ${profile.user.accountAgeDays} days with ${adminAdj} clawbacks — possible plan-cycling abuse.`,
+    });
+  } else if (subGrants >= 2 && profile.user.accountAgeDays < 60) {
+    areas.push({
+      domain: "Subscription churn",
+      status: "medium",
+      finding: `${subGrants} subscription grants; ${adminAdj} clawbacks. Monitor for cycling.`,
+    });
+  } else {
+    areas.push({
+      domain: "Subscription churn",
+      status: "low",
+      finding: `${subGrants} subscription grants; ${adminAdj} clawbacks. Normal.`,
+    });
+  }
+
+  return areas;
+}
+
+function buildEvidenceMarkdown(
+  profile: any,
+  opts?: {
+    filteredLedger?: any[];
+    filteredStripe?: any[];
+    timeRangeDays?: number;
+    abnormalAreas?: AbnormalArea[];
+  },
+): string {
   const lines: string[] = [];
   lines.push(`# Billing dispute evidence — ${profile.user.email ?? profile.user.clerkUserId}`);
   lines.push(`Generated: ${new Date().toISOString()}`);
   lines.push("");
+
+  if (profile.verdict) {
+    const v = profile.verdict;
+    lines.push(`## Risk verdict — ${v.score}/100 (${v.level.toUpperCase()})`);
+    lines.push(`**${v.label}**`);
+    lines.push("");
+    lines.push(v.advice);
+    if (v.reasons?.length > 0) {
+      lines.push("");
+      lines.push(`Score factors:`);
+      for (const r of v.reasons) {
+        lines.push(`- ${r.sign}${r.points} — ${r.text}`);
+      }
+    }
+    lines.push("");
+  }
+
+  if (opts?.abnormalAreas && opts.abnormalAreas.length > 0) {
+    lines.push(`## Abnormal areas (per-domain risk)`);
+    lines.push(`| Domain | Status | Finding |`);
+    lines.push(`|---|---|---|`);
+    for (const a of opts.abnormalAreas) {
+      lines.push(`| ${a.domain} | **${a.status.toUpperCase()}** | ${a.finding} |`);
+    }
+    lines.push("");
+  }
 
   lines.push(`## User`);
   lines.push(`- Email: ${profile.user.email ?? "—"}`);
@@ -465,13 +790,24 @@ function buildEvidenceMarkdown(profile: any): string {
     lines.push("");
   }
 
-  lines.push(`## Stripe payment references (cross-reference for dispute)`);
-  if (profile.stripeIds.length === 0) {
-    lines.push(`_No purchase records on file._`);
+  const stripeList = opts?.filteredStripe ?? profile.stripeIds;
+  const rangeLabel =
+    opts?.timeRangeDays === 0 || opts?.timeRangeDays === undefined
+      ? "all time"
+      : `last ${opts.timeRangeDays} days`;
+  lines.push(
+    `## Stripe payment references (${stripeList.length} in ${rangeLabel}${
+      stripeList.length !== profile.stripeIds.length
+        ? `; ${profile.stripeIds.length} total on file`
+        : ""
+    })`,
+  );
+  if (stripeList.length === 0) {
+    lines.push(`_No purchase records in this window._`);
   } else {
     lines.push(`| Date | Amount | Credits | PaymentIntent | CheckoutSession |`);
     lines.push(`|---|---|---|---|---|`);
-    for (const s of profile.stripeIds) {
+    for (const s of stripeList) {
       lines.push(
         `| ${new Date(s.createdAt).toISOString().slice(0, 10)} | ${s.amountCents ? `${(s.amountCents / 100).toFixed(2)} ${s.currency?.toUpperCase()}` : "—"} | ${s.tokens?.toLocaleString() ?? "—"} | \`${s.paymentIntent ?? "—"}\` | \`${s.checkoutSession ?? "—"}\` |`,
       );
@@ -488,10 +824,11 @@ function buildEvidenceMarkdown(profile: any): string {
   );
   lines.push("");
 
-  lines.push(`## Recent ledger (last 30 events)`);
+  const ledgerList = opts?.filteredLedger ?? profile.recentLedger;
+  lines.push(`## Ledger activity (${ledgerList.length} in ${rangeLabel})`);
   lines.push(`| Date | Type | Tokens | Reason |`);
   lines.push(`|---|---|---|---|`);
-  for (const r of profile.recentLedger) {
+  for (const r of ledgerList) {
     lines.push(
       `| ${new Date(r.createdAt).toISOString().slice(0, 16).replace("T", " ")} | \`${r.type}\` | ${r.tokens > 0 ? "+" : ""}${r.tokens} | ${r.reason ?? "—"} |`,
     );
