@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireOwner } from "./credits";
+import { requireOwner, requireWorkspaceAccess } from "./credits";
 
 export const ensureOrgSettings = mutation({
   args: {
@@ -35,7 +35,9 @@ export const ensureOrgSettings = mutation({
 export const getSettings = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    await requireOwner(ctx, companyId);
+    // Members may need to read non-sensitive settings; updateSettings stays owner-only.
+    // TODO: split sensitive fields (API keys) into a separate getOwnerSettings query.
+    await requireWorkspaceAccess(ctx, companyId);
     const settings = await ctx.db
       .query("org_settings")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))

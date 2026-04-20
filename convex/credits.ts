@@ -128,7 +128,7 @@ export const refundCredits = mutation({
     if (args._secret) {
       requireWebhookSecret(args._secret);
     } else {
-      userId = await requireOwner(ctx, args.companyId);
+      userId = await requireWorkspaceAccess(ctx, args.companyId);
     }
     const now = Date.now();
 
@@ -692,14 +692,21 @@ export async function requireOwner(
 }
 
 /**
- * Throw unless the authenticated caller can access `companyId`. Allows
- * three classes of caller:
- *   - personal workspace owner (companyId === user's Clerk subject)
- *   - active org member (Clerk JWT `orgId === companyId`)
- *   - org creator (per resolveCompanyCreator)
+ * Throw unless the authenticated caller can access `companyId`. Tries
+ * five increasingly-broad signals:
+ *   1. Personal workspace (companyId === user's Clerk subject)
+ *   2. Active-org JWT claim (`identity.orgId === companyId`) — only fires
+ *      when the Clerk JWT template includes `org_id`. The default
+ *      template here does NOT, so this is a no-op until configured.
+ *   3. Workspace creator (per resolveCompanyCreator)
+ *   4. Owns any project in this workspace (via storyboard_projects
+ *      by_owner index)
+ *   5. Has any ledger row authored by this user in this workspace
  *
- * Use this for storyboard projects/items/files where every member of an
- * org should be able to read and edit, not just the creator.
+ * Brand-new invited members with zero activity will fail until they
+ * perform any action that creates evidence (a project or a deduction).
+ * The proper fix is to add `org_id`/`org_role` to the Clerk JWT template
+ * — see commit message for instructions.
  */
 export async function requireWorkspaceAccess(
   ctx: { db: any; auth: any },
@@ -707,13 +714,35 @@ export async function requireWorkspaceAccess(
 ): Promise<string> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Unauthenticated");
-  if (companyId === identity.subject) return identity.subject;
-  if ((identity as any).orgId === companyId) return identity.subject;
+  const userId = identity.subject;
+
+  // 1 + 2: Quick checks via JWT
+  if (companyId === userId) return userId;
+  if ((identity as any).orgId === companyId) return userId;
+
+  // 3: Creator
   const creator = await resolveCompanyCreator(ctx, companyId);
-  if (creator !== identity.subject) {
-    throw new Error("You do not have access to this workspace");
-  }
-  return identity.subject;
+  if (creator === userId) return userId;
+
+  // 4: Owns a project in this workspace
+  const ownedProject = await ctx.db
+    .query("storyboard_projects")
+    .withIndex("by_owner", (q: any) =>
+      q.eq("orgId", companyId).eq("ownerId", userId),
+    )
+    .first();
+  if (ownedProject) return userId;
+
+  // 5: Has any ledger evidence (deduction, refund, etc.) — scans via
+  // by_companyId then filters; acceptable for typical workspace sizes.
+  const ledgerEvidence = await ctx.db
+    .query("credits_ledger")
+    .withIndex("by_companyId", (q: any) => q.eq("companyId", companyId))
+    .filter((q: any) => q.eq(q.field("userId"), userId))
+    .first();
+  if (ledgerEvidence) return userId;
+
+  throw new Error("You do not have access to this workspace");
 }
 
 /**
@@ -1657,7 +1686,7 @@ export const listOwnedWorkspaces = query({
 export const getBalance = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    await requireOwner(ctx, companyId);
+    await requireWorkspaceAccess(ctx, companyId);
     const balance = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -1670,7 +1699,7 @@ export const getBalance = query({
 export const getCompanyBalance = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    await requireOwner(ctx, companyId);
+    await requireWorkspaceAccess(ctx, companyId);
     const balance = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -1688,7 +1717,7 @@ export const getLedger = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireOwner(ctx, args.companyId);
+    await requireWorkspaceAccess(ctx, args.companyId);
     const limit = args.limit || 100;
     const ledger = await ctx.db
       .query("credits_ledger")
@@ -1705,7 +1734,7 @@ export const getPurchaseHistory = query({
     companyId: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireOwner(ctx, args.companyId);
+    await requireWorkspaceAccess(ctx, args.companyId);
     const purchases = await ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q) =>
@@ -1729,7 +1758,7 @@ export const listTransferHistory = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireOwner(ctx, args.companyId);
+    await requireWorkspaceAccess(ctx, args.companyId);
     const limit = args.limit ?? 50;
     const transfersOut = await ctx.db
       .query("credits_ledger")
@@ -1760,7 +1789,7 @@ export const listTransferHistory = query({
 export const getOrgUsageSummary = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    await requireOwner(ctx, companyId);
+    await requireWorkspaceAccess(ctx, companyId);
     const all = await ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q) =>
@@ -1798,7 +1827,7 @@ export const getOrgUsageSummary = query({
 export const listOrgUsage = query({
   args: { companyId: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, { companyId, limit }) => {
-    await requireOwner(ctx, companyId);
+    await requireWorkspaceAccess(ctx, companyId);
     const q = ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q2) =>
