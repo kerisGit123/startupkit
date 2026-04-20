@@ -413,6 +413,8 @@ export const getUserBillingProfile = query({
         advice: verdictAdvice,
         reasons: scoreReasons,
       },
+      // Anti-abuse fields from credits_balance (personal workspace)
+      cyclingBlockedUntil: personalRow?.cyclingBlockedUntil ?? null,
     };
   },
 });

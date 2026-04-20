@@ -26,8 +26,25 @@ export default clerkMiddleware(async (auth, request) => {
     return;
   }
 
+  // Allow the suspended page itself (and its API counterpart) to load
+  // without triggering an infinite redirect loop.
+  if (request.nextUrl.pathname === '/suspended') {
+    return;
+  }
+
   if (!isPublicRoute(request)) {
     await auth.protect();
+  }
+
+  // After auth, check if the account has been manually suspended by an admin.
+  // publicMetadata.suspended is set via the Clerk Admin API from the
+  // fraud-check tool's "Suspend account" button.
+  const { sessionClaims } = await auth();
+  const meta = sessionClaims?.public_metadata as Record<string, unknown> | undefined;
+  if (meta?.suspended === true && request.nextUrl.pathname !== '/suspended') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/suspended';
+    return Response.redirect(url);
   }
 });
 

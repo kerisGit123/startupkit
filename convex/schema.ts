@@ -517,6 +517,7 @@ export default defineSchema({
         v.literal("transfer_out"),     // Sent to another owned org
         v.literal("transfer_in"),      // Received from another owned org
         v.literal("admin_adjustment"), // Manual support adjustment (excluded from ownership)
+        v.literal("subscription_change"), // Audit marker: owner plan transitioned (subscribe/upgrade/downgrade/cancel)
       ),
     ),
     // The Clerk user who caused this ledger entry (creator for org_created,
@@ -570,6 +571,11 @@ export default defineSchema({
     // against these rows if the companyId somehow reappears, because
     // we never delete the financial records.
     purgedAt: v.optional(v.number()),
+    // Anti-abuse: when a user rapidly cycles subscriptions (subscribe →
+    // cancel → subscribe …) we set this to Date.now() + 30d. While set
+    // and not expired, grantMonthlyCreditsIfDue caps the monthly grant
+    // to zero so the abuser can't keep harvesting fresh allowances.
+    cyclingBlockedUntil: v.optional(v.number()),
   })
     .index("by_companyId", ["companyId"])
     .index("by_creatorUserId", ["creatorUserId"])
@@ -1944,6 +1950,25 @@ export default defineSchema({
     .index("by_isShared", ["isShared", "sharedAt"]) // Gallery listing sorted by share date
     .index("by_isShared_model", ["isShared", "model"]), // Gallery filter by model
 
+
+  // ============================================
+  // STORYBOARD STUDIO: Personas (AI voice profiles for music generation)
+  // ============================================
+  storyboard_personas: defineTable({
+    companyId: v.string(),
+    userId: v.string(),
+    personaId: v.string(),            // KIE AI persona ID (returned from generate-persona)
+    name: v.string(),                  // User-given name e.g. "My Chinese Male Voice"
+    description: v.string(),           // Style description for the persona
+    sourceTaskId: v.optional(v.string()),  // Which music task it was created from
+    sourceAudioId: v.optional(v.string()), // Which audio variation was used
+    sourceFileId: v.optional(v.id("storyboard_files")), // Link to the source audio file
+    style: v.optional(v.string()),     // Musical style tag
+    createdAt: v.number(),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_userId", ["userId"])
+    .index("by_personaId", ["personaId"]),
 
   // ============================================
   // STORYBOARD STUDIO: Elements (LTX-style reusable assets)

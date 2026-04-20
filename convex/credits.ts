@@ -43,9 +43,115 @@ const LedgerTypeValidator = v.union(
   v.literal("transfer_out"),
   v.literal("transfer_in"),
   v.literal("admin_adjustment"),
+  v.literal("subscription_change"),
 );
 
 // ─── Balance writers ─────────────────────────────────────────────────────
+
+/**
+ * Stripe refund → proportional credit reversal.
+ *
+ * Called by the `charge.refunded` Stripe webhook. Finds the original
+ * purchase ledger row by stripePaymentIntentId, computes how many credits
+ * to claw back (proportional to the refund amount), then deducts them and
+ * writes a `refund` row. If the user already spent the credits their balance
+ * can go negative — that's intentional (they owe us the service).
+ *
+ * Idempotent on (stripeChargeId, refundId): if the same refund fires twice
+ * we skip the second write.
+ */
+export const reverseCreditsOnRefund = mutation({
+  args: {
+    stripePaymentIntentId: v.string(),
+    stripeChargeId: v.string(),
+    stripeRefundId: v.string(),
+    refundAmountCents: v.number(),
+    _secret: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    requireWebhookSecret(args._secret);
+    const now = Date.now();
+
+    // Idempotency: skip if we already processed this refund
+    const alreadyProcessed = await ctx.db
+      .query("credits_ledger")
+      .filter((q) => q.eq(q.field("reason"), `stripe_refund:${args.stripeRefundId}`))
+      .first();
+    if (alreadyProcessed) return { skipped: true, reason: "already_processed" };
+
+    // Find the original purchase row
+    const purchaseRow = await ctx.db
+      .query("credits_ledger")
+      .withIndex("by_company_type", (q) =>
+        // We don't know companyId here so scan by stripePaymentIntentId via filter
+        q.eq("companyId", "__scan__").eq("type", "purchase"),
+      )
+      .filter((q) => false) // intentional no-op — use the full scan below
+      .first();
+
+    // Full scan by stripePaymentIntentId (credits_ledger doesn't have a
+    // by_stripePaymentIntentId index, so we filter on the by_company_type
+    // index for "purchase" rows across all companies)
+    const allPurchaseRows = await ctx.db
+      .query("credits_ledger")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("type"), "purchase"),
+          q.eq(q.field("stripePaymentIntentId"), args.stripePaymentIntentId),
+        ),
+      )
+      .collect();
+
+    if (allPurchaseRows.length === 0) {
+      return { skipped: true, reason: "no_matching_purchase_row" };
+    }
+
+    const original = allPurchaseRows[0];
+    const originalAmountCents = original.amountPaid ?? 0;
+    const originalTokens = original.tokens;
+
+    if (originalAmountCents <= 0 || originalTokens <= 0) {
+      return { skipped: true, reason: "original_row_has_no_amount_or_tokens" };
+    }
+
+    // Proportional: how many credits to reverse?
+    const ratio = Math.min(1, args.refundAmountCents / originalAmountCents);
+    const tokensToReverse = Math.round(originalTokens * ratio);
+
+    if (tokensToReverse <= 0) return { skipped: true, reason: "zero_tokens_to_reverse" };
+
+    // Write the reversal ledger row (negative tokens = deduction)
+    await ctx.db.insert("credits_ledger", {
+      companyId: original.companyId,
+      tokens: -tokensToReverse,
+      type: "refund",
+      userId: original.userId,
+      stripePaymentIntentId: args.stripePaymentIntentId,
+      reason: `stripe_refund:${args.stripeRefundId}`,
+      createdAt: now,
+    });
+
+    // Patch balance — allow going negative (user consumed more than they paid for)
+    const balance = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", original.companyId))
+      .first();
+
+    if (balance) {
+      await ctx.db.patch(balance._id, {
+        balance: balance.balance - tokensToReverse,
+        updatedAt: now,
+      });
+    }
+
+    return {
+      skipped: false,
+      companyId: original.companyId,
+      tokensReversed: tokensToReverse,
+      ratio,
+    };
+  },
+});
 
 /**
  * Add credits back to a company's balance (refund flow).
@@ -203,6 +309,22 @@ async function grantMonthlyCreditsIfDue(
     now: number;
   },
 ): Promise<{ granted: boolean; amount?: number; reason?: string }> {
+  // ── Anti-abuse: refuse to grant while the workspace is in a cycling block ──
+  // propagateOwnerPlanChange sets cyclingBlockedUntil when it detects a user
+  // has flipped plans >= 5 times in the last 30d. While the block is active,
+  // we let paid features work (plan snapshot unchanged) but refuse to mint
+  // any fresh monthly credits.
+  const balanceForCheck = await ctx.db
+    .query("credits_balance")
+    .withIndex("by_companyId", (q: any) => q.eq("companyId", args.companyId))
+    .first();
+  if (
+    balanceForCheck?.cyclingBlockedUntil &&
+    balanceForCheck.cyclingBlockedUntil > args.now
+  ) {
+    return { granted: false, reason: "cycling_blocked" };
+  }
+
   const monthStart = (() => {
     const d = new Date(args.now);
     return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
@@ -1534,11 +1656,17 @@ export const propagateOwnerPlanChange = mutation({
 
     const downgradingToFree = args.newPlan === "free";
     let updated = 0;
+    let previousPlan: string | null = null;
 
     for (const row of allOwnedRows) {
       const patch: Record<string, unknown> = {
         updatedAt: now,
       };
+
+      // Capture the prior plan from the personal workspace row for the audit entry.
+      if (row.companyId === args.ownerUserId) {
+        previousPlan = row.ownerPlan ?? null;
+      }
 
       if (row.ownerPlan !== args.newPlan) {
         patch.ownerPlan = args.newPlan;
@@ -1567,11 +1695,56 @@ export const propagateOwnerPlanChange = mutation({
       }
     }
 
+    // ── Audit + cycling detection ──
+    // Only log a ledger row if the plan actually changed. We anchor the
+    // entry at the OWNER'S PERSONAL workspace so cycling detection has a
+    // single deterministic location to count from (regardless of how
+    // many orgs the user happens to own).
+    let cyclingBlocked = false;
+    if (previousPlan !== args.newPlan) {
+      await ctx.db.insert("credits_ledger", {
+        companyId: args.ownerUserId,
+        tokens: 0,
+        type: "subscription_change",
+        userId: args.ownerUserId,
+        reason: `Plan change: ${previousPlan ?? "unknown"} → ${args.newPlan}`,
+        createdAt: now,
+      });
+
+      // Count subscription_change events in the last 30 days. If >= 5,
+      // flag the owner as a cycler for 30 days — during the block window,
+      // grantMonthlyCreditsIfDue caps the grant to zero.
+      const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
+      const recentChanges = await ctx.db
+        .query("credits_ledger")
+        .withIndex("by_company_type", (q) =>
+          q
+            .eq("companyId", args.ownerUserId)
+            .eq("type", "subscription_change"),
+        )
+        .filter((q) => q.gt(q.field("createdAt"), thirtyDaysAgo))
+        .collect();
+
+      if (recentChanges.length >= 5) {
+        cyclingBlocked = true;
+        const blockUntil = now + 30 * 24 * 60 * 60 * 1000;
+        // Apply the block to every workspace the owner controls so that
+        // lazy auto-grants in any of them respect the same clock.
+        for (const row of allOwnedRows) {
+          await ctx.db.patch(row._id, {
+            cyclingBlockedUntil: blockUntil,
+            updatedAt: now,
+          });
+        }
+      }
+    }
+
     return {
       ownerUserId: args.ownerUserId,
       newPlan: args.newPlan,
       totalOwned: allOwnedRows.length,
       updated,
+      cyclingBlocked,
     };
   },
 });

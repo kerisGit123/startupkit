@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
 import {
   AlertCircle, CheckCircle2, Copy, Download, Search, Shield,
-  ShieldAlert, ShieldCheck, ShieldX,
+  ShieldAlert, ShieldCheck, ShieldX, Ban,
 } from "lucide-react";
 
 /**
@@ -204,6 +204,33 @@ function ProfileSection({
   const [timeRangeDays, setTimeRangeDays] = useState<30 | 60 | 90 | 0>(30);
   const printableRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [suspendLoading, setSuspendLoading] = useState(false);
+  const [suspendResult, setSuspendResult] = useState<null | { ok: boolean; msg: string }>(null);
+
+  async function handleSuspend(suspend: boolean) {
+    if (!profile || profile.found === false) return;
+    const action = suspend ? "suspend" : "unsuspend";
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} account ${profile.user.clerkUserId}? This will immediately block their access.`)) return;
+    setSuspendLoading(true);
+    setSuspendResult(null);
+    try {
+      const res = await fetch("/api/admin/suspend-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: profile.user.clerkUserId, suspend }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSuspendResult({ ok: false, msg: data.error ?? "Failed" });
+      } else {
+        setSuspendResult({ ok: true, msg: suspend ? "Account suspended. User will be redirected to /suspended on next request." : "Account unsuspended." });
+      }
+    } catch (e: any) {
+      setSuspendResult({ ok: false, msg: e?.message ?? "Network error" });
+    } finally {
+      setSuspendLoading(false);
+    }
+  }
 
   if (profile === undefined) {
     return <div className="text-zinc-600 text-sm">Loading…</div>;
@@ -359,7 +386,7 @@ function ProfileSection({
                 </button>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={handleCopy}
                 className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white text-sm font-medium hover:bg-zinc-50 flex items-center gap-1.5 text-zinc-900"
@@ -375,7 +402,20 @@ function ProfileSection({
                 <Download className="w-3.5 h-3.5" />
                 {pdfLoading ? "Building PDF…" : "Download PDF (for Stripe)"}
               </button>
+              <button
+                onClick={() => handleSuspend(true)}
+                disabled={suspendLoading}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-sm font-medium hover:bg-rose-700 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                {suspendLoading ? "Working…" : "Suspend account"}
+              </button>
             </div>
+            {suspendResult && (
+              <p className={`text-xs mt-1 ${suspendResult.ok ? "text-emerald-700" : "text-rose-700"}`}>
+                {suspendResult.ok ? "✓" : "✗"} {suspendResult.msg}
+              </p>
+            )}
           </div>
 
           {/* Everything inside this ref goes into the PDF */}
@@ -750,27 +790,42 @@ function computeAbnormalAreas(profile: any): AbnormalArea[] {
     });
   }
 
-  // 5. Subscription churn — frequent plan changes?
-  // Count subscription grants as a proxy for plan changes
+  // 5. Subscription churn — uses the subscription_change audit rows written
+  //    by propagateOwnerPlanChange (added in A+B) for exact cycle counting.
+  //    Falls back to subscription-grant count for older accounts without rows.
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const cycleEvents = profile.recentLedger.filter(
+    (r: any) => r.type === "subscription_change" && r.createdAt >= thirtyDaysAgo,
+  ).length;
   const subGrants = profile.recentLedger.filter((r: any) => r.type === "subscription").length;
   const adminAdj = s.adminAdjustmentCount;
-  if (subGrants >= 3 && profile.user.accountAgeDays < 30) {
+  const isCurrentlyBlocked = profile.cyclingBlockedUntil
+    ? profile.cyclingBlockedUntil > Date.now()
+    : false;
+
+  if (isCurrentlyBlocked) {
     areas.push({
       domain: "Subscription churn",
       status: "high",
-      finding: `${subGrants} subscription grants in ${profile.user.accountAgeDays} days with ${adminAdj} clawbacks — possible plan-cycling abuse.`,
+      finding: `CYCLING BLOCK ACTIVE — monthly credit grants frozen until ${new Date(profile.cyclingBlockedUntil).toLocaleDateString()}. ${cycleEvents} plan changes in last 30d.`,
     });
-  } else if (subGrants >= 2 && profile.user.accountAgeDays < 60) {
+  } else if (cycleEvents >= 3) {
+    areas.push({
+      domain: "Subscription churn",
+      status: "high",
+      finding: `${cycleEvents} plan changes in last 30 days — approaching cycling-abuse threshold (5). ${subGrants} subscription grants; ${adminAdj} clawbacks.`,
+    });
+  } else if (cycleEvents >= 2 || (subGrants >= 2 && profile.user.accountAgeDays < 60)) {
     areas.push({
       domain: "Subscription churn",
       status: "medium",
-      finding: `${subGrants} subscription grants; ${adminAdj} clawbacks. Monitor for cycling.`,
+      finding: `${cycleEvents} plan changes (last 30d); ${subGrants} subscription grants; ${adminAdj} clawbacks. Monitor for cycling.`,
     });
   } else {
     areas.push({
       domain: "Subscription churn",
       status: "low",
-      finding: `${subGrants} subscription grants; ${adminAdj} clawbacks. Normal.`,
+      finding: `${cycleEvents} plan changes (last 30d); ${subGrants} subscription grants; ${adminAdj} clawbacks. Normal.`,
     });
   }
 

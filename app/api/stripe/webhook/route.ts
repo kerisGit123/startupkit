@@ -106,6 +106,46 @@ export async function POST(req: Request) {
         break;
       }
 
+      // ─── Stripe refund → proportional credit reversal ───────────────
+      // When Stripe issues a refund (dashboard, dispute, or programmatic)
+      // we claw back credits proportional to the refund amount so a user
+      // can't keep credits they got a refund for.
+      case "charge.refunded": {
+        const charge = event.data.object as any;
+        // charge.refunds is an expandable list; grab the most-recent entry
+        const refund = charge.refunds?.data?.[0];
+        if (!refund) {
+          console.log("[WEBHOOK] charge.refunded — no refund object, skipping");
+          break;
+        }
+        console.log("[WEBHOOK] charge.refunded", {
+          chargeId: charge.id,
+          piId: charge.payment_intent,
+          refundId: refund.id,
+          refundAmount: refund.amount,
+        });
+        if (!charge.payment_intent) {
+          console.log("[WEBHOOK] charge.refunded — no payment_intent, skipping");
+          break;
+        }
+        try {
+          const result = await convex.mutation(
+            api.credits.reverseCreditsOnRefund,
+            {
+              stripePaymentIntentId: charge.payment_intent as string,
+              stripeChargeId: charge.id as string,
+              stripeRefundId: refund.id as string,
+              refundAmountCents: refund.amount as number,
+            },
+          );
+          console.log("[WEBHOOK] Credit reversal result", result);
+        } catch (err) {
+          console.error("[WEBHOOK] Failed to reverse credits on refund", err);
+          throw err;
+        }
+        break;
+      }
+
       // Legacy subscription events are NOT handled here anymore.
       // Clerk Billing manages subscriptions end-to-end.
       default:

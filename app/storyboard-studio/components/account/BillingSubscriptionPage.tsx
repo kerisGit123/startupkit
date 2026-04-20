@@ -883,10 +883,10 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg !bg-(--bg-primary) text-(--text-primary) border-(--border-primary)">
           <DialogHeader>
-            <DialogTitle>Confirm credit purchase</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-(--text-primary)">Confirm credit purchase</DialogTitle>
+            <DialogDescription className="text-(--text-secondary)">
               Review the terms below before continuing to payment.
             </DialogDescription>
           </DialogHeader>

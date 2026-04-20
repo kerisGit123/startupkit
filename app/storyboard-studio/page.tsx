@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { useOrganization, useUser, UserButton } from "@clerk/nextjs";
+import { CheckCircle2 } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/convex/_generated/api";
 import type { Step, Orientation, ViewMode, Shot, Tag, CommentItem, CastMember, LocationAsset, BoardSettings, Project } from "./types";
@@ -80,7 +81,19 @@ export default function StoryboardPage() {
     projectId: projectId as Id<"storyboard_projects">
   });
   
-  // Update shots when Convex data loads
+  const [purchaseBanner, setPurchaseBanner] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") !== "true") return;
+    params.delete("success");
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `/storyboard-studio?${qs}` : "/storyboard-studio");
+    setPurchaseBanner(true);
+    const timer = setTimeout(() => setPurchaseBanner(false), 6000);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (storyboardItems) {
       setShots(storyboardItems.map(item => {
@@ -455,6 +468,22 @@ export default function StoryboardPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-screen bg-[#0d0d12] overflow-hidden">
+      {purchaseBanner && (
+        <div className="fixed bottom-6 right-6 z-[999999] flex items-start gap-3 max-w-sm rounded-lg border border-emerald-500/40 bg-[#2C2C2C] px-4 py-3 text-sm text-white shadow-2xl">
+          <CheckCircle2 className="w-5 h-5 mt-0.5 text-emerald-400 shrink-0" />
+          <div className="flex-1">
+            <div className="font-medium">Purchase successful</div>
+            <div className="text-[#A0A0A0] text-xs mt-0.5">Credits have been added to your account.</div>
+          </div>
+          <button
+            onClick={() => setPurchaseBanner(false)}
+            className="text-[#A0A0A0] hover:text-white text-lg leading-none"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Lapsed subscription banner — shown when in an org whose

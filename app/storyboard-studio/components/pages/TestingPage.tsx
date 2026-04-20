@@ -1090,6 +1090,41 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
     }
   }
 
+  async function runCyclingStressTest() {
+    if (!user?.id) {
+      setStatus({ kind: "error", text: "No user ID available" });
+      return;
+    }
+    setBusy("cycleStress");
+    setStatus({ kind: "success", text: "Cycling stress test: starting 6 alternating plan changes…" });
+    const log: string[] = [];
+    try {
+      // Alternate free ↔ userPlan 6 times → 6 subscription_change rows
+      // Block fires at count >= 5, so the 5th change should set cyclingBlockedUntil.
+      const sequence = [
+        "free", userPlan, "free", userPlan, "free", userPlan,
+      ] as string[];
+      for (let i = 0; i < sequence.length; i++) {
+        const plan = sequence[i];
+        const result = await propagatePlanChange({ ownerUserId: user.id, newPlan: plan });
+        log.push(
+          `[${i + 1}/6] → "${plan}" | updated=${result.updated} cyclingBlocked=${result.cyclingBlocked ?? false}`,
+        );
+        setStatus({ kind: "success", text: log.join("\n") });
+        // Small gap so Convex writes aren't batched into one tick
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      log.push("Done. Check credits_balance.cyclingBlockedUntil in Convex dashboard.");
+      log.push("Then try generating something — grantMonthlyCreditsIfDue should return cycling_blocked.");
+      setStatus({ kind: "success", text: log.join("\n") });
+    } catch (err) {
+      log.push(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus({ kind: "error", text: log.join("\n") });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function runSimulateOrgLapse() {
     if (!companyId || !companyId.startsWith("org_")) {
       setStatus({
@@ -1531,6 +1566,25 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
               and all owned orgs. Use before deleting your user in Clerk
               Dashboard for a completely fresh start.
             </p>
+
+            {/* Cycling abuse guard stress test */}
+            <div className="mt-4 pt-4 border-t border-(--border-primary)">
+              <p className="text-xs text-(--text-tertiary) mb-3">
+                <strong className="text-yellow-300">Cycling Abuse Stress Test</strong> — runs 6 alternating plan changes (free ↔ {userPlan}) to trigger the cycling-abuse guard. After the 5th change, <code className="bg-black/30 px-1 rounded">cyclingBlockedUntil</code> should be set on your balance row and <code className="bg-black/30 px-1 rounded">grantMonthlyCreditsIfDue</code> will return <code className="bg-black/30 px-1 rounded">cycling_blocked</code>.
+              </p>
+              <button
+                onClick={runCyclingStressTest}
+                disabled={busy !== null || isRunningTests}
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/20 transition-colors disabled:opacity-50"
+              >
+                {busy === "cycleStress" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4" />
+                )}
+                Run Cycling Stress Test (6 plan flips)
+              </button>
+            </div>
           </div>
 
           {/* Advanced Actions */}
