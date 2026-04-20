@@ -61,18 +61,34 @@ export const getUserBillingProfile = query({
     identifier: v.string(),
   },
   handler: async (ctx, args) => {
-    // Super-admin only. We don't trust the Clerk JWT `roles` claim here
-    // because the JWT template in this deployment emits the literal
-    // string `"{{org.roles}}"` (unresolved template variable). Instead,
-    // look up the caller in our admin_users table — the source of truth.
+    // Super-admin only. Accept two signals:
+    //   1. Clerk JWT `public_metadata.role === "super_admin"` — primary,
+    //      requires the `public_metadata` claim in the Clerk JWT template
+    //   2. admin_users table row with role=super_admin and isActive=true —
+    //      fallback for users bootstrapped before the JWT fix
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
-    const adminRow = await ctx.db
-      .query("admin_users")
-      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
-      .first();
-    if (!adminRow || adminRow.role !== "super_admin" || !adminRow.isActive) {
-      throw new Error("Forbidden — super_admin role required");
+
+    const publicMetadata = (identity as any).public_metadata as
+      | { role?: string }
+      | undefined;
+    const roleFromJwt = publicMetadata?.role;
+    const jwtSuperAdmin = roleFromJwt === "super_admin";
+
+    let dbSuperAdmin = false;
+    if (!jwtSuperAdmin) {
+      const adminRow = await ctx.db
+        .query("admin_users")
+        .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
+        .first();
+      dbSuperAdmin =
+        !!adminRow && adminRow.role === "super_admin" && adminRow.isActive;
+    }
+
+    if (!jwtSuperAdmin && !dbSuperAdmin) {
+      throw new Error(
+        "Forbidden — super_admin role required (set publicMetadata.role in Clerk OR register via /admin/fraud-check bootstrap)",
+      );
     }
 
     // 1. Resolve identifier → Clerk userId.
