@@ -1,12 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { Component, useState, type ReactNode } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useIsSuperAdmin } from "@/hooks/useAdminRole";
 import { AlertCircle, CheckCircle2, Copy, Search, Shield } from "lucide-react";
 
-type ConvexQueryError = { message?: string };
+/**
+ * Error boundary that catches the "Forbidden — super_admin" throw from
+ * the Convex query and shows an inline message instead of letting Next's
+ * dev overlay take over the screen. Resets when `resetKey` changes.
+ */
+class QueryErrorBoundary extends Component<
+  { children: ReactNode; resetKey: string },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidUpdate(prev: { resetKey: string }) {
+    if (prev.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+  render() {
+    if (this.state.error) {
+      const msg = this.state.error.message || String(this.state.error);
+      const isAdminMissing = /super_admin role required/i.test(msg);
+      return (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+          <h2 className="font-semibold mb-1">
+            {isAdminMissing
+              ? "You're not in the admin_users table yet"
+              : "Lookup failed"}
+          </h2>
+          <p className="text-sm text-amber-800 mb-3">
+            {isAdminMissing
+              ? "Open the “First-time setup” section above and click Register to sync your role into Convex, then refresh."
+              : msg}
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * Admin chargeback / fraud evidence page.
@@ -26,20 +65,6 @@ export default function FraudCheckPage() {
     null | "loading" | "success" | "error"
   >(null);
   const [bootstrapMessage, setBootstrapMessage] = useState("");
-
-  const profile = useQuery(
-    api.fraudCheck.getUserBillingProfile,
-    activeIdentifier ? { identifier: activeIdentifier } : "skip",
-  );
-
-  // If query throws "super_admin role required", offer to bootstrap.
-  const queryError =
-    profile === undefined ? null : null; // useQuery doesn't surface throws directly
-  // Detect throw via React error boundary alternative: we wrap in try by
-  // checking a known-bad shape. Simpler: just always offer the bootstrap
-  // button when isSuperAdmin (Clerk-side) is true but the query path is
-  // failing. We surface the bootstrap UI via the runtime error overlay
-  // OR via the explicit button below.
 
   const handleBootstrap = async () => {
     setBootstrapStatus("loading");
@@ -82,18 +107,6 @@ export default function FraudCheckPage() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setActiveIdentifier(identifierInput.trim());
-    setCopied(false);
-  };
-
-  const evidenceMarkdown = profile?.found
-    ? buildEvidenceMarkdown(profile)
-    : "";
-
-  const handleCopy = async () => {
-    if (!evidenceMarkdown) return;
-    await navigator.clipboard.writeText(evidenceMarkdown);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -164,19 +177,48 @@ export default function FraudCheckPage() {
         </div>
       </details>
 
-      {activeIdentifier && profile === undefined && (
-        <div className="text-zinc-600 text-sm">Loading…</div>
+      {activeIdentifier && (
+        <QueryErrorBoundary resetKey={activeIdentifier}>
+          <ProfileSection identifier={activeIdentifier} copied={copied} setCopied={setCopied} />
+        </QueryErrorBoundary>
       )}
+    </div>
+  );
+}
 
-      {profile && profile.found === false && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 text-zinc-900">
-          <h2 className="font-semibold mb-1">No user found</h2>
-          <p className="text-sm text-zinc-600">{profile.message}</p>
-        </div>
-      )}
+function ProfileSection({
+  identifier,
+  copied,
+  setCopied,
+}: {
+  identifier: string;
+  copied: boolean;
+  setCopied: (v: boolean) => void;
+}) {
+  const profile = useQuery(api.fraudCheck.getUserBillingProfile, { identifier });
 
-      {profile && profile.found && (
-        <div className="space-y-4">
+  if (profile === undefined) {
+    return <div className="text-zinc-600 text-sm">Loading…</div>;
+  }
+
+  if (profile.found === false) {
+    return (
+      <div className="rounded-xl border border-zinc-200 bg-white p-6 text-zinc-900">
+        <h2 className="font-semibold mb-1">No user found</h2>
+        <p className="text-sm text-zinc-600">{profile.message}</p>
+      </div>
+    );
+  }
+
+  const evidenceMarkdown = buildEvidenceMarkdown(profile);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(evidenceMarkdown);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="space-y-4">
           {/* User header */}
           <Card title="User">
             <Row label="Email" value={profile.user.email ?? "—"} />
@@ -344,8 +386,6 @@ export default function FraudCheckPage() {
               {evidenceMarkdown}
             </pre>
           </Card>
-        </div>
-      )}
     </div>
   );
 }
