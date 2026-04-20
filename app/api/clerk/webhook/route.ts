@@ -10,8 +10,14 @@ import {
 
 /**
  * Derive an internal plan key from a Clerk subscription webhook payload.
- * Clerk stores the plan slug in varying locations per event — try each
- * and fall back to "free" if nothing matches.
+ * Clerk stores the plan slug in varying locations per event — try each.
+ *
+ * Distinguishes two cases:
+ *   - No plan info present (cancellation / downgrade) → return "free"
+ *   - Plan slug PRESENT but unrecognized (mapping bug) → throw
+ *
+ * Throwing surfaces the bug loudly via webhook 5xx instead of silently
+ * downgrading the user. Add the new slug to lib/plan-config.ts.
  */
 function extractInternalPlanFromPayload(data: any): InternalPlanKey {
   const candidates: (string | undefined)[] = [
@@ -38,6 +44,18 @@ function extractInternalPlanFromPayload(data: any): InternalPlanKey {
     if (!candidate) continue;
     const internal = INTERNAL_KEY_FROM_CLERK_SLUG[candidate];
     if (internal) return internal;
+  }
+
+  const presentSlugs = candidates.filter((c): c is string => !!c);
+  if (presentSlugs.length > 0) {
+    // Plan slug(s) present but none mapped — almost certainly a missing
+    // entry in lib/plan-config.ts. Throw so the webhook returns 5xx and
+    // the operator gets a loud signal instead of a silent downgrade.
+    throw new Error(
+      `[clerk-webhook] Unrecognized plan slug in payload: ${JSON.stringify(presentSlugs)}. ` +
+        `Add it to lib/plan-config.ts (CLERK_PLAN_SLUGS + INTERNAL_KEY_FROM_CLERK_SLUG). ` +
+        `Known slugs: ${JSON.stringify(Object.keys(INTERNAL_KEY_FROM_CLERK_SLUG))}.`,
+    );
   }
 
   return "free";

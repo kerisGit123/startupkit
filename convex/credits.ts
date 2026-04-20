@@ -48,67 +48,6 @@ const LedgerTypeValidator = v.union(
 // ─── Balance writers ─────────────────────────────────────────────────────
 
 /**
- * Add credits to a company's balance and write a ledger entry.
- *
- * Defaults `type` to "purchase". Webhook/subscription flows should pass an
- * explicit type like "subscription". The `userId` arg lets trusted server
- * callers (Stripe webhook) pass the purchaser's id; otherwise we read it
- * from the authenticated caller's Clerk identity.
- */
-export const addCredits = internalMutation({
-  args: {
-    companyId: v.string(),
-    tokens: v.number(),
-    type: v.optional(LedgerTypeValidator),
-    userId: v.optional(v.string()),
-    stripePaymentIntentId: v.optional(v.string()),
-    stripeCheckoutSessionId: v.optional(v.string()),
-    amountPaid: v.optional(v.number()),
-    currency: v.optional(v.string()),
-    reason: v.optional(v.string()),
-    transactionId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const identity = await ctx.auth.getUserIdentity();
-    const userId = args.userId ?? identity?.subject;
-
-    await ctx.db.insert("credits_ledger", {
-      companyId: args.companyId,
-      tokens: args.tokens,
-      type: args.type ?? "purchase",
-      userId,
-      stripePaymentIntentId: args.stripePaymentIntentId,
-      stripeCheckoutSessionId: args.stripeCheckoutSessionId,
-      amountPaid: args.amountPaid,
-      currency: args.currency,
-      reason: args.reason,
-      createdAt: now,
-    });
-
-    const balance = await ctx.db
-      .query("credits_balance")
-      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
-      .first();
-
-    if (balance) {
-      await ctx.db.patch(balance._id, {
-        balance: balance.balance + args.tokens,
-        updatedAt: now,
-      });
-    } else {
-      await ctx.db.insert("credits_balance", {
-        companyId: args.companyId,
-        balance: args.tokens,
-        updatedAt: now,
-      });
-    }
-
-    return true;
-  },
-});
-
-/**
  * Add credits back to a company's balance (refund flow).
  */
 /**
@@ -1586,7 +1525,6 @@ export const propagateOwnerPlanChange = mutation({
     let updated = 0;
 
     for (const row of allOwnedRows) {
-      const isOrg = row.companyId.startsWith("org_");
       const patch: Record<string, unknown> = {
         updatedAt: now,
       };
@@ -1600,13 +1538,14 @@ export const propagateOwnerPlanChange = mutation({
         patch.creatorUserId = args.ownerUserId;
       }
 
-      // Track lapsed timestamp for orgs only (personal workspaces don't lapse)
-      if (isOrg) {
-        if (downgradingToFree && !row.lapsedAt) {
-          patch.lapsedAt = now; // start the lapse clock
-        } else if (!downgradingToFree && row.lapsedAt) {
-          patch.lapsedAt = undefined; // clear on re-subscription
-        }
+      // Track lapsed timestamp for ALL workspaces (personal and org).
+      // Personal workspaces also need a lapsed signal so the UI can
+      // show a "subscription ended" banner there too — they don't get
+      // the file-purge treatment but the flag drives banner display.
+      if (downgradingToFree && !row.lapsedAt) {
+        patch.lapsedAt = now; // start the lapse clock
+      } else if (!downgradingToFree && row.lapsedAt) {
+        patch.lapsedAt = undefined; // clear on re-subscription
       }
 
       // Only patch if something actually changed

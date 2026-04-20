@@ -114,7 +114,6 @@ import type * as storyboard_storyboardElements from "../storyboard/storyboardEle
 import type * as storyboard_storyboardFiles from "../storyboard/storyboardFiles.js";
 import type * as storyboard_storyboardItemElements from "../storyboard/storyboardItemElements.js";
 import type * as storyboard_storyboardItems from "../storyboard/storyboardItems.js";
-import type * as subscriptions from "../subscriptions.js";
 import type * as syncUserData from "../syncUserData.js";
 import type * as tickets from "../tickets.js";
 import type * as transactions_createTransaction from "../transactions/createTransaction.js";
@@ -237,7 +236,6 @@ declare const fullApi: ApiFromModules<{
   "storyboard/storyboardFiles": typeof storyboard_storyboardFiles;
   "storyboard/storyboardItemElements": typeof storyboard_storyboardItemElements;
   "storyboard/storyboardItems": typeof storyboard_storyboardItems;
-  subscriptions: typeof subscriptions;
   syncUserData: typeof syncUserData;
   tickets: typeof tickets;
   "transactions/createTransaction": typeof transactions_createTransaction;
