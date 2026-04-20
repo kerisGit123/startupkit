@@ -250,42 +250,70 @@ function ProfileSection({
       ]);
 
       const canvas = await html2canvas(printableRef.current, {
-        scale: 2,
+        scale: 1.5, // 1.5 is plenty for readable A4; 2 doubles PDF size
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
       });
 
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
+        compress: true,
       });
 
-      // Fit canvas to A4 width, preserve aspect ratio, paginate vertically
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const margin = 10;
       const contentWidth = pdfWidth - margin * 2;
-      const contentHeight = (canvas.height * contentWidth) / canvas.width;
+      const contentHeight = pdfHeight - margin * 2;
 
-      let remainingHeight = contentHeight;
-      let yOffset = 0;
-      const pageContentHeight = pdfHeight - margin * 2;
+      // How many canvas pixels fit into one PDF page?
+      // (canvas.width px → contentWidth mm, so 1mm = canvas.width / contentWidth px)
+      const pxPerMm = canvas.width / contentWidth;
+      const pageSlicePx = Math.floor(contentHeight * pxPerMm);
 
-      while (remainingHeight > 0) {
-        pdf.addImage(
-          imgData,
-          "PNG",
-          margin,
-          margin - yOffset,
-          contentWidth,
-          contentHeight,
+      // Slice the canvas into page-sized chunks. Each chunk gets its own
+      // PDF page — no negative-Y hack, no duplication.
+      const sliceCanvas = document.createElement("canvas");
+      sliceCanvas.width = canvas.width;
+      const sliceCtx = sliceCanvas.getContext("2d");
+      if (!sliceCtx) throw new Error("Canvas 2D context unavailable");
+
+      let srcY = 0;
+      let pageIdx = 0;
+      while (srcY < canvas.height) {
+        const thisSliceHeight = Math.min(pageSlicePx, canvas.height - srcY);
+        sliceCanvas.height = thisSliceHeight;
+        sliceCtx.clearRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+        sliceCtx.drawImage(
+          canvas,
+          0,
+          srcY,
+          canvas.width,
+          thisSliceHeight,
+          0,
+          0,
+          canvas.width,
+          thisSliceHeight,
         );
-        remainingHeight -= pageContentHeight;
-        yOffset += pageContentHeight;
-        if (remainingHeight > 0) pdf.addPage();
+        const sliceData = sliceCanvas.toDataURL("image/jpeg", 0.9);
+        const sliceDisplayHeight = (thisSliceHeight * contentWidth) / canvas.width;
+
+        if (pageIdx > 0) pdf.addPage();
+        pdf.addImage(
+          sliceData,
+          "JPEG",
+          margin,
+          margin,
+          contentWidth,
+          sliceDisplayHeight,
+        );
+
+        srcY += thisSliceHeight;
+        pageIdx++;
+        if (pageIdx > 20) break; // safety cap — dispute evidence shouldn't need more
       }
 
       const filename = `dispute-evidence-${profile.user.email ?? profile.user.clerkUserId}-${new Date().toISOString().slice(0, 10)}.pdf`;
