@@ -12,7 +12,49 @@
  */
 
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
+import { requireWebhookSecret } from "./credits";
+
+/**
+ * Bootstrap mutation: insert the caller into admin_users with super_admin
+ * role. Gated by webhook secret so only the API route can call it (the
+ * route checks Clerk publicMetadata.role first). In dev with no
+ * WEBHOOK_SECRET set, this is unrestricted — fine for local setup.
+ */
+export const bootstrapSuperAdmin = mutation({
+  args: {
+    clerkUserId: v.string(),
+    email: v.string(),
+    _secret: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    requireWebhookSecret(args._secret);
+    const existing = await ctx.db
+      .query("admin_users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", args.clerkUserId))
+      .first();
+    if (existing) {
+      // Upgrade to super_admin if not already, ensure active
+      if (existing.role !== "super_admin" || !existing.isActive) {
+        await ctx.db.patch(existing._id, {
+          role: "super_admin",
+          isActive: true,
+        });
+        return { ok: true, action: "upgraded", id: existing._id };
+      }
+      return { ok: true, action: "already_super_admin", id: existing._id };
+    }
+    const id = await ctx.db.insert("admin_users", {
+      clerkUserId: args.clerkUserId,
+      email: args.email,
+      role: "super_admin",
+      isActive: true,
+      createdAt: Date.now(),
+      createdBy: args.clerkUserId, // self-bootstrap
+    });
+    return { ok: true, action: "inserted", id };
+  },
+});
 
 export const getUserBillingProfile = query({
   args: {

@@ -204,6 +204,11 @@ const navItems = [
         url: "/admin/security",
         icon: IconLock,
       },
+      {
+        title: "Fraud Check",
+        url: "/admin/fraud-check",
+        icon: IconShield,
+      },
     ],
   },
 ]
