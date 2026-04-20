@@ -56,6 +56,7 @@ import type * as financialLedger from "../financialLedger.js";
 import type * as fixNotifications from "../fixNotifications.js";
 import type * as forceFixAll from "../forceFixAll.js";
 import type * as forceFixNotifications from "../forceFixNotifications.js";
+import type * as fraudCheck from "../fraudCheck.js";
 import type * as http from "../http.js";
 import type * as httpRoutes from "../httpRoutes.js";
 import type * as inbox from "../inbox.js";
@@ -178,6 +179,7 @@ declare const fullApi: ApiFromModules<{
   fixNotifications: typeof fixNotifications;
   forceFixAll: typeof forceFixAll;
   forceFixNotifications: typeof forceFixNotifications;
+  fraudCheck: typeof fraudCheck;
   http: typeof http;
   httpRoutes: typeof httpRoutes;
   inbox: typeof inbox;

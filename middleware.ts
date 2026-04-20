@@ -5,6 +5,7 @@ const isPublicRoute = createRouteMatcher([
   "/pricing",
   "/community",
   "/storytica(.*)",
+  "/billing-policy",
   "/sign-in(.*)",
   "/sign-up(.*)",
 
@@ -20,10 +21,11 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
-  // IP/Country blocking has been moved to login tracking for better performance
-  // Blocking is now checked only when users log in, not on every request
-  // See: components/LoginTracker.tsx and convex/userActivity.ts
-  
+  // Skip auth entirely for KIE AI callback — external webhook, no user session
+  if (request.nextUrl.pathname.startsWith('/api/kie-callback')) {
+    return;
+  }
+
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
