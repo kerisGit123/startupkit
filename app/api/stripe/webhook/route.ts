@@ -33,57 +33,13 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
-      // ─── Credit top-up via PaymentIntent ────────────────────────────
-      case "payment_intent.succeeded": {
-        const pi = event.data.object as any;
-        const md = pi.metadata || {};
-        console.log("[WEBHOOK] payment_intent.succeeded", {
-          metadata: md,
-          piId: pi.id,
-        });
-
-        if (md.type !== "credits") break;
-
-        const companyId = md.companyId;
-        const userId = md.userId || undefined;
-        const tokens = Number(md.tokens || 0);
-        const amountPaid = pi.amount_received || pi.amount;
-        const currency = pi.currency || md.currency;
-
-        console.log("[WEBHOOK] Processing credit purchase", {
-          companyId,
-          userId,
-          tokens,
-          amountPaid,
-          currency,
-        });
-
-        if (!companyId || tokens <= 0) {
-          console.log("[WEBHOOK] Skipping - invalid companyId or tokens");
-          break;
-        }
-
-        try {
-          const result = await convex.mutation(
-            api.transactions.createTransaction.createPaymentTransaction,
-            {
-              companyId,
-              userId: userId as any,
-              amount: amountPaid,
-              currency,
-              tokens,
-              stripePaymentIntentId: pi.id,
-            },
-          );
-          console.log("[WEBHOOK] Credit purchase transaction created", result);
-        } catch (error) {
-          console.error("[WEBHOOK] Failed to create payment transaction", error);
-          throw error;
-        }
-        break;
-      }
-
       // ─── Credit top-up via Checkout Session ─────────────────────────
+      // SINGLE source of truth for credit-purchase events. Stripe also
+      // fires `payment_intent.succeeded` for every Checkout-Session
+      // payment; we deliberately do NOT handle that event here, because
+      // both events have the same metadata and would double-grant credits
+      // (createPaymentTransaction's idempotency check now also defends
+      // against this, but skipping the duplicate event is cleaner).
       case "checkout.session.completed": {
         const session = event.data.object as any;
         console.log("[WEBHOOK] checkout.session.completed", {
@@ -128,7 +84,7 @@ export async function POST(req: Request) {
             api.transactions.createTransaction.createPaymentTransaction,
             {
               companyId,
-              userId: userId as any,
+              purchaserClerkUserId: userId,
               amount: amountPaid,
               currency,
               tokens,
