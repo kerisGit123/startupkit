@@ -216,16 +216,26 @@ async function grantMonthlyCreditsIfDue(
     .order("desc")
     .first();
 
-  // Decide whether this call should re-grant, and if so, whether it's a
-  // calendar-month rollover (claw back leftover) or a plan change
-  // (preserve leftover so an upgrade doesn't refund the user's free credits).
+  // Three cases for re-granting:
+  //   - same plan, same month        → skip (no-op)
+  //   - plan change, new amount > old → upgrade: skip clawback, add full new
+  //   - plan change, new amount < old → downgrade: claw back leftover, add new
+  //   - same plan, new month         → calendar rollover: claw back, add new
+  //
+  // Skipping clawback on upgrades means a free → pro mid-month user gets the
+  // full +2500 instead of being penalized for unused free credits. The
+  // downgrade clawback prevents accumulating credits by cycling subscriptions.
   let planChanged = false;
+  let isDowngrade = false;
   if (existingGrant && existingGrant.createdAt >= monthStart) {
     const prevPlan = existingGrant.reason?.match(/Monthly grant: (\w+)/)?.[1];
     if (prevPlan === args.plan) {
       return { granted: false, reason: "already_granted_same_plan" };
     }
     planChanged = true; // same month, different plan
+    const prevAmount = (prevPlan && MONTHLY_CREDITS[prevPlan]) ?? 0;
+    const newAmount = MONTHLY_CREDITS[args.plan] ?? 0;
+    isDowngrade = newAmount < prevAmount;
   }
 
   const monthlyAmount = MONTHLY_CREDITS[args.plan] ?? 0;
@@ -241,11 +251,13 @@ async function grantMonthlyCreditsIfDue(
     return { granted: false, reason: "orgs_receive_credits_via_transfer_only" };
   }
 
-  // Clawback leftover from previous cycle (don't roll over) — but ONLY
-  // on calendar-month renewals, not on plan changes. A user upgrading
-  // free → pro mid-month keeps their unused free credits, so the
-  // upgrade adds the full new allowance instead of partially refunding.
-  if (existingGrant && !planChanged) {
+  // Claw back the previous cycle's leftover credits IF either:
+  //   - calendar-month rollover (no plan change), OR
+  //   - plan downgrade (so users can't game by cycling pro → free → pro)
+  // Skip clawback on plan upgrades so the user gets the full new allowance
+  // they paid for.
+  const shouldClawback = existingGrant && (!planChanged || isDowngrade);
+  if (shouldClawback) {
     const previousSubTokens = existingGrant.tokens;
     const usageSince = await ctx.db
       .query("credits_ledger")
