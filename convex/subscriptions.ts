@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
+import { requireOwner } from "./credits";
 
 export const getSubscription = query({
   args: { companyId: v.string() },
@@ -12,7 +13,7 @@ export const getSubscription = query({
   },
 });
 
-export const upsertSubscription = mutation({
+export const upsertSubscription = internalMutation({
   args: {
     companyId: v.string(),
     plan: v.string(),
@@ -138,7 +139,7 @@ export const getSubscriptionHistory = query({
   },
 });
 
-export const recordTransaction = mutation({
+export const recordTransaction = internalMutation({
   args: {
     companyId: v.string(),
     action: v.string(),

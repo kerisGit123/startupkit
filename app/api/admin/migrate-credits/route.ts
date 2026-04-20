@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ConvexHttpClient } from 'convex/browser';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 
 export async function POST(req: NextRequest) {
   try {
-    // Require admin authentication
+    // Require admin authentication AND super_admin role
     const { userId } = await auth();
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const user = await currentUser();
+    if (user?.publicMetadata?.role !== "super_admin") {
+      return NextResponse.json({ error: "Forbidden — super_admin role required" }, { status: 403 });
     }
 
     console.log('[migrate-credits] Starting credit migration...');

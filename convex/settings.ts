@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { requireOwner } from "./credits";
 
 export const ensureOrgSettings = mutation({
   args: {
@@ -34,6 +35,7 @@ export const ensureOrgSettings = mutation({
 export const getSettings = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
+    await requireOwner(ctx, companyId);
     const settings = await ctx.db
       .query("org_settings")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -88,6 +90,7 @@ export const updateSettings = mutation({
     updatedBy: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const existing = await ctx.db
       .query("org_settings")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))

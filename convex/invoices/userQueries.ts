@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
+import { requireOwner } from "../credits";
 
 /**
  * Get user's invoices with filtering
@@ -23,6 +24,7 @@ export const getUserInvoicesWithFilters = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     // Get all user invoices by companyId
     let invoices = await ctx.db
       .query("invoices")
@@ -84,8 +86,9 @@ export const getUserInvoiceDetail = query({
     companyId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const invoice = await ctx.db.get(args.invoiceId);
-    
+
     // Verify invoice belongs to company
     if (!invoice || invoice.companyId !== args.companyId) {
       return null;
@@ -110,6 +113,7 @@ export const getUserInvoiceStats = query({
     companyId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const invoices = await ctx.db
       .query("invoices")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query } from "../_generated/server";
+import { requireOwner } from "../credits";
 
 /**
  * Get all invoices for a company
@@ -14,10 +15,11 @@ export const getCompanyInvoices = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const q = ctx.db
       .query("invoices")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId));
-    
+
     const invoices = await q
       .order("desc")
       .take(args.limit || 100);
@@ -138,11 +140,12 @@ export const getInvoiceStats = query({
     companyId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const invoices = await ctx.db
       .query("invoices")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
       .collect();
-    
+
     const stats = {
       total: invoices.length,
       totalAmount: 0,

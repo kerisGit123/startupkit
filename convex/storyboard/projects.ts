@@ -1,5 +1,6 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { requireWorkspaceAccess, requireWebhookSecret } from "../credits";
 
 // Per-plan project limits. Keep in sync with lib/plan-config.ts PLAN_LIMITS.
 // Convex mutations can't import from `lib/` directly (different runtime),
@@ -115,9 +116,19 @@ export const listByOrg = query({
 });
 
 export const get = query({
-  args: { id: v.id("storyboard_projects") },
-  handler: async (ctx, { id }) => {
-    return await ctx.db.get(id);
+  args: {
+    id: v.id("storyboard_projects"),
+    _secret: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, _secret }) => {
+    const project = await ctx.db.get(id);
+    if (!project) return null;
+    if (_secret) {
+      requireWebhookSecret(_secret); // n8n / r2-upload webhooks
+    } else {
+      await requireWorkspaceAccess(ctx, project.companyId ?? project.orgId ?? project.ownerId);
+    }
+    return project;
   },
 });
 
@@ -163,6 +174,7 @@ export const update = mutation({
     if (!existing) {
       throw new Error("Project not found");
     }
+    await requireWorkspaceAccess(ctx, existing.companyId ?? existing.orgId ?? existing.ownerId);
 
     // Create updated document — spread existing first, then override with provided fields
     const updatedDoc = { ...existing, ...fields, updatedAt: Date.now() };
@@ -189,6 +201,7 @@ export const duplicate = mutation({
     if (!project) {
       throw new Error("Storyboard project not found");
     }
+    await requireWorkspaceAccess(ctx, project.companyId ?? project.orgId ?? project.ownerId);
 
     const duplicatedProjectId = await ctx.db.insert("storyboard_projects", {
       name: `${project.name} (copy)`,
@@ -247,17 +260,12 @@ export const duplicate = mutation({
 export const remove = mutation({
   args: { id: v.id("storyboard_projects") },
   handler: async (ctx, { id }) => {
-    // Get user authentication
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("User not authenticated");
-    }
-
     // Get the project to verify it exists and get its ID
     const project = await ctx.db.get(id);
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireWorkspaceAccess(ctx, project.companyId ?? project.orgId ?? project.ownerId);
 
     console.log(`[Project Remove] Starting cleanup for project: ${id}`);
 
@@ -368,8 +376,11 @@ export const updateBuildStatus = mutation({
       })),
     })),
     isAIGenerated: v.boolean(),
+    _secret: v.optional(v.string()),
   },
-  handler: async (ctx, { id, taskStatus, taskMessage, scriptType, scenes, isAIGenerated }) => {
+  handler: async (ctx, { id, taskStatus, taskMessage, scriptType, scenes, isAIGenerated, _secret }) => {
+    // Called only by n8n webhook (no Clerk identity); guard with shared secret.
+    requireWebhookSecret(_secret);
     await ctx.db.patch(id, {
       taskStatus,
       taskMessage,
@@ -410,6 +421,9 @@ export const updateScript = mutation({
     scriptType: v.optional(v.string()), // "ANIMATED_STORIES" | "KIDS_ANIMATED_STORIES" | etc.
   },
   handler: async (ctx, { id, script, scenes, isAIGenerated, aiModel, taskStatus, taskMessage, scriptType }) => {
+    const project = await ctx.db.get(id);
+    if (!project) throw new Error("Project not found");
+    await requireWorkspaceAccess(ctx, project.companyId ?? project.orgId ?? project.ownerId);
     await ctx.db.patch(id, {
       script,
       scenes,

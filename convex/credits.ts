@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import {
+  mutation,
+  query,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 
 /**
  * Unified credit system.
@@ -50,7 +55,7 @@ const LedgerTypeValidator = v.union(
  * callers (Stripe webhook) pass the purchaser's id; otherwise we read it
  * from the authenticated caller's Clerk identity.
  */
-export const addCredits = mutation({
+export const addCredits = internalMutation({
   args: {
     companyId: v.string(),
     tokens: v.number(),
@@ -106,21 +111,32 @@ export const addCredits = mutation({
 /**
  * Add credits back to a company's balance (refund flow).
  */
+/**
+ * Public refund — accepts EITHER an authenticated owner of the workspace
+ * (client SceneEditor on local generation errors) OR a webhook secret
+ * (KIE callback / async failure paths that have no Clerk identity).
+ */
 export const refundCredits = mutation({
   args: {
     companyId: v.string(),
     tokens: v.number(),
     reason: v.optional(v.string()),
+    _secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    let userId: string | undefined;
+    if (args._secret) {
+      requireWebhookSecret(args._secret);
+    } else {
+      userId = await requireOwner(ctx, args.companyId);
+    }
     const now = Date.now();
-    const identity = await ctx.auth.getUserIdentity();
 
     await ctx.db.insert("credits_ledger", {
       companyId: args.companyId,
       tokens: args.tokens,
       type: "refund",
-      userId: identity?.subject,
+      userId,
       reason: args.reason,
       createdAt: now,
     });
@@ -376,8 +392,10 @@ export const recordOrgCreator = mutation({
   args: {
     companyId: v.string(),
     userId: v.string(),
+    _secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireWebhookSecret(args._secret);
     // Idempotent: if marker already exists, do nothing
     const existing = await ctx.db
       .query("credits_ledger")
@@ -600,7 +618,7 @@ export const transferCredits = mutation({
  * Internal helper that mirrors getCompanyCreator. Inlined so that
  * transferCredits can call it directly (mutations can't call queries).
  */
-async function resolveCompanyCreator(
+export async function resolveCompanyCreator(
   ctx: { db: any },
   companyId: string,
 ): Promise<string | null> {
@@ -652,6 +670,76 @@ async function resolveCompanyCreator(
     .first();
 
   return earliestProject?.ownerId ?? null;
+}
+
+/**
+ * Throw unless the authenticated caller owns `companyId`. Personal
+ * workspaces (companyId === user's own Clerk subject) always pass.
+ * Returns the caller's userId for convenience.
+ */
+export async function requireOwner(
+  ctx: { db: any; auth: any },
+  companyId: string,
+): Promise<string> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Unauthenticated");
+  if (companyId === identity.subject) return identity.subject;
+  const creator = await resolveCompanyCreator(ctx, companyId);
+  if (creator !== identity.subject) {
+    throw new Error("You are not the owner of this workspace");
+  }
+  return identity.subject;
+}
+
+/**
+ * Throw unless the authenticated caller can access `companyId`. Allows
+ * three classes of caller:
+ *   - personal workspace owner (companyId === user's Clerk subject)
+ *   - active org member (Clerk JWT `orgId === companyId`)
+ *   - org creator (per resolveCompanyCreator)
+ *
+ * Use this for storyboard projects/items/files where every member of an
+ * org should be able to read and edit, not just the creator.
+ */
+export async function requireWorkspaceAccess(
+  ctx: { db: any; auth: any },
+  companyId: string,
+): Promise<string> {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Unauthenticated");
+  if (companyId === identity.subject) return identity.subject;
+  if ((identity as any).orgId === companyId) return identity.subject;
+  const creator = await resolveCompanyCreator(ctx, companyId);
+  if (creator !== identity.subject) {
+    throw new Error("You do not have access to this workspace");
+  }
+  return identity.subject;
+}
+
+/**
+ * Throw unless the request carries the WEBHOOK_SECRET shared between
+ * Convex env and Next.js API routes (Stripe / Clerk / KIE callbacks).
+ * Used to gate mutations that have no Clerk user identity (called by
+ * server-side handlers via ConvexHttpClient).
+ *
+ * Setup:
+ *   1. `npx convex env set WEBHOOK_SECRET <random-32-bytes>`
+ *   2. Add `WEBHOOK_SECRET=<same-value>` to `.env.local`
+ *   3. The API route reads `process.env.WEBHOOK_SECRET` and passes it
+ *      as `_secret`.
+ *
+ * In dev (no secret set anywhere) this is a no-op so the existing
+ * webhook flows keep working. In prod, deploy will fail to call these
+ * mutations until the env var is configured.
+ */
+export function requireWebhookSecret(secret: string | undefined): void {
+  const expected = process.env.WEBHOOK_SECRET;
+  if (!expected) return; // dev mode bypass — see docstring
+  if (secret !== expected) {
+    throw new Error(
+      "Forbidden — call requires WEBHOOK_SECRET (server-only mutation)",
+    );
+  }
 }
 
 // ─── Monthly credit grant (Option 3: on-demand lazy allocation) ───────────
@@ -801,6 +889,13 @@ export const cleanupUntypedLedgerRows = mutation({
 
     const companyId =
       args.companyId ?? (identity.orgId as string) ?? identity.subject;
+
+    if (companyId !== identity.subject) {
+      const creator = await resolveCompanyCreator(ctx, companyId);
+      if (creator !== identity.subject) {
+        throw new Error("You are not the owner of this workspace");
+      }
+    }
 
     const allRows = await ctx.db
       .query("credits_ledger")
@@ -1224,8 +1319,10 @@ export const setOwnerPlan = mutation({
     creatorUserId: v.string(),
     ownerPlan: v.string(),
     organizationName: v.optional(v.string()),
+    _secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireWebhookSecret(args._secret);
     const now = Date.now();
     const existing = await ctx.db
       .query("credits_balance")
@@ -1340,8 +1437,10 @@ export const listLapsedOrgs = query({
 export const completeCompanyPurge = mutation({
   args: {
     companyId: v.string(),
+    _secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireWebhookSecret(args._secret);
     const now = Date.now();
 
     // 1. Clear r2Key on all storyboard_files rows for this companyId.
@@ -1394,8 +1493,10 @@ export const completeCompanyPurge = mutation({
 export const listCompanyR2Keys = query({
   args: {
     companyId: v.string(),
+    _secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireWebhookSecret(args._secret);
     const files = await ctx.db
       .query("storyboard_files")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
@@ -1556,6 +1657,7 @@ export const listOwnedWorkspaces = query({
 export const getBalance = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
+    await requireOwner(ctx, companyId);
     const balance = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -1568,6 +1670,7 @@ export const getBalance = query({
 export const getCompanyBalance = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
+    await requireOwner(ctx, companyId);
     const balance = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -1585,6 +1688,7 @@ export const getLedger = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const limit = args.limit || 100;
     const ledger = await ctx.db
       .query("credits_ledger")
@@ -1601,6 +1705,7 @@ export const getPurchaseHistory = query({
     companyId: v.string(),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const purchases = await ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q) =>
@@ -1624,6 +1729,7 @@ export const listTransferHistory = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    await requireOwner(ctx, args.companyId);
     const limit = args.limit ?? 50;
     const transfersOut = await ctx.db
       .query("credits_ledger")
@@ -1654,6 +1760,7 @@ export const listTransferHistory = query({
 export const getOrgUsageSummary = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
+    await requireOwner(ctx, companyId);
     const all = await ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q) =>
@@ -1691,6 +1798,7 @@ export const getOrgUsageSummary = query({
 export const listOrgUsage = query({
   args: { companyId: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, { companyId, limit }) => {
+    await requireOwner(ctx, companyId);
     const q = ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q2) =>

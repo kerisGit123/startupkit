@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { mutation } from "../_generated/server";
-import { internal } from "../_generated/api";
+import { mutation, internalMutation } from "../_generated/server";
+import { requireWebhookSecret } from "../credits";
 
 /**
  * Create a payment transaction (credit purchase)
@@ -15,10 +15,12 @@ export const createPaymentTransaction = mutation({
     tokens: v.number(),
     stripePaymentIntentId: v.optional(v.string()),
     stripeCheckoutSessionId: v.optional(v.string()),
+    _secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    requireWebhookSecret(args._secret);
     console.log("[createPaymentTransaction] Starting", args);
-    
+
     try {
       // 1. Create transaction record
       console.log("[createPaymentTransaction] Creating transaction record");
@@ -91,7 +93,7 @@ export const createPaymentTransaction = mutation({
  * Create a subscription transaction
  * This replaces the old subscription_transactions insert
  */
-export const createSubscriptionTransaction = mutation({
+export const createSubscriptionTransaction = internalMutation({
   args: {
     companyId: v.string(),
     userId: v.optional(v.id("users")),
@@ -152,7 +154,7 @@ export const createSubscriptionTransaction = mutation({
 /**
  * Create a manual credit transaction (admin only)
  */
-export const createCreditTransaction = mutation({
+export const createCreditTransaction = internalMutation({
   args: {
     companyId: v.string(),
     userId: v.optional(v.id("users")),
