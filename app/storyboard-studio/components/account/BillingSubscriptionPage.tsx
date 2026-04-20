@@ -22,6 +22,10 @@ import { getCreditPackages } from "@/lib/credit-pricing";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
 import { TransferCreditsDialog } from "./TransferCreditsDialog";
 import { CreditTransactionHistory } from "./CreditTransactionHistory";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface BillingSubscriptionPageProps {
   sidebarOpen: boolean;
@@ -117,6 +121,15 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
   const [invoiceType, setInvoiceType] = useState<"all" | "subscription" | "payment">("all");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<Id<"invoices"> | null>(null);
 
+  // Credit purchase confirmation dialog state
+  const [pendingPurchase, setPendingPurchase] = useState<{
+    tokens: number;
+    amount: number;
+    price: string;
+  } | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+
   // Real credit data from Convex
   const creditBalance = useQuery(api.credits.getBalance, companyId ? { companyId } : "skip");
   const ledger = useQuery(api.credits.getLedger, companyId ? { companyId, limit: 50 } : "skip");
@@ -159,34 +172,44 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
     return { totalUsed: Math.round(used), totalAdded: Math.round(added) };
   }, [ledger]);
 
-  const handleBuyCredits = async (tokens: number, amount: number) => {
+  const handleBuyCredits = (tokens: number, amount: number, price: string) => {
     if (!user || !companyId) {
       alert("Please sign in to buy credits");
       return;
     }
+    // Open the confirmation dialog. Actual checkout fires only after the
+    // user explicitly agrees to the no-refund terms.
+    setAgreedToTerms(false);
+    setPendingPurchase({ tokens, amount, price });
+  };
 
+  const confirmPurchase = async () => {
+    if (!pendingPurchase || !companyId || !agreedToTerms) return;
+    setPurchaseLoading(true);
     try {
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type: "credits",
-          tokens,
-          amount,
+          tokens: pendingPurchase.tokens,
+          amount: pendingPurchase.amount,
           companyId,
         }),
       });
 
       const data = await response.json();
-      
+
       if (data.url) {
         window.location.href = data.url;
       } else {
         alert("Failed to create checkout session");
+        setPurchaseLoading(false);
       }
     } catch (error) {
       console.error("Checkout error:", error);
       alert("An error occurred. Please try again.");
+      setPurchaseLoading(false);
     }
   };
 
@@ -493,8 +516,8 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                         <p className="text-emerald-400 text-sm">USD {(pkg.amountInCents / pkg.credits / 100).toFixed(2)}/credit</p>
                       </div>
                       
-                      <button 
-                        onClick={() => handleBuyCredits(pkg.credits, pkg.amountInCents)}
+                      <button
+                        onClick={() => handleBuyCredits(pkg.credits, pkg.amountInCents, pkg.price)}
                         className={`w-full py-4 rounded-xl font-semibold transition-all duration-200 ${
                           pkg.highlighted
                             ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg"
@@ -846,6 +869,97 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
           )}
         </div>
       </div>
+
+      {/* Credit purchase confirmation dialog — enforces explicit
+          agreement to the no-refund/no-cancel policy before opening
+          Stripe Checkout. The agreement also serves as evidence in
+          chargeback disputes. See docs/billing-policy.md §3.4. */}
+      <Dialog
+        open={!!pendingPurchase}
+        onOpenChange={(open) => {
+          if (!open && !purchaseLoading) {
+            setPendingPurchase(null);
+            setAgreedToTerms(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Confirm credit purchase</DialogTitle>
+            <DialogDescription>
+              Review the terms below before continuing to payment.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingPurchase && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border border-(--border-primary) bg-(--bg-secondary) p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-2xl font-bold">{pendingPurchase.tokens.toLocaleString()} credits</div>
+                    <div className="text-sm text-(--text-secondary)">One-time purchase</div>
+                  </div>
+                  <div className="text-2xl font-bold">{pendingPurchase.price}</div>
+                </div>
+              </div>
+
+              <ul className="space-y-2 text-sm text-(--text-secondary)">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
+                  <span>Credits are added to your <strong>personal workspace</strong> immediately on payment.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
+                  <span>Credits <strong>never expire</strong> and are not affected by subscription changes.</span>
+                </li>
+                <li className="flex items-start gap-2 text-amber-300">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span><strong>Final sale:</strong> credit top-up purchases are non-refundable and cannot be cancelled once payment completes.</span>
+                </li>
+                <li className="flex items-start gap-2 text-amber-300">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span>Credits cannot be converted back to cash, transferred between users, or sold.</span>
+                </li>
+              </ul>
+
+              <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-(--border-primary) bg-(--bg-secondary) p-3 hover:bg-(--bg-tertiary) transition-colors">
+                <Checkbox
+                  checked={agreedToTerms}
+                  onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm">
+                  I understand that this purchase is <strong>final</strong> and cannot be refunded or cancelled. I agree to the{" "}
+                  <a href="/billing-policy" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">billing policy</a>.
+                </span>
+              </label>
+            </div>
+          )}
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingPurchase(null);
+                setAgreedToTerms(false);
+              }}
+              disabled={purchaseLoading}
+              className="px-4 py-2 rounded-lg border border-(--border-primary) hover:bg-(--bg-secondary) disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmPurchase}
+              disabled={!agreedToTerms || purchaseLoading}
+              className="px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {purchaseLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+              Continue to payment
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
 );
 }
