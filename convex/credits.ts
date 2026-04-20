@@ -216,20 +216,16 @@ async function grantMonthlyCreditsIfDue(
     .order("desc")
     .first();
 
-  // Skip only if the existing grant is from this month AND was for the
-  // same plan. If the plan changed (e.g. upgraded Free → Starter mid-month),
-  // we re-grant with the new amount so the user actually gets their upgrade.
-  //
-  // Plan detection: we store the plan in `reason` as "Monthly grant: X".
-  // Parse it back out to compare.
+  // Decide whether this call should re-grant, and if so, whether it's a
+  // calendar-month rollover (claw back leftover) or a plan change
+  // (preserve leftover so an upgrade doesn't refund the user's free credits).
+  let planChanged = false;
   if (existingGrant && existingGrant.createdAt >= monthStart) {
     const prevPlan = existingGrant.reason?.match(/Monthly grant: (\w+)/)?.[1];
     if (prevPlan === args.plan) {
       return { granted: false, reason: "already_granted_same_plan" };
     }
-    // Plan changed mid-cycle — fall through to re-grant with new amount.
-    // The clawback logic below will zero out the old plan's leftover credits
-    // before the new grant is added.
+    planChanged = true; // same month, different plan
   }
 
   const monthlyAmount = MONTHLY_CREDITS[args.plan] ?? 0;
@@ -245,8 +241,11 @@ async function grantMonthlyCreditsIfDue(
     return { granted: false, reason: "orgs_receive_credits_via_transfer_only" };
   }
 
-  // Clawback leftover from previous cycle (don't roll over)
-  if (existingGrant) {
+  // Clawback leftover from previous cycle (don't roll over) — but ONLY
+  // on calendar-month renewals, not on plan changes. A user upgrading
+  // free → pro mid-month keeps their unused free credits, so the
+  // upgrade adds the full new allowance instead of partially refunding.
+  if (existingGrant && !planChanged) {
     const previousSubTokens = existingGrant.tokens;
     const usageSince = await ctx.db
       .query("credits_ledger")
