@@ -729,6 +729,13 @@ export const resetCreditsForTesting = mutation({
     const companyId =
       args.companyId ?? (identity.orgId as string) ?? identity.subject;
 
+    if (companyId !== identity.subject) {
+      const creator = await resolveCompanyCreator(ctx, companyId);
+      if (creator !== identity.subject) {
+        throw new Error("You are not the owner of this workspace");
+      }
+    }
+
     // 1. Delete THIS MONTH's subscription ledger entries so the grant
     //    check will allow a fresh grant on next load.
     const monthStart = (() => {
@@ -850,6 +857,11 @@ export const simulateOrgLapseForTesting = mutation({
       throw new Error("Lapse simulation only applies to orgs, not personal workspaces");
     }
 
+    const creator = await resolveCompanyCreator(ctx, args.companyId);
+    if (creator !== identity.subject) {
+      throw new Error("You are not the owner of this workspace");
+    }
+
     const row = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
@@ -878,6 +890,11 @@ export const restoreOrgPlanForTesting = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
+
+    const creator = await resolveCompanyCreator(ctx, args.companyId);
+    if (creator !== identity.subject) {
+      throw new Error("You are not the owner of this workspace");
+    }
 
     const row = await ctx.db
       .query("credits_balance")
@@ -1117,6 +1134,13 @@ export const seedCreditsForTesting = mutation({
 
     const companyId =
       args.companyId ?? (identity.orgId as string) ?? identity.subject;
+
+    if (companyId !== identity.subject) {
+      const creator = await resolveCompanyCreator(ctx, companyId);
+      if (creator !== identity.subject) {
+        throw new Error("You are not the owner of this workspace");
+      }
+    }
 
     const now = Date.now();
     await ctx.db.insert("credits_ledger", {

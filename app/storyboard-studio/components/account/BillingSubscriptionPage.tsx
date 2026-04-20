@@ -67,24 +67,6 @@ const PLANS = [
     ],
   },
   {
-    key: "starter",
-    name: "Starter Team",
-    kind: "organization" as const,
-    priceMonthly: 39.9,
-    priceYearly: 32, // $384/yr
-    priceLabel: "$39.90 / month",
-    credits: 2500,
-    maxOrgs: 1,
-    maxSeats: 5,
-    features: [
-      "2,500 credits/month",
-      "1 organization",
-      "5 seats per org",
-      "10 GB storage",
-      "Shared element library",
-    ],
-  },
-  {
     key: "business",
     name: "Business",
     kind: "organization" as const,
@@ -96,7 +78,7 @@ const PLANS = [
     maxSeats: 15,
     popular: true,
     features: [
-      "Everything in Starter",
+      "Everything in Pro",
       "6,900 credits/month",
       "3 organizations",
       "15 seats per org",
@@ -552,7 +534,7 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
               </div>
 
               {/* All plans are now User Plans — no Personal/Organization toggle.
-                  Starter Team and Business unlock team features via the
+                  Pro and Business unlock team features via the
                   ownerPlan snapshot propagation system. Subscribing is a
                   direct user action, no org required. */}
 
