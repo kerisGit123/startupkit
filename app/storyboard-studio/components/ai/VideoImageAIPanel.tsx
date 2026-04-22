@@ -2031,7 +2031,10 @@ export function ImageAIPanel({
                                     setAudioRefs([{ url: af.sourceUrl, duration: Math.round(dur) }]);
                                     if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); }
                                     setShowExtendAudioDropdown(false);
-                                  }} className="flex-1 text-left text-[12px] text-[#EAEAEA] truncate">{af.name}</button>
+                                  }} className="flex-1 text-left text-[12px] text-[#EAEAEA] truncate">
+                                    {af.name}
+                                    {af.personaCreated && <span className="text-[9px] text-amber-500 ml-1">✓ Persona</span>}
+                                  </button>
                                   {af.sourceUrl && (
                                     <button onClick={(e) => { e.stopPropagation(); if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); } setMediaPreview({ type: 'audio', url: af.sourceUrl!, label: af.name, prompt: af.prompt, fileId: String(af._id) }); }}
                                       className="w-5 h-5 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/10 flex-shrink-0 transition" title="Open full player">
@@ -3834,6 +3837,7 @@ export function ImageAIPanel({
                               className={`flex-1 text-left text-[12px] truncate ${musicExtendAudioId === af.audioId ? 'text-teal-400' : 'text-[#EAEAEA]'}`}
                             >
                               {af.name}
+                              {af.personaCreated && <span className="text-[9px] text-amber-500 ml-1">✓ Persona</span>}
                             </button>
                             {/* Expand to full player */}
                             {af.sourceUrl && (

@@ -228,10 +228,13 @@ export function GeneratedImageCard({
                     <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
                   </div>
                 </div>
-                {/* AI + MUSIC badges */}
+                {/* AI + MUSIC + PERSONA badges */}
                 <div className="absolute top-2 left-2 flex items-center gap-1">
                   <div className="bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">AI</div>
                   <div className="bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">MUSIC</div>
+                  {metadata?.personaCreated && (
+                    <div className="bg-amber-500/90 text-white text-[8px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">PERSONA</div>
+                  )}
                 </div>
                 {/* Song name at bottom */}
                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">

@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import {
-  Film, Music, Image, Play, Pause, Scissors, Trash2,
+  Film, Music, Image, Play, Pause, Scissors, Trash2, Camera,
   ZoomIn, ZoomOut, Download, Plus, Loader2, Clock,
   SkipBack, SkipForward, PanelLeftOpen, PanelLeftClose, X, Save, FolderOpen,
 } from "lucide-react";
@@ -55,8 +55,14 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const companyId = useCurrentCompanyId();
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
 
-  const [clips, setClips] = useState<TimelineClip[]>([]);
+  const [videoClips, setVideoClips] = useState<TimelineClip[]>([]);
+  const [audioClips, setAudioClips] = useState<TimelineClip[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [selectedTrack, setSelectedTrack] = useState<"video" | "audio">("video");
+
+  // Unified clips getter for backward compat
+  const clips = selectedTrack === "video" ? videoClips : audioClips;
+  const setClips = selectedTrack === "video" ? setVideoClips : setAudioClips;
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [pxPerSec, setPxPerSec] = useState(100);
@@ -86,24 +92,23 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
   const projectFiles = useQuery(api.storyboard.storyboardFiles.listByProject, { projectId });
 
-  // Undo system — push state before destructive actions
+  // Undo system — push state before destructive actions (saves both tracks)
   const pushHistory = useCallback(() => {
-    setHistory(prev => [...prev.slice(0, historyIndex + 1), [...clips]]);
+    setHistory(prev => [...prev.slice(0, historyIndex + 1), [videoClips, audioClips] as any]);
     setHistoryIndex(prev => prev + 1);
-  }, [clips, historyIndex]);
+  }, [videoClips, audioClips, historyIndex]);
 
   const undo = useCallback(() => {
     if (historyIndex < 0) return;
-    setClips(history[historyIndex]);
+    const [v, a] = history[historyIndex] as any;
+    setVideoClips(v);
+    setAudioClips(a);
     setHistoryIndex(prev => prev - 1);
     toast.success("Undone");
   }, [history, historyIndex]);
 
-  // Track type: determined by first clip. Empty = unlocked (show all files)
-  const trackType: "video" | "audio" | null = useMemo(() => {
-    if (clips.length === 0) return null;
-    return clips[0].type === "audio" ? "audio" : "video";
-  }, [clips]);
+  // Track type for media panel filtering
+  const trackType = selectedTrack;
 
   const mediaFiles = useMemo(() => {
     if (!projectFiles) return [];
@@ -112,118 +117,107 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         if (f.status === "deleted" || f.deletedAt) return false;
         if (!f.r2Key && !f.sourceUrl) return false;
         if ((f.size ?? 0) <= 0) return false;
-        // If track is locked, only show matching type
-        if (trackType === "video") return f.fileType === "video" || f.fileType === "image";
-        if (trackType === "audio") return f.fileType === "audio";
-        // Unlocked — show everything
         return f.fileType === "video" || f.fileType === "image" || f.fileType === "audio";
       })
       .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-  }, [projectFiles, trackType]);
+  }, [projectFiles]);
 
-  const totalDur = clips.reduce((s, c) => s + getVisDur(c), 0);
+  const videoDur = videoClips.reduce((s, c) => s + getVisDur(c), 0);
+  const audioDur = audioClips.reduce((s, c) => s + getVisDur(c), 0);
+  const totalDur = Math.max(videoDur, audioDur);
 
   // ── Playback ──────────────────────────────────────────────────────────
 
-  const getClipAt = useCallback((t: number) => {
+  // Get clip at time for a specific track's clips
+  const getClipAtInTrack = useCallback((trackClips: TimelineClip[], t: number) => {
     let e = 0;
-    for (let i = 0; i < clips.length; i++) {
-      const d = getVisDur(clips[i]);
-      if (t < e + d) return { clip: clips[i], offset: t - e + clips[i].trimStart, idx: i };
+    for (let i = 0; i < trackClips.length; i++) {
+      const d = getVisDur(trackClips[i]);
+      if (t < e + d) return { clip: trackClips[i], offset: t - e + trackClips[i].trimStart, idx: i };
       e += d;
     }
     return null;
-  }, [clips]);
+  }, []);
 
-  const lastSyncClipId = useRef<string>("");
+  // Backward compat — getClipAt uses selected track
+  const getClipAt = useCallback((t: number) => getClipAtInTrack(clips, t), [clips, getClipAtInTrack]);
+
+  const lastSyncVideoId = useRef<string>("");
+  const lastSyncAudioId = useRef<string>("");
 
   const syncPreview = useCallback((t: number) => {
-    const r = getClipAt(t);
-    if (!r) return;
-
-    const clipChanged = lastSyncClipId.current !== r.clip.id;
-    lastSyncClipId.current = r.clip.id;
-
-    if (r.clip.type === "video" && previewRef.current) {
+    // Sync video track
+    const vr = getClipAtInTrack(videoClips, t);
+    if (vr && (vr.clip.type === "video" || vr.clip.type === "image") && previewRef.current) {
       const vid = previewRef.current;
-      if (clipChanged || vid.src !== r.clip.src) {
-        vid.src = r.clip.src;
-        vid.load();
-        vid.currentTime = r.offset;
-        vid.muted = false;
-        if (playing) {
-          const tryPlay = () => {
-            vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });
-          };
-          if (vid.readyState >= 2) { tryPlay(); }
-          else { vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); }; }
+      const videoChanged = lastSyncVideoId.current !== vr.clip.id;
+      lastSyncVideoId.current = vr.clip.id;
+      if (vr.clip.type === "video") {
+        if (videoChanged || vid.src !== vr.clip.src) {
+          vid.src = vr.clip.src;
+          vid.load();
+          vid.currentTime = vr.offset;
+          vid.muted = false;
+          if (playing) {
+            const tryPlay = () => { vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); }); };
+            if (vid.readyState >= 2) { tryPlay(); } else { vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); }; }
+          }
+        } else if (!playing) {
+          vid.currentTime = vr.offset;
         }
-      } else if (!playing) {
-        previewRef.current.currentTime = r.offset;
       }
     }
-
-    if (r.clip.type === "audio" && audioRef.current) {
-      const aud = audioRef.current;
-      if (clipChanged || aud.src !== r.clip.src) {
-        aud.src = r.clip.src;
-        aud.load();
-        aud.currentTime = r.offset;
-        if (playing) {
-          if (aud.readyState >= 2) { aud.play().catch(() => {}); }
-          else { aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); }; }
-        }
-      } else if (!playing) {
-        audioRef.current.currentTime = r.offset;
-      }
-    }
-
-    // Pause media when switching away from their type
-    if (r.clip.type !== "audio" && audioRef.current && !audioRef.current.paused) {
-      audioRef.current.pause();
-    }
-    if (r.clip.type !== "video" && previewRef.current && !previewRef.current.paused) {
+    if (!vr && previewRef.current && !previewRef.current.paused) {
       previewRef.current.pause();
+      lastSyncVideoId.current = "";
     }
-  }, [getClipAt, playing]);
+
+    // Sync audio track
+    const ar = getClipAtInTrack(audioClips, t);
+    if (ar && audioRef.current) {
+      const aud = audioRef.current;
+      const audioChanged = lastSyncAudioId.current !== ar.clip.id;
+      lastSyncAudioId.current = ar.clip.id;
+      if (audioChanged || aud.src !== ar.clip.src) {
+        aud.src = ar.clip.src;
+        aud.load();
+        aud.currentTime = ar.offset;
+        if (playing) {
+          if (aud.readyState >= 2) { aud.play().catch(() => {}); } else { aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); }; }
+        }
+      } else if (!playing) {
+        aud.currentTime = ar.offset;
+      }
+    }
+    if (!ar && audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      lastSyncAudioId.current = "";
+    }
+  }, [videoClips, audioClips, getClipAtInTrack, playing]);
 
   const startPlay = useCallback(() => {
     if (totalDur <= 0) return;
     setPlaying(true);
     playStart.current = { realTime: performance.now(), offset: currentTime };
 
-    // Set src and play — wait for canplay before calling play()
-    const curClip = getClipAt(currentTime);
-    if (curClip) {
-      if (curClip.clip.type === "video" && previewRef.current) {
-        const vid = previewRef.current;
-        // Only change src if different to avoid reload
-        if (vid.src !== curClip.clip.src) {
-          vid.src = curClip.clip.src;
-          vid.load();
-        }
-        vid.currentTime = curClip.offset;
-        vid.muted = false;
-        const tryPlay = () => {
-          vid.play().catch(() => {
-            // Browser may block unmuted autoplay — retry muted
-            vid.muted = true;
-            vid.play().catch(() => {});
-          });
-        };
-        if (vid.readyState >= 2) { tryPlay(); }
-        else { vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); }; }
-      }
-      if (curClip.clip.type === "audio" && audioRef.current) {
-        const aud = audioRef.current;
-        if (aud.src !== curClip.clip.src) {
-          aud.src = curClip.clip.src;
-          aud.load();
-        }
-        aud.currentTime = curClip.offset;
-        if (aud.readyState >= 2) { aud.play().catch(() => {}); }
-        else { aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); }; }
-      }
+    // Start both tracks simultaneously — directly start media (can't rely on syncPreview since playing state hasn't updated yet)
+    const vr = getClipAtInTrack(videoClips, currentTime);
+    if (vr && vr.clip.type === "video" && previewRef.current) {
+      const vid = previewRef.current;
+      if (vid.src !== vr.clip.src) { vid.src = vr.clip.src; vid.load(); }
+      vid.currentTime = vr.offset;
+      vid.muted = false;
+      const tryPlay = () => { vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); }); };
+      if (vid.readyState >= 2) tryPlay(); else vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); };
+      lastSyncVideoId.current = vr.clip.id;
+    }
+    const ar = getClipAtInTrack(audioClips, currentTime);
+    if (ar && audioRef.current) {
+      const aud = audioRef.current;
+      if (aud.src !== ar.clip.src) { aud.src = ar.clip.src; aud.load(); }
+      aud.currentTime = ar.offset;
+      if (aud.readyState >= 2) aud.play().catch(() => {}); else aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); };
+      lastSyncAudioId.current = ar.clip.id;
     }
 
     const tick = () => {
@@ -240,20 +234,22 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       if (progressBarRef.current) progressBarRef.current.style.width = `${t * pxPerSec}px`;
       if (timeDisplayRef.current) timeDisplayRef.current.textContent = `${formatTime(t)} / ${formatTime(totalDur)}`;
 
-      // Update React state only 4 times per second (for UI that depends on currentTime)
+      // Update React state only 4 times per second
       if (Math.floor(t * 4) !== Math.floor((t - 1/60) * 4)) {
         setCurrentTime(t);
       }
 
-      // Only sync media on clip boundaries
-      const r = getClipAt(t);
-      if (r && lastSyncClipId.current !== r.clip.id) {
+      // Sync on clip boundaries for both tracks
+      const vr = getClipAtInTrack(videoClips, t);
+      const ar = getClipAtInTrack(audioClips, t);
+      if ((vr && lastSyncVideoId.current !== vr.clip.id) || (ar && lastSyncAudioId.current !== ar.clip.id) ||
+          (!vr && lastSyncVideoId.current) || (!ar && lastSyncAudioId.current)) {
         syncPreview(t);
       }
       animRef.current = requestAnimationFrame(tick);
     };
     animRef.current = requestAnimationFrame(tick);
-  }, [totalDur, currentTime, syncPreview]);
+  }, [totalDur, currentTime, syncPreview, videoClips, audioClips, getClipAtInTrack]);
 
   const stopPlay = useCallback(() => {
     setPlaying(false);
@@ -268,11 +264,12 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
   // Sync preview when clips change or currentTime is seeked while paused
   useEffect(() => {
-    if (!playing && clips.length > 0) {
-      lastSyncClipId.current = ""; // force re-sync
+    if (!playing && (videoClips.length > 0 || audioClips.length > 0)) {
+      lastSyncVideoId.current = "";
+      lastSyncAudioId.current = "";
       syncPreview(currentTime);
     }
-  }, [clips, playing, syncPreview]);
+  }, [videoClips, audioClips, playing, syncPreview]);
 
   // ── Clip Actions ──────────────────────────────────────────────────────
 
@@ -287,13 +284,21 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         el.onerror = () => r(5); setTimeout(() => r(5), 5000);
       });
     }
+    const clipType = file.fileType === "video" ? "video" : file.fileType === "image" ? "image" : "audio";
     const c: TimelineClip = {
       id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-      type: file.fileType === "video" ? "video" : file.fileType === "image" ? "image" : "audio",
+      type: clipType,
       src, name: file.filename || file.model || "Untitled",
       duration: dur, trimStart: 0, trimEnd: 0, originalDuration: dur,
     };
-    setClips(p => [...p, c]);
+    // Route to correct track
+    if (clipType === "audio") {
+      setAudioClips(p => [...p, c]);
+      setSelectedTrack("audio");
+    } else {
+      setVideoClips(p => [...p, c]);
+      setSelectedTrack("video");
+    }
     setSelectedClipId(c.id);
     setShowMedia(false);
   }, []);
@@ -344,7 +349,8 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
   const removeClip = useCallback((id: string) => {
     pushHistory();
-    setClips(p => p.filter(c => c.id !== id));
+    setVideoClips(p => p.filter(c => c.id !== id));
+    setAudioClips(p => p.filter(c => c.id !== id));
     if (selectedClipId === id) setSelectedClipId(null);
   }, [selectedClipId, pushHistory]);
 
@@ -377,16 +383,18 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       ...clipboard,
       id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
     };
-    // Insert after selected clip, or at end
-    const idx = selectedClipId ? clips.findIndex(c => c.id === selectedClipId) : -1;
+    const targetTrack = pasted.type === "audio" ? audioClips : videoClips;
+    const setTargetTrack = pasted.type === "audio" ? setAudioClips : setVideoClips;
+    const idx = selectedClipId ? targetTrack.findIndex(c => c.id === selectedClipId) : -1;
     if (idx >= 0) {
-      setClips(p => [...p.slice(0, idx + 1), pasted, ...p.slice(idx + 1)]);
+      setTargetTrack(p => [...p.slice(0, idx + 1), pasted, ...p.slice(idx + 1)]);
     } else {
-      setClips(p => [...p, pasted]);
+      setTargetTrack(p => [...p, pasted]);
     }
     setSelectedClipId(pasted.id);
+    setSelectedTrack(pasted.type === "audio" ? "audio" : "video");
     toast.success("Clip pasted");
-  }, [clipboard, clips, selectedClipId]);
+  }, [clipboard, videoClips, audioClips, selectedClipId]);
 
   // ── Extract Audio from Video ─────────────────────────────────────────
 
@@ -460,10 +468,11 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         originalDuration: dur,
       };
       pushHistory();
-      setClips(p => [...p, newClip]);
+      setAudioClips(p => [...p, newClip]);
       setSelectedClipId(newClip.id);
+      setSelectedTrack("audio");
 
-      toast.success("Audio extracted and added to timeline! Right-click to save or download.");
+      toast.success("Audio extracted and added to audio track! Right-click to save or download.");
       audioCtx.close();
     } catch (err) {
       console.error("[VideoEditor] Extract audio failed:", err);
@@ -552,25 +561,30 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const onDrop = useCallback((e: React.DragEvent, tid: string) => {
     e.preventDefault();
     if (!draggedClipId || draggedClipId === tid) return;
-    setClips(p => { const a = [...p]; const fi = a.findIndex(c => c.id === draggedClipId); const ti = a.findIndex(c => c.id === tid); if (fi < 0 || ti < 0) return p; const [m] = a.splice(fi, 1); a.splice(ti, 0, m); return a; });
+    // Rearrange within the same track
+    const reorder = (p: TimelineClip[]) => { const a = [...p]; const fi = a.findIndex(c => c.id === draggedClipId); const ti = a.findIndex(c => c.id === tid); if (fi < 0 || ti < 0) return p; const [m] = a.splice(fi, 1); a.splice(ti, 0, m); return a; };
+    setVideoClips(reorder);
+    setAudioClips(reorder);
     setDraggedClipId(null);
   }, [draggedClipId]);
 
   const onTrimDown = useCallback((e: React.MouseEvent, id: string, side: "left" | "right") => {
     e.stopPropagation(); e.preventDefault();
-    const c = clips.find(x => x.id === id);
+    const c = videoClips.find(x => x.id === id) || audioClips.find(x => x.id === id);
     if (c) setTrimming({ clipId: id, side, startX: e.clientX, origTS: c.trimStart, origTE: c.trimEnd });
-  }, [clips]);
+  }, [videoClips, audioClips]);
 
   useEffect(() => {
     if (!trimming) return;
     const move = (e: MouseEvent) => {
       const dt = (e.clientX - trimming.startX) / pxPerSec;
-      setClips(p => p.map(c => {
+      const trimMapper = (c: TimelineClip) => {
         if (c.id !== trimming.clipId) return c;
         if (trimming.side === "left") return { ...c, trimStart: Math.max(0, Math.min(trimming.origTS + dt, c.duration - c.trimEnd - 0.1)) };
         return { ...c, trimEnd: Math.max(0, Math.min(trimming.origTE - dt, c.duration - c.trimStart - 0.1)) };
-      }));
+      };
+      setVideoClips(p => p.map(trimMapper));
+      setAudioClips(p => p.map(trimMapper));
     };
     const up = () => setTrimming(null);
     window.addEventListener("mousemove", move);
@@ -933,8 +947,11 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
   // ── Render ────────────────────────────────────────────────────────────
 
-  const cur = getClipAt(currentTime);
-  const sel = clips.find(c => c.id === selectedClipId);
+  // Current clip for preview — always show video track in preview area
+  const curVideo = getClipAtInTrack(videoClips, currentTime);
+  const curAudio = getClipAtInTrack(audioClips, currentTime);
+  const cur = curVideo; // Preview shows video track
+  const sel = videoClips.find(c => c.id === selectedClipId) || audioClips.find(c => c.id === selectedClipId);
   const tlWidth = Math.max(totalDur * pxPerSec + 200, 500);
 
   return (
@@ -999,6 +1016,90 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           </div>
         )}
 
+        {/* Top-right: Snapshot button */}
+        {cur && (cur.clip.type === "video" || cur.clip.type === "image") && (
+          <div className="absolute top-3 right-3 z-10">
+            <button
+              onClick={async () => {
+                const addSnapshotToTrack = (blob: Blob) => {
+                  const url = URL.createObjectURL(blob);
+                  const snapClip: TimelineClip = {
+                    id: `c-${Date.now()}-snap`,
+                    type: "image",
+                    src: url,
+                    name: `snapshot-${formatTime(currentTime).replace(/[:.]/g, "-")}.png`,
+                    duration: 3,
+                    trimStart: 0,
+                    trimEnd: 0,
+                    originalDuration: 3,
+                  };
+                  setVideoClips(p => [...p, snapClip]);
+                  setSelectedClipId(snapClip.id);
+                  setSelectedTrack("video");
+                  toast.success("Frame captured and added to video track!");
+                };
+
+                try {
+                  if (cur.clip.type === "image") {
+                    // For images — just reuse the source URL directly as a new clip
+                    const snapClip: TimelineClip = {
+                      id: `c-${Date.now()}-snap`,
+                      type: "image",
+                      src: cur.clip.src,
+                      name: `snapshot-${formatTime(currentTime).replace(/[:.]/g, "-")}.png`,
+                      duration: 3,
+                      trimStart: 0,
+                      trimEnd: 0,
+                      originalDuration: 3,
+                    };
+                    setVideoClips(p => [...p, snapClip]);
+                    setSelectedClipId(snapClip.id);
+                    setSelectedTrack("video");
+                    toast.success("Frame captured and added to video track!");
+                  } else if (cur.clip.type === "video" && previewRef.current) {
+                    // Fetch the video as blob, create a crossOrigin video from blob URL, then capture frame
+                    toast.info("Capturing frame...");
+                    const vid = previewRef.current;
+                    const seekTime = vid.currentTime;
+
+                    const res = await fetch(cur.clip.src);
+                    const blob = await res.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+
+                    const tempVid = document.createElement("video");
+                    tempVid.src = blobUrl;
+                    tempVid.preload = "auto";
+                    tempVid.onloadeddata = () => { tempVid.currentTime = seekTime; };
+                    tempVid.onseeked = () => {
+                      const w = tempVid.videoWidth || 1920;
+                      const h = tempVid.videoHeight || 1080;
+                      const canvas = document.createElement("canvas");
+                      canvas.width = w;
+                      canvas.height = h;
+                      const ctx = canvas.getContext("2d");
+                      if (!ctx) { toast.error("Canvas not supported"); URL.revokeObjectURL(blobUrl); return; }
+                      ctx.drawImage(tempVid, 0, 0, w, h);
+                      canvas.toBlob((snapBlob) => {
+                        URL.revokeObjectURL(blobUrl);
+                        if (!snapBlob) { toast.error("Failed to capture"); return; }
+                        addSnapshotToTrack(snapBlob);
+                      }, "image/png");
+                    };
+                    tempVid.onerror = () => { URL.revokeObjectURL(blobUrl); toast.error("Failed to load video for capture"); };
+                  }
+                } catch {
+                  toast.error("Failed to capture frame");
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition shadow-lg bg-[#1a1a24]/90 backdrop-blur text-[#c0c0c0] hover:text-white border border-[#2a2a35]"
+              title="Capture current frame as image"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Snapshot
+            </button>
+          </div>
+        )}
+
         {/* Top-left: Add Media button */}
         <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
           <button
@@ -1020,10 +1121,10 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           </button>
 
           {/* Track type indicator */}
-          {showMedia && trackType && (
+          {showMedia && (
             <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1a1a24]/90 backdrop-blur rounded-lg border border-[#2a2a35] text-[10px] font-medium text-[#A0A0A0]">
-              {trackType === "video" ? <Film className="w-3 h-3 text-teal-500" /> : <Music className="w-3 h-3 text-teal-500" />}
-              {trackType === "video" ? "Video Track" : "Audio Track"}
+              {selectedTrack === "video" ? <Film className="w-3 h-3 text-teal-500" /> : <Music className="w-3 h-3 text-purple-500" />}
+              {selectedTrack === "video" ? "Video Track" : "Audio Track"}
             </div>
           )}
         </div>
@@ -1149,21 +1250,25 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         <div
           ref={timelineRef}
           className="relative overflow-x-auto overflow-y-hidden cursor-pointer"
-          style={{ height: clips.length > 0 ? 200 : 60 }}
+          style={{ height: (videoClips.length > 0 || audioClips.length > 0) ? 280 : 60 }}
           onClick={onTimelineClick}
         >
-          {clips.length === 0 ? (
+          {videoClips.length === 0 && audioClips.length === 0 ? (
             <div className="flex items-center justify-center h-full text-xs text-[#2a2a35]">
               <Plus className="w-4 h-4 mr-2" /> Add clips to build your timeline
             </div>
           ) : (
             <>
-              {/* Track label (fixed left) */}
-              <div className="absolute left-0 top-7 bottom-0 w-14 bg-[#111118] border-r border-[#1e1e28] z-20 flex flex-col justify-center gap-1 px-1.5">
-                <div className="flex items-center gap-1 text-[8px] text-[#6E6E6E]">
-                  {trackType === "audio" ? <Music className="w-3 h-3 text-teal-500/60" /> : <Film className="w-3 h-3 text-teal-500/60" />}
-                  <span>{trackType === "audio" ? "Audio" : "Video"}</span>
-                </div>
+              {/* Track labels (fixed left) */}
+              <div className="absolute left-0 top-7 bottom-0 w-14 bg-[#111118] border-r border-[#1e1e28] z-20 flex flex-col">
+                <button onClick={() => setSelectedTrack("video")}
+                  className={`h-[120px] flex items-center gap-1 px-1.5 text-[8px] border-b border-[#1e1e28] transition ${selectedTrack === "video" ? "text-teal-400 bg-teal-500/5" : "text-[#6E6E6E] hover:text-[#A0A0A0]"}`}>
+                  <Film className="w-3 h-3" /><span>Video</span>
+                </button>
+                <button onClick={() => setSelectedTrack("audio")}
+                  className={`h-[100px] flex items-center gap-1 px-1.5 text-[8px] transition ${selectedTrack === "audio" ? "text-purple-400 bg-purple-500/5" : "text-[#6E6E6E] hover:text-[#A0A0A0]"}`}>
+                  <Music className="w-3 h-3" /><span>Audio</span>
+                </button>
               </div>
 
               {/* Ruler with progress bar */}
@@ -1191,23 +1296,20 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                 })()}
               </div>
 
-              {/* Clip track */}
-              <div className="absolute top-12 left-14 bottom-8 flex items-stretch gap-2 px-3" style={{ width: tlWidth }}>
-                {clips.map(clip => {
+              {/* Video Track */}
+              <div className={`absolute top-[28px] left-14 h-[120px] flex items-stretch gap-2 px-3 py-2 border-b border-[#1e1e28] ${selectedTrack === "video" ? "bg-teal-500/[0.02]" : ""}`} style={{ width: tlWidth }}>
+                {videoClips.map(clip => {
                   const vd = getVisDur(clip);
                   const w = vd * pxPerSec;
                   const isSel = clip.id === selectedClipId;
-
                   return (
                     <div key={clip.id} data-clip draggable onDragStart={(e) => onDragStart(e, clip.id)} onDragOver={onDragOver} onDrop={(e) => onDrop(e, clip.id)} onDragEnd={onDragEnd}
-                      onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); }}
-                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); }}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
                       className={`relative shrink-0 rounded-xl overflow-hidden transition cursor-grab active:cursor-grabbing ${
                         isSel ? "ring-[3px] ring-teal-400 shadow-lg shadow-teal-500/30" : "ring-1 ring-[#2a2a35] hover:ring-[#4A4A4A]"
                       } ${draggedClipId === clip.id ? "opacity-30" : ""}`}
                       style={{ width: Math.max(w, 36), height: "100%" }}>
-
-                      {/* Full thumbnail */}
                       {clip.type === "video" && (
                         <video src={clip.src} className="absolute inset-0 w-full h-full object-cover" muted preload="metadata"
                           onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = clip.trimStart + 0.5; }} />
@@ -1215,57 +1317,74 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                       {clip.type === "image" && (
                         <img src={clip.src} className="absolute inset-0 w-full h-full object-cover" alt="" />
                       )}
-                      {clip.type === "audio" && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-[#0f1a2a] to-[#1a1a30] flex items-center justify-center">
-                          <Music className="w-6 h-6 text-teal-500/30" />
-                        </div>
-                      )}
-
-                      {/* Gradient overlay for text readability */}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
-
-                      {/* Type badge */}
-                      <div className="absolute top-2 left-2">
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md ${
-                          clip.type === "video" ? "bg-emerald-600/90" : clip.type === "image" ? "bg-purple-600/90" : "bg-blue-600/90"
-                        } text-white shadow-sm`}>
-                          {clip.type === "video" ? "VIDEO" : clip.type === "image" ? "IMAGE" : "AUDIO"}
+                      <div className="absolute top-2 left-2 flex items-center gap-1">
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md ${clip.type === "video" ? "bg-emerald-600/90" : "bg-purple-600/90"} text-white shadow-sm`}>
+                          {clip.type === "video" ? "VIDEO" : "IMAGE"}
                         </span>
+                        {clip.src.startsWith("blob:") && (
+                          <span className="text-[7px] font-medium px-1 py-0.5 rounded bg-amber-500/80 text-white shadow-sm" title="Unsaved — right-click to save">
+                            UNSAVED
+                          </span>
+                        )}
                       </div>
-
-                      {/* Bottom info */}
                       <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                         <span className="text-[10px] text-white/90 font-medium truncate">{clip.name}</span>
                         <span className="text-[9px] text-white/50 shrink-0 ml-1 bg-black/40 px-1.5 py-0.5 rounded">{formatTime(vd)}</span>
                       </div>
-
-                      {/* Range Cut: red tint on clip only */}
                       {showRangeCut && isSel && (() => {
-                        const rcVd = getVisDur(clip);
-                        const rcStartPct = (rangeCutStart / rcVd) * 100;
-                        const rcEndPct = (rangeCutEnd / rcVd) * 100;
-                        return (
-                          <div className="absolute top-0 bottom-0 bg-red-500/25 z-20 pointer-events-none"
-                            style={{ left: `${rcStartPct}%`, width: `${rcEndPct - rcStartPct}%` }}
-                          />
-                        );
+                        const rcVd = getVisDur(clip); const rcStartPct = (rangeCutStart / rcVd) * 100; const rcEndPct = (rangeCutEnd / rcVd) * 100;
+                        return <div className="absolute top-0 bottom-0 bg-red-500/25 z-20 pointer-events-none" style={{ left: `${rcStartPct}%`, width: `${rcEndPct - rcStartPct}%` }} />;
                       })()}
+                      {!showRangeCut && (<>
+                        <div className="absolute left-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "left")}>
+                          <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-teal-400/0 group-hover/t:bg-teal-400 transition rounded-l-xl flex items-center justify-center"><div className="w-0.5 h-8 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" /></div>
+                        </div>
+                        <div className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "right")}>
+                          <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-teal-400/0 group-hover/t:bg-teal-400 transition rounded-r-xl flex items-center justify-center"><div className="w-0.5 h-8 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" /></div>
+                        </div>
+                      </>)}
+                    </div>
+                  );
+                })}
+              </div>
 
-                      {/* Trim handles */}
-                      {!showRangeCut && (
-                      <>
-                      <div className="absolute left-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "left")}>
-                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-teal-400/0 group-hover/t:bg-teal-400 transition rounded-l-xl flex items-center justify-center">
-                          <div className="w-0.5 h-8 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" />
-                        </div>
+              {/* Audio Track */}
+              <div className={`absolute top-[148px] left-14 h-[100px] flex items-stretch gap-2 px-3 py-2 border-b border-[#1e1e28] ${selectedTrack === "audio" ? "bg-purple-500/[0.02]" : ""}`} style={{ width: tlWidth }}>
+                {audioClips.map(clip => {
+                  const vd = getVisDur(clip);
+                  const w = vd * pxPerSec;
+                  const isSel = clip.id === selectedClipId;
+                  return (
+                    <div key={clip.id} data-clip draggable onDragStart={(e) => onDragStart(e, clip.id)} onDragOver={onDragOver} onDrop={(e) => onDrop(e, clip.id)} onDragEnd={onDragEnd}
+                      onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); }}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
+                      className={`relative shrink-0 rounded-xl overflow-hidden transition cursor-grab active:cursor-grabbing ${
+                        isSel ? "ring-[3px] ring-purple-400 shadow-lg shadow-purple-500/30" : "ring-1 ring-[#2a2a35] hover:ring-[#4A4A4A]"
+                      } ${draggedClipId === clip.id ? "opacity-30" : ""}`}
+                      style={{ width: Math.max(w, 36), height: "100%" }}>
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#0f1a2a] to-[#1a1a30] flex items-center justify-center">
+                        <Music className="w-5 h-5 text-purple-500/30" />
                       </div>
-                      <div className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "right")}>
-                        <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-teal-400/0 group-hover/t:bg-teal-400 transition rounded-r-xl flex items-center justify-center">
-                          <div className="w-0.5 h-8 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" />
-                        </div>
+                      <div className="absolute top-1.5 left-2">
+                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-purple-600/90 text-white shadow-sm">AUDIO</span>
                       </div>
-                      </>
-                      )}
+                      <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between">
+                        <span className="text-[9px] text-white/90 font-medium truncate">{clip.name}</span>
+                        <span className="text-[8px] text-white/50 shrink-0 ml-1 bg-black/40 px-1 py-0.5 rounded">{formatTime(vd)}</span>
+                      </div>
+                      {showRangeCut && isSel && (() => {
+                        const rcVd = getVisDur(clip); const rcStartPct = (rangeCutStart / rcVd) * 100; const rcEndPct = (rangeCutEnd / rcVd) * 100;
+                        return <div className="absolute top-0 bottom-0 bg-red-500/25 z-20 pointer-events-none" style={{ left: `${rcStartPct}%`, width: `${rcEndPct - rcStartPct}%` }} />;
+                      })()}
+                      {!showRangeCut && (<>
+                        <div className="absolute left-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "left")}>
+                          <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-purple-400/0 group-hover/t:bg-purple-400 transition rounded-l-xl flex items-center justify-center"><div className="w-0.5 h-6 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" /></div>
+                        </div>
+                        <div className="absolute right-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "right")}>
+                          <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-purple-400/0 group-hover/t:bg-purple-400 transition rounded-r-xl flex items-center justify-center"><div className="w-0.5 h-6 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" /></div>
+                        </div>
+                      </>)}
                     </div>
                   );
                 })}
@@ -1374,7 +1493,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       </div>
       {/* Clip Context Menu */}
       {clipContextMenu && (() => {
-        const ctxClip = clips.find(c => c.id === clipContextMenu.clipId);
+        const ctxClip = videoClips.find(c => c.id === clipContextMenu.clipId) || audioClips.find(c => c.id === clipContextMenu.clipId);
         if (!ctxClip) return null;
         return (
           <div
