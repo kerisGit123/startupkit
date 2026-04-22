@@ -8,8 +8,6 @@ import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { SidebarNav } from "./components/dashboard/SidebarNav";
 import { StoryboardStudioUIProvider } from "./StoryboardStudioUIContext";
 import { SettingsModal } from "./components/modals/SettingsModal";
-import { ChatWidget } from "@/components/ChatWidget";
-import { useUser } from "@clerk/nextjs";
 import type { Project } from "./types";
 import "./globals.css";
 
@@ -19,11 +17,9 @@ export default function StoryboardStudioLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { user } = useUser();
   const orgId = useCurrentCompanyId() || "personal";
   const hideStudioSidebar = pathname?.startsWith("/storyboard-studio/projects") ||
     pathname?.startsWith("/storyboard-studio/workspace");
-  const showChatWidget = !pathname?.startsWith("/storyboard-studio/workspace");
 
   const [showSettings, setShowSettings] = useState(false);
   const [activeNav, setActiveNav] = useState("projects");
@@ -83,7 +79,6 @@ export default function StoryboardStudioLayout({
         <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
       </StoryboardStudioUIProvider>
 
-      {showChatWidget && <ChatWidget type="user_panel" userId={user?.id} />}
     </div>
   );
 }

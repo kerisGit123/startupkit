@@ -1737,6 +1737,23 @@ export const propagateOwnerPlanChange = mutation({
           });
         }
       }
+
+      // Eagerly run the monthly-grant helper on the personal workspace.
+      // grantMonthlyCreditsIfDue handles both sides of the plan change:
+      //   - downgrade/cancel  → claw back leftover + grant new (free=100)
+      //   - upgrade           → additive new grant, no clawback
+      //   - cycling-blocked   → grant skipped; clawback deferred (pre-existing)
+      // Running this here (instead of waiting for next deductCredits) makes
+      // the clawback visible at the moment of cancellation — matches the
+      // published policy in docs/billing-policy.md §2.3.
+      if (personalRow) {
+        await grantMonthlyCreditsIfDue(ctx, {
+          companyId: personalRow.companyId,
+          plan: args.newPlan,
+          userId: args.ownerUserId,
+          now,
+        });
+      }
     }
 
     return {

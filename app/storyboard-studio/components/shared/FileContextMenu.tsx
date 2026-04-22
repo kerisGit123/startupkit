@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronRight, Share2, ShieldOff, Copy } from "lucide-react";
+import { Check, ChevronRight, Share2, ShieldOff, Copy, Mic, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 // ─── Tag Categories ─────────────────────────────────────────────────────
@@ -122,9 +122,12 @@ interface FileContextMenuProps {
   isShared?: boolean;
   onShare?: () => void;
   onUnshare?: () => void;
+  onCreatePersona?: () => void;
+  onEditPersona?: () => void;
+  onRename?: () => void;
 }
 
-export function FileContextMenu({ x, y, fileId, currentTags, onTagToggle, onClose, isShared, onShare, onUnshare }: FileContextMenuProps) {
+export function FileContextMenu({ x, y, fileId, currentTags, onTagToggle, onClose, isShared, onShare, onUnshare, onCreatePersona, onEditPersona, onRename }: FileContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState({ x, y });
@@ -262,6 +265,48 @@ export function FileContextMenu({ x, y, fileId, currentTags, onTagToggle, onClos
               </button>
             )
           )}
+        </>
+      )}
+
+      {/* Create Persona (audio files with taskId + audioId) */}
+      {onCreatePersona && (
+        <>
+          <div className="mx-2 my-1 border-t border-[#3D3D3D]" />
+          <button
+            onClick={() => { onCreatePersona(); onClose(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-purple-400 hover:bg-[#2a2a35] transition-colors"
+          >
+            <Mic className="w-3.5 h-3.5" />
+            Create Persona
+          </button>
+        </>
+      )}
+
+      {/* Edit Persona (audio files with personaCreated) */}
+      {onEditPersona && (
+        <>
+          {!onCreatePersona && <div className="mx-2 my-1 border-t border-[#3D3D3D]" />}
+          <button
+            onClick={() => { onEditPersona(); onClose(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-purple-400 hover:bg-[#2a2a35] transition-colors"
+          >
+            <Mic className="w-3.5 h-3.5" />
+            Edit Persona
+          </button>
+        </>
+      )}
+
+      {/* Rename */}
+      {onRename && (
+        <>
+          <div className="mx-2 my-1 border-t border-[#3D3D3D]" />
+          <button
+            onClick={() => { onRename(); onClose(); }}
+            className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white hover:bg-[#2a2a35] transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            Rename
+          </button>
         </>
       )}
 

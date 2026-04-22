@@ -5126,6 +5126,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   onFitToScreen={handleFitToScreen}
                   zoomLevel={zoomLevel}
                   onZoomChange={setZoomLevel}
+                  activeShotId={activeShot?.id ? String(activeShot.id) : undefined}
                   activeShotDescription={activeShot?.description}
                   activeShotImagePrompt={activeShot?.imagePrompt}
                   activeShotVideoPrompt={activeShot?.videoPrompt}
@@ -5851,12 +5852,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                           } else if (aiModel === "ai-music-api/generate") {
                             console.log("Using AI Music API format...");
 
-                            // Parse quality param: "music_instrumental_Cinematic_V4_none"
-                            const musicParts = quality.split('_');
-                            const isInstrumental = musicParts[1] === 'instrumental';
-                            const musicStyleParam = musicParts[2] !== 'any' ? musicParts[2] : undefined;
-                            const musicModelVersion = (musicParts[3] || 'V4') as "V4" | "V5";
-                            const musicVocalGender = musicParts[4] !== 'none' ? musicParts[4] as "m" | "f" : undefined;
+                            // Parse quality param as JSON
+                            console.log('[SceneEditor] Music quality string:', quality);
+                            const mq = JSON.parse(quality);
+                            const isInstrumental = mq.instrumental;
+                            const musicStyleParam = mq.style || undefined;
+                            const musicModelVersion = mq.model || 'V4';
+                            const musicVocalGender = mq.vocalGender as "m" | "f" | undefined;
+                            const musicTitle = mq.title || undefined;
 
                             // Create placeholder record
                             const fileId = await logUpload({
@@ -5900,16 +5903,27 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             });
 
                             try {
-                              const { generateMusic } = await import("@/lib/storyboard/videoAI");
-                              const result = await generateMusic({
-                                prompt: extractedPrompt,
-                                style: musicStyleParam,
-                                instrumental: isInstrumental,
-                                model: musicModelVersion,
-                                callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
-                                companyId: companyId || "",
-                                ...(musicVocalGender && { vocalGender: musicVocalGender }),
+                              // Call server-side API route (API key is server-only)
+                              const response = await fetch('/api/storyboard/generate-music', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  prompt: extractedPrompt,
+                                  style: musicStyleParam,
+                                  title: musicTitle,
+                                  instrumental: isInstrumental,
+                                  model: musicModelVersion,
+                                  callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                  companyId: companyId || "",
+                                  ...(musicVocalGender && { vocalGender: musicVocalGender }),
+                                }),
                               });
+
+                              if (!response.ok) {
+                                throw new Error(`Music API error: ${response.status} ${response.statusText}`);
+                              }
+
+                              const result = await response.json();
 
                               if (result.responseCode && result.responseCode !== 200) {
                                 await refundCredits({
@@ -5950,6 +5964,116 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 id: fileId,
                                 status: "failed",
                               });
+                              throw apiError;
+                            }
+
+                          } else if (aiModel === "ai-music-api/upload-cover") {
+                            console.log("Using Upload & Cover Audio API format...");
+                            const cq = JSON.parse(quality);
+                            const coverAudioUrl = audioUrls && audioUrls.length > 0 ? audioUrls[0] : '';
+                            if (!coverAudioUrl) { toast.error("Cover Song requires an audio file to upload"); return; }
+                            const fileId = await logUpload({
+                              companyId: companyId || "", userId: user?.id || "", projectId: projectId || undefined,
+                              category: "generated", filename: `cover-song-${Date.now()}.mp3`, fileType: "audio", mimeType: "audio/mpeg",
+                              size: 0, status: "generating", creditsUsed, categoryId: activeShotId, sourceUrl: undefined, tags: [],
+                              uploadedBy: user?.id || "", model: aiModel, prompt: extractedPrompt, aspectRatio: undefined, defaultAI: currentDefaultAI as any,
+                              metadata: { modelId: aiModel, modelName: "Cover Song", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
+                            });
+                            await deductCredits({ companyId: companyId || "", tokens: creditsUsed, reason: `AI cover song generation`, plan: currentPlan });
+                            try {
+                              const response = await fetch('/api/storyboard/upload-cover', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ uploadUrl: coverAudioUrl, prompt: extractedPrompt, title: cq.title, style: cq.style, instrumental: cq.instrumental, model: cq.model, personaId: cq.personaId, customMode: cq.customMode, negativeTags: cq.negativeTags, vocalGender: cq.vocalGender, styleWeight: cq.styleWeight, weirdnessConstraint: cq.weirdnessConstraint, audioWeight: cq.audioWeight, callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`, companyId: companyId || "" }),
+                              });
+                              if (!response.ok) throw new Error(`Cover API error: ${response.status}`);
+                              const result = await response.json();
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({ companyId: companyId || "", tokens: creditsUsed, reason: `Refund: Cover song failed (${result.responseCode})` });
+                                await updateStoryboardFile({ id: fileId, status: "failed", responseCode: result.responseCode, responseMessage: result.responseMessage });
+                                toast.error(`Cover song failed: ${result.responseMessage || 'Unknown error'}`); return;
+                              }
+                              // Handle synchronous response: API returned audio URLs directly (no callback needed)
+                              if (result.audioUrls && Array.isArray(result.audioUrls) && result.audioUrls.length > 0) {
+                                console.log("[SceneEditor] Cover song returned synchronous URLs:", result.audioUrls);
+                                await updateStoryboardFile({ id: fileId, status: "processing", responseCode: 200, responseMessage: "Cover completed (sync)" });
+                                // Trigger callback-style processing by POSTing to kie-callback with the URLs
+                                try {
+                                  await fetch(`/api/kie-callback?fileId=${fileId}`, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(result.audioUrls),
+                                  });
+                                } catch (cbErr) {
+                                  console.error("[SceneEditor] Failed to process sync cover URLs via callback:", cbErr);
+                                }
+                                toast.success(`Cover song completed! ${creditsUsed} credits deducted.`);
+                              } else if (result.taskId) {
+                                await updateStoryboardFile({ id: fileId, status: "processing", taskId: result.taskId, responseCode: result.responseCode, responseMessage: result.responseMessage });
+                                toast.success(`Cover song started! ${creditsUsed} credits deducted.`);
+                              } else {
+                                console.warn("[SceneEditor] Cover song: no taskId and no audioUrls in response", result);
+                                toast.success(`Cover song submitted! ${creditsUsed} credits deducted.`);
+                              }
+                            } catch (apiError) {
+                              await refundCredits({ companyId: companyId || "", tokens: creditsUsed, reason: `Refund: Cover API failed` });
+                              await updateStoryboardFile({ id: fileId, status: "failed" }); throw apiError;
+                            }
+
+                          } else if (aiModel === "ai-music-api/extend") {
+                            console.log("Using Extend Music API format...");
+                            const eq = JSON.parse(quality);
+                            const extendAudioId = audioUrls && audioUrls.length > 0 ? audioUrls[0] : '';
+                            if (!extendAudioId) { toast.error("Extend Music requires selecting a song to extend"); return; }
+                            const fileId = await logUpload({
+                              companyId: companyId || "", userId: user?.id || "", projectId: projectId || undefined,
+                              category: "generated", filename: `extend-music-${Date.now()}.mp3`, fileType: "audio", mimeType: "audio/mpeg",
+                              size: 0, status: "generating", creditsUsed, categoryId: activeShotId, sourceUrl: undefined, tags: [],
+                              uploadedBy: user?.id || "", model: aiModel, prompt: extractedPrompt, aspectRatio: undefined, defaultAI: currentDefaultAI as any,
+                              metadata: { modelId: aiModel, modelName: "Extend Music", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
+                            });
+                            await deductCredits({ companyId: companyId || "", tokens: creditsUsed, reason: `AI extend music`, plan: currentPlan });
+                            try {
+                              const response = await fetch('/api/storyboard/extend-music', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ audioId: extendAudioId, prompt: extractedPrompt, model: eq.model, continueAt: eq.customMode ? eq.continueAt : undefined, defaultParamFlag: eq.customMode, title: eq.title, personaId: eq.personaId, style: eq.style, vocalGender: eq.vocalGender, callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`, companyId: companyId || "" }),
+                              });
+                              if (!response.ok) throw new Error(`Extend API error: ${response.status}`);
+                              const result = await response.json();
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({ companyId: companyId || "", tokens: creditsUsed, reason: `Refund: Extend music failed (${result.responseCode})` });
+                                await updateStoryboardFile({ id: fileId, status: "failed", responseCode: result.responseCode, responseMessage: result.responseMessage });
+                                toast.error(`Extend music failed: ${result.responseMessage || 'Unknown error'}`); return;
+                              }
+                              if (result.taskId) { await updateStoryboardFile({ id: fileId, status: "processing", taskId: result.taskId, responseCode: result.responseCode, responseMessage: result.responseMessage }); }
+                              toast.success(`Extend music started! ${creditsUsed} credits deducted.`);
+                            } catch (apiError) {
+                              await refundCredits({ companyId: companyId || "", tokens: creditsUsed, reason: `Refund: Extend API failed` });
+                              await updateStoryboardFile({ id: fileId, status: "failed" }); throw apiError;
+                            }
+
+                          } else if (aiModel === "ai-music-api/generate-persona") {
+                            console.log("Using Generate Persona API format...");
+                            // Persona creation doesn't generate a file — it creates a voice profile
+                            // The audioId and taskId come from the quality string or are passed directly
+                            // For persona, we don't need to create a file record or deduct credits (it's free)
+                            const personaTaskId = audioUrls && audioUrls.length > 0 ? audioUrls[0] : ''; // taskId passed via first audioUrl slot
+                            const personaAudioId = audioUrls && audioUrls.length > 1 ? audioUrls[1] : ''; // audioId passed via second slot
+                            if (!personaTaskId || !personaAudioId) {
+                              toast.error("Create Persona requires selecting a completed song first"); return;
+                            }
+                            try {
+                              const response = await fetch('/api/storyboard/generate-persona', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ taskId: personaTaskId, audioId: personaAudioId, name: extractedPrompt.substring(0, 50) || 'My Persona', description: extractedPrompt || 'Custom voice persona', companyId: companyId || "" }),
+                              });
+                              if (!response.ok) throw new Error(`Persona API error: ${response.status}`);
+                              const result = await response.json();
+                              if (result.personaId) {
+                                toast.success(`Persona created successfully! ID: ${result.personaId}`);
+                              } else {
+                                toast.error(`Persona creation failed: ${result.responseMessage || 'Unknown error'}`);
+                              }
+                            } catch (apiError) {
+                              toast.error(`Persona creation failed`);
                               throw apiError;
                             }
 
@@ -6299,7 +6423,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       }}
                       userPrompt={promptText}
                       onUserPromptChange={setPromptText}
-                      activeShotDescription={activeShot?.description}
+                      activeShotId={activeShot?.id ? String(activeShot.id) : undefined}
+                  activeShotDescription={activeShot?.description}
                       activeShotImagePrompt={activeShot?.imagePrompt}
                       activeShotVideoPrompt={activeShot?.videoPrompt}
                       onCombine={handleCombineLayers}

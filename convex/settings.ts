@@ -32,6 +32,19 @@ export const ensureOrgSettings = mutation({
   },
 });
 
+/** Public query returning only the defaultAI field — no auth needed.
+ *  Used by server-side resolveKieApiKey (ConvexHttpClient, no user session). */
+export const getDefaultAI = query({
+  args: { companyId: v.string() },
+  handler: async (ctx, { companyId }) => {
+    const settings = await ctx.db
+      .query("org_settings")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .first();
+    return settings ? { defaultAI: settings.defaultAI ?? null } : null;
+  },
+});
+
 export const getSettings = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {

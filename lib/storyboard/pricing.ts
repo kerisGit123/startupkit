@@ -652,4 +652,58 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
       },
     }),
   },
+  {
+    modelId: "ai-music-api/upload-cover",
+    modelName: "Cover Song",
+    modelType: "audio",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 12,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 12,
+        factor: 1.2,
+        charged: 15,
+        note: "Re-creates uploaded audio with new style/persona. KIE AI cost: 12 credits.",
+      },
+    }),
+  },
+  {
+    modelId: "ai-music-api/extend",
+    modelName: "Extend Music",
+    modelType: "audio",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 12,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 12,
+        factor: 1.2,
+        charged: 15,
+        note: "Extends existing song from a specified timestamp. KIE AI cost: 12 credits.",
+      },
+    }),
+  },
+  {
+    modelId: "ai-music-api/generate-persona",
+    modelName: "Create Persona",
+    modelType: "audio",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 0,
+    factor: 1,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 0,
+        factor: 1,
+        charged: 0,
+        note: "Extracts a reusable voice profile from an existing song. Free.",
+      },
+    }),
+  },
 ];

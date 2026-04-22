@@ -14,7 +14,6 @@ import {
   IconMessageChatbot,
   IconChartBar,
   IconBook,
-  IconPalette,
   IconCalendar,
   IconCurrencyDollar,
   IconInbox,
@@ -151,14 +150,26 @@ const navItems = [
         icon: IconSettings,
       },
       {
-        title: "Widget Designer",
-        url: "/admin/chatbot-designer",
-        icon: IconPalette,
-      },
-      {
         title: "Knowledge Base",
         url: "/admin/knowledge-base",
         icon: IconBook,
+      },
+    ],
+  },
+  {
+    title: "AI Support",
+    icon: IconMessageChatbot,
+    color: "text-teal-600",
+    items: [
+      {
+        title: "Chat Reports",
+        url: "/admin/support-chat-reports",
+        icon: IconChartBar,
+      },
+      {
+        title: "Support Tickets",
+        url: "/admin/support-tickets",
+        icon: IconInbox,
       },
     ],
   },

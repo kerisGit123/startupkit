@@ -69,12 +69,15 @@ export const get = query({
 export const getByCompany = query({
   args: { companyId: v.string() },
   handler: async (ctx, args) => {
-    const templates = await ctx.db
+    // Cap at 200 — defensive bound on per-call bandwidth. A company with
+    // more than 200 templates almost certainly has a data-hygiene problem.
+    // The real fix for the 56 MB dashboard hit is call-frequency (every
+    // page load re-subscribes this query across 5+ components). Consider
+    // lifting the subscription into a shared React context.
+    return await ctx.db
       .query("promptTemplates")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
-      .collect();
-    
-    return templates;
+      .take(200);
   },
 });
 

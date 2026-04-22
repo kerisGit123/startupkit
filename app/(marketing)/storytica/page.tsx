@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { PricingTable, useUser } from "@clerk/nextjs";
 import { dark } from "@clerk/ui/themes";
-import { ChatWidget } from "@/components/ChatWidget";
+import SupportChatWidget from "@/components/support-chat/SupportChatWidget";
 
 /* ─── reveal ─────────────────────────────────────────────────────────── */
 function useRv(t = 0.1) {
@@ -446,7 +446,7 @@ export default function StorticaLanding() {
         </div>
       </footer>
 
-      <ChatWidget type="frontend" userId={user?.id} />
+      <SupportChatWidget variant="landing" />
     </div>
   );
 }

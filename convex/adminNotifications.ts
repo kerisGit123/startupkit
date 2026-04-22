@@ -158,44 +158,33 @@ export const getUnreadCount = query({
       return 0;
     }
 
-    // Count recent items (last 7 days)
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    
-    const recentSubscriptions = await ctx.db
-      .query("subscription_transactions")
-      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
-      .collect();
+    // Cap per source — the bell badge only needs to show "N" or "99+".
+    // Reading the full 7-day window via .filter() on 3 large tables was
+    // the root of the 32 MB bandwidth. Bounded reads solve it.
+    const CAP = 50;
 
-    const recentPurchases = await ctx.db
-      .query("credits_ledger")
-      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
-      .collect();
+    const [subs, purchases, tickets] = await Promise.all([
+      ctx.db.query("subscription_transactions").order("desc").take(CAP),
+      ctx.db.query("credits_ledger").order("desc").take(CAP),
+      ctx.db.query("support_tickets").order("desc").take(CAP),
+    ]);
 
-    const recentTickets = await ctx.db
-      .query("support_tickets")
-      .filter((q) => q.gte(q.field("createdAt"), sevenDaysAgo))
-      .collect();
-
-    // Get read notifications
     const readNotifications = await ctx.db
       .query("notifications_read")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .collect();
-    
-    const readIds = new Set(readNotifications.map(n => n.notificationId));
-    
+      .order("desc")
+      .take(500);
+
+    const readIds = new Set(readNotifications.map((n) => n.notificationId));
+
     let unreadCount = 0;
-    
-    for (const sub of recentSubscriptions) {
-      if (!readIds.has(sub._id.toString())) unreadCount++;
+    for (const item of [...subs, ...purchases, ...tickets]) {
+      if ((item as any).createdAt >= sevenDaysAgo && !readIds.has(item._id.toString())) {
+        unreadCount++;
+      }
     }
-    for (const purchase of recentPurchases) {
-      if (!readIds.has(purchase._id.toString())) unreadCount++;
-    }
-    for (const ticket of recentTickets) {
-      if (!readIds.has(ticket._id.toString())) unreadCount++;
-    }
-    
+
     return unreadCount;
   },
 });

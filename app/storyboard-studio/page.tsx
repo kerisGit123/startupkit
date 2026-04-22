@@ -32,6 +32,7 @@ import LogsPage from "./components/account/LogsPage";
 import AdminPage from "./components/account/AdminPage";
 import InvoicesPage from "./components/account/InvoicesPage";
 import ReferralsPage from "./components/account/ReferralsPage";
+import SupportChatWidget from "@/components/support-chat/SupportChatWidget";
 
 export default function StoryboardPage() {
   const router = useRouter();
@@ -724,6 +725,7 @@ export default function StoryboardPage() {
         accept="image/*,video/*,audio/*,.pdf"
         onChange={handleFileUpload}
       />
+      <SupportChatWidget variant="studio" />
     </div>
   );
 }

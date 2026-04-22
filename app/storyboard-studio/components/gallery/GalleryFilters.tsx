@@ -84,6 +84,7 @@ export function GalleryFilters({
               { id: "", label: "All" },
               { id: "image", label: "Image" },
               { id: "video", label: "Video" },
+              { id: "audio", label: "Audio" },
             ].map(item => (
               <button
                 key={item.id}
@@ -139,6 +140,8 @@ export function filterFiles(
         if (f.fileType !== "image") return false;
       } else if (opts.activeModel === "video") {
         if (f.fileType !== "video") return false;
+      } else if (opts.activeModel === "audio") {
+        if (f.fileType !== "audio") return false;
       } else {
         if (f.model !== opts.activeModel) return false;
       }

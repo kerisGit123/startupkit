@@ -1,15 +1,18 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import {
   Film, Music, Image, Play, Pause, Scissors, Trash2,
   ZoomIn, ZoomOut, Download, Plus, Loader2, Clock,
-  SkipBack, SkipForward, PanelLeftOpen, PanelLeftClose, X,
+  SkipBack, SkipForward, PanelLeftOpen, PanelLeftClose, X, Save, FolderOpen,
 } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
+import { FileBrowser } from "../ai/FileBrowser";
 
 const R2_PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "";
 
@@ -48,6 +51,10 @@ interface VideoEditorProps {
 }
 
 export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProps) {
+  const { user } = useUser();
+  const companyId = useCurrentCompanyId();
+  const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
+
   const [clips, setClips] = useState<TimelineClip[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -57,6 +64,9 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const [exportProgress, setExportProgress] = useState(0);
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
   const [showMedia, setShowMedia] = useState(false);
+  const [showRangeCut, setShowRangeCut] = useState(false);
+  const [rangeCutStart, setRangeCutStart] = useState(0);
+  const [rangeCutEnd, setRangeCutEnd] = useState(30);
   const [clipboard, setClipboard] = useState<TimelineClip | null>(null);
   const [history, setHistory] = useState<TimelineClip[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -135,12 +145,18 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     lastSyncClipId.current = r.clip.id;
 
     if (r.clip.type === "video" && previewRef.current) {
-      if (clipChanged) {
-        const vid = previewRef.current;
+      const vid = previewRef.current;
+      if (clipChanged || vid.src !== r.clip.src) {
         vid.src = r.clip.src;
+        vid.load();
         vid.currentTime = r.offset;
+        vid.muted = false;
         if (playing) {
-          vid.oncanplay = () => { vid.oncanplay = null; vid.play().catch(() => {}); };
+          const tryPlay = () => {
+            vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); });
+          };
+          if (vid.readyState >= 2) { tryPlay(); }
+          else { vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); }; }
         }
       } else if (!playing) {
         previewRef.current.currentTime = r.offset;
@@ -148,12 +164,14 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     }
 
     if (r.clip.type === "audio" && audioRef.current) {
-      if (clipChanged) {
-        const aud = audioRef.current;
+      const aud = audioRef.current;
+      if (clipChanged || aud.src !== r.clip.src) {
         aud.src = r.clip.src;
+        aud.load();
         aud.currentTime = r.offset;
         if (playing) {
-          aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); };
+          if (aud.readyState >= 2) { aud.play().catch(() => {}); }
+          else { aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); }; }
         }
       } else if (!playing) {
         audioRef.current.currentTime = r.offset;
@@ -179,15 +197,32 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     if (curClip) {
       if (curClip.clip.type === "video" && previewRef.current) {
         const vid = previewRef.current;
-        vid.src = curClip.clip.src;
+        // Only change src if different to avoid reload
+        if (vid.src !== curClip.clip.src) {
+          vid.src = curClip.clip.src;
+          vid.load();
+        }
         vid.currentTime = curClip.offset;
-        vid.oncanplay = () => { vid.oncanplay = null; vid.play().catch(() => {}); };
+        vid.muted = false;
+        const tryPlay = () => {
+          vid.play().catch(() => {
+            // Browser may block unmuted autoplay — retry muted
+            vid.muted = true;
+            vid.play().catch(() => {});
+          });
+        };
+        if (vid.readyState >= 2) { tryPlay(); }
+        else { vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); }; }
       }
       if (curClip.clip.type === "audio" && audioRef.current) {
         const aud = audioRef.current;
-        aud.src = curClip.clip.src;
+        if (aud.src !== curClip.clip.src) {
+          aud.src = curClip.clip.src;
+          aud.load();
+        }
         aud.currentTime = curClip.offset;
-        aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); };
+        if (aud.readyState >= 2) { aud.play().catch(() => {}); }
+        else { aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); }; }
       }
     }
 
@@ -231,6 +266,14 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
   useEffect(() => () => cancelAnimationFrame(animRef.current), []);
 
+  // Sync preview when clips change or currentTime is seeked while paused
+  useEffect(() => {
+    if (!playing && clips.length > 0) {
+      lastSyncClipId.current = ""; // force re-sync
+      syncPreview(currentTime);
+    }
+  }, [clips, playing, syncPreview]);
+
   // ── Clip Actions ──────────────────────────────────────────────────────
 
   const addClip = useCallback(async (file: any) => {
@@ -254,6 +297,50 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     setSelectedClipId(c.id);
     setShowMedia(false);
   }, []);
+
+  const applyRangeCut = useCallback(() => {
+    if (!selectedClipId) return;
+    const idx = clips.findIndex(c => c.id === selectedClipId);
+    if (idx < 0) return;
+    const clip = clips[idx];
+    const vd = getVisDur(clip);
+    const start = Math.max(0, Math.min(rangeCutStart, vd - 0.1));
+    const end = Math.max(start + 0.1, Math.min(rangeCutEnd, vd));
+    if (end - start < 0.1) { toast.warning("Range too short"); return; }
+    pushHistory();
+    const ts = Date.now();
+    const pieces: TimelineClip[] = [];
+    // Piece 1: Before (if start > 0)
+    if (start > 0.1) {
+      pieces.push({ ...clip, id: `c-${ts}-before`, trimEnd: clip.duration - (clip.trimStart + start) });
+    }
+    // Piece 2: Selected range (always)
+    const middle: TimelineClip = { ...clip, id: `c-${ts}-range`, trimStart: clip.trimStart + start, trimEnd: clip.duration - (clip.trimStart + end) };
+    pieces.push(middle);
+    // Piece 3: After (if end < vd)
+    if (vd - end > 0.1) {
+      pieces.push({ ...clip, id: `c-${ts}-after`, trimStart: clip.trimStart + end });
+    }
+    setClips(p => [...p.slice(0, idx), ...pieces, ...p.slice(idx + 1)]);
+    setSelectedClipId(middle.id);
+    setShowRangeCut(false);
+    toast.success(`Split into ${pieces.length} pieces — middle selected (${formatTime(end - start)})`);
+  }, [selectedClipId, clips, rangeCutStart, rangeCutEnd, pushHistory]);
+
+  const openRangeCut = useCallback(() => {
+    const clip = clips.find(c => c.id === selectedClipId);
+    if (!clip) return;
+    const vd = getVisDur(clip);
+    setRangeCutStart(0);
+    setRangeCutEnd(Math.min(30, vd));
+    setShowRangeCut(true);
+  }, [clips, selectedClipId]);
+
+  const addClipFromUrl = useCallback(async (url: string, fileType: string) => {
+    const filename = url.split("/").pop()?.split("?")[0] || "file";
+    await addClip({ sourceUrl: url, fileType, filename });
+    setShowFileBrowser(false);
+  }, [addClip]);
 
   const removeClip = useCallback((id: string) => {
     pushHistory();
@@ -301,10 +388,167 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     toast.success("Clip pasted");
   }, [clipboard, clips, selectedClipId]);
 
+  // ── Extract Audio from Video ─────────────────────────────────────────
+
+  const [extracting, setExtracting] = useState(false);
+  const [clipContextMenu, setClipContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  // rangeCutStart/rangeCutEnd state moved up near other state declarations
+
+  const extractAudioFromVideo = useCallback(async (clip: TimelineClip) => {
+    if (clip.type !== "video") return;
+    setExtracting(true);
+    toast.info("Extracting audio from video...");
+
+    try {
+      // Fetch video as blob
+      const res = await fetch(clip.src);
+      const blob = await res.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+
+      // Decode audio using Web Audio API
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+      // Encode as WAV
+      const numChannels = audioBuffer.numberOfChannels;
+      const sampleRate = audioBuffer.sampleRate;
+      const length = audioBuffer.length;
+      const wavBuffer = new ArrayBuffer(44 + length * numChannels * 2);
+      const view = new DataView(wavBuffer);
+
+      // WAV header
+      const writeStr = (offset: number, str: string) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+      writeStr(0, "RIFF");
+      view.setUint32(4, 36 + length * numChannels * 2, true);
+      writeStr(8, "WAVE");
+      writeStr(12, "fmt ");
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * numChannels * 2, true);
+      view.setUint16(32, numChannels * 2, true);
+      view.setUint16(34, 16, true);
+      writeStr(36, "data");
+      view.setUint32(40, length * numChannels * 2, true);
+
+      // Interleave channels
+      let offset = 44;
+      for (let i = 0; i < length; i++) {
+        for (let ch = 0; ch < numChannels; ch++) {
+          const sample = Math.max(-1, Math.min(1, audioBuffer.getChannelData(ch)[i]));
+          view.setInt16(offset, sample * 0x7fff, true);
+          offset += 2;
+        }
+      }
+
+      // Create blob and download
+      const wavBlob = new Blob([wavBuffer], { type: "audio/wav" });
+      const url = URL.createObjectURL(wavBlob);
+
+      // Add as audio clip to timeline
+      const dur = audioBuffer.duration;
+      const newClip: TimelineClip = {
+        id: `c-${Date.now()}-extract`,
+        type: "audio",
+        src: url,
+        name: `${clip.name.replace(/\.\w+$/, "")}-audio.wav`,
+        duration: dur,
+        trimStart: 0,
+        trimEnd: 0,
+        originalDuration: dur,
+      };
+      pushHistory();
+      setClips(p => [...p, newClip]);
+      setSelectedClipId(newClip.id);
+
+      toast.success("Audio extracted and added to timeline! Right-click to save or download.");
+      audioCtx.close();
+    } catch (err) {
+      console.error("[VideoEditor] Extract audio failed:", err);
+      toast.error("Failed to extract audio — video may not have an audio track");
+    } finally {
+      setExtracting(false);
+    }
+  }, [pushHistory]);
+
+  // ── Save Clip to Uploads ─────────────────────────────────────────────
+
+  const [saving, setSaving] = useState(false);
+
+  const saveClipToUploads = useCallback(async (clip: TimelineClip) => {
+    if (!companyId || !user?.id) { toast.error("Not authenticated"); return; }
+    setSaving(true);
+    try {
+      // Fetch the file
+      const res = await fetch(clip.src);
+      const blob = await res.blob();
+
+      // Determine file details
+      const ext = clip.type === "video" ? "mp4" : clip.type === "audio" ? "mp3" : "png";
+      const mimeType = clip.type === "video" ? "video/mp4" : clip.type === "audio" ? "audio/mpeg" : "image/png";
+      const filename = clip.name.includes(".") ? clip.name : `${clip.name}.${ext}`;
+
+      // Get presigned upload URL from R2
+      const uploadRes = await fetch("/api/storyboard/r2-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename,
+          mimeType: blob.type || mimeType,
+          companyId,
+          category: "uploaded",
+        }),
+      });
+      const uploadData = await uploadRes.json();
+
+      if (!uploadRes.ok || !uploadData.uploadUrl || !uploadData.key) {
+        throw new Error(uploadData.error || "Failed to get upload URL");
+      }
+
+      // Upload file to R2
+      await fetch(uploadData.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": blob.type || mimeType },
+        body: blob,
+      });
+
+      const r2Key = uploadData.key;
+      const publicUrl = uploadData.publicUrl || `${R2_PUBLIC_URL}/${r2Key}`;
+
+      // Log to storyboard_files
+      await logUpload({
+        companyId,
+        userId: user.id,
+        projectId,
+        category: "uploaded",
+        filename,
+        fileType: clip.type,
+        mimeType: blob.type || mimeType,
+        size: blob.size,
+        status: "completed",
+        r2Key,
+        sourceUrl: publicUrl,
+        tags: [],
+        uploadedBy: user.id,
+      });
+
+      toast.success(`Saved "${filename}" to uploads!`);
+    } catch (err) {
+      console.error("[VideoEditor] Save to uploads failed:", err);
+      toast.error("Failed to save to uploads");
+    } finally {
+      setSaving(false);
+      setClipContextMenu(null);
+    }
+  }, [companyId, user?.id, projectId, logUpload]);
+
   // ── Drag & Trim ──────────────────────────────────────────────────────
 
-  const onDragStart = useCallback((e: React.DragEvent, id: string) => { setDraggedClipId(id); e.dataTransfer.effectAllowed = "move"; }, []);
+  const onDragStart = useCallback((e: React.DragEvent, id: string) => { setDraggedClipId(id); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", id); }, []);
   const onDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }, []);
+  const onDragEnd = useCallback(() => { setDraggedClipId(null); }, []);
   const onDrop = useCallback((e: React.DragEvent, tid: string) => {
     e.preventDefault();
     if (!draggedClipId || draggedClipId === tid) return;
@@ -335,11 +579,12 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   }, [trimming, pxPerSec]);
 
   const onTimelineClick = useCallback((e: React.MouseEvent) => {
+    if (showRangeCut) return; // Don't move playhead when range cut is active
     if (!timelineRef.current) return;
     const r = timelineRef.current.getBoundingClientRect();
     const t = Math.max(0, Math.min((e.clientX - r.left + timelineRef.current.scrollLeft - 56) / pxPerSec, totalDur));
     setCurrentTime(t); syncPreview(t);
-  }, [pxPerSec, totalDur, syncPreview]);
+  }, [pxPerSec, totalDur, syncPreview, showRangeCut]);
 
   // ── Audio Export (WAV — pure JS, no library needed) ────────────────────
 
@@ -443,16 +688,19 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       }
 
       // Download
+      const exportFilename = `audio-export-${Date.now()}.wav`;
       const blob = new Blob([buffer], { type: "audio/wav" });
+
+      // Download locally
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `audio-export-${Date.now()}.wav`;
-      a.click();
+      a.href = url; a.download = exportFilename; a.click();
       URL.revokeObjectURL(url);
 
+      // Save to project
+      await saveExportToProject(blob, exportFilename, "audio", "audio/wav");
       audioCtx.close();
-      toast.success("Audio exported as WAV!");
+      toast.success("Exported & saved to project!");
     } catch (err) {
       console.error("Audio export error:", err);
       toast.error(`Audio export failed: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -593,9 +841,18 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       // Cleanup bitmaps
       Object.values(imageBitmaps).forEach(bmp => bmp.close());
       await enc.flush(); muxer.finalize();
+      const exportFilename = `export-${Date.now()}.mp4`;
       const blob = new Blob([(muxer.target as any).buffer], { type: "video/mp4" });
-      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `export-${Date.now()}.mp4`; a.click(); URL.revokeObjectURL(url);
-      toast.success("Exported!");
+
+      // Download locally
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = exportFilename; a.click();
+      URL.revokeObjectURL(url);
+
+      // Save to project
+      await saveExportToProject(blob, exportFilename, "video", "video/mp4");
+      toast.success("Exported & saved to project!");
     } catch (err) { console.error("Export error:", err); toast.error(`Export failed: ${err instanceof Error ? err.message : "Unknown error"}`); }
     finally {
       setExporting(false); setExportProgress(0);
@@ -603,6 +860,52 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       blobUrls.forEach(u => URL.revokeObjectURL(u));
     }
   }, [clips, totalDur, getClipAt]);
+
+  // ── Save exported file to R2 + storyboard_files ──────────────────────
+
+  const saveExportToProject = useCallback(async (blob: Blob, filename: string, fileType: "video" | "audio", mimeType: string) => {
+    try {
+      const r2Key = `${companyId}/uploads/${filename}`;
+
+      // Get presigned upload URL
+      const sigRes = await fetch("/api/storyboard/r2-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: r2Key, contentType: mimeType }),
+      });
+      const { uploadUrl } = await sigRes.json();
+
+      // Upload to R2
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        body: blob,
+        headers: { "Content-Type": mimeType },
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+
+      // Log to storyboard_files
+      await logUpload({
+        companyId,
+        userId: user?.id,
+        projectId,
+        r2Key,
+        filename,
+        fileType,
+        mimeType,
+        size: blob.size,
+        category: "uploads",
+        categoryId: projectId,
+        tags: [],
+        uploadedBy: user?.id || "unknown",
+        status: "ready",
+      });
+
+      toast.success(`Saved to project: ${filename}`);
+    } catch (err) {
+      console.error("Save to project failed:", err);
+      toast.error("Failed to save to project");
+    }
+  }, [companyId, user, projectId, logUpload]);
 
   // Route export based on track type
   const handleExport = useCallback(() => {
@@ -668,7 +971,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         <audio ref={audioRef} style={{ display: "none" }} preload="auto" />
 
         {cur?.clip.type === "video" ? (
-          <video ref={previewRef} src={cur.clip.src} className="max-w-full max-h-full object-contain" playsInline crossOrigin="anonymous" />
+          <video ref={previewRef} className="max-w-full max-h-full object-contain" playsInline />
         ) : cur?.clip.type === "audio" ? (
           <div className="flex flex-col items-center gap-4">
             <div className="w-24 h-24 rounded-full bg-[#1a1a24] flex items-center justify-center border border-[#2a2a35]">
@@ -706,6 +1009,14 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           >
             {showMedia ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             {showMedia ? "Close" : "Add Media"}
+          </button>
+
+          <button
+            onClick={() => { setShowFileBrowser(true); setShowMedia(false); }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition shadow-lg bg-[#1a1a24]/90 backdrop-blur text-[#c0c0c0] hover:text-white border border-[#2a2a35]"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            Browse Files
           </button>
 
           {/* Track type indicator */}
@@ -771,6 +1082,11 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                 <button onClick={splitClip} className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#A0A0A0] hover:text-white hover:bg-[#1a1a24] rounded transition">
                   <Scissors className="w-3.5 h-3.5" /> Split
                 </button>
+                {(sel.type === "video" || sel.type === "audio") && (
+                  <button onClick={() => showRangeCut ? setShowRangeCut(false) : openRangeCut()} className={`flex items-center gap-1 px-2 py-1 text-[10px] rounded transition ${showRangeCut ? 'text-teal-400 bg-teal-500/10' : 'text-[#A0A0A0] hover:text-white hover:bg-[#1a1a24]'}`}>
+                    <Scissors className="w-3.5 h-3.5" /> Range Cut
+                  </button>
+                )}
                 {sel.type === "image" && (
                   <div className="flex items-center gap-0.5 px-2.5 py-1 bg-[#1a1a24] border border-[#2a2a35] rounded-full text-[10px] text-[#A0A0A0]">
                     <Clock className="w-3 h-3 text-teal-500" />
@@ -779,6 +1095,13 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                       className="w-7 px-0 py-0 bg-transparent border-none text-[10px] text-white text-center outline-none" />
                     <span>s</span>
                   </div>
+                )}
+                {sel.type === "video" && (
+                  <button onClick={() => extractAudioFromVideo(sel)} disabled={extracting}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#A0A0A0] hover:text-teal-400 hover:bg-teal-500/10 rounded transition disabled:opacity-50">
+                    {extracting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Music className="w-3.5 h-3.5" />}
+                    {extracting ? "Extracting..." : "Extract Audio"}
+                  </button>
                 )}
                 <button onClick={() => removeClip(sel.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#A0A0A0] hover:text-red-400 hover:bg-red-500/10 rounded transition">
                   <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -803,7 +1126,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
               <ZoomOut className="w-3 h-3 text-[#4A4A4A]" />
               <input
                 type="range"
-                min={30}
+                min={2}
                 max={300}
                 value={pxPerSec}
                 onChange={(e) => setPxPerSec(parseInt(e.target.value))}
@@ -811,7 +1134,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
               />
               <ZoomIn className="w-3 h-3 text-[#4A4A4A]" />
               <button
-                onClick={() => { if (timelineRef.current && totalDur > 0) setPxPerSec(Math.max(30, Math.floor((timelineRef.current.clientWidth - 80) / totalDur))); }}
+                onClick={() => { if (timelineRef.current && totalDur > 0) setPxPerSec(Math.max(2, Math.floor((timelineRef.current.clientWidth - 80) / totalDur))); }}
                 className="px-3 py-1 text-[10px] font-semibold text-[#A0A0A0] hover:text-white bg-[#1a1a24] border border-[#2a2a35] rounded-full hover:border-teal-500/50 hover:bg-teal-500/10 transition"
               >
                 Fit
@@ -819,6 +1142,8 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
             </div>
           </div>
         </div>
+
+        {/* Range Cut is rendered directly on the clip in the timeline */}
 
         {/* Ruler + Timeline */}
         <div
@@ -847,15 +1172,23 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                 {totalDur > 0 && (
                   <div ref={progressBarRef} className="absolute bottom-0 left-0 h-[2px] bg-teal-500/40" style={{ width: currentTime * pxPerSec }} />
                 )}
-                {Array.from({ length: Math.ceil(totalDur) + 2 }, (_, i) => (
-                  <div key={i} className="absolute top-0" style={{ left: i * pxPerSec }}>
-                    <div className="w-px h-3 bg-[#2a2a35]" />
-                    <span className="text-[9px] text-[#4A4A4A] ml-1 select-none">{formatTime(i)}</span>
-                    {pxPerSec >= 60 && (
-                      <div className="absolute top-0 w-px h-2 bg-[#1e1e28]" style={{ left: pxPerSec / 2 }} />
-                    )}
-                  </div>
-                ))}
+                {(() => {
+                  // Adaptive ruler: choose tick interval based on zoom level
+                  const tickInterval = pxPerSec >= 60 ? 1 : pxPerSec >= 20 ? 5 : pxPerSec >= 8 ? 10 : pxPerSec >= 4 ? 30 : 60;
+                  const tickCount = Math.ceil(totalDur / tickInterval) + 2;
+                  return Array.from({ length: tickCount }, (_, i) => {
+                    const sec = i * tickInterval;
+                    return (
+                      <div key={sec} className="absolute top-0" style={{ left: sec * pxPerSec }}>
+                        <div className="w-px h-3 bg-[#2a2a35]" />
+                        <span className="text-[9px] text-[#4A4A4A] ml-1 select-none">{formatTime(sec)}</span>
+                        {pxPerSec >= 60 && (
+                          <div className="absolute top-0 w-px h-2 bg-[#1e1e28]" style={{ left: pxPerSec / 2 }} />
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
 
               {/* Clip track */}
@@ -866,8 +1199,9 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                   const isSel = clip.id === selectedClipId;
 
                   return (
-                    <div key={clip.id} draggable onDragStart={(e) => onDragStart(e, clip.id)} onDragOver={onDragOver} onDrop={(e) => onDrop(e, clip.id)}
+                    <div key={clip.id} data-clip draggable onDragStart={(e) => onDragStart(e, clip.id)} onDragOver={onDragOver} onDrop={(e) => onDrop(e, clip.id)} onDragEnd={onDragEnd}
                       onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); }}
+                      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
                       className={`relative shrink-0 rounded-xl overflow-hidden transition cursor-grab active:cursor-grabbing ${
                         isSel ? "ring-[3px] ring-teal-400 shadow-lg shadow-teal-500/30" : "ring-1 ring-[#2a2a35] hover:ring-[#4A4A4A]"
                       } ${draggedClipId === clip.id ? "opacity-30" : ""}`}
@@ -905,7 +1239,21 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                         <span className="text-[9px] text-white/50 shrink-0 ml-1 bg-black/40 px-1.5 py-0.5 rounded">{formatTime(vd)}</span>
                       </div>
 
+                      {/* Range Cut: red tint on clip only */}
+                      {showRangeCut && isSel && (() => {
+                        const rcVd = getVisDur(clip);
+                        const rcStartPct = (rangeCutStart / rcVd) * 100;
+                        const rcEndPct = (rangeCutEnd / rcVd) * 100;
+                        return (
+                          <div className="absolute top-0 bottom-0 bg-red-500/25 z-20 pointer-events-none"
+                            style={{ left: `${rcStartPct}%`, width: `${rcEndPct - rcStartPct}%` }}
+                          />
+                        );
+                      })()}
+
                       {/* Trim handles */}
+                      {!showRangeCut && (
+                      <>
                       <div className="absolute left-0 top-0 bottom-0 w-3 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "left")}>
                         <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-teal-400/0 group-hover/t:bg-teal-400 transition rounded-l-xl flex items-center justify-center">
                           <div className="w-0.5 h-8 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" />
@@ -916,6 +1264,8 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                           <div className="w-0.5 h-8 bg-white/0 group-hover/t:bg-white/80 rounded-full transition" />
                         </div>
                       </div>
+                      </>
+                      )}
                     </div>
                   );
                 })}
@@ -932,7 +1282,13 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                     const startTime = currentTime;
                     const onMove = (me: MouseEvent) => {
                       const dt = (me.clientX - startX) / pxPerSec;
-                      setCurrentTime(Math.max(0, Math.min(totalDur, startTime + dt)));
+                      const newTime = Math.max(0, Math.min(totalDur, startTime + dt));
+                      setCurrentTime(newTime);
+                      // If playing, reset the animation clock so playback continues from new position
+                      if (playing) {
+                        playStart.current = { realTime: performance.now(), offset: newTime };
+                        syncPreview(newTime);
+                      }
                     };
                     const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
                     window.addEventListener("mousemove", onMove);
@@ -956,8 +1312,136 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
               </div>
             </>
           )}
+
+              {/* Range Cut needles — full timeline height, same level as playhead */}
+              {showRangeCut && sel && (() => {
+                const rcVd = getVisDur(sel);
+                // Calculate the selected clip's X offset in the timeline
+                let clipOffset = 0;
+                for (const c of clips) {
+                  if (c.id === sel.id) break;
+                  clipOffset += getVisDur(c) * pxPerSec + 8; // 8px = gap-2
+                }
+                const rcStartX = clipOffset + (rangeCutStart / rcVd) * (getVisDur(sel) * pxPerSec) + 56 + 12; // 56=left-14, 12=px-3
+                const rcEndX = clipOffset + (rangeCutEnd / rcVd) * (getVisDur(sel) * pxPerSec) + 56 + 12;
+
+                const makeDrag = (side: "start" | "end") => (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  const clipW = getVisDur(sel) * pxPerSec;
+                  const clipLeft = clipOffset + 56 + 12;
+                  const tl = timelineRef.current;
+                  const onMove = (me: MouseEvent) => {
+                    if (!tl) return;
+                    const tlRect = tl.getBoundingClientRect();
+                    const x = me.clientX - tlRect.left + tl.scrollLeft - clipLeft;
+                    const t = parseFloat((Math.max(0, Math.min(1, x / clipW)) * rcVd).toFixed(1));
+                    if (side === "start") setRangeCutStart(Math.max(0, Math.min(t, rangeCutEnd - 0.5)));
+                    else setRangeCutEnd(Math.max(rangeCutStart + 0.5, Math.min(t, rcVd)));
+                  };
+                  const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+                  window.addEventListener("mousemove", onMove);
+                  window.addEventListener("mouseup", onUp);
+                };
+
+                return (
+                  <>
+                    {/* Start needle — green */}
+                    <div className="absolute top-0 bottom-0 z-30" style={{ left: rcStartX }}>
+                      <div className="absolute top-0 bottom-[9px] left-1/2 -translate-x-1/2 w-px bg-green-400 pointer-events-none" />
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[7px] border-r-[7px] border-b-[9px] border-l-transparent border-r-transparent border-b-green-400 pointer-events-none" />
+                      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-4 cursor-ew-resize pointer-events-auto" onMouseDown={makeDrag("start")} />
+                    </div>
+
+                    {/* End needle — red */}
+                    <div className="absolute top-0 bottom-0 z-30" style={{ left: rcEndX }}>
+                      <div className="absolute top-0 bottom-[9px] left-1/2 -translate-x-1/2 w-px bg-red-400 pointer-events-none" />
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[7px] border-r-[7px] border-b-[9px] border-l-transparent border-r-transparent border-b-red-400 pointer-events-none" />
+                      <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-4 cursor-ew-resize pointer-events-auto" onMouseDown={makeDrag("end")} />
+                    </div>
+
+                    {/* CUT button — centered between needles */}
+                    <div className="absolute z-30 flex items-center justify-center pointer-events-none" style={{ left: rcStartX, width: rcEndX - rcStartX, top: "50%", transform: "translateY(-50%)" }}>
+                      <button onClick={(e) => { e.stopPropagation(); applyRangeCut(); }}
+                        className="pointer-events-auto px-5 py-2 bg-red-500/90 hover:bg-red-500 text-white text-xs font-bold rounded-full shadow-lg shadow-red-500/30 transition border border-red-400/50">
+                        CUT
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+
         </div>
       </div>
+      {/* Clip Context Menu */}
+      {clipContextMenu && (() => {
+        const ctxClip = clips.find(c => c.id === clipContextMenu.clipId);
+        if (!ctxClip) return null;
+        return (
+          <div
+            className="fixed bg-[#1e1e28] border border-[#3D3D3D] rounded-xl shadow-2xl shadow-black/60 overflow-hidden py-1 min-w-[180px]"
+            style={{ left: clipContextMenu.x, top: clipContextMenu.y, zIndex: 99999 }}
+            onClick={() => setClipContextMenu(null)}
+          >
+            <button
+              onClick={() => saveClipToUploads(ctxClip)}
+              disabled={saving}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-teal-400 hover:bg-[#2a2a35] transition-colors disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {saving ? "Saving..." : "Save to Uploads"}
+            </button>
+            <button
+              onClick={() => {
+                const link = document.createElement("a");
+                link.href = ctxClip.src;
+                link.download = ctxClip.name;
+                link.click();
+                setClipContextMenu(null);
+              }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:bg-[#2a2a35] hover:text-white transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download
+            </button>
+            {ctxClip.type === "video" && (
+              <button
+                onClick={() => { extractAudioFromVideo(ctxClip); setClipContextMenu(null); }}
+                disabled={extracting}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:bg-[#2a2a35] hover:text-white transition-colors disabled:opacity-50"
+              >
+                <Music className="w-3.5 h-3.5" />
+                {extracting ? "Extracting..." : "Extract Audio"}
+              </button>
+            )}
+            <div className="mx-2 my-1 border-t border-[#3D3D3D]" />
+            <button
+              onClick={() => { removeClip(ctxClip.id); setClipContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-[#2a2a35] transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Close context menu on click outside */}
+      {clipContextMenu && (
+        <div className="fixed inset-0" style={{ zIndex: 99998 }} onClick={() => setClipContextMenu(null)} />
+      )}
+
+      {/* FileBrowser */}
+      {showFileBrowser && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowFileBrowser(false)}
+          onSelectFile={(url, type) => {
+            if (type === "image" || type === "video" || type === "audio") {
+              addClipFromUrl(url, type);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

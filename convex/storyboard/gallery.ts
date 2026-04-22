@@ -1,5 +1,6 @@
 import { mutation, query, internalMutation } from "../_generated/server";
 import { v } from "convex/values";
+import { syncFileAggregates } from "./aggregates";
 
 // ─── Auto-Share (Internal) ──────────────────────────────────────────────
 // Called by server-side callback for free plan users. No auth required.
@@ -19,6 +20,9 @@ export const autoShareFile = internalMutation({
       sharedAt: Date.now(),
       sharedBy: file.userId || "system",
     });
+
+    const after = await ctx.db.get(args.fileId);
+    await syncFileAggregates(ctx, file, after);
   },
 });
 
@@ -56,6 +60,9 @@ export const shareFile = mutation({
       sharedAt: Date.now(),
       sharedBy: identity.subject,
     });
+
+    const after = await ctx.db.get(args.fileId);
+    await syncFileAggregates(ctx, file, after);
 
     return { success: true, alreadyShared: false };
   },
@@ -105,6 +112,9 @@ export const unshareFile = mutation({
       isShared: false,
     });
 
+    const after = await ctx.db.get(args.fileId);
+    await syncFileAggregates(ctx, file, after);
+
     return { success: true, alreadyUnshared: false };
   },
 });
@@ -117,33 +127,33 @@ export const listSharedFiles = query({
     limit: v.optional(v.number()),
     sortBy: v.optional(v.literal("recent")),
     filterModel: v.optional(v.string()),
-    filterFileType: v.optional(v.union(v.literal("image"), v.literal("video"))),
+    filterFileType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"))),
   },
   handler: async (ctx, args) => {
     const limit = args.limit ?? 40;
-    const sortBy = args.sortBy ?? "recent";
 
-    // Fetch shared files
-    let files = await ctx.db
-      .query("storyboard_files")
-      .withIndex("by_isShared", (q) => q.eq("isShared", true))
-      .order("desc")
-      .collect();
+    // Pick the best index for the requested filter. When a model filter is
+    // provided, by_isShared_model narrows at the index level; otherwise use
+    // by_isShared which is already ordered by sharedAt desc.
+    const baseQuery = args.filterModel
+      ? ctx.db
+          .query("storyboard_files")
+          .withIndex("by_isShared_model", (q) =>
+            q.eq("isShared", true).eq("model", args.filterModel!)
+          )
+      : ctx.db
+          .query("storyboard_files")
+          .withIndex("by_isShared", (q) => q.eq("isShared", true));
 
-    // Filter by model
-    if (args.filterModel) {
-      files = files.filter(f => f.model === args.filterModel);
-    }
+    // fileType has no index — oversample so we still have `limit` rows after
+    // the JS filter. 5× is generous; typical galleries have roughly balanced
+    // image/video ratios.
+    const fetchCount = args.filterFileType ? limit * 5 : limit;
+    let files = await baseQuery.order("desc").take(fetchCount);
 
-    // Filter by file type
     if (args.filterFileType) {
-      files = files.filter(f => f.fileType === args.filterFileType);
+      files = files.filter(f => f.fileType === args.filterFileType).slice(0, limit);
     }
-
-    // "recent" is already sorted by sharedAt desc via the index
-
-    // Apply limit
-    files = files.slice(0, limit);
 
     // Join creator info — org files show org name, personal files show user name
     const filesWithUser = await Promise.all(
@@ -190,17 +200,14 @@ export const listSharedFiles = query({
 
 export const getSharedModels = query({
   handler: async (ctx) => {
-    const files = await ctx.db
-      .query("storyboard_files")
-      .withIndex("by_isShared", (q) => q.eq("isShared", true))
-      .collect();
-
-    const models = new Set<string>();
-    for (const file of files) {
-      if (file.model) models.add(file.model);
-    }
-
-    return Array.from(models).sort();
+    // Read from the catalog — maintained by syncFileAggregates on every
+    // share/unshare. Dropping from scanning every shared file (27 MB) to
+    // reading ~20 tiny rows.
+    const rows = await ctx.db.query("storyboard_shared_models").collect();
+    return rows
+      .filter((r) => r.count > 0)
+      .map((r) => r.model)
+      .sort();
   },
 });
 
@@ -213,26 +220,19 @@ export const getTopCreators = query({
   handler: async (ctx, args) => {
     const maxCreators = args.limit ?? 10;
 
-    const files = await ctx.db
-      .query("storyboard_files")
-      .withIndex("by_isShared", (q) => q.eq("isShared", true))
-      .collect();
+    // Read from denormalized stats table instead of scanning every shared
+    // file. Maintained by syncFileAggregates in every share/unshare path.
+    const stats = await ctx.db
+      .query("storyboard_creator_stats")
+      .withIndex("by_sharedCount")
+      .order("desc")
+      .take(maxCreators * 2);
 
-    // Count by companyId (org or personal)
-    const counts: Record<string, number> = {};
-    for (const file of files) {
-      const key = file.companyId || file.userId || "unknown";
-      counts[key] = (counts[key] || 0) + 1;
-    }
+    const active = stats.filter((s) => s.sharedCount > 0).slice(0, maxCreators);
 
-    // Sort by count desc, take top N
-    const topIds = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, maxCreators);
-
-    // Join creator data — org or user
     const creators = await Promise.all(
-      topIds.map(async ([companyId, count]) => {
+      active.map(async (s) => {
+        const companyId = s.companyId;
         const isOrg = companyId.startsWith("org_");
 
         if (isOrg) {
@@ -244,12 +244,11 @@ export const getTopCreators = query({
             userId: companyId,
             userName: orgBalance?.organizationName || companyId,
             userAvatar: null,
-            creationCount: count,
+            creationCount: s.sharedCount,
             isOrg: true,
           };
         }
 
-        // Personal user
         const user = await ctx.db
           .query("users")
           .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", companyId))
@@ -258,7 +257,7 @@ export const getTopCreators = query({
           userId: companyId,
           userName: user?.fullName || user?.firstName || "Anonymous",
           userAvatar: user?.imageUrl || null,
-          creationCount: count,
+          creationCount: s.sharedCount,
           isOrg: false,
         };
       })

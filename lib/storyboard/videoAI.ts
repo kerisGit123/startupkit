@@ -316,9 +316,10 @@ export async function generateMusic(params: {
   style?: string;
   title?: string;
   instrumental?: boolean;
-  model?: "V4" | "V5";
+  model?: string;
   negativeTags?: string;
   vocalGender?: "m" | "f";
+  personaId?: string;
   callbackUrl: string;
   companyId?: string;
 }) {
@@ -340,9 +341,136 @@ export async function generateMusic(params: {
       ...(params.title && { title: params.title }),
       ...(params.negativeTags && { negativeTags: params.negativeTags }),
       ...(params.vocalGender && !params.instrumental && { vocalGender: params.vocalGender }),
+      ...(params.personaId && { personaId: params.personaId, personaModel: "style_persona" }),
     }),
   });
   if (!res.ok) throw new Error(`Music API error: ${await res.text()}`);
+  const data = await res.json();
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}
+
+export async function uploadAndCoverAudio(params: {
+  uploadUrl: string;
+  prompt: string;
+  style?: string;
+  title?: string;
+  instrumental?: boolean;
+  model?: string;
+  vocalGender?: "m" | "f";
+  personaId?: string;
+  customMode?: boolean;
+  negativeTags?: string;
+  styleWeight?: number;
+  weirdnessConstraint?: number;
+  audioWeight?: number;
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/generate/upload-cover`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      uploadUrl: params.uploadUrl,
+      prompt: params.prompt,
+      customMode: params.customMode ?? true,
+      instrumental: params.instrumental ?? true,
+      model: params.model || "V4",
+      callBackUrl: params.callbackUrl,
+      ...(params.style && { style: params.style }),
+      ...(params.title && { title: params.title }),
+      ...(params.vocalGender && !params.instrumental && { vocalGender: params.vocalGender }),
+      // personaId, styleWeight, weirdnessConstraint, audioWeight require customMode=true
+      ...((params.customMode ?? true) && params.personaId && { personaId: params.personaId, personaModel: "style_persona" }),
+      ...(params.negativeTags && { negativeTags: params.negativeTags }),
+      ...((params.customMode ?? true) && params.styleWeight !== undefined && { styleWeight: params.styleWeight }),
+      ...((params.customMode ?? true) && params.weirdnessConstraint !== undefined && { weirdnessConstraint: params.weirdnessConstraint }),
+      ...((params.customMode ?? true) && params.audioWeight !== undefined && { audioWeight: params.audioWeight }),
+    }),
+  });
+  if (!res.ok) throw new Error(`Upload & Cover API error: ${await res.text()}`);
+  const data = await res.json();
+  // Handle synchronous response: API may return bare array of URLs ["url1.mp3", "url2.mp3"]
+  if (Array.isArray(data)) {
+    const audioUrls = data.filter((item: any) => typeof item === 'string' && item.startsWith('http'));
+    return { taskId: undefined, raw: data, responseCode: 200, responseMessage: 'success', audioUrls };
+  }
+  // Handle async response: {code: 200, data: {taskId: "..."}}
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined, audioUrls: undefined as string[] | undefined };
+}
+
+export async function generatePersona(params: {
+  taskId: string;
+  audioId: string;
+  name: string;
+  description: string;
+  vocalStart?: number;
+  vocalEnd?: number;
+  style?: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/generate/generate-persona`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      taskId: params.taskId,
+      audioId: params.audioId,
+      name: params.name,
+      description: params.description,
+      ...(params.vocalStart !== undefined && { vocalStart: params.vocalStart }),
+      ...(params.vocalEnd !== undefined && { vocalEnd: params.vocalEnd }),
+      ...(params.style && { style: params.style }),
+    }),
+  });
+  if (!res.ok) throw new Error(`Generate Persona API error: ${await res.text()}`);
+  const data = await res.json();
+  // Response: {code: 200, data: {taskId: "..."}} — the taskId IS the personaId for future use
+  const personaId = data.data?.personaId || data.data?.taskId;
+  return { personaId: personaId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}
+
+export async function extendMusic(params: {
+  audioId: string;
+  prompt?: string;
+  style?: string;
+  title?: string;
+  model?: string;
+  continueAt?: number;
+  vocalGender?: "m" | "f";
+  personaId?: string;
+  defaultParamFlag?: boolean;
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const isCustom = params.defaultParamFlag ?? true;
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/generate/extend`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      defaultParamFlag: isCustom,
+      audioId: params.audioId,
+      model: params.model || "V4",
+      callBackUrl: params.callbackUrl,
+      ...(isCustom && params.prompt && { prompt: params.prompt }),
+      ...(isCustom && params.continueAt !== undefined && { continueAt: params.continueAt }),
+      ...(isCustom && params.style && { style: params.style }),
+      ...(isCustom && params.title && { title: params.title }),
+      ...(params.vocalGender && { vocalGender: params.vocalGender }),
+      ...(isCustom && params.personaId && { personaId: params.personaId, personaModel: "style_persona" }),
+    }),
+  });
+  if (!res.ok) throw new Error(`Extend Music API error: ${await res.text()}`);
   const data = await res.json();
   return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }

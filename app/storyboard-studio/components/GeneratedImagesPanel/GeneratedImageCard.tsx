@@ -2,10 +2,15 @@
 
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download, FileText, Share2 } from "lucide-react";
+import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download, FileText, Share2, RefreshCw, Mic, Pencil, Check } from "lucide-react";
+import { CreatePersonaDialog } from "./CreatePersonaDialog";
+import { EditPersonaDialog } from "./EditPersonaDialog";
 import { toast } from "sonner";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { getResponseCodeInfo, getResponseCodeColor } from "@/lib/storyboard/kieResponse";
 import { FileContextMenu, getTagColor } from "../shared/FileContextMenu";
+import { AudioPreviewDialog } from "../shared/AudioPreviewDialog";
 
 // Types
 interface GeneratedImageMetadata {
@@ -51,10 +56,15 @@ interface GeneratedImageCardProps {
   onTagToggle?: (tag: string) => void;
   size?: number;
   categoryId?: string;
+  taskId?: string;
+  companyId?: string;
+  userId?: string;
+  metadata?: any;
 }
 
 // Helper function to format relative time
 const formatRelativeTime = (date: Date): string => {
+  if (!date || !date.getTime) return '';
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const minutes = Math.floor(diff / 60000);
@@ -89,10 +99,20 @@ export function GeneratedImageCard({
   onUnshare,
   size,
   categoryId,
+  taskId,
+  companyId,
+  userId,
+  metadata,
 }: GeneratedImageCardProps) {
   const [showVideoDialog, setShowVideoDialog] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [isPulling, setIsPulling] = useState(false);
+  const [showPersonaDialog, setShowPersonaDialog] = useState(false);
+  const [showEditPersonaDialog, setShowEditPersonaDialog] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const renameFile = useMutation(api.storyboard.storyboardFiles.renameFile);
 
   const structuredTags = tags.filter(t => t.includes(":"));
 
@@ -112,9 +132,38 @@ export function GeneratedImageCard({
     navigator.clipboard.writeText(fileId);
   };
 
+  const handlePullResult = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!taskId || !fileId || isPulling) return;
+    setIsPulling(true);
+    try {
+      const res = await fetch('/api/storyboard/pull-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, fileId, companyId }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success('Result pulled successfully!');
+      } else if (result.status === 'unknown' || result.status === 'PENDING' || result.status === 'PROCESSING') {
+        toast.info(`Task still ${result.status?.toLowerCase() || 'processing'}...`);
+      } else {
+        toast.error(result.error || result.message || 'Failed to pull result');
+      }
+    } catch (err) {
+      toast.error('Failed to pull result');
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
+  const [showAudioPlayer, setShowAudioPlayer] = useState(false);
+
   const handleImageClick = () => {
     if (image.fileType === 'video') {
       setShowVideoDialog(true);
+    } else if (image.fileType === 'audio') {
+      setShowAudioPlayer(true);
     } else {
       setShowImagePreview(true);
     }
@@ -130,7 +179,7 @@ export function GeneratedImageCard({
         
         const link = document.createElement('a');
         link.href = blobUrl;
-        link.download = `${image.metadata.model}-${image.id}.mp4`;
+        link.download = `${image.metadata?.model}-${image.id}.mp4`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -141,7 +190,7 @@ export function GeneratedImageCard({
         // For images, use the direct URL
         const link = document.createElement('a');
         link.href = image.url;
-        link.download = `${image.metadata.model}-${image.id}.png`;
+        link.download = `${image.metadata?.model}-${image.id}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -151,7 +200,7 @@ export function GeneratedImageCard({
       // Fallback to direct link
       const link = document.createElement('a');
       link.href = image.url;
-      link.download = `${image.metadata.model}-${image.id}.${image.fileType === 'video' ? 'mp4' : image.fileType === 'audio' ? 'mp3' : 'png'}`;
+      link.download = `${image.metadata?.model}-${image.id}.${image.fileType === 'video' ? 'mp4' : image.fileType === 'audio' ? 'mp3' : 'png'}`;
       link.target = '_blank'; // Open in new tab as fallback
       document.body.appendChild(link);
       link.click();
@@ -172,26 +221,21 @@ export function GeneratedImageCard({
             onClick={handleImageClick}
           >
             {image.fileType === 'audio' ? (
-              // Audio card with waveform-style display
+              // Audio card — clean, play on hover
               <>
-                <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-[#141418] flex flex-col items-center justify-center gap-2">
+                <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-[#141418] flex items-center justify-center">
                   <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
                     <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
                   </div>
-                  <span className="text-[10px] text-purple-300 font-medium">{image.metadata.model || 'AI Music'}</span>
-                </div>
-                {/* Audio player */}
-                <div className="absolute bottom-0 left-0 right-0 px-2 pb-2">
-                  <audio src={image.url} controls className="w-full h-7" style={{ filter: 'invert(1) hue-rotate(180deg)', opacity: 0.7 }} />
                 </div>
                 {/* AI + MUSIC badges */}
                 <div className="absolute top-2 left-2 flex items-center gap-1">
-                  <div className="bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
-                    AI
-                  </div>
-                  <div className="bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
-                    MUSIC
-                  </div>
+                  <div className="bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">AI</div>
+                  <div className="bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">MUSIC</div>
+                </div>
+                {/* Song name at bottom */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
+                  <p className="text-xs text-white/90 truncate font-medium">{metadata?.musicTitle || "Untitled"}</p>
                 </div>
               </>
             ) : image.fileType === 'video' ? (
@@ -224,7 +268,7 @@ export function GeneratedImageCard({
 
                 {/* Duration indicator */}
                 <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                  {image.metadata.parameters?.duration ? `${image.metadata.parameters.duration}s` : '4s'}
+                  {image.metadata?.parameters?.duration ? `${image.metadata?.parameters.duration}s` : '4s'}
                 </div>
               </>
             ) : (
@@ -232,12 +276,12 @@ export function GeneratedImageCard({
               <>
                 <img
                   src={image.thumbnail}
-                  alt={image.metadata.prompt || `Generated ${image.id}`}
+                  alt={image.metadata?.prompt || `Generated ${image.id}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
                 {/* Source badge */}
-                {image.metadata.model === 'combine-layers' ? (
+                {image.metadata?.model === 'combine-layers' ? (
                   <div className="absolute top-2 left-2 bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
                     COMBINE
                   </div>
@@ -269,28 +313,38 @@ export function GeneratedImageCard({
               </div>
             )}
             
-            {image.metadata.progress && (
+            {image.metadata?.progress && (
               <div className="w-32 h-1 bg-white/20 rounded-full mt-2 overflow-hidden">
                 <div 
                   className="h-full bg-[#4A90E2] transition-all duration-300"
-                  style={{ width: `${image.metadata.progress}%` }}
+                  style={{ width: `${image.metadata?.progress}%` }}
                 />
               </div>
             )}
             
-            {image.metadata.estimatedTime && (
+            {image.metadata?.estimatedTime && (
               <div className="text-[#A0A0A0] text-xs mt-1">
-                ~{image.metadata.estimatedTime}s remaining
+                ~{image.metadata?.estimatedTime}s remaining
               </div>
             )}
-            {image.metadata.stage && (
-              <div className="text-[#A0A0A0] text-xs mt-1">{image.metadata.stage}</div>
+            {image.metadata?.stage && (
+              <div className="text-[#A0A0A0] text-xs mt-1">{image.metadata?.stage}</div>
             )}
           </div>
         )}
 
         {image.status === 'processing' && (
           <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-start justify-center gap-2 pt-4 pointer-events-none">
+            {taskId && (
+              <button
+                onClick={handlePullResult}
+                disabled={isPulling}
+                className="p-2 bg-blue-500/80 rounded-lg hover:bg-blue-500 pointer-events-auto disabled:opacity-50"
+                title="Pull result from Kie AI"
+              >
+                <RefreshCw className={`w-4 h-4 text-white ${isPulling ? 'animate-spin' : ''}`} />
+              </button>
+            )}
             <button
               onClick={handleCopyId}
               className="p-2 bg-white/20 rounded-lg hover:bg-white/30 pointer-events-auto"
@@ -321,8 +375,8 @@ export function GeneratedImageCard({
                 {responseCode} - {getResponseCodeInfo(responseCode).label}
               </span>
             )}
-            {image.metadata.error && !responseCode && (
-              <div className="text-red-300 text-xs mt-1 text-center px-2">{image.metadata.error}</div>
+            {image.metadata?.error && !responseCode && (
+              <div className="text-red-300 text-xs mt-1 text-center px-2">{image.metadata?.error}</div>
             )}
             <div className="flex items-center gap-2 mt-2">
               <button
@@ -374,11 +428,24 @@ export function GeneratedImageCard({
         {image.status === 'completed' && (
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
             {image.fileType === 'audio' ? (
-              // Audio: Show play (handled by embedded player), download, copy prompt, delete
+              // Audio: play button prominent, then download, copy, delete
               <>
+                <button onClick={handleImageClick} className="p-2 bg-white/90 rounded-lg hover:bg-white shadow-lg" title="Play audio">
+                  <Play className="w-4 h-4 text-black ml-0.5" />
+                </button>
                 <button onClick={handleDownload} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Download audio">
                   <Download className="w-4 h-4 text-white" />
                 </button>
+                {taskId && metadata?.audioId && !metadata?.personaCreated && (
+                  <button onClick={(e) => { e.stopPropagation(); setShowPersonaDialog(true); }} className="p-2 bg-purple-500/80 rounded-lg hover:bg-purple-500" title="Create Persona from this song">
+                    <Mic className="w-4 h-4 text-white" />
+                  </button>
+                )}
+                {metadata?.personaCreated && metadata?.personaId && (
+                  <button onClick={(e) => { e.stopPropagation(); setShowEditPersonaDialog(true); }} className="p-2 bg-purple-500/30 rounded-lg hover:bg-purple-500/50" title={`Edit Persona: ${metadata.personaName || 'Unnamed'}`}>
+                    <Pencil className="w-4 h-4 text-purple-400" />
+                  </button>
+                )}
                 {prompt && (
                   <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy prompt">
                     <FileText className="w-4 h-4 text-white" />
@@ -452,28 +519,28 @@ export function GeneratedImageCard({
             )}
 
             <span className="text-[#6E6E6E] text-xs">
-              {formatRelativeTime(image.metadata.timestamp)}
+              {formatRelativeTime(image.metadata?.timestamp)}
             </span>
           </div>
           
           <div className="flex items-center gap-2 mb-2">
             <Cpu className="w-3 h-3 text-[#6E6E6E]" />
             <span className="text-[#6E6E6E] text-xs">
-              {image.metadata.model}
+              {image.metadata?.model}
             </span>
-            {image.metadata.generationTime > 0 && (
+            {image.metadata?.generationTime > 0 && (
               <span className="text-[#6E6E6E] text-xs">
-                • {image.metadata.generationTime}s
+                • {image.metadata?.generationTime}s
               </span>
             )}
           </div>
 
-          {image.status === 'processing' && image.metadata.progress !== undefined && (
+          {image.status === 'processing' && image.metadata?.progress !== undefined && (
             <div className="flex items-center gap-2 text-xs text-[#A0A0A0] mb-2">
               <Loader2 className="w-3 h-3 animate-spin" />
-              <span>{image.metadata.progress}% complete</span>
-              {image.metadata.estimatedTime && (
-                <span>• ~{image.metadata.estimatedTime}s</span>
+              <span>{image.metadata?.progress}% complete</span>
+              {image.metadata?.estimatedTime && (
+                <span>• ~{image.metadata?.estimatedTime}s</span>
               )}
             </div>
           )}
@@ -501,6 +568,9 @@ export function GeneratedImageCard({
           isShared={isShared}
           onShare={onShare && r2Key ? () => onShare(image) : undefined}
           onUnshare={onUnshare ? () => onUnshare(image) : undefined}
+          onCreatePersona={image.fileType === 'audio' && taskId && metadata?.audioId && !metadata?.personaCreated ? () => setShowPersonaDialog(true) : undefined}
+          onEditPersona={image.fileType === 'audio' && metadata?.personaCreated && metadata?.personaId ? () => setShowEditPersonaDialog(true) : undefined}
+          onRename={fileId ? () => { setNameValue(image.metadata?.model || metadata?.musicTitle || "Untitled"); setEditingName(true); setShowAudioPlayer(true); } : undefined}
         />
       )}
 
@@ -537,7 +607,7 @@ export function GeneratedImageCard({
             <div className="p-4 border-t border-[#3D3D3D] flex items-center justify-between">
               <div>
                 {image.metadata?.model && (
-                  <div className="text-sm text-gray-400">Model: {image.metadata.model}</div>
+                  <div className="text-sm text-gray-400">Model: {image.metadata?.model}</div>
                 )}
                 {image.prompt && (
                   <div className="text-sm text-gray-400 mt-1 line-clamp-2">Prompt: {image.prompt}</div>
@@ -596,17 +666,55 @@ export function GeneratedImageCard({
             {/* Footer */}
             <div className="p-4 border-t border-[#3D3D3D]">
               <div className="text-sm text-gray-400">
-                Model: {image.metadata.model}
+                Model: {image.metadata?.model}
               </div>
-              {image.metadata.prompt && (
+              {image.metadata?.prompt && (
                 <div className="text-sm text-gray-400 mt-1">
-                  Prompt: {image.metadata.prompt}
+                  Prompt: {image.metadata?.prompt}
                 </div>
               )}
             </div>
           </div>
         </div>,
         document.body
+      )}
+
+      {/* Audio Player Dialog — shared component */}
+      {showAudioPlayer && image.fileType === 'audio' && (
+        <AudioPreviewDialog
+          url={image.url}
+          name={metadata?.musicTitle || image.metadata?.model || "Audio"}
+          prompt={prompt}
+          model={image.metadata?.model}
+          fileId={fileId}
+          onClose={() => setShowAudioPlayer(false)}
+        />
+      )}
+
+      {/* Create Persona Dialog */}
+      {showPersonaDialog && taskId && metadata?.audioId && image.url && (
+        <CreatePersonaDialog
+          audioUrl={image.url}
+          taskId={taskId}
+          audioId={metadata.audioId}
+          fileId={fileId || image.id}
+          companyId={companyId || ""}
+          userId={userId || ""}
+          fileMetadata={metadata}
+          onClose={() => setShowPersonaDialog(false)}
+        />
+      )}
+
+      {/* Edit Persona Dialog */}
+      {showEditPersonaDialog && metadata?.personaId && (
+        <EditPersonaDialog
+          personaId={metadata.personaId}
+          fileId={fileId || image.id}
+          fileMetadata={metadata}
+          companyId={companyId || ""}
+          audioUrl={image.url}
+          onClose={() => setShowEditPersonaDialog(false)}
+        />
       )}
     </div>
   );

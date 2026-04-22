@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { X, Search, Eye, Star, GitCompare, Trash2, AlertCircle, Loader2, Clock, Cpu, Image } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -91,6 +91,59 @@ export function GeneratedImagesPanel({
   const unshareFileMutation = useMutation(api.storyboard.gallery.unshareFile);
   const updateTagsMutation = useMutation(api.storyboard.storyboardFiles.updateFileTags);
 
+  // ── Auto-poll processing files ──────────────────────────────────────
+  const pollingRef = useRef<Set<string>>(new Set());
+
+  const pollResult = useCallback(async (taskId: string, fileId: string) => {
+    if (pollingRef.current.has(fileId)) return;
+    pollingRef.current.add(fileId);
+    try {
+      const res = await fetch('/api/storyboard/pull-result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, fileId, companyId }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success('Music ready!');
+      } else if (result.status && !['PENDING', 'PROCESSING', 'QUEUED', 'unknown'].includes(result.status)) {
+        // Failed — toast is optional since the card will show failed state
+      }
+      // else still processing — will retry on next interval
+    } catch {
+      // Ignore — will retry
+    } finally {
+      pollingRef.current.delete(fileId);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!projectFiles) return;
+    const processingFiles = projectFiles.filter(
+      (f: any) => (f.status === 'processing' || f.status === 'generating') && f.taskId && f.categoryId === activeShot?.id && f.model?.startsWith('ai-music-api/')
+    );
+    // Only poll files created within the last 10 minutes
+    const fiveMinAgo = Date.now() - 10 * 60 * 1000;
+    const recentProcessing = processingFiles.filter((f: any) => (f.createdAt || 0) > fiveMinAgo);
+    if (recentProcessing.length === 0) return;
+
+    // Poll every 15 seconds, auto-stops after 5 min (file falls out of recentProcessing)
+    const interval = setInterval(() => {
+      recentProcessing.forEach((f: any) => {
+        if (f.taskId) pollResult(f.taskId, String(f._id));
+      });
+    }, 15000);
+
+    // First poll after 5 seconds
+    const initialTimeout = setTimeout(() => {
+      recentProcessing.forEach((f: any) => {
+        if (f.taskId) pollResult(f.taskId, String(f._id));
+      });
+    }, 5000);
+
+    return () => { clearInterval(interval); clearTimeout(initialTimeout); };
+  }, [projectFiles, activeShot?.id, pollResult]);
+
   // Free personal users cannot unshare
   const isPersonalFree = !companyId?.startsWith("org_") && currentPlan === "free";
   const canUnshare = !isPersonalFree;
@@ -167,7 +220,7 @@ export function GeneratedImagesPanel({
           fileType: file.fileType as 'image' | 'video' | 'audio',
           metadata: {
             timestamp: new Date(file.createdAt ?? Date.now()),
-            model: file.model || file.metadata?.model || file.filename || 'Unknown',
+            model: file.fileType === 'audio' ? (file.metadata?.musicTitle || file.filename || file.model || 'Unknown') : (file.model || file.metadata?.model || file.filename || 'Unknown'),
             prompt: file.metadata?.prompt || '',
             parameters: file.metadata?.parameters || {},
             generationTime: file.metadata?.generationTime || 0,
@@ -188,7 +241,10 @@ export function GeneratedImagesPanel({
           tags: file.tags || [],
           size: file.size || 0,
           categoryId: file.categoryId ? String(file.categoryId) : "",
-        } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number; prompt?: string; isShared?: boolean; category?: string; tags?: string[]; size?: number; categoryId?: string };
+          taskId: file.taskId,
+          userId: file.userId,
+          metadata: file.metadata,
+        } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number; prompt?: string; isShared?: boolean; category?: string; tags?: string[]; size?: number; categoryId?: string; taskId?: string; userId?: string; metadata?: any };
       });
   }, [activeShot?.id, projectFiles]);
 
@@ -205,9 +261,9 @@ export function GeneratedImagesPanel({
     filtered = [...filtered].sort((a, b) => {
       switch (filters.sortBy) {
         case 'date':
-          return b.metadata.timestamp.getTime() - a.metadata.timestamp.getTime();
+          return (b.metadata?.timestamp?.getTime?.() ?? 0) - (a.metadata?.timestamp?.getTime?.() ?? 0);
         case 'date-asc':
-          return a.metadata.timestamp.getTime() - b.metadata.timestamp.getTime();
+          return (a.metadata?.timestamp?.getTime?.() ?? 0) - (b.metadata?.timestamp?.getTime?.() ?? 0);
         case 'name':
           return (a.metadata.prompt || '').localeCompare(b.metadata.prompt || '');
         case 'model':
@@ -334,6 +390,10 @@ export function GeneratedImagesPanel({
                       onTagToggle={(tag) => handleTagToggle(image.id, tag)}
                       onShare={handleShare}
                       onUnshare={canUnshare ? handleUnshare : undefined}
+                      taskId={(image as any).taskId}
+                      companyId={companyId}
+                      userId={(image as any).userId}
+                      metadata={(image as any).metadata}
                     />
                   ))}
                 </div>

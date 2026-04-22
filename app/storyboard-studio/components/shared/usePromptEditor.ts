@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 
 /**
  * Shared hook for the ContentEditable prompt editor with drag-and-drop badge system.
@@ -232,34 +232,9 @@ export function usePromptEditor(opts?: {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // Allow all Ctrl/Cmd shortcuts (copy, paste, cut, select all, undo, redo)
     if (e.ctrlKey || e.metaKey) {
-      // Handle Ctrl+V paste — insert plain text only
+      // Handle Ctrl+V paste — insert plain text only (strip HTML formatting)
       if (e.key === 'v') {
-        e.preventDefault();
-        navigator.clipboard.readText().then((text) => {
-          if (!text) return;
-          const el = editorRef.current;
-          if (!el) return;
-          const selection = window.getSelection();
-          if (!selection) return;
-          let range: Range;
-          if (selection.rangeCount > 0) {
-            range = selection.getRangeAt(0);
-          } else {
-            range = document.createRange();
-            range.selectNodeContents(el);
-            range.collapse(false);
-          }
-          if (!range.collapsed) range.deleteContents();
-          const textNode = document.createTextNode(text);
-          range.insertNode(textNode);
-          range.setStartAfter(textNode);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-        }).catch(() => {
-          // Fallback: let browser handle it
-        });
+        // Let the browser handle paste natively via the paste event listener below
         return;
       }
       // Let Ctrl+C, Ctrl+X, Ctrl+A, Ctrl+Z etc. pass through natively
@@ -427,6 +402,37 @@ export function usePromptEditor(opts?: {
   }, [opts]);
 
   // ── Clear editor ───────────────────────────────────────────────────
+  // Handle paste — strip HTML, insert plain text only
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      const text = e.clipboardData?.getData("text/plain") || "";
+      if (!text) return;
+      const selection = window.getSelection();
+      if (!selection) return;
+      let range: Range;
+      if (selection.rangeCount > 0) {
+        range = selection.getRangeAt(0);
+      } else {
+        range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+      }
+      if (!range.collapsed) range.deleteContents();
+      const textNode = document.createTextNode(text);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    el.addEventListener("paste", handlePaste);
+    return () => el.removeEventListener("paste", handlePaste);
+  }, []);
+
   const clear = useCallback(() => {
     const el = editorRef.current;
     if (!el) return;

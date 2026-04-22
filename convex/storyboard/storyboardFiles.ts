@@ -1,6 +1,12 @@
 import { mutation, query, internalMutation } from "../_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
+import {
+  storageByCompany,
+  storageByCategory,
+  storageByFileType,
+  syncFileAggregates,
+} from "./aggregates";
 
 export const logUpload = mutation({
   args: {
@@ -64,8 +70,11 @@ export const logUpload = mutation({
         delete insertData[key];
       }
     });
-    
-    return await ctx.db.insert("storyboard_files", insertData);
+
+    const fileId = await ctx.db.insert("storyboard_files", insertData);
+    const inserted = await ctx.db.get(fileId);
+    if (inserted) await syncFileAggregates(ctx, null, inserted);
+    return fileId;
   },
 });
 
@@ -102,6 +111,9 @@ export const remove = mutation({
       tags: [],
       isFavorite: false,
     });
+
+    const after = await ctx.db.get(id);
+    await syncFileAggregates(ctx, file, after);
   },
 });
 
@@ -169,6 +181,10 @@ export const update = mutation({
     }
 
     await ctx.db.patch(id, updateData);
+
+    const after = await ctx.db.get(id);
+    await syncFileAggregates(ctx, file, after);
+
     return { success: true };
   },
 });
@@ -199,13 +215,15 @@ export const deleteWithR2 = mutation({
   handler: async (ctx, { id }) => {
     const file = await ctx.db.get(id);
     if (!file) throw new Error("File not found");
-    
+
     // TODO: Delete from R2 bucket
     // This would require R2 admin credentials or a separate API route
-    
+
     // Delete from database
     await ctx.db.delete(id);
-    
+
+    await syncFileAggregates(ctx, file, null);
+
     return file.r2Key;
   },
 });
@@ -369,21 +387,24 @@ export const listByUser = query({
 });
 
 export const listByProject = query({
-  args: { 
+  args: {
     projectId: v.id("storyboard_projects"),
     category: v.optional(v.string())
   },
   handler: async (ctx, { projectId, category }) => {
-    const files = await ctx.db
+    if (category) {
+      return await ctx.db
+        .query("storyboard_files")
+        .withIndex("by_category", (q) =>
+          q.eq("projectId", projectId).eq("category", category)
+        )
+        .collect();
+    }
+
+    return await ctx.db
       .query("storyboard_files")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
-    
-    if (category) {
-      return files.filter(file => file.category === category);
-    }
-    
-    return files;
   },
 });
 
@@ -419,6 +440,56 @@ export const getByR2Key = query({
   },
 });
 
+// List completed audio/music files for Extend Music dropdown
+export const listAudioFiles = query({
+  args: {
+    companyId: v.string(),
+    categoryId: v.optional(v.string()),
+  },
+  handler: async (ctx, { companyId, categoryId }) => {
+    const files = await ctx.db
+      .query("storyboard_files")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .collect();
+    return files
+      .filter(f =>
+        f.fileType === "audio" &&
+        f.status === "completed" &&
+        f.metadata?.audioId &&
+        (!categoryId || String(f.categoryId) === categoryId)
+      )
+      .map(f => ({
+        _id: f._id,
+        audioId: (f.metadata as any)?.audioId as string,
+        name: (f.metadata as any)?.musicTitle || f.filename || "Untitled",
+        duration: (f.metadata as any)?.musicDuration,
+        model: f.model,
+        taskId: f.taskId,
+        sourceUrl: f.sourceUrl,
+        prompt: f.prompt,
+        personaCreated: !!(f.metadata as any)?.personaCreated,
+      }))
+      .sort((a, b) => (b.name > a.name ? -1 : 1));
+  },
+});
+
+// Rename a file (also updates metadata.musicTitle for audio files)
+export const renameFile = mutation({
+  args: {
+    fileId: v.id("storyboard_files"),
+    filename: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const file = await ctx.db.get(args.fileId);
+    const updates: any = { filename: args.filename };
+    // Also update musicTitle in metadata for audio files
+    if (file?.metadata) {
+      updates.metadata = { ...file.metadata, musicTitle: args.filename };
+    }
+    await ctx.db.patch(args.fileId, updates);
+  },
+});
+
 // Update file record from KIE AI callback
 export const updateFromCallback = mutation({
   args: {
@@ -432,13 +503,14 @@ export const updateFromCallback = mutation({
     responseCode: v.optional(v.number()),
     responseMessage: v.optional(v.string()),
     creditsUsed: v.optional(v.number()), // Set to 0 after refund
+    fileType: v.optional(v.string()), // Override fileType (e.g. when audio detected from URL)
     // Gallery sharing fields (auto-share for free users)
     isShared: v.optional(v.boolean()),
     sharedAt: v.optional(v.number()),
     sharedBy: v.optional(v.string()),
     aspectRatio: v.optional(v.string()),
   },
-  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size, responseCode, responseMessage, creditsUsed, isShared, sharedAt, sharedBy, aspectRatio }) => {
+  handler: async (ctx, { fileId, sourceUrl, taskId, status, r2Key, metadata, size, responseCode, responseMessage, creditsUsed, fileType, isShared, sharedAt, sharedBy, aspectRatio }) => {
     const updateData: any = { status };
 
     if (sourceUrl) {
@@ -461,6 +533,10 @@ export const updateFromCallback = mutation({
       updateData.size = size;
     }
 
+    if (fileType) {
+      updateData.fileType = fileType;
+    }
+
     if (responseCode !== undefined) {
       updateData.responseCode = responseCode;
     }
@@ -479,7 +555,11 @@ export const updateFromCallback = mutation({
     if (sharedBy !== undefined) updateData.sharedBy = sharedBy;
     if (aspectRatio !== undefined) updateData.aspectRatio = aspectRatio;
 
+    const before = await ctx.db.get(fileId);
     await ctx.db.patch(fileId, updateData);
+    const after = await ctx.db.get(fileId);
+    await syncFileAggregates(ctx, before, after);
+
     return { success: true };
   },
 });
@@ -488,55 +568,62 @@ export const updateFromCallback = mutation({
 // deleted storyboard_credit_usage table. Already run; no longer needed.
 
 // ── Logs: total storage usage by company ─────────────────────────────────
+// Reads from the aggregate component — O(log n) tree walks instead of a
+// full table scan. Aggregates are maintained by syncFileAggregates in each
+// mutation path. If a new category/fileType appears that isn't in the
+// hardcoded list below, its breakdown row is omitted but the total still
+// reflects it via storageByCompany.
+const KNOWN_CATEGORIES = ["uploads", "generated", "elements", "storyboard", "videos", "temps", "other"];
+const KNOWN_FILE_TYPES = ["image", "video", "audio", "other"];
+
 export const getStorageUsage = query({
   args: { companyId: v.string() },
   handler: async (ctx, args) => {
-    const allFiles = await ctx.db
-      .query("storyboard_files")
-      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
-      .collect();
+    const namespace = args.companyId;
 
-    // Exclude deleted files from storage calculation
-    // Shared files excluded — they are gallery content hosted by platform
-    const files = allFiles.filter(f => {
-      if (f.deletedAt || f.status === "deleted") return false;
-      if ((f.size ?? 0) <= 0) return false;
-      if (f.isShared === true) return false;
-      return true;
-    });
+    const [totalFiles, totalSize] = await Promise.all([
+      storageByCompany.count(ctx, { namespace }),
+      storageByCompany.sum(ctx, { namespace }),
+    ]);
 
-    let totalSize = 0;
-    const byCategory: Record<string, { count: number; size: number }> = {};
-    const byFileType: Record<string, { count: number; size: number }> = {};
-
-    for (const file of files) {
-      const size = file.size ?? 0;
-      totalSize += size;
-
-      const cat = file.category || "other";
-      if (!byCategory[cat]) byCategory[cat] = { count: 0, size: 0 };
-      byCategory[cat].count++;
-      byCategory[cat].size += size;
-
-      const ft = file.fileType || "other";
-      if (!byFileType[ft]) byFileType[ft] = { count: 0, size: 0 };
-      byFileType[ft].count++;
-      byFileType[ft].size += size;
-    }
-
-    const categoryStats = Object.entries(byCategory)
-      .map(([category, stats]) => ({ category, ...stats }))
+    const categoryStats = (
+      await Promise.all(
+        KNOWN_CATEGORIES.map(async (category) => {
+          const bounds = { prefix: [category] as [string] };
+          const [count, size] = await Promise.all([
+            storageByCategory.count(ctx, { namespace, bounds }),
+            storageByCategory.sum(ctx, { namespace, bounds }),
+          ]);
+          return { category, count, size };
+        })
+      )
+    )
+      .filter((s) => s.count > 0)
       .sort((a, b) => b.size - a.size);
 
-    const fileTypeStats = Object.entries(byFileType)
-      .map(([fileType, stats]) => ({ fileType, ...stats }))
+    const fileTypeStats = (
+      await Promise.all(
+        KNOWN_FILE_TYPES.map(async (fileType) => {
+          const bounds = { prefix: [fileType] as [string] };
+          const [count, size] = await Promise.all([
+            storageByFileType.count(ctx, { namespace, bounds }),
+            storageByFileType.sum(ctx, { namespace, bounds }),
+          ]);
+          return { fileType, count, size };
+        })
+      )
+    )
+      .filter((s) => s.count > 0)
       .sort((a, b) => b.size - a.size);
 
-    return { totalFiles: files.length, totalSize, categoryStats, fileTypeStats };
+    return { totalFiles, totalSize, categoryStats, fileTypeStats };
   },
 });
 
 // ── Logs: analytics for generated files ──────────────────────────────────
+// Reads from storyboard_generation_daily (maintained by syncGenerationDaily
+// in each generated-file mutation). Bandwidth is bounded by days × models
+// in the window — typically well under 1 KB even for 90-day queries.
 export const getGenerationAnalytics = query({
   args: {
     companyId: v.string(),
@@ -544,61 +631,49 @@ export const getGenerationAnalytics = query({
     toTimestamp: v.number(),
   },
   handler: async (ctx, args) => {
-    const files = await ctx.db
-      .query("storyboard_files")
-      .withIndex("by_companyId_category", (q) =>
-        q.eq("companyId", args.companyId).eq("category", "generated")
-      )
-      .filter((q) =>
-        q.and(
-          q.gte(q.field("createdAt"), args.fromTimestamp),
-          q.lte(q.field("createdAt"), args.toTimestamp)
-        )
+    const fromDate = new Date(args.fromTimestamp).toISOString().split("T")[0];
+    const toDate = new Date(args.toTimestamp).toISOString().split("T")[0];
+
+    const rows = await ctx.db
+      .query("storyboard_generation_daily")
+      .withIndex("by_companyId_date", (q) =>
+        q.eq("companyId", args.companyId).gte("date", fromDate).lte("date", toDate)
       )
       .collect();
 
-    // Aggregate by model
     const byModel: Record<string, { count: number; credits: number; storage: number; success: number; failed: number }> = {};
-    let totalCredits = 0;
+    const byDay: Record<string, { count: number; credits: number }> = {};
+
     let totalGenerations = 0;
+    let totalCredits = 0;
+    let totalStorage = 0;
     let totalSuccess = 0;
     let totalFailed = 0;
-    let totalStorage = 0;
 
-    for (const file of files) {
-      const model = file.model || (file.metadata as any)?.model || (file.metadata as any)?.modelId || "unknown";
-      if (!byModel[model]) {
-        byModel[model] = { count: 0, credits: 0, storage: 0, success: 0, failed: 0 };
+    for (const r of rows) {
+      if (!byModel[r.model]) {
+        byModel[r.model] = { count: 0, credits: 0, storage: 0, success: 0, failed: 0 };
       }
-      byModel[model].count++;
-      byModel[model].credits += file.creditsUsed ?? 0;
-      byModel[model].storage += file.size ?? 0;
-      totalCredits += file.creditsUsed ?? 0;
-      totalStorage += file.size ?? 0;
-      totalGenerations++;
+      byModel[r.model].count += r.count;
+      byModel[r.model].credits += r.credits;
+      byModel[r.model].storage += r.storage;
+      byModel[r.model].success += r.success;
+      byModel[r.model].failed += r.failed;
 
-      if (file.status === "ready" || file.status === "completed") {
-        byModel[model].success++;
-        totalSuccess++;
-      } else if (file.status === "failed" || file.status === "error") {
-        byModel[model].failed++;
-        totalFailed++;
-      }
+      if (!byDay[r.date]) byDay[r.date] = { count: 0, credits: 0 };
+      byDay[r.date].count += r.count;
+      byDay[r.date].credits += r.credits;
+
+      totalGenerations += r.count;
+      totalCredits += r.credits;
+      totalStorage += r.storage;
+      totalSuccess += r.success;
+      totalFailed += r.failed;
     }
 
-    // Sort by count descending
     const modelStats = Object.entries(byModel)
       .map(([model, stats]) => ({ model, ...stats }))
       .sort((a, b) => b.count - a.count);
-
-    // Aggregate by day for chart
-    const byDay: Record<string, { count: number; credits: number }> = {};
-    for (const file of files) {
-      const day = new Date(file.createdAt).toISOString().split("T")[0];
-      if (!byDay[day]) byDay[day] = { count: 0, credits: 0 };
-      byDay[day].count++;
-      byDay[day].credits += file.creditsUsed ?? 0;
-    }
 
     const dailyStats = Object.entries(byDay)
       .map(([date, stats]) => ({ date, ...stats }))
@@ -624,36 +699,23 @@ export const listGenerationLogs = query({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    // Query only "generated" category (combine files don't use credits/AI keys)
-    const generatedFiles = await ctx.db
+    // Native paginate on by_companyId_category — avoids loading entire
+    // generated-files history into memory. Status applied as server-side filter.
+    const baseQuery = ctx.db
       .query("storyboard_files")
       .withIndex("by_companyId_category", (q) =>
         q.eq("companyId", args.companyId).eq("category", "generated")
-      )
-      .collect();
+      );
 
-    let allFiles = generatedFiles
-      .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+    const filteredQuery = args.status
+      ? baseQuery.filter((q) => q.eq(q.field("status"), args.status))
+      : baseQuery;
 
-    // Filter by status if specified
-    if (args.status) {
-      allFiles = allFiles.filter(f => f.status === args.status);
-    }
+    const results = await filteredQuery.order("desc").paginate(args.paginationOpts);
 
-    // Manual pagination
-    const cursor = args.paginationOpts.cursor;
-    const numItems = args.paginationOpts.numItems;
-    let startIndex = 0;
-    if (cursor) {
-      const cursorIndex = allFiles.findIndex(f => f._id === cursor);
-      if (cursorIndex >= 0) startIndex = cursorIndex + 1;
-    }
-    const page = allFiles.slice(startIndex, startIndex + numItems);
-    const isDone = startIndex + numItems >= allFiles.length;
-
-    // Resolve defaultAI references to get key names
+    // Resolve defaultAI references to get key names (only for this page)
     const enriched = await Promise.all(
-      page.map(async (file) => {
+      results.page.map(async (file) => {
         let aiKeyName: string | null = null;
         if (file.defaultAI) {
           const aiKey = await ctx.db.get(file.defaultAI);
@@ -663,11 +725,7 @@ export const listGenerationLogs = query({
       })
     );
 
-    return {
-      page: enriched,
-      isDone,
-      continueCursor: isDone ? null : (page[page.length - 1]?._id ?? null),
-    };
+    return { ...results, page: enriched };
   },
 });
 

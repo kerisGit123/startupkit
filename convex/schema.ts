@@ -1950,6 +1950,52 @@ export default defineSchema({
     .index("by_isShared", ["isShared", "sharedAt"]) // Gallery listing sorted by share date
     .index("by_isShared_model", ["isShared", "model"]), // Gallery filter by model
 
+  // ============================================
+  // STORYBOARD STUDIO: Creator stats (materialized for top-creators gallery)
+  // ============================================
+  // Denormalized shared-file count per company. Maintained by triggers in
+  // gallery.ts share/unshare paths. Used by getTopCreators to avoid scanning
+  // the entire storyboard_files table for a simple top-N ranking.
+  storyboard_creator_stats: defineTable({
+    companyId: v.string(),
+    sharedCount: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_sharedCount", ["sharedCount"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Shared-model catalog (for gallery filter dropdown)
+  // ============================================
+  // Distinct list of AI models that appear in the public gallery. One row
+  // per model string with a reference count. Maintained by syncFileAggregates
+  // on share/unshare transitions.
+  storyboard_shared_models: defineTable({
+    model: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  }).index("by_model", ["model"]),
+
+  // ============================================
+  // STORYBOARD STUDIO: Daily generation rollup (for analytics dashboard)
+  // ============================================
+  // One row per (companyId, date, model). Maintained by syncGenerationDaily
+  // in each generated-file mutation. Replaces the full-table scan in
+  // getGenerationAnalytics.
+  storyboard_generation_daily: defineTable({
+    companyId: v.string(),
+    date: v.string(),    // YYYY-MM-DD UTC — index-sortable string
+    model: v.string(),   // "unknown" when not set on the file
+    count: v.number(),
+    credits: v.number(),
+    storage: v.number(),
+    success: v.number(),
+    failed: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_companyId_date", ["companyId", "date"])
+    .index("by_companyId_date_model", ["companyId", "date", "model"]),
+
 
   // ============================================
   // STORYBOARD STUDIO: Personas (AI voice profiles for music generation)
@@ -2133,4 +2179,52 @@ export default defineSchema({
   })
     .index("by_default", ["isDefault"])
     .index("by_name", ["name"]),
+
+  // ============================================
+  // SUPPORT CHAT: Haiku-powered chatbot sessions
+  // ============================================
+  support_chat_sessions: defineTable({
+    userId: v.optional(v.string()),       // Clerk userId (absent for anon)
+    orgId: v.optional(v.string()),        // Active Clerk org when session started
+    variant: v.union(                     // Where the widget was opened
+      v.literal("landing"),
+      v.literal("studio")
+    ),
+    title: v.optional(v.string()),        // Auto-derived from first user message
+    messageCount: v.number(),
+    totalTokensIn: v.number(),
+    totalTokensOut: v.number(),
+    createdAt: v.number(),
+    lastMessageAt: v.number(),
+  })
+    .index("by_userId", ["userId", "lastMessageAt"])
+    .index("by_createdAt", ["createdAt"]),
+
+  support_chat_messages: defineTable({
+    sessionId: v.id("support_chat_sessions"),
+    role: v.union(
+      v.literal("user"),
+      v.literal("assistant"),
+      v.literal("tool")
+    ),
+    content: v.string(),                  // Rendered text (assistant output, user input, or tool summary)
+    toolCalls: v.optional(v.array(v.object({
+      toolName: v.string(),
+      toolUseId: v.string(),
+      input: v.string(),                  // JSON-stringified input
+      output: v.optional(v.string()),     // JSON-stringified result
+      isError: v.optional(v.boolean()),
+    }))),
+    tokensIn: v.optional(v.number()),
+    tokensOut: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_sessionId", ["sessionId", "createdAt"]),
+
+  support_chat_rate_limits: defineTable({
+    key: v.string(),                      // "user:<userId>" or "ip:<ip>"
+    count: v.number(),
+    windowStart: v.number(),              // ms timestamp of current hour window
+  })
+    .index("by_key", ["key"]),
 });

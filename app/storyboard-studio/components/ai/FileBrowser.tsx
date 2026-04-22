@@ -21,6 +21,9 @@ import {
   Grid3x3,
   Volume2,
   Plus,
+  Play,
+  Pause,
+  Pencil,
 } from "lucide-react";
 import { uploadToR2, deleteFromR2, batchDeleteFromR2 } from "@/lib/uploadToR2";
 import { useMutation } from "convex/react";
@@ -161,6 +164,12 @@ export function FileBrowser({
   const [deletingId, setDeletingId]           = useState<string | null>(null);
   const [pendingDeleteFile, setPendingDeleteFile] = useState<any>(null);
   const [error, setError]                     = useState<string | null>(null);
+  const [playingAudioId, setPlayingAudioId]   = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement>(null);
+  const [renamingId, setRenamingId]           = useState<string | null>(null);
+  const [renameValue, setRenameValue]         = useState("");
+  const renameFileMutation = useMutation(api.storyboard.storyboardFiles.renameFile);
+  const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; file: any } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -512,6 +521,9 @@ export function FileBrowser({
         <div className="h-px bg-(--border-primary)" />
 
         {/* ── Content ── */}
+        {/* Hidden audio element for preview playback */}
+        <audio ref={previewAudioRef} style={{ display: "none" }} preload="none" />
+
         <div className="flex-1 overflow-y-auto p-6">
           {error ? (
             <ErrorDisplay error={error} onRetry={() => { setError(null); setRefreshKey((k) => k + 1); }} />
@@ -564,6 +576,7 @@ export function FileBrowser({
                               className="w-full rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 hover:border-blue-500 hover:shadow-xl"
                               style={{ height: `${viewSize}px`, borderColor: "var(--border-primary)" }}
                               onClick={() => onSelectFile?.(publicUrl, file.fileType)}
+                              onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setFileContextMenu({ x: e.clientX, y: e.clientY, file }); }}
                             >
                               {isImage ? (
                                 <img src={publicUrl} alt={file.filename} loading="lazy" className="w-full h-full object-cover rounded-2xl" />
@@ -581,6 +594,48 @@ export function FileBrowser({
                                   }}
                                   onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                                 />
+                              ) : file.fileType === "audio" ? (
+                                <div className="w-full h-full flex flex-col items-center justify-center rounded-2xl gap-2 relative" style={{ backgroundColor: "var(--bg-secondary)" }}>
+                                  <Volume2 className="w-8 h-8 opacity-60" style={{ color: "var(--text-tertiary)" }} />
+                                  {/* Play/Pause overlay on hover */}
+                                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const audio = previewAudioRef.current;
+                                        if (!audio) return;
+                                        if (playingAudioId === String(file._id)) {
+                                          audio.pause();
+                                          setPlayingAudioId(null);
+                                        } else {
+                                          audio.src = publicUrl;
+                                          audio.play().catch(() => {});
+                                          setPlayingAudioId(String(file._id));
+                                          audio.onended = () => setPlayingAudioId(null);
+                                        }
+                                      }}
+                                      className="w-10 h-10 rounded-full bg-purple-500/90 hover:bg-purple-400 flex items-center justify-center shadow-lg transition"
+                                    >
+                                      {playingAudioId === String(file._id)
+                                        ? <Pause className="w-4 h-4 text-white" />
+                                        : <Play className="w-4 h-4 text-white ml-0.5" />
+                                      }
+                                    </button>
+                                  </div>
+                                  {/* Playing indicator */}
+                                  {playingAudioId === String(file._id) && (
+                                    <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1">
+                                      <div className="flex items-end gap-0.5 h-3">
+                                        <div className="w-0.5 bg-purple-400 animate-pulse rounded-full" style={{ height: '40%', animationDelay: '0ms' }} />
+                                        <div className="w-0.5 bg-purple-400 animate-pulse rounded-full" style={{ height: '80%', animationDelay: '150ms' }} />
+                                        <div className="w-0.5 bg-purple-400 animate-pulse rounded-full" style={{ height: '60%', animationDelay: '300ms' }} />
+                                        <div className="w-0.5 bg-purple-400 animate-pulse rounded-full" style={{ height: '90%', animationDelay: '100ms' }} />
+                                      </div>
+                                      <span className="text-[9px] text-purple-400">Playing</span>
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center rounded-2xl gap-2" style={{ backgroundColor: "var(--bg-secondary)" }}>
                                   <Icon className="w-8 h-8 opacity-60" style={{ color: "var(--text-tertiary)" }} />
@@ -638,19 +693,19 @@ export function FileBrowser({
 
                             {/* File info */}
                             <div className="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/80 to-transparent px-3 py-2">
-                              <div className="flex items-center gap-2">
+                              <p className="text-xs text-white truncate font-medium mb-1">{file.metadata?.musicTitle || file.filename}</p>
+                              <div className="flex items-center gap-1.5">
                                 {file.projectId
-                                  ? <span className="text-[10px] px-1.5 py-0.5 bg-(--accent-blue)/20 text-(--accent-blue) rounded-md font-medium">Project</span>
-                                  : <span className="text-[10px] px-1.5 py-0.5 bg-(--accent-teal)/20 text-(--accent-teal) rounded-md font-medium">Global</span>
+                                  ? <span className="text-[9px] px-1.5 py-0.5 bg-(--accent-blue)/20 text-(--accent-blue) rounded-md font-medium">Project</span>
+                                  : <span className="text-[9px] px-1.5 py-0.5 bg-(--accent-teal)/20 text-(--accent-teal) rounded-md font-medium">Global</span>
                                 }
-                                {/* File extension */}
                                 {(() => {
                                   const ext = file.filename.split('.').pop()?.toUpperCase();
                                   return ext ? (
-                                    <span className="text-[9px] px-1 py-0.5 bg-white/10 text-gray-300 rounded font-mono">{ext}</span>
+                                    <span className="text-[8px] px-1 py-0.5 bg-white/10 text-gray-300 rounded font-mono">{ext}</span>
                                   ) : null;
                                 })()}
-                                <p className="text-xs text-white truncate flex-1 font-medium">{file.filename}</p>
+                                <span className="text-[8px] text-gray-500 truncate">{file.filename}</span>
                               </div>
                             </div>
                           </div>
@@ -691,6 +746,66 @@ export function FileBrowser({
       </div>
 
       {/* Delete Confirmation Dialog */}
+      {/* File Context Menu */}
+      {fileContextMenu && (
+        <>
+          <div className="fixed inset-0" style={{ zIndex: 99998 }} onClick={() => setFileContextMenu(null)} />
+          <div className="fixed bg-[#1e1e28] border border-[#3D3D3D] rounded-xl shadow-2xl shadow-black/60 overflow-hidden py-1 min-w-[160px]"
+            style={{ left: fileContextMenu.x, top: fileContextMenu.y, zIndex: 99999 }}>
+            <button onClick={() => { setRenamingId(String(fileContextMenu.file._id)); setRenameValue(fileContextMenu.file.filename); setFileContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white hover:bg-[#2a2a35] transition-colors">
+              <Pencil className="w-3.5 h-3.5" /> Rename
+            </button>
+            <button onClick={() => { handleFileAction("download", fileContextMenu.file); setFileContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white hover:bg-[#2a2a35] transition-colors">
+              <Download className="w-3.5 h-3.5" /> Download
+            </button>
+            <div className="mx-2 my-1 border-t border-[#3D3D3D]" />
+            <button onClick={() => { handleFileAction("delete", fileContextMenu.file); setFileContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-[#2a2a35] transition-colors">
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Rename Dialog */}
+      {renamingId && (
+        <>
+          <div className="fixed inset-0 bg-black/60" style={{ zIndex: 99999 }} onClick={() => setRenamingId(null)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl p-5 w-[360px] shadow-2xl" style={{ zIndex: 100000 }}
+            onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-white font-medium text-sm mb-3">Rename File</h3>
+            <input
+              type="text"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameValue.trim()) {
+                  renameFileMutation({ fileId: renamingId as any, filename: renameValue.trim() })
+                    .then(() => { toast.success("Renamed!"); setRenamingId(null); })
+                    .catch(() => toast.error("Failed to rename"));
+                } else if (e.key === "Escape") { setRenamingId(null); }
+              }}
+              autoFocus
+              className="w-full px-3 py-2 bg-[#141418] border border-[#2A2A32] rounded-lg text-sm text-white outline-none focus:border-purple-500/50 transition"
+            />
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <button onClick={() => setRenamingId(null)} className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition">Cancel</button>
+              <button onClick={() => {
+                if (renameValue.trim()) {
+                  renameFileMutation({ fileId: renamingId as any, filename: renameValue.trim() })
+                    .then(() => { toast.success("Renamed!"); setRenamingId(null); })
+                    .catch(() => toast.error("Failed to rename"));
+                }
+              }} className="px-4 py-1.5 bg-purple-500 hover:bg-purple-400 text-white text-sm font-medium rounded-lg transition">
+                Save
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       <ConfirmDialog
         isOpen={!!pendingDeleteFile}
         onCancel={() => setPendingDeleteFile(null)}

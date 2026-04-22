@@ -19,8 +19,8 @@ export async function resolveKieApiKey(companyId?: string): Promise<{ apiKey: st
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
     const { api } = await import("../../convex/_generated/api");
 
-    // Step 1: Get org_settings for this company
-    const settings = await convex.query(api.settings.getSettings, { companyId });
+    // Step 1: Get defaultAI from org_settings (public query, no auth needed)
+    const settings = await convex.query(api.settings.getDefaultAI, { companyId });
 
     if (settings?.defaultAI) {
       // Step 2: Fetch the KIE AI key record

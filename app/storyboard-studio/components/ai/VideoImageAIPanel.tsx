@@ -8,7 +8,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -25,6 +25,9 @@ import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
 import PromptLibrary from "./PromptLibrary";
 import { FileBrowser } from "./FileBrowser";
+import { AudioPreviewDialog } from "../shared/AudioPreviewDialog";
+import { CreatePersonaDialog } from "../GeneratedImagesPanel/CreatePersonaDialog";
+import { ManagePersonaDialog } from "../shared/ManagePersonaDialog";
 import { ElementLibrary } from "./ElementLibrary";
 
 // Constants for mention system
@@ -67,6 +70,7 @@ export interface ImageAIPanelProps {
   isGenerating?: boolean;
   userPrompt?: string;
   onUserPromptChange?: (prompt: string) => void;
+  activeShotId?: string; // Active shot/item ID for filtering generated files
   activeShotDescription?: string; // NEW: For loading storyboard item description
   activeShotImagePrompt?: string; // NEW: For loading storyboard item image prompt
   activeShotVideoPrompt?: string; // NEW: For loading storyboard item video prompt
@@ -174,6 +178,7 @@ export function ImageAIPanel({
   isGenerating = false,
   userPrompt = "",
   onUserPromptChange,
+  activeShotId,
   activeShotDescription,
   activeShotImagePrompt,
   activeShotVideoPrompt,
@@ -247,6 +252,9 @@ export function ImageAIPanel({
     companyId: companyId
   });
   const projectData = useQuery(api.storyboard.projects.get, projectId ? { id: projectId } : "skip");
+  const savedPersonas = useQuery(api.storyboard.personas.list, { companyId });
+  const renameFileMutation = useMutation(api.storyboard.storyboardFiles.renameFile);
+  const audioFiles = useQuery(api.storyboard.storyboardFiles.listAudioFiles, { companyId, categoryId: activeShotId });
   const { getModelCredits } = usePricingData();
   
   // Debug: Log when company ID changes and getBalance result
@@ -348,6 +356,9 @@ export function ImageAIPanel({
     { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • MP4, MOV, WEBM, M4V, GIF", icon: ArrowUp, maxReferenceImages: 0 },
     { value: "infinitalk/from-audio", label: "InfiniteTalk", sub: "Lip sync • image + audio • 480p/720p", icon: Mic, maxReferenceImages: 1 },
     { value: "ai-music-api/generate", label: "AI Music", sub: "Generate music • up to 4min", icon: Music, maxReferenceImages: 0 },
+    { value: "ai-music-api/upload-cover", label: "Cover Song", sub: "Re-sing with persona • upload audio", icon: Music, maxReferenceImages: 0 },
+    { value: "ai-music-api/extend", label: "Extend Music", sub: "Make songs longer • from timestamp", icon: Music, maxReferenceImages: 0 },
+    { value: "ai-music-api/generate-persona", label: "Create Persona", sub: "Extract voice • free", icon: Mic, maxReferenceImages: 0 },
   ];
   // Combine all models for the consolidated dropdown
   const allModelOptions = [...inpaintModelOptions, ...videoModelOptions];
@@ -431,9 +442,34 @@ export function ImageAIPanel({
   const [musicInstrumental, setMusicInstrumental] = useState(true); // Music: instrumental only (no vocals)
   const [musicStyle, setMusicStyle] = useState(""); // Music: genre/style tag
   const [musicVocalGender, setMusicVocalGender] = useState<"m" | "f">("f"); // Music: vocal gender
-  const [musicModel, setMusicModel] = useState<"V4" | "V5">("V4"); // Music: model version
+  const [musicModel, setMusicModel] = useState<string>("V4"); // Music: model version
   const [musicNegativeTags, setMusicNegativeTags] = useState(""); // Music: styles to exclude
+  const [musicTitle, setMusicTitle] = useState(""); // Music: song title (required in custom mode)
+  const [selectedPersonaId, setSelectedPersonaId] = useState<string>(""); // Music: selected persona for Generate/Cover/Extend
+  const [musicCoverAudioUrl, setMusicCoverAudioUrl] = useState<string>(""); // Cover: uploaded audio URL
+  const [coverCustomMode, setCoverCustomMode] = useState(true); // Cover: custom mode toggle
+  const [coverStyleWeight, setCoverStyleWeight] = useState(0.5); // Cover: style weight 0-1
+  const [coverWeirdnessConstraint, setCoverWeirdnessConstraint] = useState(0.5); // Cover: weirdness constraint 0-1
+  const [coverAudioWeight, setCoverAudioWeight] = useState(0.5); // Cover: audio weight 0-1
+  const [musicExtendAudioId, setMusicExtendAudioId] = useState<string>(""); // Extend: audioId of song to extend
+  const [musicExtendContinueAt, setMusicExtendContinueAt] = useState<number>(60); // Extend: timestamp to continue from
+  const [personaName, setPersonaName] = useState(""); // Create Persona: name
+  const [personaDescription, setPersonaDescription] = useState(""); // Create Persona: description
+  const [personaSourceAudioId, setPersonaSourceAudioId] = useState(""); // Create Persona: audioId from generated song
+  const [personaSourceTaskId, setPersonaSourceTaskId] = useState(""); // Create Persona: taskId from generated song
   const [showMusicStyleDropdown, setShowMusicStyleDropdown] = useState(false); // Music: style dropdown
+  const [showPersonaDropdown, setShowPersonaDropdown] = useState(false); // Music: persona dropdown
+  const [showCoverAdvanced, setShowCoverAdvanced] = useState(false); // Cover: advanced options toggle
+  const [showModelVersionDropdown, setShowModelVersionDropdown] = useState(false); // Music: model version dropdown
+  // showCoverAdvanced is now shared for all music models (generate/cover/extend)
+  const [showExtendAudioDropdown, setShowExtendAudioDropdown] = useState(false); // Extend: audio file selector
+  // extendDefaultParam removed — now using shared coverCustomMode for all music models
+  const [extendPreviewPlaying, setExtendPreviewPlaying] = useState<string | null>(null); // Extend: playing audio preview
+  // extendPreviewPopup uses mediaPreview state (shared)
+  const [personaSourceSong, setPersonaSourceSong] = useState<{ audioId: string; taskId: string; sourceUrl: string; name: string; fileId: string } | null>(null);
+  const [showPersonaCreateDialog, setShowPersonaCreateDialog] = useState(false);
+  const [showManagePersona, setShowManagePersona] = useState(false);
+  const extendPreviewAudioRef = React.useRef<HTMLAudioElement>(null);
   const [klingOrientation, setKlingOrientation] = useState<"image" | "video">("video"); // Kling: default video orient
   const [klingSource, setKlingSource] = useState<"input_video" | "input_image">("input_video"); // Kling: background source
   const [firstFrameUrl, setFirstFrameUrl] = useState<string | null>(null); // Seedance 2.0: first frame
@@ -441,7 +477,7 @@ export function ImageAIPanel({
   const [showFirstFrameBrowser, setShowFirstFrameBrowser] = useState(false);
   const [showLastFrameBrowser, setShowLastFrameBrowser] = useState(false);
   // Media preview popup
-  const [mediaPreview, setMediaPreview] = useState<{ type: 'video' | 'audio'; url: string; label: string } | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{ type: 'video' | 'audio'; url: string; label: string; prompt?: string; fileId?: string } | null>(null);
   // Video references: Kling (1 video), Seedance 2.0 (max 3 videos, total ≤15s)
   const [videoRefs, setVideoRefs] = useState<Array<{ url: string; duration: number }>>([]);
   const [showVideoBrowser, setShowVideoBrowser] = useState(false);
@@ -595,6 +631,18 @@ export function ImageAIPanel({
         const musicCredits = getModelCredits("ai-music-api/generate", "fixed");
         return musicCredits > 0 ? musicCredits : 15;
       })()
+    : selectedModelOption.value === "ai-music-api/upload-cover"
+    ? (() => {
+        const coverCredits = getModelCredits("ai-music-api/upload-cover", "fixed");
+        return coverCredits > 0 ? coverCredits : 15;
+      })()
+    : selectedModelOption.value === "ai-music-api/extend"
+    ? (() => {
+        const extendCredits = getModelCredits("ai-music-api/extend", "fixed");
+        return extendCredits > 0 ? extendCredits : 15;
+      })()
+    : selectedModelOption.value === "ai-music-api/generate-persona"
+    ? 0 // Free
     : selectedModelOption.value === "z-image"
     ? (() => {
         const credits = getModelCredits("z-image", "fixed");
@@ -1588,7 +1636,7 @@ export function ImageAIPanel({
 
       if (onGenerate) {
         const isSeedance2 = selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast";
-        const qualityParam = outputMode === "video"
+        const qualityParam = (outputMode === "video" || outputMode === "music")
           ? isSeedance2
             ? (() => {
                 const outputDur = parseInt(videoDuration.replace('s', '')) || 5;
@@ -1604,7 +1652,13 @@ export function ImageAIPanel({
             : selectedModelOption.value === "infinitalk/from-audio"
             ? `${infinitalkResolution}_${audioRefs.length > 0 ? audioRefs[0].duration : parseInt(videoDuration.replace('s', '')) || 5}s`
             : selectedModelOption.value === "ai-music-api/generate"
-            ? `music_${musicInstrumental ? 'instrumental' : 'vocal'}_${musicStyle || 'any'}_${musicModel}_${musicInstrumental ? 'none' : musicVocalGender}`
+            ? JSON.stringify({ type: 'music', instrumental: musicInstrumental, style: musicStyle, model: musicModel, vocalGender: musicInstrumental ? undefined : musicVocalGender, personaId: selectedPersonaId || undefined, customMode: coverCustomMode, title: musicTitle || undefined, negativeTags: musicNegativeTags || undefined, styleWeight: coverStyleWeight, weirdnessConstraint: coverWeirdnessConstraint, audioWeight: coverAudioWeight })
+            : selectedModelOption.value === "ai-music-api/upload-cover"
+            ? JSON.stringify({ type: 'cover', instrumental: musicInstrumental, style: musicStyle, model: musicModel, vocalGender: musicInstrumental ? undefined : musicVocalGender, personaId: selectedPersonaId || undefined, customMode: coverCustomMode, title: musicTitle || undefined, negativeTags: musicNegativeTags || undefined, styleWeight: coverStyleWeight, weirdnessConstraint: coverWeirdnessConstraint, audioWeight: coverAudioWeight })
+            : selectedModelOption.value === "ai-music-api/extend"
+            ? JSON.stringify({ type: 'extend', continueAt: musicExtendContinueAt, model: musicModel, personaId: selectedPersonaId || undefined, customMode: coverCustomMode, style: musicStyle || undefined, title: musicTitle || undefined, vocalGender: musicInstrumental ? undefined : musicVocalGender, negativeTags: musicNegativeTags || undefined, styleWeight: coverStyleWeight, weirdnessConstraint: coverWeirdnessConstraint, audioWeight: coverAudioWeight })
+            : selectedModelOption.value === "ai-music-api/generate-persona"
+            ? `persona_free`
             : `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}`
           : resolution;
         
@@ -1625,7 +1679,11 @@ export function ImageAIPanel({
           : isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase") ? videoRefs.map(v => v.url)
           : undefined;
         const isInfinitalk = selectedModelOption.value === "infinitalk/from-audio";
-        const audioUrlsParam = (isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "lipsync")) || isInfinitalk ? audioRefs.map(a => a.url) : undefined;
+        const isCoverSong = selectedModelOption.value === "ai-music-api/upload-cover";
+        const isExtendMusic = selectedModelOption.value === "ai-music-api/extend";
+        const audioUrlsParam = (isSeedance2 && (seedanceMode === "multimodal" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "lipsync")) || isInfinitalk || isCoverSong ? audioRefs.map(a => a.url)
+          : isExtendMusic && musicExtendAudioId ? [musicExtendAudioId] // Pass audioId as first element for extend
+          : undefined;
         // Lipsync sends as multimodal (first_frame_url + audio is invalid — they're mutually exclusive)
         // Character image goes into referenceImages, audio into audioUrls
         const seedanceModeParam = isSeedance2 ? (seedanceMode === "lipsync" ? "multimodal" : seedanceMode) : undefined;
@@ -1839,8 +1897,167 @@ export function ImageAIPanel({
           </div>
         )}
 
+        {/* Create Persona — song selector */}
+        {selectedModelOption.value === "ai-music-api/generate-persona" && (
+          <div className="mb-[0px]">
+            <div className="px-0 py-0">
+              <div className="flex items-start gap-2.5">
+                {personaSourceSong ? (
+                  <div className="relative group flex-shrink-0">
+                    <div className="w-16 h-16 rounded-md border border-purple-500/30 bg-[#1a1a24] flex flex-col items-center justify-center cursor-pointer"
+                      onClick={() => setMediaPreview({ type: 'audio', url: personaSourceSong.sourceUrl, label: personaSourceSong.name, fileId: personaSourceSong.fileId })}
+                    >
+                      <Mic className="w-5 h-5 text-purple-400" />
+                      <span className="text-[9px] text-purple-300 mt-0.5 truncate max-w-[56px]">{personaSourceSong.name}</span>
+                    </div>
+                    <button onClick={() => setPersonaSourceSong(null)}
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20">
+                      <X className="w-2 h-2 text-white" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowExtendAudioDropdown(!showExtendAudioDropdown)}
+                      className="w-16 h-16 rounded-md border border-dashed border-purple-800/50 hover:border-purple-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-purple-900/10"
+                      title="Select a generated song"
+                    >
+                      <Music className="w-4 h-4 text-purple-600 group-hover:text-purple-400" />
+                      <span className="text-[9px] text-purple-600 group-hover:text-purple-400">Song</span>
+                    </button>
+                    {showExtendAudioDropdown && (
+                      <div className="absolute bottom-full left-0 mb-1 w-[280px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-56 overflow-y-auto">
+                        <audio ref={extendPreviewAudioRef} style={{ display: "none" }} preload="none" onEnded={() => setExtendPreviewPlaying(null)} />
+                        {audioFiles && audioFiles.length > 0 ? (
+                          audioFiles.map((af) => (
+                            <div key={af.audioId} className={`flex items-center gap-2 px-2 py-1.5 transition-colors ${af.personaCreated ? 'opacity-50' : 'hover:bg-[#1E1E24]'}`}>
+                              <button onClick={(e) => { e.stopPropagation(); const audio = extendPreviewAudioRef.current; if (!audio || !af.sourceUrl) return; if (extendPreviewPlaying === af.audioId) { audio.pause(); setExtendPreviewPlaying(null); } else { audio.src = af.sourceUrl; audio.play().catch(() => {}); setExtendPreviewPlaying(af.audioId); } }}
+                                className="w-6 h-6 rounded-full bg-purple-500/20 hover:bg-purple-500/40 flex items-center justify-center flex-shrink-0 transition">
+                                {extendPreviewPlaying === af.audioId ? <Pause className="w-3 h-3 text-purple-400" /> : <Play className="w-3 h-3 text-purple-400 ml-0.5" />}
+                              </button>
+                              <button onClick={() => {
+                                if (af.personaCreated) { toast.warning("This audio already has a persona created"); return; }
+                                if (!af.sourceUrl || !af.taskId) return;
+                                setPersonaSourceSong({ audioId: af.audioId, taskId: af.taskId, sourceUrl: af.sourceUrl, name: af.name, fileId: String(af._id) });
+                                if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); }
+                                setShowExtendAudioDropdown(false);
+                              }} className={`flex-1 text-left text-[12px] truncate ${af.personaCreated ? 'text-gray-500' : 'text-[#EAEAEA]'}`}>
+                                {af.name}
+                                {af.personaCreated && <span className="text-[9px] text-amber-500 ml-1">✓ Persona</span>}
+                              </button>
+                              {af.sourceUrl && (
+                                <button onClick={(e) => { e.stopPropagation(); if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); } setMediaPreview({ type: 'audio', url: af.sourceUrl!, label: af.name, prompt: af.prompt, fileId: String(af._id) }); }}
+                                  className="w-5 h-5 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/10 flex-shrink-0 transition" title="Open full player">
+                                  <Maximize2 className="w-3 h-3" />
+                                </button>
+                              )}
+                              {af.duration && <span className="text-[10px] text-gray-600 flex-shrink-0">{Math.round(af.duration)}s</span>}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-[11px] text-gray-600">No completed songs — generate music first</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="self-center">
+                  <span className="text-[11px] text-gray-500">Select a generated song to extract voice from</span>
+                  <br /><span className="text-[10px] text-gray-600">The persona captures the singing voice for reuse</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cover Song — audio upload area */}
+        {selectedModelOption.value === "ai-music-api/upload-cover" && (
+          <div className="mb-[0px]">
+            <div className="px-0 py-0">
+              <div className="flex items-start gap-2.5">
+                {/* Audio Slot */}
+                <div className="relative flex-shrink-0">
+                  {audioRefs.length > 0 ? (
+                    <div className="relative group">
+                      <div className="w-16 h-16 rounded-md border border-amber-500/30 bg-[#1a1a24] flex flex-col items-center justify-center cursor-pointer"
+                        onClick={() => setMediaPreview({ type: 'audio', url: audioRefs[0].url, label: 'Cover Audio' })}
+                      >
+                        <Music className="w-5 h-5 text-amber-400" />
+                        {audioRefs[0].duration > 0 && (
+                          <span className="text-[10px] text-amber-300 mt-0.5">{audioRefs[0].duration}s</span>
+                        )}
+                      </div>
+                      <div className="absolute top-1 left-1 bg-amber-600 text-white text-[7px] px-1 py-0.5 rounded-full z-20 font-medium">Audio</div>
+                      <button
+                        onClick={() => setAudioRefs([])}
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2 h-2 text-white" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setShowAudioBrowser(true)}
+                        className="w-16 h-16 rounded-md border border-dashed border-amber-800/50 hover:border-amber-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-amber-900/10"
+                        title="Browse files to upload"
+                      >
+                        <Music className="w-4 h-4 text-amber-600 group-hover:text-amber-400" />
+                        <span className="text-[9px] text-amber-600 group-hover:text-amber-400">Browse</span>
+                      </button>
+                      {/* Pick from generated songs */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowExtendAudioDropdown(!showExtendAudioDropdown)}
+                          className="w-16 h-16 rounded-md border border-dashed border-purple-800/50 hover:border-purple-700/70 flex flex-col items-center justify-center gap-0.5 group transition-colors bg-purple-900/10"
+                          title="Pick from generated songs"
+                        >
+                          <Music className="w-4 h-4 text-purple-600 group-hover:text-purple-400" />
+                          <span className="text-[9px] text-purple-600 group-hover:text-purple-400">Songs</span>
+                        </button>
+                        {showExtendAudioDropdown && (
+                          <div className="absolute top-full left-0 mt-1 w-[260px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-48 overflow-y-auto">
+                            <audio ref={extendPreviewAudioRef} style={{ display: "none" }} preload="none" onEnded={() => setExtendPreviewPlaying(null)} />
+                            {audioFiles && audioFiles.length > 0 ? (
+                              audioFiles.map((af) => (
+                                <div key={af.audioId} className="flex items-center gap-2 px-2 py-1.5 hover:bg-[#1E1E24] transition-colors">
+                                  <button onClick={(e) => { e.stopPropagation(); const audio = extendPreviewAudioRef.current; if (!audio || !af.sourceUrl) return; if (extendPreviewPlaying === af.audioId) { audio.pause(); setExtendPreviewPlaying(null); } else { audio.src = af.sourceUrl; audio.play().catch(() => {}); setExtendPreviewPlaying(af.audioId); } }}
+                                    className="w-6 h-6 rounded-full bg-purple-500/20 hover:bg-purple-500/40 flex items-center justify-center flex-shrink-0 transition">
+                                    {extendPreviewPlaying === af.audioId ? <Pause className="w-3 h-3 text-purple-400" /> : <Play className="w-3 h-3 text-purple-400 ml-0.5" />}
+                                  </button>
+                                  <button onClick={async () => {
+                                    if (!af.sourceUrl) return;
+                                    const dur = af.duration || await new Promise<number>(r => { const a = new Audio(af.sourceUrl!); a.onloadedmetadata = () => r(a.duration); a.onerror = () => r(0); setTimeout(() => r(0), 3000); });
+                                    setAudioRefs([{ url: af.sourceUrl, duration: Math.round(dur) }]);
+                                    if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); }
+                                    setShowExtendAudioDropdown(false);
+                                  }} className="flex-1 text-left text-[12px] text-[#EAEAEA] truncate">{af.name}</button>
+                                  {af.sourceUrl && (
+                                    <button onClick={(e) => { e.stopPropagation(); if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); } setMediaPreview({ type: 'audio', url: af.sourceUrl!, label: af.name, prompt: af.prompt, fileId: String(af._id) }); }}
+                                      className="w-5 h-5 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/10 flex-shrink-0 transition" title="Open full player">
+                                      <Maximize2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                  {af.duration && <span className="text-[10px] text-gray-600 flex-shrink-0">{Math.round(af.duration)}s</span>}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="px-3 py-2 text-[11px] text-gray-600">No completed songs in this shot</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <span className="text-[11px] text-gray-500 self-center">Upload audio or pick from generated songs<br /><span className="text-gray-600">MP3, WAV, OGG, M4A, FLAC, AAC (Max 200MB)</span></span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Reference Images Panel — hidden for text-only models like z-image and Topaz Video Upscale (video-only) */}
-        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && (
+        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && (
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
@@ -2347,8 +2564,164 @@ export function ImageAIPanel({
 
         {/* Main Panel */}
         <div className="bg-[#0a0a0f]/98 backdrop-blur-md rounded-2xl border border-white/10">
+          {/* Cover Song quick guide */}
+          {selectedModelOption.value === "ai-music-api/upload-cover" && (
+            <div className="px-[10px] pt-[10px] pb-0">
+              <details className="group">
+                <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-amber-400 hover:text-amber-300 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="1.5"/><path strokeLinecap="round" strokeWidth="1.5" d="M12 16v-4m0-4h.01"/></svg>
+                  <span>How to use Cover Song — click for guide</span>
+                </summary>
+                <div className="mt-2 p-3 bg-[#141418] border border-[#2A2A32] rounded-lg text-[11px] text-gray-400 leading-relaxed space-y-3">
+
+                  {/* Quick Start */}
+                  <div>
+                    <p className="text-[#EAEAEA] font-medium mb-1">Re-sing a full song with your Persona:</p>
+                    <div className="bg-[#0A0A0F] rounded-md px-3 py-2 text-[11px] space-y-0.5">
+                      <p><span className="text-green-400">1.</span> Upload your song (Browse or pick from Songs)</p>
+                      <p><span className="text-green-400">2.</span> Set <span className="text-blue-400">Custom ON</span></p>
+                      <p><span className="text-green-400">3.</span> Set <span className="text-orange-400">Instrumental OFF</span> (Vocals)</p>
+                      <p><span className="text-green-400">4.</span> Open <span className="text-gray-300">Advanced</span> → select your <span className="text-purple-400">Persona</span> → click <span className="text-purple-400">Strong Persona</span></p>
+                      <p><span className="text-green-400">5.</span> Set Model to <span className="text-amber-400">V4.5+</span> or higher (supports up to 8 min, generates full song)</p>
+                      <p><span className="text-green-400">6.</span> Write lyrics in prompt</p>
+                      <p><span className="text-green-400">7.</span> Click Generate</p>
+                    </div>
+                    <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2 text-[10px] text-amber-400">
+                      <p className="font-medium">Important tips:</p>
+                      <p>• Use <span className="text-white">V4.5+, V4.5 ALL, V5, or V5.5</span> model for full-length songs (up to 8 min). V4 only generates up to 4 min and may produce partial songs.</p>
+                      <p>• Click <span className="text-purple-400">Strong Persona</span> to auto-apply the persona's style and optimal slider settings.</p>
+                      <p>• Only AI-generated songs can be covered. Commercially copyrighted songs will be blocked (error 413).</p>
+                    </div>
+                    <p className="text-gray-600 mt-1 text-[10px]">Don't have a persona? Switch to Create Persona model, select a generated song, and extract the voice.</p>
+                  </div>
+
+                  {/* 3 Modes */}
+                  <div>
+                    <p className="text-[#EAEAEA] font-medium mb-1">3 ways to cover:</p>
+                    <div className="space-y-1">
+                      <p><span className="text-amber-400 font-medium">1. Persona cover</span> — Upload song + Persona + Custom ON + Vocals → AI re-sings with that voice</p>
+                      <p><span className="text-amber-400 font-medium">2. Quick cover</span> — Upload song + Custom OFF + describe mood → AI auto-generates lyrics & voice</p>
+                      <p><span className="text-amber-400 font-medium">3. Instrumental remix</span> — Upload song + Custom ON + Instrumental ON → re-arranged, no vocals</p>
+                    </div>
+                  </div>
+
+                  {/* What each field does */}
+                  <details className="group/more">
+                    <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-300 transition">
+                      See more — what each setting does
+                    </summary>
+                    <div className="mt-2 space-y-1.5 text-[10px]">
+                      <div className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1">
+                        <span className="text-orange-400 font-medium">Instrumental</span>
+                        <span><span className="text-white">ON</span> = no vocals, music only. <span className="text-white">OFF</span> = vocals included. When OFF, select <span className="text-white">Male/Female</span> to control the vocal gender.</span>
+
+                        <span className="text-blue-400 font-medium">Custom Mode</span>
+                        <span><span className="text-white">ON</span> = you control everything (prompt = exact lyrics, style + title required). <span className="text-white">OFF</span> = simple mode (prompt = mood description, AI auto-generates lyrics).</span>
+
+                        <span className="text-gray-300 font-medium">Title</span>
+                        <span>The song name. Required when Custom ON. Used for file naming and display in Kie AI.</span>
+
+                        <span className="text-gray-300 font-medium">Style</span>
+                        <span>Music genre (Rock, Pop, Jazz...). Guides the AI's arrangement and vocal delivery style.</span>
+
+                        <span className="text-purple-400 font-medium">Persona</span>
+                        <span>A saved voice profile. The AI will sing using this voice. Requires Custom ON. Create one from any generated song.</span>
+
+                        <span className="text-gray-300 font-medium">Negative Tags</span>
+                        <span>Styles to <span className="text-red-400">avoid</span>. e.g. "heavy metal, strong drums" — the AI won't use these elements. Optional.</span>
+
+                        <span className="text-blue-400 font-medium">Style Weight</span>
+                        <span>0–1. How closely to follow the style tag. Higher = stricter genre adherence. Default 0.5. Optional.</span>
+
+                        <span className="text-purple-400 font-medium">Weirdness</span>
+                        <span>0–1. Creative deviation. Higher = more experimental/unusual output. Default 0.5. Optional.</span>
+
+                        <span className="text-amber-400 font-medium">Audio Weight</span>
+                        <span>0–1. How closely to follow the original uploaded audio. Higher = more faithful to the original melody. Default 0.5. Optional.</span>
+
+                        <span className="text-gray-300 font-medium">Vocal Gender</span>
+                        <span>Male or Female. Only applies when Instrumental is OFF (vocals enabled). Ignored if a Persona is selected.</span>
+
+                        <span className="text-gray-300 font-medium">Model</span>
+                        <span>V4 = stable, V5 = better quality, V5.5 = latest. Higher versions may produce more natural vocals.</span>
+                      </div>
+                    </div>
+                  </details>
+
+                </div>
+              </details>
+            </div>
+          )}
+
+          {/* Extend Music quick guide */}
+          {selectedModelOption.value === "ai-music-api/extend" && (
+            <div className="px-[10px] pt-[10px] pb-0">
+              <details className="group">
+                <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-teal-400 hover:text-teal-300 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="1.5"/><path strokeLinecap="round" strokeWidth="1.5" d="M12 16v-4m0-4h.01"/></svg>
+                  <span>How to use Extend Music — click for guide</span>
+                </summary>
+                <div className="mt-2 p-3 bg-[#141418] border border-[#2A2A32] rounded-lg text-[11px] text-gray-400 leading-relaxed space-y-3">
+
+                  {/* Quick Start */}
+                  <div>
+                    <p className="text-[#EAEAEA] font-medium mb-1">Make your song longer:</p>
+                    <div className="bg-[#0A0A0F] rounded-md px-3 py-2 text-[11px] space-y-0.5">
+                      <p><span className="text-green-400">1.</span> Select a completed song from the <span className="text-teal-400">Select Song</span> dropdown</p>
+                      <p><span className="text-green-400">2.</span> The "From" time auto-fills to the song's end (you can adjust)</p>
+                      <p><span className="text-green-400">3.</span> Write continuation lyrics in the prompt</p>
+                      <p><span className="text-green-400">4.</span> Click Generate</p>
+                    </div>
+                  </div>
+
+                  {/* Two modes */}
+                  <div>
+                    <p className="text-[#EAEAEA] font-medium mb-1">Two modes:</p>
+                    <div className="space-y-1">
+                      <p><span className="text-teal-400 font-medium">Custom OFF</span> (simple) — only select song + audioId needed. AI uses the original song's style, title, and settings to continue.</p>
+                      <p><span className="text-teal-400 font-medium">Custom ON</span> — you control everything: prompt (lyrics), style, title, continueAt, persona. Use this for changing style mid-song or adding specific lyrics.</p>
+                    </div>
+                  </div>
+
+                  {/* Tips */}
+                  <details className="group/more">
+                    <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-300 transition">
+                      See more — tips & settings
+                    </summary>
+                    <div className="mt-2 space-y-1.5 text-[10px]">
+                      <div className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1">
+                        <span className="text-teal-400 font-medium">Select Song</span>
+                        <span>Pick the song to extend from your generated panel. Shows name and duration.</span>
+
+                        <span className="text-blue-400 font-medium">Custom On/Off</span>
+                        <span><span className="text-white">OFF</span> = inherit original params (simplest). <span className="text-white">ON</span> = set your own prompt, style, continueAt.</span>
+
+                        <span className="text-gray-300 font-medium">From (s)</span>
+                        <span>Where to start extending from. This is the most important setting:
+                          <br /><span className="text-teal-400">From = song end (e.g. 90/93s)</span> → adds new music after the song ends. Use this to make the song longer.
+                          <br /><span className="text-amber-400">From = middle (e.g. 30s)</span> → keeps the first 30s, re-generates everything after. Use this to change the second half.
+                          <br /><span className="text-red-400">From = near start (e.g. 5s)</span> → re-generates almost the entire song with your new lyrics/style.
+                          <br />Auto-set to song duration when you select a song. Adjust as needed.</span>
+
+                        <span className="text-gray-300 font-medium">Prompt</span>
+                        <span>Lyrics for the extension (Custom ON). Write the next section: [Verse 3], [Bridge], [Outro], etc.</span>
+
+                        <span className="text-purple-400 font-medium">Persona</span>
+                        <span>Use the same persona as the original for consistent voice. Requires Custom ON.</span>
+
+                        <span className="text-gray-300 font-medium">Style/Title</span>
+                        <span>Required when Custom ON. Match the original song's style for consistency.</span>
+                      </div>
+                    </div>
+                  </details>
+
+                </div>
+              </details>
+            </div>
+          )}
+
           {/* Lyrics format guide — only when Music + Vocals mode */}
-          {selectedModelOption.value === "ai-music-api/generate" && !musicInstrumental && (
+          {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover") && !musicInstrumental && (
             <div className="px-[10px] pt-[10px] pb-0">
               <details className="group">
                 <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-purple-400 hover:text-purple-300 transition-colors">
@@ -2371,8 +2744,8 @@ export function ImageAIPanel({
             </div>
           )}
 
-          {/* User Prompt Area — hidden for Topaz Video Upscale (no prompt needed) */}
-          {mode !== "describe" || selectedModelOption.value === "topaz/video-upscale" ? null : (
+          {/* User Prompt Area — hidden for Topaz Video Upscale and Create Persona (no prompt needed) */}
+          {mode !== "describe" || selectedModelOption.value === "topaz/video-upscale" || selectedModelOption.value === "ai-music-api/generate-persona" ? null : (
             <div className="px-[10px] pt-[10px] pb-0">
               <div className="flex gap-2">
                 {/* Text Area (shared component) */}
@@ -2380,10 +2753,12 @@ export function ImageAIPanel({
                   editorRef={editorRef}
                   editorIsEmpty={editorIsEmpty}
                   placeholder={
-                    selectedModelOption.value === "ai-music-api/generate"
-                      ? musicInstrumental
-                        ? "Describe the music mood, tempo, instruments... e.g. calm piano with soft melodies, 80bpm"
-                        : "Write your lyrics here... use [Verse], [Chorus], [Bridge] to structure"
+                    selectedModelOption.value.startsWith("ai-music-api/")
+                      ? coverCustomMode
+                        ? musicInstrumental
+                          ? "Describe the music mood, instruments... e.g. calm piano with soft melodies"
+                          : "Write your lyrics here... use [Verse], [Chorus], [Bridge] to structure. e.g. [Verse 1] Walking through the city lights..."
+                        : "Describe the mood and style. Lyrics will be auto-generated. e.g. A powerful rock ballad with emotional vocals"
                       : "Describe your element... drag & drop reference images here"
                   }
                   minHeight={TEXTAREA_MIN_HEIGHT}
@@ -2809,7 +3184,7 @@ export function ImageAIPanel({
             <div className="flex-1" />
 
             {/* Aspect Ratio Select Box - Hide for Kling Motion, Topaz Video Upscale, InfiniteTalk, and Music */}
-            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && (
+            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && (
             <div className="relative" style={{ width: "80px" }}>
               <button
                 onClick={() => setShowAspectRatioDropdown(!showAspectRatioDropdown)}
@@ -2863,10 +3238,10 @@ export function ImageAIPanel({
                     {selectedModelOption?.icon && <selectedModelOption.icon className="w-4 h-4" />}
                     <span>{selectedModelOption?.label || "Nano Banana 2"}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded ${
-                      selectedModelOption.value === "ai-music-api/generate" ? "bg-purple-500/20 text-purple-300"
+                      selectedModelOption.value.startsWith("ai-music-api/") ? "bg-purple-500/20 text-purple-300"
                       : outputMode === "image" ? "bg-cyan-500/20 text-cyan-300" : "bg-green-500/20 text-green-300"
                     }`}>
-                      {selectedModelOption.value === "ai-music-api/generate" ? "Music" : outputMode === "image" ? "Image" : "Video"}
+                      {selectedModelOption.value.startsWith("ai-music-api/") ? "Music" : outputMode === "image" ? "Image" : "Video"}
                     </span>
                   </div>
                   <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
@@ -2880,7 +3255,7 @@ export function ImageAIPanel({
                           key={modelOption.value}
                           onClick={() => {
                             // Determine the output mode based on model type
-                            const modelOutputMode = modelOption.value === "ai-music-api/generate" ? "music" as const
+                            const modelOutputMode = modelOption.value.startsWith("ai-music-api/") ? "music" as const
                               : videoModelOptions.some(m => m.value === modelOption.value) ? "video" as const : "image" as const;
                             
                             // Switch output mode if different
@@ -2945,13 +3320,13 @@ export function ImageAIPanel({
                             </div>
                             <div className="flex items-center gap-2">
                               <span className={`text-[10px] px-2 py-0.5 rounded ${
-                                modelOption.value === "ai-music-api/generate"
+                                modelOption.value.startsWith("ai-music-api/")
                                   ? "bg-purple-500/20 text-purple-300"
                                   : videoModelOptions.some(m => m.value === modelOption.value)
                                   ? "bg-green-500/20 text-green-300"
                                   : "bg-cyan-500/20 text-cyan-300"
                               }`}>
-                                {modelOption.value === "ai-music-api/generate" ? "Music" : videoModelOptions.some(m => m.value === modelOption.value) ? "Video" : "Image"}
+                                {modelOption.value.startsWith("ai-music-api/") ? "Music" : videoModelOptions.some(m => m.value === modelOption.value) ? "Video" : "Image"}
                               </span>
                             </div>
                           </div>
@@ -2967,7 +3342,7 @@ export function ImageAIPanel({
             )}
 
             {/* Resolution Select Box - Hide for Veo 3.1, Z-Image, Topaz Video Upscale, and InfiniteTalk */}
-            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && (
+            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowResolutionDropdown(!showResolutionDropdown)}
@@ -3100,7 +3475,7 @@ export function ImageAIPanel({
 
 
             {/* AI Music: Instrumental / Vocals toggle */}
-            {selectedModelOption.value === "ai-music-api/generate" && (
+            {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover" || selectedModelOption.value === "ai-music-api/extend") && (
               <button
                 onClick={() => setMusicInstrumental(!musicInstrumental)}
                 className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors ${
@@ -3115,7 +3490,7 @@ export function ImageAIPanel({
             )}
 
             {/* AI Music: Vocal Gender — only when vocals enabled */}
-            {selectedModelOption.value === "ai-music-api/generate" && !musicInstrumental && (
+            {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover") && !musicInstrumental && (
               <button
                 onClick={() => setMusicVocalGender(musicVocalGender === "f" ? "m" : "f")}
                 className="px-3 py-2 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#EAEAEA] flex items-center gap-1.5 hover:bg-[#2A2A35] transition-colors"
@@ -3124,19 +3499,26 @@ export function ImageAIPanel({
               </button>
             )}
 
-            {/* AI Music: Style/Genre selector — custom dropdown */}
-            {selectedModelOption.value === "ai-music-api/generate" && (
+            {/* AI Music: Style/Genre — combo text input + dropdown presets */}
+            {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover" || selectedModelOption.value === "ai-music-api/extend") && (
               <div className="relative">
-                <button
-                  onClick={() => setShowMusicStyleDropdown(!showMusicStyleDropdown)}
-                  className="px-3 py-2 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#EAEAEA] flex items-center gap-1.5 hover:bg-[#2A2A35] transition-colors"
-                  style={{ width: "110px" }}
-                >
-                  <span className="flex-1 text-left truncate">{musicStyle || "Any Style"}</span>
-                  <ChevronDown className="w-3 h-3 text-gray-400" />
-                </button>
+                <div className="flex items-center bg-[#1E1E24] border border-[#2A2A32] rounded-lg overflow-hidden" style={{ width: "180px" }}>
+                  <input
+                    type="text"
+                    value={musicStyle}
+                    onChange={(e) => setMusicStyle(e.target.value)}
+                    placeholder="Any Style"
+                    className="flex-1 px-2.5 py-2 bg-transparent text-[13px] text-[#EAEAEA] placeholder-gray-500 outline-none min-w-0"
+                  />
+                  <button
+                    onClick={() => setShowMusicStyleDropdown(!showMusicStyleDropdown)}
+                    className="px-1.5 py-2 hover:bg-[#2A2A35] transition-colors flex-shrink-0"
+                  >
+                    <ChevronDown className="w-3 h-3 text-gray-400" />
+                  </button>
+                </div>
                 {showMusicStyleDropdown && (
-                  <div className="absolute bottom-full left-0 mb-1 w-[140px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
+                  <div className="absolute bottom-full left-0 mb-1 w-[180px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
                     {[
                       { value: "", label: "Any Style" },
                       { value: "Cinematic", label: "Cinematic" },
@@ -3151,6 +3533,11 @@ export function ImageAIPanel({
                       { value: "R&B", label: "R&B" },
                       { value: "Country", label: "Country" },
                       { value: "Folk", label: "Folk" },
+                      { value: "Children's Music", label: "Children's" },
+                      { value: "Reggae", label: "Reggae" },
+                      { value: "Metal", label: "Metal" },
+                      { value: "Blues", label: "Blues" },
+                      { value: "Soul", label: "Soul" },
                     ].map((opt) => (
                       <button
                         key={opt.value}
@@ -3169,18 +3556,325 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* AI Music: Model version */}
-            {selectedModelOption.value === "ai-music-api/generate" && (
+            {/* Title moved into Advanced Options panel */}
+
+            {/* Model version moved into Advanced Options */}
+
+            {/* Persona selector moved into Advanced Options panel */}
+
+            {/* Music: Custom Mode toggle — for Generate, Cover, Extend */}
+            {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover" || selectedModelOption.value === "ai-music-api/extend") && (
               <button
-                onClick={() => setMusicModel(musicModel === "V4" ? "V5" : "V4")}
-                className="px-3 py-2 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#EAEAEA] hover:bg-[#2A2A35] transition-colors"
+                onClick={() => setCoverCustomMode(!coverCustomMode)}
+                className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors ${
+                  coverCustomMode
+                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                    : 'bg-white/5 border-white/10 text-gray-400'
+                }`}
               >
-                {musicModel}
+                <span>Custom {coverCustomMode ? "On" : "Off"}</span>
               </button>
             )}
 
+            {/* Shared Music Advanced Options — for Generate, Cover, Extend */}
+            {((selectedModelOption.value === "ai-music-api/generate") || (selectedModelOption.value === "ai-music-api/upload-cover") || (selectedModelOption.value === "ai-music-api/extend")) && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowCoverAdvanced(!showCoverAdvanced)}
+                  className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors ${
+                    showCoverAdvanced
+                      ? 'bg-white/10 border-white/20 text-white'
+                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Advanced</span>
+                </button>
+                {showCoverAdvanced && (
+                  <div className="absolute bottom-full left-0 mb-2 w-[260px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] text-gray-500 font-medium">Advanced Options</div>
+                      {coverCustomMode && selectedPersonaId && (() => {
+                        const persona = savedPersonas?.find(p => p.personaId === selectedPersonaId);
+                        return (
+                          <div className="flex items-center gap-1">
+                            {persona?.style && (
+                              <button
+                                onClick={() => { setMusicStyle(persona.style!); toast.success(`Style set to "${persona.style}"`); }}
+                                className="text-[9px] px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded-full hover:bg-blue-500/30 transition font-medium"
+                              >
+                                Apply Style
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setCoverStyleWeight(0.2); setCoverWeirdnessConstraint(0.3); setCoverAudioWeight(0.6); if (persona?.style) { setMusicStyle(persona.style); toast.success("Strong Persona applied — style set to " + persona.style); } else { toast.success("Strong Persona applied — no style saved, set one in Edit Persona or Style field"); } }}
+                              className="text-[9px] px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded-full hover:bg-purple-500/30 transition font-medium"
+                            >
+                              Strong Persona
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Persona selector (requires custom mode) */}
+                    {coverCustomMode && <div>
+                      <label className="text-[10px] text-gray-500 mb-1 block">Persona</label>
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowPersonaDropdown(!showPersonaDropdown)}
+                          className={`w-full px-2.5 py-1.5 border rounded-md text-[12px] flex items-center justify-between transition-colors ${
+                            selectedPersonaId
+                              ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                              : 'bg-[#0A0A0F] border-[#2A2A32] text-gray-400'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Mic className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{selectedPersonaId ? (savedPersonas?.find(p => p.personaId === selectedPersonaId)?.name || 'Persona') : 'No Persona'}</span>
+                          </div>
+                          <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                        </button>
+                        {showPersonaDropdown && (
+                          <div className="absolute top-full left-0 mt-1 w-full bg-[#0A0A0F] border border-[#2A2A32] rounded-md shadow-xl z-50 py-1 max-h-36 overflow-y-auto">
+                            <button
+                              onClick={() => { setSelectedPersonaId(""); setShowPersonaDropdown(false); }}
+                              className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors ${!selectedPersonaId ? 'bg-purple-500/15 text-purple-400' : 'text-[#EAEAEA] hover:bg-[#1E1E24]'}`}
+                            >No Persona</button>
+                            {savedPersonas && savedPersonas.length > 0 ? (
+                              savedPersonas.map((p) => (
+                                <button key={p.personaId}
+                                  onClick={() => { setSelectedPersonaId(p.personaId); if (p.style && !musicStyle) setMusicStyle(p.style); setShowPersonaDropdown(false); }}
+                                  className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors ${selectedPersonaId === p.personaId ? 'bg-purple-500/15 text-purple-400' : 'text-[#EAEAEA] hover:bg-[#1E1E24]'}`}
+                                >
+                                  <div className="truncate">{p.name}</div>
+                                  {p.style && <div className="text-[9px] text-gray-600 truncate">{p.style}</div>}
+                                </button>
+                              ))
+                            ) : (
+                              <div className="px-3 py-2 text-[10px] text-gray-600">No personas yet — create one from a generated song</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>}
+
+                    {/* Model version */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 mb-1 block">Model</label>
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowModelVersionDropdown(!showModelVersionDropdown)}
+                          className="w-full px-2.5 py-1.5 bg-[#0A0A0F] border border-[#2A2A32] rounded-md text-[12px] text-[#EAEAEA] flex items-center justify-between cursor-pointer hover:border-[#4A4A4A] transition"
+                        >
+                          <span>{[{v:"V4",l:"V4"},{v:"V4_5",l:"V4.5"},{v:"V4_5PLUS",l:"V4.5+"},{v:"V4_5ALL",l:"V4.5 ALL"},{v:"V5",l:"V5"},{v:"V5_5",l:"V5.5"}].find(m=>m.v===musicModel)?.l || musicModel}</span>
+                          <ChevronDown className="w-3 h-3 text-gray-500" />
+                        </button>
+                        {showModelVersionDropdown && (
+                          <div className="absolute top-full left-0 mt-1 w-full bg-[#0A0A0F] border border-[#2A2A32] rounded-md shadow-xl z-50 py-1 max-h-48 overflow-y-auto">
+                            {[
+                              { value: "V4", label: "V4", desc: "Stable, max 4 min" },
+                              { value: "V4_5", label: "V4.5", desc: "Smarter prompts, max 8 min" },
+                              { value: "V4_5PLUS", label: "V4.5+", desc: "Richer sound, max 8 min" },
+                              { value: "V4_5ALL", label: "V4.5 ALL", desc: "Smarter prompts, max 8 min" },
+                              { value: "V5", label: "V5", desc: "Superior expression, faster" },
+                              { value: "V5_5", label: "V5.5", desc: "Custom models, latest" },
+                            ].map(m => (
+                              <button key={m.value}
+                                onClick={() => { setMusicModel(m.value); setShowModelVersionDropdown(false); }}
+                                className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors ${musicModel === m.value ? 'bg-[#4A90E2]/15 text-[#4A90E2]' : 'text-[#EAEAEA] hover:bg-[#1E1E24]'}`}
+                              >
+                                <span className="font-medium">{m.label}</span>
+                                <span className="text-[10px] text-gray-600 ml-1.5">{m.desc}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Title */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 mb-1 block">Title</label>
+                      <input
+                        type="text"
+                        value={musicTitle}
+                        onChange={(e) => setMusicTitle(e.target.value)}
+                        placeholder="Song title"
+                        className="w-full px-2.5 py-1.5 bg-[#0A0A0F] border border-[#2A2A32] rounded-md text-[12px] text-[#EAEAEA] placeholder-gray-600 outline-none"
+                      />
+                    </div>
+
+                    {/* Negative Tags */}
+                    <div>
+                      <label className="text-[10px] text-gray-500 mb-1 block">Negative Tags</label>
+                      <input
+                        type="text"
+                        value={musicNegativeTags}
+                        onChange={(e) => setMusicNegativeTags(e.target.value)}
+                        placeholder="e.g. heavy metal, strong drums"
+                        className="w-full px-2.5 py-1.5 bg-[#0A0A0F] border border-[#2A2A32] rounded-md text-[12px] text-[#EAEAEA] placeholder-gray-600 outline-none"
+                      />
+                    </div>
+
+                    {/* Sliders + Persona info — only when custom mode is available */}
+                    {coverCustomMode && (<>
+                      {/* Style Weight */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] text-gray-500">Style Weight</label>
+                          <span className="text-[10px] text-gray-400">{coverStyleWeight}</span>
+                        </div>
+                        <input type="range" min="0" max="1" step="0.05" value={coverStyleWeight}
+                          onChange={(e) => setCoverStyleWeight(parseFloat(e.target.value))}
+                          className="w-full h-1 accent-blue-500 cursor-pointer" />
+                        <p className="text-[9px] text-gray-600 mt-0.5">How closely to follow the style tag</p>
+                      </div>
+
+                      {/* Weirdness */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] text-gray-500">Weirdness</label>
+                          <span className="text-[10px] text-gray-400">{coverWeirdnessConstraint}</span>
+                        </div>
+                        <input type="range" min="0" max="1" step="0.05" value={coverWeirdnessConstraint}
+                          onChange={(e) => setCoverWeirdnessConstraint(parseFloat(e.target.value))}
+                          className="w-full h-1 accent-purple-500 cursor-pointer" />
+                        <p className="text-[9px] text-gray-600 mt-0.5">Higher = more creative/experimental</p>
+                      </div>
+
+                      {/* Audio Weight */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-[10px] text-gray-500">Audio Weight</label>
+                          <span className="text-[10px] text-gray-400">{coverAudioWeight}</span>
+                        </div>
+                        <input type="range" min="0" max="1" step="0.05" value={coverAudioWeight}
+                          onChange={(e) => setCoverAudioWeight(parseFloat(e.target.value))}
+                          className="w-full h-1 accent-amber-500 cursor-pointer" />
+                        <p className="text-[9px] text-gray-600 mt-0.5">How faithful to the original audio</p>
+                      </div>
+
+                      {/* Persona info */}
+                      {selectedPersonaId && (() => {
+                        const persona = savedPersonas?.find(p => p.personaId === selectedPersonaId);
+                        return persona ? (
+                          <div className="bg-[#0A0A0F] rounded-md px-3 py-2 text-[10px] text-gray-500 space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-purple-400 font-medium">{persona.name}</span>
+                              <span className="text-gray-600">{persona.style || 'No style'}</span>
+                            </div>
+                            {persona.description && <p className="text-gray-600 truncate">{persona.description}</p>}
+                          </div>
+                        ) : null;
+                      })()}
+                    </>)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Extend Music: Audio selector + Custom toggle + Continue At */}
+            {selectedModelOption.value === "ai-music-api/extend" && (
+              <>
+                {/* Audio file selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowExtendAudioDropdown(!showExtendAudioDropdown)}
+                    className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors max-w-[180px] ${
+                      musicExtendAudioId
+                        ? 'bg-teal-500/10 border-teal-500/30 text-teal-400'
+                        : 'bg-[#1E1E24] border-[#2A2A32] text-gray-400 hover:bg-[#2A2A35]'
+                    }`}
+                  >
+                    <Music className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="truncate">{musicExtendAudioId ? (audioFiles?.find(a => a.audioId === musicExtendAudioId)?.name || 'Selected') : 'Select Song'}</span>
+                    <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                  </button>
+                  {showExtendAudioDropdown && (
+                    <div className="absolute bottom-full left-0 mb-1 w-[280px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-56 overflow-y-auto">
+                      <audio ref={extendPreviewAudioRef} style={{ display: "none" }} preload="none" onEnded={() => setExtendPreviewPlaying(null)} />
+                      {audioFiles && audioFiles.length > 0 ? (
+                        audioFiles.map((af) => (
+                          <div key={af.audioId}
+                            className={`flex items-center gap-2 px-2 py-1.5 transition-colors ${
+                              musicExtendAudioId === af.audioId ? 'bg-teal-500/15' : 'hover:bg-[#1E1E24]'
+                            }`}
+                          >
+                            {/* Play preview button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const audio = extendPreviewAudioRef.current;
+                                if (!audio || !af.sourceUrl) return;
+                                if (extendPreviewPlaying === af.audioId) {
+                                  audio.pause();
+                                  setExtendPreviewPlaying(null);
+                                } else {
+                                  audio.src = af.sourceUrl;
+                                  audio.play().catch(() => {});
+                                  setExtendPreviewPlaying(af.audioId);
+                                }
+                              }}
+                              className="w-6 h-6 rounded-full bg-purple-500/20 hover:bg-purple-500/40 flex items-center justify-center flex-shrink-0 transition"
+                            >
+                              {extendPreviewPlaying === af.audioId
+                                ? <Pause className="w-3 h-3 text-purple-400" />
+                                : <Play className="w-3 h-3 text-purple-400 ml-0.5" />
+                              }
+                            </button>
+                            {/* Song name — click to select */}
+                            <button
+                              onClick={() => {
+                                setMusicExtendAudioId(af.audioId);
+                                if (af.duration) setMusicExtendContinueAt(Math.floor(af.duration));
+                                if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); }
+                                setShowExtendAudioDropdown(false);
+                              }}
+                              className={`flex-1 text-left text-[12px] truncate ${musicExtendAudioId === af.audioId ? 'text-teal-400' : 'text-[#EAEAEA]'}`}
+                            >
+                              {af.name}
+                            </button>
+                            {/* Expand to full player */}
+                            {af.sourceUrl && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (extendPreviewAudioRef.current) { extendPreviewAudioRef.current.pause(); setExtendPreviewPlaying(null); } setMediaPreview({ type: 'audio', url: af.sourceUrl!, label: af.name, prompt: af.prompt, fileId: String(af._id) }); }}
+                                className="w-5 h-5 rounded flex items-center justify-center text-gray-600 hover:text-white hover:bg-white/10 flex-shrink-0 transition"
+                                title="Open full player"
+                              >
+                                <Maximize2 className="w-3 h-3" />
+                              </button>
+                            )}
+                            {af.duration && <span className="text-[10px] text-gray-600 flex-shrink-0">{Math.round(af.duration)}s</span>}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-[11px] text-gray-600">No completed songs in this shot</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Continue At — only when custom is on */}
+                {coverCustomMode && (() => {
+                  const selectedSong = audioFiles?.find(a => a.audioId === musicExtendAudioId);
+                  const songDur = selectedSong?.duration ? Math.round(selectedSong.duration) : 0;
+                  return (
+                    <div className="flex items-center gap-1 px-2.5 py-1.5 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#A0A0A0]"
+                      title={`Song is ${songDur}s. Set to ${songDur} to add more at the end, or lower to re-generate from that point.`}>
+                      <span className="text-[10px] text-gray-500">From</span>
+                      <input type="number" min={1} max={600} value={musicExtendContinueAt}
+                        onChange={(e) => setMusicExtendContinueAt(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-10 px-0 py-0 bg-transparent border-none text-[13px] text-white text-center outline-none" />
+                      <span className="text-[10px] text-gray-500">/ {songDur}s</span>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+
             {/* Video Duration Select Box - Hide for Veo 3.1, Kling Motion, Topaz Video Upscale, and InfiniteTalk */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale", "infinitalk/from-audio", "ai-music-api/generate"].includes(selectedModelOption.value) && (
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
               <div className="relative" style={{ width: "100px" }}>
                 <button
                   onClick={() => setShowVideoDurationDropdown(!showVideoDurationDropdown)}
@@ -3220,8 +3914,8 @@ export function ImageAIPanel({
             )}
 
             {/* Video Input toggle - Only for Seedance 2.0 */}
-            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0/Fast, not Grok, not Topaz */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && (
+            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0/Fast, not Grok, not Topaz, not Music */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
               <div className="relative" style={{ width: "120px" }}>
                 <button
                   onClick={() => setShowAudioDropdown(!showAudioDropdown)}
@@ -3352,8 +4046,8 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Output Format Select Box - Only show in image mode, hide for z-image */}
-            {outputMode === "image" && selectedModelOption.value !== "z-image" && (
+            {/* Output Format Select Box - Only show in image mode, hide for z-image and music */}
+            {outputMode === "image" && selectedModelOption.value !== "z-image" && !selectedModelOption.value.startsWith("ai-music-api/") && (
               <div className="relative" style={{ width: "80px" }}>
                 <button
                   onClick={() => setShowOutputFormatDropdown(!showOutputFormatDropdown)}
@@ -3506,32 +4200,55 @@ export function ImageAIPanel({
             )}
 
             {/* Cost per generation */}
-            <div className="flex items-center gap-1.5 text-[12px] text-gray-400">
-              <Zap className="w-3.5 h-3.5 text-blue-400" />
-              <span>{displayedCredits} credits</span>
-            </div>
+            {selectedModelOption.value !== "ai-music-api/generate-persona" && (
+              <div className="flex items-center gap-1.5 text-[12px] text-gray-400">
+                <Zap className="w-3.5 h-3.5 text-blue-400" />
+                <span>{displayedCredits} credits</span>
+              </div>
+            )}
 
-            {/* Generate Button */}
-            <button
-              onClick={handleKieAIGenerate}
-              disabled={isGenerating || generateCooldown}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
-                "bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white"
-              }`}
-            >
-              {isGenerating || generateCooldown ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {cooldownSeconds > 0 ? `Wait ${cooldownSeconds}s...` : "Generating..."}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Generate
-                  <span className="text-xs opacity-75">+ {displayedCredits}</span>
-                </>
-              )}
-            </button>
+            {/* Generate Button / Create Persona Button */}
+            {selectedModelOption.value === "ai-music-api/generate-persona" ? (
+              <>
+                <button
+                  onClick={() => setShowManagePersona(true)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg transition font-medium text-[13px] bg-[#1E1E24] border border-[#2A2A32] text-gray-400 hover:text-white hover:bg-[#2A2A35]"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  Manage
+                </button>
+                <button
+                  onClick={() => { if (personaSourceSong) setShowPersonaCreateDialog(true); else toast.warning("Select a song first"); }}
+                  disabled={!personaSourceSong}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed bg-purple-500 hover:bg-purple-400 text-white"
+                >
+                  <Mic className="w-4 h-4" />
+                  Create Persona
+                  <span className="text-xs opacity-75">Free</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleKieAIGenerate}
+                disabled={isGenerating || generateCooldown}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
+                  "bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white"
+                }`}
+              >
+                {isGenerating || generateCooldown ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {cooldownSeconds > 0 ? `Wait ${cooldownSeconds}s...` : "Generating..."}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Generate
+                    <span className="text-xs opacity-75">+ {displayedCredits}</span>
+                  </>
+                )}
+              </button>
+            )}
 
           </div>
         </div>
@@ -3786,7 +4503,7 @@ export function ImageAIPanel({
               const duration = await getMediaDuration(url, 'video');
               // Validate total ≤15s for Seedance 2.0
               if ((selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && totalVideoDuration + duration > 15) {
-                alert(`Total video duration would be ${totalVideoDuration + duration}s. Maximum is 15s.`);
+                toast.warning(`Video too long (${Math.round(totalVideoDuration + duration)}s). Maximum is 15 seconds.`);
                 return;
               }
               setVideoRefs(prev => [...prev, { url, duration }]);
@@ -3804,15 +4521,17 @@ export function ImageAIPanel({
           onClose={() => setShowAudioBrowser(false)}
           onSelectFile={async (url, type) => {
             if (type === 'audio' || type === 'file') {
-              if (audioRefs.length >= 3) {
+              const isCover = selectedModelOption.value === "ai-music-api/upload-cover";
+              const maxDuration = isCover ? 300 : 15; // Cover Song: 5min, Seedance: 15s
+              const maxFiles = isCover ? 1 : 3;
+              if (audioRefs.length >= maxFiles) {
                 setShowAudioBrowser(false);
                 return;
               }
               // Get audio duration
               const duration = await getMediaDuration(url, 'audio');
-              // Validate total ≤15s
-              if (totalAudioDuration + duration > 15) {
-                alert(`Total audio duration would be ${totalAudioDuration + duration}s. Maximum is 15s.`);
+              if (totalAudioDuration + duration > maxDuration) {
+                toast.warning(`Audio too long (${Math.round(totalAudioDuration + duration)}s). Maximum is ${isCover ? '5 minutes' : '15 seconds'}.`);
                 return;
               }
               setAudioRefs(prev => [...prev, { url, duration }]);
@@ -3823,51 +4542,50 @@ export function ImageAIPanel({
       )}
 
       {/* Media Preview Popup */}
-      {mediaPreview && (
+      {mediaPreview && mediaPreview.type === 'audio' && (
+        <AudioPreviewDialog
+          url={mediaPreview.url}
+          name={mediaPreview.label}
+          prompt={mediaPreview.prompt}
+          fileId={mediaPreview.fileId}
+          onClose={() => setMediaPreview(null)}
+          onNameChange={(newName) => setMediaPreview({ ...mediaPreview, label: newName })}
+        />
+      )}
+      {mediaPreview && mediaPreview.type === 'video' && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }}
-          onClick={() => setMediaPreview(null)}
-        >
+          onClick={() => setMediaPreview(null)}>
           <div className="bg-[#1A1A1A] rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
+            onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-[#3D3D3D]">
-              <h3 className="text-white font-medium">{mediaPreview.type === 'video' ? 'Video Preview' : 'Audio Preview'}</h3>
-              <button onClick={() => setMediaPreview(null)}
-                className="text-gray-400 hover:text-white transition-colors">
+              <h3 className="text-white font-medium">{mediaPreview.label || 'Video Preview'}</h3>
+              <button onClick={() => setMediaPreview(null)} className="text-gray-400 hover:text-white transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            {/* Content */}
             <div className="p-4">
-              {mediaPreview.type === 'video' ? (
-                <video
-                  src={mediaPreview.url}
-                  controls
-                  autoPlay
-                  className="w-full rounded-lg"
-                  style={{ maxHeight: '70vh' }}
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-6 py-8">
-                  <div className="w-24 h-24 rounded-full bg-purple-500/20 border border-purple-400/40 flex items-center justify-center">
-                    <Volume2 className="w-12 h-12 text-purple-400" />
-                  </div>
-                  <audio
-                    src={mediaPreview.url}
-                    controls
-                    autoPlay
-                    className="w-full max-w-lg"
-                  />
-                </div>
-              )}
-            </div>
-            {/* Footer */}
-            <div className="p-4 border-t border-[#3D3D3D]">
-              <div className="text-sm text-gray-400">{mediaPreview.label}</div>
+              <video src={mediaPreview.url} controls autoPlay className="w-full rounded-lg" style={{ maxHeight: '70vh' }} />
             </div>
           </div>
         </div>
+      )}
+
+      {/* Manage Persona Dialog */}
+      {showManagePersona && (
+        <ManagePersonaDialog companyId={companyId} onClose={() => setShowManagePersona(false)} />
+      )}
+
+      {/* Create Persona Dialog */}
+      {showPersonaCreateDialog && personaSourceSong && (
+        <CreatePersonaDialog
+          audioUrl={personaSourceSong.sourceUrl}
+          taskId={personaSourceSong.taskId}
+          audioId={personaSourceSong.audioId}
+          fileId={personaSourceSong.fileId}
+          companyId={companyId}
+          userId={clerkUser?.id || ""}
+          onClose={() => setShowPersonaCreateDialog(false)}
+        />
       )}
 
       {/* Element Library Modal */}

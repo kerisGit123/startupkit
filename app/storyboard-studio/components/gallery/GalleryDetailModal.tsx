@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, Copy, Download, Cpu, Coins, Calendar, ChevronDown, MoreHorizontal } from "lucide-react";
+import { X, Copy, Download, Cpu, Coins, Calendar, ChevronDown, MoreHorizontal, Music } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -58,9 +58,10 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
 
   const imageUrl = file?.r2Key ? `${R2_PUBLIC_URL}/${file.r2Key}` : file?.sourceUrl || "";
   const isVideo = file?.fileType === "video";
+  const isAudio = file?.fileType === "audio";
 
   useEffect(() => {
-    if (!imageUrl || isVideo) return;
+    if (!imageUrl || isVideo || isAudio) return;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => setPalette(extractPalette(img));
@@ -88,7 +89,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             r2Key: file.r2Key,
-            filename: file.filename || `gallery-${file._id}.${isVideo ? "mp4" : "png"}`,
+            filename: file.filename || `gallery-${file._id}.${isAudio ? "mp3" : isVideo ? "mp4" : "png"}`,
           }),
         });
         const data = await res.json();
@@ -107,7 +108,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
 
   const tags: string[] = [];
   if (file.model) tags.push(file.model);
-  if (file.fileType) tags.push(file.fileType === "video" ? "Video" : "Image");
+  if (file.fileType) tags.push(file.fileType === "video" ? "Video" : file.fileType === "audio" ? "Audio" : "Image");
   if (file.category) tags.push(file.category);
 
   return createPortal(
@@ -150,9 +151,16 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
         {/* Content */}
         <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
 
-          {/* Left: Image */}
+          {/* Left: Media */}
           <div className="flex-1 flex items-center justify-center overflow-hidden bg-[#1A1A1A]">
-            {isVideo ? (
+            {isAudio ? (
+              <div className="flex flex-col items-center justify-center gap-6 p-8 w-full">
+                <div className="w-24 h-24 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <Music className="w-12 h-12 text-purple-400" />
+                </div>
+                <audio src={imageUrl} controls autoPlay className="w-full max-w-md" />
+              </div>
+            ) : isVideo ? (
               <video src={imageUrl} controls autoPlay className="w-full h-full max-h-[calc(92vh-52px)] object-contain" />
             ) : (
               <img
@@ -171,7 +179,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
               {/* Title */}
               <div>
                 <h2 className="text-xl text-white font-bold leading-tight mb-1.5">
-                  {isVideo ? "Video" : "Image"} · {modelShort}
+                  {isAudio ? "Music" : isVideo ? "Video" : "Image"} · {modelShort}
                 </h2>
                 {promptPreview && (
                   <p className="text-[13px] text-[#A0A0A0] leading-relaxed">{promptPreview}</p>
@@ -227,7 +235,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
                     onClick={handleDownload}
                     className="px-4 py-1.5 rounded-full bg-[#2C2C2C] text-white text-xs font-medium hover:bg-[#3D3D3D] transition border border-[#3D3D3D]"
                   >
-                    {isVideo ? "Video" : "Image"}
+                    {isAudio ? "Audio" : isVideo ? "Video" : "Image"}
                   </button>
                   {file.prompt && (
                     <button

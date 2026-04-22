@@ -5,6 +5,50 @@ import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import sharp from "sharp";
 import { extractKieResponse, getResponseCodeInfo } from "@/lib/storyboard/kieResponse";
 
+// Extract music tracks from Suno/Kie callback in various formats
+function extractMusicTracks(data: any): Array<{ audioId: string; audioUrl: string; title?: string; duration?: number }> {
+  // Format 1: {code: 200, data: {callbackType: "complete", data: [{id, audio_url}]}}
+  if (data?.data?.callbackType === 'complete' && Array.isArray(data?.data?.data)) {
+    return data.data.data
+      .filter((t: any) => t.id && (t.audio_url || t.audioUrl))
+      .map((t: any) => ({
+        audioId: t.id,
+        audioUrl: t.audio_url || t.audioUrl,
+        title: t.title,
+        duration: t.duration,
+      }));
+  }
+  // Format 2: {data: {response: {sunoData: [{id, audioUrl}]}}} — record-info / retry callback format
+  if (Array.isArray(data?.data?.response?.sunoData)) {
+    return data.data.response.sunoData
+      .filter((t: any) => t.id && (t.audioUrl || t.sourceAudioUrl))
+      .map((t: any) => ({
+        audioId: t.id,
+        audioUrl: t.audioUrl || t.sourceAudioUrl,
+        title: t.title,
+        duration: t.duration,
+      }));
+  }
+  // Format 3: {data: {sunoData: [...]}} — direct sunoData
+  if (Array.isArray(data?.data?.sunoData)) {
+    return data.data.sunoData
+      .filter((t: any) => t.id && (t.audioUrl || t.sourceAudioUrl))
+      .map((t: any) => ({
+        audioId: t.id,
+        audioUrl: t.audioUrl || t.sourceAudioUrl,
+        title: t.title,
+        duration: t.duration,
+      }));
+  }
+  // Format 4: bare array ["url1.mp3", "url2.mp3"]
+  if (Array.isArray(data)) {
+    return data
+      .filter((item: any) => typeof item === 'string' && item.startsWith('http'))
+      .map((url: string, i: number) => ({ audioId: `track-${i}`, audioUrl: url }));
+  }
+  return [];
+}
+
 function getResultUrl(data: any): string | undefined {
   console.log('[kie-callback] getResultUrl - checking response structure:', {
     'response array': Array.isArray(data) ? data.length + ' items' : 'not array',
@@ -30,7 +74,27 @@ function getResultUrl(data: any): string | undefined {
     console.log('[kie-callback] Found audio_url in data.data.audio_url');
     return data.data.audio_url;
   }
+  // Handle sunoData format: {data: {response: {sunoData: [{audioUrl}]}}} or {data: {sunoData: [...]}}
+  const sunoTracks = data?.data?.response?.sunoData || data?.data?.sunoData;
+  if (Array.isArray(sunoTracks) && sunoTracks.length > 0) {
+    const firstTrack = sunoTracks[0];
+    const sunoUrl = firstTrack.audioUrl || firstTrack.sourceAudioUrl;
+    if (sunoUrl) {
+      console.log('[kie-callback] Found music URL in sunoData[0]:', { audioId: firstTrack.id, url: sunoUrl });
+      return sunoUrl;
+    }
+  }
   
+  // Handle Suno/Music callback: {code: 200, data: {callbackType: "complete", data: [{id, audio_url}]}}
+  if (data?.data?.callbackType === 'complete' && Array.isArray(data?.data?.data) && data.data.data.length > 0) {
+    const firstTrack = data.data.data[0];
+    const musicUrl = firstTrack.audio_url || firstTrack.audioUrl;
+    if (musicUrl) {
+      console.log('[kie-callback] Found music URL in Suno callback data.data.data[0]:', { audioId: firstTrack.id, url: musicUrl });
+      return musicUrl;
+    }
+  }
+
   // Check if the URL is in the top-level response array (Veo 3.1, Suno music)
   if (Array.isArray(data) && data.length > 0) {
     console.log('[kie-callback] Checking response array for media URL:', data);
@@ -359,11 +423,12 @@ export async function POST(request: NextRequest) {
         id: fileId,
       });
 
-      if (fileRecord?.companyId && fileRecord?.creditsUsed) {
+      if (fileRecord?.companyId && fileRecord?.creditsUsed && fileRecord.creditsUsed > 0) {
         await convex.mutation(api.credits.refundCredits, {
           companyId: fileRecord.companyId,
           tokens: fileRecord.creditsUsed,
           reason: `AI Generation Failed - ${fileRecord.filename}`,
+          _secret: process.env.WEBHOOK_SECRET || 'server-bypass',
         });
       }
 
@@ -390,54 +455,68 @@ export async function POST(request: NextRequest) {
       state = 'success';
     }
 
-    // Handle multiple result URLs (e.g. Suno music returns 2 songs per request)
-    // Save additional URLs as separate storyboard_files records (0 credits — already paid)
-    if (state === 'success' && Array.isArray(data) && data.length > 1) {
-      const extraUrls = data.filter((item: any) => typeof item === 'string' && item.startsWith('http')).slice(1); // skip first (handled by main flow)
-      if (extraUrls.length > 0) {
-        console.log(`[kie-callback] Found ${extraUrls.length} additional result URLs, creating extra file records`);
-        const originalFileRecord = await convex.query(api.storyboard.storyboardFiles.getById, { id: fileId });
+    // Handle multiple music tracks (Suno returns 2 song variations per request)
+    // Extract all tracks with audioId, save extras as separate files (0 credits)
+    const musicTracks = extractMusicTracks(data);
+    if (state === 'success' && musicTracks.length > 0) {
+      console.log(`[kie-callback] Found ${musicTracks.length} music tracks:`, musicTracks.map(t => ({ audioId: t.audioId, title: t.title })));
+    }
+    if (state === 'success' && musicTracks.length > 1) {
+      const extraTracks = musicTracks.slice(1); // skip first (handled by main flow)
+      console.log(`[kie-callback] Saving ${extraTracks.length} additional music tracks`);
+      const originalFileRecord = await convex.query(api.storyboard.storyboardFiles.getById, { id: fileId });
 
-        for (let i = 0; i < extraUrls.length; i++) {
-          const extraUrl = extraUrls[i];
-          try {
-            const extraResponse = await fetch(extraUrl);
-            if (!extraResponse.ok) continue;
-            const extraBlob = await extraResponse.blob();
-            const extraMime = extraBlob.type || 'audio/mpeg';
-            const extraExt = extraUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'mp3';
-            const extraCompanyId = originalFileRecord?.companyId ?? 'unknown';
-            const extraR2Key = `${extraCompanyId}/generated/ai-music-${Date.now()}-v${i + 2}.${extraExt}`;
+      for (let i = 0; i < extraTracks.length; i++) {
+        const extraUrl = extraTracks[i].audioUrl;
+        try {
+          const extraResponse = await fetch(extraUrl);
+          if (!extraResponse.ok) continue;
+          const extraBlob = await extraResponse.blob();
+          const extraMime = extraBlob.type || 'audio/mpeg';
+          const extraExt = extraUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'mp3';
+          const extraCompanyId = originalFileRecord?.companyId ?? 'unknown';
+          const extraR2Key = `${extraCompanyId}/generated/ai-music-${Date.now()}-v${i + 2}.${extraExt}`;
 
-            await uploadToR2(extraBlob, extraR2Key);
-            const extraPublicUrl = getR2PublicUrl(extraR2Key);
+          await uploadToR2(extraBlob, extraR2Key);
+          const extraPublicUrl = getR2PublicUrl(extraR2Key);
 
-            // Create a new file record with 0 credits (already charged on the first one)
-            await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
-              companyId: extraCompanyId,
-              userId: originalFileRecord?.uploadedBy || '',
-              projectId: originalFileRecord?.projectId,
-              category: 'generated',
-              filename: `ai-music-${Date.now()}-v${i + 2}.${extraExt}`,
-              fileType: 'audio',
-              mimeType: extraMime,
-              size: extraBlob.size,
-              status: 'completed',
-              creditsUsed: 0, // No extra charge — already paid
-              categoryId: originalFileRecord?.categoryId,
-              sourceUrl: extraPublicUrl,
-              r2Key: extraR2Key,
-              tags: [],
-              uploadedBy: originalFileRecord?.uploadedBy || '',
-              model: originalFileRecord?.model || 'ai-music-api/generate',
-              prompt: originalFileRecord?.prompt || '',
-              aspectRatio: undefined,
-            });
+          // Create a new file record with 0 credits (already charged on the first one)
+          const extraFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
+            companyId: extraCompanyId,
+            userId: originalFileRecord?.uploadedBy || '',
+            projectId: originalFileRecord?.projectId,
+            category: 'generated',
+            filename: `ai-music-${Date.now()}-v${i + 2}.${extraExt}`,
+            fileType: 'audio',
+            mimeType: extraMime,
+            size: extraBlob.size,
+            status: 'completed',
+            creditsUsed: 0, // No extra charge — already paid
+            categoryId: originalFileRecord?.categoryId,
+            sourceUrl: extraPublicUrl,
+            r2Key: extraR2Key,
+            tags: [],
+            uploadedBy: originalFileRecord?.uploadedBy || '',
+            model: originalFileRecord?.model || 'ai-music-api/generate',
+            prompt: originalFileRecord?.prompt || '',
+            aspectRatio: undefined,
+            taskId: taskId || originalFileRecord?.taskId,
+            defaultAI: originalFileRecord?.defaultAI,
+            metadata: { audioId: extraTracks[i].audioId, musicTitle: extraTracks[i].title, musicDuration: extraTracks[i].duration, audioUrl: extraPublicUrl },
+          });
 
-            console.log(`[kie-callback] Extra audio ${i + 2} saved:`, { r2Key: extraR2Key, sizeMB: (extraBlob.size / (1024 * 1024)).toFixed(2) });
-          } catch (extraErr) {
-            console.error(`[kie-callback] Failed to save extra audio ${i + 2}:`, extraErr);
-          }
+          // Set responseCode/responseMessage via updateFromCallback
+          await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+            fileId: extraFileId,
+            taskId: taskId || originalFileRecord?.taskId,
+            status: 'completed',
+            responseCode: kieResponse.responseCode || 200,
+            responseMessage: kieResponse.responseMessage || 'success',
+          });
+
+          console.log(`[kie-callback] Extra audio ${i + 2} saved:`, { r2Key: extraR2Key, fileId: extraFileId, sizeMB: (extraBlob.size / (1024 * 1024)).toFixed(2) });
+        } catch (extraErr) {
+          console.error(`[kie-callback] Failed to save extra audio ${i + 2}:`, extraErr);
         }
       }
     }
@@ -458,8 +537,9 @@ export async function POST(request: NextRequest) {
       const mimeType = sourceBlob.type || 'image/png';
       const timestamp = Date.now();
       const generationMetadata = fileRecord?.metadata ?? {};
-      const isVideo = fileRecord?.fileType === 'video' || mimeType.startsWith('video/') || resultUrl.match(/\.(mp4|webm|mov)(\?|$)/i);
-      const isAudio = fileRecord?.fileType === 'audio' || mimeType.startsWith('audio/') || resultUrl.match(/\.(mp3|wav|m4a|ogg|aac)(\?|$)/i);
+      // Audio detection first (takes priority) — check URL, mime, fileType, AND model name
+      const isAudio = fileRecord?.fileType === 'audio' || mimeType.startsWith('audio/') || resultUrl.match(/\.(mp3|wav|m4a|ogg|aac)(\?|$)/i) || fileRecord?.model?.includes('music');
+      const isVideo = !isAudio && (fileRecord?.fileType === 'video' || mimeType.startsWith('video/') || resultUrl.match(/\.(mp4|webm|mov)(\?|$)/i));
 
       console.log('[kie-callback] File type detection:', { fileType: fileRecord?.fileType, mimeType, isVideo, isAudio, resultUrl: resultUrl.substring(0, 80) });
 
@@ -468,9 +548,10 @@ export async function POST(request: NextRequest) {
       let fileSizeBytes: number;
 
       if (isAudio) {
-        // ── AUDIO: Save directly to {companyId}/generated/ as .mp3 ──
-        const audioExt = mimeType.includes('wav') ? 'wav' : mimeType.includes('ogg') ? 'ogg' : mimeType.includes('m4a') ? 'm4a' : 'mp3';
-        finalR2Key = `${companyId}/generated/${fileRecord?.filename || `audio-${timestamp}.${audioExt}`}`;
+        // ── AUDIO: Save directly to {companyId}/generated/ as correct extension ──
+        const urlExt = resultUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'mp3';
+        const audioExt = ['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(urlExt) ? urlExt : 'mp3';
+        finalR2Key = `${companyId}/generated/ai-music-${timestamp}.${audioExt}`;
         await uploadToR2(sourceBlob, finalR2Key);
         finalUrl = getR2PublicUrl(finalR2Key);
         fileSizeBytes = sourceBlob.size;
@@ -554,11 +635,15 @@ export async function POST(request: NextRequest) {
         responseMessage: 'success',
         metadata: {
           ...generationMetadata,
-          ...(isVideo ? { videoUrl: finalUrl } : { tempGeneratedImageUrl: finalUrl, finalImageUrl: finalUrl }),
+          ...(isAudio ? { audioUrl: finalUrl } : isVideo ? { videoUrl: finalUrl } : { tempGeneratedImageUrl: finalUrl, finalImageUrl: finalUrl }),
+          // Store music audioId + taskId for persona creation & extend
+          ...(musicTracks.length > 0 ? { audioId: musicTracks[0].audioId, musicTitle: musicTracks[0].title, musicDuration: musicTracks[0].duration } : {}),
           processedAt: new Date().toISOString(),
           fileSizeBytes,
           fileSizeMB: Math.round(fileSizeBytes / (1024 * 1024) * 100) / 100,
         },
+        // Correct fileType if detected as audio from URL (fixes old records with wrong fileType)
+        ...(isAudio && fileRecord?.fileType !== 'audio' ? { fileType: 'audio' } : {}),
       });
 
       // Auto-share for free personal users only — orgs are never auto-shared
