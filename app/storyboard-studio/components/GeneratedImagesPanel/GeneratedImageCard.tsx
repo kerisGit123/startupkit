@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download, FileText, Share2, RefreshCw, Mic, Pencil, Check } from "lucide-react";
+import { VideoPreviewDialog } from "../shared/VideoPreviewDialog";
 import { CreatePersonaDialog } from "./CreatePersonaDialog";
 import { EditPersonaDialog } from "./EditPersonaDialog";
 import { toast } from "sonner";
@@ -60,6 +61,10 @@ interface GeneratedImageCardProps {
   companyId?: string;
   userId?: string;
   metadata?: any;
+  /** Capture video frame → save as current shot's imageUrl */
+  onSnapshotToSelf?: (videoUrl: string, currentTime: number) => Promise<void>;
+  /** Capture video frame → save as next shot's imageUrl */
+  onSnapshotToNext?: (videoUrl: string, currentTime: number) => Promise<void>;
 }
 
 // Helper function to format relative time
@@ -103,6 +108,8 @@ export function GeneratedImageCard({
   companyId,
   userId,
   metadata,
+  onSnapshotToSelf,
+  onSnapshotToNext,
 }: GeneratedImageCardProps) {
   const [showVideoDialog, setShowVideoDialog] = useState(false);
   const [showImagePreview, setShowImagePreview] = useState(false);
@@ -621,50 +628,16 @@ export function GeneratedImageCard({
         document.body
       )}
 
-      {/* Video Preview Popup — rendered via portal to escape panel overflow */}
-      {showVideoDialog && image.fileType === 'video' && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }}
-          onClick={() => setShowVideoDialog(false)}
-        >
-          <div className="bg-(--bg-secondary) rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
-              <h3 className="text-white font-medium">Video Preview</h3>
-              <button
-                onClick={() => setShowVideoDialog(false)}
-                className="text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            {/* Video Player */}
-            <div className="p-4">
-              <video
-                src={image.url}
-                controls
-                autoPlay
-                className="w-full rounded-lg"
-                style={{ maxHeight: '70vh' }}
-              />
-            </div>
-            
-            {/* Footer */}
-            <div className="p-4 border-t border-(--border-primary)">
-              <div className="text-sm text-gray-400">
-                Model: {image.metadata?.model}
-              </div>
-              {image.metadata?.prompt && (
-                <div className="text-sm text-gray-400 mt-1">
-                  Prompt: {image.metadata?.prompt}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>,
-        document.body
+      {/* Video Preview — shared dialog component */}
+      {showVideoDialog && image.fileType === 'video' && (
+        <VideoPreviewDialog
+          url={image.url}
+          onClose={() => setShowVideoDialog(false)}
+          model={image.metadata?.model}
+          prompt={prompt || image.metadata?.prompt}
+          onSnapshotToSelf={onSnapshotToSelf}
+          onSnapshotToNext={onSnapshotToNext}
+        />
       )}
 
       {/* Audio Player Dialog — shared component */}

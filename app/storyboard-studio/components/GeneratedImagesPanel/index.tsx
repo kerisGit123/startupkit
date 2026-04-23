@@ -54,6 +54,10 @@ interface GeneratedImagesPanelProps {
   openSceneImageContextMenu: (event: React.MouseEvent, url: string, title: string, type: string) => void;
   currentPlan?: string;
   companyId?: string;
+  /** Capture video frame → save as current shot's imageUrl */
+  onVideoSnapshotToSelf?: (videoUrl: string, currentTime: number) => Promise<void>;
+  /** Capture video frame → save as next shot's imageUrl */
+  onVideoSnapshotToNext?: (videoUrl: string, currentTime: number) => Promise<void>;
 }
 
 interface FilterState {
@@ -81,6 +85,8 @@ export function GeneratedImagesPanel({
   openSceneImageContextMenu,
   currentPlan,
   companyId,
+  onVideoSnapshotToSelf,
+  onVideoSnapshotToNext,
 }: GeneratedImagesPanelProps) {
   const [filters, setFilters] = useState<FilterState>({
     statuses: [],
@@ -394,6 +400,8 @@ export function GeneratedImagesPanel({
                       companyId={companyId}
                       userId={(image as any).userId}
                       metadata={(image as any).metadata}
+                      onSnapshotToSelf={onVideoSnapshotToSelf}
+                      onSnapshotToNext={onVideoSnapshotToNext}
                     />
                   ))}
                 </div>

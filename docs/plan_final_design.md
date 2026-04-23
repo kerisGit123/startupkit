@@ -395,18 +395,272 @@ Close:     w-7 h-7 rounded-md text-(--text-secondary) hover:text-(--text-primary
 | Dropdown popup | `z-50` | Inside toolbar's z-50 stacking context |
 | Seedance mode backdrop | `z-40` | Fixed overlay |
 
-## 11. Files Modified
+## 11. Director's View Components (StoryboardStrip)
+
+### StoryboardStrip (Filmstrip Bar)
+```
+File:      editor/StoryboardStrip.tsx
+Location:  Between SceneEditorHeader and Canvas area
+
+Container: bg-(--bg-secondary)/95 backdrop-blur-md border-b border-(--border-primary)
+           h-[82px] px-2 py-[8px] select-none
+           flex items-center
+
+Frame Card:
+  Size:     w-[80px]
+  Thumbnail: h-[52px] bg-(--bg-primary) overflow-hidden
+  Border:   border border-(--border-primary) rounded-lg
+  Active:   border-(--accent-blue) ring-1 ring-(--accent-blue)/30 scale-105
+  Hover:    hover:border-(--border-secondary)
+  Badge:    text-[9px] px-1.5 py-0.5 rounded-md font-semibold uppercase tracking-wide
+            VIDEO: bg-red-500 text-white
+            IMAGE: bg-emerald-500 text-white
+  Info bar: text-[10px] text-(--text-secondary) font-medium
+  Status:   w-1.5 h-1.5 rounded-full
+            completed: bg-[var(--color-success)]
+            in-progress: bg-[var(--color-warning)]
+            draft: bg-(--border-primary)
+  Notes:    StickyNote icon w-3 h-3 text-yellow-400/80 (bottom-right when notes exist)
+  Drag:     GripVertical icon top-right, opacity-0 group-hover:opacity-70
+
+Gap:       gap-[5px] between cards
+
+Scroll arrows: w-6 h-6 rounded-md text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5
+Frame counter: text-[11px] text-(--text-secondary) font-medium tabular-nums
+Duration:      text-[10px] text-(--text-tertiary) tabular-nums
+```
+
+### Animatic + Comparison Buttons
+```
+Position:  Left of filmstrip, before scroll arrows
+Size:      w-6 h-6 rounded-md
+Active:    text-(--accent-blue) bg-(--accent-blue)/15
+Inactive:  text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5
+Icons:     Play/Pause (animatic), Columns3 (comparison)
+```
+
+### Generated Outputs Row
+```
+Position:  Below filmstrip, conditional (only when outputs exist)
+Container: h-[46px] px-2 py-1 bg-(--bg-primary)/80 border-b border-(--border-primary)/40
+Label:     text-[9px] text-(--text-tertiary) font-medium uppercase tracking-wide
+
+Output Thumb:
+  Size:    w-[48px] h-[36px] rounded-md
+  Border:  border-(--border-primary) hover:border-(--border-secondary)
+  Video:   <video> element with onLoadedMetadata seek to 0.5s
+           Play icon overlay: w-4 h-4 rounded-full bg-black/60
+           "V" badge: text-[6px] bg-red-500 top-left
+  Model:   text-[6px] text-white/70 bg-black/50 bottom bar
+```
+
+### Comparison Mode
+```
+Layout:    flex items-center justify-center gap-3
+Frame:     w-[140px] h-[56px] rounded-lg
+           Active: ring-2 ring-(--accent-blue)
+           Inactive: ring-1 ring-(--border-primary) hover:ring-(--border-secondary)
+Labels:    text-[9px] text-(--text-tertiary) uppercase tracking-wide
+           "PREVIOUS", "CURRENT", "NEXT"
+Empty:     border-dashed border-(--border-primary), text-[9px] "No prev" / "No next"
+```
+
+### Context Menu (Right-click)
+```
+Container: bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl
+           py-1.5 w-[180px] z-99999
+Items:     px-3 py-2 text-[13px] text-(--text-primary) hover:bg-white/5
+           Icon: w-4 h-4 text-(--text-secondary) strokeWidth={1.75}
+           gap-2.5
+Delete:    text-red-400 hover:bg-red-500/10
+Divider:   h-px bg-(--border-primary) mx-2 my-1
+Notes:     StickyNote icon text-yellow-400/70
+```
+
+### Scene Divider
+```
+Container: shrink-0 px-1 self-stretch
+Line:      w-px bg-(--border-primary)/60
+Label:     text-[8px] text-(--text-tertiary) font-medium "S1", "S2"
+```
+
+## 12. Aspect Ratio Selector (SceneEditorHeader)
+
+```
+File:      editor/SceneEditorHeader.tsx
+Style:     Matches VideoImageAIPanel settings grid popup
+
+Trigger:   flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[13px] font-medium
+           Icon: RectangleHorizontal w-3.5 h-3.5 strokeWidth={1.75}
+           Open: text-(--text-primary) bg-white/10
+           Closed: text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5
+
+Popup:     bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl p-2
+           top-full left-0 mt-1 z-50
+Backdrop:  fixed inset-0 z-40
+
+Options:   px-3 py-1.5 rounded-md text-[13px] text-center min-w-[52px]
+           Selected: bg-white/10 text-white
+           Inactive: text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)
+           Values: "16:9", "9:16", "1:1"
+```
+
+## 13. Frame Information Dialog
+
+```
+File:      editor/FrameInfoDialog.tsx
+Wrapper:   DarkModal with bg-(--bg-secondary), max-w-4xl, overlayOpacity={85}
+
+Header:    px-5 py-3.5 border-b border-white/4
+           Frame badge: px-2.5 py-1 rounded-md bg-white/4
+             Clapperboard icon text-(--accent-blue)
+             "#04" text-[13px] font-semibold tabular-nums
+           Title: text-[13px] font-semibold text-(--text-primary)
+           Status pills: px-2 py-0.5 rounded bg-white/4 text-[11px] font-semibold text-[#8A8A8A] tabular-nums
+             Clock icon + duration, RectangleHorizontal icon + ratio
+
+Left Column (Readouts):
+  Width:   w-[220px] border-r border-white/4
+  Bg:      bg-(--bg-secondary)/50
+  Card:    bg-linear-to-br from-(--bg-secondary) to-(--bg-tertiary) border border-white/4 rounded-lg p-3
+           Accent line: absolute top-0 h-px opacity-40 (color varies per card)
+  Label:   text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8A8A8A]
+           Icon: w-3 h-3 opacity-60
+  Value:   text-(--text-primary) font-semibold text-[13px] (or text-[22px] for large)
+
+Media Badge:
+  Video:   bg-red-500/15 text-red-400 text-[10px] font-semibold uppercase
+  Image:   bg-emerald-500/15 text-emerald-400
+  None:    text-[11px] text-(--text-tertiary) "No media"
+
+Right Column (Tabbed Editor):
+  Tab bar: border-b border-white/4, px-4
+           Active: text-(--text-primary) + 2px colored underline (accent per tab)
+           Inactive: text-[#8A8A8A] hover:text-(--text-primary)
+           Style: text-[13px] font-semibold uppercase tracking-wide
+           Icon: w-3.5 h-3.5 strokeWidth={1.75}
+
+  Section Header:
+    Icon box: w-6 h-6 rounded-md bg-{accent}20
+    Label: text-[13px] font-bold text-(--text-primary)
+    Line: h-px bg-linear-to-r from-(--border-primary) to-transparent
+
+  Textarea: bg-(--bg-secondary) border border-white/4 rounded-lg text-[13px] p-3.5
+            placeholder:text-(--text-tertiary) leading-relaxed
+            focus:border-white/10 focus:bg-(--bg-tertiary)
+
+  Tags:    px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wide
+           border border-white/6, bg = tag.color + "33", color = tag.color
+
+Font weight reference (matching VideoImageAIPanel):
+  - Tab labels: font-semibold (600) — not font-medium
+  - Readout labels: font-semibold (600)
+  - Readout values: font-semibold (600)
+  - Section headers: font-bold (700)
+  - Header title: font-semibold (600)
+  - Inactive text color: #8A8A8A — brighter than --text-tertiary (#6E6E6E)
+```
+
+## 14. Shared Components (New)
+
+### VideoPreviewDialog
+```
+File:      shared/VideoPreviewDialog.tsx
+Used by:   GeneratedImageCard, SceneEditor (outputs row, animatic)
+
+Container: Portal to body, fixed inset-0 bg-black/80 z-99999
+Modal:     bg-(--bg-secondary) rounded-xl max-w-4xl max-h-[90vh]
+
+Header:    p-4 border-b border-(--border-primary)
+           Title: "Video Preview" text-white font-medium
+           Snapshot buttons:
+             "This frame": Camera icon + label
+             "Next frame": SkipForward icon + label
+             Style: px-2.5 py-1.5 rounded-md text-[12px] font-medium
+                    bg-(--bg-tertiary) text-(--text-secondary)
+                    hover:text-(--text-primary) hover:bg-white/10
+                    disabled:opacity-40
+
+Video:     <video> controls autoPlay, w-full rounded-lg, max-h-[70vh]
+
+Footer:    p-4 border-t border-(--border-primary)
+           Model: text-sm text-gray-400
+           Prompt: text-sm text-gray-400 line-clamp-2
+```
+
+### DarkModal
+```
+File:      shared/DarkModal.tsx
+Container: bg-(--bg-primary) border border-(--border-primary) rounded-2xl
+Close btn: text-(--text-tertiary) hover:text-(--text-primary) hover:bg-white/10
+```
+
+## 15. VideoEditor Extensions
+
+### Blend Modes
+```
+File:      editor/VideoEditor.tsx
+
+TimelineClip extended with:
+  blendMode?: "normal" | "multiply" | "screen" | "overlay" | "darken" | "lighten" | "color-dodge" | "color-burn"
+  opacity?: number (0-100)
+
+Controls:  Visible when video/image clip selected
+  Dropdown: px-1.5 py-1 text-[10px] bg-[#1a1a24] border border-[#2a2a35] rounded
+  Slider:   w-12 h-1 accent-teal-500
+
+Preview:   style={{ mixBlendMode, opacity }} on <video> and <img>
+Export:    ctx.globalCompositeOperation + ctx.globalAlpha
+
+Timeline badge:
+  Blend: text-[7px] font-bold px-1 py-0.5 rounded bg-orange-500/80 text-white
+  Opacity: text-[7px] font-bold px-1 py-0.5 rounded bg-white/20 text-white
+```
+
+### Subtitle Track
+```
+File:      editor/VideoEditor.tsx
+
+Track:     h-[60px] at top-[248px], yellow theme
+Label:     Type icon + "Subs", text-yellow-400 bg-yellow-500/5
+Timeline:  340px total height (was 280)
+
+Clip:      Absolute positioned by startTime/endTime
+           bg-linear-to-r from-yellow-900/40 to-yellow-800/20 rounded-lg
+           Selected: ring-2 ring-yellow-400 shadow-lg shadow-yellow-500/20
+           Text: text-[9px] text-yellow-200/80
+
+Controls:  "Add Sub" button: text-yellow-400 hover:bg-yellow-500/10
+           Text input, position dropdown (top/center/bottom)
+           Font weight dropdown, color picker, delete button
+
+Preview:   Overlay on video preview area
+           Position: top-4 / top-1/2 / bottom-4
+           Style: fontSize, fontColor, backgroundColor, fontWeight from SubtitleClip
+
+Export:    ctx.font, ctx.textAlign="center", background rect + text
+```
+
+## 16. Files Modified (Complete List)
 
 | File | Changes |
 |------|---------|
-| `ai/VideoImageAIPanel.tsx` | Full toolbar redesign, category tabs, model dropdown, settings grid, all controls, ToolBtn updated |
-| `editor/EditImageAIPanel.tsx` | Toolbar, model dropdown, quality dropdown, generate button, left/right toolbar + ToolBtn redesign |
+| `ai/VideoImageAIPanel.tsx` | Full toolbar redesign, category tabs, model dropdown, settings grid, all controls |
+| `editor/EditImageAIPanel.tsx` | Toolbar, model dropdown, quality dropdown, generate button, toolbars |
+| `editor/SceneEditor.tsx` | StoryboardStrip integration, snapshot handlers, video preview dialog, reorder/status/delete/notes handlers, animatic callbacks, output selection |
+| `editor/SceneEditorHeader.tsx` | Aspect ratio selector redesigned as grid popup (matches VideoImageAIPanel) |
+| `editor/StoryboardStrip.tsx` | **NEW** — Director's filmstrip with all Phase 1-2 features |
+| `editor/FrameInfoDialog.tsx` | Redesigned as cinema-grade inspector (readout cards, NLE tab bar, section headers) |
+| `editor/VideoEditor.tsx` | Blend modes + opacity on clips, subtitle track (timeline + preview + export) |
+| `shared/DarkModal.tsx` | Updated to CSS variables (bg-primary, border-primary, text-tertiary) |
+| `shared/VideoPreviewDialog.tsx` | **NEW** — shared video player dialog with snapshot buttons |
 | `shared/PromptTextarea.tsx` | Borderless transparent bg, design system text colors |
 | `shared/PromptActionsDropdown.tsx` | **NEW** — shared component extracted from both panels |
-| `GeneratedImagesPanel/index.tsx` | Panel bg, header, section headings, share dialog |
-| `GeneratedImagesPanel/GeneratedImageCard.tsx` | Card container, badges, music card, hover actions, error/processing states |
+| `GeneratedImagesPanel/index.tsx` | Panel bg, header, share dialog, video snapshot callbacks, output row callbacks |
+| `GeneratedImagesPanel/GeneratedImageCard.tsx` | Card container, badges, hover actions, VideoPreviewDialog integration |
 | `GeneratedImagesPanel/FilterControls.tsx` | Filter pill styles |
 | `GeneratedImagesPanel/EmptyState.tsx` | Colors updated |
 | `GeneratedImagesPanel/ComparisonView.tsx` | Colors updated |
 | `GeneratedImagesPanel/EditPersonaDialog.tsx` | Colors updated |
 | `GeneratedImagesPanel/CreatePersonaDialog.tsx` | Colors updated |
+| `lib/storyboard/snapshotUtils.ts` | **NEW** — shared captureVideoFrame/captureImageFrame utilities |

@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, RectangleHorizontal } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import { CreditBadge } from "../shared/CreditBadge";
@@ -71,26 +72,15 @@ export function SceneEditorHeader({
         </span>
       ))}
 
-      {/* Aspect ratio */}
-      <div className="flex items-center gap-2">
-        <span className="text-gray-400 text-xs">Aspect</span>
-        <select
-          value={activeShot.aspectRatio || "16:9"}
-          onChange={(e) => {
-            const newAspectRatio = e.target.value;
-            onShotsChange(shots.map(s =>
-              s.id === activeShotId
-                ? { ...s, aspectRatio: newAspectRatio }
-                : s
-            ));
-          }}
-          className="bg-white/5 border border-white/10 text-gray-300 text-xs rounded px-2 py-1 focus:outline-none focus:border-blue-500"
-        >
-          <option value="16:9">16:9</option>
-          <option value="9:16">9:16</option>
-          <option value="1:1">1:1</option>
-        </select>
-      </div>
+      {/* Aspect ratio — matches VideoImageAIPanel grid popup style */}
+      <AspectRatioSelector
+        value={activeShot.aspectRatio || "16:9"}
+        onChange={(val) => {
+          onShotsChange(shots.map(s =>
+            s.id === activeShotId ? { ...s, aspectRatio: val } : s
+          ));
+        }}
+      />
 
       {/* Info button */}
       <button
@@ -116,6 +106,56 @@ export function SceneEditorHeader({
         />
         <UserButton appearance={{ elements: { avatarBox: "w-7 h-7" } }} />
       </div>
+    </div>
+  );
+}
+
+// ─── Aspect Ratio Selector (matches VideoImageAIPanel grid popup) ───────
+
+const ASPECT_OPTIONS = [
+  { value: "16:9", label: "16:9", sub: "Landscape" },
+  { value: "9:16", label: "9:16", sub: "Portrait" },
+  { value: "1:1", label: "1:1", sub: "Square" },
+];
+
+function AspectRatioSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative flex items-center">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
+          open ? "text-(--text-primary) bg-white/10" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+        }`}
+        title="Aspect Ratio"
+      >
+        <RectangleHorizontal className="w-3.5 h-3.5" strokeWidth={1.75} />
+        <span>{value}</span>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50 p-2">
+            <div className="flex flex-col gap-0.5">
+              {ASPECT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => { onChange(opt.value); setOpen(false); }}
+                  className={`px-3 py-1.5 rounded-md text-[13px] text-center transition-colors min-w-[52px] ${
+                    value === opt.value
+                      ? "bg-white/10 text-white"
+                      : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -55,13 +55,13 @@ export function DarkModal({
 
       {/* Content */}
       <div
-        className={`relative bg-[#1A1A1A] border border-[#3D3D3D] rounded-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] ${maxWidth} ${noPadding ? "" : "p-6"} ${className}`}
+        className={`relative bg-(--bg-primary) border border-(--border-primary) rounded-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] ${maxWidth} ${noPadding ? "" : "p-6"} ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         {showCloseButton && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-lg text-[#6E6E6E] hover:text-white hover:bg-white/10 transition"
+            className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-lg text-(--text-tertiary) hover:text-(--text-primary) hover:bg-white/10 transition"
           >
             <X className="w-4 h-4" />
           </button>

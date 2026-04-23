@@ -3154,10 +3154,10 @@ export function ImageAIPanel({
                       onModelChange?.(firstInCategory.value);
                     }
                   }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium uppercase tracking-wide transition-colors ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold uppercase tracking-wide transition-colors ${
                     isActive
                       ? "bg-white/10 text-(--text-primary)"
-                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                      : "text-[#8A8A8A] hover:text-(--text-primary) hover:bg-white/5"
                   }`}
                 >
                   <cat.Icon className="w-4 h-4" strokeWidth={1.75} />

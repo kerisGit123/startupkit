@@ -29,8 +29,11 @@ import EditImageAIPanel, { type AIEditMode } from "./EditImageAIPanel";
 import { ImageAIPanel, type ImageAIEditMode } from "../ai/VideoImageAIPanel";
 import { CreditBadge } from "../shared/CreditBadge";
 import { SceneEditorHeader } from "./SceneEditorHeader";
+import { StoryboardStrip } from "./StoryboardStrip";
+import { VideoPreviewDialog } from "../shared/VideoPreviewDialog";
 import { Image as ImageIcon, Box } from "lucide-react";
 import { uploadToR2 } from "@/lib/uploadToR2";
+import { captureVideoFrame } from "@/lib/storyboard/snapshotUtils";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
 import { api } from "@/convex/_generated/api";
@@ -463,6 +466,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   useEffect(() => {
     setIsCanvasImageRemoved(false);
+    // Reset backgroundImage so canvas loads the new activeShot's imageUrl
+    setBackgroundImage(null);
+    setSelectedSceneImageUrl(null);
   }, [activeShotId]);
 
   useEffect(() => {
@@ -513,6 +519,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const deductCredits = useMutation(api.credits.deductCredits);
   const refundCredits = useMutation(api.credits.refundCredits);
+  const reorderItems = useMutation(api.storyboard.storyboardItems.reorder);
+  const updateFrameStatus = useMutation(api.storyboard.storyboardItems.updateFrameStatus);
+  const removeItem = useMutation(api.storyboard.storyboardItems.remove);
+  const updateFrameNotes = useMutation(api.storyboard.storyboardItems.updateFrameNotes);
 
   const projectGeneratedImages = useMemo(() => {
     if (!projectFiles) return [] as string[];
@@ -3692,6 +3702,167 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     }
   };
 
+  // ── Filmstrip snapshot handlers ───────────────────────────────────────────
+  // Capture current canvas frame → upload to R2 → save as imageUrl on target shot
+
+  const handleStripSnapshot = useCallback(async (targetShotId: string) => {
+    const currentUserId = user?.id || userId;
+    const { effectiveCompanyId } = getCanvasImageInfo();
+    if (!effectiveCompanyId || !currentUserId) {
+      toast.error("Authentication required for snapshot");
+      return;
+    }
+    try {
+      // Use the active shot's existing imageUrl directly (avoids CORS canvas taint).
+      // Falls back to buildUploadFile only for same-origin / data URLs.
+      const activeShot = shots.find(s => s.id === activeShotId);
+      const existingUrl = activeShot?.imageUrl || activeShot?.videoUrl;
+
+      if (existingUrl) {
+        // Direct URL copy — server-side R2 fetch, no canvas needed
+        await onSaveSelectedImageToItem?.(existingUrl, targetShotId);
+        onShotsChange(shots.map(s => s.id === targetShotId ? { ...s, imageUrl: existingUrl } : s));
+      } else {
+        // No existing image — try canvas capture (works for same-origin / drawn content)
+        const { file, screenNumber } = await buildUploadFile();
+        const result = await uploadToR2({
+          file,
+          category: "uploads",
+          companyId: effectiveCompanyId,
+          userId: currentUserId,
+          projectId: projectId || undefined,
+          tags: ["storyboard", "snapshot", `screen-${screenNumber}`],
+        });
+        await onSaveSelectedImageToItem?.(result.publicUrl, targetShotId);
+        onShotsChange(shots.map(s => s.id === targetShotId ? { ...s, imageUrl: result.publicUrl } : s));
+      }
+
+      toast.success(targetShotId === activeShotId ? "Snapshot saved to this frame" : "Snapshot sent to next frame");
+    } catch (err) {
+      console.error("[StoryboardStrip] Snapshot failed:", err);
+      toast.error("Failed to capture snapshot");
+    }
+  }, [buildUploadFile, getCanvasImageInfo, user, userId, projectId, onSaveSelectedImageToItem, onShotsChange, shots, activeShotId]);
+
+  const handleSnapshotToSelf = useCallback(async () => {
+    await handleStripSnapshot(activeShotId);
+  }, [handleStripSnapshot, activeShotId]);
+
+  const handleSnapshotToNext = useCallback(async () => {
+    const sortedShots = [...shots].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const idx = sortedShots.findIndex(s => s.id === activeShotId);
+    if (idx < 0 || idx >= sortedShots.length - 1) return;
+    await handleStripSnapshot(sortedShots[idx + 1].id);
+  }, [handleStripSnapshot, shots, activeShotId]);
+
+  // ── Video preview snapshot handlers (GeneratedImagesPanel) ────────────────
+  // Capture a specific frame from a playing video → upload to R2 → save as imageUrl
+
+  const handleVideoSnapshotToTarget = useCallback(async (videoUrl: string, currentTime: number, targetShotId: string) => {
+    const currentUserId = user?.id || userId;
+    const { effectiveCompanyId } = getCanvasImageInfo();
+    if (!effectiveCompanyId || !currentUserId) {
+      toast.error("Authentication required for snapshot");
+      return;
+    }
+    try {
+      toast.info("Capturing video frame...");
+      const blob = await captureVideoFrame(videoUrl, currentTime);
+      const file = new File([blob], `snapshot-${Date.now()}.png`, { type: "image/png" });
+      const result = await uploadToR2({
+        file,
+        category: "uploads",
+        companyId: effectiveCompanyId,
+        userId: currentUserId,
+        projectId: projectId || undefined,
+        tags: ["storyboard", "video-snapshot"],
+      });
+      await onSaveSelectedImageToItem?.(result.publicUrl, targetShotId);
+      onShotsChange(shots.map(s => s.id === targetShotId ? { ...s, imageUrl: result.publicUrl } : s));
+      toast.success(targetShotId === activeShotId ? "Video frame saved to this frame" : "Video frame sent to next frame");
+    } catch (err) {
+      console.error("[SceneEditor] Video snapshot failed:", err);
+      toast.error("Failed to capture video frame");
+    }
+  }, [getCanvasImageInfo, user, userId, projectId, onSaveSelectedImageToItem, onShotsChange, shots, activeShotId]);
+
+  const handleVideoSnapshotToSelf = useCallback(async (videoUrl: string, currentTime: number) => {
+    await handleVideoSnapshotToTarget(videoUrl, currentTime, activeShotId);
+  }, [handleVideoSnapshotToTarget, activeShotId]);
+
+  const handleVideoSnapshotToNext = useCallback(async (videoUrl: string, currentTime: number) => {
+    const sorted = [...shots].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const idx = sorted.findIndex(s => s.id === activeShotId);
+    if (idx < 0 || idx >= sorted.length - 1) {
+      toast.error("No next frame available");
+      return;
+    }
+    await handleVideoSnapshotToTarget(videoUrl, currentTime, sorted[idx + 1].id);
+  }, [handleVideoSnapshotToTarget, shots, activeShotId]);
+
+  // ── Filmstrip Phase 2 handlers (reorder, status, duplicate, delete) ─────
+
+  const handleStripReorder = useCallback(async (updates: { id: string; newOrder: number }[]) => {
+    if (!projectId) return;
+    try {
+      await reorderItems({
+        projectId,
+        itemOrders: updates.map(u => ({
+          itemId: u.id as any, // Convex Id type
+          newOrder: u.newOrder,
+        })),
+      });
+      // Update local state for immediate feedback
+      onShotsChange(shots.map(s => {
+        const update = updates.find(u => u.id === s.id);
+        return update ? { ...s, order: update.newOrder } : s;
+      }));
+    } catch (err) {
+      console.error("[StoryboardStrip] Reorder failed:", err);
+      toast.error("Failed to reorder frames");
+    }
+  }, [projectId, reorderItems, onShotsChange, shots]);
+
+  const handleStripFrameStatus = useCallback(async (shotId: string, status: "draft" | "in-progress" | "completed") => {
+    try {
+      await updateFrameStatus({ id: shotId as any, frameStatus: status });
+      toast.success(`Frame marked as ${status}`);
+    } catch (err) {
+      console.error("[StoryboardStrip] Status update failed:", err);
+      toast.error("Failed to update frame status");
+    }
+  }, [updateFrameStatus]);
+
+  const handleStripDelete = useCallback(async (shotId: string) => {
+    if (shots.length <= 1) {
+      toast.error("Cannot delete the last frame");
+      return;
+    }
+    try {
+      await removeItem({ id: shotId as any });
+      // Navigate to adjacent frame
+      const sorted = [...shots].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const idx = sorted.findIndex(s => s.id === shotId);
+      const nextShot = sorted[idx + 1] || sorted[idx - 1];
+      if (nextShot) setActiveShotId(nextShot.id);
+      onShotsChange(shots.filter(s => s.id !== shotId));
+      toast.success("Frame deleted");
+    } catch (err) {
+      console.error("[StoryboardStrip] Delete failed:", err);
+      toast.error("Failed to delete frame");
+    }
+  }, [removeItem, shots, onShotsChange, setActiveShotId]);
+
+  const handleStripEditNotes = useCallback(async (shotId: string, notes: string) => {
+    try {
+      await updateFrameNotes({ id: shotId as any, notes });
+      onShotsChange(shots.map(s => s.id === shotId ? { ...s, notes } : s));
+    } catch (err) {
+      console.error("[StoryboardStrip] Notes update failed:", err);
+      toast.error("Failed to update notes");
+    }
+  }, [updateFrameNotes, onShotsChange, shots]);
+
   // Helper functions that were removed but needed - functions restored
   const saveField = (field: "voice" | "notes" | "action") => {
     if (!editingField || !activeShotId) return;
@@ -3997,6 +4168,47 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           onNavigateToShot={onNavigateToShot}
           onShotsChange={onShotsChange}
           onShowInfoDialog={() => setShowInfoDialog(true)}
+        />
+
+        {/* ── Director's Filmstrip (God View) ── */}
+        <StoryboardStrip
+          shots={shots}
+          activeShotId={activeShotId}
+          onNavigateToShot={goTo}
+          projectFiles={projectFiles ?? undefined}
+          isMobile={isMobile}
+          onSnapshotToSelf={handleSnapshotToSelf}
+          onSnapshotToNext={handleSnapshotToNext}
+          onReorder={projectId ? handleStripReorder : undefined}
+          onFrameStatusChange={handleStripFrameStatus}
+          onDelete={handleStripDelete}
+          onEditNotes={handleStripEditNotes}
+          onPlayVideo={(videoUrl) => {
+            setVideoState({
+              status: 'ready',
+              content: { videoUrl },
+              processingProgress: 100,
+            });
+          }}
+          onStopVideo={() => {
+            setVideoState({
+              status: 'empty',
+              content: null,
+              processingProgress: 0,
+            });
+          }}
+          onSelectOutput={(url) => {
+            if (url) switchCanvasImage(url, 0);
+          }}
+          onPlayVideoOutput={(videoUrl) => {
+            if (videoUrl) {
+              setVideoState({
+                status: 'ready',
+                content: { videoUrl },
+                processingProgress: 100,
+              });
+            }
+          }}
         />
 
       {/* ── Main area ── */}
@@ -4436,6 +4648,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             }}
           />
 
+          {/* Video preview dialog — shown when videoState is ready (from outputs row or animatic) */}
+          {videoState.status === 'ready' && videoState.content?.videoUrl && (
+            <VideoPreviewDialog
+              url={videoState.content.videoUrl}
+              onClose={() => setVideoState({ status: 'empty', content: null, processingProgress: 0 })}
+              onSnapshotToSelf={handleVideoSnapshotToSelf}
+              onSnapshotToNext={handleVideoSnapshotToNext}
+            />
+          )}
+
           {/* Sliding Panels */}
           {/* Overlay backdrop */}
           {generatedImagesPanelOpen && (
@@ -4495,6 +4717,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             openSceneImageContextMenu={openSceneImageContextMenu}
             currentPlan={currentPlan}
             companyId={companyId}
+            onVideoSnapshotToSelf={handleVideoSnapshotToSelf}
+            onVideoSnapshotToNext={handleVideoSnapshotToNext}
           />
 
           {sceneImageContextMenu && (

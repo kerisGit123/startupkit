@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Film, Music, Image, Play, Pause, Scissors, Trash2, Camera,
   ZoomIn, ZoomOut, Download, Plus, Loader2, Clock,
-  SkipBack, SkipForward, PanelLeftOpen, PanelLeftClose, X, Save, FolderOpen,
+  SkipBack, SkipForward, PanelLeftOpen, PanelLeftClose, X, Save, FolderOpen, Type,
 } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
@@ -17,6 +17,9 @@ import { FileBrowser } from "../ai/FileBrowser";
 const R2_PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "";
 
 // ─── Types ──────────────────────────────────────────────────────────────
+
+type BlendMode = "normal" | "multiply" | "screen" | "overlay" | "darken" | "lighten" | "color-dodge" | "color-burn";
+const BLEND_MODES: BlendMode[] = ["normal", "multiply", "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn"];
 
 interface TimelineClip {
   id: string;
@@ -27,6 +30,20 @@ interface TimelineClip {
   trimStart: number;
   trimEnd: number;
   originalDuration: number;
+  blendMode?: BlendMode;
+  opacity?: number; // 0-100, default 100
+}
+
+interface SubtitleClip {
+  id: string;
+  text: string;
+  startTime: number;
+  endTime: number;
+  position: "top" | "center" | "bottom";
+  fontSize: number;
+  fontColor: string;
+  backgroundColor: string;
+  fontWeight: "normal" | "bold";
 }
 
 type EditorMode = "video" | "audio";
@@ -58,7 +75,9 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const [videoClips, setVideoClips] = useState<TimelineClip[]>([]);
   const [audioClips, setAudioClips] = useState<TimelineClip[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
-  const [selectedTrack, setSelectedTrack] = useState<"video" | "audio">("video");
+  const [selectedTrack, setSelectedTrack] = useState<"video" | "audio" | "subtitle">("video");
+  const [subtitleClips, setSubtitleClips] = useState<SubtitleClip[]>([]);
+  const [selectedSubtitleId, setSelectedSubtitleId] = useState<string | null>(null);
 
   // Unified clips getter for backward compat
   const clips = selectedTrack === "video" ? videoClips : audioClips;
@@ -117,7 +136,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         if (f.status === "deleted" || f.deletedAt) return false;
         if (!f.r2Key && !f.sourceUrl) return false;
         if ((f.size ?? 0) <= 0) return false;
-        return f.fileType === "video" || f.fileType === "image" || f.fileType === "audio";
+        return f.fileType === "video" || f.fileType === "image" || f.fileType === "audio" || f.fileType === "music";
       })
       .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
   }, [projectFiles]);
@@ -276,7 +295,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const addClip = useCallback(async (file: any) => {
     const src = file.r2Key ? `${R2_PUBLIC_URL}/${file.r2Key}` : file.sourceUrl || "";
     let dur = 3;
-    if (file.fileType === "video" || file.fileType === "audio") {
+    if (file.fileType === "video" || file.fileType === "audio" || file.fileType === "music") {
       dur = await new Promise<number>(r => {
         const el = file.fileType === "video" ? document.createElement("video") : document.createElement("audio");
         el.src = src; el.preload = "metadata";
@@ -507,7 +526,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           filename,
           mimeType: blob.type || mimeType,
           companyId,
-          category: "uploaded",
+          category: "uploads",
         }),
       });
       const uploadData = await uploadRes.json();
@@ -823,6 +842,16 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
         const r = getClipAt(f / FPS);
         if (r) {
+          // Apply blend mode and opacity for export
+          const prevComposite = ctx.globalCompositeOperation;
+          const prevAlpha = ctx.globalAlpha;
+          if (r.clip.blendMode && r.clip.blendMode !== "normal") {
+            ctx.globalCompositeOperation = r.clip.blendMode as GlobalCompositeOperation;
+          }
+          if (r.clip.opacity != null && r.clip.opacity < 100) {
+            ctx.globalAlpha = r.clip.opacity / 100;
+          }
+
           if (r.clip.type === "video") {
             const vid = videoEls[r.clip.id];
             if (vid && vid.videoWidth > 0) {
@@ -839,6 +868,29 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
               ctx.drawImage(bmp, (W - dw) / 2, (H - dh) / 2, dw, dh);
             }
           }
+
+          // Restore composite state
+          ctx.globalCompositeOperation = prevComposite;
+          ctx.globalAlpha = prevAlpha;
+        }
+
+        // Render active subtitle on export frame
+        const exportTime = f / FPS;
+        const activeSub = subtitleClips.find(s => exportTime >= s.startTime && exportTime < s.endTime);
+        if (activeSub) {
+          ctx.save();
+          ctx.font = `${activeSub.fontWeight} ${activeSub.fontSize}px sans-serif`;
+          ctx.textAlign = "center";
+          const metrics = ctx.measureText(activeSub.text);
+          const tx = W / 2;
+          const ty = activeSub.position === "top" ? 60 : activeSub.position === "center" ? H / 2 : H - 40;
+          // Background
+          ctx.fillStyle = activeSub.backgroundColor;
+          ctx.fillRect(tx - metrics.width / 2 - 12, ty - activeSub.fontSize + 4, metrics.width + 24, activeSub.fontSize + 12);
+          // Text
+          ctx.fillStyle = activeSub.fontColor;
+          ctx.fillText(activeSub.text, tx, ty);
+          ctx.restore();
         }
 
         const vf = new VideoFrame(canvas, { timestamp: (f / FPS) * 1e6, duration: (1 / FPS) * 1e6 });
@@ -988,7 +1040,15 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         <audio ref={audioRef} style={{ display: "none" }} preload="auto" />
 
         {cur?.clip.type === "video" ? (
-          <video ref={previewRef} className="max-w-full max-h-full object-contain" playsInline />
+          <video
+            ref={previewRef}
+            className="max-w-full max-h-full object-contain"
+            playsInline
+            style={{
+              mixBlendMode: (cur.clip.blendMode || "normal") as any,
+              opacity: (cur.clip.opacity ?? 100) / 100,
+            }}
+          />
         ) : cur?.clip.type === "audio" ? (
           <div className="flex flex-col items-center gap-4">
             <div className="w-24 h-24 rounded-full bg-[#1a1a24] flex items-center justify-center border border-[#2a2a35]">
@@ -997,13 +1057,45 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
             <span className="text-sm text-[#6E6E6E]">{cur.clip.name}</span>
           </div>
         ) : cur?.clip.type === "image" ? (
-          <img src={cur.clip.src} className="max-w-full max-h-full object-contain" alt="" />
+          <img
+            src={cur.clip.src}
+            className="max-w-full max-h-full object-contain"
+            alt=""
+            style={{
+              mixBlendMode: (cur.clip.blendMode || "normal") as any,
+              opacity: (cur.clip.opacity ?? 100) / 100,
+            }}
+          />
         ) : (
           <div className="flex flex-col items-center gap-4 text-[#2a2a35]">
             <Film className="w-20 h-20" />
             <p className="text-sm text-[#4A4A4A]">Click <span className="text-teal-500 font-medium">+ Add Media</span> to start building your video</p>
           </div>
         )}
+
+        {/* Subtitle overlay on preview */}
+        {(() => {
+          const activeSub = subtitleClips.find(s => currentTime >= s.startTime && currentTime < s.endTime);
+          if (!activeSub) return null;
+          return (
+            <div className={`absolute left-0 right-0 pointer-events-none flex justify-center px-4 ${
+              activeSub.position === "top" ? "top-4" :
+              activeSub.position === "center" ? "top-1/2 -translate-y-1/2" : "bottom-4"
+            }`}>
+              <span
+                style={{
+                  fontSize: activeSub.fontSize,
+                  color: activeSub.fontColor,
+                  backgroundColor: activeSub.backgroundColor,
+                  fontWeight: activeSub.fontWeight,
+                }}
+                className="px-3 py-1 rounded-md max-w-[80%] text-center"
+              >
+                {activeSub.text}
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Export overlay */}
         {exporting && (
@@ -1204,11 +1296,110 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                     {extracting ? "Extracting..." : "Extract Audio"}
                   </button>
                 )}
+                {/* Blend mode (video/image only) */}
+                {(sel.type === "video" || sel.type === "image") && (
+                  <select
+                    value={sel.blendMode || "normal"}
+                    onChange={(e) => {
+                      const mode = e.target.value as BlendMode;
+                      setVideoClips(p => p.map(c => c.id !== sel.id ? c : { ...c, blendMode: mode }));
+                    }}
+                    className="px-1.5 py-1 text-[10px] bg-[#1a1a24] border border-[#2a2a35] rounded text-[#A0A0A0] hover:text-white outline-none cursor-pointer"
+                    title="Blend mode"
+                  >
+                    {BLEND_MODES.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                )}
+                {/* Opacity (video/image only) */}
+                {(sel.type === "video" || sel.type === "image") && (
+                  <div className="flex items-center gap-1 px-1.5 py-1 bg-[#1a1a24] border border-[#2a2a35] rounded text-[10px] text-[#A0A0A0]">
+                    <input
+                      type="range"
+                      min={0} max={100}
+                      value={sel.opacity ?? 100}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setVideoClips(p => p.map(c => c.id !== sel.id ? c : { ...c, opacity: val }));
+                      }}
+                      className="w-12 h-1 accent-teal-500 cursor-pointer"
+                      title={`Opacity: ${sel.opacity ?? 100}%`}
+                    />
+                    <span className="w-6 text-center tabular-nums">{sel.opacity ?? 100}%</span>
+                  </div>
+                )}
                 <button onClick={() => removeClip(sel.id)} className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#A0A0A0] hover:text-red-400 hover:bg-red-500/10 rounded transition">
                   <Trash2 className="w-3.5 h-3.5" /> Delete
                 </button>
               </>
             )}
+
+            {/* Subtitle controls */}
+            {selectedTrack === "subtitle" && (() => {
+              const selSub = subtitleClips.find(s => s.id === selectedSubtitleId);
+              return (
+                <>
+                  <button
+                    onClick={() => {
+                      const newSub: SubtitleClip = {
+                        id: `sub-${Date.now()}`,
+                        text: "Subtitle text",
+                        startTime: currentTime,
+                        endTime: Math.min(currentTime + 3, totalDur || currentTime + 3),
+                        position: "bottom",
+                        fontSize: 32,
+                        fontColor: "#FFFFFF",
+                        backgroundColor: "#00000080",
+                        fontWeight: "normal",
+                      };
+                      setSubtitleClips(p => [...p, newSub]);
+                      setSelectedSubtitleId(newSub.id);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] text-yellow-400 hover:bg-yellow-500/10 rounded transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Sub
+                  </button>
+                  {selSub && (
+                    <>
+                      <input
+                        value={selSub.text}
+                        onChange={(e) => setSubtitleClips(p => p.map(s => s.id !== selSub.id ? s : { ...s, text: e.target.value }))}
+                        className="px-2 py-1 text-[10px] bg-[#1a1a24] border border-[#2a2a35] rounded text-white outline-none w-32"
+                        placeholder="Subtitle text..."
+                      />
+                      <select
+                        value={selSub.position}
+                        onChange={(e) => setSubtitleClips(p => p.map(s => s.id !== selSub.id ? s : { ...s, position: e.target.value as "top" | "center" | "bottom" }))}
+                        className="px-1.5 py-1 text-[10px] bg-[#1a1a24] border border-[#2a2a35] rounded text-[#A0A0A0] outline-none cursor-pointer"
+                      >
+                        <option value="top">Top</option>
+                        <option value="center">Center</option>
+                        <option value="bottom">Bottom</option>
+                      </select>
+                      <select
+                        value={selSub.fontWeight}
+                        onChange={(e) => setSubtitleClips(p => p.map(s => s.id !== selSub.id ? s : { ...s, fontWeight: e.target.value as "normal" | "bold" }))}
+                        className="px-1.5 py-1 text-[10px] bg-[#1a1a24] border border-[#2a2a35] rounded text-[#A0A0A0] outline-none cursor-pointer"
+                      >
+                        <option value="normal">Normal</option>
+                        <option value="bold">Bold</option>
+                      </select>
+                      <input
+                        type="color" value={selSub.fontColor}
+                        onChange={(e) => setSubtitleClips(p => p.map(s => s.id !== selSub.id ? s : { ...s, fontColor: e.target.value }))}
+                        className="w-5 h-5 rounded cursor-pointer border-none"
+                        title="Font color"
+                      />
+                      <button
+                        onClick={() => { setSubtitleClips(p => p.filter(s => s.id !== selSub.id)); setSelectedSubtitleId(null); }}
+                        className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#A0A0A0] hover:text-red-400 hover:bg-red-500/10 rounded transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </button>
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Center: playback */}
@@ -1250,7 +1441,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         <div
           ref={timelineRef}
           className="relative overflow-x-auto overflow-y-hidden cursor-pointer"
-          style={{ height: (videoClips.length > 0 || audioClips.length > 0) ? 280 : 60 }}
+          style={{ height: (videoClips.length > 0 || audioClips.length > 0 || subtitleClips.length > 0) ? 340 : 60 }}
           onClick={onTimelineClick}
         >
           {videoClips.length === 0 && audioClips.length === 0 ? (
@@ -1268,6 +1459,10 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                 <button onClick={() => setSelectedTrack("audio")}
                   className={`h-[100px] flex items-center gap-1 px-1.5 text-[8px] transition ${selectedTrack === "audio" ? "text-purple-400 bg-purple-500/5" : "text-[#6E6E6E] hover:text-[#A0A0A0]"}`}>
                   <Music className="w-3 h-3" /><span>Audio</span>
+                </button>
+                <button onClick={() => setSelectedTrack("subtitle")}
+                  className={`h-[60px] flex items-center gap-1 px-1.5 text-[8px] transition ${selectedTrack === "subtitle" ? "text-yellow-400 bg-yellow-500/5" : "text-[#6E6E6E] hover:text-[#A0A0A0]"}`}>
+                  <Type className="w-3 h-3" /><span>Subs</span>
                 </button>
               </div>
 
@@ -1329,7 +1524,15 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                         )}
                       </div>
                       <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                        <span className="text-[10px] text-white/90 font-medium truncate">{clip.name}</span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="text-[10px] text-white/90 font-medium truncate">{clip.name}</span>
+                          {clip.blendMode && clip.blendMode !== "normal" && (
+                            <span className="text-[7px] font-bold px-1 py-0.5 rounded bg-orange-500/80 text-white shrink-0">{clip.blendMode.toUpperCase()}</span>
+                          )}
+                          {clip.opacity != null && clip.opacity < 100 && (
+                            <span className="text-[7px] font-bold px-1 py-0.5 rounded bg-white/20 text-white shrink-0">{clip.opacity}%</span>
+                          )}
+                        </div>
                         <span className="text-[9px] text-white/50 shrink-0 ml-1 bg-black/40 px-1.5 py-0.5 rounded">{formatTime(vd)}</span>
                       </div>
                       {showRangeCut && isSel && (() => {
@@ -1388,6 +1591,32 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                     </div>
                   );
                 })}
+              </div>
+
+              {/* Subtitle Track */}
+              <div className={`absolute top-[248px] left-14 h-[60px] px-3 py-1 border-b border-[#1e1e28] ${selectedTrack === "subtitle" ? "bg-yellow-500/[0.02]" : ""}`} style={{ width: tlWidth }}>
+                {subtitleClips.map(sub => {
+                  const x = sub.startTime * pxPerSec;
+                  const w = (sub.endTime - sub.startTime) * pxPerSec;
+                  const isSel = sub.id === selectedSubtitleId;
+                  return (
+                    <div key={sub.id}
+                      className={`absolute top-1 bottom-1 rounded-lg cursor-pointer transition ${isSel ? "ring-2 ring-yellow-400 shadow-lg shadow-yellow-500/20" : "ring-1 ring-[#2a2a35] hover:ring-[#4A4A4A]"}`}
+                      style={{ left: x, width: Math.max(w, 30) }}
+                      onClick={(e) => { e.stopPropagation(); setSelectedSubtitleId(sub.id); setSelectedTrack("subtitle"); }}
+                    >
+                      <div className="h-full bg-gradient-to-r from-yellow-900/40 to-yellow-800/20 rounded-lg px-2 flex items-center overflow-hidden">
+                        <span className="text-[9px] text-yellow-200/80 truncate">{sub.text}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Add subtitle button (when track selected and empty area clicked) */}
+                {selectedTrack === "subtitle" && subtitleClips.length === 0 && (
+                  <div className="flex items-center justify-center h-full text-[10px] text-[#2a2a35]">
+                    <Plus className="w-3 h-3 mr-1" /> Click "Add Sub" to add subtitles
+                  </div>
+                )}
               </div>
 
               {/* Playhead needle */}
