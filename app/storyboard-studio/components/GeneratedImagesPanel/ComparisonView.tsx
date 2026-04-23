@@ -50,11 +50,11 @@ export function ComparisonView({ images, onClose }: ComparisonViewProps) {
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-      <div className="bg-[#2C2C2C] rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+      <div className="bg-(--bg-secondary) rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#3D3D3D]">
+        <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
           <h3 className="text-white font-medium">Image Comparison</h3>
-          <button onClick={onClose} className="text-[#A0A0A0] hover:text-white">
+          <button onClick={onClose} className="text-(--text-secondary) hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -66,21 +66,21 @@ export function ComparisonView({ images, onClose }: ComparisonViewProps) {
               <div className="text-white text-sm font-medium">
                 {index === 0 ? 'Before' : 'After'}
               </div>
-              <div className="relative aspect-video bg-[#1A1A1A] rounded-lg overflow-hidden">
+              <div className="relative aspect-video bg-(--bg-primary) rounded-lg overflow-hidden">
                 <img 
                   src={image.url} 
                   alt="" 
                   className="w-full h-full object-contain" 
                 />
               </div>
-              <div className="text-[#A0A0A0] text-xs space-y-1">
+              <div className="text-(--text-secondary) text-xs space-y-1">
                 <div>Model: {image.metadata.model}</div>
                 <div>Time: {formatRelativeTime(image.metadata.timestamp)}</div>
                 {image.metadata.generationTime && (
                   <div>Generation: {image.metadata.generationTime}s</div>
                 )}
                 {image.metadata.prompt && (
-                  <div className="text-[#A0A0A0] text-xs mt-2 italic">
+                  <div className="text-(--text-secondary) text-xs mt-2 italic">
                     "{image.metadata.prompt}"
                   </div>
                 )}

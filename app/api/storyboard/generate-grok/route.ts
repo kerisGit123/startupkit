@@ -5,7 +5,7 @@ import { resolveKieApiKey } from '@/lib/storyboard/kieAI';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { prompt, imageUrls, aspectRatio, resolution, duration, callbackUrl, companyId } = body;
+    const { prompt, imageUrls, aspectRatio, resolution, duration, mode, nsfwChecker, callbackUrl, companyId } = body;
 
     if (!prompt) {
       return NextResponse.json({ error: 'prompt is required' }, { status: 400 });
@@ -20,6 +20,8 @@ export async function POST(req: NextRequest) {
       aspectRatio,
       resolution,
       duration,
+      mode,
+      nsfwChecker,
       kieAiId,
     });
 
@@ -29,6 +31,8 @@ export async function POST(req: NextRequest) {
       aspectRatio: aspectRatio || '16:9',
       resolution: resolution || '480p',
       duration: duration || 6,
+      mode: mode || 'normal',
+      nsfwChecker: nsfwChecker ?? true,
       callbackUrl,
       companyId,
     });

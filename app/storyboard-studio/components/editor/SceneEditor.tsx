@@ -3944,7 +3944,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   if (!activeShot) return null;
 
   return (
-    <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#0d0d12] ${isMobile ? 'touch-pan-y' : ''}`}
+    <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden bg-(--bg-primary) ${isMobile ? 'touch-pan-y' : ''}`}
          onTouchStart={handleTouchStart}
          onTouchEnd={handleTouchEnd}>
       
@@ -5615,6 +5615,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             console.log("Using Grok Imagine API format...");
 
                             const durSec = parseInt(duration.replace('s', '')) || 6;
+                            // Parse grok-specific params from quality: "480P_6s_normal_nsfw"
+                            const qualityParts = quality.split('_');
+                            const grokMode = (qualityParts[2] === "fun" ? "fun" : "normal") as "normal" | "fun";
+                            const grokNsfw = qualityParts[3] !== "nonsfw";
 
                             // Create placeholder record
                             const fileId = await logUpload({
@@ -5672,11 +5676,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   prompt: extractedPrompt,
-                              aspectRatio: aspectRatio || undefined,
                                   imageUrls: processedReferenceImages,
                                   aspectRatio: aspectRatio,
                                   resolution: quality.split('_')[0] || '480p',
                                   duration: durSec,
+                                  mode: grokMode,
+                                  nsfwChecker: grokNsfw,
                                   callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
                                   companyId: companyId || "",
                                 }),
@@ -5868,7 +5873,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               projectId: projectId || undefined,
                               category: "generated",
                               filename: `ai-music-${Date.now()}.mp3`,
-                              fileType: "audio",
+                              fileType: "music",
                               mimeType: "audio/mpeg",
                               size: 0,
                               status: "generating",
@@ -5974,7 +5979,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             if (!coverAudioUrl) { toast.error("Cover Song requires an audio file to upload"); return; }
                             const fileId = await logUpload({
                               companyId: companyId || "", userId: user?.id || "", projectId: projectId || undefined,
-                              category: "generated", filename: `cover-song-${Date.now()}.mp3`, fileType: "audio", mimeType: "audio/mpeg",
+                              category: "generated", filename: `cover-song-${Date.now()}.mp3`, fileType: "music", mimeType: "audio/mpeg",
                               size: 0, status: "generating", creditsUsed, categoryId: activeShotId, sourceUrl: undefined, tags: [],
                               uploadedBy: user?.id || "", model: aiModel, prompt: extractedPrompt, aspectRatio: undefined, defaultAI: currentDefaultAI as any,
                               metadata: { modelId: aiModel, modelName: "Cover Song", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
@@ -6025,7 +6030,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             if (!extendAudioId) { toast.error("Extend Music requires selecting a song to extend"); return; }
                             const fileId = await logUpload({
                               companyId: companyId || "", userId: user?.id || "", projectId: projectId || undefined,
-                              category: "generated", filename: `extend-music-${Date.now()}.mp3`, fileType: "audio", mimeType: "audio/mpeg",
+                              category: "generated", filename: `extend-music-${Date.now()}.mp3`, fileType: "music", mimeType: "audio/mpeg",
                               size: 0, status: "generating", creditsUsed, categoryId: activeShotId, sourceUrl: undefined, tags: [],
                               uploadedBy: user?.id || "", model: aiModel, prompt: extractedPrompt, aspectRatio: undefined, defaultAI: currentDefaultAI as any,
                               metadata: { modelId: aiModel, modelName: "Extend Music", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
@@ -6074,6 +6079,119 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               }
                             } catch (apiError) {
                               toast.error(`Persona creation failed`);
+                              throw apiError;
+                            }
+
+                          } else if (aiModel === "elevenlabs/text-to-speech-multilingual-v2") {
+                            console.log("Using ElevenLabs TTS API format...");
+
+                            // Parse quality param as JSON for TTS settings
+                            const ttsParams = JSON.parse(quality);
+
+                            // Create placeholder record
+                            const fileId = await logUpload({
+                              companyId: companyId || "",
+                              userId: user?.id || "",
+                              projectId: projectId || undefined,
+                              category: "generated",
+                              filename: `tts-${Date.now()}.mp3`,
+                              fileType: "audio",
+                              mimeType: "audio/mpeg",
+                              size: 0,
+                              status: "generating",
+                              creditsUsed: creditsUsed,
+                              categoryId: activeShotId,
+                              sourceUrl: undefined,
+                              tags: [],
+                              uploadedBy: user?.id || "",
+                              model: aiModel,
+                              prompt: extractedPrompt,
+                              aspectRatio: undefined,
+                              defaultAI: currentDefaultAI as any,
+                              metadata: {
+                                modelId: aiModel,
+                                modelName: "ElevenLabs Text-to-Speech",
+                                pricingType: "fixed",
+                                quality: quality,
+                                creditsConsumed: creditsUsed,
+                                generationTimestamp: Date.now(),
+                                behavior: { cropped: false, combined: false, referenceImagesUsed: 0 },
+                                processingTime: 0,
+                                success: false,
+                              },
+                            });
+
+                            // Deduct credits
+                            await deductCredits({
+                              companyId: companyId || "",
+                              tokens: creditsUsed,
+                              reason: `ElevenLabs TTS generation`,
+                              plan: currentPlan,
+                            });
+
+                            try {
+                              const response = await fetch('/api/storyboard/generate-tts', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  text: extractedPrompt,
+                                  voice: ttsParams.voice,
+                                  stability: ttsParams.stability,
+                                  similarityBoost: ttsParams.similarityBoost,
+                                  style: ttsParams.style,
+                                  speed: ttsParams.speed,
+                                  languageCode: ttsParams.languageCode,
+                                  previousText: ttsParams.previousText,
+                                  nextText: ttsParams.nextText,
+                                  callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
+                                  companyId: companyId || "",
+                                }),
+                              });
+
+                              if (!response.ok) {
+                                throw new Error(`TTS API error: ${response.status} ${response.statusText}`);
+                              }
+
+                              const result = await response.json();
+
+                              if (result.responseCode && result.responseCode !== 200) {
+                                await refundCredits({
+                                  companyId: companyId || "",
+                                  tokens: creditsUsed,
+                                  reason: `Refund: TTS generation failed (${result.responseCode})`,
+                                });
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "failed",
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                                toast.error(`TTS generation failed: ${result.responseMessage || 'Unknown error'}`);
+                                return;
+                              }
+
+                              // Update file with taskId
+                              if (result.taskId) {
+                                await updateStoryboardFile({
+                                  id: fileId,
+                                  status: "processing",
+                                  taskId: result.taskId,
+                                  responseCode: result.responseCode,
+                                  responseMessage: result.responseMessage,
+                                });
+                              }
+
+                              toast.success("TTS generation started! Audio will appear when ready.");
+                            } catch (apiError) {
+                              await refundCredits({
+                                companyId: companyId || "",
+                                tokens: creditsUsed,
+                                reason: `Refund: TTS API failed`,
+                              });
+                              await updateStoryboardFile({
+                                id: fileId,
+                                status: "failed",
+                              });
                               throw apiError;
                             }
 

@@ -219,11 +219,11 @@ export function CreatePersonaDialog({
       onClick={onClose}
     >
       <div
-        className="bg-[#1A1A1A] rounded-xl w-full max-w-lg overflow-hidden border border-[#3D3D3D]"
+        className="bg-(--bg-secondary) rounded-xl w-full max-w-lg overflow-hidden border border-(--border-primary)"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#3D3D3D]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-(--border-primary)">
           <div className="flex items-center gap-2">
             <Music className="w-4 h-4 text-purple-400" />
             <h3 className="text-white font-medium text-sm">Create Persona</h3>
@@ -380,7 +380,7 @@ export function CreatePersonaDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-[#3D3D3D] flex items-center justify-between">
+        <div className="px-5 py-3 border-t border-(--border-primary) flex items-center justify-between">
           <div className="text-[10px] text-gray-600">
             Vocal: {formatTime(vocalStart)} - {formatTime(vocalEnd)} ({vocalEnd - vocalStart}s)
           </div>

@@ -136,7 +136,7 @@ export function EditPersonaDialog({
   if (!persona && personas !== undefined) {
     return createPortal(
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }} onClick={onClose}>
-        <div className="bg-[#1A1A1A] rounded-xl p-6 max-w-sm text-center" onClick={e => e.stopPropagation()}>
+        <div className="bg-(--bg-secondary) rounded-xl p-6 max-w-sm text-center" onClick={e => e.stopPropagation()}>
           <p className="text-gray-400 text-sm">Persona not found in database.</p>
           <button onClick={onClose} className="mt-4 px-4 py-1.5 text-sm text-gray-400 hover:text-white transition">Close</button>
         </div>
@@ -152,11 +152,11 @@ export function EditPersonaDialog({
       onClick={onClose}
     >
       <div
-        className="bg-[#1A1A1A] rounded-xl w-full max-w-md overflow-hidden border border-[#3D3D3D]"
+        className="bg-(--bg-secondary) rounded-xl w-full max-w-md overflow-hidden border border-(--border-primary)"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[#3D3D3D]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-(--border-primary)">
           <div className="flex items-center gap-2">
             <Mic className="w-4 h-4 text-purple-400" />
             <h3 className="text-white font-medium text-sm">Edit Persona</h3>
@@ -253,7 +253,7 @@ export function EditPersonaDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-[#3D3D3D] flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-(--border-primary) flex items-center justify-end gap-2">
           <button onClick={onClose} className="px-4 py-1.5 text-sm text-gray-400 hover:text-white transition">
             Cancel
           </button>

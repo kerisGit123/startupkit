@@ -985,8 +985,8 @@ export function CanvasEditor({
   }
 
   return (
-    <div ref={outerRef} className="relative w-full h-full flex items-center justify-center bg-[#0d0d12] overflow-hidden">
-      <div ref={containerRef} className="relative bg-[#13131a]" data-canvas-editor="true"
+    <div ref={outerRef} className="relative w-full h-full flex items-center justify-center bg-(--bg-primary) overflow-hidden">
+      <div ref={containerRef} className="relative bg-(--bg-primary)" data-canvas-editor="true"
         style={{ ...canvasStyle, cursor }}
         onMouseDown={handleMouseDown}
         onClick={e => { 

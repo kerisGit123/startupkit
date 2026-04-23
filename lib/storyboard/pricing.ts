@@ -15,7 +15,7 @@ export interface PricingModel {
   _id?: string;
   modelId: string;
   modelName: string;
-  modelType: "image" | "video" | "audio";
+  modelType: "image" | "video" | "audio" | "music";
   isActive: boolean;
   pricingType: "fixed" | "formula";
   creditCost?: number;
@@ -32,7 +32,8 @@ export interface PricingModel {
     | "getGptImagePrice"
     | "getVeo31"
     | "getGrokImageToVideo"
-    | "getInfinitalkFromAudio";
+    | "getInfinitalkFromAudio"
+    | "getElevenLabsTTS";
   createdAt?: number;
   updatedAt?: number;
 }
@@ -342,6 +343,26 @@ export function getFixedPrice(base: number, factor: number): number {
   return Math.ceil(base * factor);
 }
 
+/**
+ * ElevenLabs TTS block-based pricing.
+ * 12 credits per 1,000-character block (rounded up).
+ *
+ * Examples (base=12, factor=1):
+ *   176 chars → 1 block × 12 = 12 credits
+ *   1200 chars → 2 blocks × 12 = 24 credits
+ *   2200 chars → 3 blocks × 12 = 36 credits
+ *   5000 chars → 5 blocks × 12 = 60 credits
+ */
+export function getElevenLabsTTS(
+  base: number,
+  multiplier: number,
+  characterCount: number
+): number {
+  if (characterCount <= 0) return 0;
+  const blocks = Math.ceil(characterCount / 1000);
+  return Math.ceil(blocks * base * multiplier);
+}
+
 // ─── Default Pricing Models ──────────────────────────────────────────────────
 
 export const DEFAULT_PRICING_MODELS: PricingModel[] = [
@@ -492,6 +513,39 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     }),
   },
   {
+    modelId: "gpt-image-2-text-to-image",
+    modelName: "GPT Image 2 Text to Image",
+    modelType: "image",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 12,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_image",
+        base_cost: 12,
+        note: "12 credits per image. Text-to-image generation from prompt only.",
+      },
+    }),
+  },
+  {
+    modelId: "gpt-image-2-image-to-image",
+    modelName: "GPT Image 2 Image to Image",
+    modelType: "image",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 12,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_image",
+        base_cost: 12,
+        max_input_images: 16,
+        note: "12 credits per image. Up to 16 input reference images. Supports auto/1:1/9:16/16:9 aspect ratios.",
+      },
+    }),
+  },
+  {
     modelId: "google/nano-banana-edit",
     modelName: "Nano Banana Edit",
     modelType: "image",
@@ -635,9 +689,34 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     }),
   },
   {
+    modelId: "elevenlabs/text-to-speech-multilingual-v2",
+    modelName: "ElevenLabs Text-to-Speech",
+    modelType: "audio",
+    isActive: true,
+    pricingType: "formula",
+    assignedFunction: "getElevenLabsTTS",
+    creditCost: 12,
+    factor: 1.2,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_1000_character_block",
+        base_cost: 12,
+        max_characters: 5000,
+        blocks: [
+          { range: "1-1000", credits: 12 },
+          { range: "1001-2000", credits: 24 },
+          { range: "2001-3000", credits: 36 },
+          { range: "3001-4000", credits: 48 },
+          { range: "4001-5000", credits: 60 },
+        ],
+        note: "12 credits per 1,000-character block (rounded up). Max 5,000 characters.",
+      },
+    }),
+  },
+  {
     modelId: "ai-music-api/generate",
     modelName: "AI Music Generator",
-    modelType: "audio",
+    modelType: "music",
     isActive: true,
     pricingType: "fixed",
     creditCost: 12,
@@ -655,7 +734,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
   {
     modelId: "ai-music-api/upload-cover",
     modelName: "Cover Song",
-    modelType: "audio",
+    modelType: "music",
     isActive: true,
     pricingType: "fixed",
     creditCost: 12,
@@ -673,7 +752,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
   {
     modelId: "ai-music-api/extend",
     modelName: "Extend Music",
-    modelType: "audio",
+    modelType: "music",
     isActive: true,
     pricingType: "fixed",
     creditCost: 12,
@@ -691,7 +770,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
   {
     modelId: "ai-music-api/generate-persona",
     modelName: "Create Persona",
-    modelType: "audio",
+    modelType: "music",
     isActive: true,
     pricingType: "fixed",
     creditCost: 0,

@@ -510,6 +510,16 @@ export const usePricingData = () => {
           console.log("[usePricingData] InfiniteTalk pricing:", { modelId, selectedQuality, itRes, itCostPerSec, itDuration, factor, result: itResult });
           return itResult;
         }
+        case 'getElevenLabsTTS': {
+          // Parse character count from selectedQuality: "chars_1500"
+          const charMatch = selectedQuality.match(/(\d+)/);
+          const charCount = charMatch ? parseInt(charMatch[1]) : 0;
+          if (charCount <= 0) return 0;
+          const blocks = Math.ceil(charCount / 1000);
+          const ttsResult = Math.ceil(blocks * base * factor);
+          console.log("[usePricingData] ElevenLabs TTS pricing:", { modelId, selectedQuality, charCount, blocks, base, factor, result: ttsResult });
+          return ttsResult;
+        }
         default:
           console.log("[usePricingData] Unknown assigned function, using fallback");
           return Math.ceil((model.creditCost || 0) * (model.factor || 1));

@@ -33,7 +33,7 @@ export function SceneEditorHeader({
   const hasNext = currentIndex < sortedShots.length - 1;
 
   return (
-    <div className={`${isMobile ? 'pt-12' : ''} flex items-center gap-3 px-4 py-2.5 border-b border-white/6 shrink-0`}>
+    <div className={`${isMobile ? 'pt-12' : ''} flex items-center gap-3 px-4 py-2.5 bg-(--bg-secondary) border-b border-(--border-primary) shrink-0`}>
       <button onClick={onClose} className="flex items-center gap-1.5 text-gray-400 hover:text-white text-sm transition">
         <ChevronLeft className="w-4 h-4" /> Back
       </button>

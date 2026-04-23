@@ -53,7 +53,7 @@ export function PromptTextarea({
         onCompositionStart={onCompositionStart}
         onCompositionEnd={onCompositionEnd}
         onKeyDown={onKeyDown}
-        className="w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2 text-gray-300 focus:outline-none focus:border-emerald-500/30 leading-6 text-sm selection:bg-white/20"
+        className="w-full bg-transparent px-3 py-2.5 text-(--text-primary) focus:outline-none leading-5 text-[14px] selection:bg-blue-500/20"
         style={{
           minHeight: `${minHeight ?? TEXTAREA_MIN_HEIGHT}px`,
           maxHeight: `${maxHeight ?? TEXTAREA_MAX_HEIGHT}px`,
@@ -63,7 +63,7 @@ export function PromptTextarea({
         }}
       />
       {editorIsEmpty && (
-        <div className="absolute top-2 left-3 right-3 text-gray-500 text-sm pointer-events-none select-none leading-6">
+        <div className="absolute top-2.5 left-3 right-3 text-(--text-secondary) text-[14px] pointer-events-none select-none leading-5">
           {placeholder}
         </div>
       )}

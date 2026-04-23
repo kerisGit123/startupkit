@@ -217,10 +217,10 @@ export function GeneratedImagesPanel({
           id: String(file._id),
           url: file.sourceUrl || "",
           thumbnail: file.sourceUrl || "",
-          fileType: file.fileType as 'image' | 'video' | 'audio',
+          fileType: file.fileType as 'image' | 'video' | 'audio' | 'music',
           metadata: {
             timestamp: new Date(file.createdAt ?? Date.now()),
-            model: file.fileType === 'audio' ? (file.metadata?.musicTitle || file.filename || file.model || 'Unknown') : (file.model || file.metadata?.model || file.filename || 'Unknown'),
+            model: (file.fileType === 'audio' || file.fileType === 'music') ? (file.metadata?.musicTitle || file.filename || file.model || 'Unknown') : (file.model || file.metadata?.model || file.filename || 'Unknown'),
             prompt: file.metadata?.prompt || '',
             parameters: file.metadata?.parameters || {},
             generationTime: file.metadata?.generationTime || 0,
@@ -314,17 +314,17 @@ export function GeneratedImagesPanel({
 
   return (
     <>
-      <div className={`absolute top-0 left-0 h-full w-80 bg-[#111118] border-r border-white/6 transform transition-transform duration-300 ease-in-out z-30 ${
+      <div className={`absolute top-0 left-0 h-full w-80 bg-(--bg-primary) border-r border-(--border-primary) transform transition-transform duration-300 ease-in-out z-30 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         {/* Header */}
-        <div className="p-4 border-b border-white/6 flex items-center justify-between">
-          <h3 className="text-white font-medium">Generated Images</h3>
+        <div className="px-4 py-3.5 border-b border-(--border-primary) flex items-center justify-between">
+          <h3 className="text-(--text-primary) text-[14px] font-semibold">Generated Images</h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4" strokeWidth={1.75} />
           </button>
         </div>
 
@@ -336,12 +336,12 @@ export function GeneratedImagesPanel({
 
         {/* Content */}
         <div className="flex flex-col h-full">
-          <div className="flex-1 min-h-0 overflow-y-auto pb-32">
+          <div className="flex-1 min-h-0 overflow-y-auto pb-32 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[#32363E]">
             {/* Original Image Section */}
             {(originalImage || backgroundImage || activeShot?.imageUrl) && (
               <div className="p-4">
-                <h4 className="text-white text-sm font-medium mb-3">Original</h4>
-                <div className="relative group cursor-pointer rounded-xl overflow-hidden border-2 border-gray-700 hover:border-gray-600 transition"
+                <h4 className="text-(--text-primary) text-[13px] font-semibold mb-3">Original</h4>
+                <div className="relative group cursor-pointer rounded-lg overflow-hidden border border-(--border-primary) hover:border-[#9CA3AF]/30 transition"
                        onClick={handleOriginalImageClick}
                        onContextMenu={(event) => {
                          const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
@@ -363,10 +363,10 @@ export function GeneratedImagesPanel({
             {/* Generated Images Section */}
             {filteredImages.length > 0 ? (
               <div className="p-4">
-                <h4 className="text-white text-sm font-medium mb-3">
+                <h4 className="text-(--text-primary) text-[13px] font-semibold mb-3">
                   Generated ({filteredImages.length})
                 </h4>
-                <div className="space-y-3 pb-4">
+                <div className="space-y-2 pb-4">
                   {filteredImages.map((image) => (
                     <GeneratedImageCard
                       key={image.id}
@@ -420,7 +420,7 @@ export function GeneratedImagesPanel({
         <div className="fixed inset-0 z-[9999] flex items-center justify-center" onClick={() => setShareCandidate(null)}>
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
           <div
-            className="relative bg-[#1A1A1A] rounded-2xl w-[440px] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] border border-[#3D3D3D]"
+            className="relative bg-(--bg-secondary) rounded-2xl w-[440px] overflow-hidden shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] border border-(--border-primary)"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Image preview */}
@@ -437,25 +437,25 @@ export function GeneratedImagesPanel({
             {/* Content */}
             <div className="p-5">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-[#4A90E2]/15 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-[#4A90E2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 rounded-full bg-(--accent-blue)/15 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5 text-[#3B82F6]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                   </svg>
                 </div>
                 <div>
                   <h3 className="text-white font-bold text-[15px]">Share to Gallery</h3>
-                  <p className="text-[#6E6E6E] text-xs">{shareCandidate.metadata?.model || 'AI Generated'}</p>
+                  <p className="text-(--text-secondary) text-xs">{shareCandidate.metadata?.model || 'AI Generated'}</p>
                 </div>
               </div>
 
-              <p className="text-[#A0A0A0] text-sm leading-relaxed mb-5">
+              <p className="text-(--text-secondary) text-[13px] leading-relaxed mb-5">
                 Once shared, this file will be permanently visible in the Community Gallery. Other users can view, rate, and donate credits to you. This cannot be undone.
               </p>
 
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShareCandidate(null)}
-                  className="px-5 py-2.5 text-sm text-[#A0A0A0] hover:text-white bg-[#2C2C2C] hover:bg-[#3D3D3D] border border-[#3D3D3D] rounded-lg transition font-medium"
+                  className="px-5 py-2.5 text-[13px] text-(--text-secondary) hover:text-(--text-primary) bg-[#1E2126] hover:bg-[#32363E] border border-(--border-primary) rounded-lg transition font-medium"
                 >
                   Cancel
                 </button>
@@ -469,7 +469,7 @@ export function GeneratedImagesPanel({
                     }
                     setShareCandidate(null);
                   }}
-                  className="px-5 py-2.5 text-sm text-white bg-[#4A90E2] hover:bg-[#357ABD] rounded-lg transition font-semibold"
+                  className="px-5 py-2.5 text-[13px] text-white bg-(--accent-blue) hover:bg-(--accent-blue-hover) rounded-lg transition font-semibold"
                 >
                   Share
                 </button>

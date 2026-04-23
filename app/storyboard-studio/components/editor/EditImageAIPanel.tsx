@@ -14,12 +14,13 @@ import PromptLibrary from "../ai/PromptLibrary";
 import { AddImageMenu } from "../shared/AddImageMenu";
 import { usePromptEditor } from "../shared/usePromptEditor";
 import { PromptTextarea } from "../shared/PromptTextarea";
+import { PromptActionsDropdown } from "../shared/PromptActionsDropdown";
 import {
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
-  Upload, Download, Save, History, Trash2, BookOpen, FolderOpen, MonitorDown, FolderDown, FileText, Camera, Zap, Layers,
+  Upload, Download, Save, History, Trash2, FolderOpen, MonitorDown, FolderDown, FileText, Camera, Zap, Layers,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
-  Eye, EyeOff, Bug, Video,
+  Eye, EyeOff, Bug, Video, Coins,
 } from "lucide-react";
 
 // Import Paintbrush separately to avoid conflicts
@@ -141,12 +142,12 @@ function ToolBtn({
   return (
     <button
       onClick={onClick}
-      className={`w-9 h-9 rounded-md flex items-center justify-center transition-all ${
+      className={`w-8 h-8 rounded-md flex items-center justify-center transition-all ${
         active
-          ? "bg-gradient-to-r from-cyan-600/30 to-green-600/30 text-cyan-300 shadow-2xl shadow-cyan-400/60 ring-4 ring-cyan-400/40 ring-offset-0"
+          ? "bg-white/10 text-(--text-primary)"
           : danger
-          ? "text-red-500 hover:bg-red-50 hover:text-red-600"
-          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+          ? "text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
       } ${className || ""}`}
       title={title}
     >
@@ -421,7 +422,7 @@ export default function EditImageAIPanel({
 
   // State for upload menu and prompt actions
   const [showUploadMenu, setShowUploadMenu] = useState(false);
-  const [showPromptActions, setShowPromptActions] = useState(false);
+  // showPromptActions now managed by PromptActionsDropdown component
   const [showElementLibrary, setShowElementLibrary] = useState(false);
 
   // Toast notification helper (simple implementation)
@@ -1194,18 +1195,14 @@ export default function EditImageAIPanel({
   const renderLeftToolbar = () => {
     return (
       <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
-        <div className={`flex flex-col gap-1 rounded-lg p-1 shadow-lg border ${
-          mode === "annotate" 
-            ? "bg-[#0a0a0f]/98 backdrop-blur-md border-white/10" 
-            : "bg-[#0a0a0f]/98 backdrop-blur-md border-white/10"
-        }`}>
+        <div className="flex flex-col gap-0.5 rounded-lg p-1 shadow-lg bg-(--bg-secondary)/95 backdrop-blur-md border border-(--border-primary)">
           {mode === "annotate" ? (
             <>
               <ToolBtn active={activeTool === "canvas-object"} onClick={() => pick("canvas-object")} title="Canvas Object (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
-              <div className="w-full h-px bg-white/[0.08] my-0.5" />
+              <div className="w-full h-px bg-[#32363E] my-0.5" />
               <ToolBtn active={activeTool === "text"} onClick={() => pick("text")} title="Text">
                 <Type className={ic} />
               </ToolBtn>
@@ -1231,7 +1228,7 @@ export default function EditImageAIPanel({
                 />
               </ToolBtn>
               {/* Separator */}
-              <div className="w-full h-px bg-white/[0.08] my-0.5" />
+              <div className="w-full h-px bg-[#32363E] my-0.5" />
               <ToolBtn active={false} onClick={() => {
                 // Trigger delete selected element
                 const canvasContainer = document.querySelector('[data-canvas-editor="true"]') as HTMLElement;
@@ -1251,7 +1248,7 @@ export default function EditImageAIPanel({
                 <MousePointer className={ic} />
               </ToolBtn>
               {/* Separator */}
-              <div className="w-full h-px bg-white/8 my-0.5" />
+              <div className="w-full h-px bg-[#32363E] my-0.5" />
               <ToolBtn active={activeTool === "brush"} onClick={() => pick("brush")} title="Brush">
                 <Brush className={ic} />
               </ToolBtn>
@@ -1265,15 +1262,15 @@ export default function EditImageAIPanel({
               {/* Pen size - shows actual brush size, independent button */}
               <button
                 onClick={() => setShowBrushSizeMenu(!showBrushSizeMenu)}
-                className={`w-9 h-9 rounded-md flex items-center justify-center transition-all ${
+                className={`w-8 h-8 rounded-md flex items-center justify-center transition-all ${
                   showBrushSizeMenu
-                    ? "bg-gradient-to-r from-cyan-600/30 to-green-600/30 text-cyan-300 shadow-2xl shadow-cyan-400/60 ring-4 ring-cyan-400/40 ring-offset-0" 
-                    : "text-gray-600 hover:bg-gray-100"
+                    ? "bg-white/10 text-(--text-primary)"
+                    : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
                 }`}
                 title={`Pen Brush Size: ${maskBrushSize}px`}
               >
-                <div 
-                  className="bg-cyan-400 rounded-full" 
+                <div
+                  className="bg-[#E5E7EB] rounded-full" 
                   style={{ 
                     width: `${Math.min((maskBrushSize ?? 20) / 6, 8)}px`, 
                     height: `${Math.min((maskBrushSize ?? 20) / 6, 8)}px` 
@@ -1298,14 +1295,14 @@ export default function EditImageAIPanel({
                 <ArrowUp className={`${ic} ${activeTool === "upscale" ? "text-yellow-400" : ""}`} />
               </ToolBtn>
               {/* Separator */}
-              <div className="w-full h-px bg-white/8 my-0.5" />
+              <div className="w-full h-px bg-[#32363E] my-0.5" />
                             {/* Clear Mask */}
               <button
                 onClick={() => {
                   setCanvasState?.(s => ({ ...s, mask: [] }));
                 }}
                 disabled={!canvasState?.mask?.length}
-                className="w-9 h-9 rounded-md flex items-center justify-center transition-all text-gray-600 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-30"
+                className="w-8 h-8 rounded-md flex items-center justify-center transition-all text-(--text-secondary) hover:bg-red-500/10 hover:text-red-400 disabled:opacity-30"
                 title="Clear Mask"
               >
                 <Trash2 className="w-4 h-4" />
@@ -1409,10 +1406,7 @@ export default function EditImageAIPanel({
 
   // ── Right Toolbar (Annotate + Area Edit) ───────────────────────────
   const renderRightToolbar = () => {
-    const grp =
-      mode === "annotate" 
-        ? "flex flex-col gap-1 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg p-1 shadow-lg border border-white/10"
-        : "flex flex-col gap-1 bg-[#0a0a0f]/98 backdrop-blur-md rounded-lg p-1 shadow-lg border border-white/10";
+    const grp = "flex flex-col gap-0.5 bg-(--bg-secondary)/95 backdrop-blur-md rounded-lg p-1 shadow-lg border border-(--border-primary)";
 
     return (
       <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2">
@@ -1462,7 +1456,7 @@ export default function EditImageAIPanel({
           <ToolBtn active={false} onClick={() => pick("fit-screen")} title="Fit to Screen">
             <Maximize2 className={ic} />
           </ToolBtn>
-          <div className="text-xs text-gray-400 text-center mt-1">
+          <div className="text-[10px] text-(--text-secondary) text-center mt-0.5">
             {zoomLevel}%
           </div>
         </div>
@@ -1542,9 +1536,9 @@ export default function EditImageAIPanel({
     if (mode !== "area-edit") return null;
 
     return (
-      <div className="px-[10px] pt-[10px] pb-0">
+      <div className="px-3 pt-3 pb-2">
         <div className="flex items-start gap-2">
-          {/* Text Area (shared component) */}
+          {/* Text Area */}
                 <PromptTextarea
                   editorRef={editorRef}
                   editorIsEmpty={editorIsEmpty}
@@ -1559,189 +1553,32 @@ export default function EditImageAIPanel({
                   onCompositionEnd={handleCompositionEnd}
                   onKeyDown={sharedHandleKeyDown}
                 />
-                
-                {/* Prompt Actions Button on the Right */}
-                <div className="flex-shrink-0">
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowPromptActions(!showPromptActions)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-colors text-xs font-medium h-full"
-                      title="Prompt actions"
-                    >
-                      <BookOpen className="w-3 h-3" />
-                      Prompt Actions
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showPromptActions ? 'rotate-180' : ''}`} />
-                    </button>
-                    
-                    {/* Dropdown Menu */}
-                    {showPromptActions && (
-                      <div className="absolute bottom-full right-0 mb-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px]">
-                        <div className="py-1">
-                          {/* Clear */}
-                          <button
-                            onClick={() => {
-                              const el = editorRef.current;
-                              if (el) {
-                                el.innerHTML = '';
-                                setEditorIsEmpty(true);
-                                setCurrentPrompt('');
-                                setShowPromptActions(false);
-                              }
-                            }}
-                            disabled={editorIsEmpty}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-400" />
-                            <span>Clear Text</span>
-                          </button>
-                          
-                          {/* Save Prompt */}
-                          <button
-                            onClick={() => {
-                              const prompt = extractPlainText();
-                              if (!prompt.trim()) return;
-                              setSavePromptName("");
-                              setSavePromptSuccess(false);
-                              setIsSavePromptOpen(true);
-                              setShowPromptActions(false);
-                            }}
-                            disabled={editorIsEmpty}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Save className="w-4 h-4 text-blue-400" />
-                            <span>Save Prompt</span>
-                          </button>
-                          
-                          {/* Test */}
-                          <button
-                            onClick={() => {
-                              const htmlContent = editorRef.current?.innerHTML || '';
-                              const plainText = extractPlainText();
-                              const textWithBadges = extractTextWithBadges();
-                              
-                              // Extract @Image mentions from HTML
-                              const imageMentions = htmlContent.match(/@Image\d+/g) || [];
-                              const r2Mentions = htmlContent.match(/@R2\d+/g) || [];
-                              const elMentions = htmlContent.match(/@EL\d+/g) || [];
-                              const allMentions = [...imageMentions, ...r2Mentions, ...elMentions];
-                              
-                              const mentionsText = allMentions.length > 0 ? allMentions.join(' ') : 'No @Image mentions found';
-                              
-                              // Debug: Show what each extraction method returns
-                              console.log('=== DEBUG EXTRACTION ===');
-                              console.log('HTML Content:', htmlContent);
-                              console.log('Plain Text (no badges):', plainText);
-                              console.log('Text with badges:', textWithBadges);
-                              console.log('Mentions from HTML:', mentionsText);
-                              
-                              alert(`Current textarea content with badges:\n\n${textWithBadges}\n\n@MENTIONS FOUND:\n${mentionsText}\n\nPLAIN TEXT (for AI):\n${plainText}\n\n=== DEBUG INFO ===\nHTML: ${htmlContent.substring(0, 200)}...`);
-                              setShowPromptActions(false);
-                            }}
-                            disabled={editorIsEmpty}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <FileText className="w-4 h-4 text-gray-400" />
-                            <span>Test</span>
-                          </button>
-                          
-                          {/* Load Description */}
-                          <button
-                            onClick={() => {
-                              console.log("Load Description clicked");
-                              if (activeShotDescription) {
-                                const el = editorRef.current;
-                                if (el) {
-                                  el.textContent = activeShotDescription;
-                                  setEditorIsEmpty(false);
-                                  handleEditorInput();
-                                  onUserPromptChange?.(activeShotDescription);
-                                  console.log("Description loaded:", activeShotDescription);
-                                }
-                              } else {
-                                console.log("No description available");
-                              }
-                              setShowPromptActions(false);
-                            }}
-                            disabled={!activeShotDescription}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <FileText className="w-4 h-4 text-orange-400" />
-                            <span>Load Description</span>
-                          </button>
-                          
-                          {/* Load Image Prompt */}
-                          <button
-                            onClick={() => {
-                              console.log("Load Image Prompt clicked");
-                              if (activeShotImagePrompt) {
-                                const el = editorRef.current;
-                                if (el) {
-                                  el.textContent = activeShotImagePrompt;
-                                  setEditorIsEmpty(false);
-                                  handleEditorInput();
-                                  onUserPromptChange?.(activeShotImagePrompt);
-                                  console.log("Image prompt loaded:", activeShotImagePrompt);
-                                }
-                              } else {
-                                console.log("No image prompt available");
-                              }
-                              setShowPromptActions(false);
-                            }}
-                            disabled={!activeShotImagePrompt}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Image className="w-4 h-4 text-cyan-400" />
-                            <span>Load Image Prompt</span>
-                          </button>
-                          
-                          {/* Load Video Prompt */}
-                          <button
-                            onClick={() => {
-                              console.log("Load Video Prompt clicked");
-                              console.log("activeShotVideoPrompt:", activeShotVideoPrompt);
-                              console.log("Type of activeShotVideoPrompt:", typeof activeShotVideoPrompt);
-                              console.log("Length of activeShotVideoPrompt:", activeShotVideoPrompt?.length);
-                              if (activeShotVideoPrompt) {
-                                const el = editorRef.current;
-                                if (el) {
-                                  el.textContent = activeShotVideoPrompt;
-                                  setEditorIsEmpty(false);
-                                  handleEditorInput();
-                                  onUserPromptChange?.(activeShotVideoPrompt);
-                                  console.log("Video prompt loaded:", activeShotVideoPrompt);
-                                }
-                              } else {
-                                console.log("No video prompt available");
-                              }
-                              setShowPromptActions(false);
-                            }}
-                            disabled={!activeShotVideoPrompt}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Video className="w-4 h-4 text-pink-400" />
-                            <span>Load Video Prompt</span>
-                          </button>
-                          
-                          {/* Prompt Library */}
-                          <button
-                            onClick={() => {
-                              setIsPromptLibraryOpen(true);
-                              setShowPromptActions(false);
-                            }}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
-                          >
-                            <BookOpen className="w-4 h-4 text-emerald-400" />
-                            <span>Prompt Library</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+
+                <PromptActionsDropdown
+                  editorRef={editorRef}
+                  editorIsEmpty={editorIsEmpty}
+                  setEditorIsEmpty={setEditorIsEmpty}
+                  setCurrentPrompt={setCurrentPrompt}
+                  onUserPromptChange={onUserPromptChange}
+                  extractPlainText={extractPlainText}
+                  extractTextWithBadges={extractTextWithBadges}
+                  onSavePrompt={() => {
+                    const prompt = extractPlainText();
+                    if (!prompt.trim()) return;
+                    setSavePromptName("");
+                    setSavePromptSuccess(false);
+                    setIsSavePromptOpen(true);
+                  }}
+                  activeShotDescription={activeShotDescription}
+                  activeShotImagePrompt={activeShotImagePrompt}
+                  activeShotVideoPrompt={activeShotVideoPrompt}
+                  onOpenLibrary={() => setIsPromptLibraryOpen(true)}
+                  onEditorInput={handleEditorInput}
+                />
 
               {/* Save Prompt Inline Modal */}
               {isSavePromptOpen && (
-                <div className="mt-2 p-3 bg-[#1a1a2e] border border-blue-500/30 rounded-lg">
+                <div className="mt-2 p-3 bg-(--bg-secondary) border border-(--border-primary) rounded-lg">
                   <p className="text-xs text-gray-400 mb-2">Save prompt as:</p>
                   <input
                     type="text"
@@ -1834,59 +1671,59 @@ export default function EditImageAIPanel({
         </div>
 
         {/* Main Panel */}
-        <div className="bg-[#0a0a0f]/98 backdrop-blur-md rounded-2xl border border-white/10">
-          {/* User Prompt Area (only in describe mode) */}
+        <div className="bg-(--bg-secondary)/95 backdrop-blur-md rounded-2xl">
+          {/* User Prompt Area (only in area-edit mode) */}
           {renderUserPromptArea()}
-          
-          {/* Row 1: Mode tabs + Model + Generate */}
-          <div className="px-4 py-3 flex items-center gap-3">
+
+          {/* Toolbar */}
+          <div className="relative z-50 px-3 py-2 flex items-center gap-1 border-t border-white/5">
           {/* Mode Tabs */}
-          <div className="flex items-center gap-1">
-            {modeTabs.map((tab) => {
-              const isActive = mode === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    onModeChange(tab.id);
-                    // Auto-select canvas-object (no tool) when switching to area-edit
-                    if (tab.id === "area-edit") {
-                      pick("canvas-object");
-                    }
-                  }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all text-[13px] font-medium ${
-                    isActive
-                      ? "bg-gradient-to-r from-cyan-600/30 to-green-600/30 text-cyan-300 shadow-2xl shadow-cyan-400/60 ring-4 ring-cyan-400/40 ring-offset-0"
-                      : "text-gray-400 hover:text-gray-200 hover:bg-white/[0.05]"
-                  }`}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </div>
+          {modeTabs.map((tab) => {
+            const isActive = mode === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  onModeChange(tab.id);
+                  if (tab.id === "area-edit") {
+                    pick("canvas-object");
+                  }
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium uppercase tracking-wide transition-colors ${
+                  isActive
+                    ? "bg-white/10 text-(--text-primary)"
+                    : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                }`}
+              >
+                <tab.icon className="w-4 h-4" strokeWidth={1.75} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
 
-          {/* Spacer */}
-          <div className="flex-1" />
+          {/* Separator */}
+          <div className="w-px h-4 bg-[#32363E] mx-1" />
 
-          {/* Model Dropdown */}
-      
-
-          {/* Model Select Box (in area-edit mode) */}
+          {/* Model Select (in area-edit mode) */}
           {mode === "area-edit" && modelOptions.length > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="relative" style={{ width: "200px" }}>
+            <>
+              <div className="relative">
                 <button
                   onClick={() => setShowInpaintModelDropdown(!showInpaintModelDropdown)}
-                  className="w-full flex items-center justify-between px-3 py-2 bg-[#1a1a24] text-white rounded-lg text-sm font-semibold hover:bg-[#1f1f2a] transition-all duration-200 border border-white/10 hover:border-purple-500/30 group"
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] font-medium text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
                 >
-                  <span className="text-xs truncate">{getSelectedModelDisplay()}</span>
-                  <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0" />
+                  <Camera className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} />
+                  <span>{getSelectedModelDisplay()}</span>
+                  <ChevronDown className="w-3 h-3 text-(--text-secondary)" />
                 </button>
                 {showInpaintModelDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
+                  <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowInpaintModelDropdown(false)} />
+                  <div className="absolute bottom-full left-0 mb-2 w-[240px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50">
+                    <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary)">
+                      Edit Model
+                    </div>
+                    <div className="py-1">
                       {modelOptions.map((modelOption) => (
                         <button
                           key={modelOption.value}
@@ -1894,32 +1731,37 @@ export default function EditImageAIPanel({
                             onModelChange?.(modelOption.value);
                             setShowInpaintModelDropdown(false);
                           }}
-                          className="w-full px-2 py-2 text-left hover:bg-white/5 rounded-lg transition"
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            model === modelOption.value ? "bg-white/8" : "hover:bg-white/5"
+                          }`}
                         >
-                          <div className="text-xs font-medium text-white">{modelOption.label}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">{modelOption.sub}</div>
+                          <div className="text-[13px] font-medium text-(--text-primary)">{modelOption.label}</div>
+                          <div className="text-[11px] text-(--text-secondary) mt-0.5">{modelOption.sub}</div>
                         </button>
                       ))}
                     </div>
                   </div>
+                  </>
                 )}
               </div>
 
-              {/* Quality Dropdown for Nano Banana, Topaz Upscale, and GPT Image 1.5 */}
+              {/* Quality */}
               {(normalizedModel === "nano-banana-2" || normalizedModel === "nano-banana-pro" || normalizedModel === "topaz/image-upscale" || normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") && (
-                <div className="relative" style={{ width: "80px" }}>
+                <div className="relative">
                   <button
                     onClick={() => setShowQualityDropdown(!showQualityDropdown)}
-                    className="w-full flex items-center justify-between px-2 py-2 bg-[#1a1a24] text-white rounded-lg text-xs font-semibold hover:bg-[#1f1f2a] transition-all duration-200 border border-white/10 hover:border-blue-500/30 group"
+                    className="flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[13px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
                   >
-                    <span className="text-xs">
+                    <Zap className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>
                       {(normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality}
                     </span>
-                    <ChevronDown className="w-3 h-3 text-gray-400 group-hover:text-blue-400 transition flex-shrink-0" />
                   </button>
                   {showQualityDropdown && (
-                    <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                      <div className="p-1">
+                    <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowQualityDropdown(false)} />
+                    <div className="absolute bottom-full left-0 mb-2 w-[100px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50">
+                      <div className="py-1">
                         {getQualityOptions(normalizedModel).map((quality) => (
                           <button
                             key={quality}
@@ -1928,7 +1770,6 @@ export default function EditImageAIPanel({
                                 setGptImageQuality(quality);
                               } else {
                                 setSelectedQuality(quality);
-                                // Set default quality to first available option if current quality is not in options
                                 const availableQualities = getQualityOptions(normalizedModel);
                                 if (!availableQualities.includes(selectedQuality)) {
                                   setSelectedQuality(availableQualities[0]);
@@ -1936,16 +1777,32 @@ export default function EditImageAIPanel({
                               }
                               setShowQualityDropdown(false);
                             }}
-                            className="w-full px-2 py-1 text-left hover:bg-white/5 rounded transition text-xs"
+                            className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors ${
+                              ((normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality) === quality
+                                ? "bg-white/8 text-(--text-primary)"
+                                : "text-(--text-primary) hover:bg-white/5"
+                            }`}
                           >
-                            <div className="text-xs font-medium text-white">{quality}</div>
+                            {quality}
                           </button>
                         ))}
                       </div>
                     </div>
+                    </>
                   )}
                 </div>
               )}
+            </>
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Credits */}
+          {mode === "area-edit" && (
+            <div className="flex items-center gap-1 text-[12px] text-(--text-secondary)">
+              <Coins className="w-4 h-4 text-amber-400" strokeWidth={1.75} />
+              <span>{getSelectedModelCredits()}</span>
             </div>
           )}
 
@@ -1953,25 +1810,16 @@ export default function EditImageAIPanel({
           <button
             onClick={() => {
               if (generateCooldown) return;
-
-              // Ensure we're calling the n8n-image-proxy route
               if (mode === "area-edit" && onGenerate) {
                 const modelId: string = typeof model === "string" && model.length > 0
                   ? model
                   : normalizedModel || "";
                 const qualityToPass = (normalizedModel === "gpt-image/1.5-image-to-image" || normalizedModel === "gpt-image/1.5-text-to-image") ? gptImageQuality : selectedQuality;
                 const creditsNeeded = getModelCredits(modelId);
-
-                console.log('[EditImageAIPanel] Generate clicked with credits:', creditsNeeded, 'quality:', qualityToPass);
-                console.log('[EditImageAIPanel] Current balance:', getBalance);
-
-                // Check if user has sufficient credits before proceeding
                 if (getBalance !== undefined && getBalance < creditsNeeded) {
                   toast.error(`Insufficient credits. You have ${getBalance} but need ${creditsNeeded}.`);
                   return;
                 }
-
-                // Start cooldown
                 setGenerateCooldown(true);
                 setCooldownSeconds(5);
                 const interval = setInterval(() => {
@@ -1980,25 +1828,17 @@ export default function EditImageAIPanel({
                     return prev - 1;
                   });
                 }, 1000);
-
-                // Forward both credits and quality to SceneEditor
                 onGenerate?.(creditsNeeded, qualityToPass);
                 onGenerateQuality?.(qualityToPass);
-              } else if (mode === "annotate") {
-                console.log("[EditImageAIPanel] Generate not available in annotate mode");
               }
             }}
             disabled={!canGenerate}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
-              !canGenerate
-                ? "bg-gray-400 text-gray-600 cursor-not-allowed" 
-                : "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
-            }`}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-md transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white"
             title={
-              mode === "annotate" 
-                ? "Generate not available in annotate mode. Use area-edit mode for AI generation."
+              mode === "annotate"
+                ? "Generate not available in annotate mode."
                 : requiresPrompt && !currentPrompt.trim()
-                ? "Please enter a prompt to generate an image."
+                ? "Please enter a prompt."
                 : undefined
             }
           >

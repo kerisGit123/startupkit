@@ -32,7 +32,7 @@ interface GeneratedImageCard {
   metadata: GeneratedImageMetadata;
   status: 'processing' | 'completed' | 'error';
   isFavorite: boolean;
-  fileType?: 'image' | 'video' | 'audio'; // Add fileType to distinguish between images, videos, and audio
+  fileType?: 'image' | 'video' | 'audio' | 'music'; // Add fileType to distinguish between images, videos, audio, and music
 }
 
 interface GeneratedImageCardProps {
@@ -162,7 +162,7 @@ export function GeneratedImageCard({
   const handleImageClick = () => {
     if (image.fileType === 'video') {
       setShowVideoDialog(true);
-    } else if (image.fileType === 'audio') {
+    } else if (image.fileType === 'audio' || image.fileType === 'music') {
       setShowAudioPlayer(true);
     } else {
       setShowImagePreview(true);
@@ -200,7 +200,7 @@ export function GeneratedImageCard({
       // Fallback to direct link
       const link = document.createElement('a');
       link.href = image.url;
-      link.download = `${image.metadata?.model}-${image.id}.${image.fileType === 'video' ? 'mp4' : image.fileType === 'audio' ? 'mp3' : 'png'}`;
+      link.download = `${image.metadata?.model}-${image.id}.${image.fileType === 'video' ? 'mp4' : (image.fileType === 'audio' || image.fileType === 'music') ? 'mp3' : 'png'}`;
       link.target = '_blank'; // Open in new tab as fallback
       document.body.appendChild(link);
       link.click();
@@ -210,39 +210,39 @@ export function GeneratedImageCard({
 
   return (
     <div
-      className="group relative bg-[#1A1A1A] rounded-xl border border-[#3D3D3D] overflow-hidden transition-all hover:border-[#4A90E2] hover:shadow-lg"
+      className="group relative bg-(--bg-secondary) rounded-xl overflow-hidden transition-all border border-(--border-secondary) hover:border-(--border-primary) hover:bg-[#1A1D22]"
       onContextMenu={handleContextMenu}
     >
       {/* Image Container */}
-      <div className="relative h-[100px] bg-[#0A0A0A]">
+      <div className="relative h-[120px] bg-(--bg-primary) rounded-lg overflow-hidden">
         {image.status === 'completed' && image.thumbnail ? (
-          <div 
+          <div
             className="relative w-full h-full cursor-pointer group"
             onClick={handleImageClick}
           >
-            {image.fileType === 'audio' ? (
-              // Audio card — clean, play on hover
+            {(image.fileType === 'music' || image.fileType === 'audio') ? (
+              // Music/Audio card
               <>
-                <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-[#141418] flex items-center justify-center">
-                  <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-                    <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+                <div className={`w-full h-full bg-linear-to-br ${image.fileType === 'music' ? 'from-purple-950/60 via-purple-900/20' : 'from-blue-950/60 via-blue-900/20'} to-[#0B0D10] flex items-center justify-center`}>
+                  <div className={`w-12 h-12 rounded-full ${image.fileType === 'music' ? 'bg-purple-500/20' : 'bg-blue-500/20'} flex items-center justify-center`}>
+                    <svg className={`w-6 h-6 ${image.fileType === 'music' ? 'text-purple-400' : 'text-blue-400'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
                   </div>
                 </div>
-                {/* AI + MUSIC + PERSONA badges */}
-                <div className="absolute top-2 left-2 flex items-center gap-1">
-                  <div className="bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">AI</div>
-                  <div className="bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">MUSIC</div>
+                {/* Badges */}
+                <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
+                  <span className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-semibold">AI</span>
+                  <span className={`${image.fileType === 'music' ? 'bg-purple-500' : 'bg-blue-500'} text-white text-[9px] px-1.5 py-0.5 rounded-md font-semibold`}>{image.fileType === 'music' ? 'MUSIC' : 'AUDIO'}</span>
                   {metadata?.personaCreated && (
-                    <div className="bg-amber-500/90 text-white text-[8px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">PERSONA</div>
+                    <span className="bg-amber-500 text-white text-[8px] px-1.5 py-0.5 rounded-md font-semibold">PERSONA</span>
                   )}
                 </div>
-                {/* Song name at bottom */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1">
-                  <p className="text-xs text-white/90 truncate font-medium">{metadata?.musicTitle || "Untitled"}</p>
+                {/* Title */}
+                <div className="absolute bottom-0 left-0 right-0 px-3 py-2">
+                  <p className="text-[13px] text-white truncate font-medium">{metadata?.musicTitle || "Untitled"}</p>
                 </div>
               </>
             ) : image.fileType === 'video' ? (
-              // Video thumbnail with overlay
+              // Video
               <>
                 <video
                   src={image.thumbnail}
@@ -251,26 +251,17 @@ export function GeneratedImageCard({
                   playsInline
                   onLoadedMetadata={(e) => {
                     const video = e.target as HTMLVideoElement;
-                    video.currentTime = 1; // Set to 1 second for thumbnail
+                    video.currentTime = 1;
                   }}
                 />
-                {/* Dark overlay for better text visibility */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-                {/* Video overlay removed — hover actions handled below */}
-
-                {/* AI + Video badges — top left */}
-                <div className="absolute top-2 left-2 flex items-center gap-1">
-                  <div className="bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
-                    AI
-                  </div>
-                  <div className="bg-red-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
-                    VIDEO
-                  </div>
+                <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
+                {/* Badges */}
+                <div className="absolute top-2.5 left-2.5 flex items-center gap-1">
+                  <span className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-semibold">AI</span>
+                  <span className="bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-semibold">VIDEO</span>
                 </div>
-
-                {/* Duration indicator */}
-                <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                {/* Duration */}
+                <div className="absolute bottom-2.5 left-2.5 bg-black/60 text-white text-[11px] px-2 py-0.5 rounded-md font-medium backdrop-blur-sm">
                   {image.metadata?.parameters?.duration ? `${image.metadata?.parameters.duration}s` : '4s'}
                 </div>
               </>
@@ -283,55 +274,49 @@ export function GeneratedImageCard({
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
-                {/* Source badge */}
-                {image.metadata?.model === 'combine-layers' ? (
-                  <div className="absolute top-2 left-2 bg-purple-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
-                    COMBINE
-                  </div>
-                ) : (
-                  <div className="absolute top-2 left-2 bg-emerald-600/90 text-white text-[9px] px-1.5 py-0.5 rounded shadow-lg font-medium backdrop-blur-sm">
-                    AI
-                  </div>
-                )}
+                {/* Badge */}
+                <div className="absolute top-2.5 left-2.5">
+                  {image.metadata?.model === 'combine-layers' ? (
+                    <span className="bg-purple-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-semibold">COMBINE</span>
+                  ) : (
+                    <span className="bg-emerald-500 text-white text-[9px] px-1.5 py-0.5 rounded-md font-semibold">AI</span>
+                  )}
+                </div>
               </>
             )}
           </div>
         ) : (
-          <div className="w-full h-full bg-[#0A0A0A]" />
+          <div className="w-full h-full bg-(--bg-primary)" />
         )}
         
         {/* Processing State */}
         {image.status === 'processing' && (
-          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
-            <Loader2 className="w-6 h-6 text-white animate-spin mb-2" />
-            <div className="text-white text-xs font-medium">Processing...</div>
-            
-            {/* File ID Info for Processing Files */}
+          <div className="absolute inset-0 bg-(--bg-primary)/70 backdrop-blur-sm flex flex-col items-center justify-center">
+            <Loader2 className="w-5 h-5 text-[#3B82F6] animate-spin mb-2" />
+            <div className="text-(--text-primary) text-[12px] font-medium">Processing...</div>
+
             {fileId && (
-              <div className="flex items-center gap-2 mt-2">
-                <Info className="w-4 h-4 text-white" />
-                <span className="text-white text-xs font-mono bg-black/50 px-2 py-1 rounded">
-                  {fileId.slice(0, 8)}...
-                </span>
-              </div>
+              <span className="text-(--text-secondary) text-[10px] font-mono mt-1.5">
+                {fileId.slice(0, 8)}...
+              </span>
             )}
-            
+
             {image.metadata?.progress && (
-              <div className="w-32 h-1 bg-white/20 rounded-full mt-2 overflow-hidden">
-                <div 
-                  className="h-full bg-[#4A90E2] transition-all duration-300"
+              <div className="w-28 h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="h-full bg-[#3B82F6] transition-all duration-300"
                   style={{ width: `${image.metadata?.progress}%` }}
                 />
               </div>
             )}
-            
+
             {image.metadata?.estimatedTime && (
-              <div className="text-[#A0A0A0] text-xs mt-1">
+              <div className="text-(--text-secondary) text-[10px] mt-1">
                 ~{image.metadata?.estimatedTime}s remaining
               </div>
             )}
             {image.metadata?.stage && (
-              <div className="text-[#A0A0A0] text-xs mt-1">{image.metadata?.stage}</div>
+              <div className="text-(--text-secondary) text-[10px] mt-1">{image.metadata?.stage}</div>
             )}
           </div>
         )}
@@ -350,14 +335,14 @@ export function GeneratedImageCard({
             )}
             <button
               onClick={handleCopyId}
-              className="p-2 bg-white/20 rounded-lg hover:bg-white/30 pointer-events-auto"
+              className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition pointer-events-auto"
               title="Copy storyboard file ID"
             >
               <Copy className="w-4 h-4 text-white" />
             </button>
             <button
               onClick={() => onDelete(image)}
-              className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500 pointer-events-auto"
+              className="p-2 bg-red-500/20 rounded-md hover:bg-red-500/40 transition pointer-events-auto"
               title="Delete processing file"
             >
               <Trash2 className="w-4 h-4 text-white" />
@@ -367,34 +352,34 @@ export function GeneratedImageCard({
         
         {/* Error State */}
         {image.status === 'error' && (
-          <div className="absolute inset-0 bg-red-500/20 flex flex-col items-center justify-center">
-            <AlertCircle className="w-6 h-6 text-red-400 mb-2" />
-            <div className="text-white text-xs font-medium">Generation Failed</div>
+          <div className="absolute inset-0 bg-(--bg-primary)/80 backdrop-blur-sm flex flex-col items-center justify-center">
+            <AlertCircle className="w-5 h-5 text-red-400 mb-1.5" strokeWidth={1.75} />
+            <div className="text-(--text-primary) text-[12px] font-medium">Generation Failed</div>
             {responseCode !== undefined && (
               <span
-                className={`px-2 py-0.5 rounded text-xs font-mono font-medium mt-1 cursor-default ${getResponseCodeColor(responseCode)}`}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-medium mt-1.5 cursor-default ${getResponseCodeColor(responseCode)}`}
                 title={`${getResponseCodeInfo(responseCode).label}${responseMessage ? `: ${responseMessage}` : ''}`}
               >
                 {responseCode} - {getResponseCodeInfo(responseCode).label}
               </span>
             )}
             {image.metadata?.error && !responseCode && (
-              <div className="text-red-300 text-xs mt-1 text-center px-2">{image.metadata?.error}</div>
+              <div className="text-red-300/80 text-[11px] mt-1 text-center px-3">{image.metadata?.error}</div>
             )}
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2.5">
               <button
                 onClick={() => onRetry(image)}
-                className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition"
+                className="px-3 py-1 bg-red-500 text-white text-[11px] font-medium rounded-md hover:bg-red-600 transition"
               >
                 Retry
               </button>
               {(creditsUsed === 0 || creditsUsed === undefined) && (
                 <button
                   onClick={() => onDelete(image)}
-                  className="p-1.5 bg-red-500/80 rounded hover:bg-red-500 transition"
+                  className="p-1.5 bg-white/10 rounded-md hover:bg-white/20 transition"
                   title="Delete failed generation"
                 >
-                  <Trash2 className="w-3.5 h-3.5 text-white" />
+                  <Trash2 className="w-3.5 h-3.5 text-(--text-secondary)" strokeWidth={1.75} />
                 </button>
               )}
             </div>
@@ -429,14 +414,14 @@ export function GeneratedImageCard({
 
         {/* Hover Actions (only for completed images) */}
         {image.status === 'completed' && (
-          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            {image.fileType === 'audio' ? (
-              // Audio: play button prominent, then download, copy, delete
+          <div className="absolute inset-0 bg-(--bg-primary)/60 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+            {(image.fileType === 'audio' || image.fileType === 'music') ? (
+              // Music/Audio: play button prominent, then download, copy, delete
               <>
-                <button onClick={handleImageClick} className="p-2 bg-white/90 rounded-lg hover:bg-white shadow-lg" title="Play audio">
+                <button onClick={handleImageClick} className="p-2.5 bg-white rounded-full hover:bg-white/90 shadow-lg transition" title="Play audio">
                   <Play className="w-4 h-4 text-black ml-0.5" />
                 </button>
-                <button onClick={handleDownload} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Download audio">
+                <button onClick={handleDownload} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Download audio">
                   <Download className="w-4 h-4 text-white" />
                 </button>
                 {taskId && metadata?.audioId && !metadata?.personaCreated && (
@@ -450,48 +435,48 @@ export function GeneratedImageCard({
                   </button>
                 )}
                 {prompt && (
-                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy prompt">
+                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Copy prompt">
                     <FileText className="w-4 h-4 text-white" />
                   </button>
                 )}
-                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete audio">
+                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/20 rounded-md hover:bg-red-500/40 transition" title="Delete audio">
                   <Trash2 className="w-4 h-4 text-white" />
                 </button>
               </>
             ) : image.fileType === 'video' ? (
               // Video: Show play, download, copy prompt, and delete buttons
               <>
-                <button onClick={handleImageClick} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Play video">
+                <button onClick={handleImageClick} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Play video">
                   <Play className="w-4 h-4 text-white" />
                 </button>
-                <button onClick={handleDownload} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Download video">
+                <button onClick={handleDownload} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Download video">
                   <Download className="w-4 h-4 text-white" />
                 </button>
                 {prompt && (
-                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy prompt">
+                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Copy prompt">
                     <FileText className="w-4 h-4 text-white" />
                   </button>
                 )}
-                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete video">
+                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/20 rounded-md hover:bg-red-500/40 transition" title="Delete video">
                   <Trash2 className="w-4 h-4 text-white" />
                 </button>
               </>
             ) : (
               // Image: Show preview, copy prompt, and delete icons
               <>
-                <button onClick={() => onSelect(image)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Preview">
+                <button onClick={() => onSelect(image)} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Preview">
                   <Eye className="w-4 h-4 text-white" />
                 </button>
                 {prompt ? (
-                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy prompt">
+                  <button onClick={() => { navigator.clipboard.writeText(prompt); toast.success('Prompt copied!'); }} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Copy prompt">
                     <FileText className="w-4 h-4 text-white" />
                   </button>
                 ) : (
-                  <button onClick={() => navigator.clipboard.writeText(fileId || image.id)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30" title="Copy file ID">
+                  <button onClick={() => navigator.clipboard.writeText(fileId || image.id)} className="p-2 bg-white/10 rounded-md hover:bg-white/20 transition" title="Copy file ID">
                     <Copy className="w-4 h-4 text-white" />
                   </button>
                 )}
-                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/80 rounded-lg hover:bg-red-500" title="Delete">
+                <button onClick={() => onDelete(image)} className="p-2 bg-red-500/20 rounded-md hover:bg-red-500/40 transition" title="Delete">
                   <Trash2 className="w-4 h-4 text-white" />
                 </button>
               </>
@@ -502,56 +487,56 @@ export function GeneratedImageCard({
       
       {/* Metadata Section */}
       {image.status !== 'completed' && (
-        <div className="p-3">
+        <div className="px-3 py-2.5">
           {/* Status Badge + Response Code */}
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className={`px-2 py-1 rounded text-xs font-medium ${
-              image.status === 'processing' ? 'bg-blue-500/20 text-blue-400' :
-              'bg-red-500/20 text-red-400'
+          <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+            <span className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${
+              image.status === 'processing' ? 'bg-blue-500/15 text-blue-400' :
+              'bg-red-500/15 text-red-400'
             }`}>
               {image.status === 'processing' ? 'Processing' : 'Failed'}
             </span>
 
             {responseCode !== undefined && (
               <span
-                className={`px-2 py-1 rounded text-xs font-mono font-medium cursor-default ${getResponseCodeColor(responseCode)}`}
+                className={`px-1.5 py-0.5 rounded text-[11px] font-mono font-medium cursor-default ${getResponseCodeColor(responseCode)}`}
                 title={`${getResponseCodeInfo(responseCode).label}${responseMessage ? `: ${responseMessage}` : ''}`}
               >
                 {responseCode}
               </span>
             )}
 
-            <span className="text-[#6E6E6E] text-xs">
+            <span className="text-(--text-secondary) text-[11px] ml-auto">
               {formatRelativeTime(image.metadata?.timestamp)}
             </span>
           </div>
-          
-          <div className="flex items-center gap-2 mb-2">
-            <Cpu className="w-3 h-3 text-[#6E6E6E]" />
-            <span className="text-[#6E6E6E] text-xs">
+
+          <div className="flex items-center gap-1.5 mb-2">
+            <Cpu className="w-3 h-3 text-(--text-secondary)" strokeWidth={1.75} />
+            <span className="text-(--text-secondary) text-[11px]">
               {image.metadata?.model}
             </span>
             {image.metadata?.generationTime > 0 && (
-              <span className="text-[#6E6E6E] text-xs">
-                • {image.metadata?.generationTime}s
+              <span className="text-(--text-secondary) text-[11px]">
+                · {image.metadata?.generationTime}s
               </span>
             )}
           </div>
 
           {image.status === 'processing' && image.metadata?.progress !== undefined && (
-            <div className="flex items-center gap-2 text-xs text-[#A0A0A0] mb-2">
+            <div className="flex items-center gap-2 text-[11px] text-(--text-secondary) mb-2">
               <Loader2 className="w-3 h-3 animate-spin" />
               <span>{image.metadata?.progress}% complete</span>
               {image.metadata?.estimatedTime && (
-                <span>• ~{image.metadata?.estimatedTime}s</span>
+                <span>· ~{image.metadata?.estimatedTime}s</span>
               )}
             </div>
           )}
-          
-          {/* Error Info (for error state) */}
+
+          {/* Error Info */}
           {image.status === 'error' && (
-            <div className="flex items-center gap-2 text-xs text-red-400 mb-2">
-              <AlertCircle className="w-3 h-3" />
+            <div className="flex items-center gap-1.5 text-[11px] text-red-400">
+              <AlertCircle className="w-3 h-3" strokeWidth={1.75} />
               <span>Generation failed</span>
             </div>
           )}
@@ -571,8 +556,8 @@ export function GeneratedImageCard({
           isShared={isShared}
           onShare={onShare && r2Key ? () => onShare(image) : undefined}
           onUnshare={onUnshare ? () => onUnshare(image) : undefined}
-          onCreatePersona={image.fileType === 'audio' && taskId && metadata?.audioId && !metadata?.personaCreated ? () => setShowPersonaDialog(true) : undefined}
-          onEditPersona={image.fileType === 'audio' && metadata?.personaCreated && metadata?.personaId ? () => setShowEditPersonaDialog(true) : undefined}
+          onCreatePersona={image.fileType === 'music' && taskId && metadata?.audioId && !metadata?.personaCreated ? () => setShowPersonaDialog(true) : undefined}
+          onEditPersona={image.fileType === 'music' && metadata?.personaCreated && metadata?.personaId ? () => setShowEditPersonaDialog(true) : undefined}
           onRename={fileId ? () => { setNameValue(image.metadata?.model || metadata?.musicTitle || "Untitled"); setEditingName(true); setShowAudioPlayer(true); } : undefined}
         />
       )}
@@ -582,11 +567,11 @@ export function GeneratedImageCard({
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }}
           onClick={() => setShowImagePreview(false)}
         >
-          <div className="bg-[#1A1A1A] rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          <div className="bg-(--bg-secondary) rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#3D3D3D]">
+            <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
               <h3 className="text-white font-medium">{image.metadata?.model === 'combine-layers' ? 'Combined Image' : 'Generated Image'}</h3>
               <button
                 onClick={() => setShowImagePreview(false)}
@@ -607,7 +592,7 @@ export function GeneratedImageCard({
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-[#3D3D3D] flex items-center justify-between">
+            <div className="p-4 border-t border-(--border-primary) flex items-center justify-between">
               <div>
                 {image.metadata?.model && (
                   <div className="text-sm text-gray-400">Model: {image.metadata?.model}</div>
@@ -641,11 +626,11 @@ export function GeneratedImageCard({
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }}
           onClick={() => setShowVideoDialog(false)}
         >
-          <div className="bg-[#1A1A1A] rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          <div className="bg-(--bg-secondary) rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-[#3D3D3D]">
+            <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
               <h3 className="text-white font-medium">Video Preview</h3>
               <button
                 onClick={() => setShowVideoDialog(false)}
@@ -667,7 +652,7 @@ export function GeneratedImageCard({
             </div>
             
             {/* Footer */}
-            <div className="p-4 border-t border-[#3D3D3D]">
+            <div className="p-4 border-t border-(--border-primary)">
               <div className="text-sm text-gray-400">
                 Model: {image.metadata?.model}
               </div>
@@ -683,7 +668,7 @@ export function GeneratedImageCard({
       )}
 
       {/* Audio Player Dialog — shared component */}
-      {showAudioPlayer && image.fileType === 'audio' && (
+      {showAudioPlayer && (image.fileType === 'audio' || image.fileType === 'music') && (
         <AudioPreviewDialog
           url={image.url}
           name={metadata?.musicTitle || image.metadata?.model || "Audio"}

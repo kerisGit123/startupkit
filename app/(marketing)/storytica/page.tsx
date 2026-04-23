@@ -58,14 +58,19 @@ export default function StorticaLanding() {
   const models = [
     { name: "Nano Banana 2", sub: "General purpose", type: "Image", icon: Zap },
     { name: "Nano Banana Pro", sub: "Higher quality", type: "Image", icon: Camera },
-    { name: "GPT Image 1.5", sub: "Image to Image", type: "Image", icon: Image },
-    { name: "Flux 2 Pro", sub: "Text to Image", type: "Image", icon: Sparkles },
-    { name: "Character Edit", sub: "Face editing", type: "Image", icon: Brush },
+    { name: "GPT Image 2", sub: "Photorealism", type: "Image", icon: Image },
+    { name: "Z-Image", sub: "Text to Image", type: "Image", icon: Sparkles },
     { name: "Seedance 1.5 Pro", sub: "Video generation", type: "Video", icon: Video },
-    { name: "Seedance 2.0", sub: "480p/720p", type: "Video", icon: Video },
+    { name: "Seedance 2.0", sub: "Quality 480p/720p", type: "Video", icon: Video },
+    { name: "Seedance 2.0 Fast", sub: "Faster rendering", type: "Video", icon: Video },
     { name: "Kling 3.0 Motion", sub: "Motion control", type: "Video", icon: Video },
     { name: "Veo 3.1", sub: "Google Video", type: "Video", icon: Video },
     { name: "Grok Imagine", sub: "Image to Video", type: "Video", icon: Video },
+    { name: "Topaz Upscale", sub: "1x/2x/4x upscale", type: "Video", icon: Video },
+    { name: "InfiniteTalk", sub: "Lip sync", type: "Video", icon: Video },
+    { name: "AI Music", sub: "Generate music", type: "Music", icon: Film },
+    { name: "Cover Song", sub: "Re-sing with persona", type: "Music", icon: Film },
+    { name: "ElevenLabs TTS", sub: "Text-to-speech", type: "Audio", icon: Film },
   ];
 
   return (
@@ -115,18 +120,18 @@ export default function StorticaLanding() {
 
           {/* Heading */}
           <h1 className={`text-[2.5rem] sm:text-[3.5rem] lg:text-[4.2rem] font-extrabold leading-[1.05] tracking-tight mb-5 transition-all duration-1000 ${ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`} style={{ transitionDelay: "150ms" }}>
-            The AI Storyboard Generator
+            AI Storyboard Studio
             <br />
-            for <span className="text-teal-400">Creative Professionals</span>
+            for <span className="text-teal-400">Film Directors & Creators</span>
           </h1>
 
           <p className={`text-base lg:text-lg text-[#888] leading-relaxed max-w-2xl mx-auto mb-6 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
-            Turn text into AI storyboard images with 11+ models. Generate videos, edit with professional canvas tools, and go from script to storyboard in minutes.
+            Turn text into storyboards with 15+ AI models. Generate images, videos, music, and voiceovers. Edit with professional canvas tools, compose in the video editor, and go from script to final cut in one place.
           </p>
 
           {/* Bullets */}
           <div className={`flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-8 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
-            {["No drawing skills needed", "Consistent characters", "PDF & video export"].map(b => (
+            {["15+ AI models (image, video, music, audio)", "Consistent characters & elements", "Video editor with multi-track timeline"].map(b => (
               <span key={b} className="flex items-center gap-2 text-[13px] text-[#aaa]"><Check className="w-3.5 h-3.5 text-teal-400" />{b}</span>
             ))}
           </div>
@@ -157,14 +162,24 @@ export default function StorticaLanding() {
           <div className="flex gap-4 animate-[scroll_30s_linear_infinite]" style={{ width: "max-content" }}>
             {[...models, ...models].map((m, i) => (
               <div key={`${m.name}-${i}`} className="flex items-center gap-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-5 py-3 shrink-0 min-w-[200px]">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${m.type === "Video" ? "bg-teal-500/10 text-teal-400" : "bg-cyan-500/10 text-cyan-400"}`}>
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                  m.type === "Video" ? "bg-teal-500/10 text-teal-400" :
+                  m.type === "Music" ? "bg-purple-500/10 text-purple-400" :
+                  m.type === "Audio" ? "bg-blue-500/10 text-blue-400" :
+                  "bg-cyan-500/10 text-cyan-400"
+                }`}>
                   <m.icon className="w-4 h-4" />
                 </div>
                 <div>
                   <div className="text-[13px] font-semibold text-white">{m.name}</div>
                   <div className="text-[10px] text-[#666]">{m.sub}</div>
                 </div>
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded ml-auto ${m.type === "Video" ? "bg-teal-500/15 text-teal-400" : "bg-cyan-500/15 text-cyan-400"}`}>{m.type}</span>
+                <span className={`text-[9px] font-bold px-2 py-0.5 rounded ml-auto ${
+                  m.type === "Video" ? "bg-teal-500/15 text-teal-400" :
+                  m.type === "Music" ? "bg-purple-500/15 text-purple-400" :
+                  m.type === "Audio" ? "bg-blue-500/15 text-blue-400" :
+                  "bg-cyan-500/15 text-cyan-400"
+                }`}>{m.type}</span>
               </div>
             ))}
           </div>
@@ -185,8 +200,8 @@ export default function StorticaLanding() {
           <div className="grid md:grid-cols-3 gap-5">
             {[
               { n: "Step 1", t: "WRITE YOUR SCRIPT", d: "Paste your script or type a prompt. AI converts it into scenes with shot breakdowns, dialogue, and camera directions.", img: `${img}/storyboard_home.png` },
-              { n: "Step 2", t: "GENERATE VISUALS", d: "Choose from 11+ AI models. Use the element library for consistent characters. Generate images and videos per frame.", img: `${img}/storyboardItem.png` },
-              { n: "Step 3", t: "EDIT & EXPORT", d: "Refine with canvas tools — brush, inpaint, shapes, text. Export as PDF, video, or individual frames.", img: `${img}/elementLibrary.png` },
+              { n: "Step 2", t: "GENERATE WITH AI", d: "Choose from 15+ AI models — images, videos, music, voiceovers. Use the element library for consistent characters across every shot.", img: `${img}/storyboardItem.png` },
+              { n: "Step 3", t: "EDIT & COMPOSE", d: "Refine with canvas tools. Compose in the multi-track video editor. Add music and voiceovers. Export as PDF, MP4, or WAV.", img: `${img}/elementLibrary.png` },
             ].map((s, i) => (
               <R key={s.n} delay={i * 120}>
                 <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl overflow-hidden h-full group hover:border-[#3a3a3a] transition-colors">
@@ -217,9 +232,9 @@ export default function StorticaLanding() {
 
           <div className="grid md:grid-cols-3 gap-5">
             {[
-              { t: "STORYBOARDING", d: "Generate frames from text prompts. Auto scene breakdown with tags, status badges, and camera notes per frame.", img: `${img}/storyboardItem.png` },
-              { t: "AI VIDEO GENERATION", d: "5 video engines — Seedance, Kling Motion, Veo 3.1, Grok Imagine. Control resolution, duration, and aspect ratio.", img: `${img}/AIModal.png` },
-              { t: "ELEMENT LIBRARY", d: "Save characters, props, styles as reusable elements. Drag into any frame for consistent characters across scenes.", img: `${img}/elementLibrary.png` },
+              { t: "AI STORYBOARDING", d: "Generate frames from text prompts. Auto scene breakdown with tags, status badges, and camera notes per frame. 4 image models including GPT Image 2 photorealism.", img: `${img}/storyboardItem.png` },
+              { t: "AI VIDEO GENERATION", d: "8 video engines — Seedance 1.5/2.0, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk lip sync. Control resolution, duration, mode, and aspect ratio.", img: `${img}/AIModal.png` },
+              { t: "AI MUSIC & AUDIO", d: "Generate original music, cover songs with custom personas, extend tracks, and create voiceovers with ElevenLabs TTS. Full audio production pipeline.", img: `${img}/elementLibrary.png` },
             ].map((f, i) => (
               <R key={f.t} delay={i * 100}>
                 <div className="group">
@@ -236,9 +251,9 @@ export default function StorticaLanding() {
           {/* Second row */}
           <div className="grid md:grid-cols-3 gap-5 mt-12">
             {[
-              { t: "CANVAS EDITOR", d: "Brush, inpaint, text, shapes, speech bubbles. AI upscaling with Topaz and Recraft Crisp. Zoom, crop, pan.", img: `${img}/toolbox.png` },
-              { t: "FILE BROWSER", d: "All files on Cloudflare R2. Browse elements, generated images, uploads. Search, filter, download.", img: `${img}/fileBrowser.png` },
-              { t: "TEAM COLLABORATION", d: "Invite members, assign roles (Admin, Member, Viewer). Organization switcher for multi-team workflows.", img: `${img}/storyboard_home.png` },
+              { t: "CANVAS EDITOR", d: "Brush, inpaint, area edit, text, shapes. AI image-to-image editing. Crop, zoom, pan. Professional editing without leaving the storyboard.", img: `${img}/toolbox.png` },
+              { t: "VIDEO EDITOR", d: "Multi-track timeline with video and audio tracks. Split, trim, reorder clips. Snapshot frames. Export to MP4 or WAV. Compose your final cut.", img: `${img}/fileBrowser.png` },
+              { t: "ELEMENT LIBRARY", d: "Save characters, props, styles as reusable elements. Drag into any frame for consistent characters across all scenes.", img: `${img}/elementLibrary.png` },
             ].map((f, i) => (
               <R key={f.t} delay={i * 100}>
                 <div className="group">
@@ -259,10 +274,10 @@ export default function StorticaLanding() {
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: Coins, t: "Credit System", d: "See exact cost before generating." },
-              { icon: MessageSquare, t: "Support Tickets", d: "Submit, track, and reply to tickets." },
-              { icon: Layers, t: "Prompt Library", d: "Save and reuse prompts by category." },
-              { icon: Shield, t: "Privacy First", d: "Content never used to train AI." },
+              { icon: Coins, t: "Credit System", d: "See exact cost before generating. Pay per model, not per subscription tier." },
+              { icon: Users, t: "Team Collaboration", d: "Invite members, assign roles. Organization switcher for multi-team workflows." },
+              { icon: Layers, t: "Prompt Library", d: "Save, organize, and reuse prompts across projects." },
+              { icon: Shield, t: "Privacy First", d: "Your content is never used to train AI models." },
             ].map((f, i) => (
               <R key={f.t} delay={i * 50}>
                 <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 h-full">
@@ -391,12 +406,12 @@ export default function StorticaLanding() {
         <div className="max-w-[650px] mx-auto px-6">
           <R><h2 className="text-[1.8rem] font-extrabold text-center mb-8">Frequently Asked Questions</h2></R>
           <R><div>
-            <Faq q="What AI models are available?" a="11+ models: Nano Banana 2, Nano Banana Pro, GPT 1.5 Image, Flux 2 Pro, Character Edit, Nano Banana Edit for images. Seedance 1.5 Pro, Seedance 2.0, Kling 3.0, Veo 3.1, Grok Imagine for video." />
-            <Faq q="Can I maintain consistent characters?" a="Yes. The Element Library saves characters, props, and styles with reference images. Drag them into any frame as AI references." />
-            <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 5 generations/month." />
-            <Faq q="What export options are available?" a="PDF with visuals and script, individual frames as PNG/JPG, video animatics, and script-only text export." />
-            <Faq q="Does it support team collaboration?" a="Yes. Invite members, assign roles (Admin, Member, Viewer), switch between organizations." />
-            <Faq q="Is there a free plan?" a="Yes. 5 AI generations/month, 1 project, PDF export. No credit card required." />
+            <Faq q="What AI models are available?" a="15+ models across 4 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS." />
+            <Faq q="Can I maintain consistent characters?" a="Yes. The Element Library saves characters, props, and styles with reference images. Drag them into any frame or mention with @Image tags in prompts." />
+            <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 100 credits/month. Top-up packs available from $9.90." />
+            <Faq q="Is there a video editor?" a="Yes. Multi-track timeline with video and audio tracks. Split, trim, reorder, snapshot frames, and export to MP4 or WAV." />
+            <Faq q="Does it support team collaboration?" a="Yes. Create organizations, invite members with roles (Admin, Member, Viewer). Members share the org's credit pool and storage." />
+            <Faq q="Is there a free plan?" a="Yes. 100 credits/month, 300MB storage. No credit card required. Upgrade anytime for more credits and storage." />
           </div></R>
         </div>
       </section>
@@ -407,8 +422,8 @@ export default function StorticaLanding() {
           <div className="max-w-[1000px] mx-auto px-6">
             <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 lg:p-12 grid lg:grid-cols-2 gap-8 items-center">
               <div>
-                <h2 className="text-[1.8rem] lg:text-[2rem] font-extrabold leading-tight mb-3">Create your storyboard in minutes</h2>
-                <p className="text-[14px] text-[#888] mb-6">11+ AI models. Canvas tools. PDF and video export. Start free.</p>
+                <h2 className="text-[1.8rem] lg:text-[2rem] font-extrabold leading-tight mb-3">From script to final cut in one place</h2>
+                <p className="text-[14px] text-[#888] mb-6">15+ AI models. Canvas editor. Video timeline. Music generation. Start free.</p>
                 <a href="/sign-up" className="group inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#111111] font-bold text-sm px-7 py-3 rounded-lg transition-all">
                   Start Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </a>
@@ -432,10 +447,26 @@ export default function StorticaLanding() {
               </div>
               <p className="text-[11px] text-[#555] leading-relaxed">AI-powered storyboard studio for creators and teams.</p>
             </div>
-            {[{ t: "Product", l: ["Features", "Pricing", "Changelog"] }, { t: "Resources", l: ["Docs", "Tutorials", "Blog"] }, { t: "Company", l: ["About", "Privacy", "Terms"] }].map(c => (
+            {[
+              { t: "Product", l: [
+                { label: "Features", href: "#features" },
+                { label: "Pricing", href: "#pricing" },
+                { label: "Community", href: "/community" },
+              ]},
+              { t: "Resources", l: [
+                { label: "Docs", href: "#" },
+                { label: "Tutorials", href: "#" },
+                { label: "Blog", href: "#" },
+              ]},
+              { t: "Legal", l: [
+                { label: "Privacy", href: "#" },
+                { label: "Terms", href: "#" },
+                { label: "Billing Policy", href: "/billing-policy" },
+              ]},
+            ].map(c => (
               <div key={c.t}>
                 <div className="text-[11px] font-bold text-[#555] uppercase tracking-wider mb-3">{c.t}</div>
-                <ul className="space-y-2">{c.l.map(l => <li key={l}><a href="#" className="text-[13px] text-[#777] hover:text-white transition-colors">{l}</a></li>)}</ul>
+                <ul className="space-y-2">{c.l.map(l => <li key={l.label}><a href={l.href} className="text-[13px] text-[#777] hover:text-white transition-colors">{l.label}</a></li>)}</ul>
               </div>
             ))}
           </div>

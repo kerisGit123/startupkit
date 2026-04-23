@@ -29,6 +29,8 @@ import { AudioPreviewDialog } from "../shared/AudioPreviewDialog";
 import { CreatePersonaDialog } from "../GeneratedImagesPanel/CreatePersonaDialog";
 import { ManagePersonaDialog } from "../shared/ManagePersonaDialog";
 import { ElementLibrary } from "./ElementLibrary";
+import { TtsVoiceSelector, TtsLanguageSelector, TTS_DEFAULT_VOICE } from "../shared/TtsVoiceSelector";
+import { PromptActionsDropdown } from "../shared/PromptActionsDropdown";
 
 // Constants for mention system
 const TEXTAREA_MIN_HEIGHT = 60;
@@ -147,12 +149,12 @@ function ToolBtn({
   return (
     <button
       onClick={onClick}
-      className={`w-9 h-9 rounded-md flex items-center justify-center transition-all ${
+      className={`w-8 h-8 rounded-md flex items-center justify-center transition-all ${
         active
-          ? "bg-gradient-to-r from-blue-600/30 to-green-600/30 text-blue-300 shadow-2xl shadow-blue-400/60 ring-4 ring-blue-400/40 ring-offset-0"
+          ? "bg-white/10 text-(--text-primary)"
           : danger
-          ? "text-red-500 hover:bg-red-50 hover:text-red-600"
-          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+          ? "text-red-400 hover:bg-red-500/10 hover:text-red-300"
+          : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
       } ${className}`}
       title={title}
     >
@@ -237,7 +239,7 @@ export function ImageAIPanel({
   const [showFileBrowser, setShowFileBrowser] = useState(false);
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
-  const [showPromptActions, setShowPromptActions] = useState(false);
+  // showPromptActions now managed by PromptActionsDropdown component
   const [outputMode, setOutputMode] = useState<"image" | "video" | "music">("image");
   const createTemplate = useMutation(api.promptTemplates.create);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
@@ -342,23 +344,25 @@ export function ImageAIPanel({
 
   // Model options for describe mode
   const inpaintModelOptions = [
-    { value: "nano-banana-2", label: "Nano Banana 2", sub: "General purpose", maxReferenceImages: 13, icon: Zap },
-    { value: "nano-banana-pro", label: "Nano Banana Pro", sub: "Higher quality • Max 8 refs", maxReferenceImages: 8, icon: Camera },
-    { value: "z-image", label: "Z-Image", sub: "Text-to-image • Fixed price", maxReferenceImages: 0, icon: Zap },
+    { value: "nano-banana-2", label: "Nano Banana 2", sub: "General purpose", maxReferenceImages: 13, icon: Zap, category: "image" as const },
+    { value: "nano-banana-pro", label: "Nano Banana Pro", sub: "Higher quality • Max 8 refs", maxReferenceImages: 8, icon: Camera, category: "image" as const },
+    { value: "z-image", label: "Z-Image", sub: "Text-to-image • Fixed price", maxReferenceImages: 0, icon: Zap, category: "image" as const },
+    { value: "gpt-image-2-image-to-image", label: "GPT Image 2", sub: "Photorealism • up to 16 refs • 12 cr", maxReferenceImages: 16, icon: Camera, category: "image" as const },
   ];
   const videoModelOptions = [
-    { value: "bytedance/seedance-1.5-pro", label: "Seedance 1.5 Pro", sub: "Video generation", icon: Film, maxReferenceImages: 2 },
-    { value: "bytedance/seedance-2", label: "Seedance 2.0", sub: "Quality • 480p/720p", icon: Film, maxReferenceImages: 9 },
-    { value: "bytedance/seedance-2-fast", label: "Seedance 2.0 Fast", sub: "Faster • 480p/720p", icon: Film, maxReferenceImages: 9 },
-    { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 img + 1 video", icon: Film, maxReferenceImages: 1 },
-    { value: "google/veo-3.1", label: "Veo 3.1", sub: "Google Video generation", icon: Film, maxReferenceImages: 3 },
-    { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7 },
-    { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • MP4, MOV, WEBM, M4V, GIF", icon: ArrowUp, maxReferenceImages: 0 },
-    { value: "infinitalk/from-audio", label: "InfiniteTalk", sub: "Lip sync • image + audio • 480p/720p", icon: Mic, maxReferenceImages: 1 },
-    { value: "ai-music-api/generate", label: "AI Music", sub: "Generate music • up to 4min", icon: Music, maxReferenceImages: 0 },
-    { value: "ai-music-api/upload-cover", label: "Cover Song", sub: "Re-sing with persona • upload audio", icon: Music, maxReferenceImages: 0 },
-    { value: "ai-music-api/extend", label: "Extend Music", sub: "Make songs longer • from timestamp", icon: Music, maxReferenceImages: 0 },
-    { value: "ai-music-api/generate-persona", label: "Create Persona", sub: "Extract voice • free", icon: Mic, maxReferenceImages: 0 },
+    { value: "bytedance/seedance-1.5-pro", label: "Seedance 1.5 Pro", sub: "Video generation", icon: Film, maxReferenceImages: 2, category: "video" as const },
+    { value: "bytedance/seedance-2", label: "Seedance 2.0", sub: "Quality • 480p/720p", icon: Film, maxReferenceImages: 9, category: "video" as const },
+    { value: "bytedance/seedance-2-fast", label: "Seedance 2.0 Fast", sub: "Faster • 480p/720p", icon: Film, maxReferenceImages: 9, category: "video" as const },
+    { value: "kling-3.0/motion-control", label: "Kling 3.0 Motion", sub: "720p/1080p • 1 img + 1 video", icon: Film, maxReferenceImages: 1, category: "video" as const },
+    { value: "google/veo-3.1", label: "Veo 3.1", sub: "Google Video generation", icon: Film, maxReferenceImages: 3, category: "video" as const },
+    { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7, category: "video" as const },
+    { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • MP4, MOV, WEBM, M4V, GIF", icon: ArrowUp, maxReferenceImages: 0, category: "video" as const },
+    { value: "infinitalk/from-audio", label: "InfiniteTalk", sub: "Lip sync • image + audio • 480p/720p", icon: Mic, maxReferenceImages: 1, category: "video" as const },
+    { value: "ai-music-api/generate", label: "AI Music", sub: "Generate music • up to 4min", icon: Music, maxReferenceImages: 0, category: "music" as const },
+    { value: "ai-music-api/upload-cover", label: "Cover Song", sub: "Re-sing with persona • upload audio", icon: Music, maxReferenceImages: 0, category: "music" as const },
+    { value: "ai-music-api/extend", label: "Extend Music", sub: "Make songs longer • from timestamp", icon: Music, maxReferenceImages: 0, category: "music" as const },
+    { value: "ai-music-api/generate-persona", label: "Create Persona", sub: "Extract voice • free", icon: Mic, maxReferenceImages: 0, category: "music" as const },
+    { value: "elevenlabs/text-to-speech-multilingual-v2", label: "ElevenLabs TTS", sub: "Text-to-speech • multilingual • 12 cr/1K chars", icon: Mic, maxReferenceImages: 0, category: "audio" as const },
   ];
   // Combine all models for the consolidated dropdown
   const allModelOptions = [...inpaintModelOptions, ...videoModelOptions];
@@ -435,7 +439,8 @@ export function ImageAIPanel({
   const [showSceneBrowser, setShowSceneBrowser] = useState(false);
   const [seedanceModeOpen, setSeedanceModeOpen] = useState(false);
   const [promptLengthError, setPromptLengthError] = useState<{ current: number; max: number } | null>(null);
-  const [nsfwChecker, setNsfwChecker] = useState(true); // Z-Image / Topaz: NSFW checker (default on)
+  const [nsfwChecker, setNsfwChecker] = useState(true); // Z-Image / Topaz / Grok: NSFW checker (default on)
+  const [grokMode, setGrokMode] = useState<"normal" | "fun">("normal"); // Grok Imagine: generation mode
   const [topazUpscaleFactor, setTopazUpscaleFactor] = useState<"1" | "2" | "4">("2"); // Topaz Video Upscale factor
   const [infinitalkResolution, setInfinitalkResolution] = useState<"480p" | "720p">("480p"); // InfiniteTalk: resolution
   const [infinitalkAudioUrl, setInfinitalkAudioUrl] = useState<string>(""); // InfiniteTalk: audio URL
@@ -457,6 +462,21 @@ export function ImageAIPanel({
   const [personaDescription, setPersonaDescription] = useState(""); // Create Persona: description
   const [personaSourceAudioId, setPersonaSourceAudioId] = useState(""); // Create Persona: audioId from generated song
   const [personaSourceTaskId, setPersonaSourceTaskId] = useState(""); // Create Persona: taskId from generated song
+  // ElevenLabs TTS state
+  const [ttsVoice, setTtsVoice] = useState(TTS_DEFAULT_VOICE); // TTS: default to James (Husky, Engaging and Bold)
+  const [ttsStability, setTtsStability] = useState(0.5); // TTS: voice stability 0-1
+  const [ttsSimilarityBoost, setTtsSimilarityBoost] = useState(0.75); // TTS: similarity boost 0-1
+  const [ttsStyle, setTtsStyle] = useState(0); // TTS: style exaggeration 0-1
+  const [ttsSpeed, setTtsSpeed] = useState(1); // TTS: speed 0.7-1.2
+  const [ttsLanguageCode, setTtsLanguageCode] = useState(""); // TTS: language code (ISO 639-1)
+  const [ttsPreviousText, setTtsPreviousText] = useState(""); // TTS: context before current text
+  const [ttsNextText, setTtsNextText] = useState(""); // TTS: context after current text
+  const [showTtsVoiceDropdown, setShowTtsVoiceDropdown] = useState(false); // TTS: voice selector dropdown
+  // GPT Image 2 state
+  const [gptImage2Mode, setGptImage2Mode] = useState<"image-to-image" | "text-to-image">("image-to-image"); // GPT Image 2: mode
+  const [gptImage2Nsfw, setGptImage2Nsfw] = useState(false); // GPT Image 2: NSFW checker
+  const [showGptImage2ModeDropdown, setShowGptImage2ModeDropdown] = useState(false); // GPT Image 2: mode dropdown
+  const [showTtsLanguageDropdown, setShowTtsLanguageDropdown] = useState(false); // TTS: language selector dropdown
   const [showMusicStyleDropdown, setShowMusicStyleDropdown] = useState(false); // Music: style dropdown
   const [showPersonaDropdown, setShowPersonaDropdown] = useState(false); // Music: persona dropdown
   const [showCoverAdvanced, setShowCoverAdvanced] = useState(false); // Cover: advanced options toggle
@@ -555,6 +575,10 @@ export function ImageAIPanel({
         return 0; // TEXT_2_VIDEO doesn't support reference images
       }
     }
+    // GPT Image 2 text-to-image mode: no reference images needed
+    if (selectedModelOption.value === "gpt-image-2-image-to-image" && gptImage2Mode === "text-to-image") {
+      return 0;
+    }
     return selectedModelOption.maxReferenceImages || 0;
   };
 
@@ -643,15 +667,28 @@ export function ImageAIPanel({
       })()
     : selectedModelOption.value === "ai-music-api/generate-persona"
     ? 0 // Free
+    : selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2"
+    ? (() => {
+        const charCount = currentPrompt.length || 0;
+        if (charCount <= 0) return getModelCredits("elevenlabs/text-to-speech-multilingual-v2", "chars_1000");
+        return getModelCredits("elevenlabs/text-to-speech-multilingual-v2", `chars_${charCount}`);
+      })()
     : selectedModelOption.value === "z-image"
     ? (() => {
         const credits = getModelCredits("z-image", "fixed");
         return credits > 0 ? credits : 1;
       })()
+    : selectedModelOption.value === "gpt-image-2-image-to-image"
+    ? (() => {
+        const credits = getModelCredits("gpt-image-2-image-to-image", "fixed");
+        return credits > 0 ? credits : 15;
+      })()
     : credits;
 
   // Dropdown visibility states
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [modelFilter, setModelFilter] = useState<"all" | "image" | "video" | "music" | "audio">("all");
   const [showAspectRatioDropdown, setShowAspectRatioDropdown] = useState(false);
   const [showResolutionDropdown, setShowResolutionDropdown] = useState(false);
   const [showOutputFormatDropdown, setShowOutputFormatDropdown] = useState(false);
@@ -1515,6 +1552,8 @@ export function ImageAIPanel({
       setResolution("480P");
       setVideoDuration("6s");
       setAspectRatio("16:9");
+      setGrokMode("normal");
+      setNsfwChecker(true);
     } else if (model === "topaz/video-upscale") {
       setTopazUpscaleFactor("2");
     } else if (model === "infinitalk/from-audio") {
@@ -1636,7 +1675,7 @@ export function ImageAIPanel({
 
       if (onGenerate) {
         const isSeedance2 = selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast";
-        const qualityParam = (outputMode === "video" || outputMode === "music")
+        const qualityParam = (outputMode === "video" || outputMode === "music" || selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2")
           ? isSeedance2
             ? (() => {
                 const outputDur = parseInt(videoDuration.replace('s', '')) || 5;
@@ -1659,7 +1698,13 @@ export function ImageAIPanel({
             ? JSON.stringify({ type: 'extend', continueAt: musicExtendContinueAt, model: musicModel, personaId: selectedPersonaId || undefined, customMode: coverCustomMode, style: musicStyle || undefined, title: musicTitle || undefined, vocalGender: musicInstrumental ? undefined : musicVocalGender, negativeTags: musicNegativeTags || undefined, styleWeight: coverStyleWeight, weirdnessConstraint: coverWeirdnessConstraint, audioWeight: coverAudioWeight })
             : selectedModelOption.value === "ai-music-api/generate-persona"
             ? `persona_free`
+            : selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2"
+            ? JSON.stringify({ type: 'tts', voice: ttsVoice, stability: ttsStability, similarityBoost: ttsSimilarityBoost, style: ttsStyle, speed: ttsSpeed, languageCode: ttsLanguageCode || undefined, previousText: ttsPreviousText || undefined, nextText: ttsNextText || undefined })
+            : selectedModelOption.value === "grok-imagine/image-to-video"
+            ? `${resolution}_${videoDuration}_${grokMode}_${nsfwChecker ? 'nsfw' : 'nonsfw'}`
             : `${resolution}_${videoDuration}_${audioEnabled ? 'audio' : 'noaudio'}`
+          : selectedModelOption.value === "gpt-image-2-image-to-image"
+          ? JSON.stringify({ type: 'gpt-image-2', mode: gptImage2Mode, nsfwChecker: gptImage2Nsfw })
           : resolution;
         
         // Include Veo 3.1 parameters if the model is Veo 3.1
@@ -1926,7 +1971,7 @@ export function ImageAIPanel({
                       <span className="text-[9px] text-purple-600 group-hover:text-purple-400">Song</span>
                     </button>
                     {showExtendAudioDropdown && (
-                      <div className="absolute bottom-full left-0 mb-1 w-[280px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-56 overflow-y-auto">
+                      <div className="absolute bottom-full left-0 mb-1 w-[280px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 py-1 max-h-56 overflow-y-auto">
                         <audio ref={extendPreviewAudioRef} style={{ display: "none" }} preload="none" onEnded={() => setExtendPreviewPlaying(null)} />
                         {audioFiles && audioFiles.length > 0 ? (
                           audioFiles.map((af) => (
@@ -1967,6 +2012,107 @@ export function ImageAIPanel({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ElevenLabs TTS — character count + info & usage guide */}
+        {selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2" && (
+          <div className="mb-[0px] px-[10px] pt-[6px] pb-0 space-y-1.5">
+            {/* Character count & flat cost */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mic className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-[11px] text-gray-400">
+                  <span className={`font-medium ${currentPrompt.length > 5000 ? 'text-red-400' : currentPrompt.length > 0 ? 'text-[#EAEAEA]' : 'text-gray-600'}`}>{currentPrompt.length.toLocaleString()}</span>
+                  <span className="text-gray-600"> / 5,000 chars</span>
+                </span>
+              </div>
+              <div className="text-[11px] text-gray-500">
+                <span className="text-blue-400 font-medium">{displayedCredits}</span> credits
+                <span className="text-gray-600 ml-1">(12 cr / 1K block)</span>
+              </div>
+            </div>
+            {currentPrompt.length > 5000 && (
+              <div className="text-[10px] text-red-400">Text exceeds 5,000 character limit. Please shorten your text.</div>
+            )}
+            <details className="group">
+              <summary className="flex items-center gap-1.5 cursor-pointer text-[11px] text-blue-400 hover:text-blue-300 transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="1.5"/><path strokeLinecap="round" strokeWidth="1.5" d="M12 16v-4m0-4h.01"/></svg>
+                <span>How to use ElevenLabs TTS — click for guide</span>
+              </summary>
+              <div className="mt-2 p-3 bg-[#141418] border border-[#2A2A32] rounded-lg text-[11px] text-gray-400 leading-relaxed space-y-3">
+
+                {/* Quick Start */}
+                <div>
+                  <p className="text-[#EAEAEA] font-medium mb-1">Convert text to natural speech:</p>
+                  <div className="bg-[#0A0A0F] rounded-md px-3 py-2 text-[11px] space-y-0.5">
+                    <p><span className="text-blue-400">1.</span> Type or paste your text in the prompt area below (max 5,000 characters)</p>
+                    <p><span className="text-blue-400">2.</span> Click <span className="text-blue-400">Advanced</span> to choose a voice and preview it before selecting</p>
+                    <p><span className="text-blue-400">3.</span> Adjust voice settings (stability, speed, etc.) if needed</p>
+                    <p><span className="text-blue-400">4.</span> Click <span className="text-green-400">Generate</span> — audio will appear when ready</p>
+                  </div>
+                </div>
+
+                {/* Example prompts */}
+                <div>
+                  <p className="text-[#EAEAEA] font-medium mb-1">Example prompts:</p>
+                  <div className="space-y-1 text-gray-500 italic">
+                    <p>"Welcome to our product demo. Today we'll walk you through the key features that make our platform stand out."</p>
+                    <p>"In a world where technology meets creativity, the possibilities are truly endless."</p>
+                  </div>
+                </div>
+
+                {/* Tips & Settings — collapsible */}
+                <details className="group/more">
+                  <summary className="cursor-pointer text-[11px] text-gray-500 hover:text-gray-300 transition">
+                    See more — tips & settings
+                  </summary>
+                  <div className="mt-2 space-y-3 text-[10px]">
+
+                    {/* Voice settings */}
+                    <div>
+                      <p className="text-[#EAEAEA] font-medium mb-1">Voice settings:</p>
+                      <div className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1">
+                        <span className="text-blue-400 font-medium">Stability</span>
+                        <span>Lower = more expressive/varied. Higher = more consistent/monotone.</span>
+
+                        <span className="text-purple-400 font-medium">Similarity</span>
+                        <span>Higher = closer to original voice. Lower = more creative interpretation.</span>
+
+                        <span className="text-amber-400 font-medium">Style</span>
+                        <span>Amplifies the voice's unique style. Keep at <span className="text-white">0</span> for neutral delivery.</span>
+
+                        <span className="text-teal-400 font-medium">Speed</span>
+                        <span><span className="text-white">0.7x</span> slow narration, <span className="text-white">1.0</span> normal, <span className="text-white">1.2x</span> fast-paced.</span>
+
+                        <span className="text-gray-300 font-medium">Language</span>
+                        <span>ISO 639-1 code (e.g. <span className="text-white">en</span>, <span className="text-white">es</span>, <span className="text-white">zh</span>). Only for Turbo/Flash models.</span>
+                      </div>
+                    </div>
+
+                    {/* Previous / Next text */}
+                    <div>
+                      <p className="text-[#EAEAEA] font-medium mb-1">Previous / Next text (multi-part speech):</p>
+                      <div className="space-y-1 text-gray-400">
+                        <p>Use these when generating speech in <span className="text-white">multiple parts</span>. They help the AI maintain natural flow between segments.</p>
+                      </div>
+                      <div className="grid grid-cols-[90px_1fr] gap-x-2 gap-y-1 mt-1">
+                        <span className="text-blue-400 font-medium">Previous</span>
+                        <span>Paste the text from your <span className="text-white">last</span> generation so the new audio continues smoothly.</span>
+
+                        <span className="text-blue-400 font-medium">Next</span>
+                        <span>Paste the text you plan to generate <span className="text-white">next</span> so the current audio leads into it naturally.</span>
+                      </div>
+                      <div className="bg-[#0A0A0F] rounded-md px-3 py-2 mt-2 text-gray-500 italic">
+                        Example: Generating a 3-part narration? When generating part 2, paste part 1 as "Previous" and part 3 as "Next" for seamless transitions.
+                      </div>
+                    </div>
+
+                  </div>
+                </details>
+
+              </div>
+            </details>
           </div>
         )}
 
@@ -2016,7 +2162,7 @@ export function ImageAIPanel({
                           <span className="text-[9px] text-purple-600 group-hover:text-purple-400">Songs</span>
                         </button>
                         {showExtendAudioDropdown && (
-                          <div className="absolute top-full left-0 mt-1 w-[260px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-48 overflow-y-auto">
+                          <div className="absolute top-full left-0 mt-1 w-[260px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 py-1 max-h-48 overflow-y-auto">
                             <audio ref={extendPreviewAudioRef} style={{ display: "none" }} preload="none" onEnded={() => setExtendPreviewPlaying(null)} />
                             {audioFiles && audioFiles.length > 0 ? (
                               audioFiles.map((af) => (
@@ -2060,7 +2206,7 @@ export function ImageAIPanel({
         )}
 
         {/* Reference Images Panel — hidden for text-only models like z-image and Topaz Video Upscale (video-only) */}
-        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && (
+        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
@@ -2566,7 +2712,7 @@ export function ImageAIPanel({
         )}
 
         {/* Main Panel */}
-        <div className="bg-[#0a0a0f]/98 backdrop-blur-md rounded-2xl border border-white/10">
+        <div className="bg-(--bg-secondary)/95 backdrop-blur-md rounded-2xl">
           {/* Cover Song quick guide */}
           {selectedModelOption.value === "ai-music-api/upload-cover" && (
             <div className="px-[10px] pt-[10px] pb-0">
@@ -2748,8 +2894,8 @@ export function ImageAIPanel({
           )}
 
           {/* User Prompt Area — hidden for Topaz Video Upscale and Create Persona (no prompt needed) */}
-          {mode !== "describe" || selectedModelOption.value === "topaz/video-upscale" || selectedModelOption.value === "ai-music-api/generate-persona" ? null : (
-            <div className="px-[10px] pt-[10px] pb-0">
+          {selectedModelOption.value === "topaz/video-upscale" || selectedModelOption.value === "ai-music-api/generate-persona" ? null : (
+            <div className="px-[10px] pt-[10px] pb-[10px]">
               <div className="flex gap-2">
                 {/* Text Area (shared component) */}
                 <PromptTextarea
@@ -2875,205 +3021,28 @@ export function ImageAIPanel({
                   </div>
                 )}
 
-                {/* Prompt Actions Button on the Right */}
-                <div className="flex-shrink-0">
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowPromptActions(!showPromptActions)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/30 transition-colors text-xs font-medium h-full"
-                      title="Prompt actions"
-                    >
-                      <BookOpen className="w-3 h-3" />
-                      Prompt Actions
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showPromptActions ? 'rotate-180' : ''}`} />
-                    </button>
-                    
-                    {/* Dropdown Menu */}
-                    {showPromptActions && (
-                      <div className="absolute bottom-full right-0 mb-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-lg z-50 min-w-[160px]">
-                        <div className="py-1">
-                          {/* Clear */}
-                          <button
-                            onClick={() => {
-                              const el = editorRef.current;
-                              if (el) {
-                                el.innerHTML = '';
-                                setEditorIsEmpty(true);
-                                setCurrentPrompt('');
-                                setShowPromptActions(false);
-                              }
-                            }}
-                            disabled={editorIsEmpty}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Trash2 className="w-4 h-4 text-red-400" />
-                            <span>Clear Text</span>
-                          </button>
-                          
-                          {/* Save Prompt */}
-                          <button
-                            onClick={() => {
-                              const prompt = extractPlainText();
-                              if (!prompt.trim()) return;
-                              setSavePromptName("");
-                              setSavePromptSuccess(false);
-                              setIsSavePromptOpen(true);
-                              setShowPromptActions(false);
-                            }}
-                            disabled={editorIsEmpty}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Save className="w-4 h-4 text-blue-400" />
-                            <span>Save Prompt</span>
-                          </button>
-                          
-                          {/* Test */}
-                          <button
-                            onClick={() => {
-                              const htmlContent = editorRef.current?.innerHTML || '';
-                              const plainText = extractPlainText();
-                              const textWithBadges = extractTextWithBadges();
-                              
-                              // Extract @Image mentions from HTML
-                              const imageMentions = htmlContent.match(/@Image\d+/g) || [];
-                              const r2Mentions = htmlContent.match(/@R2\d+/g) || [];
-                              const elMentions = htmlContent.match(/@EL\d+/g) || [];
-                              const allMentions = [...imageMentions, ...r2Mentions, ...elMentions];
-                              
-                              const mentionsText = allMentions.length > 0 ? allMentions.join(' ') : 'No @Image mentions found';
-                              
-                              alert(`Current textarea content with badges:\n\n${textWithBadges}\n\n@MENTIONS FOUND:\n${mentionsText}\n\nPLAIN TEXT (for AI):\n${plainText}`);
-                              setShowPromptActions(false);
-                            }}
-                            disabled={editorIsEmpty}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <FileText className="w-4 h-4 text-gray-400" />
-                            <span>Test</span>
-                          </button>
-                          
-                          {/* Load Description */}
-                          <button
-                            onClick={() => {
-                              console.log("Load Description clicked");
-                              if (activeShotDescription) {
-                                const el = editorRef.current;
-                                if (el) {
-                                  el.textContent = activeShotDescription;
-                                  setEditorIsEmpty(false);
-                                  setCurrentPrompt(activeShotDescription);
-                                  onUserPromptChange?.(activeShotDescription);
-                                  console.log("Description loaded:", activeShotDescription);
-                                }
-                              } else {
-                                console.log("No description available");
-                              }
-                              setShowPromptActions(false);
-                            }}
-                            disabled={!activeShotDescription}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Download className="w-4 h-4 text-purple-400" />
-                            <span>Load Description</span>
-                          </button>
-                          
-                          {/* Load Image Prompt */}
-                          <button
-                            onClick={() => {
-                              console.log("Load Image Prompt clicked");
-                              if (activeShotImagePrompt) {
-                                const el = editorRef.current;
-                                if (el) {
-                                  el.textContent = activeShotImagePrompt;
-                                  setEditorIsEmpty(false);
-                                  setCurrentPrompt(activeShotImagePrompt);
-                                  onUserPromptChange?.(activeShotImagePrompt);
-                                  console.log("Image prompt loaded:", activeShotImagePrompt);
-                                }
-                              } else {
-                                console.log("No image prompt available");
-                              }
-                              setShowPromptActions(false);
-                            }}
-                            disabled={!activeShotImagePrompt}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Image className="w-4 h-4 text-blue-400" />
-                            <span>Load Image Prompt</span>
-                          </button>
-                          
-                          {/* Load Video Prompt */}
-                          <button
-                            onClick={() => {
-                              console.log("Load Video Prompt clicked");
-                              console.log("activeShotVideoPrompt:", activeShotVideoPrompt);
-                              console.log("Type of activeShotVideoPrompt:", typeof activeShotVideoPrompt);
-                              console.log("Length of activeShotVideoPrompt:", activeShotVideoPrompt?.length);
-                              if (activeShotVideoPrompt) {
-                                const el = editorRef.current;
-                                if (el) {
-                                  el.textContent = activeShotVideoPrompt;
-                                  setEditorIsEmpty(false);
-                                  setCurrentPrompt(activeShotVideoPrompt);
-                                  onUserPromptChange?.(activeShotVideoPrompt);
-                                  console.log("Video prompt loaded:", activeShotVideoPrompt);
-                                }
-                              } else {
-                                console.log("No video prompt available");
-                              }
-                              setShowPromptActions(false);
-                            }}
-                            disabled={!activeShotVideoPrompt}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Video className="w-4 h-4 text-orange-400" />
-                            <span>Load Video Prompt</span>
-                          </button>
-                          
-                          {/* Load Style */}
-                          <button
-                            onClick={() => {
-                              const stylePrompt = projectData?.stylePrompt;
-                              if (stylePrompt) {
-                                const el = editorRef.current;
-                                if (el) {
-                                  // Append style to existing prompt
-                                  const existing = el.textContent || "";
-                                  const combined = existing ? `${existing}\n\n${stylePrompt}` : stylePrompt;
-                                  el.textContent = combined;
-                                  setEditorIsEmpty(false);
-                                  setCurrentPrompt(combined);
-                                  onUserPromptChange?.(combined);
-                                  toast.success(`Style "${projectData?.style || 'project'}" loaded`);
-                                }
-                              } else {
-                                toast.error("No style set for this project");
-                              }
-                              setShowPromptActions(false);
-                            }}
-                            disabled={!projectData?.stylePrompt}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-                          >
-                            <Palette className="w-4 h-4 text-purple-400" />
-                            <span>Load Style</span>
-                          </button>
-
-                          {/* Prompt Library */}
-                          <button
-                            onClick={() => {
-                              setIsPromptLibraryOpen(true);
-                              setShowPromptActions(false);
-                            }}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/10 hover:text-white transition-colors flex items-center gap-2"
-                          >
-                            <BookOpen className="w-4 h-4 text-emerald-400" />
-                            <span>Prompt Library</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <PromptActionsDropdown
+                  editorRef={editorRef}
+                  editorIsEmpty={editorIsEmpty}
+                  setEditorIsEmpty={setEditorIsEmpty}
+                  setCurrentPrompt={setCurrentPrompt}
+                  onUserPromptChange={onUserPromptChange}
+                  extractPlainText={extractPlainText}
+                  extractTextWithBadges={extractTextWithBadges}
+                  onSavePrompt={() => {
+                    const prompt = extractPlainText();
+                    if (!prompt.trim()) return;
+                    setSavePromptName("");
+                    setSavePromptSuccess(false);
+                    setIsSavePromptOpen(true);
+                  }}
+                  activeShotDescription={activeShotDescription}
+                  activeShotImagePrompt={activeShotImagePrompt}
+                  activeShotVideoPrompt={activeShotVideoPrompt}
+                  projectStylePrompt={projectData?.stylePrompt}
+                  projectStyleName={projectData?.style}
+                  onOpenLibrary={() => setIsPromptLibraryOpen(true)}
+                />
               </div>
 
               {/* Save Prompt Inline Modal */}
@@ -3157,323 +3126,347 @@ export function ImageAIPanel({
             </div>
           )}
           
-          {/* Row 1: Mode tabs */}
-          <div className="flex items-center gap-3 px-[10px] py-[10px]">
-            {/* Mode Tabs */}
-            <div className="flex gap-1 bg-white/5 rounded-lg p-[3px]">
-              {modeTabs.map((tab) => {
-                const isActive = mode === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => {
-                      onModeChange(tab.id);
-                      pick("canvas-object");
-                    }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all text-[13px] font-medium ${
-                      isActive
-                        ? "bg-gradient-to-r from-blue-600/30 to-green-600/30 text-blue-300 shadow-2xl shadow-blue-400/60 ring-4 ring-blue-400/40 ring-offset-0"
-                        : "text-gray-400 hover:text-gray-200 hover:bg-white/5"
-                    }`}
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </div>
+          {/* Toolbar — bottom settings bar */}
+          <div className="relative z-50 flex items-center gap-1 px-3 py-2 border-t border-white/5">
+            {/* Category tabs — inline horizontal */}
+            {([
+              { key: "image", Icon: Image, title: "IMAGE" },
+              { key: "video", Icon: Film, title: "VIDEO" },
+              { key: "music", Icon: Music, title: "MUSIC" },
+              { key: "audio", Icon: Mic, title: "AUDIO" },
+            ] as const).map((cat) => {
+              const isActive = selectedModelOption.category === cat.key;
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => {
+                    setModelFilter(cat.key);
+                    const firstInCategory = allModelOptions.find(m => m.category === cat.key);
+                    if (firstInCategory) {
+                      const modelOutputMode = firstInCategory.category === "music" ? "music" as const
+                        : firstInCategory.category === "image" ? "image" as const
+                        : "video" as const;
+                      if (modelOutputMode !== outputMode) {
+                        setOutputMode(modelOutputMode);
+                        setResolution(modelOutputMode === "video" ? "480P" : "1K");
+                        setAspectRatio(modelOutputMode === "video" ? "16:9" : "1:1");
+                      }
+                      onModelChange?.(firstInCategory.value);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-medium uppercase tracking-wide transition-colors ${
+                    isActive
+                      ? "bg-white/10 text-(--text-primary)"
+                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                  }`}
+                >
+                  <cat.Icon className="w-4 h-4" strokeWidth={1.75} />
+                  <span>{cat.title}</span>
+                </button>
+              );
+            })}
 
-            {/* Spacer to push model and generate to right */}
-            <div className="flex-1" />
+            {/* Separator */}
+            <div className="w-px h-4 bg-[#32363E] mx-1" />
 
-            {/* Aspect Ratio Select Box - Hide for Kling Motion, Topaz Video Upscale, InfiniteTalk, and Music */}
-            {selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && (
-            <div className="relative" style={{ width: "80px" }}>
-              <button
-                onClick={() => setShowAspectRatioDropdown(!showAspectRatioDropdown)}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
-              >
-                <span>{aspectRatioOptions.find(o => o.value === aspectRatio)?.label || "1:1"}</span>
-                <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
-              </button>
-              
-              {showAspectRatioDropdown && (
-                <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                  <div className="p-2">
-                    {aspectRatioOptions
-                      .filter(option => {
-                        // Hide 1:1 when Veo 3.1 is selected and mode is REFERENCE_2_VIDEO
-                        if (selectedModelOption.value === "google/veo-3.1" && veoMode === "REFERENCE_2_VIDEO") {
-                          return option.value !== "1:1";
-                        }
-                        return true;
-                      })
-                      .map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => {
-                            setAspectRatio(option.value);
-                            setShowAspectRatioDropdown(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
-                            aspectRatio === option.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
-                          }`}
-                        >
-                          <span>{option.label}</span>
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            )}
-
-            {/* Model Select Box - Combined with Output Mode */}
+            {/* Model name */}
             {allModelOptions.length > 0 && (
-              <div className="relative" style={{ width: "220px" }}>
+              <div className="relative">
                 <button
                   onClick={() => setShowModelDropdown(!showModelDropdown)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] font-medium text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
                 >
-                  <div className="flex items-center gap-2">
-                    {selectedModelOption?.icon && <selectedModelOption.icon className="w-4 h-4" />}
-                    <span>{selectedModelOption?.label || "Nano Banana 2"}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded ${
-                      selectedModelOption.value.startsWith("ai-music-api/") ? "bg-purple-500/20 text-purple-300"
-                      : outputMode === "image" ? "bg-cyan-500/20 text-cyan-300" : "bg-green-500/20 text-green-300"
-                    }`}>
-                      {selectedModelOption.value.startsWith("ai-music-api/") ? "Music" : outputMode === "image" ? "Image" : "Video"}
-                    </span>
-                  </div>
-                  <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
+                  {selectedModelOption?.icon && <selectedModelOption.icon className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} />}
+                  <span>{selectedModelOption?.label || "Nano Banana 2"}</span>
                 </button>
                 
                 {showModelDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
-                      {allModelOptions.map((modelOption) => (
-                        <button
-                          key={modelOption.value}
-                          onClick={() => {
-                            // Determine the output mode based on model type
-                            const modelOutputMode = modelOption.value.startsWith("ai-music-api/") ? "music" as const
-                              : videoModelOptions.some(m => m.value === modelOption.value) ? "video" as const : "image" as const;
-                            
-                            // Switch output mode if different
-                            if (modelOutputMode !== outputMode) {
-                              setOutputMode(modelOutputMode);
-                              // Reset resolution for the new mode
-                              setResolution(modelOutputMode === "video" ? "480P" : "1K");
-                              
-                              // Set aspect ratio based on model and mode
-                              if (modelOutputMode === "video") {
-                                setAspectRatio("16:9"); // Video mode always 16:9
-                              } else {
-                                // Image mode: 16:9 for Nano Banana models, 1:1 for others
-                                const isNanoBanana = modelOption.value.includes("nano-banana");
-                                setAspectRatio(isNanoBanana ? "16:9" : "1:1");
-                              }
-                            }
-                            
-                            // Reset resolution/duration to valid defaults for the new model
-                            if (modelOption.value === "kling-3.0/motion-control") {
-                              setResolution("720P");
-                              setVideoDuration("4s");
-                            } else if (modelOption.value === "bytedance/seedance-2" || modelOption.value === "bytedance/seedance-2-fast") {
-                              setResolution("480P");
-                              setVideoDuration("5s");
-                              setHasVideoInput(false);
-                              setWebSearch(false);
-                              setGenerateAudio(true);
-                              setVideoRefs([]);
-                              setAudioRefs([]);
-                              setFirstFrameUrl(null);
-                              setLastFrameUrl(null);
-                            } else if (modelOption.value === "bytedance/seedance-1.5-pro") {
-                              setResolution("480P");
-                              setVideoDuration("8s");
-                              setAudioEnabled(false);
-                            } else if (modelOption.value === "google/veo-3.1") {
-                              setVeoQuality("Fast");
-                              setVeoMode("TEXT_2_VIDEO");
-                            } else if (modelOption.value === "grok-imagine/image-to-video") {
-                              setResolution("480P");
-                              setVideoDuration("6s");
-                              setAspectRatio("16:9");
-                            } else {
-                              // Image models
-                              setResolution("1K");
-                            }
-
-                            onModelChange?.(modelOption.value);
-                            setShowModelDropdown(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
-                            selectedModelOption?.value === modelOption.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between w-full">
-                            <div className="flex items-center gap-2">
-                              {modelOption.icon && <modelOption.icon className="w-4 h-4" />}
-                              <span className="font-medium">{modelOption.label}</span>
+                  <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)} />
+                  <div className="absolute bottom-full left-0 mb-2 w-[260px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50">
+                    <div className="py-1.5 max-h-[360px] overflow-y-auto">
+                      {(() => {
+                        const filtered = allModelOptions.filter((m) => modelFilter === "all" || m.category === modelFilter);
+                        const groups: Record<string, typeof filtered> = {};
+                        filtered.forEach((m) => {
+                          if (!groups[m.category]) groups[m.category] = [];
+                          groups[m.category].push(m);
+                        });
+                        const categoryOrder = ["image", "video", "music", "audio"];
+                        const catIcons: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = { image: Image, video: Film, music: Music, audio: Mic };
+                        return categoryOrder.filter(c => groups[c]).map((cat) => (
+                          <div key={cat}>
+                            <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary)">
+                              {cat} model
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[10px] px-2 py-0.5 rounded ${
-                                modelOption.value.startsWith("ai-music-api/")
-                                  ? "bg-purple-500/20 text-purple-300"
-                                  : videoModelOptions.some(m => m.value === modelOption.value)
-                                  ? "bg-green-500/20 text-green-300"
-                                  : "bg-cyan-500/20 text-cyan-300"
-                              }`}>
-                                {modelOption.value.startsWith("ai-music-api/") ? "Music" : videoModelOptions.some(m => m.value === modelOption.value) ? "Video" : "Image"}
-                              </span>
-                            </div>
+                            {groups[cat].map((modelOption) => (
+                              <button
+                                key={modelOption.value}
+                                onClick={() => {
+                                  const modelOutputMode = modelOption.category === "music" ? "music" as const
+                                    : modelOption.category === "image" ? "image" as const
+                                    : "video" as const;
+                                  if (modelOutputMode !== outputMode) {
+                                    setOutputMode(modelOutputMode);
+                                    setResolution(modelOutputMode === "video" ? "480P" : "1K");
+                                    if (modelOutputMode === "video") {
+                                      setAspectRatio("16:9");
+                                    } else {
+                                      const isNanoBanana = modelOption.value.includes("nano-banana");
+                                      setAspectRatio(isNanoBanana ? "16:9" : "1:1");
+                                    }
+                                  }
+                                  if (modelOption.value === "kling-3.0/motion-control") {
+                                    setResolution("720P"); setVideoDuration("4s");
+                                  } else if (modelOption.value === "bytedance/seedance-2" || modelOption.value === "bytedance/seedance-2-fast") {
+                                    setResolution("480P"); setVideoDuration("5s"); setHasVideoInput(false); setWebSearch(false); setGenerateAudio(true); setVideoRefs([]); setAudioRefs([]); setFirstFrameUrl(null); setLastFrameUrl(null);
+                                  } else if (modelOption.value === "bytedance/seedance-1.5-pro") {
+                                    setResolution("480P"); setVideoDuration("8s"); setAudioEnabled(false);
+                                  } else if (modelOption.value === "google/veo-3.1") {
+                                    setVeoQuality("Fast"); setVeoMode("TEXT_2_VIDEO");
+                                  } else if (modelOption.value === "grok-imagine/image-to-video") {
+                                    setResolution("480P"); setVideoDuration("6s"); setAspectRatio("16:9");
+                                  } else {
+                                    setResolution("1K");
+                                  }
+                                  onModelChange?.(modelOption.value);
+                                  setShowModelDropdown(false);
+                                }}
+                                className={`w-full px-3 py-2 text-left transition-colors ${
+                                  selectedModelOption?.value === modelOption.value
+                                    ? "bg-white/8"
+                                    : "hover:bg-white/5"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  {(() => {
+                                    const CatIcon = catIcons[modelOption.category] || Image;
+                                    return <CatIcon className="w-4 h-4 flex-shrink-0 text-(--text-secondary)" strokeWidth={1.75} />;
+                                  })()}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-[13px] text-(--text-primary)">{modelOption.label}</span>
+                                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wide ${
+                                        modelOption.category === "image" ? "bg-cyan-500/15 text-cyan-400"
+                                        : modelOption.category === "video" ? "bg-green-500/15 text-green-400"
+                                        : modelOption.category === "music" ? "bg-purple-500/15 text-purple-400"
+                                        : "bg-blue-500/15 text-blue-400"
+                                      }`}>{modelOption.category}</span>
+                                    </div>
+                                    <div className="text-[11px] text-(--text-secondary) mt-0.5">{modelOption.sub}</div>
+                                  </div>
+                                </div>
+                              </button>
+                            ))}
                           </div>
-                          <div className="text-[10px] text-gray-500 text-left mt-1">
-                            {modelOption.sub}
-                          </div>
-                        </button>
-                      ))}
+                        ));
+                      })()}
                     </div>
                   </div>
+                  </>
                 )}
               </div>
             )}
 
-            {/* Resolution Select Box - Hide for Veo 3.1, Z-Image, Topaz Video Upscale, and InfiniteTalk */}
-            {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && (
-              <div className="relative" style={{ width: "120px" }}>
+            {/* Spacer — push remaining controls to the right */}
+            <div className="flex-1" />
+
+            {/* Settings grid — aspect ratio, resolution, format in one popup */}
+            {selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (
+              <div className="relative flex items-center gap-0.5">
+                {/* Aspect ratio trigger */}
                 <button
-                  onClick={() => setShowResolutionDropdown(!showResolutionDropdown)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
+                  onClick={() => { setShowAspectRatioDropdown(!showAspectRatioDropdown); setShowResolutionDropdown(false); setShowOutputFormatDropdown(false); }}
+                  className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[13px] transition-colors cursor-pointer ${
+                    showAspectRatioDropdown ? "text-(--text-primary) bg-white/5" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                  }`}
+                  title="Aspect Ratio"
                 >
-                  <div className="flex items-center gap-2">
-                    {currentResolutionOptions.find(o => o.value === resolution)?.icon && 
-                      React.createElement(currentResolutionOptions.find(o => o.value === resolution)!.icon, { className: "w-4 h-4" })}
+                  <RectangleHorizontal className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <span>{aspectRatioOptions.find(o => o.value === aspectRatio)?.label || "1:1"}</span>
+                </button>
+
+                {/* Resolution trigger */}
+                {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "kling-3.0/motion-control" && selectedModelOption.value !== "gpt-image-2-image-to-image" && (
+                  <button
+                    onClick={() => { setShowResolutionDropdown(!showResolutionDropdown); setShowAspectRatioDropdown(false); setShowOutputFormatDropdown(false); }}
+                    className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[13px] transition-colors cursor-pointer ${
+                      showResolutionDropdown ? "text-(--text-primary) bg-white/5" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                    }`}
+                    title="Resolution"
+                  >
+                    <Monitor className="w-3.5 h-3.5" strokeWidth={1.75} />
                     <span>{currentResolutionOptions.find(o => o.value === resolution)?.label || "Res"}</span>
-                  </div>
-                  <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
-                </button>
-                
-                {showResolutionDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
-                      {currentResolutionOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => {
-                            console.log("[ElementImageAIPanel] Resolution changing from", resolution, "to", option.value);
-                            setResolution(option.value);
-                            setShowResolutionDropdown(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
-                            resolution === option.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
-                          }`}
-                        >
-                          <span>{option.label}</span>
-                        </button>
-                      ))}
+                  </button>
+                )}
+
+                {/* Unified grid popup */}
+                {(showAspectRatioDropdown || showResolutionDropdown || showOutputFormatDropdown) && (
+                  <>
+                  <div className="fixed inset-0 z-40" onClick={() => { setShowAspectRatioDropdown(false); setShowResolutionDropdown(false); setShowOutputFormatDropdown(false); }} />
+                  <div className="absolute bottom-full right-0 mb-2 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50 p-2">
+                    <div className="flex gap-1">
+                      {/* Aspect Ratio column */}
+                      {selectedModelOption.value !== "kling-3.0/motion-control" && (
+                        <div className="flex flex-col gap-0.5">
+                          {aspectRatioOptions
+                            .filter(option => {
+                              if (selectedModelOption.value === "google/veo-3.1" && veoMode === "REFERENCE_2_VIDEO") return option.value !== "1:1";
+                              return true;
+                            })
+                            .map((option) => (
+                              <button
+                                key={`ar-${option.value}`}
+                                onClick={() => { setAspectRatio(option.value); setShowAspectRatioDropdown(false); setShowResolutionDropdown(false); setShowOutputFormatDropdown(false); }}
+                                className={`px-3 py-1.5 rounded-md text-[13px] text-center transition-colors min-w-[52px] ${
+                                  aspectRatio === option.value
+                                    ? "bg-white/10 text-white"
+                                    : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                        </div>
+                      )}
+
+                      {/* Resolution column */}
+                      {selectedModelOption.value !== "google/veo-3.1" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "gpt-image-2-image-to-image" && (
+                        <div className="flex flex-col gap-0.5">
+                          {currentResolutionOptions.map((option) => (
+                            <button
+                              key={`res-${option.value}`}
+                              onClick={() => { setResolution(option.value); setShowAspectRatioDropdown(false); setShowResolutionDropdown(false); setShowOutputFormatDropdown(false); }}
+                              className={`px-3 py-1.5 rounded-md text-[13px] text-center transition-colors min-w-[52px] ${
+                                resolution === option.value
+                                  ? "bg-white/10 text-white"
+                                  : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Format column — image mode only */}
+                      {outputMode === "image" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "gpt-image-2-image-to-image" && (
+                        <div className="flex flex-col gap-0.5">
+                          {outputFormatOptions.map((option) => (
+                            <button
+                              key={`fmt-${option.value}`}
+                              onClick={() => { setOutputFormat(option.value); setShowAspectRatioDropdown(false); setShowResolutionDropdown(false); setShowOutputFormatDropdown(false); }}
+                              className={`px-3 py-1.5 rounded-md text-[13px] text-center transition-colors min-w-[52px] ${
+                                outputFormat === option.value
+                                  ? "bg-white/10 text-white"
+                                  : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                              }`}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
+                  </>
                 )}
               </div>
             )}
 
-            {/* Kling Motion: Orientation dropdown */}
+            {/* Kling Motion: Orientation */}
             {selectedModelOption.value === "kling-3.0/motion-control" && (
-              <div className="relative" style={{ width: "120px" }}>
-                <button
-                  onClick={() => setKlingOrientation(klingOrientation === "image" ? "video" : "image")}
-                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
-                    klingOrientation === "video"
-                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
-                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                  }`}
-                >
-                  <span>{klingOrientation === "image" ? "Image Orient" : "Video Orient"}</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setKlingOrientation(klingOrientation === "image" ? "video" : "image")}
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  klingOrientation === "video" ? 'text-purple-400' : 'text-(--text-secondary)'
+                }`}
+              >
+                {klingOrientation === "image" ? "Image Orient" : "Video Orient"}
+              </button>
             )}
 
-            {/* Kling Motion: Background Source dropdown */}
+            {/* Kling Motion: Background Source */}
             {selectedModelOption.value === "kling-3.0/motion-control" && (
-              <div className="relative" style={{ width: "120px" }}>
-                <button
-                  onClick={() => setKlingSource(klingSource === "input_video" ? "input_image" : "input_video")}
-                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
-                    klingSource === "input_image"
-                      ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
-                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                  }`}
-                >
-                  <span>{klingSource === "input_video" ? "Video Source" : "Image Source"}</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setKlingSource(klingSource === "input_video" ? "input_image" : "input_video")}
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  klingSource === "input_image" ? 'text-cyan-400' : 'text-(--text-secondary)'
+                }`}
+              >
+                {klingSource === "input_video" ? "Video Source" : "Image Source"}
+              </button>
             )}
 
-            {/* Topaz Video Upscale: Upscale Factor dropdown */}
+            {/* Topaz: Upscale Factor */}
             {selectedModelOption.value === "topaz/video-upscale" && (
-              <div className="relative" style={{ width: "100px" }}>
-                <button
-                  onClick={() => {
-                    const factors: Array<"1" | "2" | "4"> = ["1", "2", "4"];
-                    const idx = factors.indexOf(topazUpscaleFactor);
-                    setTopazUpscaleFactor(factors[(idx + 1) % factors.length]);
-                  }}
-                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
-                    topazUpscaleFactor === "4"
-                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                  }`}
-                >
-                  <span>{topazUpscaleFactor}x Upscale</span>
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  const factors: Array<"1" | "2" | "4"> = ["1", "2", "4"];
+                  const idx = factors.indexOf(topazUpscaleFactor);
+                  setTopazUpscaleFactor(factors[(idx + 1) % factors.length]);
+                }}
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  topazUpscaleFactor === "4" ? 'text-yellow-400' : 'text-[#EAEAEA]'
+                }`}
+              >
+                {topazUpscaleFactor}x Upscale
+              </button>
             )}
 
-            {/* Topaz Video Upscale: NSFW Checker toggle */}
+            {/* Topaz: NSFW toggle */}
             {selectedModelOption.value === "topaz/video-upscale" && (
-              <div className="relative" style={{ width: "100px" }}>
-                <button
-                  onClick={() => setNsfwChecker(!nsfwChecker)}
-                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
-                    nsfwChecker
-                      ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                      : 'bg-red-500/10 border-red-500/30 text-red-400'
-                  }`}
-                >
-                  <span>NSFW {nsfwChecker ? "On" : "Off"}</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setNsfwChecker(!nsfwChecker)}
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  nsfwChecker ? 'text-green-400' : 'text-red-400'
+                }`}
+              >
+                NSFW {nsfwChecker ? "On" : "Off"}
+              </button>
             )}
 
-            {/* Topaz Video Upscale: Video duration display (from video ref) */}
+            {/* Topaz: Video duration */}
             {selectedModelOption.value === "topaz/video-upscale" && videoRefs.length > 0 && (
-              <div className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-[13px] text-gray-400">
-                {videoRefs[0].duration}s video
-              </div>
+              <span className="px-2 py-1 text-[12px] text-[#808090]">
+                {videoRefs[0].duration}s
+              </span>
             )}
 
-            {/* InfiniteTalk: Resolution dropdown */}
+            {/* Grok: Mode */}
+            {selectedModelOption.value === "grok-imagine/image-to-video" && (
+              <button
+                onClick={() => setGrokMode(grokMode === "normal" ? "fun" : "normal")}
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  grokMode === "fun" ? 'text-amber-400' : 'text-(--text-secondary)'
+                }`}
+              >
+                {grokMode === "fun" ? "Fun" : "Normal"}
+              </button>
+            )}
+
+            {/* Grok: NSFW toggle */}
+            {selectedModelOption.value === "grok-imagine/image-to-video" && (
+              <button
+                onClick={() => setNsfwChecker(!nsfwChecker)}
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  nsfwChecker ? 'text-green-400' : 'text-red-400'
+                }`}
+              >
+                NSFW {nsfwChecker ? "On" : "Off"}
+              </button>
+            )}
+
+            {/* InfiniteTalk: Resolution */}
             {selectedModelOption.value === "infinitalk/from-audio" && (
-              <div className="relative" style={{ width: "100px" }}>
-                <button
-                  onClick={() => setInfinitalkResolution(infinitalkResolution === "480p" ? "720p" : "480p")}
-                  className={`w-full px-3 py-2 border rounded-lg text-[13px] flex items-center justify-between transition-colors ${
-                    infinitalkResolution === "720p"
-                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
-                      : 'bg-white/5 border-white/10 text-white hover:bg-white/10'
-                  }`}
-                >
-                  <span>{infinitalkResolution}</span>
-                </button>
-              </div>
+              <button
+                onClick={() => setInfinitalkResolution(infinitalkResolution === "480p" ? "720p" : "480p")}
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  infinitalkResolution === "720p" ? 'text-purple-400' : 'text-[#EAEAEA]'
+                }`}
+              >
+                {infinitalkResolution}
+              </button>
             )}
 
 
@@ -3481,10 +3474,8 @@ export function ImageAIPanel({
             {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover" || selectedModelOption.value === "ai-music-api/extend") && (
               <button
                 onClick={() => setMusicInstrumental(!musicInstrumental)}
-                className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors ${
-                  musicInstrumental
-                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-400'
-                    : 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+                className={`px-2 py-1 rounded-md text-[12px] flex items-center gap-1.5 transition-colors hover:bg-white/5 ${
+                  musicInstrumental ? 'text-purple-400' : 'text-orange-400'
                 }`}
               >
                 <Music className="w-3.5 h-3.5" />
@@ -3492,36 +3483,36 @@ export function ImageAIPanel({
               </button>
             )}
 
-            {/* AI Music: Vocal Gender — only when vocals enabled */}
+            {/* AI Music: Vocal Gender */}
             {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover") && !musicInstrumental && (
               <button
                 onClick={() => setMusicVocalGender(musicVocalGender === "f" ? "m" : "f")}
-                className="px-3 py-2 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#EAEAEA] flex items-center gap-1.5 hover:bg-[#2A2A35] transition-colors"
+                className="px-2 py-1 rounded-md text-[12px] text-(--text-primary) hover:bg-white/5 transition-colors"
               >
-                <span>{musicVocalGender === "f" ? "♀ Female" : "♂ Male"}</span>
+                {musicVocalGender === "f" ? "♀ Female" : "♂ Male"}
               </button>
             )}
 
-            {/* AI Music: Style/Genre — combo text input + dropdown presets */}
+            {/* AI Music: Style/Genre */}
             {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover" || selectedModelOption.value === "ai-music-api/extend") && (
               <div className="relative">
-                <div className="flex items-center bg-[#1E1E24] border border-[#2A2A32] rounded-lg overflow-hidden" style={{ width: "180px" }}>
+                <div className="flex items-center bg-[#141418] border border-[#2A2A35] rounded-lg overflow-hidden" style={{ width: "160px" }}>
                   <input
                     type="text"
                     value={musicStyle}
                     onChange={(e) => setMusicStyle(e.target.value)}
                     placeholder="Any Style"
-                    className="flex-1 px-2.5 py-2 bg-transparent text-[13px] text-[#EAEAEA] placeholder-gray-500 outline-none min-w-0"
+                    className="flex-1 px-2.5 py-1 bg-transparent text-[12px] text-[#EAEAEA] placeholder-[#555560] outline-none min-w-0"
                   />
                   <button
                     onClick={() => setShowMusicStyleDropdown(!showMusicStyleDropdown)}
-                    className="px-1.5 py-2 hover:bg-[#2A2A35] transition-colors flex-shrink-0"
+                    className="px-1.5 py-1 hover:bg-white/5 transition-colors flex-shrink-0"
                   >
-                    <ChevronDown className="w-3 h-3 text-gray-400" />
+                    <ChevronDown className="w-3 h-3 text-[#808090]" />
                   </button>
                 </div>
                 {showMusicStyleDropdown && (
-                  <div className="absolute bottom-full left-0 mb-1 w-[180px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-64 overflow-y-auto">
+                  <div className="absolute bottom-full left-0 mb-1 w-[160px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 py-1 max-h-64 overflow-y-auto">
                     {[
                       { value: "", label: "Any Style" },
                       { value: "Cinematic", label: "Cinematic" },
@@ -3565,36 +3556,32 @@ export function ImageAIPanel({
 
             {/* Persona selector moved into Advanced Options panel */}
 
-            {/* Music: Custom Mode toggle — for Generate, Cover, Extend */}
+            {/* Music: Custom Mode toggle */}
             {(selectedModelOption.value === "ai-music-api/generate" || selectedModelOption.value === "ai-music-api/upload-cover" || selectedModelOption.value === "ai-music-api/extend") && (
               <button
                 onClick={() => setCoverCustomMode(!coverCustomMode)}
-                className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors ${
-                  coverCustomMode
-                    ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                    : 'bg-white/5 border-white/10 text-gray-400'
+                className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                  coverCustomMode ? 'text-blue-400' : 'text-(--text-secondary)'
                 }`}
               >
-                <span>Custom {coverCustomMode ? "On" : "Off"}</span>
+                Custom {coverCustomMode ? "On" : "Off"}
               </button>
             )}
 
-            {/* Shared Music Advanced Options — for Generate, Cover, Extend */}
+            {/* Shared Music Advanced Options */}
             {((selectedModelOption.value === "ai-music-api/generate") || (selectedModelOption.value === "ai-music-api/upload-cover") || (selectedModelOption.value === "ai-music-api/extend")) && (
               <div className="relative">
                 <button
                   onClick={() => setShowCoverAdvanced(!showCoverAdvanced)}
-                  className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors ${
-                    showCoverAdvanced
-                      ? 'bg-white/10 border-white/20 text-white'
-                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  className={`px-2 py-1 rounded-md text-[12px] flex items-center gap-1.5 transition-colors hover:bg-white/5 ${
+                    showCoverAdvanced ? 'text-[#EAEAEA]' : 'text-(--text-secondary)'
                   }`}
                 >
                   <Settings className="w-3.5 h-3.5" />
                   <span>Advanced</span>
                 </button>
                 {showCoverAdvanced && (
-                  <div className="absolute bottom-full left-0 mb-2 w-[260px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 p-3 space-y-3">
+                  <div className="absolute bottom-full left-0 mb-2 w-[260px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="text-[11px] text-gray-500 font-medium">Advanced Options</div>
                       {coverCustomMode && selectedPersonaId && (() => {
@@ -3777,6 +3764,149 @@ export function ImageAIPanel({
               </div>
             )}
 
+            {/* GPT Image 2: Mode dropdown + NSFW toggle */}
+            {selectedModelOption.value === "gpt-image-2-image-to-image" && (
+              <>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowGptImage2ModeDropdown(!showGptImage2ModeDropdown)}
+                    className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[12px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    <span>{gptImage2Mode === "image-to-image" ? "Img2Img" : "Txt2Img"}</span>
+                    <ChevronDown className="w-3 h-3 text-[#808090]" />
+                  </button>
+                  {showGptImage2ModeDropdown && (
+                    <div className="absolute bottom-full left-0 mb-2 w-[200px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 py-1">
+                      <button
+                        onClick={() => { setGptImage2Mode("image-to-image"); setShowGptImage2ModeDropdown(false); }}
+                        className={`w-full text-left px-3 py-2 text-[12px] transition-colors ${gptImage2Mode === "image-to-image" ? 'bg-white/8 text-(--text-primary)' : 'text-(--text-primary) hover:bg-white/5'}`}
+                      >
+                        <div className="font-medium">Image to Image</div>
+                        <div className="text-[10px] text-(--text-tertiary)">Transform existing images with prompt</div>
+                      </button>
+                      <button
+                        onClick={() => { setGptImage2Mode("text-to-image"); setShowGptImage2ModeDropdown(false); }}
+                        className={`w-full text-left px-3 py-2 text-[12px] transition-colors ${gptImage2Mode === "text-to-image" ? 'bg-white/8 text-(--text-primary)' : 'text-(--text-primary) hover:bg-white/5'}`}
+                      >
+                        <div className="font-medium">Text to Image</div>
+                        <div className="text-[10px] text-(--text-tertiary)">Generate images from text prompt only</div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => setGptImage2Nsfw(!gptImage2Nsfw)}
+                  className={`px-2 py-1 rounded-lg text-[12px] transition-colors hover:bg-white/5 ${
+                    gptImage2Nsfw ? 'text-amber-400' : 'text-(--text-secondary)'
+                  }`}
+                  title={gptImage2Nsfw ? "NSFW filter ON" : "NSFW filter OFF"}
+                >
+                  NSFW {gptImage2Nsfw ? "On" : "Off"}
+                </button>
+              </>
+            )}
+
+            {/* ElevenLabs TTS Advanced Options */}
+            {selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2" && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowCoverAdvanced(!showCoverAdvanced)}
+                  className={`px-2 py-1 rounded-md text-[12px] flex items-center gap-1.5 transition-colors hover:bg-white/5 ${
+                    showCoverAdvanced ? 'text-[#EAEAEA]' : 'text-(--text-secondary)'
+                  }`}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Advanced</span>
+                </button>
+                {showCoverAdvanced && (
+                  <div className="absolute bottom-full left-0 mb-2 w-[280px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 p-3 space-y-3">
+                    <div className="text-[11px] text-gray-500 font-medium">Voice Settings</div>
+
+                    {/* Voice Selector (shared component) */}
+                    <TtsVoiceSelector
+                      value={ttsVoice}
+                      onChange={setTtsVoice}
+                      open={showTtsVoiceDropdown}
+                      onOpenChange={setShowTtsVoiceDropdown}
+                    />
+
+                    {/* Language Selector (shared component) */}
+                    <TtsLanguageSelector
+                      value={ttsLanguageCode}
+                      onChange={setTtsLanguageCode}
+                      open={showTtsLanguageDropdown}
+                      onOpenChange={setShowTtsLanguageDropdown}
+                    />
+
+                    {/* Stability */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500">Stability</label>
+                        <span className="text-[10px] text-gray-400">{ttsStability.toFixed(2)}</span>
+                      </div>
+                      <input type="range" min="0" max="1" step="0.05" value={ttsStability}
+                        onChange={(e) => setTtsStability(parseFloat(e.target.value))}
+                        className="w-full h-1 accent-blue-500 cursor-pointer" />
+                      <p className="text-[9px] text-gray-600 mt-0.5">Voice stability (0 = variable, 1 = stable)</p>
+                    </div>
+
+                    {/* Similarity Boost */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500">Similarity Boost</label>
+                        <span className="text-[10px] text-gray-400">{ttsSimilarityBoost.toFixed(2)}</span>
+                      </div>
+                      <input type="range" min="0" max="1" step="0.05" value={ttsSimilarityBoost}
+                        onChange={(e) => setTtsSimilarityBoost(parseFloat(e.target.value))}
+                        className="w-full h-1 accent-purple-500 cursor-pointer" />
+                      <p className="text-[9px] text-gray-600 mt-0.5">How closely to match the original voice</p>
+                    </div>
+
+                    {/* Style */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500">Style</label>
+                        <span className="text-[10px] text-gray-400">{ttsStyle.toFixed(2)}</span>
+                      </div>
+                      <input type="range" min="0" max="1" step="0.05" value={ttsStyle}
+                        onChange={(e) => setTtsStyle(parseFloat(e.target.value))}
+                        className="w-full h-1 accent-amber-500 cursor-pointer" />
+                      <p className="text-[9px] text-gray-600 mt-0.5">Style exaggeration (0 = none)</p>
+                    </div>
+
+                    {/* Speed */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500">Speed</label>
+                        <span className="text-[10px] text-gray-400">{ttsSpeed.toFixed(2)}</span>
+                      </div>
+                      <input type="range" min="0.7" max="1.2" step="0.05" value={ttsSpeed}
+                        onChange={(e) => setTtsSpeed(parseFloat(e.target.value))}
+                        className="w-full h-1 accent-teal-500 cursor-pointer" />
+                      <p className="text-[9px] text-gray-600 mt-0.5">0.7x slow — 1.0 normal — 1.2x fast</p>
+                    </div>
+
+                    {/* Context Text */}
+                    <div className="border-t border-[#2A2A32] pt-2">
+                      <div className="text-[10px] text-gray-500 font-medium mb-2">Context Text</div>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="text-[9px] text-gray-600 block mb-0.5">Previous text</label>
+                          <textarea value={ttsPreviousText} onChange={(e) => setTtsPreviousText(e.target.value)} rows={2} placeholder="Text before..."
+                            className="w-full px-2 py-1 bg-[#0A0A0F] border border-[#2A2A32] rounded text-[11px] text-[#EAEAEA] placeholder-gray-600 resize-none outline-none" />
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-gray-600 block mb-0.5">Next text</label>
+                          <textarea value={ttsNextText} onChange={(e) => setTtsNextText(e.target.value)} rows={2} placeholder="Text after..."
+                            className="w-full px-2 py-1 bg-[#0A0A0F] border border-[#2A2A32] rounded text-[11px] text-[#EAEAEA] placeholder-gray-600 resize-none outline-none" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Extend Music: Audio selector + Custom toggle + Continue At */}
             {selectedModelOption.value === "ai-music-api/extend" && (
               <>
@@ -3784,10 +3914,8 @@ export function ImageAIPanel({
                 <div className="relative">
                   <button
                     onClick={() => setShowExtendAudioDropdown(!showExtendAudioDropdown)}
-                    className={`px-3 py-2 border rounded-lg text-[13px] flex items-center gap-1.5 transition-colors max-w-[180px] ${
-                      musicExtendAudioId
-                        ? 'bg-teal-500/10 border-teal-500/30 text-teal-400'
-                        : 'bg-[#1E1E24] border-[#2A2A32] text-gray-400 hover:bg-[#2A2A35]'
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] max-w-[160px] transition-colors hover:bg-white/5 cursor-pointer ${
+                      musicExtendAudioId ? 'text-teal-400' : 'text-(--text-secondary)'
                     }`}
                   >
                     <Music className="w-3.5 h-3.5 flex-shrink-0" />
@@ -3795,7 +3923,7 @@ export function ImageAIPanel({
                     <ChevronDown className="w-3 h-3 flex-shrink-0" />
                   </button>
                   {showExtendAudioDropdown && (
-                    <div className="absolute bottom-full left-0 mb-1 w-[280px] bg-[#141418] border border-[#2A2A32] rounded-lg shadow-xl z-50 py-1 max-h-56 overflow-y-auto">
+                    <div className="absolute bottom-full left-0 mb-1 w-[280px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 py-1 max-h-56 overflow-y-auto">
                       <audio ref={extendPreviewAudioRef} style={{ display: "none" }} preload="none" onEnded={() => setExtendPreviewPlaying(null)} />
                       {audioFiles && audioFiles.length > 0 ? (
                         audioFiles.map((af) => (
@@ -3864,7 +3992,7 @@ export function ImageAIPanel({
                   const selectedSong = audioFiles?.find(a => a.audioId === musicExtendAudioId);
                   const songDur = selectedSong?.duration ? Math.round(selectedSong.duration) : 0;
                   return (
-                    <div className="flex items-center gap-1 px-2.5 py-1.5 bg-[#1E1E24] border border-[#2A2A32] rounded-lg text-[13px] text-[#A0A0A0]"
+                    <div className="flex items-center gap-1 px-2 py-1 bg-[#141418] border border-[#2A2A35] rounded-lg text-[12px] text-[#808090]"
                       title={`Song is ${songDur}s. Set to ${songDur} to add more at the end, or lower to re-generate from that point.`}>
                       <span className="text-[10px] text-gray-500">From</span>
                       <input type="number" min={1} max={600} value={musicExtendContinueAt}
@@ -3877,24 +4005,21 @@ export function ImageAIPanel({
               </>
             )}
 
-            {/* Video Duration Select Box - Hide for Veo 3.1, Kling Motion, Topaz Video Upscale, and InfiniteTalk */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-              <div className="relative" style={{ width: "100px" }}>
+            {/* Video Duration */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+              <div className="relative">
                 <button
                   onClick={() => setShowVideoDurationDropdown(!showVideoDurationDropdown)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[13px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
+                  title="Duration"
                 >
-                  <div className="flex items-center gap-2">
-                    {videoDurationOptions.find(o => o.value === videoDuration)?.icon && 
-                      React.createElement(videoDurationOptions.find(o => o.value === videoDuration)!.icon, { className: "w-4 h-4" })}
-                    <span>{videoDurationOptions.find(o => o.value === videoDuration)?.label || "8s"}</span>
-                  </div>
-                  <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>{videoDurationOptions.find(o => o.value === videoDuration)?.label || "8s"}</span>
                 </button>
-                
+
                 {showVideoDurationDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
+                  <div className="absolute bottom-full left-0 mb-2 w-[80px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50 max-h-[200px] overflow-y-auto">
+                    <div className="py-1">
                       {videoDurationOptions.map((option) => (
                         <button
                           key={option.value}
@@ -3902,10 +4027,10 @@ export function ImageAIPanel({
                             setVideoDuration(option.value);
                             setShowVideoDurationDropdown(false);
                           }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
+                          className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors ${
                             videoDuration === option.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
+                              ? "bg-white/8 text-(--text-primary)"
+                              : "text-(--text-primary) hover:bg-white/5"
                           }`}
                         >
                           <span>{option.label}</span>
@@ -3917,37 +4042,32 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Video Input toggle - Only for Seedance 2.0 */}
-            {/* Audio Select Box - Only show in video mode, not Veo 3.1, not Kling Motion, not Seedance 2.0/Fast, not Grok, not Topaz, not Music */}
-            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video", "topaz/video-upscale", "infinitalk/from-audio"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-              <div className="relative" style={{ width: "120px" }}>
+            {/* Audio toggle */}
+            {outputMode === "video" && !["google/veo-3.1", "kling-3.0/motion-control", "bytedance/seedance-2", "bytedance/seedance-2-fast", "grok-imagine/image-to-video", "topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+              <div className="relative">
                 <button
                   onClick={() => setShowAudioDropdown(!showAudioDropdown)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[13px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
+                  title="Audio"
                 >
-                  <div className="flex items-center gap-2">
-                    {audioOptions.find(o => o.value === audioEnabled)?.icon && 
-                      React.createElement(audioOptions.find(o => o.value === audioEnabled)!.icon, { className: "w-4 h-4" })}
-                    <span>{audioOptions.find(o => o.value === audioEnabled)?.label || "Off"}</span>
-                  </div>
-                  <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
+                  {audioEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  <span>{audioOptions.find(o => o.value === audioEnabled)?.label || "Off"}</span>
                 </button>
-                
+
                 {showAudioDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
+                  <div className="absolute bottom-full left-0 mb-2 w-[100px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50">
+                    <div className="py-1">
                       {audioOptions.map((option) => (
                         <button
                           key={option.value.toString()}
                           onClick={() => {
-                            console.log("[ElementImageAIPanel] Audio changing from", audioEnabled, "to", option.value);
                             setAudioEnabled(option.value);
                             setShowAudioDropdown(false);
                           }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
+                          className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors ${
                             audioEnabled === option.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
+                              ? "bg-white/8 text-(--text-primary)"
+                              : "text-(--text-primary) hover:bg-white/5"
                           }`}
                         >
                           <span>{option.label}</span>
@@ -3959,22 +4079,22 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Veo 3.1 Quality Select Box - Only show for Veo 3.1 model */}
+            {/* Veo 3.1 Quality */}
             {selectedModelOption.value === "google/veo-3.1" && (
-              <div className="relative" style={{ width: "100px" }}>
+              <div className="relative">
                 <button
                   onClick={() => setShowVeoQualityDropdown(!showVeoQualityDropdown)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[13px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
+                  title="Quality"
                 >
-                  <div className="flex items-center gap-2">
-                    <span>{veoQualityOptions.find(o => o.value === veoQuality)?.label || "Fast"}</span>
-                  </div>
-                  <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>{veoQualityOptions.find(o => o.value === veoQuality)?.label || "Fast"}</span>
+                  <ChevronDown className="w-3 h-3 text-[#808090]" />
                 </button>
                 
                 {showVeoQualityDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
+                  <div className="absolute bottom-full left-0 mb-2 w-[100px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50">
+                    <div className="py-1">
                       {veoQualityOptions.map((option) => (
                         <button
                           key={option.value}
@@ -3982,10 +4102,10 @@ export function ImageAIPanel({
                             setVeoQuality(option.value);
                             setShowVeoQualityDropdown(false);
                           }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
+                          className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors ${
                             veoQuality === option.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
+                              ? "bg-white/8 text-(--text-primary)"
+                              : "text-(--text-primary) hover:bg-white/5"
                           }`}
                         >
                           <span>{option.label}</span>
@@ -3997,47 +4117,44 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Veo 3.1 Mode Select Box - Only show for Veo 3.1 model */}
+            {/* Veo 3.1 Mode */}
             {selectedModelOption.value === "google/veo-3.1" && (
-              <div className="relative" style={{ width: "180px" }}>
+              <div className="relative">
                 <button
                   onClick={() => setShowVeoModeDropdown(!showVeoModeDropdown)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
+                  className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[13px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
+                  title="Mode"
                 >
-                  <div className="flex items-center gap-2">
-                    <span>{veoModeOptions.find(o => o.value === veoMode)?.label || "Text to Video"}</span>
-                  </div>
-                  <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
+                  <Film className="w-3.5 h-3.5" />
+                  <span>{veoModeOptions.find(o => o.value === veoMode)?.label || "Text to Video"}</span>
+                  <ChevronDown className="w-3 h-3 text-[#808090]" />
                 </button>
-                
+
                 {showVeoModeDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
+                  <div className="absolute bottom-full left-0 mb-2 w-[200px] bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl z-50">
+                    <div className="py-1">
                       {veoModeOptions.map((option) => (
                         <button
                           key={option.value}
                           onClick={() => {
                             setVeoMode(option.value);
                             setShowVeoModeDropdown(false);
-                            
-                            // Handle aspect ratio restriction for REFERENCE_2_VIDEO
+
                             if (option.value === "REFERENCE_2_VIDEO") {
-                              // Only allow 16:9 and 9:16 for reference mode
                               if (!["16:9", "9:16"].includes(aspectRatio)) {
-                                // Change aspect ratio based on current selection
                                 setAspectRatio(aspectRatio === "1:1" ? "16:9" : "6:19");
                               }
                             }
                           }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
+                          className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors ${
                             veoMode === option.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
+                              ? "bg-white/8 text-(--text-primary)"
+                              : "text-(--text-primary) hover:bg-white/5"
                           }`}
                         >
                           <div className="flex flex-col items-start">
                             <span>{option.label}</span>
-                            <span className="text-[10px] text-gray-500">{option.sub}</span>
+                            <span className="text-[10px] text-(--text-tertiary)">{option.sub}</span>
                             {option.value === "REFERENCE_2_VIDEO" && (
                               <span className="text-[9px] text-yellow-400">Only 16:9 & 9:16</span>
                             )}
@@ -4050,54 +4167,25 @@ export function ImageAIPanel({
               </div>
             )}
 
-            {/* Output Format Select Box - Only show in image mode, hide for z-image and music */}
-            {outputMode === "image" && selectedModelOption.value !== "z-image" && !selectedModelOption.value.startsWith("ai-music-api/") && (
-              <div className="relative" style={{ width: "80px" }}>
-                <button
-                  onClick={() => setShowOutputFormatDropdown(!showOutputFormatDropdown)}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center justify-between hover:bg-white/10 transition-colors"
-                >
-                  <span>{outputFormatOptions.find(o => o.value === outputFormat)?.label || "PNG"}</span>
-                  <ChevronDown className={`w-3 h-3 text-gray-400 group-hover:text-purple-400 transition flex-shrink-0`} />
-                </button>
-                
-                {showOutputFormatDropdown && (
-                  <div className="absolute bottom-full left-0 mb-2 w-full bg-[#1a1a24] border border-white/10 rounded-lg shadow-xl z-50">
-                    <div className="p-2">
-                      {outputFormatOptions.map((option) => (
-                        <button
-                          key={option.value}
-                          onClick={() => {
-                            setOutputFormat(option.value);
-                            setShowOutputFormatDropdown(false);
-                          }}
-                          className={`w-full px-3 py-2 text-left text-[13px] transition-colors rounded ${
-                            outputFormat === option.value
-                              ? "bg-blue-500/20 text-blue-300"
-                              : "text-gray-300 hover:bg-white/5"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              {option.icon && React.createElement(option.icon, { className: "w-4 h-4" })}
-                              <span>{option.label}</span>
-                            </div>
-                            <span className="text-[10px] text-gray-500">{option.sub}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+            {/* Format trigger — image mode only, opens unified grid */}
+            {outputMode === "image" && selectedModelOption.value !== "z-image" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && selectedModelOption.value !== "gpt-image-2-image-to-image" && (
+              <button
+                onClick={() => { setShowOutputFormatDropdown(!showOutputFormatDropdown); setShowAspectRatioDropdown(false); setShowResolutionDropdown(false); }}
+                className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[13px] transition-colors cursor-pointer ${
+                  showOutputFormatDropdown ? "text-(--text-primary) bg-white/5" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                }`}
+                title="Format"
+              >
+                <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+                <span>{outputFormatOptions.find(o => o.value === outputFormat)?.label || "PNG"}</span>
+              </button>
             )}
 
             {/* Seedance 2.0/Fast: Mode selector + Web Search + Generate Audio switches */}
             {(selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast") && (
               <>
-                {/* Mode selector — styled like duration dropdown */}
+                {/* Seedance mode selector */}
                 {(() => {
-                  const [showModeDropdown, setShowModeDropdown] = [seedanceModeOpen, setSeedanceModeOpen];
                   const modeOptions = [
                     { value: "text-to-video", label: "Text Only" },
                     { value: "first-frame", label: "First Frame" },
@@ -4111,23 +4199,23 @@ export function ImageAIPanel({
                     <div className="relative">
                       <button
                         onClick={() => setSeedanceModeOpen(!seedanceModeOpen)}
-                        className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-[13px] flex items-center gap-2 hover:bg-white/10 transition-colors"
+                        className="flex items-center gap-1.5 px-1.5 py-1 rounded-lg text-[13px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
                       >
                         <span>{modeOptions.find(o => o.value === seedanceMode)?.label || "Text Only"}</span>
-                        <ChevronDown className="w-3 h-3 text-gray-400" />
+                        <ChevronDown className="w-3 h-3 text-[#808090]" />
                       </button>
                       {seedanceModeOpen && (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setSeedanceModeOpen(false)} />
-                          <div className="absolute bottom-full mb-1 left-0 bg-[#1a1a24] border border-white/15 rounded-lg shadow-2xl py-1 z-50 min-w-[140px]">
+                          <div className="absolute bottom-full mb-1 left-0 bg-(--bg-secondary) border border-(--border-primary) rounded-lg shadow-2xl py-1 z-50 min-w-[140px]">
                             {modeOptions.map(opt => (
                               <button
                                 key={opt.value}
                                 onClick={() => { setSeedanceMode(opt.value as any); setSeedanceModeOpen(false); }}
-                                className={`w-full px-3 py-2 text-left text-[13px] transition-colors ${
+                                className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors ${
                                   seedanceMode === opt.value
-                                    ? 'bg-emerald-500/15 text-emerald-400'
-                                    : 'text-gray-300 hover:bg-white/8 hover:text-white'
+                                    ? 'bg-white/8 text-(--text-primary)'
+                                    : 'text-(--text-primary) hover:bg-white/5'
                                 }`}
                               >
                                 {opt.label}
@@ -4142,42 +4230,36 @@ export function ImageAIPanel({
 
                 <button
                   onClick={() => setWebSearch(!webSearch)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
-                    webSearch
-                      ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400'
-                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors hover:bg-white/5 ${
+                    webSearch ? 'text-cyan-400' : 'text-(--text-secondary)'
                   }`}
                   title="Web Search"
                 >
-                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${webSearch ? 'bg-cyan-500' : 'bg-gray-600'}`}>
+                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${webSearch ? 'bg-cyan-500' : 'bg-[#3A3A45]'}`}>
                     <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${webSearch ? 'left-3' : 'left-0.5'}`} />
                   </div>
                   Search
                 </button>
                 <button
                   onClick={() => setGenerateAudio(!generateAudio)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
-                    generateAudio
-                      ? 'bg-purple-500/15 border-purple-500/30 text-purple-400'
-                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors hover:bg-white/5 ${
+                    generateAudio ? 'text-purple-400' : 'text-(--text-secondary)'
                   }`}
                   title="Generate Audio"
                 >
-                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${generateAudio ? 'bg-purple-500' : 'bg-gray-600'}`}>
+                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${generateAudio ? 'bg-purple-500' : 'bg-[#3A3A45]'}`}>
                     <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${generateAudio ? 'left-3' : 'left-0.5'}`} />
                   </div>
                   Audio
                 </button>
                 <button
                   onClick={() => setCleanOutput(!cleanOutput)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
-                    cleanOutput
-                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                      : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors hover:bg-white/5 ${
+                    cleanOutput ? 'text-emerald-400' : 'text-(--text-secondary)'
                   }`}
                   title="Clean Output — appends 'no subtitles, no music, no text overlays' to prompt"
                 >
-                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${cleanOutput ? 'bg-emerald-500' : 'bg-gray-600'}`}>
+                  <div className={`w-6 h-3.5 rounded-full relative transition-colors ${cleanOutput ? 'bg-emerald-500' : 'bg-[#3A3A45]'}`}>
                     <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${cleanOutput ? 'left-3' : 'left-0.5'}`} />
                   </div>
                   Clean
@@ -4185,18 +4267,16 @@ export function ImageAIPanel({
               </>
             )}
 
-            {/* Z-Image: NSFW Checker switch */}
+            {/* Z-Image: NSFW toggle */}
             {selectedModelOption.value === "z-image" && (
               <button
                 onClick={() => setNsfwChecker(!nsfwChecker)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all border ${
-                  nsfwChecker
-                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                    : 'bg-white/5 border-white/10 text-gray-500 hover:text-gray-300'
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium transition-colors hover:bg-white/5 ${
+                  nsfwChecker ? 'text-emerald-400' : 'text-(--text-secondary)'
                 }`}
                 title="NSFW Content Filter"
               >
-                <div className={`w-6 h-3.5 rounded-full relative transition-colors ${nsfwChecker ? 'bg-emerald-500' : 'bg-gray-600'}`}>
+                <div className={`w-6 h-3.5 rounded-full relative transition-colors ${nsfwChecker ? 'bg-emerald-500' : 'bg-[#3A3A45]'}`}>
                   <div className={`absolute top-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${nsfwChecker ? 'left-3' : 'left-0.5'}`} />
                 </div>
                 NSFW
@@ -4205,9 +4285,9 @@ export function ImageAIPanel({
 
             {/* Cost per generation */}
             {selectedModelOption.value !== "ai-music-api/generate-persona" && (
-              <div className="flex items-center gap-1.5 text-[12px] text-gray-400">
-                <Zap className="w-3.5 h-3.5 text-blue-400" />
-                <span>{displayedCredits} credits</span>
+              <div className="flex items-center gap-1 text-[12px] text-(--text-secondary)">
+                <Coins className="w-4 h-4 text-amber-400" strokeWidth={1.75} />
+                <span>{displayedCredits}</span>
               </div>
             )}
 
@@ -4234,10 +4314,8 @@ export function ImageAIPanel({
             ) : (
               <button
                 onClick={handleKieAIGenerate}
-                disabled={isGenerating || generateCooldown}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed ${
-                  "bg-gradient-to-r from-blue-500 to-green-500 hover:from-blue-600 hover:to-green-600 text-white"
-                }`}
+                disabled={isGenerating || generateCooldown || (selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2" && (currentPrompt.length === 0 || currentPrompt.length > 5000))}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white"
               >
                 {isGenerating || generateCooldown ? (
                   <>

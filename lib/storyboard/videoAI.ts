@@ -251,6 +251,8 @@ export async function generateGrokImagineVideo(params: {
   aspectRatio: string;
   resolution: string;
   duration: number;
+  mode?: "normal" | "fun";
+  nsfwChecker?: boolean;
   callbackUrl: string;
   companyId?: string;
 }) {
@@ -267,10 +269,11 @@ export async function generateGrokImagineVideo(params: {
       input: {
         prompt: params.prompt,
         image_urls: params.imageUrls,
-        mode: "normal",
+        mode: params.mode || "normal",
         duration: String(params.duration),
         resolution: params.resolution.toLowerCase(),
         aspect_ratio: params.aspectRatio,
+        nsfw_checker: params.nsfwChecker ?? true,
       },
     }),
   });
@@ -307,6 +310,80 @@ export async function generateInfinitalkFromAudio(params: {
     }),
   });
   if (!res.ok) throw new Error(`InfiniteTalk API error: ${await res.text()}`);
+  const data = await res.json();
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}
+
+export async function generateGptImage2(params: {
+  prompt: string;
+  inputUrls: string[];
+  aspectRatio?: string;
+  nsfwChecker?: boolean;
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-image-2-image-to-image",
+      callBackUrl: params.callbackUrl,
+      input: {
+        prompt: params.prompt,
+        input_urls: params.inputUrls,
+        ...(params.aspectRatio && params.aspectRatio !== "auto" && { aspect_ratio: params.aspectRatio }),
+        nsfw_checker: params.nsfwChecker ?? false,
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`GPT Image 2 API error: ${await res.text()}`);
+  const data = await res.json();
+  return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
+}
+
+export async function generateElevenLabsTTS(params: {
+  text: string;
+  voice?: string;
+  stability?: number;
+  similarityBoost?: number;
+  style?: number;
+  speed?: number;
+  timestamps?: boolean;
+  previousText?: string;
+  nextText?: string;
+  languageCode?: string;
+  callbackUrl: string;
+  companyId?: string;
+}) {
+  const { apiKey } = await resolveKieApiKey(params.companyId);
+  const res = await fetch(`${KIE_AI_BASE}/api/v1/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "elevenlabs/text-to-speech-multilingual-v2",
+      callBackUrl: params.callbackUrl,
+      input: {
+        text: params.text,
+        voice: params.voice || "EkK5I93UQWFDigLMpZcX",
+        stability: params.stability ?? 0.5,
+        similarity_boost: params.similarityBoost ?? 0.75,
+        style: params.style ?? 0,
+        speed: params.speed ?? 1,
+        timestamps: params.timestamps ?? false,
+        previous_text: params.previousText || "",
+        next_text: params.nextText || "",
+        language_code: params.languageCode || "",
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`ElevenLabs TTS API error: ${await res.text()}`);
   const data = await res.json();
   return { taskId: data.data?.taskId as string | undefined, raw: data, responseCode: data.code as number | undefined, responseMessage: data.msg as string | undefined };
 }
