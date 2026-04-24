@@ -127,6 +127,10 @@ export function ProjectsDashboard({
   const createPromptTemplate = useMutation(api.promptTemplates.create);
   const updatePromptTemplate = useMutation(api.promptTemplates.update);
   const deletePromptTemplate = useMutation(api.promptTemplates.remove);
+  const stylePresets = useQuery(api.storyboard.presets.list, { companyId: dashboardCompanyId, category: "style" });
+  const createPreset = useMutation(api.storyboard.presets.create);
+  const updatePresetMut = useMutation(api.storyboard.presets.update);
+  const removePreset = useMutation(api.storyboard.presets.remove);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -186,8 +190,9 @@ export function ProjectsDashboard({
     setIsCreating(true);
     try {
       if (newType === "board" && onCreateConvexProject) {
-        // Resolve stylePrompt: check custom styles first, then built-in STYLE_PROMPTS
-        const customMatch = customStyleTemplates.find(s => s.name === newArtStyle);
+        // Resolve stylePrompt: check presets first, then built-in STYLE_PROMPTS
+        const presetMatch = (stylePresets || []).find(p => p.name === newArtStyle);
+        const customMatch = presetMatch ? { prompt: presetMatch.prompt || "" } : customStyleTemplates.find(s => s.name === newArtStyle);
         const { STYLE_PROMPTS } = await import("../../constants");
         const resolvedStylePrompt = customMatch?.prompt || STYLE_PROMPTS[newArtStyle] || "";
         await onCreateConvexProject(newName, newFrameRatio, newArtStyle, resolvedStylePrompt);
@@ -937,10 +942,22 @@ export function ProjectsDashboard({
                       onClick={async () => {
                         try {
                           if (editingStyleId) {
-                            await updatePromptTemplate({ id: editingStyleId as any, name: customStyleName.trim(), prompt: customStylePrompt.trim() });
+                            await updatePresetMut({
+                              id: editingStyleId as any,
+                              name: customStyleName.trim(),
+                              prompt: customStylePrompt.trim(),
+                              format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
+                            });
                             toast.success(`Style "${customStyleName}" updated`);
                           } else {
-                            await createPromptTemplate({ name: customStyleName.trim(), type: "style", prompt: customStylePrompt.trim(), companyId: dashboardCompanyId, isPublic: false, tags: ["custom-style"] });
+                            await createPreset({
+                              name: customStyleName.trim(),
+                              category: "style",
+                              format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
+                              prompt: customStylePrompt.trim(),
+                              companyId: dashboardCompanyId,
+                              userId: "",
+                            });
                             setNewArtStyle(customStyleName.trim());
                             toast.success(`Custom style "${customStyleName}" created`);
                           }
@@ -983,25 +1000,29 @@ export function ProjectsDashboard({
                   </button>
                 ))}
 
-                {/* Custom styles from promptTemplates */}
-                {customStyleTemplates.map(style => (
+                {/* Custom styles from storyboard_presets */}
+                {(stylePresets || []).map(preset => (
                   <button
-                    key={style._id}
-                    onClick={() => setNewArtStyle(style.name)}
+                    key={preset._id}
+                    onClick={() => setNewArtStyle(preset.name)}
                     className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                      newArtStyle === style.name
+                      newArtStyle === preset.name
                         ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
                         : 'border-[#3D3D3D] hover:border-white/20'
                     }`}
                   >
-                    <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
-                      <Palette className="w-6 h-6 text-purple-400/50" />
-                    </div>
+                    {preset.thumbnailUrl ? (
+                      <img src={preset.thumbnailUrl} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
+                        <Palette className="w-6 h-6 text-purple-400/50" />
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                     <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg truncate px-1">
-                      {style.name}
+                      {preset.name}
                     </span>
-                    {newArtStyle === style.name && (
+                    {newArtStyle === preset.name && (
                       <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
                         <Check className="w-2.5 h-2.5 text-white" />
                       </div>
@@ -1011,9 +1032,9 @@ export function ProjectsDashboard({
                       role="button"
                       onClick={(e) => {
                         e.stopPropagation(); e.preventDefault();
-                        setEditingStyleId(style._id);
-                        setCustomStyleName(style.name);
-                        setCustomStylePrompt(style.prompt);
+                        setEditingStyleId(String(preset._id));
+                        setCustomStyleName(preset.name);
+                        setCustomStylePrompt(preset.prompt || "");
                         setShowCustomStyleForm(true);
                       }}
                       className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
@@ -1025,9 +1046,9 @@ export function ProjectsDashboard({
                       role="button"
                       onClick={(e) => {
                         e.stopPropagation(); e.preventDefault();
-                        deletePromptTemplate({ id: style._id });
-                        if (newArtStyle === style.name) setNewArtStyle(VISUAL_STYLES[0].id);
-                        toast.success(`Style "${style.name}" deleted`);
+                        removePreset({ id: preset._id });
+                        if (newArtStyle === preset.name) setNewArtStyle(VISUAL_STYLES[0].id);
+                        toast.success(`Style "${preset.name}" deleted`);
                       }}
                       className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
                     >

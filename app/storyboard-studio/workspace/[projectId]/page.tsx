@@ -14,9 +14,11 @@ import { FrameFavoriteButton } from "../../components/editor/FrameFavoriteButton
 import { FramePrimaryImageButton } from "../../components/editor/FramePrimaryImageButton";
 import { WorkspaceExportModal } from "../../components/modals/WorkspaceExportModal";
 import { FileBrowser } from "../../components/ai/FileBrowser";
-import { VISUAL_STYLES, STYLE_PROMPTS } from "../../constants";
+import { VISUAL_STYLES, STYLE_PROMPTS, FORMAT_PRESETS, FORMAT_PROMPT_MAP } from "../../constants";
 import { ElementLibrary } from "../../components/ai/ElementLibrary";
 import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
+import { BatchGenerateDialog } from "../../components/storyboard/BatchGenerateDialog";
+import { PresetManager } from "../../components/storyboard/PresetManager";
 import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
 import { SceneEditor } from "../../components/editor/SceneEditor";
 import { TagEditor } from "../../components/storyboard/TagEditor";
@@ -126,12 +128,16 @@ export default function StoryboardWorkspacePage() {
   // Credit balance now handled by CreditBadge component
   const customStyles = useQuery(api.promptTemplates.getByCompany, { companyId: currentCompanyId });
   const customStyleTemplates = customStyles?.filter(t => t.type === "style") ?? [];
+  const stylePresets = useQuery(api.storyboard.presets.list, { companyId: currentCompanyId, category: "style" });
 
   const updateScript = useMutation(api.storyboard.projects.updateScript);
   const updateProject = useMutation(api.storyboard.projects.update);
   const createPromptTemplate = useMutation(api.promptTemplates.create);
   const updatePromptTemplate = useMutation(api.promptTemplates.update);
   const deletePromptTemplate = useMutation(api.promptTemplates.remove);
+  const createPreset = useMutation(api.storyboard.presets.create);
+  const updatePresetMut = useMutation(api.storyboard.presets.update);
+  const removePreset = useMutation(api.storyboard.presets.remove);
   const createBatch = useMutation(api.storyboard.storyboardItems.createBatch);
   const createItem = useMutation(api.storyboard.storyboardItems.create);
   const updateItem = useMutation(api.storyboard.storyboardItems.update);
@@ -517,12 +523,15 @@ export default function StoryboardWorkspacePage() {
   const [customStyleName, setCustomStyleName] = useState("");
   const [customStylePrompt, setCustomStylePrompt] = useState("");
   const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
+  const [showFormatDropdown, setShowFormatDropdown] = useState(false);
   const [isBuilding, setIsBuilding] = useState(false);
   const [isAddingFrame, setIsAddingFrame] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [showAiInput, setShowAiInput] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showBatchGenerate, setShowBatchGenerate] = useState(false);
+  const [showPresetManager, setShowPresetManager] = useState(false);
   const [tableEditField, setTableEditField] = useState<{ itemId: string; field: string; value: string } | null>(null);
   const [tableTagEditorId, setTableTagEditorId] = useState<string | null>(null);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
@@ -1260,26 +1269,24 @@ export default function StoryboardWorkspacePage() {
                                     onClick={async () => {
                                       try {
                                         if (editingStyleId) {
-                                          // Update existing
-                                          await updatePromptTemplate({
+                                          // Update existing preset
+                                          await updatePresetMut({
                                             id: editingStyleId as any,
                                             name: customStyleName.trim(),
                                             prompt: customStylePrompt.trim(),
+                                            format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
                                           });
-                                          // If this style is currently applied, update the project too
-                                          if (project?.style === customStyleTemplates.find(s => s._id === editingStyleId)?.name || project?.stylePrompt) {
-                                            updateProject({ id: project._id, style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() });
-                                          }
+                                          updateProject({ id: project._id, style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() });
                                           toast.success(`Style "${customStyleName}" updated`);
                                         } else {
-                                          // Create new
-                                          await createPromptTemplate({
+                                          // Create new preset
+                                          await createPreset({
                                             name: customStyleName.trim(),
-                                            type: "style",
+                                            category: "style",
+                                            format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
                                             prompt: customStylePrompt.trim(),
                                             companyId: currentCompanyId,
-                                            isPublic: false,
-                                            tags: ["custom-style"],
+                                            userId: user?.id || "",
                                           });
                                           updateProject({ id: project._id, style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() });
                                           toast.success(`Custom style "${customStyleName}" created and applied`);
@@ -1301,6 +1308,32 @@ export default function StoryboardWorkspacePage() {
                             )}
 
                             <div className="grid grid-cols-4 gap-2 max-h-[350px] overflow-y-auto pr-1">
+                              {/* No Style — clear option */}
+                              <button
+                                onClick={() => {
+                                  updateProject({ id: project._id, style: "", stylePrompt: "" });
+                                  setShowStyleDropdown(false);
+                                }}
+                                className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
+                                  !project?.style || project.style === ''
+                                    ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
+                                    : 'border-[#3D3D3D] hover:border-white/20'
+                                }`}
+                              >
+                                <div className="w-full h-full bg-gradient-to-br from-gray-800/60 to-gray-900/60 flex items-center justify-center">
+                                  <X className="w-6 h-6 text-gray-500" />
+                                </div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-gray-400 drop-shadow-lg">
+                                  No Style
+                                </span>
+                                {(!project?.style || project.style === '') && (
+                                  <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                                    <Check className="w-2.5 h-2.5 text-white" />
+                                  </div>
+                                )}
+                              </button>
+
                               {/* Built-in styles */}
                               {VISUAL_STYLES.filter(s => s.id !== 'custom').map(style => (
                                 <button
@@ -1333,28 +1366,33 @@ export default function StoryboardWorkspacePage() {
                                 </button>
                               ))}
 
-                              {/* Custom styles from promptTemplates */}
-                              {customStyleTemplates.map(style => (
+                              {/* Custom styles from storyboard_presets */}
+                              {(stylePresets || []).map(preset => (
                                 <button
-                                  key={style._id}
+                                  key={preset._id}
                                   onClick={() => {
-                                    updateProject({ id: project._id, style: style.name, stylePrompt: style.prompt });
+                                    const parsed = JSON.parse(preset.format || "{}");
+                                    updateProject({ id: project._id, style: parsed.style || preset.name, stylePrompt: parsed.stylePrompt || preset.prompt || "" });
                                     setShowStyleDropdown(false);
                                   }}
                                   className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                    project?.style === style.name
+                                    project?.style === preset.name
                                       ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
                                       : 'border-[#3D3D3D] hover:border-white/20'
                                   }`}
                                 >
-                                  <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
-                                    <Palette className="w-6 h-6 text-purple-400/50" />
-                                  </div>
+                                  {preset.thumbnailUrl ? (
+                                    <img src={preset.thumbnailUrl} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
+                                      <Palette className="w-6 h-6 text-purple-400/50" />
+                                    </div>
+                                  )}
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                                   <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg truncate px-1">
-                                    {style.name}
+                                    {preset.name}
                                   </span>
-                                  {project?.style === style.name && (
+                                  {project?.style === preset.name && (
                                     <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
                                       <Check className="w-2.5 h-2.5 text-white" />
                                     </div>
@@ -1365,9 +1403,9 @@ export default function StoryboardWorkspacePage() {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       e.preventDefault();
-                                      setEditingStyleId(style._id);
-                                      setCustomStyleName(style.name);
-                                      setCustomStylePrompt(style.prompt);
+                                      setEditingStyleId(String(preset._id));
+                                      setCustomStyleName(preset.name);
+                                      setCustomStylePrompt(preset.prompt || "");
                                       setShowCustomStyleForm(true);
                                     }}
                                     className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
@@ -1380,8 +1418,8 @@ export default function StoryboardWorkspacePage() {
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       e.preventDefault();
-                                      deletePromptTemplate({ id: style._id });
-                                      toast.success(`Style "${style.name}" deleted`);
+                                      removePreset({ id: preset._id });
+                                      toast.success(`Style "${preset.name}" deleted`);
                                     }}
                                     className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
                                   >
@@ -1405,6 +1443,78 @@ export default function StoryboardWorkspacePage() {
                         </>
                       )}
                     </div>
+                    {/* Format Badge */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowFormatDropdown(!showFormatDropdown)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
+                          project?.formatPreset
+                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-gray-300'
+                        }`}
+                      >
+                        <Film className="w-3 h-3" />
+                        {project?.formatPreset
+                          ? FORMAT_PRESETS.find(f => f.id === project.formatPreset)?.label || project.formatPreset
+                          : 'No Format'}
+                        <ChevronDown className="w-2.5 h-2.5" />
+                      </button>
+                      {showFormatDropdown && (
+                        <>
+                          <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowFormatDropdown(false)} />
+                          <div className="absolute top-full mt-2 left-0 bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl z-50 w-[320px] p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-sm font-semibold text-white">Content Format</h3>
+                              <button onClick={() => setShowFormatDropdown(false)} className="text-[#6E6E6E] hover:text-white transition">
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <p className="text-[10px] text-[#6E6E6E] mb-3">Auto-appends framing, pacing, and camera behavior to all generation prompts.</p>
+                            <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-1">
+                              {/* No Format — clear option */}
+                              <button
+                                onClick={() => {
+                                  updateProject({ id: project._id, formatPreset: "" });
+                                  setShowFormatDropdown(false);
+                                }}
+                                className={`relative px-3 py-2.5 rounded-lg border-2 transition-all text-center ${
+                                  !project?.formatPreset || project.formatPreset === ''
+                                    ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-500/10'
+                                    : 'border-[#3D3D3D] hover:border-white/20 bg-[#2C2C2C]'
+                                }`}
+                              >
+                                <X className="w-4 h-4 mx-auto mb-1 text-gray-500" />
+                                <span className="text-[10px] font-medium text-gray-400">No Format</span>
+                              </button>
+
+                              {FORMAT_PRESETS.map(format => (
+                                <button
+                                  key={format.id}
+                                  onClick={() => {
+                                    updateProject({ id: project._id, formatPreset: format.id });
+                                    setShowFormatDropdown(false);
+                                  }}
+                                  className={`relative px-3 py-2.5 rounded-lg border-2 transition-all text-center ${
+                                    project?.formatPreset === format.id
+                                      ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-500/10'
+                                      : 'border-[#3D3D3D] hover:border-white/20 bg-[#2C2C2C]'
+                                  }`}
+                                  title={format.prompt}
+                                >
+                                  <div className="w-4 h-4 rounded-full mx-auto mb-1" style={{ backgroundColor: format.color }} />
+                                  <span className="text-[10px] font-medium text-white">{format.label}</span>
+                                  {project?.formatPreset === format.id && (
+                                    <div className="absolute top-1 right-1 w-3 h-3 bg-amber-500 rounded-full flex items-center justify-center">
+                                      <Check className="w-2 h-2 text-white" />
+                                    </div>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     {duplicateCount > 0 && (
                       <div className="flex items-center gap-1 px-2 py-1 bg-[#FAAD14]/20 border border-[#FAAD14]/30 rounded-md">
                         <AlertTriangle className="w-3 h-3 text-[#FAAD14]" />
@@ -1421,6 +1531,12 @@ export default function StoryboardWorkspacePage() {
                       <Trash2 className="w-3.5 h-3.5" />
                       Remove Duplicates
                     </button>
+                    <button onClick={() => setShowBatchGenerate(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium rounded-lg transition"
+                      title="Generate images for all frames with prompts">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Generate All
+                    </button>
                     <button onClick={() => setShowFileBrowser(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition">
                       <FolderOpen className="w-3.5 h-3.5" />
@@ -1430,6 +1546,12 @@ export default function StoryboardWorkspacePage() {
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition">
                       <Users className="w-3.5 h-3.5" />
                       Elements
+                    </button>
+                    <button onClick={() => setShowPresetManager(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition"
+                      title="Manage saved presets">
+                      <Settings className="w-3.5 h-3.5" />
+                      Presets
                     </button>
                     <button onClick={() => setShowExportModal(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-xs text-white font-medium rounded-lg transition">
@@ -1888,6 +2010,22 @@ export default function StoryboardWorkspacePage() {
             </form>
           </div>
         </div>
+      )}
+      {showPresetManager && (
+        <PresetManager
+          companyId={currentCompanyId}
+          onClose={() => setShowPresetManager(false)}
+        />
+      )}
+      {showBatchGenerate && items && project && (
+        <BatchGenerateDialog
+          projectId={projectId as any}
+          companyId={currentCompanyId}
+          userId={user?.id || ""}
+          items={items}
+          project={project}
+          onClose={() => setShowBatchGenerate(false)}
+        />
       )}
       {showExportModal && items && project && (
         <WorkspaceExportModal

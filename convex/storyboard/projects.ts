@@ -141,6 +141,11 @@ export const update = mutation({
     isFavorite: v.optional(v.boolean()),
     style: v.optional(v.string()), // Top-level project theme: "cinematic" | "sketch" | "anime" | etc.
     stylePrompt: v.optional(v.string()), // Actual style prompt text appended to generations
+    formatPreset: v.optional(v.string()), // Format preset key: "film" | "documentary" | "youtube" | "reel" | etc.
+    colorPalette: v.optional(v.object({
+      referenceUrl: v.optional(v.string()),
+      colors: v.array(v.string()),
+    })),
     tags: v.optional(v.array(v.string())),
     script: v.optional(v.string()),
     imageUrl: v.optional(v.string()), // NEW: Image URL for project's main image

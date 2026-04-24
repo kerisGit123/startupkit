@@ -8,7 +8,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -24,6 +24,7 @@ import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
 import PromptLibrary from "./PromptLibrary";
+import { FORMAT_PROMPT_MAP } from "../../constants";
 import { FileBrowser } from "./FileBrowser";
 import { AudioPreviewDialog } from "../shared/AudioPreviewDialog";
 import { CreatePersonaDialog } from "../GeneratedImagesPanel/CreatePersonaDialog";
@@ -31,6 +32,9 @@ import { ManagePersonaDialog } from "../shared/ManagePersonaDialog";
 import { ElementLibrary } from "./ElementLibrary";
 import { TtsVoiceSelector, TtsLanguageSelector, TTS_DEFAULT_VOICE } from "../shared/TtsVoiceSelector";
 import { PromptActionsDropdown } from "../shared/PromptActionsDropdown";
+import { VirtualCameraStyle, buildCameraPromptText } from "./VirtualCameraStyle";
+import { CameraAnglePicker, buildAnglePromptText, DEFAULT_ANGLE_SETTINGS } from "./CameraAnglePicker";
+import type { CameraAngleSettings } from "./CameraAnglePicker";
 
 // Constants for mention system
 const TEXTAREA_MIN_HEIGHT = 60;
@@ -240,10 +244,11 @@ export function ImageAIPanel({
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   // showPromptActions now managed by PromptActionsDropdown component
-  const [outputMode, setOutputMode] = useState<"image" | "video" | "music">("image");
+  const [outputMode, setOutputMode] = useState<"image" | "video" | "music" | "analyze">("image");
   const createTemplate = useMutation(api.promptTemplates.create);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const deductCredits = useMutation(api.credits.deductCredits);
+  const refundCredits = useMutation(api.credits.refundCredits);
   
   // Use exact same pattern as working CreditBalanceDisplay (avoid naming conflicts)
   const { user: clerkUser } = useUser();
@@ -508,6 +513,11 @@ export function ImageAIPanel({
   const [webSearch, setWebSearch] = useState(false);
   const [generateAudio, setGenerateAudio] = useState(true);
   const [cleanOutput, setCleanOutput] = useState(true); // Appends "no subtitles, no music, no text" for cleaner output
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeType, setAnalyzeType] = useState<"image" | "video" | "audio">("image");
+  const [analyzeMediaUrl, setAnalyzeMediaUrl] = useState("");
+  const [analyzeResult, setAnalyzeResult] = useState("");
+  const [showAnalyzeBrowser, setShowAnalyzeBrowser] = useState(false);
 
   // Get media duration from URL
   const getMediaDuration = (url: string, type: 'video' | 'audio'): Promise<number> => {
@@ -696,6 +706,29 @@ export function ImageAIPanel({
   const [showAudioDropdown, setShowAudioDropdown] = useState(false);
   const [showVeoQualityDropdown, setShowVeoQualityDropdown] = useState(false);
   const [showVeoModeDropdown, setShowVeoModeDropdown] = useState(false);
+  const [cameraMotion, setCameraMotion] = useState("none");
+  const [virtualCameraSettings, setVirtualCameraSettings] = useState<import("./VirtualCameraStyle").VirtualCameraSettings>({ camera: "default", lens: "none", focalLength: "none", aperture: "none" });
+  const [cameraAngleSettings, setCameraAngleSettings] = useState<CameraAngleSettings>({ ...DEFAULT_ANGLE_SETTINGS });
+  const [showCameraMotionDropdown, setShowCameraMotionDropdown] = useState(false);
+
+  // Camera motion presets — appended to video prompt as natural language
+  const cameraMotionOptions = [
+    { value: "none", label: "No Motion", description: "" },
+    { value: "static", label: "Static", description: "Static camera, locked position, no movement" },
+    { value: "dolly-in", label: "Dolly In", description: "The camera smoothly dollies forward toward the subject" },
+    { value: "dolly-out", label: "Dolly Out", description: "The camera smoothly dollies backward away from the subject" },
+    { value: "crane-up", label: "Crane Up", description: "The camera rises vertically on a crane, revealing the scene from above" },
+    { value: "crane-down", label: "Crane Down", description: "The camera descends vertically on a crane, dropping into the scene" },
+    { value: "pan-left", label: "Pan Left", description: "The camera pans smoothly to the left" },
+    { value: "pan-right", label: "Pan Right", description: "The camera pans smoothly to the right" },
+    { value: "tilt-up", label: "Tilt Up", description: "The camera tilts upward" },
+    { value: "tilt-down", label: "Tilt Down", description: "The camera tilts downward" },
+    { value: "orbit", label: "Orbit", description: "The camera orbits slowly around the subject in a circular motion" },
+    { value: "tracking", label: "Tracking", description: "The camera tracks alongside the moving subject" },
+    { value: "handheld", label: "Handheld", description: "Handheld camera with natural subtle shake, documentary style" },
+    { value: "zoom-in", label: "Zoom In", description: "The camera zooms in toward the subject" },
+    { value: "zoom-out", label: "Zoom Out", description: "The camera zooms out from the subject" },
+  ];
 
   // Video duration options — model-specific
   const videoDurationOptions = (selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast")
@@ -1596,6 +1629,95 @@ export function ImageAIPanel({
   const [generateCooldown, setGenerateCooldown] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
+  // ── AI Analyze: user-selected media type + URL ─────────────────────────
+  const handleAnalyze = async () => {
+    if (isAnalyzing) return;
+
+    const mediaType = analyzeType;
+    const mediaUrl = analyzeMediaUrl;
+
+    if (!mediaUrl) {
+      toast.error(`No ${mediaType} to analyze. Upload or paste a URL first.`);
+      return;
+    }
+
+    // Credit cost: image=1, video=3, audio=1
+    const creditCost = mediaType === "video" ? 3 : 1;
+    const currentCredits = typeof getBalance === "number" ? getBalance : 0;
+    if (currentCredits < creditCost) {
+      toast.error(`Insufficient credits. Need ${creditCost} but you have ${currentCredits}.`);
+      return;
+    }
+
+    const modelName = mediaType === "image" ? "ImageAnalyzer" : mediaType === "video" ? "VideoAnalyzer" : "AudioAnalyzer";
+
+    setIsAnalyzing(true);
+    try {
+      // Deduct credits first
+      await deductCredits({
+        companyId,
+        tokens: creditCost,
+        reason: `AI Analyze ${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)}`,
+      });
+
+      const response = await fetch("/api/ai-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaType, mediaUrl }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || `Analysis failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const result = data.result;
+
+      if (!result) {
+        throw new Error("No result from AI analysis");
+      }
+
+      // Create file record with completed result
+      await logUpload({
+        companyId,
+        userId: user?.id || "",
+        projectId: projectId || undefined,
+        filename: `${modelName} — ${new Date().toLocaleString()}`,
+        fileType: "analysis",
+        mimeType: "text/plain",
+        size: result.length,
+        category: "generated",
+        tags: ["analysis", mediaType],
+        uploadedBy: user?.id || "",
+        status: "completed",
+        creditsUsed: creditCost,
+        model: modelName,
+        prompt: result,
+        categoryId: activeShotId ? activeShotId as any : undefined,
+        metadata: { analysisType: mediaType, sourceUrl: mediaUrl },
+      });
+
+      // Store result — user can click "Use as Prompt" to load it
+      setAnalyzeResult(result);
+
+      toast.success(`${mediaType.charAt(0).toUpperCase() + mediaType.slice(1)} analyzed (${creditCost} credit${creditCost > 1 ? 's' : ''})`);
+    } catch (error: any) {
+      console.error("[AI Analyze] Error:", error);
+      toast.error(error.message || "Analysis failed");
+      // Refund on failure
+      try {
+        await refundCredits({
+          companyId,
+          tokens: creditCost,
+          reason: `AI Analyze ${mediaType} — refund (failed)`,
+        });
+      } catch { /* best effort refund */ }
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleKieAIGenerate = async () => {
     // Rate limit: prevent double-click / rapid submissions
     if (generateCooldown) return;
@@ -1738,8 +1860,24 @@ export function ImageAIPanel({
         // For Seedance 2.0, pass generateAudio state — lipsync always enables audio
         const audioParam = isSeedance2 ? (seedanceMode === "lipsync" ? true : generateAudio) : audioEnabled;
 
-        // UGC/Showcase mode: convert custom badges to @Image(n) and merge images
+        // Auto-prepend project style + format + color palette to prompt
         let finalPrompt = extractedPrompt;
+        {
+          const parts: string[] = [];
+          if (projectData?.stylePrompt) parts.push(projectData.stylePrompt);
+          if (projectData?.formatPreset && FORMAT_PROMPT_MAP[projectData.formatPreset]) {
+            parts.push(FORMAT_PROMPT_MAP[projectData.formatPreset]);
+          }
+          if (projectData?.colorPalette?.colors?.length) {
+            const colorNames = projectData.colorPalette.colors.map((c: string) => c.toUpperCase()).join(', ');
+            parts.push(`Color graded with dominant palette: ${colorNames}.`);
+          }
+          if (parts.length > 0) {
+            finalPrompt = parts.join(' ') + ' ' + finalPrompt;
+          }
+        }
+
+        // UGC/Showcase mode: convert custom badges to @Image(n) and merge images
         if (seedanceMode === "ugc") {
           const productCount = productImages.length;
           for (let i = 1; i <= productCount; i++) {
@@ -1761,6 +1899,18 @@ export function ImageAIPanel({
           for (let i = 1; i <= sceneImages.length; i++) {
             finalPrompt = finalPrompt.replace(new RegExp(`@Scene${i}`, 'g'), `@Image${subjectCount + presenterCount + i}`);
           }
+        }
+
+        // Append virtual camera style to prompt
+        const cameraStyleText = buildCameraPromptText(virtualCameraSettings);
+        if (cameraStyleText) {
+          finalPrompt = finalPrompt.trimEnd() + '. ' + cameraStyleText;
+        }
+
+        // Append 3D camera angle to prompt
+        const angleText = buildAnglePromptText(cameraAngleSettings);
+        if (angleText) {
+          finalPrompt = finalPrompt.trimEnd() + '. ' + angleText;
         }
 
         // Append clean output suffix for Seedance models
@@ -2205,8 +2355,158 @@ export function ImageAIPanel({
           </div>
         )}
 
-        {/* Reference Images Panel — hidden for text-only models like z-image and Topaz Video Upscale (video-only) */}
-        {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (
+        {/* ── ANALYZE MODE: media input using AddImageMenu ──────────── */}
+        {outputMode === "analyze" && (
+          <div className="mb-[0px]">
+            <div className="px-0 py-0">
+              <div className="flex items-start gap-2.5">
+                <div className="flex-shrink-0 flex items-center gap-1.5">
+                  {/* Preview of selected media — reuses existing video/audio preview patterns */}
+                  {analyzeMediaUrl && analyzeType === "image" && (
+                    <div className="relative group">
+                      <div className="w-16 h-16 rounded-md border border-amber-500/30 bg-[#1a1a24] overflow-hidden">
+                        <img src={analyzeMediaUrl} alt="Analyze" className="w-full h-full object-cover" />
+                      </div>
+                      <button
+                        onClick={() => { setAnalyzeMediaUrl(""); setAnalyzeResult(""); }}
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2 h-2 text-white" />
+                      </button>
+                    </div>
+                  )}
+                  {analyzeMediaUrl && analyzeType === "video" && (
+                    <div className="relative group">
+                      <div className="w-16 h-16 rounded-md border border-green-500/30 bg-[#1a1a24] overflow-hidden cursor-pointer"
+                        onClick={() => setMediaPreview({ type: 'video', url: analyzeMediaUrl, label: 'Analyze Video' })}
+                      >
+                        <video src={analyzeMediaUrl} className="w-full h-full object-cover" muted preload="metadata" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
+                            <div className="w-0 h-0 border-l-[8px] border-l-black border-y-[5px] border-y-transparent ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="absolute -top-1.5 -left-1 bg-green-800 text-green-200 text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium pointer-events-none">Video</div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setAnalyzeMediaUrl(""); setAnalyzeResult(""); }}
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2 h-2 text-white" />
+                      </button>
+                    </div>
+                  )}
+                  {analyzeMediaUrl && analyzeType === "audio" && (
+                    <div className="relative group">
+                      <div className="w-16 h-16 rounded-md border border-purple-500/30 bg-[#1a1a24] flex flex-col items-center justify-center cursor-pointer"
+                        onClick={() => setMediaPreview({ type: 'audio', url: analyzeMediaUrl, label: 'Analyze Audio' })}
+                      >
+                        <Volume2 className="w-5 h-5 text-purple-400" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                          <div className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
+                            <div className="w-0 h-0 border-l-[8px] border-l-purple-600 border-y-[5px] border-y-transparent ml-0.5" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="absolute -top-1.5 -left-1 bg-purple-800 text-purple-200 text-[8px] px-1.5 py-0.5 rounded-full z-20 font-medium pointer-events-none">Audio</div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setAnalyzeMediaUrl(""); setAnalyzeResult(""); }}
+                        className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                      >
+                        <X className="w-2 h-2 text-white" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Add media — reuse AddImageMenu for images, direct browse for video/audio */}
+                  {!analyzeMediaUrl && analyzeType === "image" && (
+                    <AddImageMenu
+                      label="Add Image"
+                      onUploadClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const formData = new FormData();
+                            formData.append('file', file, file.name);
+                            formData.append('category', 'temps');
+                            const res = await fetch('/api/storyboard/upload', { method: 'POST', body: formData });
+                            if (res.ok) {
+                              const data = await res.json();
+                              setAnalyzeMediaUrl(data.publicUrl);
+                              setAnalyzeResult("");
+                            } else { toast.error("Upload failed"); }
+                          } catch { toast.error("Upload failed"); }
+                        };
+                        input.click();
+                      }}
+                      onR2Click={() => setShowAnalyzeBrowser(true)}
+                      canOpenR2={canOpenFileBrowser()}
+                      onR2Unavailable={() => showToast('Project info required', 'error')}
+                      onElementsClick={() => setShowElementLibrary(true)}
+                      canOpenElements={canOpenElementLibrary()}
+                      onElementsUnavailable={() => showToast('Project info required', 'error')}
+                      onCaptureClick={backgroundImage ? () => {
+                        setAnalyzeMediaUrl(backgroundImage);
+                        setAnalyzeResult("");
+                      } : undefined}
+                      generatedItemImages={generatedItemImages}
+                      generatedProjectImages={generatedProjectImages}
+                      onSelectGeneratedImage={(url) => { setAnalyzeMediaUrl(url); setAnalyzeResult(""); }}
+                    />
+                  )}
+                  {!analyzeMediaUrl && (analyzeType === "video" || analyzeType === "audio") && (
+                    <AddImageMenu
+                      mediaType={analyzeType}
+                      onUploadClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = analyzeType === "video" ? 'video/mp4,video/webm' : 'audio/mpeg,audio/wav,audio/mp4,audio/ogg,.mp3,.wav,.m4a';
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const formData = new FormData();
+                            formData.append('file', file, file.name);
+                            formData.append('category', 'temps');
+                            const res = await fetch('/api/storyboard/upload', { method: 'POST', body: formData });
+                            if (res.ok) {
+                              const data = await res.json();
+                              setAnalyzeMediaUrl(data.publicUrl);
+                              setAnalyzeResult("");
+                            } else { toast.error("Upload failed"); }
+                          } catch { toast.error("Upload failed"); }
+                        };
+                        input.click();
+                      }}
+                      onR2Click={() => setShowAnalyzeBrowser(true)}
+                      canOpenR2={canOpenFileBrowser()}
+                      onR2Unavailable={() => showToast('Project info required', 'error')}
+                    />
+                  )}
+                </div>
+
+                {/* Description text */}
+                <div className="flex-1 min-w-0 pt-1">
+                  <p className="text-[11px] text-(--text-tertiary) leading-relaxed">
+                    {analyzeMediaUrl
+                      ? `Ready to analyze. Click Analyze to generate a prompt from this ${analyzeType}.`
+                      : analyzeType === "image"
+                        ? "Click to add reference images from computer, R2 storage, or element library"
+                        : `Click to browse ${analyzeType} files from R2 storage`
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reference Images Panel — hidden for text-only models and Topaz */}
+        {outputMode !== "analyze" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (
         <div className="mb-[0px]">
           <div className="px-0 py-0">
             <div className="flex items-start gap-2.5 overflow-x-auto">
@@ -2893,11 +3193,60 @@ export function ImageAIPanel({
             </div>
           )}
 
-          {/* User Prompt Area — hidden for Topaz Video Upscale and Create Persona (no prompt needed) */}
-          {selectedModelOption.value === "topaz/video-upscale" || selectedModelOption.value === "ai-music-api/generate-persona" ? null : (
+          {/* ── ANALYZE MODE: URL input + result display ─────────────── */}
+          {outputMode === "analyze" && (
+            <div className="px-[10px] pt-[6px] pb-[10px] space-y-2">
+              {/* URL input */}
+              <input
+                type="text"
+                placeholder={`Paste ${analyzeType} URL...`}
+                value={analyzeMediaUrl}
+                onChange={(e) => { setAnalyzeMediaUrl(e.target.value); setAnalyzeResult(""); }}
+                className="w-full px-3 py-2 bg-[#141418] border border-[#2A2A32] rounded-lg text-xs text-white placeholder-[#6E6E6E] outline-none focus:border-amber-500/50 transition"
+              />
+
+              {/* Result display */}
+              {analyzeResult && (
+                <div className="relative">
+                  <div className="px-3 py-2 bg-[#141418] border border-amber-500/20 rounded-lg max-h-28 overflow-y-auto">
+                    <p className="text-[11px] text-(--text-secondary) whitespace-pre-wrap leading-relaxed">{analyzeResult}</p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <button
+                      onClick={() => {
+                        setOutputMode("image");
+                        setTimeout(() => {
+                          const el = editorRef.current;
+                          if (el) {
+                            el.textContent = analyzeResult;
+                            setEditorIsEmpty(false);
+                            setCurrentPrompt(analyzeResult);
+                            onUserPromptChange?.(analyzeResult);
+                          }
+                          toast.success("Result loaded into prompt");
+                        }, 100);
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-amber-400 hover:bg-amber-500/10 transition"
+                    >
+                      <ArrowUp className="w-3 h-3" /> Use as Prompt
+                    </button>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(analyzeResult); toast.success("Copied!"); }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-(--text-secondary) hover:bg-white/5 transition"
+                    >
+                      <Copy className="w-3 h-3" /> Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* User Prompt Area — hidden for Topaz Video Upscale, Create Persona, and Analyze mode */}
+          {outputMode === "analyze" || selectedModelOption.value === "topaz/video-upscale" || selectedModelOption.value === "ai-music-api/generate-persona" ? null : (
             <div className="px-[10px] pt-[10px] pb-[10px]">
               <div className="flex gap-2">
-                {/* Text Area (shared component) */}
+                {/* Text Area (shared component) with context menu */}
                 <PromptTextarea
                   editorRef={editorRef}
                   editorIsEmpty={editorIsEmpty}
@@ -2919,6 +3268,9 @@ export function ImageAIPanel({
                   onCompositionStart={handleCompositionStart}
                   onCompositionEnd={handleCompositionEnd}
                   onKeyDown={handleKeyDown}
+                  cameraMotionOptions={outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") ? cameraMotionOptions : undefined}
+                  onCameraMotionSelect={(value) => setCameraMotion(value)}
+                  onPromptChange={(text) => { setEditorIsEmpty(!text.trim()); setCurrentPrompt(text); onUserPromptChange?.(text); }}
                 />
                 
                 {/* Video & Audio slots — right side, for Kling/Seedance 2.0 multimodal/Topaz Video Upscale */}
@@ -3042,7 +3394,105 @@ export function ImageAIPanel({
                   projectStylePrompt={projectData?.stylePrompt}
                   projectStyleName={projectData?.style}
                   onOpenLibrary={() => setIsPromptLibraryOpen(true)}
+                  companyId={companyId}
+                  userId={user?.id}
                 />
+
+                {/* Camera Motion Preset — video mode only */}
+                {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="relative inline-block ml-2">
+                    <button
+                      onClick={() => setShowCameraMotionDropdown(!showCameraMotionDropdown)}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] transition-colors cursor-pointer border ${
+                        cameraMotion !== "none"
+                          ? "text-(--accent-blue) border-(--accent-blue)/30 bg-(--accent-blue)/8"
+                          : "text-(--text-secondary) border-white/8 hover:text-(--text-primary) hover:bg-white/5"
+                      }`}
+                      title="Camera Motion Preset"
+                    >
+                      <Film className="w-3 h-3" />
+                      <span>{cameraMotionOptions.find(o => o.value === cameraMotion)?.label || "Camera"}</span>
+                      <ChevronDown className="w-3 h-3 opacity-50" />
+                    </button>
+
+                    {showCameraMotionDropdown && (
+                      <div className="absolute bottom-full right-0 mb-2 w-[170px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50 max-h-[280px] overflow-y-auto py-1.5">
+                          {cameraMotionOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              onClick={() => {
+                                setCameraMotion(option.value);
+                                setShowCameraMotionDropdown(false);
+                                const el = editorRef.current;
+                                if (el && option.description) {
+                                  const saved = savedSelectionRef.current;
+                                  // Insert at saved cursor position (saved on blur when clicking dropdown)
+                                  if (saved && el.contains(saved.container)) {
+                                    el.focus();
+                                    const sel = window.getSelection();
+                                    const range = document.createRange();
+                                    range.setStart(saved.container, saved.offset);
+                                    range.collapse(true);
+                                    const br = document.createElement('br');
+                                    const textNode = document.createTextNode(option.description);
+                                    range.insertNode(textNode);
+                                    range.insertNode(br);
+                                    range.setStartAfter(textNode);
+                                    range.collapse(true);
+                                    sel?.removeAllRanges();
+                                    sel?.addRange(range);
+                                  } else {
+                                    // No cursor — append at end
+                                    const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                                    if (hasContent) {
+                                      el.innerHTML = el.innerHTML + '<br>' + option.description;
+                                    } else {
+                                      el.textContent = option.description;
+                                    }
+                                  }
+                                  const plainText = el.innerText || '';
+                                  setEditorIsEmpty(false);
+                                  setCurrentPrompt(plainText);
+                                  onUserPromptChange?.(plainText);
+                                }
+                              }}
+                              className={`w-full px-3 py-2 text-left text-[13px] transition-colors ${
+                                cameraMotion === option.value
+                                  ? "bg-white/8 text-(--text-primary)"
+                                  : "text-(--text-primary) hover:bg-white/5"
+                              }`}
+                            >
+                              <span>{option.label}</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Virtual Camera Style — image and video modes */}
+                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="inline-block ml-2">
+                    <VirtualCameraStyle
+                      settings={virtualCameraSettings}
+                      onSettingsChange={setVirtualCameraSettings}
+                      companyId={companyId}
+                      userId={user?.id}
+                    />
+                  </div>
+                )}
+
+                {/* 3D Camera Angle Picker — image and video modes */}
+                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="inline-block ml-1">
+                    <CameraAnglePicker
+                      settings={cameraAngleSettings}
+                      onSettingsChange={setCameraAngleSettings}
+                      companyId={companyId}
+                      userId={user?.id}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Save Prompt Inline Modal */}
@@ -3135,18 +3585,19 @@ export function ImageAIPanel({
               { key: "music", Icon: Music, title: "MUSIC" },
               { key: "audio", Icon: Mic, title: "AUDIO" },
             ] as const).map((cat) => {
-              const isActive = selectedModelOption.category === cat.key;
+              const isActive = outputMode !== "analyze" && selectedModelOption.category === cat.key;
               return (
                 <button
                   key={cat.key}
                   onClick={() => {
+                    if (outputMode === "analyze") setOutputMode("image");
                     setModelFilter(cat.key);
                     const firstInCategory = allModelOptions.find(m => m.category === cat.key);
                     if (firstInCategory) {
                       const modelOutputMode = firstInCategory.category === "music" ? "music" as const
                         : firstInCategory.category === "image" ? "image" as const
                         : "video" as const;
-                      if (modelOutputMode !== outputMode) {
+                      if (modelOutputMode !== outputMode || outputMode === "analyze") {
                         setOutputMode(modelOutputMode);
                         setResolution(modelOutputMode === "video" ? "480P" : "1K");
                         setAspectRatio(modelOutputMode === "video" ? "16:9" : "1:1");
@@ -3166,7 +3617,74 @@ export function ImageAIPanel({
               );
             })}
 
-            {/* Separator */}
+            {/* ANALYZE tab */}
+            <button
+              onClick={() => setOutputMode("analyze")}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold uppercase tracking-wide transition-colors ${
+                outputMode === "analyze"
+                  ? "bg-amber-500/15 text-amber-400"
+                  : "text-[#8A8A8A] hover:text-amber-400 hover:bg-amber-500/8"
+              }`}
+            >
+              <Scan className="w-4 h-4" strokeWidth={1.75} />
+              <span>ANALYZE</span>
+            </button>
+
+            {/* ── ANALYZE MODE toolbar ─────────────────────────────── */}
+            {outputMode === "analyze" && <>
+              <div className="w-px h-4 bg-[#32363E] mx-1" />
+
+              {/* Type selector */}
+              {([
+                { key: "image" as const, label: "Image", icon: Image, cost: 1 },
+                { key: "video" as const, label: "Video", icon: Film, cost: 3 },
+                { key: "audio" as const, label: "Audio", icon: Mic, cost: 1 },
+              ] as const).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => { setAnalyzeType(t.key); setAnalyzeMediaUrl(""); setAnalyzeResult(""); }}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                    analyzeType === t.key
+                      ? "bg-amber-500/15 text-amber-400"
+                      : "text-[#8A8A8A] hover:text-amber-300 hover:bg-amber-500/8"
+                  }`}
+                >
+                  <t.icon className="w-3.5 h-3.5" />
+                  {t.label}
+                  <span className="text-[10px] opacity-50">{t.cost}cr</span>
+                </button>
+              ))}
+
+              <div className="flex-1" />
+
+              {/* Credit cost */}
+              <div className="flex items-center gap-1 text-[12px] text-(--text-secondary)">
+                <Coins className="w-4 h-4 text-amber-400" strokeWidth={1.75} />
+                <span>{analyzeType === "video" ? 3 : 1}</span>
+              </div>
+
+              {/* Analyze button */}
+              <button
+                onClick={handleAnalyze}
+                disabled={isAnalyzing || !analyzeMediaUrl}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-400 text-black"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Scan className="w-4 h-4" />
+                    Analyze
+                  </>
+                )}
+              </button>
+            </>}
+
+            {/* Separator + Model selector — hidden in analyze mode */}
+            {outputMode !== "analyze" && <>
             <div className="w-px h-4 bg-[#32363E] mx-1" />
 
             {/* Model name */}
@@ -4331,6 +4849,7 @@ export function ImageAIPanel({
                 )}
               </button>
             )}
+          </>}
 
           </div>
         </div>
@@ -4623,6 +5142,31 @@ export function ImageAIPanel({
         />
       )}
 
+      {/* Analyze FileBrowser — picks image/video/audio based on analyzeType */}
+      {showAnalyzeBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          defaultFileType={analyzeType === "image" ? "image" : analyzeType === "video" ? "video" : "audio"}
+          onClose={() => setShowAnalyzeBrowser(false)}
+          onSelectFile={(url, type) => {
+            const validTypes = analyzeType === "image" ? ["image"]
+              : analyzeType === "video" ? ["video"]
+              : ["audio", "music", "file"];
+            if (validTypes.includes(type)) {
+              setAnalyzeMediaUrl(url);
+              setAnalyzeResult("");
+              setShowAnalyzeBrowser(false);
+            }
+          }}
+          onSelectImage={analyzeType === "image" ? (imageUrl) => {
+            setAnalyzeMediaUrl(imageUrl);
+            setAnalyzeResult("");
+            setShowAnalyzeBrowser(false);
+          } : undefined}
+          imageSelectionMode={analyzeType === "image"}
+        />
+      )}
+
       {/* Media Preview Popup */}
       {mediaPreview && mediaPreview.type === 'audio' && (
         <AudioPreviewDialog
@@ -4730,6 +5274,7 @@ export function ImageAIPanel({
         cancelText="Close"
         variant="warning"
       />
+
     </>
   );
 }

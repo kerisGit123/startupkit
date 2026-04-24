@@ -24,6 +24,7 @@ import {
   Play,
   Pause,
   Pencil,
+  Scan,
 } from "lucide-react";
 import { uploadToR2, deleteFromR2, batchDeleteFromR2 } from "@/lib/uploadToR2";
 import { useMutation } from "convex/react";
@@ -47,7 +48,7 @@ interface FileBrowserProps {
   defaultFileType?: FileType;
 }
 
-type FileType = "all" | "image" | "video" | "audio" | "file";
+type FileType = "all" | "image" | "video" | "audio" | "music" | "file";
 type CategoryFilter = "all" | "temps" | "uploads" | "generated" | "elements" | "storyboard" | "videos";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -67,10 +68,12 @@ const CATEGORY_LABELS = Object.fromEntries(
 );
 
 const TYPE_ICON: Record<string, any> = {
-  image:  ImageIcon,
-  video:  Video,
-  audio:  Volume2,
-  file:   FileText,
+  image:    ImageIcon,
+  video:    Video,
+  audio:    Volume2,
+  music:    Volume2,
+  file:     FileText,
+  analysis: Scan,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -396,6 +399,7 @@ export function FileBrowser({
                           { value: "all",   label: "All Files",  icon: Grid3x3  },
                           { value: "image", label: "Images",     icon: ImageIcon },
                           { value: "video", label: "Videos",     icon: Video     },
+                          { value: "music", label: "Music",      icon: Volume2   },
                           { value: "audio", label: "Audio",      icon: Volume2   },
                           { value: "file",  label: "Documents",  icon: FileText  },
                         ].map(({ value, label, icon: Icon }) => (
@@ -552,7 +556,8 @@ export function FileBrowser({
                         const Icon        = TYPE_ICON[file.fileType] ?? FileText;
                         const isImage     = file.fileType === "image";
                         const isVideo     = file.fileType === "video";
-                        const publicUrl   = getFileUrl(file.r2Key);
+                        const isAnalysis  = file.fileType === "analysis";
+                        const publicUrl   = isAnalysis ? "" : getFileUrl(file.r2Key);
                         const isDeleting  = deletingId === file._id;
 
                         return (
@@ -575,7 +580,14 @@ export function FileBrowser({
                             <div
                               className="w-full rounded-2xl overflow-hidden border cursor-pointer transition-all duration-200 hover:border-blue-500 hover:shadow-xl"
                               style={{ height: `${viewSize}px`, borderColor: "var(--border-primary)" }}
-                              onClick={() => onSelectFile?.(publicUrl, file.fileType)}
+                              onClick={() => {
+                                if (isAnalysis && file.prompt) {
+                                  navigator.clipboard.writeText(file.prompt);
+                                  toast.success("Analysis copied to clipboard");
+                                } else if (!isAnalysis) {
+                                  onSelectFile?.(publicUrl, file.fileType);
+                                }
+                              }}
                               onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setFileContextMenu({ x: e.clientX, y: e.clientY, file }); }}
                             >
                               {isImage ? (
@@ -594,7 +606,7 @@ export function FileBrowser({
                                   }}
                                   onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                                 />
-                              ) : file.fileType === "audio" ? (
+                              ) : (file.fileType === "audio" || file.fileType === "music") ? (
                                 <div className="w-full h-full flex flex-col items-center justify-center rounded-2xl gap-2 relative" style={{ backgroundColor: "var(--bg-secondary)" }}>
                                   <Volume2 className="w-8 h-8 opacity-60" style={{ color: "var(--text-tertiary)" }} />
                                   {/* Play/Pause overlay on hover */}
@@ -634,6 +646,28 @@ export function FileBrowser({
                                       </div>
                                       <span className="text-[9px] text-purple-400">Playing</span>
                                     </div>
+                                  )}
+                                </div>
+                              ) : isAnalysis ? (
+                                <div
+                                  className="w-full h-full flex flex-col items-center justify-center rounded-2xl gap-1.5 px-2 cursor-pointer"
+                                  style={{ backgroundColor: "var(--bg-secondary)" }}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    if (file.prompt) {
+                                      navigator.clipboard.writeText(file.prompt);
+                                      toast.success("Analysis copied to clipboard");
+                                    }
+                                  }}
+                                  title={file.prompt ? file.prompt.slice(0, 200) + (file.prompt.length > 200 ? "..." : "") : "No analysis result"}
+                                >
+                                  <Scan className="w-6 h-6 text-amber-400/70" />
+                                  <span className="text-[9px] font-medium text-amber-400/80">{file.model || "Analysis"}</span>
+                                  {file.prompt && (
+                                    <p className="text-[8px] text-center leading-tight opacity-50 line-clamp-3" style={{ color: "var(--text-secondary)" }}>
+                                      {file.prompt.slice(0, 80)}...
+                                    </p>
                                   )}
                                 </div>
                               ) : (
@@ -756,10 +790,23 @@ export function FileBrowser({
               className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white hover:bg-[#2a2a35] transition-colors">
               <Pencil className="w-3.5 h-3.5" /> Rename
             </button>
-            <button onClick={() => { handleFileAction("download", fileContextMenu.file); setFileContextMenu(null); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white hover:bg-[#2a2a35] transition-colors">
-              <Download className="w-3.5 h-3.5" /> Download
-            </button>
+            {fileContextMenu.file.fileType === "analysis" ? (
+              <button onClick={() => {
+                if (fileContextMenu.file.prompt) {
+                  navigator.clipboard.writeText(fileContextMenu.file.prompt);
+                  toast.success("Analysis copied to clipboard");
+                }
+                setFileContextMenu(null);
+              }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white hover:bg-[#2a2a35] transition-colors">
+                <Scan className="w-3.5 h-3.5" /> Copy Result
+              </button>
+            ) : (
+              <button onClick={() => { handleFileAction("download", fileContextMenu.file); setFileContextMenu(null); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white hover:bg-[#2a2a35] transition-colors">
+                <Download className="w-3.5 h-3.5" /> Download
+              </button>
+            )}
             <div className="mx-2 my-1 border-t border-[#3D3D3D]" />
             <button onClick={() => { handleFileAction("delete", fileContextMenu.file); setFileContextMenu(null); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-[#2a2a35] transition-colors">

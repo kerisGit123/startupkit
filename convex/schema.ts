@@ -1775,6 +1775,11 @@ export default defineSchema({
     isFavorite: v.optional(v.boolean()),
     style: v.optional(v.string()), // "cinematic" | "sketch" | "anime" | "cartoon" | etc. — top-level project theme
     stylePrompt: v.optional(v.string()), // The actual style prompt text appended to all generations in this project
+    formatPreset: v.optional(v.string()), // "film" | "documentary" | "youtube" | "reel" | etc. — content format prompt template key
+    colorPalette: v.optional(v.object({
+      referenceUrl: v.optional(v.string()),
+      colors: v.array(v.string()), // 5 hex colors e.g. ["#8B1A1A", "#6B0F0F", "#2D5A27"]
+    })),
     tags: v.array(v.string()),
     script: v.string(),
     scenes: v.array(v.object({
@@ -2066,6 +2071,26 @@ export default defineSchema({
     .index("by_companyId", ["companyId"])
     .index("by_visibility", ["visibility"]),
 
+  // ============================================
+  // STORYBOARD STUDIO: Presets (saved tool settings)
+  // ============================================
+  storyboard_presets: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    category: v.string(), // "camera-studio" | "camera-angle" | "camera-motion" | "color-palette" | "style" | "format" | "prompt" | "note" | "bundle"
+    format: v.string(), // JSON blob — system reads/writes tool state
+    prompt: v.optional(v.string()), // Human-readable prompt text this preset produces
+    thumbnailUrl: v.optional(v.string()),
+    companyId: v.string(),
+    userId: v.string(), // Creator
+    usageCount: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_category", ["companyId", "category"])
+    .index("by_userId", ["userId"]),
+
   // NOTE: The former `storyboard_credit_usage` table has been removed.
   // All credit-usage tracking now lives in `credits_ledger` with
   // type === "usage" and the projectId/itemId/model/action fields.
@@ -2135,7 +2160,7 @@ export default defineSchema({
   storyboard_model_credit: defineTable({
     modelId: v.string(),                    // "nano-banana-2", "seedance-1.5-pro"
     modelName: v.string(),                  // "Nano Banana 2", "Seedance 1.5 Pro"
-    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio")),
+    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music")),
     isActive: v.boolean(),                   // true = available, false = disabled
     pricingType: v.union(v.literal("fixed"), v.literal("formula")),
     
@@ -2156,7 +2181,8 @@ export default defineSchema({
       v.literal("getGptImagePrice"),
       v.literal("getVeo31"),
       v.literal("getGrokImageToVideo"),
-      v.literal("getInfinitalkFromAudio")
+      v.literal("getInfinitalkFromAudio"),
+      v.literal("getElevenLabsTTS")
     )),
     
     createdAt: v.number(),

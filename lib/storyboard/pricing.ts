@@ -785,4 +785,59 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
       },
     }),
   },
+  // ── AI Analyze (OpenRouter → Gemini) ──────────────────────────────────────
+  {
+    modelId: "ai-analyze/image",
+    modelName: "AI Analyze Image",
+    modelType: "image",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 1,
+    factor: 1,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 1,
+        factor: 1,
+        charged: 1,
+        note: "Analyzes image to generate a detailed AI prompt. Uses Gemini Flash 1.5 via OpenRouter. Cost: ~$0.0001/request.",
+      },
+    }),
+  },
+  {
+    modelId: "ai-analyze/video",
+    modelName: "AI Analyze Video",
+    modelType: "video",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 3,
+    factor: 1,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 3,
+        factor: 1,
+        charged: 3,
+        note: "Analyzes video to generate a detailed AI prompt. Uses Gemini Pro 1.5 via OpenRouter. Covers up to 60s video. Cost: ~$0.02/request.",
+      },
+    }),
+  },
+  {
+    modelId: "ai-analyze/audio",
+    modelName: "AI Analyze Audio",
+    modelType: "audio",
+    isActive: true,
+    pricingType: "fixed",
+    creditCost: 1,
+    factor: 1,
+    formulaJson: JSON.stringify({
+      pricing: {
+        unit: "per_request",
+        base_cost: 1,
+        factor: 1,
+        charged: 1,
+        note: "Transcribes speech or extracts lyrics from audio. Uses Gemini Pro 1.5 via OpenRouter. Cost: ~$0.005/request.",
+      },
+    }),
+  },
 ];

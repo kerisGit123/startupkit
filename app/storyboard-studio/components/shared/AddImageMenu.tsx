@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Plus, Upload, FolderOpen, FileText, Camera, Sparkles, X } from "lucide-react";
+import { Plus, Upload, FolderOpen, FileText, Camera, Sparkles, X, Film, Volume2 } from "lucide-react";
 
 export interface GeneratedImageItem {
   id: string;
@@ -30,6 +30,8 @@ export interface AddImageMenuProps {
   onSelectGeneratedImage?: (url: string) => void;
   /** Label override (default: "Add Image") */
   label?: string;
+  /** Media type — changes icon and colors (default: "image") */
+  mediaType?: "image" | "video" | "audio";
 }
 
 export function AddImageMenu({
@@ -44,8 +46,12 @@ export function AddImageMenu({
   generatedItemImages,
   generatedProjectImages,
   onSelectGeneratedImage,
-  label = "Add Image",
+  label,
+  mediaType = "image",
 }: AddImageMenuProps) {
+  const resolvedLabel = label || (mediaType === "video" ? "Add Video" : mediaType === "audio" ? "Add Audio" : "Add Image");
+  const IconComponent = mediaType === "video" ? Film : mediaType === "audio" ? Volume2 : Plus;
+  const accentColor = mediaType === "video" ? "green" : mediaType === "audio" ? "purple" : "emerald";
   const [showMenu, setShowMenu] = useState(false);
   const [showGeneratedPicker, setShowGeneratedPicker] = useState(false);
   const [generatedScope, setGeneratedScope] = useState<"item" | "project">("item");
@@ -67,11 +73,23 @@ export function AddImageMenu({
         {/* Add Button */}
         <button
           onClick={() => setShowMenu(!showMenu)}
-          className="w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed border-emerald-500/30 hover:border-emerald-500/50 transition-colors flex flex-col items-center justify-center gap-1 group"
-          title={label}
+          className={`w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-1 group ${
+            accentColor === "green" ? "border-green-500/30 hover:border-green-500/50"
+            : accentColor === "purple" ? "border-purple-500/30 hover:border-purple-500/50"
+            : "border-emerald-500/30 hover:border-emerald-500/50"
+          }`}
+          title={resolvedLabel}
         >
-          <Plus className="w-4 h-4 text-emerald-400 group-hover:text-emerald-300 transition-colors" />
-          <span className="text-[10px] text-emerald-400 group-hover:text-emerald-300 transition-colors">{label}</span>
+          <IconComponent className={`w-4 h-4 transition-colors ${
+            accentColor === "green" ? "text-green-400 group-hover:text-green-300"
+            : accentColor === "purple" ? "text-purple-400 group-hover:text-purple-300"
+            : "text-emerald-400 group-hover:text-emerald-300"
+          }`} />
+          <span className={`text-[10px] transition-colors ${
+            accentColor === "green" ? "text-green-400 group-hover:text-green-300"
+            : accentColor === "purple" ? "text-purple-400 group-hover:text-purple-300"
+            : "text-emerald-400 group-hover:text-emerald-300"
+          }`}>{resolvedLabel}</span>
         </button>
 
         {/* Slide-out Menu */}

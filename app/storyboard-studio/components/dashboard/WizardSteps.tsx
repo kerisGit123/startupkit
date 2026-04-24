@@ -354,6 +354,10 @@ export function StyleSelection({ selectedStyle, onStyleChange, onBack, onNext }:
   const createPromptTemplate = useMutation(api.promptTemplates.create);
   const updatePromptTemplate = useMutation(api.promptTemplates.update);
   const deletePromptTemplate = useMutation(api.promptTemplates.remove);
+  const createPreset = useMutation(api.storyboard.presets.create);
+  const updatePreset = useMutation(api.storyboard.presets.update);
+  const removePreset = useMutation(api.storyboard.presets.remove);
+  const stylePresets = useQuery(api.storyboard.presets.list, { companyId, category: "style" });
 
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -400,10 +404,22 @@ export function StyleSelection({ selectedStyle, onStyleChange, onBack, onNext }:
                 onClick={async () => {
                   try {
                     if (editingId) {
-                      await updatePromptTemplate({ id: editingId as any, name: formName.trim(), prompt: formPrompt.trim() });
+                      await updatePreset({
+                        id: editingId as any,
+                        name: formName.trim(),
+                        prompt: formPrompt.trim(),
+                        format: JSON.stringify({ style: formName.trim(), stylePrompt: formPrompt.trim() }),
+                      });
                       toast.success(`Style "${formName}" updated`);
                     } else {
-                      await createPromptTemplate({ name: formName.trim(), type: "style", prompt: formPrompt.trim(), companyId, isPublic: false, tags: ["custom-style"] });
+                      await createPreset({
+                        name: formName.trim(),
+                        category: "style",
+                        format: JSON.stringify({ style: formName.trim(), stylePrompt: formPrompt.trim() }),
+                        prompt: formPrompt.trim(),
+                        companyId,
+                        userId: "",
+                      });
                       onStyleChange(formName.trim());
                       toast.success(`Style "${formName}" created`);
                     }
@@ -438,29 +454,43 @@ export function StyleSelection({ selectedStyle, onStyleChange, onBack, onNext }:
             </button>
           ))}
 
-          {/* Custom styles */}
-          {customStyleTemplates.map(style => (
-            <button key={style._id} onClick={() => onStyleChange(style.name)}
+          {/* Custom styles from storyboard_presets */}
+          {(stylePresets || []).map(preset => (
+            <button key={preset._id} onClick={() => onStyleChange(preset.name)}
               className={`group relative aspect-4/3 rounded-xl overflow-hidden border-2 transition ${
-                selectedStyle === style.name ? "border-pink-500 ring-2 ring-pink-500/30" : "border-[#3D3D3D] hover:border-white/20"
+                selectedStyle === preset.name ? "border-pink-500 ring-2 ring-pink-500/30" : "border-[#3D3D3D] hover:border-white/20"
               }`}>
-              <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
-                <Palette className="w-6 h-6 text-purple-400/50" />
-              </div>
+              {preset.thumbnailUrl ? (
+                <img src={preset.thumbnailUrl} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
+                  <Palette className="w-6 h-6 text-purple-400/50" />
+                </div>
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <span className="absolute bottom-2 left-0 right-0 text-center text-[11px] font-medium text-white drop-shadow-lg truncate px-1">{style.name}</span>
-              {selectedStyle === style.name && (
+              <span className="absolute bottom-2 left-0 right-0 text-center text-[11px] font-medium text-white drop-shadow-lg truncate px-1">{preset.name}</span>
+              {selectedStyle === preset.name && (
                 <div className="absolute top-2 right-2 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
                   <Check className="w-3 h-3 text-white" />
                 </div>
               )}
-              {/* Edit */}
-              <div role="button" onClick={(e) => { e.stopPropagation(); setEditingId(style._id); setFormName(style.name); setFormPrompt(style.prompt); setShowForm(true); }}
+              {/* Edit button */}
+              <div role="button" onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingId(String(preset._id));
+                  setFormName(preset.name);
+                  setFormPrompt(preset.prompt || "");
+                  setShowForm(true);
+                }}
                 className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
                 <Edit3 className="w-2.5 h-2.5 text-white" />
               </div>
-              {/* Delete */}
-              <div role="button" onClick={(e) => { e.stopPropagation(); deletePromptTemplate({ id: style._id }); toast.success(`Deleted "${style.name}"`); }}
+              {/* Delete button */}
+              <div role="button" onClick={(e) => {
+                  e.stopPropagation();
+                  removePreset({ id: preset._id });
+                  toast.success(`Deleted "${preset.name}"`);
+                }}
                 className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer">
                 <X className="w-2.5 h-2.5 text-white" />
               </div>

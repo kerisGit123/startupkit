@@ -70,6 +70,28 @@ export const STYLE_PROMPTS: Record<string, string> = {
   "custom": "",
 };
 
+// Content format preset ID → prompt text mapping. Auto-appended to generation prompts when a format is selected.
+// Format controls framing, pacing, energy, and camera behavior — NOT visual aesthetics (that's Style).
+export const FORMAT_PRESETS: { id: string; label: string; color: string; prompt: string }[] = [
+  { id: "film", label: "Film", color: "#d97706", prompt: "Cinematic film framing. Wide establishing shots transitioning to medium close-ups. 24fps motion cadence with deliberate camera movement. Shot-reverse-shot conversation coverage. Careful depth staging with foreground, midground, background separation. Slow dolly and pan movements. Traditional three-act visual rhythm." },
+  { id: "documentary", label: "Documentary", color: "#059669", prompt: "Documentary style framing. Observational handheld camera with natural subtle movement. Interview-style medium shots at eye level. B-roll coverage of environments and details. Available light, no staged compositions. Fly-on-the-wall perspective. Authentic, unscripted energy with reactive camera following action." },
+  { id: "youtube", label: "YouTube", color: "#ef4444", prompt: "YouTube video framing. Direct-to-camera eye-level medium shot. Clean well-lit background with depth separation. Headroom for subscribe buttons and end screens. Engaging facial expressions visible. Bright, evenly lit subject. Open composition with space for text overlays and graphics. Energetic, personal, conversational tone." },
+  { id: "reel", label: "Reel / TikTok", color: "#ec4899", prompt: "Short-form vertical content framing. 9:16 vertical composition optimized for mobile. Fast-paced cuts, punchy transitions. Subject centered with bold framing. Eye-catching opening frame. Space reserved for caption text at bottom and username at top. High energy, trend-aware, scroll-stopping visual impact. Quick visual payoff." },
+  { id: "commercial", label: "Commercial", color: "#3b82f6", prompt: "Commercial advertisement framing. Product hero shots with clean isolation. Polished, brand-safe compositions. Smooth controlled camera movement — slider and gimbal. Lifestyle context showing product in use. Professional talent direction. Call-to-action framing in final frames. Premium, aspirational, purchase-motivating energy." },
+  { id: "music-video", label: "Music Video", color: "#a855f7", prompt: "Music video framing. Performance shots alternating with narrative cutaways. Rhythmic editing synced to beat. Slow motion accent moments at 60-120fps. Dynamic camera movement — crane, steadicam, whip pans. Dramatic poses and choreographed movement. Stylized compositions with strong visual motifs. Energetic, expressive, visually bold." },
+  { id: "vlog", label: "Vlog", color: "#f59e0b", prompt: "Vlog-style framing. Handheld or selfie-angle camera, slightly above eye level. Casual walk-and-talk movement. Natural environments, no staged sets. Frequent location changes and jump cuts. Personal, intimate distance to camera. Spontaneous, authentic, unpolished feel with genuine reactions." },
+  { id: "tutorial", label: "Tutorial", color: "#10b981", prompt: "Tutorial instructional framing. Clear overhead or eye-level shots of workspace. Step-by-step visual progression. Clean uncluttered frame with subject centered. Space for text annotations and callout graphics. Well-lit detail shots for close-up demonstrations. Steady tripod-mounted camera. Methodical, clear, easy-to-follow visual flow." },
+  { id: "presentation", label: "Presentation", color: "#6366f1", prompt: "Corporate presentation framing. Clean professional compositions with minimal distractions. Speaker medium shot with confident posture. Slide-compatible layouts with space for data overlays. Neutral corporate backgrounds. Even professional lighting. Steady camera, no handheld movement. Polished, authoritative, trustworthy visual tone." },
+  { id: "podcast", label: "Podcast", color: "#8b5cf6", prompt: "Podcast video framing. Two or three-person conversation setup with individual medium shots. Clean desk or studio background with microphones visible. Switching between speaker close-ups and wide two-shot. Minimal camera movement, focus on faces and reactions. Relaxed conversational distance. Intimate, engaging, discussion-driven composition." },
+  { id: "product-demo", label: "Product Demo", color: "#0ea5e9", prompt: "Product demonstration framing. Close-up detail shots of product features. Hands-on interaction showing scale and usability. Clean neutral background isolating the product. Smooth 360-degree rotation reveals. Macro shots of texture and materials. Before-after comparisons. Informative, clear, purchase-decision supporting visuals." },
+  { id: "cinematic-ad", label: "Cinematic Ad", color: "#1e293b", prompt: "Cinematic advertisement framing. Film-quality camera movement — dolly, crane, steadicam tracking. Narrative storytelling structure with emotional arc. Hero moments with dramatic reveals. Shallow depth of field for premium feel. Aspirational lifestyle context. Brand integration without product dominance. Premium, emotionally resonant, story-driven commercial filmmaking." },
+];
+
+// Format preset ID → prompt text lookup
+export const FORMAT_PROMPT_MAP: Record<string, string> = Object.fromEntries(
+  FORMAT_PRESETS.map(f => [f.id, f.prompt])
+);
+
 export const SAMPLE_SHOTS: Shot[] = [
   {
     id: "s1", scene: 1, shot: 1,
