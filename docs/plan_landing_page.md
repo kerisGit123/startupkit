@@ -1,7 +1,7 @@
 # Landing Page Redesign Plan
 
 > **Date:** 2026-04-25
-> **Status:** Analysis complete, implementation pending
+> **Status:** Phase 1 + Phase 2 complete, Phase 3 pending (needs screen recordings)
 
 ---
 
@@ -13,11 +13,11 @@
 |---|---|---|---|---|---|---|---|
 | **Hero type** | Static screenshot | Problem-first + interactive demo | Multi-announcement carousel | Outcome headline + product tour | Aspirational + animated outputs | Video hero + "100M users" | Full-screen cinematic reel |
 | **Hero visual** | PNG screenshot | Animated workflow video | Auto-playing video cards | Interactive tabbed demo | Animated GIFs of AI outputs | Auto-playing video | Auto-playing cinematic reel |
-| **Social proof** | 4 avatar placeholders | Studio logos + "1M+ storyboards, 12M+ comments" | Community galleries, 50+ apps | Disney/Netflix/NBC logos, "1M+ creatives" | Samsung/EA logos, Discord community | "100M+ users", awards, media | "50M+ creators", brand logos |
+| **Social proof** | Live DB metrics (creators, projects, generations) | Studio logos + "1M+ storyboards, 12M+ comments" | Community galleries, 50+ apps | Disney/Netflix/NBC logos, "1M+ creatives" | Samsung/EA logos, Discord community | "100M+ users", awards, media | "50M+ creators", brand logos |
 | **Feature demos** | Static screenshots | Interactive demo with real comments | Auto-playing video in every card | Tabbed interactive product tour | Animated GIFs showing AI results | Video clips per feature | Rich visual previews |
-| **Headline style** | What it is ("AI Storyboard Studio") | Pain they solve ("Stop expensive reshoots") | Outcomes ("Cinema-grade video") | Outcome ("Plan your entire production") | Aspirational ("Where Ideas Become Visual Stories") | Capability ("Easy video editor") | Visual-first (no headline, just reel) |
-| **CTA** | "Create Storyboard" | "Try Boords Free" (3x) | "Try Model" per feature | "Start Free" | "Start creating now - It's free!" | "Download Free" | "Start Free Trial" |
-| **Pricing on landing** | Full PricingShowcase | Separate page link | Separate page link | Separate page link | Mentioned in FAQ | Separate page | Separate page |
+| **Headline style** | Outcome ("Professional Storyboards in Minutes, Not Days") | Pain they solve ("Stop expensive reshoots") | Outcomes ("Cinema-grade video") | Outcome ("Plan your entire production") | Aspirational ("Where Ideas Become Visual Stories") | Capability ("Easy video editor") | Visual-first (no headline, just reel) |
+| **CTA** | "Start Free" + "No credit card required" | "Try Boords Free" (3x) | "Try Model" per feature | "Start Free" | "Start creating now - It's free!" | "Download Free" | "Start Free Trial" |
+| **Pricing on landing** | Compact PricingShowcase + link to full pricing | Separate page link | Separate page link | Separate page link | Mentioned in FAQ | Separate page | Separate page |
 
 ### What Each Competitor Does Best
 
@@ -40,120 +40,125 @@
 | Element | Assessment |
 |---|---|
 | Dark theme | Good — matches creative professional aesthetic |
-| AI Models scroller | Unique — no competitor does this |
+| AI Models scroller (25 models) | Unique — no competitor does this; now includes all models across 5 categories |
 | Feature coverage | Good — 6 main + 4 compact cards |
-| WhyStorytica differentiator grid | Strong competitive messaging |
+| WhyStorytica differentiator grid | Strong competitive messaging, placed above testimonials |
 | PricingShowcase with gen estimates | Better than most competitors |
-| FAQ section | Good, with link to full FAQ page |
+| FAQ section | Good, with link to full FAQ page, model list up to date |
 | Scroll-reveal animations | Good subtle polish |
 | Support chat widget | Good — live help available |
+| Problem-first headline | "Professional Storyboards in Minutes, Not Days" |
+| No credit card required text | Below CTA button |
+| Social proof bar | Live metrics from Convex (creators, projects, AI generations) |
+| Metrics badge in hero | 25+ AI models / Image, video, music, audio & utility / Credits never expire |
 
 ---
 
-## 3. Our Landing Page — Top 5 Gaps
+## 3. Our Landing Page — Remaining Gaps
 
 ### Gap 1: Static screenshot hero (CRITICAL)
-**Problem:** Every strong competitor uses video/animation in the hero. Our hero is a static PNG.
+
+**Problem:** Every strong competitor uses video/animation in the hero. Our hero is still a static PNG (`storyboard_home.png`).
 **Fix:** Record a 10-15s loop showing: type prompt -> frames generate -> drag element -> canvas edit. Export as WebM/MP4 with autoplay.
 **Impact:** Massive — first impression determines bounce rate.
 
-### Gap 2: No real social proof (CRITICAL)
-**Problem:** We have 4 placeholder avatar circles + "Trusted by creators". Competitors have:
-- Boords: "1M+ storyboards shared, 12M+ comments"
-- Filmora: "100M+ users"
-- StudioBinder: Disney, Netflix, NBC logos
-- OpenArt: Samsung, EA logos
-**Fix (short-term):** Add real metrics: "X storyboards created", "Y frames generated", "Z users signed up". Even small real numbers ("500+ creators") beat fake-feeling placeholders.
-**Fix (long-term):** Collect beta tester logos, case studies.
-**Impact:** High — trust is the #1 conversion factor.
+### Gap 2: Feature sections use static screenshots (HIGH)
 
-### Gap 3: Hero headline is "what it is", not "what it solves" (HIGH)
-**Problem:** "AI Storyboard Studio for Film Directors & Creators" tells them what the product IS.
-**Fix:** Lead with outcome or pain:
-- "From script to screen — without the expensive reshoots"
-- "Stop redrawing storyboards by hand"
-- "Professional storyboards in minutes, not days"
-- "Turn any script into a visual story — automatically"
-**Impact:** High — emotional hook in first 2 seconds.
-
-### Gap 4: Feature sections use static screenshots (HIGH)
-**Problem:** All 6 feature cards show static PNGs. Competitors show features alive.
-**Fix:** Replace PNGs with:
-- Short GIF/WebM loops (3-5s) showing each feature in action
-- Canvas editing loop, video editor timeline, AI generation, etc.
+**Problem:** All 6 feature cards + 3 "How It Works" cards show static PNGs. Competitors show features alive.
+**Fix:** Replace PNGs with short GIF/WebM loops (3-5s) showing each feature in action.
 **Impact:** High — "show don't tell" drives understanding.
 
-### Gap 5: No output gallery / "see what's possible" (MEDIUM)
+### Gap 3: No output gallery / "see what's possible" (MEDIUM)
+
 **Problem:** Visitors can't see quality of AI outputs without signing up.
-**Fix:** Add a gallery section showing:
-- AI-generated storyboard frames (different styles)
-- Before/after (script text -> visual storyboard)
-- Video clips generated with different models
+**Fix:** Add a gallery section showing AI-generated storyboard frames (different styles), before/after (script -> storyboard), video clips from different models.
 **Impact:** Medium-high — proves quality, inspires confidence.
 
 ---
 
-## 4. Recommended New Landing Page Structure
+## 4. Recommended Landing Page Structure
 
 ```
-NAV (sticky, current is fine)
+NAV (sticky) [DONE]
     |
-HERO
-    - Problem-first headline: "Professional storyboards in minutes, not days"
-    - Subheadline: "25+ AI models. Script to storyboard to final cut. One app."
-    - 3 bullet points (current ones are good)
-    - CTA: "Start Free — No credit card"
-    - AUTO-PLAYING VIDEO LOOP (not static screenshot)
+HERO [DONE except video]
+    - Problem-first headline [DONE]
+    - Subheadline with feature summary [DONE]
+    - 3 bullet points [DONE]
+    - CTA: "Start Free" + "No credit card required" [DONE]
+    - AUTO-PLAYING VIDEO LOOP [TODO — needs recording]
     |
-SOCIAL PROOF BAR
-    - "X,000+ storyboards created" + "Y creators" + star rating
+SOCIAL PROOF BAR [DONE]
+    - Live metrics from Convex: creators, projects, AI generations
     - Logo bar (when available): "Used by teams at..."
     |
-AI MODELS SCROLLER (keep — this is unique to us)
+AI MODELS SCROLLER (25 models, 5 categories) [DONE]
     |
-HOW IT WORKS (keep current 3-step cards, but replace PNGs with GIFs)
+HOW IT WORKS (3 cards) [DONE — needs GIFs to replace PNGs]
     |
-FEATURES (keep current 6 cards, but replace PNGs with video loops)
+FEATURES (6 cards + 4 compact) [DONE — needs GIFs to replace PNGs]
     |
-OUTPUT GALLERY (NEW)
-    - "See what creators are building"
-    - Grid of AI-generated storyboard frames in different styles
-    - Link to /community gallery
+OUTPUT GALLERY [TODO — NEW, needs curated frames]
     |
-TESTIMONIALS (keep, but add more + add role/company specifics)
+WHY STORYTICA [DONE]
     |
-PRICING (compact PricingShowcase — current approach is good)
+TESTIMONIALS [DONE — needs real testimonials long-term]
     |
-WHY STORYTICA (keep — already on landing page)
+PRICING (compact PricingShowcase + full pricing link) [DONE]
     |
-VIEW FULL PRICING LINK (keep)
+FAQ (model list up to date) [DONE]
     |
-FAQ (keep current)
+FINAL CTA [DONE]
     |
-FINAL CTA (keep current)
-    |
-FOOTER (keep current)
+FOOTER [DONE]
 ```
 
 ---
 
-## 5. Quick Wins (can do now, no new assets needed)
+## 5. Implementation Checklist
 
-- [ ] Change hero headline to problem/outcome-first
-- [ ] Add "No credit card required" next to CTA button
-- [ ] Replace placeholder avatars with real metric: query Convex for actual storyboard/frame count
-- [ ] Add "X storyboards created" + "Y AI generations" counter from real DB data
-- [ ] Move WhyStorytica ABOVE testimonials (differentiators before social proof)
+### Phase 1 — Quick Wins (COMPLETE)
 
-## 6. Medium Effort (need screen recordings)
+- [x] Change hero headline to problem/outcome-first
+- [x] Add "No credit card required" next to CTA button
+- [x] Replace placeholder avatars with metrics badge
+- [x] Move WhyStorytica ABOVE testimonials
 
-- [ ] Record hero video loop (10-15s workflow demo)
-- [ ] Record GIF for each feature card (6 GIFs)
-- [ ] Screenshot gallery of best AI-generated storyboard frames
+### Phase 2 — Code Changes (COMPLETE)
 
-## 7. Long-term (need user growth)
+- [x] Add live metrics from Convex via `landingStats.getPublicStats` as social proof bar below hero
+- [x] Update AI Models scroller — 15 to 25 models (added Flux 2 Pro, Flux 2 Flex I2I, Character Edit, Nano Banana Edit, Crisp Upscale, Extend Music, Create Persona, AI Analyze, Prompt Enhance)
+- [x] Add Utility category with amber color scheme to scroller
+- [x] Update FAQ model list to include all current models (5 categories)
+- [x] Fix `storyboard_model_credit` schema — added `"music"` and `"utility"` to `modelType` union
+
+### Phase 3 — Screen Recordings (needs asset creation)
+
+- [ ] Record hero video loop (10-15s workflow demo) — WebM/MP4 with autoplay, muted, loop
+- [ ] Record GIF/WebM for each feature card (6 features x 3-5s each)
+- [ ] Record GIF/WebM for each "How It Works" card (3 cards)
+- [ ] Screenshot gallery of best AI-generated storyboard frames for Output Gallery section
+
+### Phase 4 — New Sections (needs assets from Phase 3)
+
+- [ ] Add Output Gallery section: grid of AI-generated frames in different art styles
+
+### Phase 5 — Long-term (needs user growth)
 
 - [ ] Collect real testimonials from beta users
 - [ ] Get permission to use company/studio logos
 - [ ] Build interactive "try a prompt" demo on landing page
 - [ ] Add case studies section
+
+---
+
+## 6. New Model: Flux 2 Flex Image-to-Image
+
+Recently added to the platform. Key details for landing page copy:
+
+- **Model ID:** `flux-2/flex-image-to-image`
+- **Capability:** Upload 1-8 reference images, describe edits in natural language
+- **Use cases:** Replace objects between images, style transfer, character consistency across references
+- **Resolution:** 1K (14 credits) or 2K (24 credits)
+- **Unique selling point:** Multi-image reference editing — no competitor offers this in a storyboard tool
+- **Landing page messaging:** Highlight in the AI Storyboarding feature card as "Edit with up to 8 reference images" or in the Element Library card as a way to maintain consistency

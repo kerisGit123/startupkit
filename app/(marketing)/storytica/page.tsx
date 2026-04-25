@@ -6,9 +6,11 @@ import {
   ArrowRight, Check, Star, Shield,
   Menu, X, FileText, Video, Coins,
   Minus, Plus, Layers, Zap, MessageSquare,
-  Image, Camera, Brush, Box,
+  Image, Camera, Brush, Box, Music, Mic,
 } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import SupportChatWidget from "@/components/support-chat/SupportChatWidget";
 import PricingShowcase, { WhyStorytica } from "@/components/pricing/PricingShowcase";
 
@@ -47,6 +49,7 @@ function Faq({ q, a }: { q: string; a: string }) {
 /* ═════════════════════════════════════════════════════════════════════ */
 export default function StorticaLanding() {
   const { user } = useUser();
+  const stats = useQuery(api.landingStats.getPublicStats);
   const [nav, setNav] = useState(false);
   const [ready, setReady] = useState(false);
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
@@ -55,21 +58,34 @@ export default function StorticaLanding() {
 
   // AI model data for horizontal scroller
   const models = [
+    // Image
     { name: "Nano Banana 2", sub: "General purpose", type: "Image", icon: Zap },
     { name: "Nano Banana Pro", sub: "Higher quality", type: "Image", icon: Camera },
     { name: "GPT Image 2", sub: "Photorealism", type: "Image", icon: Image },
     { name: "Z-Image", sub: "Text to Image", type: "Image", icon: Sparkles },
+    { name: "Flux 2 Pro", sub: "High quality", type: "Image", icon: Sparkles },
+    { name: "Flux 2 Flex I2I", sub: "Multi-ref editing", type: "Image", icon: Brush },
+    { name: "Character Edit", sub: "Consistent chars", type: "Image", icon: PenTool },
+    { name: "Nano Banana Edit", sub: "Image editing", type: "Image", icon: Brush },
+    { name: "Crisp Upscale", sub: "Image upscale", type: "Image", icon: Image },
+    // Video
     { name: "Seedance 1.5 Pro", sub: "Video generation", type: "Video", icon: Video },
     { name: "Seedance 2.0", sub: "Quality 480p/720p", type: "Video", icon: Video },
     { name: "Seedance 2.0 Fast", sub: "Faster rendering", type: "Video", icon: Video },
     { name: "Kling 3.0 Motion", sub: "Motion control", type: "Video", icon: Video },
     { name: "Veo 3.1", sub: "Google Video", type: "Video", icon: Video },
     { name: "Grok Imagine", sub: "Image to Video", type: "Video", icon: Video },
-    { name: "Topaz Upscale", sub: "1x/2x/4x upscale", type: "Video", icon: Video },
+    { name: "Topaz Upscale", sub: "Video upscale", type: "Video", icon: Video },
     { name: "InfiniteTalk", sub: "Lip sync", type: "Video", icon: Video },
-    { name: "AI Music", sub: "Generate music", type: "Music", icon: Film },
-    { name: "Cover Song", sub: "Re-sing with persona", type: "Music", icon: Film },
-    { name: "ElevenLabs TTS", sub: "Text-to-speech", type: "Audio", icon: Film },
+    // Music & Audio
+    { name: "AI Music", sub: "Generate music", type: "Music", icon: Music },
+    { name: "Cover Song", sub: "Re-sing with persona", type: "Music", icon: Music },
+    { name: "Extend Music", sub: "Extend tracks", type: "Music", icon: Music },
+    { name: "Create Persona", sub: "Custom voice", type: "Music", icon: Mic },
+    { name: "ElevenLabs TTS", sub: "Text-to-speech", type: "Audio", icon: Mic },
+    // Utility
+    { name: "AI Analyze", sub: "Image/video/audio", type: "Utility", icon: Sparkles },
+    { name: "Prompt Enhance", sub: "Improve prompts", type: "Utility", icon: Zap },
   ];
 
   return (
@@ -137,7 +153,7 @@ export default function StorticaLanding() {
 
           {/* Bullets */}
           <div className={`flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-8 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
-            {["25+ AI models (image, video, music, audio)", "Consistent characters & elements", "Video editor with multi-track timeline"].map(b => (
+            {["25+ AI models (image, video, music, audio, utility)", "Consistent characters & elements", "Video editor with multi-track timeline"].map(b => (
               <span key={b} className="flex items-center gap-2 text-[13px] text-[#aaa]"><Check className="w-3.5 h-3.5 text-teal-400" />{b}</span>
             ))}
           </div>
@@ -159,6 +175,24 @@ export default function StorticaLanding() {
         </div>
       </section>
 
+      {/* ═══ SOCIAL PROOF BAR ═══ */}
+      {stats && (stats.totalCreators > 0 || stats.totalProjects > 0 || stats.totalGenerations > 0) && (
+        <section className="py-6 border-b border-[#1e1e1e]">
+          <div className="max-w-[1200px] mx-auto px-6 flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+            {[
+              { label: "Creators", value: stats.totalCreators },
+              { label: "Projects created", value: stats.totalProjects },
+              { label: "AI generations", value: stats.totalGenerations },
+            ].map((s) => (
+              <div key={s.label} className="text-center">
+                <div className="text-xl sm:text-2xl font-extrabold text-white">{s.value.toLocaleString()}+</div>
+                <div className="text-[11px] text-[#666] uppercase tracking-wider">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ═══ AI MODELS — horizontal auto-scroll ═══ */}
       <section className="py-10 border-y border-[#1e1e1e] overflow-hidden">
         <div className="relative">
@@ -173,6 +207,7 @@ export default function StorticaLanding() {
                   m.type === "Video" ? "bg-teal-500/10 text-teal-400" :
                   m.type === "Music" ? "bg-purple-500/10 text-purple-400" :
                   m.type === "Audio" ? "bg-blue-500/10 text-blue-400" :
+                  m.type === "Utility" ? "bg-amber-500/10 text-amber-400" :
                   "bg-cyan-500/10 text-cyan-400"
                 }`}>
                   <m.icon className="w-4 h-4" />
@@ -185,6 +220,7 @@ export default function StorticaLanding() {
                   m.type === "Video" ? "bg-teal-500/15 text-teal-400" :
                   m.type === "Music" ? "bg-purple-500/15 text-purple-400" :
                   m.type === "Audio" ? "bg-blue-500/15 text-blue-400" :
+                  m.type === "Utility" ? "bg-amber-500/15 text-amber-400" :
                   "bg-cyan-500/15 text-cyan-400"
                 }`}>{m.type}</span>
               </div>
@@ -359,7 +395,7 @@ export default function StorticaLanding() {
         <div className="max-w-[650px] mx-auto px-6">
           <R><h2 className="text-[1.8rem] font-extrabold text-center mb-8">Frequently Asked Questions</h2></R>
           <R><div>
-            <Faq q="What AI models are available?" a="25+ models across 4 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Character Edit, Nano Banana Edit, Crisp Upscale. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS. Plus: AI Analyze (image/video/audio), Prompt Enhance." />
+            <Faq q="What AI models are available?" a="25+ models across 5 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Flux 2 Flex Image-to-Image, Character Edit, Nano Banana Edit, Crisp Upscale, Topaz Image Upscale. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Video Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS. Utility: AI Analyze (image/video/audio), Prompt Enhance." />
             <Faq q="Can I maintain consistent characters?" a="Yes. The Element Library saves characters, props, and styles with reference images. Drag them into any frame or mention with @Image tags in prompts." />
             <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 50 credits/month. Top-up packs available from $9.90." />
             <Faq q="Is there a video editor?" a="Yes. Multi-track timeline with video and audio tracks. Split, trim, reorder, snapshot frames, and export to MP4 or WAV." />

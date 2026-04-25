@@ -2165,7 +2165,7 @@ export default defineSchema({
   storyboard_model_credit: defineTable({
     modelId: v.string(),                    // "nano-banana-2", "seedance-1.5-pro"
     modelName: v.string(),                  // "Nano Banana 2", "Seedance 1.5 Pro"
-    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio")),
+    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music"), v.literal("utility")),
     isActive: v.boolean(),                   // true = available, false = disabled
     visibility: v.optional(v.union(v.literal("public"), v.literal("temp_down"))), // public = visible to users, temp_down = admin only (dev in progress)
     isHot: v.optional(v.boolean()),              // true = strategy pricing model (0.625 multiplier, hot badge)
