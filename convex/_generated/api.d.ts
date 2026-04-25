@@ -118,7 +118,6 @@ import type * as supportTools from "../supportTools.js";
 import type * as syncUserData from "../syncUserData.js";
 import type * as tickets from "../tickets.js";
 import type * as transactions_createTransaction from "../transactions/createTransaction.js";
-import type * as transactions_queries from "../transactions/queries.js";
 import type * as userActivity from "../userActivity.js";
 import type * as users from "../users.js";
 import type * as users_deleteUser from "../users/deleteUser.js";
@@ -241,7 +240,6 @@ declare const fullApi: ApiFromModules<{
   syncUserData: typeof syncUserData;
   tickets: typeof tickets;
   "transactions/createTransaction": typeof transactions_createTransaction;
-  "transactions/queries": typeof transactions_queries;
   userActivity: typeof userActivity;
   users: typeof users;
   "users/deleteUser": typeof users_deleteUser;

@@ -20,7 +20,7 @@ import {
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
   Upload, Download, Save, History, Trash2, FolderOpen, MonitorDown, FolderDown, FileText, Camera, Zap, Layers,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp,
-  Eye, EyeOff, Bug, Video, Coins,
+  Eye, EyeOff, Bug, Video, Coins, Sun, ImageOff, Expand,
 } from "lucide-react";
 
 // Import Paintbrush separately to avoid conflicts
@@ -29,6 +29,36 @@ const Paintbrush = ({ className }: { className?: string }) => (
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
   </svg>
 );
+
+// ── Post-Processing Presets ────────────────────────────────────────────
+const ENHANCE_PRESETS = [
+  { id: "face-skin", label: "Face & Skin", prompt: "Enhance facial details, natural skin retouching, restore clarity, improve skin texture while maintaining realism, professional portrait retouching" },
+  { id: "sharpen", label: "Sharpen", prompt: "Enhance fine details, sharpen textures and edges, increase clarity, improve micro-contrast while preserving natural look" },
+  { id: "color-tone", label: "Color & Tone", prompt: "Professional color correction, enhance color vibrancy, improve tonal range, cinematic color grading, balanced highlights and shadows" },
+  { id: "cinematic", label: "Cinematic", prompt: "Cinematic film grade enhancement, add subtle film grain, anamorphic lens quality, professional color grading, shallow depth of field feel" },
+  { id: "full", label: "Full Enhance", prompt: "Professional image enhancement: sharpen details, improve skin texture, enhance colors, cinematic color grading, increase clarity, natural retouching" },
+];
+
+const RELIGHT_PRESETS = [
+  { id: "dramatic-side", label: "Dramatic Side", prompt: "Relight this image with strong directional side light from the left, deep shadows on right, high contrast, dramatic cinematic mood" },
+  { id: "soft-front", label: "Soft Front", prompt: "Relight this image with soft diffused front lighting, even illumination, beauty lighting, soft shadows, flattering portrait light" },
+  { id: "backlit", label: "Backlit / Rim", prompt: "Relight this image with strong backlight creating rim light and silhouette edge glow, lens flare, contre-jour cinematic lighting" },
+  { id: "golden-hour", label: "Golden Hour", prompt: "Relight this image with warm golden hour sunlight, long shadows, amber tones, magic hour cinematography, warm color grading" },
+  { id: "blue-hour", label: "Blue Hour", prompt: "Relight this image with cool blue twilight lighting, soft ambient, pre-dawn or post-sunset atmosphere, cold color grading" },
+  { id: "neon", label: "Neon Night", prompt: "Relight this image with neon colored lighting, cyberpunk city glow, mixed colored light sources, urban night atmosphere" },
+  { id: "moonlight", label: "Moonlight", prompt: "Relight this image with cold moonlight from above, blue-silver tones, night scene, low ambient light, mysterious atmosphere" },
+  { id: "rembrandt", label: "Studio Rembrandt", prompt: "Relight this image with classic Rembrandt lighting, triangle of light on cheek, one key light at 45 degrees, dramatic portrait" },
+  { id: "overhead", label: "Overhead", prompt: "Relight this image with harsh overhead lighting, strong top-down shadows, noon sun directly above, high contrast" },
+  { id: "underlight", label: "Underlight", prompt: "Relight this image with dramatic underlighting from below, horror/thriller mood, eerie upward shadows, unsettling atmosphere" },
+];
+
+const REFRAME_SIZES = [
+  { id: "landscape_16_9", label: "16:9" },
+  { id: "landscape_4_3", label: "4:3" },
+  { id: "square_hd", label: "1:1" },
+  { id: "portrait_4_3", label: "3:4" },
+  { id: "portrait_16_9", label: "9:16" },
+];
 
 // ── Types ─────────────────────────────────────────────────────────────
 export type AIEditMode = "area-edit" | "annotate";
@@ -441,6 +471,9 @@ export default function EditImageAIPanel({
   
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
   const [showInpaintModelDropdown, setShowInpaintModelDropdown] = useState(false);
+  const [selectedEnhancePreset, setSelectedEnhancePreset] = useState(ENHANCE_PRESETS[4].id); // Full Enhance default
+  const [selectedRelightPreset, setSelectedRelightPreset] = useState(RELIGHT_PRESETS[0].id); // Dramatic Side default
+  const [selectedReframeSize, setSelectedReframeSize] = useState("landscape_16_9");
 
   // Constants for textarea
   const TEXTAREA_MIN_HEIGHT = 60;
@@ -733,6 +766,16 @@ export default function EditImageAIPanel({
     ] : activeTool === "upscale" ? [
       { value: "recraft/crisp-upscale", label: "Recraft Crisp", sub: "AI Upscale", credits: getModelCredits("recraft/crisp-upscale"), maxReferenceImages: 0 },
       { value: "topaz/image-upscale", label: "Topaz Upscale", sub: `${selectedQuality} Upscale`, credits: getModelCredits("topaz/image-upscale"), maxReferenceImages: 0 },
+    ] : activeTool === "enhance" ? [
+      { value: "gpt-image/1.5-image-to-image", label: "GPT Image 2", sub: "Best quality", credits: getModelCredits("gpt-image/1.5-image-to-image"), maxReferenceImages: 0 },
+      { value: "google/nano-banana-edit", label: "Nano Banana Edit", sub: "Cheaper", credits: getModelCredits("google/nano-banana-edit"), maxReferenceImages: 0 },
+    ] : activeTool === "relight" ? [
+      { value: "gpt-image/1.5-image-to-image", label: "GPT Image 2", sub: "Best quality", credits: getModelCredits("gpt-image/1.5-image-to-image"), maxReferenceImages: 0 },
+      { value: "google/nano-banana-edit", label: "Nano Banana Edit", sub: "Cheaper", credits: getModelCredits("google/nano-banana-edit"), maxReferenceImages: 0 },
+    ] : activeTool === "remove-bg" ? [
+      { value: "recraft/remove-background", label: "Recraft Remove BG", sub: "1 credit", credits: 1, maxReferenceImages: 0 },
+    ] : activeTool === "reframe" ? [
+      { value: "ideogram/v3-reframe", label: "Ideogram V3 Reframe", sub: "Turbo/Balanced/Quality", credits: getModelCredits("ideogram/v3-reframe"), maxReferenceImages: 0 },
     ] : [
       // Default: include character-edit for any other tools in area-edit mode
       { value: "ideogram/character-edit", label: "Character Edit", sub: "Faceshift", credits: getModelCredits("ideogram/character-edit"), maxReferenceImages: 0 },
@@ -1154,6 +1197,30 @@ export default function EditImageAIPanel({
       // Auto-set Topaz Upscale model for upscale tool
       onModelChange?.("topaz/image-upscale");
       onToolSelect?.("upscale");
+    } else if (id === "enhance") {
+      // Select enhance tool — uses GPT Image 2 img2img with enhance prompt presets
+      setActiveTool(id);
+      setShowBrushSizeMenu(false);
+      onModelChange?.("gpt-image/1.5-image-to-image");
+      onToolSelect?.("enhance");
+    } else if (id === "relight") {
+      // Select relight tool — uses GPT Image 2 img2img with lighting prompt presets
+      setActiveTool(id);
+      setShowBrushSizeMenu(false);
+      onModelChange?.("gpt-image/1.5-image-to-image");
+      onToolSelect?.("relight");
+    } else if (id === "remove-bg") {
+      // Select remove background tool — uses recraft/remove-background (no prompt needed)
+      setActiveTool(id);
+      setShowBrushSizeMenu(false);
+      onModelChange?.("recraft/remove-background");
+      onToolSelect?.("remove-bg");
+    } else if (id === "reframe") {
+      // Select reframe/extend tool — uses ideogram/v3-reframe
+      setActiveTool(id);
+      setShowBrushSizeMenu(false);
+      onModelChange?.("ideogram/v3-reframe");
+      onToolSelect?.("reframe");
     } else if (id === "image-to-image") {
       // Select image to image tool
       setActiveTool("image-to-image");
@@ -1319,6 +1386,18 @@ export default function EditImageAIPanel({
               </ToolBtn>
               <ToolBtn active={activeTool === "upscale"} onClick={() => pick("upscale")} title="Upscale">
                 <ArrowUp className={`${ic} ${activeTool === "upscale" ? "text-yellow-400" : ""}`} />
+              </ToolBtn>
+              <ToolBtn active={activeTool === "enhance"} onClick={() => pick("enhance")} title="Enhance (Face, Detail, Color)">
+                <Sparkles className={`${ic} ${activeTool === "enhance" ? "text-purple-400" : ""}`} />
+              </ToolBtn>
+              <ToolBtn active={activeTool === "relight"} onClick={() => pick("relight")} title="Relight (Change Lighting)">
+                <Sun className={`${ic} ${activeTool === "relight" ? "text-amber-400" : ""}`} />
+              </ToolBtn>
+              <ToolBtn active={activeTool === "remove-bg"} onClick={() => pick("remove-bg")} title="Remove Background">
+                <ImageOff className={`${ic} ${activeTool === "remove-bg" ? "text-rose-400" : ""}`} />
+              </ToolBtn>
+              <ToolBtn active={activeTool === "reframe"} onClick={() => pick("reframe")} title="Reframe / Extend">
+                <Expand className={`${ic} ${activeTool === "reframe" ? "text-teal-400" : ""}`} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-[#32363E] my-0.5" />
