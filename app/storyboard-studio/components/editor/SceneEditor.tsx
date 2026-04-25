@@ -4820,6 +4820,49 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     console.log("Quality received from EditImageAIPanel:", qualityToUse);
                     
                     try {
+                      // Fast-path for post-processing tools (enhance, relight, remove-bg, reframe)
+                      const postProcessTools = ["recraft/remove-background", "ideogram/v3-reframe"];
+                      const isImgToImgPostProcess = aiModel === "gpt-image/1.5-image-to-image" && (promptText.startsWith("Enhance") || promptText.startsWith("Relight") || promptText.startsWith("Professional image enhancement") || promptText.startsWith("Remove background"));
+                      const isDirectPostProcess = postProcessTools.includes(aiModel);
+
+                      if (isDirectPostProcess || isImgToImgPostProcess) {
+                        const sourceImage = backgroundImage || activeShot?.imageUrl;
+                        if (!sourceImage) {
+                          toast.error("No image to process. Load an image first.");
+                          return;
+                        }
+                        console.log('[onGenerate] Post-processing fast-path:', aiModel, promptText.substring(0, 50));
+
+                        const response = await fetch("/api/inpaint", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            image: sourceImage,
+                            prompt: promptText || "enhance",
+                            model: aiModel,
+                            imageSize: (aiModel === "ideogram/v3-reframe") ? "landscape_16_9" : undefined,
+                            renderingSpeed: (aiModel === "ideogram/v3-reframe") ? "BALANCED" : undefined,
+                          }),
+                        });
+
+                        if (!response.ok) {
+                          const err = await response.json().catch(() => ({}));
+                          throw new Error(err.error || `Post-processing failed (${response.status})`);
+                        }
+
+                        const result = await response.json();
+                        const resultImage = result.image ?? result.url ?? result.output;
+
+                        if (resultImage) {
+                          setBackgroundImage(resultImage);
+                          setGeneratedImages((prev) => [resultImage, ...prev]);
+                          toast.success(`${aiModel.includes("remove") ? "Background removed" : aiModel.includes("reframe") ? "Image reframed" : "Image enhanced"}! ${creditsUsed} credits used.`);
+                        } else {
+                          throw new Error("No result image returned");
+                        }
+                        return;
+                      }
+
                       // Get canvas image and reference images for character-edit models
                       const canvasImageInfo = getCanvasImageInfo();
                       const currentImageUrl = backgroundImage || canvasImageInfo.imageSrc || activeShot?.imageUrl;

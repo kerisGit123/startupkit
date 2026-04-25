@@ -1203,24 +1203,38 @@ export default function EditImageAIPanel({
       setShowBrushSizeMenu(false);
       onModelChange?.("gpt-image/1.5-image-to-image");
       onToolSelect?.("enhance");
+      // Auto-set prompt from selected preset
+      const preset = ENHANCE_PRESETS.find(p => p.id === selectedEnhancePreset) ?? ENHANCE_PRESETS[4];
+      onUserPromptChange?.(preset.prompt);
+      setCurrentPrompt(preset.prompt);
     } else if (id === "relight") {
       // Select relight tool — uses GPT Image 2 img2img with lighting prompt presets
       setActiveTool(id);
       setShowBrushSizeMenu(false);
       onModelChange?.("gpt-image/1.5-image-to-image");
       onToolSelect?.("relight");
+      // Auto-set prompt from selected preset
+      const preset = RELIGHT_PRESETS.find(p => p.id === selectedRelightPreset) ?? RELIGHT_PRESETS[0];
+      onUserPromptChange?.(preset.prompt);
+      setCurrentPrompt(preset.prompt);
     } else if (id === "remove-bg") {
       // Select remove background tool — uses recraft/remove-background (no prompt needed)
       setActiveTool(id);
       setShowBrushSizeMenu(false);
       onModelChange?.("recraft/remove-background");
       onToolSelect?.("remove-bg");
+      // Remove BG needs no prompt — set a placeholder
+      onUserPromptChange?.("Remove background");
+      setCurrentPrompt("Remove background");
     } else if (id === "reframe") {
       // Select reframe/extend tool — uses ideogram/v3-reframe
       setActiveTool(id);
       setShowBrushSizeMenu(false);
       onModelChange?.("ideogram/v3-reframe");
       onToolSelect?.("reframe");
+      // Set prompt for reframe
+      onUserPromptChange?.("Extend and reframe this image");
+      setCurrentPrompt("Extend and reframe this image");
     } else if (id === "image-to-image") {
       // Select image to image tool
       setActiveTool("image-to-image");
@@ -1639,6 +1653,97 @@ export default function EditImageAIPanel({
   // ── User Prompt Text Area (inside bottom panel) ───────────────────────
   const renderUserPromptArea = () => {
     if (mode !== "area-edit") return null;
+
+    // Enhance presets UI
+    if (activeTool === "enhance") {
+      return (
+        <div className="px-3 pt-3 pb-2">
+          <div className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2">Enhance Preset</div>
+          <div className="flex flex-wrap gap-1.5">
+            {ENHANCE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => {
+                  setSelectedEnhancePreset(preset.id);
+                  onUserPromptChange?.(preset.prompt);
+                  setCurrentPrompt(preset.prompt);
+                }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  selectedEnhancePreset === preset.id
+                    ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                    : "bg-white/5 text-(--text-secondary) hover:bg-white/10 border border-transparent"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Relight presets UI
+    if (activeTool === "relight") {
+      return (
+        <div className="px-3 pt-3 pb-2">
+          <div className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2">Lighting Preset</div>
+          <div className="flex flex-wrap gap-1.5">
+            {RELIGHT_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => {
+                  setSelectedRelightPreset(preset.id);
+                  onUserPromptChange?.(preset.prompt);
+                  setCurrentPrompt(preset.prompt);
+                }}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  selectedRelightPreset === preset.id
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                    : "bg-white/5 text-(--text-secondary) hover:bg-white/10 border border-transparent"
+                }`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // Remove BG — no prompt needed, just show info
+    if (activeTool === "remove-bg") {
+      return (
+        <div className="px-3 pt-3 pb-2">
+          <div className="text-[11px] text-(--text-secondary)">
+            One-click background removal. Click Generate to isolate the subject with transparent background.
+          </div>
+        </div>
+      );
+    }
+
+    // Reframe — aspect ratio selector
+    if (activeTool === "reframe") {
+      return (
+        <div className="px-3 pt-3 pb-2">
+          <div className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2">Target Aspect Ratio</div>
+          <div className="flex flex-wrap gap-1.5">
+            {REFRAME_SIZES.map((size) => (
+              <button
+                key={size.id}
+                onClick={() => setSelectedReframeSize(size.id)}
+                className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                  selectedReframeSize === size.id
+                    ? "bg-teal-500/20 text-teal-300 border border-teal-500/40"
+                    : "bg-white/5 text-(--text-secondary) hover:bg-white/10 border border-transparent"
+                }`}
+              >
+                {size.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="px-3 pt-3 pb-2">

@@ -878,9 +878,17 @@ export async function POST(req: NextRequest) {
           console.log('[inpaint] Calling runNanoBanana2...');
           resultUrl = await runNanoBanana2(image, prompt, referenceImages);            
           break;
-        case "ideogram/character-remix":            
+        case "ideogram/character-remix":
           console.log('[inpaint] Calling runIdeogramCharacterRemix...');
-          resultUrl = await runIdeogramCharacterRemix(image, prompt, referenceImages);            
+          resultUrl = await runIdeogramCharacterRemix(image, prompt, referenceImages);
+          break;
+        case "recraft/remove-background":
+          console.log('[inpaint] Calling runRecraftRemoveBackground...');
+          resultUrl = await runRecraftRemoveBackground(image);
+          break;
+        case "ideogram/v3-reframe":
+          console.log('[inpaint] Calling runIdeogramReframe...');
+          resultUrl = await runIdeogramReframe(image, body.imageSize || "landscape_16_9", body.renderingSpeed || "BALANCED");
           break;
         default: 
           console.log('[inpaint] Unknown model:', effectiveModel);
@@ -969,10 +977,10 @@ async function runNanoBanana2(image: string, prompt: string, referenceImages?: s
 
 async function runIdeogramCharacterRemix(image: string, prompt: string, referenceImages?: string[]): Promise<string> {
   const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
-  const refImageUrls = referenceImages ? await Promise.all(referenceImages.map(ref => 
+  const refImageUrls = referenceImages ? await Promise.all(referenceImages.map(ref =>
     ref.startsWith('data:') ? uploadImageToTemp(ref) : ref
   )) : [];
-  
+
   const requestBody = {
     model: "ideogram/character-remix",
     input: {
@@ -987,7 +995,7 @@ async function runIdeogramCharacterRemix(image: string, prompt: string, referenc
       strength: 0.8
     }
   };
-  
+
   const res = await fetch(KIE_CREATE_URL, {
     method: 'POST',
     headers: {
@@ -996,7 +1004,67 @@ async function runIdeogramCharacterRemix(image: string, prompt: string, referenc
     },
     body: JSON.stringify(requestBody)
   });
-  
+
   const result = await res.json();
   return result.data?.outputImageUrl || result.data?.image_url || '';
+}
+
+// Recraft Remove Background via Market API (/jobs/createTask)
+async function runRecraftRemoveBackground(image: string): Promise<string> {
+  const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
+
+  const requestBody = {
+    model: "recraft/remove-background",
+    input: {
+      image: imageUrl,
+    },
+  };
+
+  console.log('[inpaint/remove-bg] Sending request');
+  const res = await fetch(KIE_CREATE_URL, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data = await res.json();
+
+  if (data?.code === 200) {
+    const taskId = data.data?.taskId ?? data.data?.recordId;
+    return pollKieMarket(taskId);
+  } else {
+    throw new Error(`Recraft Remove Background failed: ${data?.msg || 'Unknown error'}`);
+  }
+}
+
+// Ideogram V3 Reframe via Market API (/jobs/createTask)
+async function runIdeogramReframe(image: string, imageSize: string = "landscape_16_9", renderingSpeed: string = "BALANCED"): Promise<string> {
+  const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
+
+  const requestBody = {
+    model: "ideogram/v3-reframe",
+    input: {
+      image_url: imageUrl,
+      image_size: imageSize,
+      rendering_speed: renderingSpeed,
+      style: "AUTO",
+      num_images: "1",
+    },
+  };
+
+  console.log('[inpaint/reframe] Sending request, size:', imageSize, 'speed:', renderingSpeed);
+  const res = await fetch(KIE_CREATE_URL, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data = await res.json();
+
+  if (data?.code === 200) {
+    const taskId = data.data?.taskId ?? data.data?.recordId;
+    return pollKieMarket(taskId);
+  } else {
+    throw new Error(`Ideogram V3 Reframe failed: ${data?.msg || 'Unknown error'}`);
+  }
 }
