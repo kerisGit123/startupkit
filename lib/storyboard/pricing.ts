@@ -15,7 +15,7 @@ export interface PricingModel {
   _id?: string;
   modelId: string;
   modelName: string;
-  modelType: "image" | "video" | "audio" | "music";
+  modelType: "image" | "video" | "audio" | "text";
   isActive: boolean;
   visibility?: "public" | "temp_down"; // public = visible to users, temp_down = admin only (dev in progress)
   isHot?: boolean; // true = strategy pricing model (0.625 multiplier, hot badge)
@@ -723,7 +723,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
   {
     modelId: "ai-music-api/generate",
     modelName: "AI Music Generator",
-    modelType: "music",
+    modelType: "audio",
     isActive: true,
     pricingType: "fixed",
     creditCost: 12,
@@ -741,7 +741,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
   {
     modelId: "ai-music-api/upload-cover",
     modelName: "Cover Song",
-    modelType: "music",
+    modelType: "audio",
     isActive: true,
     pricingType: "fixed",
     creditCost: 12,
@@ -759,7 +759,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
   {
     modelId: "ai-music-api/extend",
     modelName: "Extend Music",
-    modelType: "music",
+    modelType: "audio",
     isActive: true,
     pricingType: "fixed",
     creditCost: 12,
@@ -777,7 +777,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
   {
     modelId: "ai-music-api/generate-persona",
     modelName: "Create Persona",
-    modelType: "music",
+    modelType: "audio",
     isActive: true,
     pricingType: "fixed",
     creditCost: 0,
@@ -853,6 +853,8 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "Prompt Enhance",
     modelType: "text",
     isActive: true,
+    pricingType: "fixed",
+    creditCost: 1,
     ...Object.fromEntries(Object.entries({
       base: { credits: 1, unit: "per enhancement" },
       note: "Enhances prompts with cinematic detail using Claude Haiku 4.5. Cost: ~$0.001/request.",

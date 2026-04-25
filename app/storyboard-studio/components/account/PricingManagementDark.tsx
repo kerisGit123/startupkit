@@ -70,7 +70,7 @@ export default function PricingManagementDark() {
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'grid' | 'card'>('table');
   const [activeTab, setActiveTab] = useState<'models' | 'testing' | 'kie' | 'strategy'>('models');
-  const [modelCategoryTab, setModelCategoryTab] = useState<'all' | 'image' | 'video' | 'audio'>('all');
+  const [modelCategoryTab, setModelCategoryTab] = useState<'all' | 'image' | 'video' | 'audio' | 'text'>('all');
   // KIE AI key management state
   const [kieKeys, setKieKeys] = useState<Array<{ _id: string; name: string; apiKey: string; isDefault: boolean; isActive: boolean; createdAt: number; updatedAt: number }>>([]);
   const [kieLoading, setKieLoading] = useState(false);
@@ -93,7 +93,7 @@ export default function PricingManagementDark() {
     favorite: false
   });
   
-  const { models, analytics, loading, error, saveModel, toggleModelActive, deleteModel, resetToDefaults, refetch: fetchModels } = usePricingData();
+  const { models, getAnalytics: analytics, loading, error, saveModel, toggleModelActive, deleteModel, resetToDefaults, fetchPricingModels: fetchModels } = usePricingData();
   const [isResetting, setIsResetting] = useState(false);
   
   const [showPricingOverview, setShowPricingOverview] = useState(false);
@@ -134,22 +134,21 @@ export default function PricingManagementDark() {
     };
     
     saveModel(apiData, { isEdit: !!selectedModel }).then(result => {
-      if (result.success && result.models) {
-        const updatedModel = result.models.find(m => m.modelId === data.modelId);
-        if (updatedModel) {
-          setSelectedModel(updatedModel);
-          setFormData({
-            modelId: updatedModel.modelId,
-            modelName: updatedModel.modelName,
-            modelType: updatedModel.modelType,
-            isActive: updatedModel.isActive,
-            pricingType: updatedModel.pricingType,
-            creditCost: updatedModel.creditCost,
-            factor: updatedModel.factor,
-            formulaJson: updatedModel.formulaJson,
-            assignedFunction: updatedModel.assignedFunction,
-          });
-        }
+      if (result.success) {
+        // Models are automatically refetched by the hook after save
+        // Update local state with what we sent
+        setSelectedModel({ ...selectedModel, ...apiData } as PricingModel);
+        setFormData({
+          modelId: data.modelId,
+          modelName: data.modelName,
+          modelType: data.modelType,
+          isActive: data.isActive,
+          pricingType: data.pricingType,
+          creditCost: data.creditCost,
+          factor: data.factor,
+          formulaJson: data.formulaJson,
+          assignedFunction: data.assignedFunction,
+        });
       }
     });
   };
@@ -375,7 +374,7 @@ export default function PricingManagementDark() {
     
     if (confirm(`Are you sure you want to delete "${modelName}"? This action cannot be undone.`)) {
       // Call delete API with the _id instead of modelId
-      const success = await deleteModel(convexId);
+      const success = await deleteModel(convexId ?? '');
       
       if (success) {
         // Optionally show success message
@@ -444,7 +443,7 @@ export default function PricingManagementDark() {
 
     // Apply category tab filter
     const matchesCategoryTab = modelCategoryTab === 'all' ||
-      (modelCategoryTab === 'audio' ? (model.modelType === 'audio' || model.modelType === 'music') : model.modelType === modelCategoryTab);
+      (modelCategoryTab === 'audio' ? (model.modelType === 'audio' || (model.modelType as string) === 'music') : model.modelType === modelCategoryTab);
     
     // Apply favorite filter
     const matchesFavorite = !filters.favorite || favoriteModels.has(model.modelId);
@@ -604,11 +603,11 @@ export default function PricingManagementDark() {
             {/* Category Tabs */}
             <div className="flex gap-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-1 shrink-0">
               {([
-                { key: 'all', label: 'All' },
-                { key: 'image', label: 'Image', icon: Image },
-                { key: 'video', label: 'Video', icon: Film },
-                { key: 'audio', label: 'Audio', icon: Mic },
-              ] as const).map(({ key, label, icon: Icon }) => (
+                { key: 'all' as const, label: 'All', icon: undefined },
+                { key: 'image' as const, label: 'Image', icon: Image },
+                { key: 'video' as const, label: 'Video', icon: Film },
+                { key: 'audio' as const, label: 'Audio', icon: Mic },
+              ]).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
                   onClick={() => setModelCategoryTab(key)}
@@ -621,7 +620,7 @@ export default function PricingManagementDark() {
                   {Icon && <Icon className="w-3 h-3" />}
                   {label}
                   <span className="opacity-60 ml-0.5">
-                    ({models?.filter(m => key === 'all' ? true : key === 'audio' ? (m.modelType === 'audio' || m.modelType === 'music') : m.modelType === key).length || 0})
+                    ({models?.filter(m => key === 'all' ? true : key === 'audio' ? (m.modelType === 'audio' || (m.modelType as string) === 'music') : m.modelType === key).length || 0})
                   </span>
                 </button>
               ))}
@@ -722,7 +721,7 @@ export default function PricingManagementDark() {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
-                    model.modelType === 'music'
+                    (model.modelType as string) === 'music'
                       ? 'bg-purple-500/20 text-purple-400 border-purple-500/40'
                       : model.modelType === 'audio'
                       ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
@@ -730,7 +729,7 @@ export default function PricingManagementDark() {
                       ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40'
                       : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
                   }`}>
-                    {model.modelType === 'music' ? <Music className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'audio' ? <Mic className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
+                    {(model.modelType as string) === 'music' ? <Music className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'audio' ? <Mic className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
                     <span className="font-medium">{model.modelType}</span>
                   </span>
                 </td>
@@ -813,7 +812,7 @@ export default function PricingManagementDark() {
                     <div className="relative dropdown-menu">
                       <button 
                         data-dropdown-btn={model._id}
-                        onClick={() => setActiveDropdown(activeDropdown === model._id ? null : model._id)}
+                        onClick={() => setActiveDropdown(activeDropdown === model._id ? null : model._id ?? null)}
                         className="text-(--text-secondary) hover:text-(--text-primary) p-1 rounded-xl hover:bg-(--bg-tertiary) transition-all duration-200"
                       >
                         <MoreVertical className="w-4 h-4" />
@@ -848,7 +847,7 @@ export default function PricingManagementDark() {
                 </div>
                 <button 
                   data-dropdown-btn={model._id}
-                  onClick={() => setActiveDropdown(activeDropdown === model._id ? null : model._id)}
+                  onClick={() => setActiveDropdown(activeDropdown === model._id ? null : model._id ?? null)}
                   className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-400/20 transition-colors"
                 >
                   <MoreVertical className="w-4 h-4" />
@@ -859,7 +858,7 @@ export default function PricingManagementDark() {
                 <div className="flex items-center justify-between">
                   <span className="text-(--text-secondary) text-sm">Type</span>
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border ${
-                    model.modelType === 'music'
+                    (model.modelType as string) === 'music'
                       ? 'bg-purple-500/20 text-purple-400 border-purple-500/40'
                       : model.modelType === 'audio'
                       ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
@@ -867,7 +866,7 @@ export default function PricingManagementDark() {
                       ? 'bg-(--accent-teal)/20 text-(--accent-teal) border-(--accent-teal)/40'
                       : 'bg-(--accent-blue)/20 text-(--accent-blue) border-(--accent-blue)/40'
                   }`}>
-                    {model.modelType === 'music' ? <Music className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'audio' ? <Mic className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
+                    {(model.modelType as string) === 'music' ? <Music className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'audio' ? <Mic className="w-3.5 h-3.5 mr-1.5" /> : model.modelType === 'image' ? <Image className="w-3.5 h-3.5 mr-1.5" /> : <Film className="w-3.5 h-3.5 mr-1.5" />}
                     <span className="font-medium">{model.modelType}</span>
                   </span>
                 </div>
@@ -991,7 +990,7 @@ export default function PricingManagementDark() {
                       data-dropdown-btn={model._id}
                       onClick={(e) => {
                         e.stopPropagation(); // Prevent event bubbling
-                        setActiveDropdown(activeDropdown === model._id ? null : model._id);
+                        setActiveDropdown(activeDropdown === model._id ? null : model._id ?? null);
                       }}
                       className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-400/20 transition-colors dropdown-btn"
                     >
@@ -1410,7 +1409,7 @@ export default function PricingManagementDark() {
               onClick={() => {
                 setTestModelTab(key);
                 const firstModel = models?.find(m =>
-                  key === 'audio' ? (m.modelType === 'audio' || m.modelType === 'music') : m.modelType === key
+                  key === 'audio' ? (m.modelType === 'audio' || (m.modelType as string) === 'music') : m.modelType === key
                 );
                 if (firstModel) setTestParams(p => ({ ...p, modelId: firstModel.modelId }));
               }}
@@ -1435,7 +1434,7 @@ export default function PricingManagementDark() {
               className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
             >
               {models?.filter(m =>
-                testModelTab === 'audio' ? (m.modelType === 'audio' || m.modelType === 'music') : m.modelType === testModelTab
+                testModelTab === 'audio' ? (m.modelType === 'audio' || (m.modelType as string) === 'music') : m.modelType === testModelTab
               ).map((model, index) => (
                 <option key={`${model.modelId}-${index}`} value={model.modelId}>
                   {model.modelName} ({model.modelId})

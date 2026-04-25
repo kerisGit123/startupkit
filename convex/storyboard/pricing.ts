@@ -5,7 +5,7 @@ import { mutation, query } from "../_generated/server";
 export const pricingModels = {
   modelId: v.string(),                    // "nano-banana-2", "seedance-1.5-pro"
   modelName: v.string(),                  // "Nano Banana 2", "Seedance 1.5 Pro"
-  modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music")),
+  modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio")),
   isActive: v.boolean(),                   // true = available, false = disabled
   pricingType: v.union(v.literal("fixed"), v.literal("formula")),
   
@@ -39,7 +39,7 @@ export const createPricingModel = mutation({
   args: {
     modelId: v.string(),
     modelName: v.string(),
-    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music")),
+    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio")),
     pricingType: v.union(v.literal("fixed"), v.literal("formula")),
     visibility: v.optional(v.union(v.literal("public"), v.literal("temp_down"))),
     isHot: v.optional(v.boolean()),
@@ -98,7 +98,7 @@ export const updatePricingModel = mutation({
   args: {
     modelId: v.string(),
     modelName: v.optional(v.string()),
-    modelType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music"))),
+    modelType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"))),
     isActive: v.optional(v.boolean()),
     visibility: v.optional(v.union(v.literal("public"), v.literal("temp_down"))),
     isHot: v.optional(v.boolean()),
@@ -197,7 +197,7 @@ export const getPricingModel = query({
 // Get pricing models by type
 export const getPricingModelsByType = query({
   args: {
-    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music")),
+    modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio")),
   },
   handler: async (ctx, args) => {
     const models = await ctx.db
@@ -224,7 +224,7 @@ export const getAllPricingModels = query({
 // Get active pricing models only
 export const getActivePricingModels = query({
   args: {
-    modelType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music"))),
+    modelType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"))),
   },
   handler: async (ctx, args) => {
     return await ctx.db
@@ -608,7 +608,7 @@ const DEFAULT_PRICING_MODELS = [
   {
     modelId: "ai-music-api/generate",
     modelName: "AI Music Generator",
-    modelType: "music",
+    modelType: "audio",
     isActive: true,
     pricingType: "fixed",
     creditCost: 12,
@@ -641,7 +641,7 @@ export const resetToDefaults = mutation({
         ...model,
         createdAt: timestamp,
         updatedAt: timestamp,
-      });
+      } as any);
     }
 
     return { deleted: allExisting.length, inserted: DEFAULT_PRICING_MODELS.length };

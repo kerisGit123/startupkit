@@ -1605,7 +1605,7 @@ export default function StoryboardWorkspacePage() {
                         onDuplicate={() => duplicateItem(item)}
                         onTagsChange={(tags) => handleTagsChange(item._id, tags)}
                         onFavoriteToggle={() => handleFavoriteToggle(item._id)}
-                        onStatusChange={(status) => handleStatusChange(item._id, status)}
+                        onStatusChange={(status) => handleStatusChange(item._id, status as "draft" | "completed" | "in-progress")}
                         onNotesChange={(notes) => handleNotesChange(item._id, notes)}
                         onTitleChange={(title) => handleTitleChange(item._id, title)}
                         onDescriptionChange={(description) => handleDescriptionChange(item._id, description)}
@@ -1877,7 +1877,7 @@ export default function StoryboardWorkspacePage() {
                         <td className="px-3 py-3">
                           <select
                             value={item.frameStatus || "draft"}
-                            onChange={(e) => handleStatusChange(item._id, e.target.value)}
+                            onChange={(e) => handleStatusChange(item._id, e.target.value as "draft" | "completed" | "in-progress")}
                             className="bg-[#2C2C2C] border border-[#3D3D3D] rounded px-2 py-1 text-[10px] text-[#A0A0A0] outline-none focus:border-[#4A90E2] transition cursor-pointer"
                           >
                             <option value="draft">Draft</option>
@@ -2662,13 +2662,11 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
               )}
 
               {/* Favorite button */}
-              {onFavoriteToggle && (
-                <FrameFavoriteButton
-                  frameId={item._id}
-                  isFavorite={item.isFavorite || false}
-                  size="sm"
-                />
-              )}
+              <FrameFavoriteButton
+                frameId={item._id}
+                isFavorite={item.isFavorite || false}
+                size="sm"
+              />
             </div>
           </div>
         </div>
@@ -2694,10 +2692,10 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         <div className="absolute bottom-36 left-2 right-2 flex flex-wrap gap-1.5 pointer-events-none z-10">
           <div className="flex flex-wrap gap-1.5">
             {/* Display elements from elementNames */}
-            {item.elementNames && (
+            {(item as any).elementNames && (
               <>
                 {/* Characters */}
-                {item.elementNames.characters?.map((elementName, index) => (
+                {(item as any).elementNames.characters?.map((elementName: string, index: number) => (
                   <div
                     key={`character-${index}`}
                     className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-purple-600/80 border-purple-500/30 text-white hover:bg-purple-600 transition-colors pointer-events-auto"
@@ -2716,7 +2714,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                   </div>
                 ))}
                 {/* Environments */}
-                {item.elementNames.environments?.map((elementName, index) => (
+                {(item as any).elementNames.environments?.map((elementName: string, index: number) => (
                   <div
                     key={`environment-${index}`}
                     className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-emerald-600/80 border-emerald-500/30 text-white hover:bg-emerald-600 transition-colors pointer-events-auto"
@@ -2735,7 +2733,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                   </div>
                 ))}
                 {/* Props */}
-                {item.elementNames.props?.map((elementName, index) => (
+                {(item as any).elementNames.props?.map((elementName: string, index: number) => (
                   <div
                     key={`prop-${index}`}
                     className="group/badge relative px-2 py-0.5 rounded-full text-[10px] font-medium backdrop-blur-sm border bg-blue-600/80 border-blue-500/30 text-white hover:bg-blue-600 transition-colors pointer-events-auto"
@@ -2843,7 +2841,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           
           {/* Duplicate button */}
           <button
-            onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+            onClick={(e) => { e.stopPropagation(); onDuplicate(item); }}
             className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
           >
             <div className="w-8 h-8 bg-gray-600/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-gray-600 transition-colors">
@@ -2872,7 +2870,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
           <div className="flex items-center gap-1 text-[10px] text-gray-600">
             <div className="w-4 h-4 bg-gray-700 rounded-full flex items-center justify-center">
               <span className="text-gray-500 font-medium">
-                {(item.generatedBy || userId || "U").charAt(0).toUpperCase()}
+                {((item as any).generatedBy || userId || "U").charAt(0).toUpperCase()}
               </span>
             </div>
           </div>

@@ -217,12 +217,12 @@ function WireframeGlobe({
         const alpha = avgZ >= 0
           ? frontAlpha
           : backAlpha;
-        ctx.beginPath();
-        ctx.moveTo(p0.x, p0.y);
-        ctx.lineTo(p1.x, p1.y);
-        ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-        ctx.lineWidth = avgZ >= 0 ? 0.7 : 0.4;
-        ctx.stroke();
+        ctx!.beginPath();
+        ctx!.moveTo(p0.x, p0.y);
+        ctx!.lineTo(p1.x, p1.y);
+        ctx!.strokeStyle = `rgba(255,255,255,${alpha})`;
+        ctx!.lineWidth = avgZ >= 0 ? 0.7 : 0.4;
+        ctx!.stroke();
       }
     }
 

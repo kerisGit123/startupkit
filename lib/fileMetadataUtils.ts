@@ -5,7 +5,7 @@
  * Use these functions whenever you need to store file metadata in storyboard_files.
  */
 
-import { convex } from "@/lib/convex-client";
+import convex from "@/lib/ConvexClient";
 import { api } from "@/convex/_generated/api";
 
 /**
@@ -18,7 +18,7 @@ export async function storeFileMetadata(params: {
   // Required fields
   r2Key: string;           // R2 storage key (e.g., "org_123/uploads/file.jpg")
   filename: string;        // Original filename
-  fileType: "image" | "video" | "audio" | "music" | "document";
+  fileType: "image" | "video" | "audio" | "document";
   mimeType: string;        // MIME type (e.g., "image/jpeg")
   size: number;            // File size in bytes
   category: "temps" | "uploads" | "generated" | "elements" | "storyboard" | "videos";
@@ -133,7 +133,9 @@ export async function handleFileUpload(params: {
   uploadedBy: string;
   projectId?: string;
   tags?: string[];
-  elementType?: string;
+  elementType?: "character" | "object" | "logo" | "font" | "style";
+  frameNumber?: number;
+  sceneId?: string;
 }) {
   try {
     // 1. Upload file to R2 (you'll need to implement this part)
@@ -157,6 +159,8 @@ export async function handleFileUpload(params: {
       projectId: params.projectId,
       tags: params.tags,
       elementType: params.elementType,
+      frameNumber: params.frameNumber,
+      sceneId: params.sceneId,
     });
     
     return {

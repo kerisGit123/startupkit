@@ -585,7 +585,7 @@ export async function POST(request: NextRequest) {
         const tempR2Key = `temps/generated-image-kie-${timestamp}.${extension}`;
         await uploadToR2(sourceBlob, tempR2Key);
 
-        let finalBuffer = sourceBuffer;
+        let finalBuffer: Buffer = sourceBuffer;
 
         // Check if we need to composite
         if (generationMetadata?.originalImageUrl &&

@@ -52,6 +52,17 @@ interface ReferenceImageMetadata {
   fileId?: string;
   r2Key?: string;
   addedAt: number;
+  originalId?: string;
+  originalSource?: string;
+  element?: any;
+  type?: string;
+  source?: string;
+  selectedAt?: number;
+  category?: string;
+  isFavorite?: boolean;
+  isGlobal?: boolean;
+  elementType?: string;
+  elementName?: string;
 }
 
 interface ReferenceImage {
@@ -248,7 +259,7 @@ export function ImageAIPanel({
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   // showPromptActions now managed by PromptActionsDropdown component
-  const [outputMode, setOutputMode] = useState<"image" | "video" | "music" | "analyze">("image");
+  const [outputMode, setOutputMode] = useState<"image" | "video" | "audio" | "analyze">("image");
   const createTemplate = useMutation(api.promptTemplates.create);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const deductCredits = useMutation(api.credits.deductCredits);
@@ -367,10 +378,10 @@ export function ImageAIPanel({
     { value: "grok-imagine/image-to-video", label: "Grok Imagine", sub: "480p/720p • up to 7 refs • 6-30s", icon: Film, maxReferenceImages: 7, category: "video" as const },
     { value: "topaz/video-upscale", label: "Topaz Video Upscale", sub: "1x/2x/4x • MP4, MOV, WEBM, M4V, GIF", icon: ArrowUp, maxReferenceImages: 0, category: "video" as const },
     { value: "infinitalk/from-audio", label: "InfiniteTalk", sub: "Lip sync • image + audio • 480p/720p", icon: Mic, maxReferenceImages: 1, category: "video" as const },
-    { value: "ai-music-api/generate", label: "AI Music", sub: "Generate music • up to 4min", icon: Music, maxReferenceImages: 0, category: "music" as const },
-    { value: "ai-music-api/upload-cover", label: "Cover Song", sub: "Re-sing with persona • upload audio", icon: Music, maxReferenceImages: 0, category: "music" as const },
-    { value: "ai-music-api/extend", label: "Extend Music", sub: "Make songs longer • from timestamp", icon: Music, maxReferenceImages: 0, category: "music" as const },
-    { value: "ai-music-api/generate-persona", label: "Create Persona", sub: "Extract voice • free", icon: Mic, maxReferenceImages: 0, category: "music" as const },
+    { value: "ai-music-api/generate", label: "AI Music", sub: "Generate music • up to 4min", icon: Music, maxReferenceImages: 0, category: "audio" as const },
+    { value: "ai-music-api/upload-cover", label: "Cover Song", sub: "Re-sing with persona • upload audio", icon: Music, maxReferenceImages: 0, category: "audio" as const },
+    { value: "ai-music-api/extend", label: "Extend Music", sub: "Make songs longer • from timestamp", icon: Music, maxReferenceImages: 0, category: "audio" as const },
+    { value: "ai-music-api/generate-persona", label: "Create Persona", sub: "Extract voice • free", icon: Mic, maxReferenceImages: 0, category: "audio" as const },
     { value: "elevenlabs/text-to-speech-multilingual-v2", label: "ElevenLabs TTS", sub: "Text-to-speech • multilingual • 12 cr/1K chars", icon: Mic, maxReferenceImages: 0, category: "audio" as const },
   ];
   // Combine all models for the consolidated dropdown
@@ -506,7 +517,7 @@ export function ImageAIPanel({
   const [showFirstFrameBrowser, setShowFirstFrameBrowser] = useState(false);
   const [showLastFrameBrowser, setShowLastFrameBrowser] = useState(false);
   // Media preview popup
-  const [mediaPreview, setMediaPreview] = useState<{ type: 'video' | 'audio'; url: string; label: string; prompt?: string; fileId?: string } | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<{ type: 'video' | 'audio' | 'image'; url: string; label: string; prompt?: string; fileId?: string } | null>(null);
   // Video references: Kling (1 video), Seedance 2.0 (max 3 videos, total ≤15s)
   const [videoRefs, setVideoRefs] = useState<Array<{ url: string; duration: number }>>([]);
   const [showVideoBrowser, setShowVideoBrowser] = useState(false);
@@ -702,7 +713,7 @@ export function ImageAIPanel({
   // Dropdown visibility states
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-  const [modelFilter, setModelFilter] = useState<"all" | "image" | "video" | "music" | "audio">("all");
+  const [modelFilter, setModelFilter] = useState<"all" | "image" | "video" | "audio">("all");
   const [showAspectRatioDropdown, setShowAspectRatioDropdown] = useState(false);
   const [showResolutionDropdown, setShowResolutionDropdown] = useState(false);
   const [showOutputFormatDropdown, setShowOutputFormatDropdown] = useState(false);
@@ -1005,8 +1016,8 @@ export function ImageAIPanel({
     // Reference current image as reference image (no download needed)
     try {
       console.log('🔍 Starting CanvasEditor-specific search...');
-      let targetElement = null;
-      let imageUrl = null;
+      let targetElement: HTMLElement | HTMLCanvasElement | null = null;
+      let imageUrl: string | null = null;
       
       // Method 1: Look for the CanvasEditor container with data-canvas-editor="true"
       const canvasEditorContainer = document.querySelector('[data-canvas-editor="true"]');
@@ -1015,7 +1026,7 @@ export function ImageAIPanel({
       if (canvasEditorContainer) {
         // Method 2: Look for the main image inside the CanvasEditor
         // This is the currently displayed image that the user sees
-        const mainImage = canvasEditorContainer.querySelector('img[data-canvas-base-image="true"], img');
+        const mainImage = canvasEditorContainer.querySelector('img[data-canvas-base-image="true"], img') as HTMLImageElement | null;
         console.log('📸 Found main image in CanvasEditor:', !!mainImage);
         
         if (mainImage) {
@@ -1047,8 +1058,8 @@ export function ImageAIPanel({
         if (!targetElement) {
           const canvases = canvasEditorContainer.querySelectorAll('canvas');
           console.log(`📊 Found ${canvases.length} canvas elements in CanvasEditor`);
-          
-          let bestCanvas = null;
+
+          let bestCanvas: HTMLCanvasElement | null = null;
           let bestScore = 0;
           
           for (let i = 0; i < canvases.length; i++) {
@@ -1086,8 +1097,8 @@ export function ImageAIPanel({
         console.log('🔄 CanvasEditor not found, searching all canvases...');
         const allCanvases = document.querySelectorAll('canvas');
         console.log(`📊 Found ${allCanvases.length} total canvas elements`);
-        
-        let bestCanvas = null;
+
+        let bestCanvas: HTMLCanvasElement | null = null;
         let bestScore = 0;
         
         for (let i = 0; i < allCanvases.length; i++) {
@@ -1162,7 +1173,7 @@ export function ImageAIPanel({
       // Handle canvas elements (capture current visual content)
       else if (targetElement.tagName === 'CANVAS') {
         console.log('🖼️ Capturing current canvas visual content...');
-        targetElement.toBlob((blob) => {
+        (targetElement as HTMLCanvasElement).toBlob((blob) => {
           if (blob) {
             console.log('✅ Canvas blob created from current visual content, size:', blob.size);
             const filename = `canvas-capture-${Date.now()}.png`;
@@ -1260,7 +1271,7 @@ export function ImageAIPanel({
   const canOpenElementLibrary = () => !!(projectId && userId && user && currentCompanyId);
 
   // Toast notification helper (simple implementation)
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
     // Simple console.log for now - can be replaced with actual toast library
     console.log(`[${type.toUpperCase()}] ${message}`);
   };
@@ -1268,9 +1279,10 @@ export function ImageAIPanel({
   // Unified handler for R2 and element library image selection
   const handleImageSelect = async (
     source: 'r2' | 'element',
-    data: { 
-      url: string; 
-      name?: string; 
+    data: {
+      url: string;
+      name?: string;
+      source?: string;
       metadata?: Partial<ReferenceImageMetadata>;
     }
   ) => {
@@ -1805,7 +1817,7 @@ export function ImageAIPanel({
 
       if (onGenerate) {
         const isSeedance2 = selectedModelOption.value === "bytedance/seedance-2" || selectedModelOption.value === "bytedance/seedance-2-fast";
-        const qualityParam = (outputMode === "video" || outputMode === "music" || selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2")
+        const qualityParam = (outputMode === "video" || outputMode === "audio" || selectedModelOption.value === "elevenlabs/text-to-speech-multilingual-v2")
           ? isSeedance2
             ? (() => {
                 const outputDur = parseInt(videoDuration.replace('s', '')) || 5;
@@ -3402,7 +3414,7 @@ export function ImageAIPanel({
                           reason: "Prompt enhancement",
                           model: "claude-haiku-4-5",
                           action: "prompt-enhance",
-                          plan: plan || undefined,
+                          plan: currentPlan || undefined,
                         });
                         const res = await fetch("/api/prompt-enhance", {
                           method: "POST",
@@ -3771,8 +3783,7 @@ export function ImageAIPanel({
             {([
               { key: "image", Icon: Image, title: "IMAGE" },
               { key: "video", Icon: Film, title: "VIDEO" },
-              { key: "music", Icon: Music, title: "MUSIC" },
-              { key: "audio", Icon: Mic, title: "AUDIO" },
+              { key: "audio", Icon: Music, title: "AUDIO" },
             ] as const).map((cat) => {
               const isActive = outputMode !== "analyze" && selectedModelOption.category === cat.key;
               return (
@@ -3783,10 +3794,10 @@ export function ImageAIPanel({
                     setModelFilter(cat.key);
                     const firstInCategory = allModelOptions.find(m => m.category === cat.key);
                     if (firstInCategory) {
-                      const modelOutputMode = firstInCategory.category === "music" ? "music" as const
+                      const modelOutputMode = firstInCategory.category === "audio" ? "audio" as const
                         : firstInCategory.category === "image" ? "image" as const
                         : "video" as const;
-                      if (modelOutputMode !== outputMode || outputMode === "analyze") {
+                      if (modelOutputMode !== (outputMode as string) || outputMode === "analyze") {
                         setOutputMode(modelOutputMode);
                         setResolution(modelOutputMode === "video" ? "480P" : "1K");
                         setAspectRatio(modelOutputMode === "video" ? "16:9" : "1:1");
@@ -3899,8 +3910,8 @@ export function ImageAIPanel({
                           if (!groups[m.category]) groups[m.category] = [];
                           groups[m.category].push(m);
                         });
-                        const categoryOrder = ["image", "video", "music", "audio"];
-                        const catIcons: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = { image: Image, video: Film, music: Music, audio: Mic };
+                        const categoryOrder = ["image", "video", "audio"];
+                        const catIcons: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = { image: Image, video: Film, audio: Music };
                         return categoryOrder.filter(c => groups[c]).map((cat) => (
                           <div key={cat}>
                             <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary)">
@@ -3910,7 +3921,7 @@ export function ImageAIPanel({
                               <button
                                 key={modelOption.value}
                                 onClick={() => {
-                                  const modelOutputMode = modelOption.category === "music" ? "music" as const
+                                  const modelOutputMode = modelOption.category === "audio" ? "audio" as const
                                     : modelOption.category === "image" ? "image" as const
                                     : "video" as const;
                                   if (modelOutputMode !== outputMode) {
@@ -3956,8 +3967,7 @@ export function ImageAIPanel({
                                       <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wide ${
                                         modelOption.category === "image" ? "bg-cyan-500/15 text-cyan-400"
                                         : modelOption.category === "video" ? "bg-green-500/15 text-green-400"
-                                        : modelOption.category === "music" ? "bg-purple-500/15 text-purple-400"
-                                        : "bg-blue-500/15 text-blue-400"
+                                        : "bg-purple-500/15 text-purple-400"
                                       }`}>{modelOption.category}</span>
                                     </div>
                                     <div className="text-[11px] text-(--text-secondary) mt-0.5">{modelOption.sub}</div>
@@ -5119,7 +5129,7 @@ export function ImageAIPanel({
           projectId={projectId}
           onClose={() => setShowFileBrowser(false)}
           imageSelectionMode={true} // Enable image selection mode
-          filterTypes={['image']} // Only show images
+          defaultFileType={'image' as any} // Only show images
           onSelectImage={(imageUrl, fileName, fileData) => {
             // Handle single image selection from R2 File Browser
             handleImageSelect('r2', {
@@ -5148,11 +5158,9 @@ export function ImageAIPanel({
       {showPaletteFileBrowser && projectId && (
         <FileBrowser
           projectId={projectId}
-          companyId={currentCompanyId || ""}
-          isOpen={showPaletteFileBrowser}
           onClose={() => setShowPaletteFileBrowser(false)}
           imageSelectionMode={true}
-          filterTypes={['image']}
+          defaultFileType={'image' as any}
           onSelectImage={(imageUrl) => {
             setColorPaletteColors(prev => ({ ...prev, referenceUrl: imageUrl }));
             setShowPaletteFileBrowser(false);
@@ -5372,7 +5380,7 @@ export function ImageAIPanel({
           onSelectFile={(url, type) => {
             const validTypes = analyzeType === "image" ? ["image"]
               : analyzeType === "video" ? ["video"]
-              : ["audio", "music", "file"];
+              : ["audio", "file"];
             if (validTypes.includes(type)) {
               setAnalyzeMediaUrl(url);
               setAnalyzeResult("");

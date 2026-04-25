@@ -138,7 +138,7 @@ export function CanvasEditor({
   const [editingBubbleId, setEditingBubbleId] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas" | "shape"; id?: string; submenu?: 'tailDirection' | 'layer' | 'bubbleType' | 'textProperties' | 'shapeProperties' | 'colorPalette'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
-  const [copiedObject, setCopiedObject] = useState<{ type: "bubble" | "text" | "asset"; data: any } | null>(null);
+  const [copiedObject, setCopiedObject] = useState<{ type: "bubble" | "text" | "asset" | "shape"; data: any } | null>(null);
   const [pendingCombine, setPendingCombine] = useState(false); // TODO: Combine Background feature - pending proper implementation
 
   // Handle deferred combine background (fires after context menu closes)
@@ -312,10 +312,10 @@ export function CanvasEditor({
       console.log("New text element:", newTextElement);
       
       // Use functional update to avoid dependency on state
-      onStateChange(prevState => ({
-        ...prevState,
-        textElements: [...prevState.textElements, newTextElement]
-      }));
+      onStateChange({
+        ...state,
+        textElements: [...state.textElements, newTextElement]
+      } as CanvasEditorState);
       setSelection(null, textId, null);
       
       // Auto-select canvas-objects tool after text creation
@@ -325,7 +325,7 @@ export function CanvasEditor({
     } else {
       console.log("Container ref is null!");
     }
-  }, [panelId, onStateChange, setSelection, mode, onToolSelect]);
+  }, [panelId, onStateChange, setSelection, mode, onToolSelect, state]);
 
   // Auto-create shape when shape tool is activated
   const createShapeInCenter = useCallback((shapeType: "arrow" | "line" | "rectangle" | "circle") => {
@@ -368,17 +368,17 @@ export function CanvasEditor({
       console.log("New shape element:", newShapeElement);
       
       // Use functional update to avoid dependency on state
-      onStateChange(prevState => ({
-        ...prevState,
-        shapeElements: [...prevState.shapeElements, newShapeElement]
-      }));
+      onStateChange({
+        ...state,
+        shapeElements: [...state.shapeElements, newShapeElement]
+      } as CanvasEditorState);
       setSelection(null, null, null, shapeId);
       
       // Auto-select canvas-objects tool after shape creation
       onToolSelect?.("canvas-objects");
       
     }
-  }, [panelId, onStateChange, setSelection, selectedColor, onToolSelect]);
+  }, [panelId, onStateChange, setSelection, selectedColor, onToolSelect, state]);
 
   useEffect(() => {
     if (activeTool === "text") {
@@ -605,10 +605,10 @@ export function CanvasEditor({
           }
         } else {
           // Regular corner resize for rectangle/circle
-          const nw = Math.max(20, d.origW + (d.handle.includes("e") ? dx : d.handle.includes("w") ? -dx : 0));
-          const nh = Math.max(20, d.origH + (d.handle.includes("s") ? dy : d.handle.includes("n") ? -dy : 0));
-          const nx = d.origX + (d.handle.includes("e") ? 0 : d.handle.includes("w") ? (d.origW - nw) : dx / 2);
-          const ny = d.origY + (d.handle.includes("s") ? 0 : d.handle.includes("n") ? (d.origH - nh) : dy / 2);
+          const nw = Math.max(20, d.origW + (d.handle?.includes("e") ? dx : d.handle?.includes("w") ? -dx : 0));
+          const nh = Math.max(20, d.origH + (d.handle?.includes("s") ? dy : d.handle?.includes("n") ? -dy : 0));
+          const nx = d.origX + (d.handle?.includes("e") ? 0 : d.handle?.includes("w") ? (d.origW - nw) : dx / 2);
+          const ny = d.origY + (d.handle?.includes("s") ? 0 : d.handle?.includes("n") ? (d.origH - nh) : dy / 2);
           if (d.kind === "bubble") onStateChange({ ...state, bubbles: bubbles.map(b => b.id === d.id ? { ...b, x: nx, y: ny, w: nw, h: nh } : b) });
           else if (d.kind === "text") onStateChange({ ...state, textElements: textElements.map(t => t.id === d.id ? { ...t, x: nx, y: ny, w: nw, h: nh } : t) });
           else if (d.kind === "shape") onStateChange({ ...state, shapeElements: shapeElements.map(s => s.id === d.id ? { ...s, x: nx, y: ny, w: nw, h: nh } : s) });
@@ -1493,7 +1493,7 @@ export function CanvasEditor({
             const nl = Math.hypot(rotatedDx, rotatedDy), ux = rotatedDx / nl, uy = rotatedDy / nl;
             
             // Use the same color logic as regular bubbles
-            const fillColor = b.flippedColors ? "#1a1a2e" : (b.bubbleType === "whisper" ? "rgba(240,240,255,0.85)" : "rgba(255,255,255,0.97)");
+            const fillColor = b.flippedColors ? "#1a1a2e" : ((b.bubbleType as string) === "whisper" ? "rgba(240,240,255,0.85)" : "rgba(255,255,255,0.97)");
             const strokeColor = b.flippedColors ? "rgba(255,255,255,0.9)" : "#1a1a2e";
             
             return (
@@ -2805,10 +2805,10 @@ export function CanvasEditor({
                 patchText(ctxMenu.id, { color: color });
               } else if (ctxMenu.kind === "bubble") {
                 const bubble = currentElement as any;
-                patchBubble(ctxMenu.id, { textColor: color });
+                patchBubble(ctxMenu.id, { textColor: color } as any);
               } else if (ctxMenu.kind === "asset") {
                 const asset = currentElement as any;
-                patchAsset(ctxMenu.id, { tintColor: color });
+                patchAsset(ctxMenu.id, { tintColor: color } as any);
               }
             }
             setCtxMenu(null);

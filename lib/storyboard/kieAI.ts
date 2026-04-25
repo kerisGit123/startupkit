@@ -49,6 +49,7 @@ async function createPlaceholderRecord(params: {
   projectId?: string;
   categoryId?: string;
   creditsUsed: number;
+  sourceUrl?: string;
 }) {
   const { ConvexHttpClient } = await import("convex/browser");
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -141,6 +142,7 @@ export interface TriggerImageGenerationParams {
   cropHeight?: number;
   originalImageUrl?: string;
   outputFormat?: string;
+  callbackUrl?: string;
 }
 
 // Video generation interface for Seedance 1.5 Pro
@@ -306,10 +308,10 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
 
 export async function triggerImageGeneration(params: TriggerImageGenerationParams) {
   // Use the provided model or fall back to STYLE_PRESETS
-  const actualModel = params.model || STYLE_PRESETS[params.style]?.model;
+  const actualModel = params.model || (params.style ? STYLE_PRESETS[params.style]?.model : undefined);
   // Skip style suffix for models that work better with clean prompts
   const skipSuffix = actualModel === 'ideogram/character-edit' || actualModel === 'topaz/image-upscale' || actualModel === 'recraft/crisp-upscale' || actualModel === 'z-image';
-  const promptSuffix = skipSuffix ? '' : (STYLE_PRESETS[params.style]?.promptSuffix || '');
+  const promptSuffix = skipSuffix ? '' : (params.style ? STYLE_PRESETS[params.style]?.promptSuffix || '' : '');
   // Clean up extra whitespace in prompt (e.g. from badge extraction leaving empty spaces)
   const rawPrompt = promptSuffix ? `${params.prompt}, ${promptSuffix}` : params.prompt;
   const fullPrompt = rawPrompt.replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim();
@@ -352,7 +354,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   // Initialize Convex client for server-side operations
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
   const { api } = await import("../../convex/_generated/api");
-  const requiredCredits = params.creditsUsed || IMAGE_CREDITS[params.quality] || IMAGE_CREDITS.standard || 5;
+  const requiredCredits = params.creditsUsed || (params.quality ? IMAGE_CREDITS[params.quality] : undefined) || IMAGE_CREDITS.standard || 5;
 
   // Step 1: Check if company has sufficient credits before proceeding
   if (params.companyId && requiredCredits) {

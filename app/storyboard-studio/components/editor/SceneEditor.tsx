@@ -499,6 +499,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     processingProgress: 0
   });
   const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("character-edit");
+  const [inpaintPrompt, setInpaintPrompt] = useState("");
   const [showBrushModelDropdown, setShowBrushModelDropdown] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [newTagName, setNewTagName] = useState("");
@@ -3885,7 +3886,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         generatedBy: "manual",
       });
       if (newId) {
-        onNavigateToShot(newId as string);
+        onNavigateToShot?.(newId as string);
       }
       toast.success("Frame added");
     } catch (err) {
@@ -4000,7 +4001,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         const rotation = s.rotation || 0;
         svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
         if (s.type === 'circle') svgContent += `<ellipse cx="0" cy="0" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
-        else if (s.type === 'square') svgContent += `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
+        else if (s.type === 'rectangle') svgContent += `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
         else if (s.type === 'arrow' || s.type === 'line') {
           // Arrows/lines use absolute coords: head at (x,y), tail at (endX,endY)
           // Don't use translate+center approach — draw using absolute positions instead
@@ -4162,7 +4163,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 })}
                 className="px-3 py-1.5 bg-(--accent-blue) text-white rounded-lg text-xs font-medium transition"
               >
-                {activeAIPanel === 'editimage' ? '🎬 Video' : activeAIPanel === 'video' ? '🎨 Element' : '🖼️ Image'}
+                {activeAIPanel === 'editimage' ? '🎬 Video' : activeAIPanel === 'videoimage' ? '🎨 Element' : '🖼️ Image'}
               </button>
               <button
                 onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
@@ -4389,7 +4390,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     svgContent += `<g transform="translate(${cx},${cy}) rotate(${rotation})">`;
                     if (s.type === 'circle') {
                       svgContent += `<ellipse cx="0" cy="0" rx="${s.w / 2}" ry="${s.h / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
-                    } else if (s.type === 'square') {
+                    } else if (s.type === 'rectangle') {
                       svgContent += `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" />`;
                     } else if (s.type === 'arrow' || s.type === 'line') {
                       svgContent += `<line x1="${-s.w / 2}" y1="${-s.h / 2}" x2="${s.w / 2}" y2="${s.h / 2}" stroke="${stroke}" stroke-width="${sw}" />`;
@@ -4628,7 +4629,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             setCanvasSelection={setCanvasSelection}
             canvasSelection={canvasSelection}
             onToolSelect={(tool) => {
-              if (tool === "pen-brush" || tool === "brush" || tool === "eraser" || tool === "inpaint") {
+              const t = tool as string;
+              if (t === "pen-brush" || t === "brush" || t === "eraser" || t === "inpaint") {
                 setCanvasTool("inpaint");
               } else {
                 setCanvasTool(tool);
@@ -4705,8 +4707,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           <GeneratedImagesPanel
             isOpen={generatedImagesPanelOpen}
             onClose={() => setGeneratedImagesPanelOpen(false)}
-            originalImage={originalImage}
-            backgroundImage={backgroundImage}
+            originalImage={originalImage ?? undefined}
+            backgroundImage={backgroundImage ?? undefined}
             activeShot={activeShot}
             generatedImages={generatedImages}
             projectGeneratedImages={projectGeneratedImages}
@@ -5135,7 +5137,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         imageCropCoordsRef.current?.width, // cropWidth (pos 14)
                         imageCropCoordsRef.current?.height, // cropHeight (pos 15)
                         // Prefer R2 URL over data URL for originalImageUrl (server needs to fetch it)
-                        (backgroundImage && !backgroundImage.startsWith('data:') ? backgroundImage : activeShot?.imageUrl) || backgroundImage // originalImageUrl (pos 16)
+                        ((backgroundImage && !backgroundImage.startsWith('data:') ? backgroundImage : activeShot?.imageUrl) || backgroundImage) ?? undefined // originalImageUrl (pos 16)
                       );
                       
                       if (result) {
@@ -5376,7 +5378,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     fitScaleRef.current = 1;
                     setZoomLevel(100);
                   }}
-                  backgroundImage={backgroundImage}
+                  backgroundImage={backgroundImage ?? undefined}
                   onZoomIn={handleZoomIn}
                   onZoomOut={handleZoomOut}
                   onFitToScreen={handleFitToScreen}
@@ -5690,7 +5692,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                 prompt: extractedPrompt,
                               aspectRatio: aspectRatio || undefined,
                                 imageUrls: veoMode === "TEXT_2_VIDEO" ? [] : processedReferenceImages,
-                                model: `veo3_${veoQuality.toLowerCase()}`,
+                                model: `veo3_${(veoQuality ?? 'standard').toLowerCase()}`,
                                 callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/kie-callback?fileId=${fileId}`,
                                 aspect_ratio: aspectRatio,
                                 generationType: veoMode,
@@ -6629,7 +6631,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                                   firstFrameUrl: (seedMode === "first-frame" || seedMode === "first-last-frame") ? (firstFrameUrl || processedReferenceImages[0]) : undefined,
                                   lastFrameUrl: seedMode === "first-last-frame" ? (lastFrameUrl || processedReferenceImages[1]) : undefined,
                                   resolution: quality.split('_')[0]?.toLowerCase() || '480p',
-                                  aspectRatio: aspectRatio,
                                   duration: durSec,
                                   generateAudio: audioEnabled,
                                   webSearch: quality.includes('_ws'),
@@ -6701,13 +6702,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               aiModel, // Pass the model
                               undefined, // imageUrl
                               processedReferenceImages, // Pass processed reference image URLs to KIE AI
-                              undefined, // maskUrl
-                              undefined, // existingFileId
-                              undefined, // cropX
-                              undefined, // cropY
-                              undefined, // cropWidth
-                              undefined, // cropHeight
-                              undefined, // originalImageUrl
                               undefined, // maskUrl
                               undefined, // existingFileId
                               undefined, // cropX
@@ -6801,7 +6795,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   activeShotDescription={activeShot?.description}
                       activeShotImagePrompt={activeShot?.imagePrompt}
                       activeShotVideoPrompt={activeShot?.videoPrompt}
-                      onCombine={handleCombineLayers}
                       generatedItemImages={
                         projectFiles
                           ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image" && String(f.categoryId ?? "") === String(activeShot?.id ?? ""))
@@ -6936,16 +6929,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       onZoomOut={handleZoomOut}
                       onFitToScreen={handleFitToScreen}
                       zoomLevel={zoomLevel}
-                      generatedItemImages={
-                        projectFiles
-                          ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image" && String(f.categoryId ?? "") === String(activeShot?.id ?? ""))
-                          .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
-                      }
-                      generatedProjectImages={
-                        projectFiles
-                          ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image")
-                          .map(f => ({ id: String(f._id), url: f.sourceUrl!, filename: f.filename })) || []
-                      }
                       onAddReferenceFromUrl={async (url: string) => {
                         const maxRefs = aiModel === 'nano-banana-pro' ? 8 : aiModel === 'nano-banana-2' ? 13 : Number.POSITIVE_INFINITY;
                         if (aiRefImages.length >= maxRefs) {
@@ -6972,24 +6955,14 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       </div>
 
       {/* KIE Modal */}
-      <AIGeneratorModal 
+      <AIGeneratorModal
         isOpen={showKIEModal}
         onClose={() => setShowKIEModal(false)}
-        onSelectOption={(option) => {
-          if (option === 'rectangle-mask') {
-            const maskData = sessionStorage.getItem('kieRectangleMask');
-            if (maskData) {
-              try {
-                const data = JSON.parse(maskData);
-                console.log('Processing rectangle mask for KIE:', data);
-                alert(`Rectangle mask ready for KIE processing:\nImage: ${data.image.substring(0, 50)}...\nRectangle: ${data.rectangle.width}×${data.rectangle.height}\nPrompt: ${data.prompt}`);
-              } catch (e) {
-                console.error('Failed to process rectangle mask:', e);
-              }
-            }
-          }
+        onGenerate={(response) => {
+          console.log('KIE Modal generation response:', response);
           setShowKIEModal(false);
         }}
+        project={{} as any}
       />
 
       {/* Bubble Style Modal */}
