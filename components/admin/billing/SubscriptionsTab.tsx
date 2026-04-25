@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
-export default function SubscriptionsPage() {
+export function SubscriptionsTab() {
   const subscriptions = useQuery(api.adminSubscriptions.getAllSubscriptions);
   const stats = useQuery(api.adminSubscriptions.getSubscriptionStats);
   const [searchTerm, setSearchTerm] = useState("");

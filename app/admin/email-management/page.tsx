@@ -374,7 +374,7 @@ export default function EmailManagementPage() {
             <h1 className="text-3xl font-bold">Email Management</h1>
           </div>
           <p className="text-muted-foreground">
-            Manage all your email settings, templates, campaigns, and analytics in one place
+            Manage email settings, templates, and logs
           </p>
         </div>
         <Button 
@@ -1066,7 +1066,7 @@ export default function EmailManagementPage() {
                     ) : (
                       <tr>
                         <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                          No email logs yet. Enable System Notification and send a campaign to see logs here.
+                          No email logs yet. Enable System Notification to see logs here.
                         </td>
                       </tr>
                     )}

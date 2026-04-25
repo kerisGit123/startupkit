@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Settings, User, Building2, TestTube, FileText, ShoppingCart, Receipt, Image, Mail, RefreshCw } from "lucide-react";
+import { Settings, User, Building2, Receipt } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -19,39 +19,9 @@ const sidebarNavItems = [
     icon: User,
   },
   {
-    title: "Email Settings",
-    href: "/admin/settings/email",
-    icon: Mail,
-  },
-  {
-    title: "Invoice & SO Config",
+    title: "Invoice & SO Settings",
     href: "/admin/settings/invoice-po-config",
     icon: Receipt,
-  },
-  {
-    title: "Report Header",
-    href: "/admin/settings/report-header",
-    icon: Image,
-  },
-  {
-    title: "Invoices",
-    href: "/admin/settings/invoices",
-    icon: FileText,
-  },
-  {
-    title: "Sales Orders",
-    href: "/admin/settings/po",
-    icon: ShoppingCart,
-  },
-  {
-    title: "Sync Data",
-    href: "/admin/settings/sync-data",
-    icon: RefreshCw,
-  },
-  {
-    title: "Testing",
-    href: "/admin/settings/testing",
-    icon: TestTube,
   },
 ];
 

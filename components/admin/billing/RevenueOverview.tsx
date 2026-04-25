@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { 
@@ -29,8 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-export default function RevenueDashboard() {
-  const router = useRouter();
+export function RevenueOverview() {
   const analytics = useQuery(api.financialLedger.getRevenueAnalytics);
   const allTransactions = useQuery(api.financialLedger.getAllLedgerEntries, {});
   const monthlyTrend = useQuery(api.financialLedger.getMonthlyRevenueTrend, { months: 6 });
@@ -127,10 +125,6 @@ export default function RevenueDashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => router.push('/admin/revenue/transactions')}>
-            <Receipt className="w-4 h-4 mr-1.5" />
-            Transactions
-          </Button>
           <Button size="sm" onClick={() => {
             if (!analytics) return;
             const report = {
@@ -489,9 +483,7 @@ export default function RevenueDashboard() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">Recent Transactions</CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs" onClick={() => router.push('/admin/revenue/transactions')}>
-              View All →
-            </Button>
+            <span className="text-xs text-muted-foreground">Last 8 transactions</span>
           </div>
         </CardHeader>
         <CardContent>

@@ -397,7 +397,7 @@ export default function AdminDashboard() {
                     <CardTitle className="text-base">Recent Activity</CardTitle>
                     <CardDescription>{recentActivity?.length || 0} transactions</CardDescription>
                   </div>
-                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => router.push('/admin/revenue')}>
+                  <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => router.push('/admin/billing')}>
                     View all
                   </Button>
                 </div>

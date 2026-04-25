@@ -12,19 +12,11 @@ import {
   IconFileInvoice,
   IconReceipt,
   IconMessageChatbot,
-  IconChartBar,
-  IconBook,
   IconCalendar,
   IconCurrencyDollar,
   IconInbox,
   IconMail,
-  IconTemplate,
-  IconSend,
-  IconActivity,
   IconBell,
-  IconCoins,
-  IconUserPlus,
-  IconGift,
 } from "@tabler/icons-react"
 
 import {
@@ -58,19 +50,9 @@ const navItems = [
         icon: IconUsers,
       },
       {
-        title: "Leads",
-        url: "/admin/leads",
-        icon: IconUserPlus,
-      },
-      {
         title: "User Management",
         url: "/admin/users",
         icon: IconUserCog,
-      },
-      {
-        title: "User Activity",
-        url: "/admin/activity",
-        icon: IconActivity,
       },
     ],
   },
@@ -80,34 +62,19 @@ const navItems = [
     color: "text-green-600",
     items: [
       {
-        title: "Revenue Dashboard",
-        url: "/admin/revenue",
-        icon: IconChartBar,
-      },
-      {
-        title: "Subscriptions",
-        url: "/admin/subscriptions",
+        title: "Billing",
+        url: "/admin/billing",
         icon: IconCreditCard,
       },
       {
-        title: "Credit Purchases",
-        url: "/admin/purchases",
-        icon: IconCoins,
-      },
-      {
         title: "Transactions",
-        url: "/admin/revenue/transactions",
+        url: "/admin/billing/transactions",
         icon: IconReceipt,
       },
       {
         title: "Invoices & Sales Orders",
         url: "/admin/invoices-and-pos",
         icon: IconFileInvoice,
-      },
-      {
-        title: "Referral Program",
-        url: "/admin/referrals",
-        icon: IconGift,
       },
     ],
   },
@@ -128,6 +95,11 @@ const navItems = [
         icon: IconInbox,
       },
       {
+        title: "Support Tickets",
+        url: "/admin/support-tickets",
+        icon: IconMessageChatbot,
+      },
+      {
         title: "Alerts",
         url: "/admin/alerts",
         icon: IconBell,
@@ -136,69 +108,15 @@ const navItems = [
   },
   {
     title: "Chatbot",
+    url: "/admin/chatbot-settings",
     icon: IconMessageChatbot,
     color: "text-indigo-600",
-    items: [
-      {
-        title: "Analytics",
-        url: "/admin/chatbot-analytics",
-        icon: IconChartBar,
-      },
-      {
-        title: "Settings",
-        url: "/admin/chatbot-settings",
-        icon: IconSettings,
-      },
-      {
-        title: "Knowledge Base",
-        url: "/admin/knowledge-base",
-        icon: IconBook,
-      },
-    ],
-  },
-  {
-    title: "AI Support",
-    icon: IconMessageChatbot,
-    color: "text-teal-600",
-    items: [
-      {
-        title: "Chat Reports",
-        url: "/admin/support-chat-reports",
-        icon: IconChartBar,
-      },
-      {
-        title: "Support Tickets",
-        url: "/admin/support-tickets",
-        icon: IconInbox,
-      },
-    ],
   },
   {
     title: "Email",
+    url: "/admin/email-management",
     icon: IconMail,
     color: "text-pink-600",
-    items: [
-      {
-        title: "Email Management",
-        url: "/admin/email-management",
-        icon: IconMail,
-      },
-      {
-        title: "Templates",
-        url: "/admin/email-templates",
-        icon: IconTemplate,
-      },
-      {
-        title: "Campaigns",
-        url: "/admin/email-management/campaigns",
-        icon: IconSend,
-      },
-      {
-        title: "Email Analytics",
-        url: "/admin/email-management/analytics",
-        icon: IconChartBar,
-      },
-    ],
   },
   {
     title: "Settings",
