@@ -183,7 +183,7 @@ const FAQ_TREE: FaqNode[] = [
       },
       {
         q: "Can I buy extra credits?",
-        a: "**Yes!** Credit top-up packs:\n\n- 1,000 credits - $9.90\n- 5,000 credits - $44.90\n- 25,000 credits - $199.00\n\nNo subscription required. Top-up credits **never expire**.",
+        a: "**Yes!** Credit top-up packs:\n\n- 1,000 credits - $9.90\n- 5,000 credits - $49.50\n- 25,000 credits - $247.50\n\nNo subscription required. Top-up credits **never expire**.",
         tags: "price buy purchase top up",
       },
       {

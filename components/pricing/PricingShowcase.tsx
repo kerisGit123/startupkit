@@ -8,6 +8,7 @@ import {
   Shield, ArrowRight, Star, Gem, Info,
 } from "lucide-react";
 import { SignedIn } from "@clerk/nextjs";
+import CreditTopUpCards from "@/components/pricing/CreditTopUpCards";
 // @ts-ignore -- moduleResolution mismatch; works at runtime with Next.js bundler
 import { CheckoutButton, SubscriptionDetailsButton, usePlans } from "@clerk/nextjs/experimental";
 import { CLERK_PLAN_SLUGS } from "@/lib/plan-config";
@@ -384,45 +385,17 @@ export default function PricingShowcase({
 
       {/* ── Credit Top-Up (only for logged-in users) ───────────────── */}
       {isLoggedIn && (
-        <div className="max-w-4xl mx-auto mb-16">
-          <div className="rounded-2xl border border-[#2a2a2a] bg-gradient-to-r from-[#111] via-[#141414] to-[#111] p-8">
-            <div className="text-center mb-6">
-              <h3 className="text-xl font-bold text-white mb-2 flex items-center justify-center gap-2">
-                <Gem className="w-5 h-5 text-emerald-400" />
-                Need More Credits?
-              </h3>
-              <p className="text-sm text-gray-400">
-                No subscription required. Buy credits anytime — they never expire.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {[
-                { credits: 1000, price: "$9.90", perCredit: "$0.0099", badge: null },
-                { credits: 5000, price: "$49.50", perCredit: "$0.0099", badge: null },
-                { credits: 25000, price: "$247.50", perCredit: "$0.0099", badge: null },
-              ].map((pkg) => (
-                <div
-                  key={pkg.credits}
-                  className="relative rounded-xl border border-[#2a2a2a] bg-[#0a0a0a] p-5 text-center transition-all hover:translate-y-[-2px]"
-                >
-                  {pkg.badge && (
-                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-500 text-white text-xs font-bold">
-                      {pkg.badge}
-                    </span>
-                  )}
-                  <p className="text-2xl font-bold text-white mb-1">
-                    {pkg.credits.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">credits</p>
-                  <p className="text-xl font-bold text-white mb-1">{pkg.price}</p>
-                  <p className="text-xs text-gray-500 mb-4">{pkg.perCredit}/credit</p>
-                  <button className="w-full py-2.5 rounded-lg bg-[#222] text-white text-sm font-medium hover:bg-[#2a2a2a] border border-[#333] transition-all">
-                    Buy Credits
-                  </button>
-                </div>
-              ))}
-            </div>
+        <div className="max-w-5xl mx-auto mb-16">
+          <div className="text-center mb-6">
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+              <Gem className="w-5 h-5 text-emerald-400" />
+              Need More Credits?
+            </h3>
+            <p className="text-sm text-gray-400">
+              No subscription required. Buy credits anytime — they never expire.
+            </p>
           </div>
+          <CreditTopUpCards />
         </div>
       )}
 
@@ -435,6 +408,7 @@ export default function PricingShowcase({
           </div>
         </>
       )}
+
     </div>
   );
 }

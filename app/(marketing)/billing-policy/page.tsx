@@ -160,15 +160,15 @@ export default function BillingPolicyPage() {
               </tr>
               <tr>
                 <Td>Standard</Td>
-                <Td>$44.90</Td>
+                <Td>$49.50</Td>
                 <Td>5,000</Td>
-                <Td>$0.00898 (Save 9%)</Td>
+                <Td>$0.0099</Td>
               </tr>
               <tr>
                 <Td>Pro</Td>
-                <Td>$199.00</Td>
+                <Td>$247.50</Td>
                 <Td>25,000</Td>
-                <Td>$0.00796 (Save 20%)</Td>
+                <Td>$0.0099</Td>
               </tr>
             </tbody>
           </Table>

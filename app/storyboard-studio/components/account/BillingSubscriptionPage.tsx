@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import {
   PanelLeftClose, PanelLeftOpen, ChevronDown, CreditCard,
   CheckCircle2, Zap, Building2, Download, Eye, Receipt,
-  Calendar, TrendingUp, Coins, Crown, Star, ArrowUpRight,
+  Calendar, TrendingUp, Coins, Crown, Star,
   Info, AlertCircle, Shield, Sparkles, CreditCard as CreditCardIcon,
   Loader2, FileText, DollarSign, Search, User,
 } from "lucide-react";
@@ -16,15 +16,11 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useCompany } from "@/hooks/useCompany";
 import { useSubscription } from "@/hooks/useSubscription";
-import { getCreditPackages } from "@/lib/credit-pricing";
+import CreditTopUpCards from "@/components/pricing/CreditTopUpCards";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
 import { TransferCreditsDialog } from "./TransferCreditsDialog";
 import { CreditTransactionHistory } from "./CreditTransactionHistory";
 import PricingShowcase from "@/components/pricing/PricingShowcase";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 
 interface BillingSubscriptionPageProps {
   sidebarOpen: boolean;
@@ -115,19 +111,8 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
     PLANS.find((p) => p.key === currentPlan) ??
     PLANS.find((p) => p.key === "free")!;
   const [activeTab, setActiveTab] = useState<"overview" | "credits" | "plans" | "invoices">("overview");
-  const creditPackages = getCreditPackages();
-
   const [invoiceType, setInvoiceType] = useState<"all" | "subscription" | "payment">("all");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<Id<"invoices"> | null>(null);
-
-  // Credit purchase confirmation dialog state
-  const [pendingPurchase, setPendingPurchase] = useState<{
-    tokens: number;
-    amount: number;
-    price: string;
-  } | null>(null);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   // Real credit data from Convex
   const creditBalance = useQuery(api.credits.getBalance, companyId ? { companyId } : "skip");
@@ -171,46 +156,6 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
     return { totalUsed: Math.round(used), totalAdded: Math.round(added) };
   }, [ledger]);
 
-  const handleBuyCredits = (tokens: number, amount: number, price: string) => {
-    if (!user || !companyId) {
-      alert("Please sign in to buy credits");
-      return;
-    }
-    // Open the confirmation dialog. Actual checkout fires only after the
-    // user explicitly agrees to the no-refund terms.
-    setAgreedToTerms(false);
-    setPendingPurchase({ tokens, amount, price });
-  };
-
-  const confirmPurchase = async () => {
-    if (!pendingPurchase || !companyId || !agreedToTerms) return;
-    setPurchaseLoading(true);
-    try {
-      const response = await fetch("/api/stripe/create-checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "credits",
-          tokens: pendingPurchase.tokens,
-          amount: pendingPurchase.amount,
-          companyId,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        alert("Failed to create checkout session");
-        setPurchaseLoading(false);
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-      alert("An error occurred. Please try again.");
-      setPurchaseLoading(false);
-    }
-  };
 
   const formatDate = (timestamp: number | undefined) => {
     if (!timestamp) return "N/A";
@@ -471,7 +416,7 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                   Buy Credits
                 </h2>
                 <p className="text-lg text-(--text-secondary) max-w-2xl mx-auto">
-                  Purchase credits anytime for additional AI generations. Top-up credits valid 12 months from purchase.
+                  Purchase credits anytime for additional AI generations. Top-up credits never expire.
                 </p>
                 <div className="mt-4 flex justify-center">
                   <TransferCreditsDialog defaultFromCompanyId={companyId ?? undefined} />
@@ -479,58 +424,8 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
               </div>
 
               {/* Credit Packages Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                {creditPackages.map((pkg, index) => (
-                  <div
-                    key={pkg.id}
-                    className={`relative group transition-all duration-300 ${
-                      pkg.highlighted
-                        ? "transform scale-105"
-                        : "hover:transform hover:scale-105"
-                    }`}
-                  >
-                    {/* Glow effect for highlighted package */}
-                    {pkg.highlighted && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 rounded-3xl blur-xl"></div>
-                    )}
-                    
-                    <div className={`relative bg-gradient-to-br from-(--bg-secondary) to-(--bg-tertiary) border rounded-3xl p-8 transition-all duration-300 ${
-                      pkg.highlighted
-                        ? "border-emerald-500/50 shadow-2xl"
-                        : "border-(--border-primary) hover:border-(--accent-purple)/50 hover:shadow-xl"
-                    }`}>
-                      {pkg.badge && (
-                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-bold rounded-full shadow-lg">
-                          {pkg.badge}
-                        </span>
-                      )}
-                      
-                      <div className="text-center mb-6">
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center mx-auto mb-4">
-                          <Coins className="w-8 h-8 text-emerald-400" />
-                        </div>
-                        <p className="text-3xl font-bold text-white mb-2">{pkg.credits}</p>
-                        <p className="text-(--text-secondary) uppercase tracking-wider text-sm mb-4">Credits</p>
-                        <p className="text-4xl font-bold text-white mb-2">{pkg.price}</p>
-                        <p className="text-emerald-400 text-sm">USD {(pkg.amountInCents / pkg.credits / 100).toFixed(2)}/credit</p>
-                      </div>
-                      
-                      <button
-                        onClick={() => handleBuyCredits(pkg.credits, pkg.amountInCents, pkg.price)}
-                        className={`w-full py-4 rounded-xl font-semibold transition-all duration-200 ${
-                          pkg.highlighted
-                            ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg"
-                            : "bg-(--accent-purple) text-white hover:bg-purple-600"
-                        }`}
-                      >
-                        <span className="flex items-center justify-center gap-2">
-                          Buy Now
-                          <ArrowUpRight className="w-4 h-4" />
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="max-w-5xl mx-auto">
+                <CreditTopUpCards />
               </div>
 
               {/* Transaction History */}
@@ -807,96 +702,6 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
         </div>
       </div>
 
-      {/* Credit purchase confirmation dialog — enforces explicit
-          agreement to the no-refund/no-cancel policy before opening
-          Stripe Checkout. The agreement also serves as evidence in
-          chargeback disputes. See docs/billing-policy.md §3.4. */}
-      <Dialog
-        open={!!pendingPurchase}
-        onOpenChange={(open) => {
-          if (!open && !purchaseLoading) {
-            setPendingPurchase(null);
-            setAgreedToTerms(false);
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg !bg-(--bg-primary) text-(--text-primary) border-(--border-primary)">
-          <DialogHeader>
-            <DialogTitle className="text-(--text-primary)">Confirm credit purchase</DialogTitle>
-            <DialogDescription className="text-(--text-secondary)">
-              Review the terms below before continuing to payment.
-            </DialogDescription>
-          </DialogHeader>
-
-          {pendingPurchase && (
-            <div className="space-y-4 py-2">
-              <div className="rounded-lg border border-(--border-primary) bg-(--bg-secondary) p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold">{pendingPurchase.tokens.toLocaleString()} credits</div>
-                    <div className="text-sm text-(--text-secondary)">One-time purchase</div>
-                  </div>
-                  <div className="text-2xl font-bold">{pendingPurchase.price}</div>
-                </div>
-              </div>
-
-              <ul className="space-y-2 text-sm text-(--text-secondary)">
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
-                  <span>Credits are added to your <strong>personal workspace</strong> immediately on payment.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-400 shrink-0" />
-                  <span>Credits <strong>never expire</strong> and are not affected by subscription changes.</span>
-                </li>
-                <li className="flex items-start gap-2 text-amber-300">
-                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                  <span><strong>Final sale:</strong> credit top-up purchases are non-refundable and cannot be cancelled once payment completes.</span>
-                </li>
-                <li className="flex items-start gap-2 text-amber-300">
-                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                  <span>Credits cannot be converted back to cash, transferred between users, or sold.</span>
-                </li>
-              </ul>
-
-              <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-(--border-primary) bg-(--bg-secondary) p-3 hover:bg-(--bg-tertiary) transition-colors">
-                <Checkbox
-                  checked={agreedToTerms}
-                  onCheckedChange={(checked) => setAgreedToTerms(checked === true)}
-                  className="mt-0.5"
-                />
-                <span className="text-sm">
-                  I understand that this purchase is <strong>final</strong> and cannot be refunded or cancelled. I agree to the{" "}
-                  <a href="/billing-policy" target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">billing policy</a>.
-                </span>
-              </label>
-            </div>
-          )}
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => {
-                setPendingPurchase(null);
-                setAgreedToTerms(false);
-              }}
-              disabled={purchaseLoading}
-              className="px-4 py-2 rounded-lg border border-(--border-primary) hover:bg-(--bg-secondary) disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={confirmPurchase}
-              disabled={!agreedToTerms || purchaseLoading}
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {purchaseLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Continue to payment
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
 );
 }
