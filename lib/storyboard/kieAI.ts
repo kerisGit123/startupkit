@@ -1,4 +1,5 @@
 import { ConvexHttpClient } from "convex/browser";
+import { Id } from "@/convex/_generated/dataModel";
 
 const KIE_AI_BASE = "https://api.kie.ai";
 
@@ -83,7 +84,7 @@ async function createPlaceholderRecord(params: {
   
   const result = await convex.mutation(api.storyboard.storyboardFiles.logUpload, uploadData);
   
-  return result.fileId;
+  return result;
 }
 
 export const STYLE_PRESETS = {
@@ -190,7 +191,7 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
   const createdFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
     companyId: params.companyId,
     userId: params.userId,
-    projectId: params.projectId,
+    projectId: params.projectId as Id<"storyboard_projects"> | undefined,
     category: "generated",
     filename: `ai-video-${Date.now()}.mp4`,
     fileType: "video",
@@ -198,7 +199,7 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
     size: 0,
     status: "generating",
     creditsUsed: requiredCredits,
-    defaultAI: kieAiId,
+    defaultAI: kieAiId as Id<"storyboard_kie_ai"> | undefined,
     model: params.model,
     prompt: params.prompt,
     tags: [],
@@ -383,10 +384,10 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   const createdFileId = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
     companyId: params.companyId,
     userId: params.userId,
-    projectId: params.projectId,
-    categoryId: params.categoryId,
+    projectId: params.projectId as Id<"storyboard_projects"> | undefined,
+    categoryId: params.categoryId as Id<"storyboard_elements"> | Id<"storyboard_items"> | Id<"storyboard_projects"> | null | undefined,
     creditsUsed: requiredCredits,
-    defaultAI: kieAiId, // Store which KIE AI key was used
+    defaultAI: kieAiId as Id<"storyboard_kie_ai"> | undefined, // Store which KIE AI key was used
     model: kieModel,   // Store the AI model used for generation
     prompt: fullPrompt, // Store the prompt for traceability
     category: "generated",

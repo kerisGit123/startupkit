@@ -3463,14 +3463,14 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
                 {paginatedTemplates.map(template => (
                   <PromptCard
                     key={template._id}
-                    template={template}
+                    template={template as Prompt}
                     onSelect={() => handleSelectPrompt(template.prompt, template._id)}
                     onEdit={() => {
-                      setEditingTemplate(template);
+                      setEditingTemplate(template as Prompt);
                       setIsCreateModalOpen(true);
                     }}
                     onDelete={() => handleDeleteTemplate(template._id)}
-                    onDuplicate={() => handleDuplicateTemplate(template)}
+                    onDuplicate={() => handleDuplicateTemplate(template as Prompt)}
                   />
                 ))}
               </div>
@@ -3479,14 +3479,14 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
                 {paginatedTemplates.map(template => (
                   <PromptListItem
                     key={template._id}
-                    template={template}
+                    template={template as Prompt}
                     onSelect={() => handleSelectPrompt(template.prompt, template._id)}
                     onEdit={() => {
-                      setEditingTemplate(template);
+                      setEditingTemplate(template as Prompt);
                       setIsCreateModalOpen(true);
                     }}
                     onDelete={() => handleDeleteTemplate(template._id)}
-                    onDuplicate={() => handleDuplicateTemplate(template)}
+                    onDuplicate={() => handleDuplicateTemplate(template as Prompt)}
                   />
                 ))}
               </div>

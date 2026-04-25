@@ -320,17 +320,6 @@ export const seedPricingModels = mutation({
         createdAt: timestamp,
         updatedAt: timestamp,
       },
-      {
-        modelId: "flux-2-pro",
-        modelName: "Flux 2 Pro",
-        modelType: "image" as const,
-        isActive: true,
-        pricingType: "fixed" as const,
-        creditCost: 5,
-        factor: 1.0,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
     ];
     
     // Check if models already exist
@@ -419,15 +408,6 @@ const DEFAULT_PRICING_MODELS = [
     }),
   },
   {
-    modelId: "flux-2/pro-text-to-image",
-    modelName: "Flux 2 Pro",
-    modelType: "image" as const,
-    isActive: true,
-    pricingType: "fixed" as const,
-    creditCost: 10,
-    factor: 1.2,
-  },
-  {
     modelId: "ideogram/character-edit",
     modelName: "Character Edit",
     modelType: "image" as const,
@@ -462,15 +442,6 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 4,
-    factor: 1.2,
-  },
-  {
-    modelId: "flux-2/flex-text-to-image",
-    modelName: "Flex Text to Image",
-    modelType: "image" as const,
-    isActive: true,
-    pricingType: "fixed" as const,
-    creditCost: 14,
     factor: 1.2,
   },
   {

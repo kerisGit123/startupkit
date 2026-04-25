@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 
 export async function POST(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Look up Convex user ID from Clerk ID if provided
-    let convexUserId = undefined;
+    let convexUserId: Id<"users"> | undefined = undefined;
     let userName = "Anonymous Visitor";
     let userEmail = "";
 

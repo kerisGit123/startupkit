@@ -33,13 +33,6 @@ export const MODEL_KNOWLEDGE = {
       strengths: "Cheapest model. Good for quick drafts and rough visualization.",
       bestFor: "Quick drafts, layout planning, rough concepts when budget matters",
     },
-    {
-      id: "flux-2/pro-text-to-image",
-      name: "Flux 2 Pro",
-      credits: "10",
-      strengths: "Excellent artistic composition. Strong with stylized and illustrated looks.",
-      bestFor: "Artistic/stylized frames, illustration style, graphic novel aesthetic",
-    },
   ],
   video: [
     {

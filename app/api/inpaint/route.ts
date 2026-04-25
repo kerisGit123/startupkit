@@ -6,9 +6,7 @@ export const maxDuration = 300;
 const KIE_API_KEY      = process.env.KIE_AI_API_KEY;
 const KIE_CREATE_URL   = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_POLL_URL     = "https://api.kie.ai/api/v1/jobs/recordInfo";
-// Nano-banana (flux-kontext) uses its own dedicated endpoint
-const KIE_FLUX_URL     = "https://api.kie.ai/api/v1/flux/kontext/generate";
-const KIE_FLUX_POLL    = "https://api.kie.ai/api/v1/flux/kontext/record-info";
+// (Flux endpoints removed — all models now use Market API)
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -136,33 +134,6 @@ async function pollKieMarket(taskId: string): Promise<string> {
   throw new Error("Kie.ai timed out after 300s");
 }
 
-// Poll flux/kontext/record-info — used only by nano-banana
-async function pollKieFlux(taskId: string): Promise<string> {
-  for (let i = 0; i < 60; i++) {
-    await sleep(5000);
-    let pollRes: Response;
-    try {
-      pollRes = await fetch(`${KIE_FLUX_POLL}?taskId=${taskId}`, {
-        headers: { "Authorization": `Bearer ${KIE_API_KEY}` },
-        signal: AbortSignal.timeout(10000),
-      });
-    } catch { console.warn(`[inpaint/flux] poll ${i+1} fetch error`); continue; }
-
-    if (!pollRes.ok) { console.warn(`[inpaint/flux] poll ${i+1} non-ok ${pollRes.status}`); continue; }
-
-    const pd = await pollRes.json();
-    const flag = pd?.data?.successFlag;
-    console.log(`[inpaint/flux] poll ${i+1}: flag=${flag}`);
-    if (flag === 1) {
-      const url = pd?.data?.response?.resultImageUrl ?? pd?.data?.resultImageUrl;
-      if (!url) throw new Error(`No resultImageUrl in: ${JSON.stringify(pd?.data)}`);
-      return url;
-    }
-    if (flag === 2 || flag === 3) throw new Error(`Kie.ai flux failed (${flag}): ${pd?.data?.errorMessage ?? "unknown"}`);
-  }
-  throw new Error("Kie.ai flux timed out after 300s");
-}
-
 // ── Model handlers (all via Kie.ai) ──────────────────────────────────────────
 
 // Qwen z-image via Market API (/jobs/createTask)
@@ -256,29 +227,6 @@ async function runNanoBanana(image: string, prompt: string): Promise<string> {
   console.log("[inpaint/nano-banana] create:", JSON.stringify(data));
   if (data?.code !== 200) throw new Error(`Kie.ai nano-banana: ${data?.msg ?? JSON.stringify(data)}`);
   return pollKieMarket(data.data.taskId);
-}
-
-// flux-kontext-pro via dedicated flux endpoint
-async function runFluxKontextPro(image: string, prompt: string): Promise<string> {
-  const imageUrl = await uploadImageToTemp(image);
-  
-  const requestBody = {
-    model: "flux-kontext-pro",
-    prompt,
-    inputImage: imageUrl,
-    outputFormat: "png"
-  };
-  
-  const res = await fetch(KIE_FLUX_URL, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await res.json();
-  console.log("[inpaint/flux-kontext-pro] create:", JSON.stringify(data));
-  if (data?.code !== 200) throw new Error(`Kie.ai flux-kontext-pro: ${data?.msg ?? JSON.stringify(data)}`);
-  return pollKieFlux(data.data.taskId);
 }
 
 // Dedicated polling for OpenAI 4o
@@ -608,7 +556,7 @@ async function uploadImageToAlternativeHost(base64DataUrl: string): Promise<stri
   
   console.log("[inpaint] All image hosting services failed for Grok");
   console.log("[inpaint] Grok API may be temporarily unavailable or has specific requirements");
-  throw new Error("Grok model is currently unavailable. Please try a different model like OpenAI 4o, Nano Banana, or Flux Kontext Pro.");
+  throw new Error("Grok model is currently unavailable. Please try a different model like OpenAI 4o or Nano Banana.");
 }
 
 // Custom polling for Grok that handles the specific response format
@@ -670,83 +618,6 @@ async function pollGrokWithRetry(taskId: string): Promise<string> {
     }
   }
   throw new Error("Grok timed out after 300s");
-}
-
-// Try FLUX inpainting with different model names
-async function runFluxFill(image: string, mask: string, prompt: string): Promise<string> {
-  const imageUrl = await uploadImageToTemp(image);
-  const maskUrl = await uploadImageToTemp(mask);
-  
-  // Try different FLUX model names that KIE might support
-  const modelNames = ["flux-inpaint", "flux-fill", "flux.1-fill", "flux.2-fill", "flux-dev-inpaint"];
-  
-  for (const modelName of modelNames) {
-    const requestBody = {
-      model: modelName,
-      input: { 
-        prompt, 
-        image_urls: [imageUrl], 
-        mask_url: maskUrl, 
-        output_format: "png"
-      },
-    };
-    
-    console.log(`[inpaint/flux-fill] Trying model: ${modelName}`);
-    console.log(`[inpaint/flux-fill] Request body:`, JSON.stringify(requestBody, null, 2));
-    
-    const res = await fetch(KIE_CREATE_URL, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(30000),
-    });
-    const data = await res.json();
-    console.log(`[inpaint/flux-fill] Response for ${modelName}:`, JSON.stringify(data, null, 2));
-    
-    if (data?.code === 200) {
-      return pollKieMarket(data.data.taskId);
-    }
-    
-    // If this model name doesn't work, try the next one
-    console.log(`[inpaint/flux-fill] Model ${modelName} failed, trying next...`);
-  }
-  
-  // If all FLUX models fail, fall back to flux-kontext-pro with mask
-  console.log("[inpaint/flux-fill] All FLUX models failed, falling back to flux-kontext-pro");
-  return await runFluxKontextProWithMask(image, mask, prompt);
-}
-
-// flux-kontext-pro with mask support (if it supports it)
-async function runFluxKontextProWithMask(image: string, mask: string, prompt: string): Promise<string> {
-  const imageUrl = await uploadImageToTemp(image);
-  const maskUrl = await uploadImageToTemp(mask);
-  
-  const requestBody = {
-    model: "flux-kontext-pro",
-    prompt,
-    inputImage: imageUrl,
-    outputFormat: "png",
-    maskImage: maskUrl, // Try adding mask support
-  };
-  
-  console.log("[inpaint/flux-kontext-pro-with-mask] Request body:", JSON.stringify(requestBody, null, 2));
-  
-  const res = await fetch(KIE_FLUX_URL, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await res.json();
-  console.log("[inpaint/flux-kontext-pro-with-mask] Response:", JSON.stringify(data, null, 2));
-  
-  if (data?.code === 200) {
-    return pollKieFlux(data.data.taskId);
-  } else {
-    // If mask doesn't work, fall back to regular flux-kontext-pro
-    console.log("[inpaint/flux-kontext-pro-with-mask] Mask not supported, using regular flux-kontext-pro");
-    return await runFluxKontextPro(image, prompt);
-  }
 }
 
 // Qwen Image Edit via Market API (/jobs/createTask)
@@ -850,102 +721,6 @@ async function runSeedream45(image: string, prompt: string): Promise<string> {
   }
 }
 
-// Flux 2 Flex Image-to-Image via Market API (/jobs/createTask)
-async function runFlux2FlexImageToImage(image: string, prompt: string): Promise<string> {
-  let requestBody: any;
-  
-  if (image.startsWith('data:')) {
-    requestBody = {
-      model: "flux-2/flex-image-to-image",
-      input: { 
-        prompt, 
-        image: image,
-        output_format: "png",
-        image_size: "square_hd",
-        image_resolution: "1K",
-        max_images: 1
-      },
-    };
-    console.log('[inpaint/flux2flex-img] Using base64 image input');
-  } else {
-    const imageUrl = await uploadImageToTemp(image);
-    requestBody = {
-      model: "flux-2/flex-image-to-image",
-      input: { 
-        prompt, 
-        image_url: imageUrl, 
-        output_format: "png",
-        image_size: "square_hd",
-        image_resolution: "1K",
-        max_images: 1
-      },
-    };
-    console.log('[inpaint/flux2flex-img] Using URL image input');
-  }
-  
-  const res = await fetch(KIE_CREATE_URL, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await res.json();
-  
-  if (data?.code === 200) {
-    return pollKieMarket(data.data.recordId);
-  } else {
-    throw new Error(`Flux 2 Flex Image-to-Image failed: ${data?.msg || 'Unknown error'}`);
-  }
-}
-
-// Flux 2 Flex Text-to-Image via Market API (/jobs/createTask)
-async function runFlux2FlexTextToImage(image: string, prompt: string): Promise<string> {
-  let requestBody: any;
-  
-  if (image.startsWith('data:')) {
-    requestBody = {
-      model: "flux-2/flex-text-to-image",
-      input: { 
-        prompt, 
-        image: image,
-        output_format: "png",
-        image_size: "square_hd",
-        image_resolution: "1K",
-        max_images: 1
-      },
-    };
-    console.log('[inpaint/flux2flex-txt] Using base64 image input');
-  } else {
-    const imageUrl = await uploadImageToTemp(image);
-    requestBody = {
-      model: "flux-2/flex-text-to-image",
-      input: { 
-        prompt, 
-        image_url: imageUrl, 
-        output_format: "png",
-        image_size: "square_hd",
-        image_resolution: "1K",
-        max_images: 1
-      },
-    };
-    console.log('[inpaint/flux2flex-txt] Using URL image input');
-  }
-  
-  const res = await fetch(KIE_CREATE_URL, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await res.json();
-  
-  if (data?.code === 200) {
-    return pollKieMarket(data.data.recordId);
-  } else {
-    throw new Error(`Flux 2 Flex Text-to-Image failed: ${data?.msg || 'Unknown error'}`);
-  }
-}
-
 // Seedream V4 Text-to-Image via Market API (/jobs/createTask)
 async function runSeedreamV4(image: string, prompt: string): Promise<string> {
   let requestBody: any;
@@ -1020,7 +795,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
     
-    const { image, mask, prompt, model = "flux-kontext-pro", referenceImages } = body;
+    const { image, mask, prompt, model = "nano-banana-2", referenceImages } = body;
     
     // Respect user's model selection
     const effectiveModel = model;
@@ -1060,14 +835,6 @@ export async function POST(req: NextRequest) {
           console.log('[inpaint] Calling runNanoBanana...');
           resultUrl = await runNanoBanana(image, prompt);     
           break;
-        case "flux-kontext-pro": 
-          console.log('[inpaint] Calling runFluxKontextPro...');
-          resultUrl = await runFluxKontextPro(image, prompt); 
-          break;
-        case "flux-fill":       
-          console.log('[inpaint] Calling runFluxFill...');
-          resultUrl = await runFluxFill(image, mask ?? "", prompt); 
-          break;
         case "openai-4o":       
           console.log('[inpaint] Calling runOpenAI4o...');
           resultUrl = await runOpenAI4o(image, mask ?? "", prompt); 
@@ -1081,9 +848,9 @@ export async function POST(req: NextRequest) {
             console.log('[inpaint] Suggesting alternative models for user');
             // Return a helpful error message instead of crashing
             return NextResponse.json({ 
-              error: "Grok model is currently unavailable. Please try: OpenAI 4o (best for masks), Nano Banana, Flux Kontext Pro, or other models.",
+              error: "Grok model is currently unavailable. Please try: OpenAI 4o (best for masks), Nano Banana, or other models.",
               suggestion: "Try OpenAI 4o for rectangle inpainting with masks, or Nano Banana for general inpainting.",
-              availableModels: ["openai-4o", "nano-banana", "flux-kontext-pro", "flux-fill", "qwen", "seedream-5.0-lite", "qwen-z-image"]
+              availableModels: ["openai-4o", "nano-banana", "qwen", "seedream-5.0-lite", "qwen-z-image"]
             }, { status: 503 });
           }
           break;
@@ -1103,21 +870,9 @@ export async function POST(req: NextRequest) {
           console.log('[inpaint] Calling runSeedream45...');
           resultUrl = await runSeedream45(image, prompt);            
           break;
-        case "flux-2-flex-image-to-image":            
-          console.log('[inpaint] Calling runFlux2FlexImageToImage...');
-          resultUrl = await runFlux2FlexImageToImage(image, prompt);            
-          break;
-        case "flux-2-flex-text-to-image":            
-          console.log('[inpaint] Calling runFlux2FlexTextToImage...');
-          resultUrl = await runFlux2FlexTextToImage(image, prompt);            
-          break;
         case "seedream-v4":            
           console.log('[inpaint] Calling runSeedreamV4...');
           resultUrl = await runSeedreamV4(image, prompt);            
-          break;
-        case "flux-2/pro-image-to-image":            
-          console.log('[inpaint] Calling runFlux2ProImageToImage...');
-          resultUrl = await runFlux2ProImageToImage(image, prompt, referenceImages);            
           break;
         case "nano-banana-2":            
           console.log('[inpaint] Calling runNanoBanana2...');
@@ -1176,41 +931,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// New model functions with correct JSON structure for remix models
-async function runFlux2ProImageToImage(image: string, prompt: string, referenceImages?: string[]): Promise<string> {
-  const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
-  const refImageUrls = referenceImages ? await Promise.all(referenceImages.map(ref => 
-    ref.startsWith('data:') ? uploadImageToTemp(ref) : ref
-  )) : [];
-  
-  const requestBody = {
-    model: "flux-2/pro-image-to-image",
-    input: {
-      prompt,
-      image_url: imageUrl,
-      reference_image_urls: refImageUrls,
-      rendering_speed: "BALANCED",
-      style: "AUTO",
-      expand_prompt: true,
-      image_size: "square_hd",
-      num_images: "1",
-      strength: 0.8
-    }
-  };
-  
-  const res = await fetch(KIE_CREATE_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${KIE_API_KEY}`
-    },
-    body: JSON.stringify(requestBody)
-  });
-  
-  const result = await res.json();
-  return result.data?.outputImageUrl || result.data?.image_url || '';
-}
-
+// Model functions with correct JSON structure for remix models
 async function runNanoBanana2(image: string, prompt: string, referenceImages?: string[]): Promise<string> {
   const imageUrl = image.startsWith('data:') ? await uploadImageToTemp(image) : image;
   const refImageUrls = referenceImages ? await Promise.all(referenceImages.map(ref => 

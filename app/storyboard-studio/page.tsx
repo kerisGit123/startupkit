@@ -98,49 +98,50 @@ export default function StoryboardPage() {
   useEffect(() => {
     if (storyboardItems) {
       setShots(storyboardItems.map(item => {
+        const a = item as any;
         return {
           id: item._id,
-          scene: item.scene || 1,
+          scene: a.scene || 1,
           shot: item.order || 1,
           description: item.description || "",
-          ert: item.ert || "5 sec",
-          shotSize: item.shotSize || "Medium shot",
-          perspective: item.perspective || "Eye-level shot",
-          movement: item.movement || "Static",
-          equipment: item.equipment || "Handheld camera",
-          focalLength: item.focalLength || "35mm",
-          aspectRatio: item.aspectRatio || "16:9",
-          cast: item.cast || [],
-          location: item.location || "",
-          voiceOver: item.voiceOver || "",
-          action: item.action || "",
+          ert: a.ert || "5 sec",
+          shotSize: a.shotSize || "Medium shot",
+          perspective: a.perspective || "Eye-level shot",
+          movement: a.movement || "Static",
+          equipment: a.equipment || "Handheld camera",
+          focalLength: a.focalLength || "35mm",
+          aspectRatio: a.aspectRatio || "16:9",
+          cast: a.cast || [],
+          location: a.location || "",
+          voiceOver: a.voiceOver || "",
+          action: a.action || "",
           imageUrl: item.imageUrl,
           videoUrl: item.videoUrl,
           imagePrompt: item.imagePrompt,
           videoPrompt: item.videoPrompt,
           tags: item.tags || [],
           notes: item.notes || "",
-          comments: item.comments || [],
+          comments: a.comments || [],
           order: item.order,
           title: item.title,
           duration: item.duration,
-          dialogue: item.dialogue,
-          camera: item.camera,
-          sound: item.sound,
-          props: item.props,
-          wardrobe: item.wardrobe,
-          makeup: item.makeup,
-          editing: item.editing,
-          vfx: item.vfx,
-          colorGrade: item.colorGrade,
-          music: item.music,
-          sfx: item.sfx,
-          transition: item.transition,
-          specialInstructions: item.specialInstructions,
-          mood: item.mood,
-          lighting: item.lighting,
-          bgDescription: item.bgDescription,
-          characters: item.characters,
+          dialogue: a.dialogue,
+          camera: a.camera,
+          sound: a.sound,
+          props: a.props,
+          wardrobe: a.wardrobe,
+          makeup: a.makeup,
+          editing: a.editing,
+          vfx: a.vfx,
+          colorGrade: a.colorGrade,
+          music: a.music,
+          sfx: a.sfx,
+          transition: a.transition,
+          specialInstructions: a.specialInstructions,
+          mood: a.mood,
+          lighting: a.lighting,
+          bgDescription: a.bgDescription,
+          characters: a.characters,
         };
       }));
     }
@@ -224,9 +225,9 @@ export default function StoryboardPage() {
       
       // Use client-side mutation like FrameCard
       await logFile({
-        orgId: currentCompanyId || null, // Use null instead of undefined for optional fields
-        userId: organization?.id ? null : (user?.id ?? null), // Only set userId if no org
-        projectId: null, // Main page uploads don't belong to specific projects
+        orgId: currentCompanyId ?? undefined, // Use undefined for optional fields
+        userId: organization?.id ? undefined : (user?.id ?? undefined), // Only set userId if no org
+        projectId: undefined as any, // Main page uploads don't belong to specific projects
         // ✅ Remove companyId - calculated on server from auth context
         r2Key,
         filename: file.name,
@@ -502,7 +503,7 @@ export default function StoryboardPage() {
           <ProjectsDashboard
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-            projects={convexProjects?.map(p => ({
+            projects={(convexProjects?.map(p => ({
               id: p._id,
               name: p.name,
               type: "board" as const,
@@ -516,7 +517,7 @@ export default function StoryboardPage() {
               favourite: p.isFavorite ?? false,
               settings: p.settings,
               imageUrl: p.imageUrl, // ✅ Add imageUrl field
-            })) ?? projects}
+            })) ?? projects) as Project[]}
             onProjectsChange={handleProjectsChange}
             onOpenProject={handleOpenProject}
             onCreateConvexProject={handleCreateConvexProject}

@@ -4,9 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 const KIE_API_KEY      = process.env.KIE_AI_API_KEY;
 const KIE_CREATE_URL   = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_POLL_URL     = "https://api.kie.ai/api/v1/jobs/recordInfo";
-// Nano-banana (flux-kontext) uses its own dedicated endpoint
-const KIE_FLUX_URL     = "https://api.kie.ai/api/v1/flux/kontext/generate";
-const KIE_FLUX_POLL    = "https://api.kie.ai/api/v1/flux/kontext/record-info";
+// (Flux endpoints removed — all models now use Market API)
 
 // Helper: sleep
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
@@ -78,39 +76,6 @@ async function pollKieMarket(taskId: string): Promise<string> {
   throw new Error("Kie.ai timed out after 300s");
 }
 
-// Poll flux/kontext/record-info — used only by nano-banana
-async function pollKieFlux(taskId: string): Promise<string> {
-  for (let i = 0; i < 60; i++) {
-    await sleep(5000);
-    let pollRes: Response;
-    try {
-      pollRes = await fetch(`${KIE_FLUX_POLL}?taskId=${taskId}`, {
-        method: "GET",
-        headers: { "Authorization": `Bearer ${KIE_API_KEY}` },
-        signal: AbortSignal.timeout(30000),
-      });
-    } catch (e) {
-      console.error("[closer-look] flux poll error:", e);
-      throw new Error("Flux poll failed");
-    }
-    const pd = await pollRes.json();
-    const state = pd?.data?.state;
-    const flag = pd?.data?.flag;
-    console.log(`[closer-look] flux poll ${i + 1}: flag=${flag} state=${state}`);
-    if (flag === 1 || state === "success") {
-      const url = pd?.data?.resultImageUrl ?? pd?.data?.url;
-      if (!url) throw new Error(`No result URL in: ${JSON.stringify(pd?.data)}`);
-      return url;
-    }
-    if (flag === 2 || flag === 3 || state === "fail") {
-      const reason = pd?.data?.failMsg ?? pd?.data?.errorMessage ?? pd?.data?.failReason ?? pd?.data?.reason ?? "unknown";
-      console.error("[closer-look] Kie.ai flux task failed. Full response:", JSON.stringify(pd?.data, null, 2));
-      throw new Error(`Kie.ai flux task failed: ${reason}`);
-    }
-  }
-  throw new Error("Kie.ai flux timed out after 300s");
-}
-
 // ── Model handlers (all via Kie.ai) ──────────────────────────────────────────
 
 // google/nano-banana via Market API (/jobs/createTask)
@@ -136,28 +101,6 @@ async function runNanoBanana(image: string, prompt: string, aspectRatio: string 
   console.log("[closer-look/nano-banana] create:", JSON.stringify(data));
   if (data?.code !== 200) throw new Error(`Kie.ai nano-banana: ${data?.msg ?? JSON.stringify(data)}`);
   return pollKieMarket(data.data.taskId);
-}
-
-// flux-kontext-pro via dedicated flux endpoint
-async function runFluxKontextPro(image: string, prompt: string, aspectRatio: string | null): Promise<string> {
-  const imageUrl = await uploadImageToTemp(image);
-  const body: any = { model: "flux-kontext-pro", prompt, inputImage: imageUrl, outputFormat: "jpeg" };
-  
-  // Add aspect ratio if supported (flux may not support explicit aspect ratio)
-  if (aspectRatio) {
-    console.log(`[closer-look/flux-kontext-pro] Requested aspect ratio: ${aspectRatio}`);
-  }
-  
-  const res = await fetch(KIE_FLUX_URL, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await res.json();
-  console.log("[closer-look/flux-kontext-pro] create:", JSON.stringify(data));
-  if (data?.code !== 200) throw new Error(`Kie.ai flux-kontext-pro: ${data?.msg ?? JSON.stringify(data)}`);
-  return pollKieFlux(data.data.taskId);
 }
 
 async function runOpenAI4o(image: string, prompt: string, aspectRatio: string | null): Promise<string> {
@@ -232,7 +175,6 @@ export async function POST(req: NextRequest) {
     let resultUrl: string;
     switch (model) {
       case "nano-banana":      resultUrl = await runNanoBanana(image, prompt, aspectRatio);     break;
-      case "flux-kontext-pro": resultUrl = await runFluxKontextPro(image, prompt, aspectRatio); break;
       case "openai-4o":        resultUrl = await runOpenAI4o(image, prompt, aspectRatio);       break;
       case "grok":             resultUrl = await runGrok(image, prompt, aspectRatio);            break;
       default: return NextResponse.json({ error: `Unknown model: ${model}` }, { status: 400 });

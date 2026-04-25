@@ -569,15 +569,6 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     factor: 1.2,
   },
   {
-    modelId: "flux-2/pro-text-to-image",
-    modelName: "Flux 2 Pro",
-    modelType: "image",
-    isActive: true,
-    pricingType: "fixed",
-    creditCost: 10,
-    factor: 1.2,
-  },
-  {
     modelId: "recraft/crisp-upscale",
     modelName: "Crisp Upscale",
     modelType: "image",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 export async function POST(request: NextRequest) {
   console.log('[storyboard-kie-callback] Route hit!');
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
       
       // Update the file record with taskId
       await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
-        fileId,
+        fileId: fileId as Id<"storyboard_files">,
         taskId: taskId,
         status: 'processing',
       });

@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 // ── Centralized Model Configuration ─────────────────────────────────────────────────────
 
 type ModelCapability = 'text-to-image' | 'image-to-image' | 'multi-reference' | 'single-reference' | 'text-only';
-type ModelFamily = 'seedream' | 'flux' | 'nano-banana' | 'gpt-image' | 'qwen' | 'grok' | 'ideogram' | 'topaz';
+type ModelFamily = 'seedream' | 'nano-banana' | 'gpt-image' | 'qwen' | 'grok' | 'ideogram' | 'topaz';
 
 interface KieModelConfig {
   frontendModel: string;
@@ -140,58 +140,6 @@ const MODEL_CONFIGS: Record<string, KieModelConfig> = {
     }
   },
   
-  // Flux Family
-  'flux-2-flex-text-to-image': {
-    frontendModel: 'flux-2-flex-text-to-image',
-    kieApiModel: 'flux-2/flex-text-to-image',
-    displayName: 'Flux 2 Flex',
-    family: 'flux',
-    capabilities: ['text-to-image', 'text-only'],
-    refMode: 'text',
-    supportsImages: false,
-    supportsMultipleReferences: false,
-    supportsTextOnly: true,
-    requestTemplate: {
-      required: ['prompt'],
-      optional: ['aspect_ratio'],
-      excluded: ['image_urls']
-    }
-  },
-  
-  'flux-2-flex-image-to-image': {
-    frontendModel: 'flux-2-flex-image-to-image',
-    kieApiModel: 'flux-2/flex-image-to-image',
-    displayName: 'Flux 2 Flex',
-    family: 'flux',
-    capabilities: ['image-to-image', 'single-reference'],
-    refMode: 'single',
-    supportsImages: true,
-    supportsMultipleReferences: false,
-    supportsTextOnly: false,
-    requestTemplate: {
-      required: ['prompt'],
-      optional: ['image_urls', 'aspect_ratio'],
-      excluded: []
-    }
-  },
-  
-  'flux-kontext-pro': {
-    frontendModel: 'flux-kontext-pro',
-    kieApiModel: 'flux-kontext-pro',
-    displayName: 'Flux Kontext',
-    family: 'flux',
-    capabilities: ['image-to-image', 'multi-reference'],
-    refMode: 'multi',
-    supportsImages: true,
-    supportsMultipleReferences: true,
-    supportsTextOnly: false,
-    requestTemplate: {
-      required: ['prompt'],
-      optional: ['image_urls', 'aspect_ratio'],
-      excluded: []
-    }
-  },
-  
   // Qwen Family
   'qwen-z-image': {
     frontendModel: 'qwen-z-image',
@@ -279,24 +227,6 @@ const MODEL_CONFIGS: Record<string, KieModelConfig> = {
     }
   },
   
-  // Other models
-  'flux-fill': {
-    frontendModel: 'flux-fill',
-    kieApiModel: 'black-forest-labs/flux-1.1-fill',
-    displayName: 'Flux Fill',
-    family: 'flux',
-    capabilities: ['image-to-image', 'single-reference'],
-    refMode: 'single',
-    supportsImages: true,
-    supportsMultipleReferences: false,
-    supportsTextOnly: false,
-    requestTemplate: {
-      required: ['prompt'],
-      optional: ['image_urls', 'aspect_ratio'],
-      excluded: []
-    }
-  },
-  
   'character-edit': {
     frontendModel: 'character-edit',
     kieApiModel: 'ideogram/character-edit',
@@ -328,23 +258,6 @@ const MODEL_CONFIGS: Record<string, KieModelConfig> = {
       required: ['prompt', 'image_url'],
       optional: ['reference_image_urls', 'rendering_speed', 'style', 'expand_prompt', 'image_size', 'num_images', 'strength'],
       excluded: ['image_urls', 'aspect_ratio', 'quality']
-    }
-  },
-  
-  'flux-2-pro-image-to-image': {
-    frontendModel: 'flux-2-pro-image-to-image',
-    kieApiModel: 'flux-2/pro-image-to-image',
-    displayName: 'Flux 2 Pro Image-to-Image',
-    family: 'flux',
-    capabilities: ['image-to-image', 'single-reference'],
-    refMode: 'single',
-    supportsImages: true,
-    supportsMultipleReferences: false,
-    supportsTextOnly: false,
-    requestTemplate: {
-      required: ['prompt'],
-      optional: ['image_urls', 'aspect_ratio'],
-      excluded: []
     }
   },
   
@@ -647,8 +560,7 @@ if (KIE_API_KEY && KIE_API_KEY.startsWith('eyJ')) {
 }
 const KIE_CREATE_URL   = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_POLL_URL     = "https://api.kie.ai/api/v1/jobs/recordInfo";
-const KIE_FLUX_URL     = "https://api.kie.ai/api/v1/flux/kontext/generate";
-const KIE_FLUX_POLL    = "https://api.kie.ai/api/v1/flux/kontext/record-info";
+// (Flux endpoints removed — all models now use Market API)
 const KIE_GPT4O_URL    = "https://api.kie.ai/api/v1/gpt4o-image/generate";
 const KIE_GPT4O_POLL   = "https://api.kie.ai/api/v1/gpt4o-image/record-info";
 const KIE_CHARACTER_URL = "https://api.kie.ai/api/v1/ideogram-character/createTask";
@@ -798,33 +710,6 @@ async function pollMarket(taskId: string): Promise<string> {
     }
   }
   throw new Error("AI generation is taking too long. Please try again or use a different AI model.");
-}
-
-// Poll /flux/kontext/record-info — Flux Kontext models
-async function pollFlux(taskId: string): Promise<string> {
-  for (let i = 0; i < 36; i++) { // 3 minutes instead of 1 minute
-    await sleep(5000);
-    try {
-      const res = await fetch(`${KIE_FLUX_POLL}?taskId=${taskId}`, {
-        headers: { "Authorization": `Bearer ${KIE_API_KEY}` },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) { console.warn(`[img-proxy/flux] poll ${i+1} non-ok ${res.status}`); continue; }
-      const pd = await res.json();
-      const flag = pd?.data?.successFlag;
-      console.log(`[img-proxy/flux] poll ${i+1}: flag=${flag}`);
-      if (flag === 1) {
-        const url = pd?.data?.response?.resultImageUrl ?? pd?.data?.resultImageUrl;
-        if (!url) throw new Error(`No resultImageUrl in flux response: ${JSON.stringify(pd?.data)}`);
-        return url;
-      }
-      if (flag === 2 || flag === 3) throw new Error(`Flux task failed: ${pd?.data?.errorMessage ?? "unknown"}`);
-    } catch (err) {
-      if (err instanceof Error && err.message.startsWith("Flux task")) throw err;
-      console.warn(`[img-proxy/flux] poll ${i+1} error:`, err);
-    }
-  }
-  throw new Error("Flux KIE timed out after 5 minutes");
 }
 
 // Poll /gpt4o-image/record-info — GPT-4o image models
@@ -980,46 +865,6 @@ async function pollCharacter(taskId: string): Promise<string> {
   throw new Error("Kie.ai timed out after 300s");
 }
 
-// Flux Kontext Pro — dedicated endpoint
-async function callFluxKontextPro(
-  prompt: string,
-  imageUrl: string | null,
-  refUrls: string[],
-  aspectRatio?: string
-): Promise<string> {
-  // Flux Kontext: canvas = inputImage (the scene to edit).
-  // Reference image URL is injected into the prompt so the model knows what to apply.
-  const sceneUrl = imageUrl ?? null;
-
-  let finalPrompt = prompt;
-  if (refUrls.length > 0) {
-    // Tell Flux Kontext exactly what the reference looks like by including its URL in the prompt
-    finalPrompt = `${prompt}. Use the style/item from this reference image: ${refUrls[0]}`;
-  }
-
-  const requestBody: Record<string, unknown> = {
-    model: "flux-kontext-pro",
-    prompt: finalPrompt,
-    outputFormat: "png",
-  };
-  if (sceneUrl) requestBody.inputImage = sceneUrl;
-  if (aspectRatio) requestBody.aspectRatio = aspectRatio;
-
-  console.log("[img-proxy] Flux Kontext Pro request, inputImage (scene):", sceneUrl?.substring(0, 60), "refInjected:", refUrls.length > 0);
-
-  const res = await fetch(KIE_FLUX_URL, {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify(requestBody),
-    signal: AbortSignal.timeout(30000),
-  });
-  const data = await res.json();
-  console.log("[img-proxy] Flux Kontext Pro response:", JSON.stringify(data));
-
-  if (data?.code !== 200) throw new Error(`Flux Kontext Pro: ${data?.msg ?? JSON.stringify(data)}`);
-  return pollFlux(data.data.taskId);
-}
-
 // GPT-4o API - force 1:1 for image-to-image generation
 function gpt4oSize(aspectRatio?: string): string {
   console.log("[img-proxy] GPT-4o aspectRatio input:", JSON.stringify(aspectRatio), "-> forcing to 1:1 for image-to-image");
@@ -1133,9 +978,7 @@ export async function POST(req: NextRequest) {
     // Route to the correct KIE endpoint based on model
     let resultUrl: string;
 
-    if (kieModel === "flux-kontext-pro") {
-      resultUrl = await callFluxKontextPro(prompt, imageUrl, refUrls, aspectRatio);
-    } else if (kieModel === "gpt-image" || kieModel === "gpt-image/1.5-image-to-image" || kieModel === "gpt-image/1.5-text-to-image" || frontendModel === "gpt-image-1-1" || 
+    if (kieModel === "gpt-image" || kieModel === "gpt-image/1.5-image-to-image" || kieModel === "gpt-image/1.5-text-to-image" || frontendModel === "gpt-image-1-1" ||
                kieModel === "qwen/image-edit") {
       console.log("[img-proxy] Routing to GPT-4o for rectangle mask models");
       console.log("[img-proxy] kieModel:", kieModel);
@@ -1311,126 +1154,6 @@ export async function POST(req: NextRequest) {
       }
       
       console.log("[img-proxy] Recraft Crisp final result URL:", resultUrl);
-    } else if (kieModel === "flux-2/pro-image-to-image") {
-      // Flux 2 Pro uses input_urls array format
-      console.log("[img-proxy] Flux 2 Pro model detected");
-      console.log("[img-proxy] Flux 2 Pro imageUrl:", imageUrl?.substring(0, 60) + "...");
-      console.log("[img-proxy] Flux 2 Pro refUrls:", refUrls);
-      
-      // Combine background image and reference images into input_urls array
-      const inputUrls = [imageUrl, ...refUrls];
-      
-      const requestBody = {
-        model: "flux-2/pro-image-to-image",
-        input: {
-          input_urls: inputUrls,
-          prompt,
-          aspect_ratio: "1:1",
-          resolution: "1K"
-        }
-      };
-      
-      console.log("[img-proxy] Flux 2 Pro request body:", JSON.stringify(requestBody, null, 2));
-      
-      const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
-        },
-        body: JSON.stringify(requestBody)
-      });
-      
-      const result = await response.json();
-      console.log("[img-proxy] Flux 2 Pro response:", result);
-      
-      // Check if we got a task ID that needs polling
-      if (result.data?.taskId || result.data?.recordId) {
-        const taskId = result.data?.taskId ?? result.data?.recordId;
-        console.log("[img-proxy] Flux 2 Pro got task ID:", taskId, "polling...");
-        
-        try {
-          resultUrl = await pollMarket(taskId);
-          console.log("[img-proxy] Flux 2 Pro polling successful, URL:", resultUrl);
-        } catch (pollError) {
-          console.error("[img-proxy] Flux 2 Pro polling failed:", pollError);
-          throw new Error(`Flux 2 Pro polling failed: ${pollError instanceof Error ? pollError.message : 'Unknown error'}`);
-        }
-      } else {
-        // Direct URL response (unlikely but handle it)
-        console.log("[img-proxy] Flux 2 Pro checking for direct URL response...");
-        resultUrl = result.data?.outputImageUrl || result.data?.image_url || '';
-        console.log("[img-proxy] Flux 2 Pro direct URL:", resultUrl);
-      }
-      
-      if (!resultUrl) {
-        console.error("[img-proxy] Flux 2 Pro: No result URL obtained");
-        console.error("[img-proxy] Full response:", JSON.stringify(result, null, 2));
-        throw new Error("Flux 2 Pro: No result URL obtained from API");
-      }
-      
-      console.log("[img-proxy] Flux 2 Pro final result URL:", resultUrl);
-    } else if (kieModel === "flux-2/flex-image-to-image") {
-      // Flux 2 Flex uses input_urls array format
-      console.log("[img-proxy] Flux 2 Flex model detected");
-      console.log("[img-proxy] Flux 2 Flex imageUrl:", imageUrl?.substring(0, 60) + "...");
-      console.log("[img-proxy] Flux 2 Flex refUrls:", refUrls);
-      
-      // Combine background image and reference images into input_urls array
-      const inputUrls = [imageUrl, ...refUrls];
-      
-      const requestBody = {
-        model: "flux-2/flex-image-to-image",
-        callBackUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/callback/flux-flex`,
-        input: {
-          input_urls: inputUrls,
-          prompt,
-          aspect_ratio: "1:1",
-          resolution: "1K",
-          nsfw_checker: false
-        }
-      };
-      
-      console.log("[img-proxy] Flux 2 Flex request body:", JSON.stringify(requestBody, null, 2));
-      
-      const response = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.KIE_AI_API_KEY}`
-        },
-        body: JSON.stringify(requestBody)
-      });
-      
-      const result = await response.json();
-      console.log("[img-proxy] Flux 2 Flex response:", result);
-      
-      // Check if we got a task ID that needs polling
-      if (result.data?.taskId || result.data?.recordId) {
-        const taskId = result.data?.taskId ?? result.data?.recordId;
-        console.log("[img-proxy] Flux 2 Flex got task ID:", taskId, "polling...");
-        
-        try {
-          resultUrl = await pollMarket(taskId);
-          console.log("[img-proxy] Flux 2 Flex polling successful, URL:", resultUrl);
-        } catch (pollError) {
-          console.error("[img-proxy] Flux 2 Flex polling failed:", pollError);
-          throw new Error(`Flux 2 Flex polling failed: ${pollError instanceof Error ? pollError.message : 'Unknown error'}`);
-        }
-      } else {
-        // Direct URL response (unlikely but handle it)
-        console.log("[img-proxy] Flux 2 Flex checking for direct URL response...");
-        resultUrl = result.data?.outputImageUrl || result.data?.image_url || '';
-        console.log("[img-proxy] Flux 2 Flex direct URL:", resultUrl);
-      }
-      
-      if (!resultUrl) {
-        console.error("[img-proxy] Flux 2 Flex: No result URL obtained");
-        console.error("[img-proxy] Full response:", JSON.stringify(result, null, 2));
-        throw new Error("Flux 2 Flex: No result URL obtained from API");
-      }
-      
-      console.log("[img-proxy] Flux 2 Flex final result URL:", resultUrl);
     } else if (kieModel === "nano-banana-2") {
       // Nano Banana 2 uses special image_input array format
       console.log("[img-proxy] Nano Banana 2 model detected");

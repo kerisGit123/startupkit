@@ -7,6 +7,7 @@
 
 import convex from "@/lib/ConvexClient";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 /**
  * 📁 STORE FILE METADATA
@@ -42,6 +43,9 @@ export async function storeFileMetadata(params: {
       ...params,
       // Ensure arrays are properly handled
       tags: params.tags || [],
+      // Cast string IDs to Convex Id types
+      projectId: params.projectId as Id<"storyboard_projects"> | undefined,
+      sceneId: params.sceneId as Id<"storyboard_items"> | undefined,
     });
     
     return result;
@@ -70,7 +74,12 @@ export async function updateFileMetadata(params: {
   isFavorite?: boolean;
 }) {
   try {
-    const result = await convex.mutation(api.storyboard.fileMetadataHandler.updateFileMetadata, params);
+    const result = await convex.mutation(api.storyboard.fileMetadataHandler.updateFileMetadata, {
+      ...params,
+      fileId: params.fileId as Id<"storyboard_files">,
+      projectId: params.projectId as Id<"storyboard_projects"> | undefined,
+      sceneId: params.sceneId as Id<"storyboard_items"> | undefined,
+    });
     
     return result;
   } catch (error) {
@@ -89,7 +98,10 @@ export async function deleteFileMetadata(params: {
   deleteFromR2?: boolean; // Optional: also delete from R2
 }) {
   try {
-    const result = await convex.mutation(api.storyboard.fileMetadataHandler.deleteFileMetadata, params);
+    const result = await convex.mutation(api.storyboard.fileMetadataHandler.deleteFileMetadata, {
+      ...params,
+      fileId: params.fileId as Id<"storyboard_files">,
+    });
     
     return result;
   } catch (error) {
@@ -110,7 +122,11 @@ export async function logFileUsage(params: {
   projectId?: string;
 }) {
   try {
-    const result = await convex.mutation(api.storyboard.fileMetadataHandler.logFileUsage, params);
+    const result = await convex.mutation(api.storyboard.fileMetadataHandler.logFileUsage, {
+      ...params,
+      fileId: params.fileId as Id<"storyboard_files">,
+      projectId: params.projectId as Id<"storyboard_projects"> | undefined,
+    });
     
     return result;
   } catch (error) {

@@ -188,7 +188,7 @@ export function POEditDialog({ poId, isOpen, onClose, onSuccess }: POEditDialogP
           notes,
           paymentTerms,
           dueDate: dueDate ?? undefined,
-          status,
+          status: status as "draft" | "issued" | "approved" | "received" | "cancelled",
         },
         clerkUserId: user.id,
       });

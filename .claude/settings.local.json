@@ -132,7 +132,10 @@
       "mcp__claude_ai_Clerk__list_clerk_sdk_snippets",
       "mcp__claude_ai_Clerk__clerk_sdk_snippet",
       "Bash(grep -r CheckoutButtonProps node_modules/@clerk/types/ --include=*.d.ts -l)",
-      "Bash(node -e \"try { require\\(''@clerk/nextjs/experimental''\\); console.log\\(''OK''\\); } catch\\(e\\) { console.log\\(''ERR:'', e.message\\); }\")"
+      "Bash(node -e \"try { require\\(''@clerk/nextjs/experimental''\\); console.log\\(''OK''\\); } catch\\(e\\) { console.log\\(''ERR:'', e.message\\); }\")",
+      "Bash(ls d:/gemini/startupkit/lib/convex-client*)",
+      "Bash(grep -rl \"/api/chat\\\\b\\\\|n8nWebhookUrl\\\\|ChatWidget\" d:/gemini/startupkit/ --include=*.tsx --include=*.ts)",
+      "Bash(ls -la /d/gemini/startupkit/app/\\\\\\(marketing\\\\\\)/billing-policy/)"
     ],
     "additionalDirectories": [
       "d:\\gemini\\startupkit\\.next"

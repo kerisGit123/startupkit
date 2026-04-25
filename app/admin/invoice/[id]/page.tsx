@@ -274,7 +274,7 @@ export default function InvoiceDocumentPage() {
                     : (invoicePOConfig.defaultTerm || "N/A")}
                 </div>
                 <div>SALESMAN</div>
-                <div>{invoice.createdBy || "ADMIN"}</div>
+                <div>{(invoice as any).createdBy || "ADMIN"}</div>
               </div>
             </div>
           </div>

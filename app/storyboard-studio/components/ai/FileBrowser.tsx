@@ -556,7 +556,7 @@ export function FileBrowser({
                         const isImage     = file.fileType === "image";
                         const isVideo     = file.fileType === "video";
                         const isAnalysis  = file.fileType === "analysis";
-                        const publicUrl   = isAnalysis ? "" : getFileUrl(file.r2Key);
+                        const publicUrl   = isAnalysis ? "" : getFileUrl(file.r2Key ?? "");
                         const isDeleting  = deletingId === file._id;
 
                         return (

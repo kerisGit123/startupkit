@@ -15,7 +15,7 @@ Storytica is an AI-powered storyboard generator for filmmakers, content creators
 - Export as PDF with visuals, individual PNG/JPG frames, video animatics, or script-only text
 
 ## AI models available (15+)
-**Image models:** Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Character Edit, Nano Banana Edit
+**Image models:** Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Character Edit, Nano Banana Edit
 **Video models:** Seedance 1.5 Pro, Seedance 2.0 (480p/720p), Kling 3.0 Motion, Veo 3.1
 **Audio/Music:** AI music generation (create, extend, cover)
 **Other:** AI Analyze (image/video/audio), Prompt Enhance, Text-to-Speech

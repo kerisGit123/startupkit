@@ -95,15 +95,6 @@ export class PricingCalculator {
             duration_multipliers: { '4s': 1, '8s': 2, '12s': 4 }
           }
         },
-        'flux-2-pro': {
-          modelId: 'flux-2-pro',
-          modelName: 'Flux 2 Pro',
-          modelType: 'image',
-          isActive: true,
-          pricingType: 'fixed',
-          creditCost: 5,
-          factor: 1.0
-        },
         'bytedance/seedance-2': {
           modelId: 'bytedance/seedance-2',
           modelName: 'Seedance 2.0',
@@ -279,13 +270,6 @@ export class PricingCalculator {
           modelType: 'image',
           isActive: true,
           pricingType: 'formula'
-        },
-        {
-          modelId: 'flux-2-pro',
-          modelName: 'Flux 2 Pro',
-          modelType: 'image',
-          isActive: true,
-          pricingType: 'fixed'
         },
         {
           modelId: 'seedance-1.5-pro',

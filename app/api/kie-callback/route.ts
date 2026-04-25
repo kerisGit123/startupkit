@@ -665,6 +665,7 @@ export async function POST(request: NextRequest) {
           if (ownerPlan === 'free') {
             await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
               fileId: typedFileId,
+              status: 'completed',
               isShared: true,
               sharedAt: Date.now(),
               sharedBy: fileRecord.userId || 'system',

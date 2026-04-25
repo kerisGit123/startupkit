@@ -42,9 +42,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Load project context (authenticated via Clerk) ──────────────
+    console.log("[ai-director] Step 1: Loading project", projectId);
     const project = await fetchQuery(api.storyboard.projects.get, {
       id: projectId as any,
     });
+    console.log("[ai-director] Step 2: Project loaded", project?.name);
     if (!project) {
       return new Response(
         JSON.stringify({ error: "Project not found" }),
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     const companyId = (project as any).companyId || orgId || clerkUserId;
 
-    // Get element summary for system prompt
+    console.log("[ai-director] Step 3: Loading elements");
     const elements = await fetchQuery(
       api.storyboard.storyboardElements.listByProject,
       { projectId: projectId as any }

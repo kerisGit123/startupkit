@@ -398,7 +398,7 @@ async function handleN8nCallback(data: any, request: NextRequest, corsHeaders: R
           thumbnailUrl: "",   // Required field
           companyId: data.companyId || ''  // Add companyId to elements
         });
-        savedElements.push(savedElement);
+        if (savedElement) savedElements.push(savedElement);
         console.log(`✅ DEBUG: Successfully saved element: ${element.name}`);
       } catch (saveError) {
         console.error(`❌ DEBUG: Failed to save element ${element.name}:`, saveError);

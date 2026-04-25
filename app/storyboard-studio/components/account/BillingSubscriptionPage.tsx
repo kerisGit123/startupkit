@@ -657,16 +657,16 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
                             <span className="text-(--text-secondary)">Subtotal:</span>
                             <span className="font-medium text-white">{formatCurrency(selectedInvoice.subtotal, selectedInvoice.currency)}</span>
                           </div>
-                          {selectedInvoice.tax > 0 && (
+                          {(selectedInvoice.tax ?? 0) > 0 && (
                             <div className="flex justify-between text-sm">
                               <span className="text-(--text-secondary)">Tax{selectedInvoice.taxRate ? ` (${selectedInvoice.taxRate}%)` : ""}:</span>
-                              <span className="font-medium text-white">{formatCurrency(selectedInvoice.tax, selectedInvoice.currency)}</span>
+                              <span className="font-medium text-white">{formatCurrency(selectedInvoice.tax ?? 0, selectedInvoice.currency)}</span>
                             </div>
                           )}
-                          {selectedInvoice.discount > 0 && (
+                          {(selectedInvoice.discount ?? 0) > 0 && (
                             <div className="flex justify-between text-sm">
                               <span className="text-(--text-secondary)">Discount:</span>
-                              <span className="font-medium text-emerald-400">-{formatCurrency(selectedInvoice.discount, selectedInvoice.currency)}</span>
+                              <span className="font-medium text-emerald-400">-{formatCurrency(selectedInvoice.discount ?? 0, selectedInvoice.currency)}</span>
                             </div>
                           )}
                           <div className="flex justify-between text-lg font-bold border-t border-(--border-primary) pt-2">

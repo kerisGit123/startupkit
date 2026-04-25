@@ -500,7 +500,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     } | null,
     processingProgress: 0
   });
-  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "flux-kontext-pro" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("character-edit");
+  const [inpaintModel, setInpaintModel] = useState<"nano-banana" | "nano-banana-2" | "openai-4o" | "grok" | "qwen-z-image" | "ideogram" | "character-edit" | "character-remix">("character-edit");
   const [inpaintPrompt, setInpaintPrompt] = useState("");
   const [showBrushModelDropdown, setShowBrushModelDropdown] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
@@ -555,7 +555,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [imageReferenceImages, setImageReferenceImages] = useState<string[]>([]);
   const [imageInpaintPrompt, setImageInpaintPrompt] = useState("");
   const [imageUseCase, setImageUseCase] = useState<string>("image-composition");
-  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "nano-banana-2" | "nano-banana-edit" | "nano-banana-pro" | "flux-kontext-pro" | "flux-fill" | "openai-4o" | "gpt-image" | "grok" | "grok-text" | "qwen-z-image" | "qwen" | "qwen-text" | "seedream-5.0-lite" | "seedream-5.0-lite-text" | "seedream-5.0-lite-image" | "seedream-4.5" | "seedream-v4" | "flux-2-flex-image-to-image" | "flux-2-flex-text-to-image" | "flux-2-pro-image-to-image" | "flux-2-pro-text-to-image" | "ideogram-reframe" | "character-remix" | "topaz-upscale">("nano-banana-edit");
+  const [imageInpaintModel, setImageInpaintModel] = useState<"nano-banana" | "nano-banana-2" | "nano-banana-edit" | "nano-banana-pro" | "openai-4o" | "gpt-image" | "grok" | "grok-text" | "qwen-z-image" | "qwen" | "qwen-text" | "seedream-5.0-lite" | "seedream-5.0-lite-text" | "seedream-5.0-lite-image" | "seedream-4.5" | "seedream-v4" | "ideogram-reframe" | "character-remix" | "topaz-upscale">("nano-banana-edit");
   const [imageRectangle, setImageRectangle] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [imageIsRectangleVisible, setImageIsRectangleVisible] = useState(true);
@@ -1734,7 +1734,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       bestModelLabel: "GPT Image 1.5",     
       models: [
         { value: "gpt-image", label: "GPT Image 1.5", sub: "Reliable" },
-        { value: "flux-kontext-pro", label: "Flux Kontext", sub: "Context-aware" }, 
         { value: "ideogram-reframe", label: "Ideogram Reframe", sub: "Resize expert" },
         { value: "character-remix", label: "Character Remix", sub: "Character expert" }
       ] 
@@ -1748,7 +1747,6 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       models: [
         { value: "seedream-5.0-lite-image", label: "Seedream 5 Lite", sub: "Multi-reference expert" }, 
         { value: "nano-banana-2", label: "Nano Banana 2", sub: "Google search integrated" },
-        { value: "flux-kontext-pro", label: "Flux Kontext Pro", sub: "Multi-reference expert" },
         { value: "gpt-image", label: "GPT Image 1.5", sub: "World knowledge" }
       ] 
     },
@@ -1756,11 +1754,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       label: "Text to Image", 
       emoji: "✍️", 
       refMode: "text",   
-      bestModel: "flux-2-flex-text-to-image", 
-      bestModelLabel: "Flux 2 Flex",     
+      bestModel: "nano-banana-2",
+      bestModelLabel: "Nano Banana 2",
       models: [
-        { value: "flux-2-flex-text-to-image", label: "Flux 2 Flex", sub: "Fast" }, 
-        { value: "flux-2-pro-text-to-image", label: "Flux 2 Pro", sub: "High quality" }, 
         { value: "nano-banana-2", label: "Nano Banana 2", sub: "Enhanced" },
         { value: "seedream-5.0-lite-text", label: "Seedream 5 Lite", sub: "Detailed" }
       ] 
@@ -1827,7 +1823,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       
       // Handle specific model failures gracefully
       if (errorMessage.includes("Grok") || errorMessage.includes("grok")) {
-        setImageInpaintError("Grok model is temporarily unavailable. Please try again with a different model (Nano Banana, Flux Kontext Pro, or OpenAI 4o).");
+        setImageInpaintError("Grok model is temporarily unavailable. Please try again with a different model (Nano Banana or OpenAI 4o).");
       } else if (errorMessage.includes("no image URL found") || errorMessage.includes("500")) {
         setImageInpaintError("The model encountered an issue generating your image. Please try again or select a different model.");
       } else if (errorMessage.includes("timeout") || errorMessage.includes("401") || errorMessage.includes("403")) {
@@ -5529,7 +5525,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId, // ✅ Save storyboard item ID as categoryId
+                              categoryId: activeShotId as any, // ✅ Save storyboard item ID as categoryId
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -5659,7 +5655,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId,
+                              categoryId: activeShotId as any,
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -5780,7 +5776,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId,
+                              categoryId: activeShotId as any,
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -5906,7 +5902,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId,
+                              categoryId: activeShotId as any,
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -6044,7 +6040,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId,
+                              categoryId: activeShotId as any,
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -6152,7 +6148,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId,
+                              categoryId: activeShotId as any,
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -6254,7 +6250,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             const fileId = await logUpload({
                               companyId: companyId || "", userId: user?.id || "", projectId: projectId || undefined,
                               category: "generated", filename: `cover-song-${Date.now()}.mp3`, fileType: "music", mimeType: "audio/mpeg",
-                              size: 0, status: "generating", creditsUsed, categoryId: activeShotId, sourceUrl: undefined, tags: [],
+                              size: 0, status: "generating", creditsUsed, categoryId: activeShotId as any, sourceUrl: undefined, tags: [],
                               uploadedBy: user?.id || "", model: aiModel, prompt: extractedPrompt, aspectRatio: undefined, defaultAI: currentDefaultAI as any,
                               metadata: { modelId: aiModel, modelName: "Cover Song", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
                             });
@@ -6305,7 +6301,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                             const fileId = await logUpload({
                               companyId: companyId || "", userId: user?.id || "", projectId: projectId || undefined,
                               category: "generated", filename: `extend-music-${Date.now()}.mp3`, fileType: "music", mimeType: "audio/mpeg",
-                              size: 0, status: "generating", creditsUsed, categoryId: activeShotId, sourceUrl: undefined, tags: [],
+                              size: 0, status: "generating", creditsUsed, categoryId: activeShotId as any, sourceUrl: undefined, tags: [],
                               uploadedBy: user?.id || "", model: aiModel, prompt: extractedPrompt, aspectRatio: undefined, defaultAI: currentDefaultAI as any,
                               metadata: { modelId: aiModel, modelName: "Extend Music", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
                             });
@@ -6374,7 +6370,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId,
+                              categoryId: activeShotId as any,
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -6484,7 +6480,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               size: 0,
                               status: "generating",
                               creditsUsed: creditsUsed,
-                              categoryId: activeShotId,
+                              categoryId: activeShotId as any,
                               sourceUrl: undefined,
                               tags: [],
                               uploadedBy: user?.id || "",
@@ -7096,7 +7092,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 size: fileData?.size || 0,
                 status: "ready",
                 creditsUsed: 0,
-                categoryId: activeShotId || undefined,
+                categoryId: (activeShotId || undefined) as any,
                 sourceUrl: imageUrl,
                 r2Key: fileData?.r2Key || undefined,
                 tags: ["upload-override"],

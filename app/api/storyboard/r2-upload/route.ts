@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       try {
         // Get project to verify organization access
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-        const project = await convex.query(api.storyboard.projects.get, { projectId });
+        const project = await convex.query(api.storyboard.projects.get, { id: projectId });
         
         if (!project) {
           return NextResponse.json({ error: "Project not found" }, { status: 404 });

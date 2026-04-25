@@ -497,7 +497,7 @@ export default function StoryboardWorkspacePage() {
     // Apply frame status filter
     if (filters.frameStatus.length > 0) {
       filtered = filtered.filter(item => 
-        item.frameStatus && filters.frameStatus.includes(item.frameStatus)
+        item.frameStatus && filters.frameStatus.includes(item.frameStatus as "draft" | "completed" | "in-progress")
       );
     }
 
@@ -935,7 +935,9 @@ export default function StoryboardWorkspacePage() {
         updateItem({
           id: itemId as Id<"storyboard_items">,
           elementNames: {
-            ...items?.find(item => item._id === itemId)?.elementNames,
+            characters: items?.find(item => item._id === itemId)?.elementNames?.characters ?? [],
+            environments: items?.find(item => item._id === itemId)?.elementNames?.environments ?? [],
+            props: items?.find(item => item._id === itemId)?.elementNames?.props ?? [],
             [type + 's']: items?.find(item => item._id === itemId)?.elementNames?.[type + 's']?.filter((_, i) => i !== index) || []
           }
         });
@@ -1629,7 +1631,7 @@ export default function StoryboardWorkspacePage() {
                         onBuildStoryboard={() => setShowBuildDialog(true)}
                         onSetStoryboardUrl={(imageUrl) => handleSetStoryboardUrl(imageUrl)}
                         onClearStoryboardUrl={() => handleClearStoryboardUrl()}
-                        projectStoryboardUrl={project?.imageUrl}
+                        projectStoryboardUrl={project?.imageUrl ?? undefined}
                         onDialogChange={(isOpen) => {
                           setItemsWithDialogOpen(prev => {
                             const next = new Set(prev);

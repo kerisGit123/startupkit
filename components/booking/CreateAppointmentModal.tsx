@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -98,11 +99,11 @@ export function CreateAppointmentModal({
 
       // Create appointment
       await createAppointment({
-        clientId,
-        clientName: formData.clientName,
-        clientEmail: formData.clientEmail,
-        clientPhone: formData.clientPhone,
-        eventTypeId: formData.eventTypeId || undefined,
+        contactId: clientId as unknown as Id<"contacts">,
+        contactName: formData.clientName,
+        contactEmail: formData.clientEmail,
+        contactPhone: formData.clientPhone,
+        eventTypeId: (formData.eventTypeId || undefined) as Id<"event_types"> | undefined,
         date: formData.date,
         startTime: formData.startTime,
         endTime,

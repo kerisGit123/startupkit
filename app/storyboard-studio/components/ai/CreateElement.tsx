@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Search, Plus, Package, Check, AlertCircle, Loader2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 // Simple debounce utility (avoids lodash dependency)
 function debounce<T extends (...args: any[]) => any>(fn: T, ms: number) {
   let timer: ReturnType<typeof setTimeout>;
@@ -35,12 +36,12 @@ export function CreateElement({ projectId, onElementCreated, onClose }: CreateEl
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   
-  const createElement = useMutation(api.elements.create);
-  const incrementUsage = useMutation(api.elements.incrementUsage);
-  const findReusableElement = useQuery(api.elements.findReusableElement, {
+  const createElement = useMutation(api.storyboard.storyboardElements.create);
+  const incrementUsage = useMutation(api.storyboard.storyboardElements.incrementUsage);
+  const findReusableElement = useQuery(api.storyboard.storyboardElements.findReusableElement, {
     elementName: elementName.trim(),
     elementType,
-    projectId
+    projectId: projectId as Id<"storyboard_projects">
   });
 
   // Debounced search for existing elements
@@ -81,7 +82,7 @@ export function CreateElement({ projectId, onElementCreated, onClose }: CreateEl
     setLoading(true);
     try {
       await createElement({
-        projectId,
+        projectId: projectId as Id<"storyboard_projects">,
         name: elementName.trim(),
         type: elementType,
         thumbnailUrl: "/api/placeholder/element-thumbnail",

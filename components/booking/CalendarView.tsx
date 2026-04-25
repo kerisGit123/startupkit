@@ -286,7 +286,7 @@ export function CalendarView({ onDateSelect, onAppointmentClick, onDateClick }: 
                                 {apt.startTime} - {apt.endTime}
                               </div>
                               <div className="truncate opacity-90">
-                                {apt.clientName}
+                                {apt.contactName}
                               </div>
                               {apt.notes && (
                                 <div className="text-[10px] truncate opacity-75 italic">

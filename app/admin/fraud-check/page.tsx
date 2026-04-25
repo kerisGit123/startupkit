@@ -210,14 +210,14 @@ function ProfileSection({
   async function handleSuspend(suspend: boolean) {
     if (!profile || profile.found === false) return;
     const action = suspend ? "suspend" : "unsuspend";
-    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} account ${profile.user.clerkUserId}? This will immediately block their access.`)) return;
+    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} account ${profile.user?.clerkUserId}? This will immediately block their access.`)) return;
     setSuspendLoading(true);
     setSuspendResult(null);
     try {
       const res = await fetch("/api/admin/suspend-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId: profile.user.clerkUserId, suspend }),
+        body: JSON.stringify({ targetUserId: profile.user?.clerkUserId, suspend }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -246,8 +246,8 @@ function ProfileSection({
   }
 
   const cutoff = timeRangeDays === 0 ? 0 : Date.now() - timeRangeDays * 24 * 60 * 60 * 1000;
-  const filteredLedger = profile.recentLedger.filter((r: any) => r.createdAt >= cutoff);
-  const filteredStripe = profile.stripeIds.filter((s: any) => s.createdAt >= cutoff);
+  const filteredLedger = (profile.recentLedger ?? []).filter((r: any) => r.createdAt >= cutoff);
+  const filteredStripe = (profile.stripeIds ?? []).filter((s: any) => s.createdAt >= cutoff);
 
   // Categorized abnormal areas — turn flat flags into domain buckets so
   // reviewers can spot WHICH aspect of the account looks fishy.
@@ -343,7 +343,7 @@ function ProfileSection({
         if (pageIdx > 20) break; // safety cap — dispute evidence shouldn't need more
       }
 
-      const filename = `dispute-evidence-${profile.user.email ?? profile.user.clerkUserId}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `dispute-evidence-${profile.user?.email ?? profile.user?.clerkUserId ?? "unknown"}-${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(filename);
     } catch (e) {
       console.error("PDF export failed", e);
@@ -357,9 +357,9 @@ function ProfileSection({
 
   const verdict = profile.verdict;
   const verdictStyles =
-    verdict.level === "strong"
+    verdict?.level === "strong"
       ? { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-900", accent: "text-emerald-700", Icon: ShieldCheck }
-      : verdict.level === "moderate"
+      : verdict?.level === "moderate"
       ? { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-900", accent: "text-amber-700", Icon: ShieldAlert }
       : { bg: "bg-rose-50", border: "border-rose-300", text: "text-rose-900", accent: "text-rose-700", Icon: ShieldX };
   const { Icon: VerdictIcon } = verdictStyles;
@@ -428,22 +428,22 @@ function ProfileSection({
               <div className="flex-1">
                 <div className="flex items-baseline gap-3 mb-1">
                   <span className={`text-3xl font-bold ${verdictStyles.text}`}>
-                    {verdict.score}<span className="text-lg text-zinc-500">/100</span>
+                    {verdict?.score}<span className="text-lg text-zinc-500">/100</span>
                   </span>
                   <span className={`text-lg font-semibold ${verdictStyles.text}`}>
-                    {verdict.label}
+                    {verdict?.label}
                   </span>
                 </div>
                 <p className={`text-sm ${verdictStyles.text} mb-3`}>
-                  {verdict.advice}
+                  {verdict?.advice}
                 </p>
-                {verdict.reasons.length > 0 && (
+                {(verdict?.reasons?.length ?? 0) > 0 && (
                   <details className="text-sm">
                     <summary className={`cursor-pointer font-medium ${verdictStyles.accent}`}>
-                      How the score was calculated ({verdict.reasons.length} factors)
+                      How the score was calculated ({verdict?.reasons?.length ?? 0} factors)
                     </summary>
                     <ul className="mt-2 space-y-1">
-                      {verdict.reasons.map((r, i) => (
+                      {(verdict?.reasons ?? []).map((r, i) => (
                         <li key={i} className={`${verdictStyles.text}`}>
                           <span className={`font-mono font-bold ${r.sign === "+" ? "text-emerald-700" : "text-rose-700"}`}>
                             {r.sign}{r.points}
@@ -496,28 +496,28 @@ function ProfileSection({
 
           {/* User header */}
           <Card title="User">
-            <Row label="Email" value={profile.user.email ?? "—"} />
-            <Row label="Name" value={profile.user.fullName ?? "—"} />
-            <Row label="Clerk userId" value={profile.user.clerkUserId} mono />
+            <Row label="Email" value={profile.user?.email ?? "—"} />
+            <Row label="Name" value={profile.user?.fullName ?? "—"} />
+            <Row label="Clerk userId" value={profile.user?.clerkUserId ?? "—"} mono />
             <Row
               label="Signed up"
-              value={`${new Date(profile.user.signedUpAt).toISOString()} (${profile.user.accountAgeDays} days ago)`}
+              value={`${new Date(profile.user?.signedUpAt ?? 0).toISOString()} (${profile.user?.accountAgeDays ?? 0} days ago)`}
             />
             <Row
               label="Owned workspaces"
-              value={profile.workspaces.length.toString()}
+              value={(profile.workspaces?.length ?? 0).toString()}
             />
           </Card>
 
           {/* Red flags */}
-          {profile.redFlags.length > 0 && (
+          {(profile.redFlags?.length ?? 0) > 0 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
               <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-700" />
-                Red flags ({profile.redFlags.length})
+                Red flags ({profile.redFlags?.length ?? 0})
               </h3>
               <ul className="space-y-1 text-sm text-amber-800">
-                {profile.redFlags.map((flag, i) => (
+                {(profile.redFlags ?? []).map((flag, i) => (
                   <li key={i}>• {flag}</li>
                 ))}
               </ul>
@@ -525,14 +525,14 @@ function ProfileSection({
           )}
 
           {/* Positive signals */}
-          {profile.positiveSignals.length > 0 && (
+          {(profile.positiveSignals?.length ?? 0) > 0 && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
               <h3 className="font-semibold text-emerald-900 mb-2 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-700" />
                 Positive signals — useful as dispute evidence
               </h3>
               <ul className="space-y-1 text-sm text-emerald-800">
-                {profile.positiveSignals.map((signal, i) => (
+                {(profile.positiveSignals ?? []).map((signal, i) => (
                   <li key={i}>• {signal}</li>
                 ))}
               </ul>
@@ -543,39 +543,39 @@ function ProfileSection({
           <Card title="Billing summary">
             <Row
               label="Current balance (all workspaces)"
-              value={`${profile.summary.currentBalanceTotal.toLocaleString()} credits`}
+              value={`${(profile.summary?.currentBalanceTotal ?? 0).toLocaleString()} credits`}
             />
             <Row
               label="Total purchased"
-              value={`${profile.summary.totalPurchasedCredits.toLocaleString()} credits / $${(profile.summary.totalPurchasedAmountCents / 100).toFixed(2)} (${profile.summary.purchaseCount} purchases)`}
+              value={`${(profile.summary?.totalPurchasedCredits ?? 0).toLocaleString()} credits / $${((profile.summary?.totalPurchasedAmountCents ?? 0) / 100).toFixed(2)} (${profile.summary?.purchaseCount ?? 0} purchases)`}
             />
             <Row
               label="Total subscription grants"
-              value={`${profile.summary.totalSubscriptionCredits.toLocaleString()} credits`}
+              value={`${(profile.summary?.totalSubscriptionCredits ?? 0).toLocaleString()} credits`}
             />
             <Row
               label="Total credits used"
-              value={`${profile.summary.totalUsedCredits.toLocaleString()} credits (${profile.summary.usagePercent}% of granted+purchased) — across ${profile.summary.usageEventCount} generations`}
+              value={`${(profile.summary?.totalUsedCredits ?? 0).toLocaleString()} credits (${profile.summary?.usagePercent ?? 0}% of granted+purchased) — across ${profile.summary?.usageEventCount ?? 0} generations`}
             />
             <Row
               label="Total refunded"
-              value={`${profile.summary.totalRefundedCredits.toLocaleString()} credits (${profile.summary.refundEventCount} refunds)`}
+              value={`${(profile.summary?.totalRefundedCredits ?? 0).toLocaleString()} credits (${profile.summary?.refundEventCount ?? 0} refunds)`}
             />
             <Row
               label="Files generated"
-              value={profile.summary.fileCount.toString()}
+              value={(profile.summary?.fileCount ?? 0).toString()}
             />
-            {profile.summary.firstPurchaseAt && (
+            {profile.summary?.firstPurchaseAt && (
               <Row
                 label="First purchase"
-                value={`${new Date(profile.summary.firstPurchaseAt).toISOString()} (${profile.summary.daysFromSignupToFirstPurchase} days after signup)`}
+                value={`${new Date(profile.summary?.firstPurchaseAt).toISOString()} (${profile.summary?.daysFromSignupToFirstPurchase ?? 0} days after signup)`}
               />
             )}
           </Card>
 
           {/* Stripe IDs — filtered by selected time window */}
           {filteredStripe.length > 0 && (
-            <Card title={`Stripe payment references (${filteredStripe.length} in ${timeRangeDays === 0 ? "all time" : `last ${timeRangeDays}d`}; ${profile.stripeIds.length} total)`}>
+            <Card title={`Stripe payment references (${filteredStripe.length} in ${timeRangeDays === 0 ? "all time" : `last ${timeRangeDays}d`}; ${profile.stripeIds?.length ?? 0} total)`}>
               <div className="overflow-x-auto -mx-2">
                 <table className="w-full text-xs">
                   <thead>
@@ -614,7 +614,7 @@ function ProfileSection({
           )}
 
           {/* Recent ledger — filtered by selected time window */}
-          <Card title={`Ledger activity (${filteredLedger.length} in ${timeRangeDays === 0 ? "all time" : `last ${timeRangeDays}d`}; last 30 of total ${profile.recentLedger.length} shown)`}>
+          <Card title={`Ledger activity (${filteredLedger.length} in ${timeRangeDays === 0 ? "all time" : `last ${timeRangeDays}d`}; last 30 of total ${profile.recentLedger?.length ?? 0} shown)`}>
             <div className="overflow-x-auto -mx-2">
               <table className="w-full text-xs">
                 <thead>
@@ -699,13 +699,13 @@ function computeAbnormalAreas(profile: any): AbnormalArea[] {
 
   // 1. Account velocity — new account + large purchase fast
   if (
-    profile.user.accountAgeDays < 7 &&
+    (profile.user?.accountAgeDays ?? 0) < 7 &&
     s.totalPurchasedAmountCents > 5000
   ) {
     areas.push({
       domain: "Account velocity",
       status: "high",
-      finding: `Account only ${profile.user.accountAgeDays} days old with $${(s.totalPurchasedAmountCents / 100).toFixed(2)} purchased — unusual for new account.`,
+      finding: `Account only ${profile.user?.accountAgeDays ?? 0} days old with $${(s.totalPurchasedAmountCents / 100).toFixed(2)} purchased — unusual for new account.`,
     });
   } else if (
     s.daysFromSignupToFirstPurchase !== null &&
@@ -720,7 +720,7 @@ function computeAbnormalAreas(profile: any): AbnormalArea[] {
     areas.push({
       domain: "Account velocity",
       status: "low",
-      finding: `Account ${profile.user.accountAgeDays} days old; first purchase ${s.daysFromSignupToFirstPurchase ?? "n/a"} days after signup. Normal.`,
+      finding: `Account ${profile.user?.accountAgeDays ?? 0} days old; first purchase ${s.daysFromSignupToFirstPurchase ?? "n/a"} days after signup. Normal.`,
     });
   }
 
@@ -770,23 +770,23 @@ function computeAbnormalAreas(profile: any): AbnormalArea[] {
   }
 
   // 4. Payment pattern — rapid repeated purchases?
-  if (s.purchaseCount >= 5 && profile.user.accountAgeDays < 14) {
+  if (s.purchaseCount >= 5 && (profile.user?.accountAgeDays ?? 0) < 14) {
     areas.push({
       domain: "Payment pattern",
       status: "high",
-      finding: `${s.purchaseCount} purchases in ${profile.user.accountAgeDays} days. Rapid spending pattern — watch for stolen card use.`,
+      finding: `${s.purchaseCount} purchases in ${profile.user?.accountAgeDays ?? 0} days. Rapid spending pattern — watch for stolen card use.`,
     });
-  } else if (s.purchaseCount >= 3 && profile.user.accountAgeDays < 30) {
+  } else if (s.purchaseCount >= 3 && (profile.user?.accountAgeDays ?? 0) < 30) {
     areas.push({
       domain: "Payment pattern",
       status: "medium",
-      finding: `${s.purchaseCount} purchases in ${profile.user.accountAgeDays} days.`,
+      finding: `${s.purchaseCount} purchases in ${profile.user?.accountAgeDays ?? 0} days.`,
     });
   } else {
     areas.push({
       domain: "Payment pattern",
       status: "low",
-      finding: `${s.purchaseCount} purchase(s) over ${profile.user.accountAgeDays} days. Normal cadence.`,
+      finding: `${s.purchaseCount} purchase(s) over ${profile.user?.accountAgeDays ?? 0} days. Normal cadence.`,
     });
   }
 
@@ -794,10 +794,10 @@ function computeAbnormalAreas(profile: any): AbnormalArea[] {
   //    by propagateOwnerPlanChange (added in A+B) for exact cycle counting.
   //    Falls back to subscription-grant count for older accounts without rows.
   const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const cycleEvents = profile.recentLedger.filter(
+  const cycleEvents = (profile.recentLedger ?? []).filter(
     (r: any) => r.type === "subscription_change" && r.createdAt >= thirtyDaysAgo,
   ).length;
-  const subGrants = profile.recentLedger.filter((r: any) => r.type === "subscription").length;
+  const subGrants = (profile.recentLedger ?? []).filter((r: any) => r.type === "subscription").length;
   const adminAdj = s.adminAdjustmentCount;
   const isCurrentlyBlocked = profile.cyclingBlockedUntil
     ? profile.cyclingBlockedUntil > Date.now()
@@ -815,7 +815,7 @@ function computeAbnormalAreas(profile: any): AbnormalArea[] {
       status: "high",
       finding: `${cycleEvents} plan changes in last 30 days — approaching cycling-abuse threshold (5). ${subGrants} subscription grants; ${adminAdj} clawbacks.`,
     });
-  } else if (cycleEvents >= 2 || (subGrants >= 2 && profile.user.accountAgeDays < 60)) {
+  } else if (cycleEvents >= 2 || (subGrants >= 2 && (profile.user?.accountAgeDays ?? 0) < 60)) {
     areas.push({
       domain: "Subscription churn",
       status: "medium",
@@ -842,7 +842,7 @@ function buildEvidenceMarkdown(
   },
 ): string {
   const lines: string[] = [];
-  lines.push(`# Billing dispute evidence — ${profile.user.email ?? profile.user.clerkUserId}`);
+  lines.push(`# Billing dispute evidence — ${profile.user?.email ?? profile.user?.clerkUserId ?? "unknown"}`);
   lines.push(`Generated: ${new Date().toISOString()}`);
   lines.push("");
 
@@ -873,55 +873,55 @@ function buildEvidenceMarkdown(
   }
 
   lines.push(`## User`);
-  lines.push(`- Email: ${profile.user.email ?? "—"}`);
-  lines.push(`- Name: ${profile.user.fullName ?? "—"}`);
-  lines.push(`- Clerk userId: \`${profile.user.clerkUserId}\``);
+  lines.push(`- Email: ${profile.user?.email ?? "—"}`);
+  lines.push(`- Name: ${profile.user?.fullName ?? "—"}`);
+  lines.push(`- Clerk userId: \`${profile.user?.clerkUserId ?? "—"}\``);
   lines.push(
-    `- Signed up: ${new Date(profile.user.signedUpAt).toISOString()} (${profile.user.accountAgeDays} days ago)`,
+    `- Signed up: ${new Date(profile.user?.signedUpAt ?? 0).toISOString()} (${profile.user?.accountAgeDays ?? 0} days ago)`,
   );
   lines.push("");
 
   lines.push(`## Service delivery proof`);
   lines.push(
-    `- ${profile.summary.fileCount} AI generations completed and stored in our system`,
+    `- ${profile.summary?.fileCount ?? 0} AI generations completed and stored in our system`,
   );
   lines.push(
-    `- ${profile.summary.totalUsedCredits.toLocaleString()} of ${(profile.summary.totalPurchasedCredits + profile.summary.totalSubscriptionCredits).toLocaleString()} granted/purchased credits consumed (${profile.summary.usagePercent}%)`,
+    `- ${(profile.summary?.totalUsedCredits ?? 0).toLocaleString()} of ${((profile.summary?.totalPurchasedCredits ?? 0) + (profile.summary?.totalSubscriptionCredits ?? 0)).toLocaleString()} granted/purchased credits consumed (${profile.summary?.usagePercent ?? 0}%)`,
   );
   lines.push(
-    `- ${profile.summary.usageEventCount} usage events recorded in our credit ledger`,
+    `- ${profile.summary?.usageEventCount ?? 0} usage events recorded in our credit ledger`,
   );
-  if (profile.summary.firstFileAt && profile.summary.lastFileAt) {
+  if (profile.summary?.firstFileAt && profile.summary?.lastFileAt) {
     lines.push(
-      `- First generation: ${new Date(profile.summary.firstFileAt).toISOString()}`,
+      `- First generation: ${new Date(profile.summary?.firstFileAt).toISOString()}`,
     );
     lines.push(
-      `- Last generation: ${new Date(profile.summary.lastFileAt).toISOString()}`,
+      `- Last generation: ${new Date(profile.summary?.lastFileAt).toISOString()}`,
     );
   }
   lines.push("");
 
-  if (profile.positiveSignals.length > 0) {
+  if ((profile.positiveSignals?.length ?? 0) > 0) {
     lines.push(`## Positive signals (defends against "did not authorize")`);
-    for (const s of profile.positiveSignals) lines.push(`- ${s}`);
+    for (const s of (profile.positiveSignals ?? [])) lines.push(`- ${s}`);
     lines.push("");
   }
 
-  if (profile.redFlags.length > 0) {
+  if ((profile.redFlags?.length ?? 0) > 0) {
     lines.push(`## Red flags (internal review)`);
-    for (const f of profile.redFlags) lines.push(`- ${f}`);
+    for (const f of (profile.redFlags ?? [])) lines.push(`- ${f}`);
     lines.push("");
   }
 
-  const stripeList = opts?.filteredStripe ?? profile.stripeIds;
+  const stripeList = opts?.filteredStripe ?? profile.stripeIds ?? [];
   const rangeLabel =
     opts?.timeRangeDays === 0 || opts?.timeRangeDays === undefined
       ? "all time"
       : `last ${opts.timeRangeDays} days`;
   lines.push(
     `## Stripe payment references (${stripeList.length} in ${rangeLabel}${
-      stripeList.length !== profile.stripeIds.length
-        ? `; ${profile.stripeIds.length} total on file`
+      stripeList.length !== (profile.stripeIds?.length ?? 0)
+        ? `; ${profile.stripeIds?.length ?? 0} total on file`
         : ""
     })`,
   );
@@ -947,7 +947,7 @@ function buildEvidenceMarkdown(
   );
   lines.push("");
 
-  const ledgerList = opts?.filteredLedger ?? profile.recentLedger;
+  const ledgerList = opts?.filteredLedger ?? profile.recentLedger ?? [];
   lines.push(`## Ledger activity (${ledgerList.length} in ${rangeLabel})`);
   lines.push(`| Date | Type | Tokens | Reason |`);
   lines.push(`|---|---|---|---|`);

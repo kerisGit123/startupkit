@@ -366,7 +366,7 @@ export function WeekView({ onTimeSlotClick, onAppointmentClick }: WeekViewProps)
                               onAppointmentClick?.(apt._id);
                             }}
                           >
-                            <div className="font-semibold truncate">{apt.clientName}</div>
+                            <div className="font-semibold truncate">{apt.contactName}</div>
                             <div className="text-xs opacity-90 truncate">
                               {apt.startTime} - {apt.endTime || `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`}
                             </div>

@@ -73,7 +73,7 @@ export function EventTypesManager() {
   const handleEditEventType = async () => {
     if (!editingId) return;
     await updateEventType({
-      eventTypeId: editingId,
+      eventTypeId: editingId as Id<"event_types">,
       ...formData,
       updatedAt: Date.now(),
     });
@@ -95,7 +95,7 @@ export function EventTypesManager() {
   };
 
   const handleDeleteEventType = async (id: string) => {
-    await deleteEventType({ eventTypeId: id });
+    await deleteEventType({ eventTypeId: id as Id<"event_types"> });
     setDeleteConfirmId(null);
   };
 

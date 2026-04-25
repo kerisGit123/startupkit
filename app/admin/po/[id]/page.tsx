@@ -451,7 +451,7 @@ export default function PODocumentPage() {
                       <tr className="border-b border-black text-green-600">
                         <td className="py-2 px-2">Discount</td>
                         <td className="py-2 px-2 text-right w-16 border-l border-black">{invoicePOConfig.currency}</td>
-                        <td className="py-2 px-2 text-right w-24 border-l border-black">-{(po.discount / 100).toFixed(2)}</td>
+                        <td className="py-2 px-2 text-right w-24 border-l border-black">-{((po.discount ?? 0) / 100).toFixed(2)}</td>
                       </tr>
                     )}
                     
@@ -459,7 +459,7 @@ export default function PODocumentPage() {
                       <tr className="border-b border-black">
                         <td className="py-2 px-2">Service Tax {po.taxRate}%</td>
                         <td className="py-2 px-2 text-right w-16 border-l border-black">{invoicePOConfig.currency}</td>
-                        <td className="py-2 px-2 text-right w-24 border-l border-black">{(po.tax / 100).toFixed(2)}</td>
+                        <td className="py-2 px-2 text-right w-24 border-l border-black">{((po.tax ?? 0) / 100).toFixed(2)}</td>
                       </tr>
                     )}
                     

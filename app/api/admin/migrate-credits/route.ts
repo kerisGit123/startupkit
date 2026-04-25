@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ConvexHttpClient } from 'convex/browser';
 import { auth, currentUser } from '@clerk/nextjs/server';
 
 export async function POST(req: NextRequest) {
@@ -16,17 +15,11 @@ export async function POST(req: NextRequest) {
 
     console.log('[migrate-credits] Starting credit migration...');
     
-    const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-    
-    // Import the migration function
-    const { api } = await import("../../../../convex/_generated/api");
-    
-    const result = await convex.mutation(api.storyboard.storyboardFiles.migrateCreditUsage);
-    
-    return NextResponse.json({ 
+    // migrateCreditUsage was a one-time migration that has already been run
+    // and was removed from storyboardFiles.ts. This endpoint is now a no-op.
+    return NextResponse.json({
       success: true,
-      message: `Successfully migrated ${result.migratedFiles} files out of ${result.totalFiles} total generated files`,
-      ...result
+      message: 'Migration already completed. The migrateCreditUsage function has been retired.',
     });
     
   } catch (error) {

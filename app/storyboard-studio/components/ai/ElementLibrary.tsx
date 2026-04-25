@@ -394,7 +394,7 @@ export function ElementLibrary({
   console.log(`[ElementLibrary] Authentication check: isAuth=${isAuth}, projectCompanyId=${projectCompanyId}`);
   
   // Query elements for this project (includes public/shared from other projects in same company)
-  const elements = useQuery(isAuth ? api.storyboard.storyboardElements.listByProject : undefined, {
+  const elements = useQuery(isAuth ? api.storyboard.storyboardElements.listByProject : ("skip" as any), {
     projectId,
     type: activeType,
     companyId: queryCompanyId,
@@ -434,6 +434,7 @@ export function ElementLibrary({
   const fileIdMap = useMemo(() => {
     const map = new Map<string, Id<"storyboard_files">>();
     allStoryFiles?.forEach(f => {
+      if (!f.r2Key) return;
       map.set(f.r2Key, f._id);
       console.log(`[ElementLibrary] fileIdMap mapping: ${f.r2Key} -> ${f._id}`);
     });

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Users as UsersIcon, Search, Mail, Calendar, CreditCard, Tag, Activity, Bell, X } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,7 +104,7 @@ export default function UsersPage() {
     if (!confirm(`Are you sure you want to ${isCurrentlyBlocked ? 'unblock' : 'block'} this user?`)) return;
     try {
       await toggleUserBlock({
-        userId,
+        userId: userId as Id<"users">,
         isBlocked: !isCurrentlyBlocked,
         reason: isCurrentlyBlocked ? "Unblocked by admin" : "Blocked by admin",
         updatedBy: "admin",

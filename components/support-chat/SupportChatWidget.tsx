@@ -93,7 +93,7 @@ const FAQ_TREE: FaqNode[] = [
     followUp: [
       {
         q: "What AI models are available?",
-        a: "**25+ models across 4 categories:**\n\n**Image:** Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Character Edit, Nano Banana Edit\n\n**Video:** Seedance 1.5 Pro, Seedance 2.0, Seedance 2.0 Fast, Kling 3.0 Motion, Veo 3.1\n\n**Music:** AI Music, Cover Song\n\n**Audio:** ElevenLabs TTS\n\n**Utility:** AI Analyze, Prompt Enhance",
+        a: "**25+ models across 4 categories:**\n\n**Image:** Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Character Edit, Nano Banana Edit\n\n**Video:** Seedance 1.5 Pro, Seedance 2.0, Seedance 2.0 Fast, Kling 3.0 Motion, Veo 3.1\n\n**Music:** AI Music, Cover Song\n\n**Audio:** ElevenLabs TTS\n\n**Utility:** AI Analyze, Prompt Enhance",
         followUp: [
           {
             q: "Nano Banana 2",

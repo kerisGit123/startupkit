@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { fetchMutation } from "convex/nextjs";
 
 export async function POST(req: NextRequest) {
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest) {
       fileName: file.name,
       fileType: file.type,
       fileSize: file.size,
-      userId: userId || undefined,
+      userId: (userId || undefined) as Id<"users"> | undefined,
     });
 
     // Get the file URL for display
