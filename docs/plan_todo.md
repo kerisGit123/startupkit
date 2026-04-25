@@ -1,100 +1,103 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-25
+> **Last updated:** 2026-04-26
+
+---
+
+## Recently Completed (this session)
+
+- [x] **Seedance 1.5 Pro pricing fix** — formula format mismatch in usePricingData, NaN guard on displayedCredits
+- [x] **100 TypeScript errors fixed** — down to 0 in new code (pre-existing errors remain in PricingShowcase, SceneEditor, fraud-check, etc.)
+- [x] **Chat migrated n8n -> Claude** — `/api/chat` now uses Claude Haiku 4.5 with booking tools, n8n fully removed
+- [x] **Booking plan written + paused** — focus on core product instead
+- [x] **AI Director Phase 1** — 11 tools, executor, filmmaking system prompt, SSE streaming API, Convex session storage
+- [x] **AI Director Phase 2** — DirectorChatPanel UI in workspace + SceneEditor, toggle buttons, SSE streaming, tool indicators
+- [x] **AI Director auth fix** — Clerk JWT token passed to ConvexHttpClient via `auth().getToken({ template: "convex" })`
+
+### Previously Completed
+
+- [x] Admin cleanup (30+ pages consolidated to 16)
+- [x] TypeScript errors (129 errors fixed in prior session)
+- [x] Removed `ignoreBuildErrors: true` from next.config.ts
 
 ---
 
 ## Priority 1 — Core Product (Code)
 
-### TypeScript Errors (plan_typescript_error.md)
-- [ ] Phase 1: Quick wins — ~20 errors across 11 files (OrganizationSwitcher, API routes, convex migrations)
-- [ ] Phase 2: Convex backend — ~24 errors (inbox, bookingTools, n8nWebhookCallback)
-- [ ] Phase 3: API routes — ~38 errors (n8n-webhook, n8n-image-proxy, kie-callback, upload)
-- [ ] Phase 4: UI components — ~16 errors (CalendarView)
-- [ ] Remove `ignoreBuildErrors: true` from next.config.ts after all phases
+### AI Director — Remaining Phases (plan_ai_director.md)
+- [x] Phase 1: Core agent (tools, executor, system prompt, API, Convex)
+- [x] Phase 2: Studio UI (DirectorChatPanel, workspace + SceneEditor toggle)
+- [ ] Phase 3: Smart context — auto-detect selected frame, "Review this frame" quick action per frame card
+- [ ] Phase 4: Vision integration — send generated images to Claude for visual QA feedback
+- [ ] Tune system prompt based on real usage
 
-### Post-Processing Tools (plan_post_processing.md)
-- [ ] Upscale 2x/4x with model choice (Topaz + Crisp) — code in kieAI.ts, needs UI
-- [ ] Enhance with 5 presets and model choice
-- [ ] Relight with 10 lighting presets and strength control
-- [ ] Post-gen angle change (prompt-based)
-- [ ] Background remove (Kie AI `recraft/remove-background`)
-- [ ] Extend / outpaint (Ideogram V3 Reframe)
-- [ ] Style transfer, color grade, multi-model choice per tool
-
-### AI Director (plan_ai_director.md)
-- [ ] Phase 1: Core agent — tools, executor, system prompt, API route, Convex chat
-- [ ] Phase 2: Studio UI — DirectorChatPanel, workspace toggle
-- [ ] Phase 3: Smart context — frame-aware suggestions, "Review this frame" action
-- [ ] Phase 4: Vision integration — Claude vision for visual QA (future)
-
-> Note: `components/director/` and backend files exist — some Phase 1/2 work may be started. Verify before building.
+### Pre-existing TypeScript Errors (~80+ remaining)
+- [ ] PricingShowcase.tsx (~20 errors — undefined vars like `pendingTopUp`, `agreedToTerms`)
+- [ ] SceneEditor.tsx (~11 errors — string vs Id type casts)
+- [ ] app/storyboard-studio/page.tsx (~30 errors — stale Shot interface fields)
+- [ ] fraud-check, invoice, booking components, kieAI.ts, fileMetadataUtils.ts
+- [ ] These are all pre-existing, not from this session
 
 ### Video Editor Enhancements (plan_videoEditor.md)
-- [ ] P1: Subtitle enhancements (outline, wrapping, font selector, SRT import, auto-subtitles from TTS)
-- [ ] P2: Audio mixing (volume per clip, fade in/out, waveform visualization)
-- [ ] P3: Multi-layer video (overlay, PiP, transitions)
-- [ ] P4: Timeline UX (snap to grid, clip thumbnails, keyboard shortcuts, zoom to fit)
-- [ ] Fix: Audio in video export (currently video-only MP4), resolution selector, framerate options
+- [ ] **Fix: Audio in video export** (critical — MP4s currently have no sound)
+- [ ] Subtitle enhancements (outline/shadow, multi-line, font selector, SRT import)
+- [ ] Audio mixing (volume per clip, fade in/out, waveform)
+- [ ] Resolution/framerate selector (currently fixed 1920x1080 @ 30fps)
+- [ ] Timeline UX (snap to grid, zoom to fit, keyboard shortcuts)
+
+### Post-Processing Tools (plan_post_processing.md)
+- [ ] Upscale 2x/4x with model choice (Topaz + Crisp) — code exists, needs UI
+- [ ] Enhance with 5 presets
+- [ ] Relight with 10 lighting presets
+- [ ] Background remove (`recraft/remove-background` — API ready)
+- [ ] Extend / outpaint (Ideogram V3 Reframe)
+- [ ] Style transfer, color grade
 
 ---
 
-## Priority 2 — Pricing & Billing (Code)
+## Priority 2 — Pricing & Billing
 
-### Pricing (plan_pricing_strategy.md + plan_pricing_design.md)
-- [ ] Wire credit top-up buttons in PricingShowcase to purchase confirmation dialog
-- [ ] Model picker in generation UI shows credit cost per model + resolution
-- [ ] "Cheapest option" badge on GPT Image 2 1K
-- [ ] Add credit slider for Business plan
-- [ ] Buy $1,250 Kie package when volume justifies
-
-### Admin Cleanup (plan_admin_cleanup.md)
-- [ ] Phase 6 (deferred): Dual-write to `financial_ledger`, migrate reads, deprecate legacy transactions table
+- [ ] Wire credit top-up buttons to purchase confirmation dialog
+- [ ] Model picker shows credit cost per model + resolution
+- [ ] "Cheapest option" badge on budget models
+- [ ] Credit slider for Business plan
 
 ---
 
 ## Priority 3 — Landing Page (Needs Assets)
 
-### Screen Recordings (plan_landing_page.md)
-- [ ] Record hero video loop (10-15s workflow demo) — WebM/MP4 autoplay
+- [ ] Record hero video loop (10-15s workflow demo)
 - [ ] Record GIF/WebM for 6 feature cards (3-5s each)
 - [ ] Record GIF/WebM for 3 "How It Works" cards
 - [ ] Collect best AI-generated frames for Output Gallery
-
-### New Sections
-- [ ] Add Output Gallery section (blocked on assets above)
-
-### Long-term
+- [ ] Add Output Gallery section
 - [ ] Real testimonials from beta users
-- [ ] Company/studio logos
-- [ ] Interactive "try a prompt" demo
-- [ ] Case studies section
+- [ ] Interactive "try a prompt" demo (long-term)
 
 ---
 
-## Priority 4 — Deferred / Paused
+## Priority 4 — Paused / Deferred
 
 ### Booking System (plan_booking.md) — PAUSED
-- [ ] Phase 2: Merge `clients` into `contacts`, remove dead booking code
-- [ ] Phase 3: Public self-booking page (`/book/[slug]`)
-- [ ] Phase 4: Google Calendar sync (schema ready, needs OAuth)
-- [ ] Phase 5: Email notifications for booking events
+- [x] Phase 1: Claude agent with booking tools (done but untested)
+- [ ] Phase 2: Merge `clients` into `contacts`, remove dead code
+- [ ] Phase 3: Public self-booking page
+- [ ] Phase 4: Google Calendar sync
+- [ ] Phase 5: Email notifications
 
-### Director View — Future Phases (plan_director_view.md)
-- [ ] Phase 4: AI script generation, AI element detection, batch frame generation, style metadata flow
-- [ ] Phase 5: Auto-sequence pipeline, cross-frame consistency, batch multi-shot video
+### Director View — Future
+- [ ] AI script generation, AI element detection
+- [ ] Auto-sequence pipeline, cross-frame consistency
+- [ ] Batch multi-shot video
+
+### Video Editor — Low Priority
+- [ ] Multi-layer video (overlay, PiP, transitions) — overkill for storyboard tool
 
 ---
 
 ## Testing (plan_testing.md)
 
-Full manual test suite exists but is unexecuted (~114 test cases):
-- [ ] Style auto-append (17 cases)
-- [ ] Format presets (6 cases)
-- [ ] AI analyzer (24 cases)
-- [ ] Presets system (26 cases)
-- [ ] Batch frame generation (14 cases)
-- [ ] Color palette (5 cases)
-- [ ] AddImageMenu mediaType (5 cases)
-- [ ] Prompt assembly order (5 cases)
-- [ ] Integration tests (12 cases)
+~114 manual test cases exist but are unexecuted:
+- [ ] Style auto-append (17), format presets (6), AI analyzer (24)
+- [ ] Presets system (26), batch gen (14), color palette (5)
+- [ ] AddImageMenu (5), prompt assembly (5), integration (12)
