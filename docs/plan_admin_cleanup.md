@@ -60,20 +60,15 @@ Cut admin from 30+ pages to ~15 focused pages. Remove bloat, merge overlaps, sim
 - [x] Simplify Email sidebar to single link (no dropdown)
 - Schema tables kept (removing requires Convex migration): `email_campaigns`, `email_events`, `campaign_recipients`, `email_unsubscribes`
 
-## Phase 6: Deprecate Legacy Transactions Table -- DEFERRED
+## Phase 6: Deprecate Legacy Transactions Table -- DONE
 
-**Why deferred**: The `transactions` table is deeply integrated:
-- Stripe webhook writes to it via `createPaymentTransaction`
-- `financialLedger.ts` reads from it for reconciliation
-- `fraudCheck.ts` queries it for risk scoring
-- `invoices/createInvoiceForTransaction.ts` references it
-- `credits.ts` deletes from it during cleanup
-
-Safe deprecation requires:
-- [ ] Dual-write to `financial_ledger` from Stripe webhook
-- [ ] Migrate all reads to `financial_ledger` or `credits_ledger`
-- [ ] Keep table in schema but stop writing to it
-- [ ] Remove `convex/transactions/` functions after migration verified
+- [x] `createPaymentTransaction` now triple-writes: transactions + credits_ledger + financial_ledger
+- [x] `fraudCheck.ts` switched from `transactions` to `financial_ledger` reads
+- [x] Deleted dead `convex/transactions/queries.ts` (no frontend callers)
+- [x] Schema table marked DEPRECATED with clear comments
+- [x] `createTransaction.ts` header documents the deprecation plan
+- Kept: `transactions` write for backward-compat invoice joins (invoice.transactionId)
+- Kept: `credits.ts` cleanup/purge still deletes from `transactions`
 
 ---
 

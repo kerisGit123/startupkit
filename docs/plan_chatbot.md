@@ -287,14 +287,9 @@ variantHint()         — context: landing page vs studio
 
 ## Admin Reports
 
-### File
-`app/admin/support-chat-reports/page.tsx`
-
-### Features
-- View all chat sessions with timestamps, message counts, token usage
-- Filter by date range
-- Per-session message thread viewer
-- Token cost tracking (input + output tokens per message)
+> **Note:** The standalone `support-chat-reports` page was removed in the admin cleanup (2025-04-25).
+> Chat session data is still in Convex (`support_chat_sessions`, `support_chat_messages` tables)
+> and can be queried via the inbox or directly in the Convex dashboard.
 
 ---
 

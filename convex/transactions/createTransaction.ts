@@ -3,8 +3,15 @@ import { mutation, internalMutation } from "../_generated/server";
 import { requireWebhookSecret } from "../credits";
 
 /**
- * Create a payment transaction (credit purchase)
- * This replaces the old credits_ledger insert
+ * Create a payment transaction (credit purchase).
+ *
+ * DEPRECATION NOTE (2025-04-26):
+ * This function writes to THREE tables for backward compatibility:
+ * 1. `transactions` (LEGACY — kept for existing invoice joins, will be removed)
+ * 2. `credits_ledger` (credit balance tracking, ownership derivation)
+ * 3. `financial_ledger` (NEW unified revenue ledger — source of truth going forward)
+ *
+ * New code should read from `financial_ledger` or `credits_ledger`, NOT `transactions`.
  */
 export const createPaymentTransaction = mutation({
   args: {
@@ -103,7 +110,28 @@ export const createPaymentTransaction = mutation({
         createdAt: now,
       });
 
-      // 4. Update credits balance (single source of truth)
+      // 4. Write to financial_ledger (NEW unified revenue ledger)
+      const year = new Date().getFullYear();
+      const random = Math.floor(Math.random() * 1000000).toString().padStart(6, "0");
+      await ctx.db.insert("financial_ledger", {
+        ledgerId: `TXN-${year}-${random}`,
+        amount: args.amount,
+        currency: args.currency,
+        type: "credit_purchase",
+        revenueSource: "stripe_payment",
+        description: `Credit top-up: ${args.tokens} credits`,
+        companyId: args.companyId,
+        stripePaymentIntentId: args.stripePaymentIntentId,
+        tokensAmount: args.tokens,
+        transactionDate: now,
+        recordedAt: now,
+        isReconciled: false,
+        legacyTransactionId: transactionId,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // 5. Update credits balance (single source of truth)
       const existingBalance = await ctx.db
         .query("credits_balance")
         .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))

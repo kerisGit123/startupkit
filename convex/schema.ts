@@ -437,7 +437,10 @@ export default defineSchema({
     .index("by_reconciled", ["isReconciled"]),
 
   // ============================================
-  // CORE: Unified Transactions (LEGACY - Being replaced by financial_ledger)
+  // DEPRECATED: Legacy transactions table — DO NOT add new reads.
+  // Replaced by: financial_ledger (revenue) + credits_ledger (credits).
+  // Kept for: backward-compat invoice joins (invoice.transactionId).
+  // Write path: createPaymentTransaction still dual-writes here for safety.
   // ============================================
   transactions: defineTable({
     companyId: v.string(),

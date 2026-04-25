@@ -148,18 +148,19 @@ export const getUserBillingProfile = query({
     }
     allLedgerRows.sort((a, b) => b.createdAt - a.createdAt);
 
-    // 4. Pull Stripe transactions tied to any of these workspaces.
+    // 4. Pull financial ledger entries tied to any of these workspaces.
+    //    (Replaced legacy `transactions` table reads — financial_ledger is source of truth)
     const allTransactions: any[] = [];
     for (const cid of allCompanyIds) {
       const txs = await ctx.db
-        .query("transactions")
-        .withIndex("by_companyId", (q) => q.eq("companyId", cid))
+        .query("financial_ledger")
+        .filter((q) => q.eq(q.field("companyId"), cid))
         .collect();
       for (const tx of txs) {
         allTransactions.push({ ...tx, _workspaceId: cid });
       }
     }
-    allTransactions.sort((a, b) => b.createdAt - a.createdAt);
+    allTransactions.sort((a, b) => (b.transactionDate ?? b.createdAt) - (a.transactionDate ?? a.createdAt));
 
     // 5. Pull file generations (proves credits were actually consumed).
     let fileCount = 0;
@@ -395,14 +396,13 @@ export const getUserBillingProfile = query({
         type: tx.type,
         amount: tx.amount,
         currency: tx.currency,
-        tokens: tx.tokens,
-        plan: tx.plan,
-        action: tx.action,
+        tokens: tx.tokensAmount,
+        plan: tx.subscriptionPlan,
+        action: tx.description,
         stripePaymentIntentId: tx.stripePaymentIntentId,
-        stripeCheckoutSessionId: tx.stripeCheckoutSessionId,
         stripeSubscriptionId: tx.stripeSubscriptionId,
-        invoiceNo: tx.invoiceNo,
-        createdAt: tx.createdAt,
+        invoiceNo: tx.ledgerId,
+        createdAt: tx.transactionDate ?? tx.createdAt,
       })),
       redFlags,
       positiveSignals,
