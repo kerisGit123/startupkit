@@ -382,7 +382,7 @@ export function ImageAIPanel({
     { value: "ai-music-api/upload-cover", label: "Cover Song", sub: "Re-sing with persona • upload audio", icon: Music, maxReferenceImages: 0, category: "audio" as const },
     { value: "ai-music-api/extend", label: "Extend Music", sub: "Make songs longer • from timestamp", icon: Music, maxReferenceImages: 0, category: "audio" as const },
     { value: "ai-music-api/generate-persona", label: "Create Persona", sub: "Extract voice • free", icon: Mic, maxReferenceImages: 0, category: "audio" as const },
-    { value: "elevenlabs/text-to-speech-multilingual-v2", label: "ElevenLabs TTS", sub: "Text-to-speech • multilingual • 12 cr/1K chars", icon: Mic, maxReferenceImages: 0, category: "audio" as const },
+    { value: "elevenlabs/text-to-speech-multilingual-v2", label: "ElevenLabs TTS", sub: "Text-to-speech • multilingual • 12 cr/1K chars", icon: Volume2, maxReferenceImages: 0, category: "audio" as const, extraBadge: "speech" as const },
   ];
   // Combine all models for the consolidated dropdown
   const allModelOptions = [...inpaintModelOptions, ...videoModelOptions];
@@ -3969,6 +3969,11 @@ export function ImageAIPanel({
                                         : modelOption.category === "video" ? "bg-green-500/15 text-green-400"
                                         : "bg-purple-500/15 text-purple-400"
                                       }`}>{modelOption.category}</span>
+                                      {(modelOption as any).extraBadge && (
+                                        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium uppercase tracking-wide bg-blue-500/15 text-blue-400">
+                                          {(modelOption as any).extraBadge}
+                                        </span>
+                                      )}
                                     </div>
                                     <div className="text-[11px] text-(--text-secondary) mt-0.5">{modelOption.sub}</div>
                                   </div>

@@ -48,7 +48,7 @@ interface FileBrowserProps {
   defaultFileType?: FileType;
 }
 
-type FileType = "all" | "image" | "video" | "audio" | "music" | "file";
+type FileType = "all" | "image" | "video" | "audio" | "file";
 type CategoryFilter = "all" | "temps" | "uploads" | "generated" | "elements" | "storyboard" | "videos";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -71,7 +71,6 @@ const TYPE_ICON: Record<string, any> = {
   image:    ImageIcon,
   video:    Video,
   audio:    Volume2,
-  music:    Volume2,
   file:     FileText,
   analysis: Scan,
 };
@@ -167,6 +166,7 @@ export function FileBrowser({
   const [deletingId, setDeletingId]           = useState<string | null>(null);
   const [pendingDeleteFile, setPendingDeleteFile] = useState<any>(null);
   const [error, setError]                     = useState<string | null>(null);
+  const [refreshKey, setRefreshKey]           = useState(0);
   const [playingAudioId, setPlayingAudioId]   = useState<string | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement>(null);
   const [renamingId, setRenamingId]           = useState<string | null>(null);
@@ -399,7 +399,6 @@ export function FileBrowser({
                           { value: "all",   label: "All Files",  icon: Grid3x3  },
                           { value: "image", label: "Images",     icon: ImageIcon },
                           { value: "video", label: "Videos",     icon: Video     },
-                          { value: "music", label: "Music",      icon: Volume2   },
                           { value: "audio", label: "Audio",      icon: Volume2   },
                           { value: "file",  label: "Documents",  icon: FileText  },
                         ].map(({ value, label, icon: Icon }) => (
@@ -606,7 +605,7 @@ export function FileBrowser({
                                   }}
                                   onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }}
                                 />
-                              ) : (file.fileType === "audio" || file.fileType === "music") ? (
+                              ) : (file.fileType === "audio") ? (
                                 <div className="w-full h-full flex flex-col items-center justify-center rounded-2xl gap-2 relative" style={{ backgroundColor: "var(--bg-secondary)" }}>
                                   <Volume2 className="w-8 h-8 opacity-60" style={{ color: "var(--text-tertiary)" }} />
                                   {/* Play/Pause overlay on hover */}
