@@ -16,9 +16,9 @@ export async function POST(request: NextRequest) {
       hasOrgId: !!authResult.orgId,
       userId: authResult.userId?.substring(0, 10) + '...',
       orgId: authResult.orgId?.substring(0, 10) + '...',
-      hasToken: !!authResult.token,
-      tokenLength: authResult.token?.length || 0,
-      tokenStart: authResult.token?.substring(0, 20) + '...'
+      hasToken: !!(authResult as Record<string, unknown>).token,
+      tokenLength: ((authResult as Record<string, unknown>).token as string | undefined)?.length || 0,
+      tokenStart: ((authResult as Record<string, unknown>).token as string | undefined)?.substring(0, 20) + '...'
     });
 
     const { userId, orgId } = authResult;
@@ -241,9 +241,9 @@ export async function POST(request: NextRequest) {
       } catch (convexError) {
         console.error('[Storyboard Upload] Convex mutation failed:', convexError);
         console.error('[Storyboard Upload] Convex error details:', {
-          message: convexError.message,
-          stack: convexError.stack,
-          name: convexError.name
+          message: convexError instanceof Error ? convexError.message : String(convexError),
+          stack: convexError instanceof Error ? convexError.stack : undefined,
+          name: convexError instanceof Error ? convexError.name : undefined
         });
         throw convexError;
       }

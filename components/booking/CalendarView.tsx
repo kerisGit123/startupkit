@@ -44,7 +44,7 @@ export function CalendarView({ onDateSelect, onAppointmentClick, onDateClick }: 
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
 
-    const days = [];
+    const days: { date: number; isCurrentMonth: boolean; fullDate: string }[] = [];
     
     // Previous month days
     const prevMonthLastDay = new Date(year, month, 0).getDate();

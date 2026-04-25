@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { convex, api } from '@/lib/convex-server';
+import { Id } from '@/convex/_generated/dataModel';
 
 /**
  * POST /api/storyboard/update-file-category

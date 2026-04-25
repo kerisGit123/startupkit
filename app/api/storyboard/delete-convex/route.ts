@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         error: convexError,
         fileId,
         userId,
-        errorType: convexError.constructor.name,
+        errorType: convexError instanceof Error ? convexError.constructor.name : typeof convexError,
         errorMessage: convexError instanceof Error ? convexError.message : 'Unknown error'
       });
       
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[delete-convex] Error:', {
       error,
-      errorType: error.constructor.name,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
       errorMessage: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
     });

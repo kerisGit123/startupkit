@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import sharp from "sharp";
 import { extractKieResponse, getResponseCodeInfo } from "@/lib/storyboard/kieResponse";
@@ -324,6 +325,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing fileId' }, { status: 400 });
     }
 
+    const typedFileId = fileId as Id<"storyboard_files">;
+
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
     // Use centralized response extraction
@@ -348,7 +351,7 @@ export async function POST(request: NextRequest) {
 
     if (taskId) {
       await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
-        fileId,
+        fileId: typedFileId,
         taskId,
         status: state === 'success' && resultUrl ? 'processing' : 'processing',
         responseCode: kieResponse.responseCode,
@@ -420,7 +423,7 @@ export async function POST(request: NextRequest) {
 
     if (state === 'failed' || state === 'error' || state === 'fail') {
       const fileRecord = await convex.query(api.storyboard.storyboardFiles.getById, {
-        id: fileId,
+        id: typedFileId,
       });
 
       if (fileRecord?.companyId && fileRecord?.creditsUsed && fileRecord.creditsUsed > 0) {
@@ -433,7 +436,7 @@ export async function POST(request: NextRequest) {
       }
 
       await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
-        fileId,
+        fileId: typedFileId,
         taskId,
         status: 'failed',
         responseCode: kieResponse.responseCode,
@@ -464,7 +467,7 @@ export async function POST(request: NextRequest) {
     if (state === 'success' && musicTracks.length > 1) {
       const extraTracks = musicTracks.slice(1); // skip first (handled by main flow)
       console.log(`[kie-callback] Saving ${extraTracks.length} additional music tracks`);
-      const originalFileRecord = await convex.query(api.storyboard.storyboardFiles.getById, { id: fileId });
+      const originalFileRecord = await convex.query(api.storyboard.storyboardFiles.getById, { id: typedFileId });
 
       for (let i = 0; i < extraTracks.length; i++) {
         const extraUrl = extraTracks[i].audioUrl;
@@ -523,7 +526,7 @@ export async function POST(request: NextRequest) {
 
     if (state === 'success' && resultUrl) {
       const fileRecord = await convex.query(api.storyboard.storyboardFiles.getById, {
-        id: fileId,
+        id: typedFileId,
       });
 
       const companyId = fileRecord?.companyId ?? fileRecord?.orgId ?? fileRecord?.userId ?? 'unknown';
@@ -612,7 +615,7 @@ export async function POST(request: NextRequest) {
           console.log('[kie-callback] No compositing needed or missing crop info, using generated image as-is');
         }
 
-        const finalBlob = new Blob([finalBuffer], { type: 'image/png' });
+        const finalBlob = new Blob([finalBuffer as unknown as BlobPart], { type: 'image/png' });
         finalR2Key = `${companyId}/generated/generated-image-final-${timestamp}.${finalExtension}`;
         await uploadToR2(finalBlob, finalR2Key);
         finalUrl = getR2PublicUrl(finalR2Key);
@@ -627,7 +630,7 @@ export async function POST(request: NextRequest) {
       });
 
       await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
-        fileId,
+        fileId: typedFileId,
         taskId,
         sourceUrl: finalUrl,
         r2Key: finalR2Key,
@@ -661,7 +664,7 @@ export async function POST(request: NextRequest) {
           const ownerPlan = ownerPlanData?.ownerPlan;
           if (ownerPlan === 'free') {
             await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
-              fileId,
+              fileId: typedFileId,
               isShared: true,
               sharedAt: Date.now(),
               sharedBy: fileRecord.userId || 'system',

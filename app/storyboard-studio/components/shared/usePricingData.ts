@@ -294,51 +294,45 @@ export const usePricingData = () => {
             try {
               const formula = JSON.parse(model.formulaJson);
               const pricing = formula.pricing;
-              
-              // Get resolution multiplier (case-insensitive lookup, default to 1 if not found)
-              // Extract resolution from the beginning of selectedQuality (e.g., "1080P" from "1080P_4s_audio")
+
+              // Parse resolution and duration from selectedQuality: "480P_8s_audio"
               const resolutionMatch = selectedQuality.match(/^([A-Za-z0-9]+)/);
-              const resolutionValue = resolutionMatch ? resolutionMatch[1] : selectedQuality;
-              const resolutionKey = Object.keys(pricing.resolution_multipliers || {}).find(
+              const resolutionValue = resolutionMatch ? resolutionMatch[1] : "480P";
+              const durationMatch = selectedQuality.match(/(\d+s)/);
+              const durationKey = durationMatch ? durationMatch[1] : "4s";
+              const hasAudio = selectedQuality.includes('_audio') && !selectedQuality.includes('_noaudio');
+
+              // New format: resolutions[resolution][duration] = base kie credits
+              if (pricing.resolutions) {
+                const resKey = Object.keys(pricing.resolutions).find(
+                  k => k.toLowerCase() === resolutionValue.toLowerCase()
+                ) || resolutionValue;
+                const resDurations = pricing.resolutions[resKey];
+                const baseCost = resDurations?.[durationKey] ?? base;
+                const audioMultiplier = hasAudio && pricing.audio_multiplier ? pricing.audio_multiplier : 1;
+                const result = Math.ceil(baseCost * audioMultiplier * factor);
+                console.log("[usePricingData] Seedance 1.5 pricing:", {
+                  modelId, selectedQuality, resKey, durationKey, baseCost, audioMultiplier, factor, result
+                });
+                return result;
+              }
+
+              // Legacy format fallback: base_cost * resolution_multipliers * duration_multipliers
+              const legacyResKey = Object.keys(pricing.resolution_multipliers || {}).find(
                 key => key.toLowerCase() === resolutionValue.toLowerCase()
               );
-              const resolutionMultiplier = resolutionKey ? pricing.resolution_multipliers[resolutionKey] : 1;
-              
-              // For video, we need to parse duration and audio from selectedQuality
-              // Format: "720p_8s_audio" or "720p_8s" (no audio)
+              const resolutionMultiplier = legacyResKey ? pricing.resolution_multipliers[legacyResKey] : 1;
               let durationMultiplier = 1;
-              let audioMultiplier = 1;
-              
-              // Extract duration from selectedQuality if available
-              const durationMatch = selectedQuality.match(/(\d+s)/);
               if (durationMatch && pricing.duration_multipliers) {
                 durationMultiplier = pricing.duration_multipliers[durationMatch[1]] || 1;
               }
-              
-              // Check if audio is included (only apply multiplier for "audio", not "noaudio")
-              if (selectedQuality.includes('_audio') && !selectedQuality.includes('_noaudio') && pricing.audio_multiplier) {
-                audioMultiplier = pricing.audio_multiplier;
-              }
-              
+              const audioMult = hasAudio && pricing.audio_multiplier ? pricing.audio_multiplier : 1;
               const result = Math.ceil(
-                pricing.base_cost * 
-                resolutionMultiplier * 
-                durationMultiplier * 
-                audioMultiplier * 
-                factor
+                (pricing.base_cost || base) * resolutionMultiplier * durationMultiplier * audioMult * factor
               );
-              
-              console.log("[usePricingData] Seedance pricing calculation:", {
-                modelId,
-                selectedQuality,
-                baseCost: pricing.base_cost,
-                resolutionMultiplier,
-                durationMultiplier,
-                audioMultiplier,
-                factor,
-                result
+              console.log("[usePricingData] Seedance 1.5 legacy pricing:", {
+                modelId, selectedQuality, baseCost: pricing.base_cost, resolutionMultiplier, durationMultiplier, audioMult, factor, result
               });
-              
               return result;
             } catch (e) {
               console.error("[usePricingData] Error parsing Seedance formula:", e);

@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('[Enhanced Extraction] Script extraction failed:', error);
-    console.error('[Enhanced Extraction] Error stack:', error.stack);
+    console.error('[Enhanced Extraction] Error stack:', error instanceof Error ? error.stack : undefined);
     
     // Return detailed error information
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';

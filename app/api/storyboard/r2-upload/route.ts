@@ -3,6 +3,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
+import { api } from "@/convex/_generated/api";
 import { getServerCurrentCompanyId, getServerUser } from "@/lib/auth-utils-server";
 import { logUserInfo } from "@/lib/auth-utils";
 
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
       try {
         // Get project to verify organization access
         const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-        const project = await convex.query.api.storyboard.projects.get({ projectId });
+        const project = await convex.query(api.storyboard.projects.get, { projectId });
         
         if (!project) {
           return NextResponse.json({ error: "Project not found" }, { status: 404 });

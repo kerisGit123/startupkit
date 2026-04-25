@@ -18,7 +18,7 @@ export const getCleanupPreview = query({
 
     const tickets = await ctx.db.query("inbox_messages").collect();
     const oldTickets = tickets.filter(
-      (t) => (t.updatedAt || t.sentAt || t.createdAt) < cutoff
+      (t) => (t.updatedAt || t.sentAt || t.createdAt || 0) < cutoff
     );
 
     const emailLogs = await ctx.db.query("email_logs").collect();
@@ -78,7 +78,7 @@ export const cleanOldInboxMessages = mutation({
     let deleted = 0;
 
     for (const msg of messages) {
-      if ((msg.updatedAt || msg.sentAt || msg.createdAt) < cutoff) {
+      if ((msg.updatedAt || msg.sentAt || msg.createdAt || 0) < cutoff) {
         // Also delete related ticket messages if it's a ticket
         if (msg.channel === "ticket" && msg.threadId) {
           const ticket = await ctx.db

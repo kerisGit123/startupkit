@@ -620,7 +620,7 @@ export function ImageAIPanel({
   const maxReferenceImages = getMaxReferenceImages();
   
   // Dynamic credit calculation for video models using getSeedance15 function
-  const displayedCredits = ["nano-banana-2", "nano-banana-pro"].includes(selectedModelOption.value)
+  const _rawCredits = (["nano-banana-2", "nano-banana-pro"].includes(selectedModelOption.value)
     ? getModelCredits(selectedModelOption.value, resolution)
     : selectedModelOption.value === "bytedance/seedance-1.5-pro"
     ? (() => {
@@ -718,7 +718,8 @@ export function ImageAIPanel({
         const credits = getModelCredits("gpt-image-2-image-to-image", "fixed");
         return credits > 0 ? credits : 15;
       })()
-    : credits;
+    : credits);
+  const displayedCredits = Number.isFinite(_rawCredits) ? _rawCredits : 0;
 
   // Dropdown visibility states
   const [showModelDropdown, setShowModelDropdown] = useState(false);

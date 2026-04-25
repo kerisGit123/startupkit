@@ -345,7 +345,7 @@ async function handleN8nCallback(data: any, request: NextRequest, corsHeaders: R
       throw new Error('Invalid elements data structure');
     }
     
-    const allElements = [];
+    const allElements: { name: string; type: string; projectId: any; description: string }[] = [];
     
     // Process characters safely
     if (Array.isArray(data.elements.characters)) {
@@ -383,7 +383,7 @@ async function handleN8nCallback(data: any, request: NextRequest, corsHeaders: R
       });
     }
 
-    const savedElements = [];
+    const savedElements: { type: string }[] = [];
     for (const element of allElements) {
       console.log(`🔍 DEBUG: Saving element: ${element.name} (${element.type})`);
       try {
@@ -414,7 +414,7 @@ async function handleN8nCallback(data: any, request: NextRequest, corsHeaders: R
     });
 
     // 2. Save scenes
-    const savedScenes = [];
+    const savedScenes: any[] = [];
     
     // Validate scenes data
     if (!data.scenes || !Array.isArray(data.scenes)) {

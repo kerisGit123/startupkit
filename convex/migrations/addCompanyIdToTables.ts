@@ -46,7 +46,7 @@ export const populateCompanyId = mutation({
       // Get project owner's organization
       // Note: This assumes you have a users table or Clerk integration
       // In production, you'd get the orgId from Clerk
-      const mockOrgId = `org_${project.createdBy}`; // Mock implementation
+      const mockOrgId = `org_${(project as Record<string, unknown>).createdBy ?? project.ownerId}`; // Mock implementation
       
       await ctx.db.patch(project._id, {
         companyId: mockOrgId
@@ -88,17 +88,7 @@ export const populateCompanyId = mutation({
         });
       }
       
-      // Update all members in this project
-      const members = await ctx.db
-        .query("storyboard_members")
-        .collect()
-        .then(members => members.filter(member => member.projectId === project._id));
-      
-      for (const member of members) {
-        await ctx.db.patch(member._id, {
-          companyId: mockOrgId
-        });
-      }
+      // Note: storyboard_members table does not exist in the current schema — skipped.
       
       // Removed: credit usage update — storyboard_credit_usage table no longer exists.
     }

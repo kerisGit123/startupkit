@@ -86,7 +86,7 @@ export const populateCompanyId = mutation({
       // If file has a project, inherit companyId from project
       if (file.projectId) {
         const project = await ctx.db.get(file.projectId);
-        companyId = project?.orgId || project?.ownerId;
+        companyId = project?.orgId || project?.ownerId || `default-org`;
       } else if (file.orgId) {
         // Use orgId as fallback
         companyId = file.orgId;

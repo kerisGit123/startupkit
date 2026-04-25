@@ -1,6 +1,7 @@
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
 import { v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 
 // Helper function to calculate end time
 function calculateEndTime(startTime: string, duration: number): string {
@@ -369,10 +370,10 @@ export const bookAppointment = httpAction(async (ctx, request) => {
   
   // Create appointment
   const appointmentId = await ctx.runMutation(api.bookingMutations.createAppointment, {
-    clientId: client!._id,
-    clientName,
-    clientEmail,
-    clientPhone,
+    contactId: client!._id as unknown as Id<"contacts">,
+    contactName: clientName,
+    contactEmail: clientEmail,
+    contactPhone: clientPhone,
     date,
     startTime,
     endTime,
@@ -413,8 +414,8 @@ export const bookAppointment = httpAction(async (ctx, request) => {
 export const lookupClient = httpAction(async (ctx, request) => {
   const { email, phone } = await request.json();
   
-  let client = null;
-  
+  let client: Doc<"clients"> | null = null;
+
   if (email) {
     client = await ctx.runQuery(api.bookingQueries.getClientByEmail, { email });
   } else if (phone) {
@@ -646,13 +647,52 @@ export const searchKnowledgeBaseCombined = httpAction(async (ctx, request) => {
 // ============================================
 export const searchKnowledgeBase = httpAction(async (ctx, request) => {
   const { query, type = "frontend" } = await request.json();
-  
+
+  if (!query || query.trim() === "") {
+    return new Response(JSON.stringify({
+      success: false,
+      message: "Query parameter is required",
+      results: [],
+      count: 0,
+    }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   // Redirect to appropriate endpoint based on type
   if (type === "combined" || type === "user_panel") {
-    return searchKnowledgeBaseCombined(ctx, request);
+    const frontendArticles = await ctx.runQuery(api.knowledgeBase.searchArticles, { type: "frontend", query });
+    const userPanelArticles = await ctx.runQuery(api.knowledgeBase.searchArticles, { type: "user_panel", query });
+    const allArticles = [...frontendArticles, ...userPanelArticles];
+    const topArticles = allArticles.slice(0, 15);
+    const concatenatedContent = topArticles
+      .map((article, index) =>
+        `Article ${index + 1}: ${article.title}\nSource: ${article.type}\nCategory: ${article.category}\nTags: ${article.tags.join(', ')}\nKeywords: ${article.keywords?.join(', ') || 'N/A'}\n\nContent:\n${article.content}`
+      )
+      .join('\n\n---\n\n');
+    return new Response(JSON.stringify({
+      success: true,
+      content: concatenatedContent,
+      count: topArticles.length,
+      source: "combined",
+      breakdown: { frontend: frontendArticles.length, user_panel: userPanelArticles.length },
+    }), { headers: { "Content-Type": "application/json" } });
   }
-  
-  return searchKnowledgeBaseFrontend(ctx, request);
+
+  const articles = await ctx.runQuery(api.knowledgeBase.searchArticles, { type: "frontend", query });
+  const topArticles = articles.slice(0, 3);
+  const concatenatedContent = topArticles
+    .map((article, index) =>
+      `Article ${index + 1}: ${article.title}\n${article.content}\nCategory: ${article.category}\nTags: ${article.tags.join(', ')}`
+    )
+    .join('\n\n---\n\n');
+  return new Response(JSON.stringify({
+    success: true,
+    content: concatenatedContent,
+    count: topArticles.length,
+    source: "frontend",
+  }), { headers: { "Content-Type": "application/json" } });
 });
 
 // ============================================
@@ -860,7 +900,7 @@ export const deleteAppointment = httpAction(async (ctx, request) => {
   
   // Update client statistics
   await ctx.runMutation(api.bookingMutations.incrementClientCancelledCount, {
-    clientId: appointment.clientId
+    clientId: appointment.contactId as unknown as Id<"clients">
   });
   
   return new Response(JSON.stringify({ 

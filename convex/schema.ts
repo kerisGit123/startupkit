@@ -1707,7 +1707,8 @@ export default defineSchema({
     // Content
     subject: v.optional(v.string()),
     body: v.string(),
-    
+    htmlBody: v.optional(v.string()),
+
     // Status & Priority
     status: v.union(
       v.literal("unread"),
@@ -1718,7 +1719,8 @@ export default defineSchema({
     priority: v.optional(v.union(
       v.literal("low"),
       v.literal("normal"),
-      v.literal("high")
+      v.literal("high"),
+      v.literal("urgent")
     )),
     
     // Assignment & Organization
@@ -1737,10 +1739,13 @@ export default defineSchema({
     readAt: v.optional(v.number()),
     repliedAt: v.optional(v.number()),
     
+    // External reference (e.g. chatbot conversation ID)
+    externalId: v.optional(v.string()),
+
     // Metadata
     metadata: v.optional(v.any()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
   })
     .index("by_channel", ["channel"])
     .index("by_status", ["status"])

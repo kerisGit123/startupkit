@@ -7,7 +7,7 @@ export const getCompanySettings = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (identity) {
-      const companyId = identity.orgId || identity.subject;
+      const companyId = String(identity.orgId || identity.subject);
       const settings = await ctx.db
         .query("org_settings")
         .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -49,7 +49,7 @@ export const updateCompanySettings = mutation({
   handler: async (ctx, args) => {
     // Get the authenticated user's companyId
     const identity = await ctx.auth.getUserIdentity();
-    const companyId = identity?.orgId || identity?.subject || "default";
+    const companyId = String(identity?.orgId || identity?.subject || "default");
 
     // Find settings for this specific company/user
     let settings = await ctx.db
@@ -90,7 +90,7 @@ export const updateCompanySettings = mutation({
         roundingEnable: args.roundingEnable,
         documentFooter: args.documentFooter,
         updatedAt: Date.now(),
-        updatedBy: "system",
+        updatedBy: identity?.subject || "system",
       });
     } else {
       // Update existing settings — also fix companyId if it's "default"

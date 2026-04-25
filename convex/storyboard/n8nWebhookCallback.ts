@@ -1,5 +1,6 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { Id } from "../_generated/dataModel";
 
 // Mutation to handle n8n webhook callback
 export const n8nWebhookCallback = mutation({
@@ -57,32 +58,45 @@ export const n8nWebhookCallback = mutation({
 
       // 2. Create elements (using correct table name)
       const allElements = [
-        ...elements.characters.map(char => ({ ...char, type: "character" })),
-        ...elements.environments.map(env => ({ ...env, type: "environment" })),
-        ...elements.props.map(prop => ({ ...prop, type: "prop" }))
+        ...elements.characters.map((char: any) => ({ name: char.name, description: char.description, appearsInScenes: char.appearsInScenes, type: "character" })),
+        ...elements.environments.map((env: any) => ({ name: env.name, description: env.description, appearsInScenes: env.appearsInScenes, type: "environment" })),
+        ...elements.props.map((prop: any) => ({ name: prop.name, description: prop.description, appearsInScenes: prop.appearsInScenes, type: "prop" }))
       ];
 
       for (const element of allElements) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await ctx.db.insert("storyboard_elements", {
-          projectId: storyboardId, // Use projectId field
+          projectId: storyboardId,
           type: element.type,
           name: element.name,
           description: element.description,
-          confidence: element.confidence,
-          appearsInScenes: element.appearsInScenes
-        });
+          appearsInScenes: element.appearsInScenes,
+          thumbnailUrl: "",
+          referenceUrls: [] as string[],
+          tags: [] as string[],
+          createdBy: "system",
+          usageCount: 0,
+          status: "ready",
+        } as any);
       }
 
       // 3. Create scenes (using correct table name)
       for (const scene of scenes) {
         await ctx.db.insert("storyboard_items", {
           projectId: storyboardId, // Use projectId field
-          sceneNumber: scene.sceneNumber,
+          sceneId: `scene-${scene.sceneNumber}`,
+          order: scene.sceneNumber,
           title: scene.title,
           duration: parseFloat(scene.duration) || 5.0, // Convert to number
           description: scene.description,
-          visualPrompt: scene.visualPrompt,
-          elements: [] // Empty array for now, will be populated later
+          imagePrompt: scene.visualPrompt,
+          elements: [], // Empty array for now, will be populated later
+          annotations: [],
+          generatedBy: "n8n",
+          isAIGenerated: true,
+          generationStatus: "none",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
         });
       }
 
@@ -172,7 +186,7 @@ export const getProject = query({
     projectId: v.string()
   },
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
+    const project = await ctx.db.get(args.projectId as Id<"storyboard_projects">);
     return project;
   }
 });

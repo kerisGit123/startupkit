@@ -35,20 +35,19 @@ export const getAllMessages = query({
     contactId: v.optional(v.id("contacts")),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db.query("inbox_messages");
-
     // Apply filters using indexes where possible
+    let messages;
     if (args.channel) {
-      query = query.withIndex("by_channel", (q) => q.eq("channel", args.channel!));
+      messages = await ctx.db.query("inbox_messages").withIndex("by_channel", (q) => q.eq("channel", args.channel!)).collect();
     } else if (args.status) {
-      query = query.withIndex("by_status", (q) => q.eq("status", args.status!));
+      messages = await ctx.db.query("inbox_messages").withIndex("by_status", (q) => q.eq("status", args.status!)).collect();
     } else if (args.assignedTo) {
-      query = query.withIndex("by_assigned", (q) => q.eq("assignedTo", args.assignedTo!));
+      messages = await ctx.db.query("inbox_messages").withIndex("by_assigned", (q) => q.eq("assignedTo", args.assignedTo!)).collect();
     } else if (args.contactId) {
-      query = query.withIndex("by_contact", (q) => q.eq("contactId", args.contactId!));
+      messages = await ctx.db.query("inbox_messages").withIndex("by_contact", (q) => q.eq("contactId", args.contactId!)).collect();
+    } else {
+      messages = await ctx.db.query("inbox_messages").collect();
     }
-
-    let messages = await query.collect();
 
     // Apply additional filters
     if (args.channel && args.status) {
@@ -181,7 +180,7 @@ export const getGroupedMessages = query({
     }
 
     // Also count ticket_messages replies for ticket threads
-    const results = [];
+    const results: Array<Record<string, unknown>> = [];
     for (const [threadId, data] of threadMap) {
       let ticketMessageCount = 0;
       let hasNewCustomerReply = data.hasNewCustomerReply;
@@ -213,7 +212,7 @@ export const getGroupedMessages = query({
       });
     }
 
-    return results.sort((a, b) => b.lastReplyAt - a.lastReplyAt);
+    return results.sort((a, b) => (b.lastReplyAt as number) - (a.lastReplyAt as number));
   },
 });
 
@@ -506,7 +505,7 @@ export const cleanupDuplicateInboxEntries = mutation({
       if (messages.length <= 1) continue;
       
       // Sort by creation time, keep the first inbound message as the ticket
-      const sortedMessages = messages.sort((a, b) => a.createdAt - b.createdAt);
+      const sortedMessages = messages.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
       const originalTicket = sortedMessages.find(m => m.direction === "inbound" && !m.metadata?.isReply);
       
       if (originalTicket) {
@@ -588,7 +587,7 @@ export const addTags = mutation({
     const message = await ctx.db.get(id);
     if (!message) throw new Error("Message not found");
 
-    const newTags = [...new Set([...message.tags, ...tags])];
+    const newTags = [...new Set([...(message.tags ?? []), ...tags])];
     await ctx.db.patch(id, { tags: newTags });
     return id;
   },

@@ -756,7 +756,7 @@ async function uploadToTemp(base64DataUrl: string): Promise<string> {
 // Unified upload system using R2 temps folder only
 
 // Poll /jobs/recordInfo — Market API models
-async function pollMarket(taskId: string): Promise<string | NextResponse> {
+async function pollMarket(taskId: string): Promise<string> {
   for (let i = 0; i < 36; i++) { // 3 minutes instead of 1 minute (36 polls * 5 seconds)
     await sleep(5000);
     try {
@@ -787,16 +787,14 @@ async function pollMarket(taskId: string): Promise<string | NextResponse> {
         return url;
       }
       if (flag === 2 || flag === 3 || state === "fail") {
-        // Stop polling immediately and return simple error message
+        // Stop polling immediately and throw an error
         console.log("[img-proxy] AI generation failed, stopping polling");
-        return NextResponse.json({ 
-          error: "AI generation failed. Please try a different prompt or use a different AI model." 
-        }, { status: 400 });
+        throw new Error("AI generation failed. Please try a different prompt or use a different AI model.");
       }
     } catch (err) {
       console.warn(`[img-proxy] poll ${i+1} error:`, err);
       // re-throw on task-level errors
-      if (err instanceof Error && (err.message.startsWith("KIE task") || err.message.startsWith("No result"))) throw err;
+      if (err instanceof Error && (err.message.startsWith("KIE task") || err.message.startsWith("No result") || err.message.startsWith("AI generation failed"))) throw err;
     }
   }
   throw new Error("AI generation is taking too long. Please try again or use a different AI model.");
@@ -932,12 +930,6 @@ async function callMarketModel(
   }
   const taskId = data?.data?.taskId ?? data?.data?.recordId;
   const result = await pollMarket(taskId);
-  
-  // Check if result is an error response (string starting with error message)
-  if (result.startsWith("AI generation failed")) {
-    return NextResponse.json({ error: result }, { status: 400 });
-  }
-  
   return result;
 }
 

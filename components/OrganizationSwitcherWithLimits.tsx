@@ -68,8 +68,9 @@ export function OrgSwitcher(
   const { appearance, ...rest } = props;
 
   return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <OrganizationSwitcher
-      {...rest}
+      {...(rest as any)}
       createOrganizationMode={canCreateOrg ? undefined : "navigation"}
       createOrganizationUrl={canCreateOrg ? undefined : "/pricing"}
       appearance={{

@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     console.log('[API/kie-task-status] KIE AI API response:', data);
 
     // Extract video URL from the response
-    let videoUrl = null;
+    let videoUrl: string | null = null;
     
     // Check various possible locations for the video URL
     if (Array.isArray(data) && data.length > 0) {

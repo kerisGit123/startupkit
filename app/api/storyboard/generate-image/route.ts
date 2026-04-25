@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     // Optionally enhance prompt with GPT
     const basePrompt = enhance !== false
-      ? await enhancePromptForImage(prompt, null, style ?? "realistic")
+      ? await enhancePromptForImage(prompt, undefined, style ?? "realistic")
       : prompt;
     const finalPrompt = basePrompt;
 

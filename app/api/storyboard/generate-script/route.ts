@@ -72,7 +72,7 @@ Rules:
       script: scriptContent,
       scenes,
       model: "gpt-4o",
-      sceneCount: scenes.length,
+      sceneCount: scenes.scenes.length,
     });
   } catch (err) {
     console.error("[generate-script]", err);
