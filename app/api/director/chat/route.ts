@@ -163,12 +163,42 @@ export async function POST(req: NextRequest) {
               const result = await dispatchDirectorTool(tb.name, tb.input, toolCtx);
               toolCallLog.push({ name: tb.name, input: tb.input, output: result.output });
               send({ type: "tool_result", name: tb.name, isError: result.isError });
-              toolResults.push({
-                type: "tool_result",
-                tool_use_id: tb.id,
-                content: result.output,
-                is_error: result.isError,
-              });
+
+              // Vision: if tool returns imageUrl, fetch it and include as image content block
+              if (result.imageUrl && !result.isError) {
+                const contentBlocks: Anthropic.ToolResultBlockParam["content"] = [
+                  { type: "text", text: result.output },
+                ];
+                try {
+                  const imgRes = await fetch(result.imageUrl, { signal: AbortSignal.timeout(10000) });
+                  if (imgRes.ok) {
+                    const buffer = Buffer.from(await imgRes.arrayBuffer());
+                    const base64 = buffer.toString("base64");
+                    const ct = imgRes.headers.get("content-type") || "image/png";
+                    const mediaType = (ct.startsWith("image/") ? ct : "image/png") as "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+                    contentBlocks.push({
+                      type: "image",
+                      source: { type: "base64", media_type: mediaType, data: base64 },
+                    });
+                  }
+                } catch (imgErr) {
+                  console.warn("[ai-director] Failed to fetch image for vision:", imgErr);
+                  contentBlocks.push({ type: "text", text: "(Could not load image for visual analysis)" });
+                }
+                toolResults.push({
+                  type: "tool_result",
+                  tool_use_id: tb.id,
+                  content: contentBlocks,
+                  is_error: false,
+                });
+              } else {
+                toolResults.push({
+                  type: "tool_result",
+                  tool_use_id: tb.id,
+                  content: result.output,
+                  is_error: result.isError,
+                });
+              }
             }
 
             currentMessages = [

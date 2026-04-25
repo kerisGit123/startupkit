@@ -7176,6 +7176,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           projectId={projectId || ""}
           currentFrameNumber={activeShot ? shots.findIndex(s => s.id === activeShot.id) + 1 : undefined}
           currentSceneId={activeShot ? `scene-${activeShot.scene}` : undefined}
+          currentFrameImageUrl={activeShot?.imageUrl || undefined}
           onClose={() => setShowDirectorChat(false)}
         />
       )}

@@ -18,6 +18,8 @@ interface DirectorChatPanelProps {
   companyId?: string;
   currentFrameNumber?: number;
   currentSceneId?: string;
+  currentFrameImageUrl?: string; // If the current frame has a generated image
+  initialMessage?: string; // Auto-send this message when set (e.g. from "Review this frame" button)
   onClose: () => void;
 }
 
@@ -55,6 +57,7 @@ const TOOL_LABELS: Record<string, string> = {
   update_project_style: "Setting style...",
   create_frames: "Creating frames...",
   batch_update_prompts: "Updating prompts...",
+  analyze_frame_image: "Analyzing image...",
   get_model_recommendations: "Checking models...",
   search_knowledge_base: "Searching...",
 };
@@ -66,6 +69,8 @@ export function DirectorChatPanel({
   companyId,
   currentFrameNumber,
   currentSceneId,
+  currentFrameImageUrl,
+  initialMessage,
   onClose,
 }: DirectorChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -230,13 +235,30 @@ export function DirectorChatPanel({
     // TODO: call convex directorChat.clearSession
   };
 
-  // ── Quick actions ─────────────────────────────────────────────────
+  // ── Auto-send initialMessage (e.g. from "Review this frame" button) ──
+  const initialMessageSent = useRef<string | null>(null);
+  useEffect(() => {
+    if (initialMessage && initialMessage !== initialMessageSent.current && !streaming) {
+      initialMessageSent.current = initialMessage;
+      sendMessage(initialMessage);
+    }
+  }, [initialMessage, streaming, sendMessage]);
 
-  const quickActions = [
-    { label: "Review storyboard", prompt: "Review my entire storyboard. Check for shot variety, pacing, continuity issues, and missing coverage. Give specific suggestions." },
-    { label: "Improve prompts", prompt: "Look at all my frames and improve the image prompts. Make them more cinematic with specific camera angles, lighting, and composition." },
-    { label: "Suggest style", prompt: "Based on my project, suggest a visual style prompt that would work well. Consider the genre, mood, and content." },
-  ];
+  // ── Quick actions (context-aware) ──────────────────────────────────
+
+  const quickActions = currentFrameNumber
+    ? [
+        ...(currentFrameImageUrl
+          ? [{ label: `Analyze frame ${currentFrameNumber} image`, prompt: `Analyze the generated image for frame ${currentFrameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. Give specific feedback on what works and what could be improved.` }]
+          : []),
+        { label: `Review frame ${currentFrameNumber}`, prompt: `Review frame ${currentFrameNumber} in detail. Analyze its prompt, composition, camera angle, lighting, and suggest specific improvements.` },
+        { label: `Improve frame ${currentFrameNumber} prompt`, prompt: `Look at frame ${currentFrameNumber}'s image prompt and rewrite it to be more cinematic. Add specific camera angle, lighting, composition, and mood details.` },
+      ]
+    : [
+        { label: "Review storyboard", prompt: "Review my entire storyboard. Check for shot variety, pacing, continuity issues, and missing coverage. Give specific suggestions." },
+        { label: "Improve prompts", prompt: "Look at all my frames and improve the image prompts. Make them more cinematic with specific camera angles, lighting, and composition." },
+        { label: "Suggest style", prompt: "Based on my project, suggest a visual style prompt that would work well. Consider the genre, mood, and content." },
+      ];
 
   // ── Render ────────────────────────────────────────────────────────
 

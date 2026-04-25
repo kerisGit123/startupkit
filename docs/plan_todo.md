@@ -74,6 +74,44 @@
 
 ## Priority 2 — Pricing & Billing
 
+### Ultra Tier + AI Director Monetization (NEEDS DISCUSSION)
+
+**Problem:** AI Director has no billing. Org members (up to 15 on Business, 25 on Ultra) can abuse unlimited Director access. Vision analysis is ~10x token cost of text messages.
+
+**Proposed Ultra tier:** ~$299/month, 25,000 credits, 5 orgs, 25 members/org, 50GB storage, unlimited Director + vision.
+
+**Billing options for Director — pick one:**
+
+- **Option A: Org-level daily pool**
+  - Pro: 20 msgs/day org-wide, Business: 50/day, Ultra: 300/day
+  - 1 counter per org per day in Convex
+  - Owner sees usage in dashboard, can manage team
+  - Pro: simple, prevents abuse. Con: new tracking infrastructure, daily reset logic
+
+- **Option B: Per-seat pricing**
+  - Director is an add-on: ~$10/seat/month
+  - Ultra includes 5 Director seats, extras $10 each
+  - Pro: direct revenue per user. Con: complex billing UX, Clerk/Stripe seat management
+
+- **Option C: Credit-based (simplest)**
+  - Each Director message costs 1 credit (text) or 3 credits (vision)
+  - No new billing infra — reuse existing `deductCredits` in API route
+  - Self-regulating: 15 users sharing 8,000 credits naturally limits abuse
+  - Ultra's 25,000 credits absorbs heavy Director + generation usage
+  - Pro: zero new infrastructure, self-balancing. Con: users may avoid Director to "save credits"
+
+- **Option D: Hybrid — free pool + credits overflow**
+  - Small free daily pool (Pro: 10, Business: 30, Ultra: 100 msgs/day)
+  - After pool exhausted, each message costs 1-3 credits
+  - Pro: best of both worlds. Con: most complex to implement
+
+**Also need to decide:**
+- [ ] Does the teaser include write tools (update prompts) or read-only?
+- [ ] Vision blocked entirely on non-Ultra, or allow 1-2 per day?
+- [ ] Are we using Clerk Billing or Stripe directly for Ultra?
+- [ ] Margin check: 25,000 credits wholesale ($125) + Claude API (~$240/mo heavy) = $365 cost vs $299 revenue — need to cap or price at $349?
+
+### Other billing items
 - [ ] Wire credit top-up buttons to purchase confirmation dialog
 - [ ] Model picker shows credit cost per model + resolution
 - [ ] "Cheapest option" badge on budget models

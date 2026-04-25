@@ -188,6 +188,28 @@ export const DIRECTOR_TOOLS: Anthropic.Tool[] = [
     },
   },
 
+  // ── VISION tools ───────────────────────────────────────────────────
+  {
+    name: "analyze_frame_image",
+    description:
+      "Look at a frame's generated image to give visual feedback. Use this to check if the image matches the prompt, evaluate composition, lighting, color, and suggest improvements. The image will be shown to you for analysis.",
+    input_schema: {
+      type: "object",
+      properties: {
+        frame_number: {
+          type: "number",
+          description: "Frame number (1-based) to visually analyze",
+        },
+        focus: {
+          type: "string",
+          enum: ["general", "composition", "lighting", "color", "prompt_match", "continuity"],
+          description: "What to focus the analysis on (default: 'general')",
+        },
+      },
+      required: ["frame_number"],
+    },
+  },
+
   // ── KNOWLEDGE tools ─────────────────────────────────────────────────
   {
     name: "get_model_recommendations",
@@ -236,5 +258,6 @@ export type DirectorToolName =
   | "update_project_style"
   | "create_frames"
   | "batch_update_prompts"
+  | "analyze_frame_image"
   | "get_model_recommendations"
   | "search_knowledge_base";

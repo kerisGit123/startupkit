@@ -18,11 +18,17 @@ export interface DirectorToolContext {
   userId: string;
 }
 
+export interface DirectorToolResult {
+  output: string;
+  isError: boolean;
+  imageUrl?: string; // If set, route will fetch and include as vision content block
+}
+
 export async function dispatchDirectorTool(
   toolName: string,
   rawInput: unknown,
   ctx: DirectorToolContext
-): Promise<{ output: string; isError: boolean }> {
+): Promise<DirectorToolResult> {
   const input = (rawInput ?? {}) as Record<string, unknown>;
   const { convex, projectId } = ctx;
 
@@ -372,6 +378,42 @@ export async function dispatchDirectorTool(
         let msg = `Updated ${successCount} of ${updates.length} frames.`;
         if (errors.length > 0) msg += ` Errors: ${errors.join("; ")}.`;
         return { output: msg, isError: false };
+      }
+
+      // ── VISION tools ─────────────────────────────────────────────
+
+      case "analyze_frame_image": {
+        const frameNum = Number(input.frame_number);
+        if (!frameNum || frameNum < 1)
+          return { output: "frame_number must be a positive number.", isError: true };
+
+        const items = await convex.query(
+          api.storyboard.storyboardItems.listByProject,
+          { projectId: projectId as any }
+        );
+        const sorted = (items as any[]).sort((a, b) => a.order - b.order);
+        const frame = sorted[frameNum - 1];
+        if (!frame) return { output: `Frame ${frameNum} not found.`, isError: true };
+
+        if (!frame.imageUrl) {
+          return { output: `Frame ${frameNum} ("${frame.title}") has no generated image yet. Generate an image first, then I can analyze it.`, isError: false };
+        }
+
+        const focus = String(input.focus || "general");
+        const focusInstructions: Record<string, string> = {
+          general: "Give an overall visual assessment — composition, lighting, color, mood, and how well it matches the prompt.",
+          composition: "Focus on composition: framing, rule of thirds, leading lines, depth, balance, and visual flow.",
+          lighting: "Focus on lighting: direction, quality, contrast, color temperature, shadows, highlights, and mood.",
+          color: "Focus on color: palette, harmony, saturation, grading, and emotional impact.",
+          prompt_match: "Compare the image against the prompt. What matches well? What's missing or different?",
+          continuity: "Evaluate continuity: would this shot cut well with adjacent frames? Check lighting direction, color grade, and style consistency.",
+        };
+
+        return {
+          output: `Analyzing frame ${frameNum} ("${frame.title}"). Prompt: "${frame.imagePrompt || "none"}". Focus: ${focus}. ${focusInstructions[focus] || focusInstructions.general}`,
+          isError: false,
+          imageUrl: frame.imageUrl,
+        };
       }
 
       // ── KNOWLEDGE tools ───────────────────────────────────────────

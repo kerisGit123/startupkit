@@ -542,6 +542,9 @@ export default function StoryboardWorkspacePage() {
   const [selectedItemForElement, setSelectedItemForElement] = useState<Id<"storyboard_items"> | null>(null);
   const [showSceneEditor, setShowSceneEditor] = useState(false);
   const [showDirectorChat, setShowDirectorChat] = useState(false);
+  const [directorReviewFrame, setDirectorReviewFrame] = useState<number | undefined>(undefined);
+  const [directorInitialMessage, setDirectorInitialMessage] = useState<string | undefined>(undefined);
+  const [directorFrameImageUrl, setDirectorFrameImageUrl] = useState<string | undefined>(undefined);
   const [selectedSceneItem, setSelectedSceneItem] = useState<any>(null);
   const [elementLibraryDraft, setElementLibraryDraft] = useState<{
     imageUrls?: string[];
@@ -1640,6 +1643,16 @@ export default function StoryboardWorkspacePage() {
                             return next;
                           });
                         }}
+                        onDirectorReview={(frameNumber, imageUrl) => {
+                          setDirectorReviewFrame(frameNumber);
+                          setDirectorFrameImageUrl(imageUrl);
+                          setDirectorInitialMessage(
+                            imageUrl
+                              ? `Analyze the generated image for frame ${frameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. Give specific feedback.`
+                              : `Review frame ${frameNumber} in detail. Analyze its prompt, composition, camera angle, lighting, and suggest specific improvements.`
+                          );
+                          setShowDirectorChat(true);
+                        }}
                       />
                     </div>
                   ))}
@@ -2190,7 +2203,15 @@ export default function StoryboardWorkspacePage() {
         <DirectorChatPanel
           projectId={pid}
           companyId={currentCompanyId}
-          onClose={() => setShowDirectorChat(false)}
+          currentFrameNumber={directorReviewFrame}
+          currentFrameImageUrl={directorFrameImageUrl}
+          initialMessage={directorInitialMessage}
+          onClose={() => {
+            setShowDirectorChat(false);
+            setDirectorReviewFrame(undefined);
+            setDirectorInitialMessage(undefined);
+            setDirectorFrameImageUrl(undefined);
+          }}
         />
       )}
     </div>
@@ -2364,9 +2385,10 @@ interface FrameCardProps {
   onClearStoryboardUrl?: () => void;
   projectStoryboardUrl?: string; // To show if this frame's image is the storyboard URL
   onDialogChange?: (isOpen: boolean) => void; // Notify parent when a dialog opens/closes (disables drag)
+  onDirectorReview?: (frameNumber: number, imageUrl?: string) => void; // Open AI Director with review for this frame
 }
 
-function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onSetPrimaryImage, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onImagePromptChange, onVideoPromptChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard, onSetStoryboardUrl, onClearStoryboardUrl, projectStoryboardUrl, onDialogChange }: FrameCardProps) {
+function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onDelete, onImageUploaded, onSetPrimaryImage, onDoubleClick, onDuplicate, onTagsChange, onFavoriteToggle, onStatusChange, onNotesChange, onTitleChange, onDescriptionChange, onImagePromptChange, onVideoPromptChange, onRemoveElement, onAddElement, onMoveUp, onMoveDown, totalItems, userId, user, onBuildStoryboard, onSetStoryboardUrl, onClearStoryboardUrl, projectStoryboardUrl, onDialogChange, onDirectorReview }: FrameCardProps) {
   const [uploading, setUploading] = useState(false);
   const [showTagEditor, setShowTagEditor] = useState(false);
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -2825,6 +2847,18 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
         
         {/* Action buttons */}
         <div className="absolute bottom-12 right-3 flex gap-2 z-20">
+          {/* AI Director review button */}
+          {onDirectorReview && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDirectorReview(item.order + 1, item.imageUrl); }}
+              className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform group-hover:scale-105"
+              title="Review with AI Director"
+            >
+              <div className="w-8 h-8 bg-amber-500/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-amber-500 transition-colors">
+                <Sparkles className="w-3.5 h-3.5 text-white" />
+              </div>
+            </button>
+          )}
           {/* Edit button */}
           <button
             onClick={(e) => { e.stopPropagation(); setShowEditDialog(true); }}
