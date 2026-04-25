@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { fetchQuery, fetchMutation } from "convex/nextjs";
+import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { getAnthropicClient, MAX_TOKENS, MAX_TOOL_ITERATIONS } from "@/lib/support/anthropic";
 import { DIRECTOR_TOOLS } from "@/lib/director/agent-tools";
@@ -8,56 +8,62 @@ import { dispatchDirectorTool, type DirectorToolContext } from "@/lib/director/t
 import { buildDirectorSystemPrompt } from "@/lib/director/system-prompt";
 import type Anthropic from "@anthropic-ai/sdk";
 
-/**
- * AI Director — SSE streaming endpoint.
- * Uses fetchQuery/fetchMutation from convex/nextjs for Clerk auth integration.
- */
 export async function POST(req: NextRequest) {
   try {
-    // ── Auth ──────────────────────────────────────────────────────────
-    let clerkUserId: string | null = null;
-    let orgId: string | null = null;
-    try {
-      const authResult = await auth();
-      clerkUserId = authResult.userId;
-      orgId = authResult.orgId ?? null;
-    } catch (authErr) {
-      console.error("[ai-director] Auth error:", authErr);
-    }
+    // ── Auth + Convex token ───────────────────────────────────────────
+    const authResult = await auth();
+    const clerkUserId = authResult.userId;
+    const orgId = authResult.orgId ?? null;
     if (!clerkUserId) {
-      return new Response(
-        JSON.stringify({ error: "Authentication required" }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401, headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Get Convex JWT from Clerk so ConvexHttpClient is authenticated
+    let convexToken: string | null = null;
+    try {
+      convexToken = await authResult.getToken({ template: "convex" });
+    } catch {
+      // If no "convex" template, try default token
+      try { convexToken = await authResult.getToken(); } catch {}
     }
 
     const body = await req.json();
     const { projectId, message, currentFrameNumber, currentSceneId } = body;
-
     if (!projectId || !message) {
-      return new Response(
-        JSON.stringify({ error: "projectId and message are required" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "projectId and message are required" }), {
+        status: 400, headers: { "Content-Type": "application/json" },
+      });
     }
 
-    // ── Load project context (authenticated via Clerk) ──────────────
-    console.log("[ai-director] Step 1: Loading project", projectId);
-    const project = await fetchQuery(api.storyboard.projects.get, {
+    // ── Authenticated Convex client ─────────────────────────────────
+    const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (!convexUrl) {
+      return new Response(JSON.stringify({ error: "NEXT_PUBLIC_CONVEX_URL not set" }), {
+        status: 500, headers: { "Content-Type": "application/json" },
+      });
+    }
+    const convex = new ConvexHttpClient(convexUrl);
+    if (convexToken) {
+      convex.setAuth(convexToken);
+    } else {
+      console.warn("[ai-director] No Convex token from Clerk — queries may fail");
+    }
+
+    // ── Load project context ────────────────────────────────────────
+    const project = await convex.query(api.storyboard.projects.get, {
       id: projectId as any,
     });
-    console.log("[ai-director] Step 2: Project loaded", project?.name);
     if (!project) {
-      return new Response(
-        JSON.stringify({ error: "Project not found" }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Project not found" }), {
+        status: 404, headers: { "Content-Type": "application/json" },
+      });
     }
 
     const companyId = (project as any).companyId || orgId || clerkUserId;
 
-    console.log("[ai-director] Step 3: Loading elements");
-    const elements = await fetchQuery(
+    const elements = await convex.query(
       api.storyboard.storyboardElements.listByProject,
       { projectId: projectId as any }
     );
@@ -70,14 +76,14 @@ export async function POST(req: NextRequest) {
       .map(([type, names]) => `${type}s: ${names.join(", ")}`)
       .join(". ");
 
-    const items = await fetchQuery(
+    const items = await convex.query(
       api.storyboard.storyboardItems.listByProject,
       { projectId: projectId as any }
     );
     const sceneIds = new Set((items as any[]).map((i) => i.sceneId));
 
     // ── Load conversation history ─────────────────────────────────────
-    const session = await fetchQuery(api.directorChat.getSession, {
+    const session = await convex.query(api.directorChat.getSession, {
       projectId: projectId as any,
       userId: clerkUserId,
     });
@@ -93,7 +99,7 @@ export async function POST(req: NextRequest) {
     }
     claudeMessages.push({ role: "user", content: message });
 
-    // ── Build system prompt ───────────────────────────────────────────
+    // ── System prompt ───────────────────────────────────────────────
     const systemPrompt = buildDirectorSystemPrompt({
       projectName: project.name,
       frameCount: items.length,
@@ -105,14 +111,15 @@ export async function POST(req: NextRequest) {
       currentSceneId,
     });
 
-    // ── Tool context ──────────────────────────────────────────────────
+    // ── Tool context (pass convex client for tools) ─────────────────
     const toolCtx: DirectorToolContext = {
+      convex,
       projectId,
       companyId,
       userId: clerkUserId,
     };
 
-    // ── SSE streaming response ────────────────────────────────────────
+    // ── SSE streaming ───────────────────────────────────────────────
     const anthropic = getAnthropicClient();
 
     const stream = new ReadableStream({
@@ -147,20 +154,15 @@ export async function POST(req: NextRequest) {
               }
             }
 
-            if (toolUseBlocks.length === 0 || response.stop_reason === "end_turn") {
-              break;
-            }
+            if (toolUseBlocks.length === 0 || response.stop_reason === "end_turn") break;
 
             const toolResults: Anthropic.ToolResultBlockParam[] = [];
             for (const block of toolUseBlocks) {
               const tb = block as any;
               send({ type: "tool_call", name: tb.name });
-
               const result = await dispatchDirectorTool(tb.name, tb.input, toolCtx);
               toolCallLog.push({ name: tb.name, input: tb.input, output: result.output });
-
               send({ type: "tool_result", name: tb.name, isError: result.isError });
-
               toolResults.push({
                 type: "tool_result",
                 tool_use_id: tb.id,
@@ -180,16 +182,11 @@ export async function POST(req: NextRequest) {
 
           // Persist session
           try {
-            const sessionId = await fetchMutation(
+            const sessionId = await convex.mutation(
               api.directorChat.getOrCreateSession,
-              {
-                projectId: projectId as any,
-                userId: clerkUserId!,
-                companyId,
-              }
+              { projectId: projectId as any, userId: clerkUserId!, companyId }
             );
-
-            await fetchMutation(api.directorChat.appendMessages, {
+            await convex.mutation(api.directorChat.appendMessages, {
               sessionId,
               userMessage: message,
               assistantMessage: finalOutput || "I'm here to help with your storyboard.",
@@ -200,10 +197,7 @@ export async function POST(req: NextRequest) {
           }
         } catch (err) {
           console.error("[ai-director] Stream error:", err);
-          send({
-            type: "error",
-            message: err instanceof Error ? err.message : "An error occurred",
-          });
+          send({ type: "error", message: err instanceof Error ? err.message : "An error occurred" });
         } finally {
           controller.close();
         }
