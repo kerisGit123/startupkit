@@ -1,12 +1,16 @@
 # Competitive Analysis — Storyboard Studio
 
-> **Last updated:** 2026-04-25
+> **Last updated:** 2026-04-25 (session #7)
 > Analysis of 8 direct competitors against our platform.
 >
-> **Recent session (2026-04-25 #2):** Added full pricing comparison section (us vs Higgsfield). Updated Higgsfield pricing with actual plan data (Basic $5/70cr, Plus $39/1000cr, Ultra $99/3000cr, Business $62/seat/1500cr). Documented Kie AI cost structure ($0.04/gen). Identified pricing gap: Higgsfield delivers 2x more gens at same $39 price. Recommended fix: drop Nano Banana 2 from 10 to 5 credits/gen. Created `plan_pricing_strategy.md`.
-> **Previous session (2026-04-25 #1):** Built Color Palette Picker (Higgsfield Soul HEX equivalent — eyedropper from canvas, 6 color slots, save/load presets, auto-append to prompts, image proxy for CORS). Soul HEX gap now fully closed.
-> **Previous session (2026-04-24):** Built 3D Camera Angle Picker (Higgsfield-style wireframe globe, rotation/tilt/zoom sliders, 12 presets, prompt auto-append). Camera control system now complete (Camera Studio + Camera Motion + 3D Angle Picker).
-> See `plan_director_view.md` for implementation details, `plan_final_design.md` for design specs, `plan_pricing_strategy.md` for pricing strategy.
+> **Session 2026-04-25 #7:** Landing page quick wins — outcome headline, no-CC badge, real value props, section reorder.
+> **Session 2026-04-25 #6:** Pricing page redesign — shared PricingShowcase component, Clerk CheckoutButton, generation estimates, billing toggle, ElevenLabs TTS speaker icon.
+> **Session 2026-04-25 #5:** FAQ system (chat widget decision tree + /faq page), PDF export (landscape A4 via jsPDF), SpeedRampEditor (8 presets), prompt enhance API, pricing bug fixes (Seedance 2.0/Fast/1.5 Pro), system prompt optimization.
+> **Session 2026-04-25 #4:** Color Palette Picker (Higgsfield Soul HEX equivalent — eyedropper, 6 slots, presets, image proxy). Soul HEX gap closed.
+> **Session 2026-04-25 #3:** Pricing comparison section, Kie AI cost structure, hot model multiplier (0.625).
+> **Session 2026-04-25 #2:** Style/Format auto-append, AI Analyzer, Presets system, Batch generation, Color palette schema.
+> **Session 2026-04-25 #1:** 3D Camera Angle Picker, Camera Studio, Camera Motion Presets.
+> See `plan_director_view.md` for implementation details, `plan_final_design.md` for design specs, `plan_pricing_strategy.md` for pricing strategy, `plan_booking.md` for booking migration plan.
 
 ---
 
@@ -573,6 +577,18 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 - Camera Studio + Angle Picker + Motion Presets (targets for auto-set)
 - Right-click context menus on images/videos
 
+### Priority 1c: Go-to-Market Features (DONE)
+
+| # | Action | Status |
+|---|--------|--------|
+| 9 | ~~**FAQ System**~~ — Chat widget decision tree (50+ paths, zero API calls) + dedicated /faq page (50+ questions, 8 categories) | **DONE** |
+| 10 | ~~**PDF Export**~~ — Landscape A4 storyboard download via jsPDF (title page + 2x2 frame grid) | **DONE** |
+| 11 | ~~**Pricing Page Redesign**~~ — PricingShowcase component, Clerk CheckoutButton, gen estimates, billing toggle | **DONE** |
+| 12 | ~~**Landing Page Quick Wins**~~ — Outcome headline, no-CC badge, real value props, section reorder | **DONE** |
+| 13 | ~~**Prompt Enhance API**~~ — AI-powered prompt improvement endpoint | **DONE** |
+| 14 | ~~**ElevenLabs TTS**~~ — Speaker icon + SPEECH badge for text-to-speech generation | **DONE** |
+| 15 | ~~**Speed Ramp Editor**~~ — 8 presets with visual curve editor, prompt auto-append | **DONE** |
+
 ### Priority 2: Post-launch
 
 | # | Action | Competitive impact |
@@ -600,7 +616,7 @@ Total unique features counted across all comparison tables:
 
 | Platform | Features | Change | Strongest area |
 |----------|:--------:|:------:|---------------|
-| **Us** | **69** | +1 | All-in-one (planning + AI + editing + continuity + camera + analyzer + presets + batch + color palette) |
+| **Us** | **76** | +7 | All-in-one (planning + AI + editing + continuity + camera + analyzer + presets + batch + color palette + speed ramps + FAQ + PDF export + pricing page) |
 | Higgsfield | 24 | — | AI models (30+) + Cinema Studio + character persistence |
 | LTX Studio | 23 | — | Script-to-video + Elements consistency + camera control |
 | ImagineArt | 16 | — | AI generation breadth + workflow builder |
@@ -610,14 +626,19 @@ Total unique features counted across all comparison tables:
 | Krock.io | 7 | — | Review/approval workflows + NLE integrations |
 | Lovart | 5 | — | Design agent UX |
 
-**We lead with 69 features — 2.9x more than our nearest competitor (Higgsfield at 24).** Color Palette Picker closes the Soul HEX gap vs Higgsfield. Director's View (11 features nobody else has), complete camera control system, and music AI remain unmatched.
+**We lead with 76 features — 3.2x more than our nearest competitor (Higgsfield at 24).** Speed ramps, FAQ system, PDF export, pricing page redesign, landing page, and prompt enhance added since last count. Director's View (11 features nobody else has), complete camera control system, and music AI remain unmatched.
 
-**However, Higgsfield undercuts us on pricing per generation** — they deliver 2x more Nano Banana 2 gens at the same $39/mo price point (500 vs 250 gens). Our feature lead is strong but pricing competitiveness needs addressing. See Section 1b and `plan_pricing_strategy.md`.
+**Pricing gap RESOLVED** — hot model multiplier (0.625) makes GPT Image 2 at $0.04/gen 48% cheaper than Higgsfield's $0.078/gen. See `plan_pricing_strategy.md`.
 
 **Session history:**
-- **2026-04-25 #2:** Pricing comparison section added. Higgsfield pricing updated with actual data. Kie AI cost structure documented. Pricing strategy document created.
-- **2026-04-25 #1:** Color Palette Picker (eyedropper, 6 slots, save/load presets, image proxy, prompt auto-append). Soul HEX gap closed.
-- **2026-04-24 #3:** Style auto-append, Format presets (12), AI Analyzer (3 media types), Batch generation, Color palette schema, Presets system (save/load), Custom style migration to presets, Analyzer pricing.
+- **2026-04-25 #7:** Landing page quick wins (outcome headline, no-CC badge, value props, section reorder).
+- **2026-04-25 #6:** Pricing page redesign (PricingShowcase, Clerk CheckoutButton, gen estimates). ElevenLabs TTS speaker icon.
+- **2026-04-25 #5:** FAQ system (chat widget 50+ paths + /faq page), PDF export (jsPDF A4), SpeedRampEditor (8 presets), prompt enhance API, pricing bug fixes (Seedance 2.0/Fast/1.5 Pro), system prompt optimization.
+- **2026-04-25 #4:** Color Palette Picker (eyedropper, 6 slots, save/load presets, image proxy, prompt auto-append). Soul HEX gap closed.
+- **2026-04-25 #3:** Pricing comparison section. Higgsfield pricing data. Kie AI cost structure. Hot model multiplier (0.625).
+- **2026-04-25 #2:** Style auto-append, Format presets (12), AI Analyzer (3 media types), Batch generation, Color palette schema, Presets system, Analyzer pricing.
+- **2026-04-25 #1:** Camera Angle Picker, Camera Studio, Camera Motion Presets.
+- **2026-04-24:** Director's View (11 features), blend modes, subtitles, competitive analysis doc created.
 
 ---
 
@@ -743,7 +764,7 @@ Higgsfield is our most formidable competitor. Cinema Studio 3.5 is a deeply inte
 | **Retake (re-render segment)** | LTX | Select video segment → regenerate. Depends on Kie AI API support | **Blocked on API** |
 | **AI Co-Director (Claude Agent)** | Higgsfield (Mr. Higgs) | Chatbot with project context + tool use. 80% infrastructure exists. See detailed plan below | **Medium — TODO** |
 | **Content Format Presets** | — | 12 format types (Film, Documentary, YouTube, Reel, Commercial, Music Video, Vlog, Tutorial, Presentation, Podcast, Product Demo, Cinematic Ad) with auto-append | **DONE** (replaces Genre Presets — formats control framing/pacing, not visual aesthetics) |
-| **Speed Ramp Presets** | Higgsfield | Timing descriptions in prompt ("slow motion", "bullet time", "flash in") — 8 presets | **Small — TODO** |
+| ~~**Speed Ramp Presets**~~ | ~~Higgsfield~~ | SpeedRampEditor: 8 presets (Linear, Flash In, Flash Out, Slow-mo, Bullet Time, Impact, Ramp Up, Auto) with visual curve editor, prompt auto-append | **DONE** |
 | ~~**Soul HEX Color Control**~~ | ~~Higgsfield~~ | ColorPalettePicker: eyedropper from reference image canvas (6 hex colors), save/load presets (`storyboard_presets` category="color-palette"), auto-append to generation prompts. Image proxy API for CORS bypass. AddImageMenu (R2/Capture/Generated) | **DONE** |
 | ~~**Soul Cast Character Builder**~~ | ~~Higgsfield~~ | **Not needed** — our Element system already covers this. Elements have name, description, thumbnailUrl, referenceUrls, @mentions in prompts, linked per frame, batch generation with refs. Soul Cast's backstory/personality/era fields don't affect image generation (models only see prompt + reference images). Face consistency is model-level, not solvable by adding form fields | **Not needed** |
 | **AI Analyze (Image/Video/Audio)** | Lovart, Storyboarder | ANALYZE tab in VideoImageAIPanel. OpenRouter → Gemini Flash (images, 1cr) + Gemini Pro (video 3cr, audio 1cr). Shot-by-shot video timestamps, lyrics extraction, speech transcription | **DONE** |
@@ -753,7 +774,7 @@ Higgsfield is our most formidable competitor. Cinema Studio 3.5 is a deeply inte
 | **Physics-Aware Generation** | Higgsfield | Model-level realistic object interactions | **Can't build** |
 | **Cinematic Reasoning** | Higgsfield | Model-level story intent understanding from images | **Can't build** |
 
-**Status: 12 DONE/covered/not-needed. 2 buildable TODOs (AI co-director, speed ramps). 1 blocked on API (retake). 4 model-level proprietary (can't build). 1 deprioritized (script import).**
+**Status: 13 DONE/covered/not-needed. 1 buildable TODO (AI co-director). 1 blocked on API (retake). 4 model-level proprietary (can't build). 1 deprioritized (script import).**
 
 ### AI Co-Director — Implementation Plan
 
@@ -857,11 +878,11 @@ StoryboardStrip + Canvas show new frames immediately
 
 We are the **only tool where a filmmaker can write a script, auto-build a storyboard, generate images with 15+ AI models, edit on canvas with AI inpainting, control camera angles with a 3D sphere picker + virtual camera studio + 15 motion presets, assemble in a multi-track timeline with subtitles and blend modes, generate music with custom personas, use the Director's View filmstrip for continuity, and export — all without leaving one web app.**
 
-### Competitor gap summary (updated 2026-04-25 session #4)
+### Competitor gap summary (updated 2026-04-25 session #7)
 
 | Competitor | Features they have that we lack | Buildable? | Our advantage over them |
 |---|---|---|---|
-| **Higgsfield** | **4** — AI co-director, speed ramps, Soul Cinema model, native audio sync, physics-aware generation, cinematic reasoning | 2 buildable, 4 model-level (can't replicate). Soul HEX closed. Soul Cast not needed (covered by Element system) | 10+ features they lack (pipeline, timeline, subtitles, blend modes, canvas+AI, music AI, Director's View, AI Analyzer, Presets, Format system, batch gen, color palette) |
+| **Higgsfield** | **5** — AI co-director, Soul Cinema model, native audio sync, physics-aware generation, cinematic reasoning | 1 buildable (co-director), 4 model-level (can't replicate). Speed ramps DONE. Soul HEX DONE. Soul Cast not needed | 12+ features they lack (pipeline, timeline, subtitles, blend modes, canvas+AI, music AI, Director's View, AI Analyzer, Presets, Format system, batch gen, color palette, speed ramps, FAQ, PDF export) |
 | **LTX Studio** | **1** — Retake only (keyframe not needed for AI video) | Blocked on API | 6+ features they lack |
 | **Storyboarder.ai** | **0** — all gaps closed | — | 10+ features they lack |
 | **ImagineArt** | **0** — workflow builder planned post-launch | — | Pipeline structure they lack |
@@ -870,9 +891,9 @@ We are the **only tool where a filmmaker can write a script, auto-build a storyb
 | **Artlist** | **0** — gallery sharing covers stock library | — | Pipeline + AI generation |
 | **Lovart** | **0** — different market | — | Everything |
 
-**Gaps closed this session (2026-04-25 #4):** Soul HEX Color Control (ColorPalettePicker — eyedropper, 6 slots, save/load presets, image proxy, prompt auto-append). Higgsfield gap narrowed from 5 to 4 features.
+**Gaps closed since session #4:** Speed Ramp Editor (8 presets with visual curve). Higgsfield buildable gap narrowed from 2 to 1 (AI co-director only).
 
-**Higgsfield is still the real threat** but the gap is nearly closed on the buildable side. Their remaining advantages are mostly model-level proprietary (Soul Cinema, physics, cinematic reasoning, native audio sync) — 4 features we cannot replicate. Only **2 buildable gaps remain: AI co-director and speed ramps**.
+**Higgsfield is still the real threat** but all buildable gaps except one are now closed. Their remaining advantages are mostly model-level proprietary (Soul Cinema, physics, cinematic reasoning, native audio sync) — 4 features we cannot replicate. Only **1 buildable gap remains: AI co-director**.
 
 ### Key threats (honest)
 
@@ -1159,20 +1180,25 @@ skills/
 
 ---
 
-### Before launch: quick wins remaining
+### Before launch: ALL quick wins DONE
 
-1. **Batch frame generation** — small effort, table-stakes
-2. **Style metadata auto-append** — small effort, consistency boost
-3. **AI Analyze (Copy Style / Video)** — small effort via OpenRouter, unique differentiator
-4. **Genre presets** — small effort, prompt templates
-5. **Speed ramp presets** — small effort, prompt text
-6. **Soul HEX color control** — small effort, color picker → prompt
+1. ~~**Batch frame generation**~~ — **DONE**
+2. ~~**Style metadata auto-append**~~ — **DONE**
+3. ~~**AI Analyze (Copy Style / Video)**~~ — **DONE**
+4. ~~**Genre presets (Content Format Presets)**~~ — **DONE**
+5. ~~**Speed ramp presets**~~ — **DONE**
+6. ~~**Soul HEX color control**~~ — **DONE**
+7. ~~**FAQ system**~~ — **DONE**
+8. ~~**PDF export**~~ — **DONE**
+9. ~~**Pricing page redesign**~~ — **DONE**
+10. ~~**Landing page improvements**~~ — **DONE**
 
 ### Post-launch priorities
 
-1. **AI Co-Director** — medium effort, biggest differentiator potential
-2. **Soul Cast character builder** — medium effort, extend Element system
-3. **Photodump batch generation** — medium effort, batch with variations
+1. **AI Co-Director** — medium effort, biggest differentiator potential. Only remaining buildable gap vs Higgsfield
+2. **Booking system migration** — replace n8n with Claude agent tool-use. See `plan_booking.md`
+3. **Public self-booking page** — Calendly-style `app/book/[slug]` page
+4. **Auto-sequence video** — chain frames via Seedance `first-last-frame` mode
 
 ---
 
