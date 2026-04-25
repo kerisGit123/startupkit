@@ -1,4 +1,4 @@
-import { ConvexHttpClient } from "convex/browser";
+import { fetchQuery, fetchMutation } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { DirectorToolName } from "./agent-tools";
 import { MODEL_KNOWLEDGE } from "./constants";
@@ -12,8 +12,7 @@ function stringifyResult(obj: unknown): string {
 }
 
 export interface DirectorToolContext {
-  convex: ConvexHttpClient;
-  projectId: string; // Convex Id<"storyboard_projects"> as string
+  projectId: string;
   companyId: string;
   userId: string;
 }
@@ -24,24 +23,24 @@ export async function dispatchDirectorTool(
   ctx: DirectorToolContext
 ): Promise<{ output: string; isError: boolean }> {
   const input = (rawInput ?? {}) as Record<string, unknown>;
-  const { convex, projectId } = ctx;
+  const { projectId } = ctx;
 
   try {
     switch (toolName as DirectorToolName) {
       // ── READ tools ────────────────────────────────────────────────
 
       case "get_project_overview": {
-        const project = await convex.query(api.storyboard.projects.get, {
+        const project = await fetchQuery(api.storyboard.projects.get, {
           id: projectId as any,
         });
         if (!project) return { output: "Project not found.", isError: true };
 
-        const items = await convex.query(
+        const items = await fetchQuery(
           api.storyboard.storyboardItems.listByProject,
           { projectId: projectId as any }
         );
 
-        const elements = await convex.query(
+        const elements = await fetchQuery(
           api.storyboard.storyboardElements.listByProject,
           { projectId: projectId as any }
         );
@@ -94,7 +93,7 @@ export async function dispatchDirectorTool(
         const sceneId = String(input.scene_id || "");
         if (!sceneId) return { output: "scene_id is required.", isError: true };
 
-        const items = await convex.query(
+        const items = await fetchQuery(
           api.storyboard.storyboardItems.listByProject,
           { projectId: projectId as any }
         );
@@ -132,7 +131,7 @@ export async function dispatchDirectorTool(
         if (!frameNum || frameNum < 1)
           return { output: "frame_number must be a positive number.", isError: true };
 
-        const items = await convex.query(
+        const items = await fetchQuery(
           api.storyboard.storyboardItems.listByProject,
           { projectId: projectId as any }
         );
@@ -176,7 +175,7 @@ export async function dispatchDirectorTool(
       case "get_element_library": {
         const typeFilter = input.type === "all" ? undefined : (input.type as string);
 
-        const elements = await convex.query(
+        const elements = await fetchQuery(
           api.storyboard.storyboardElements.listByProject,
           {
             projectId: projectId as any,
@@ -210,7 +209,7 @@ export async function dispatchDirectorTool(
         if (!frameNum || frameNum < 1)
           return { output: "frame_number must be a positive number.", isError: true };
 
-        const items = await convex.query(
+        const items = await fetchQuery(
           api.storyboard.storyboardItems.listByProject,
           { projectId: projectId as any }
         );
@@ -222,7 +221,7 @@ export async function dispatchDirectorTool(
         if (input.image_prompt) updateData.imagePrompt = String(input.image_prompt);
         if (input.video_prompt) updateData.videoPrompt = String(input.video_prompt);
 
-        await convex.mutation(api.storyboard.storyboardItems.update, updateData as any);
+        await fetchMutation(api.storyboard.storyboardItems.update, updateData as any);
 
         const changes: string[] = [];
         if (input.image_prompt) changes.push("image prompt");
@@ -239,7 +238,7 @@ export async function dispatchDirectorTool(
         if (!frameNum || frameNum < 1)
           return { output: "frame_number must be a positive number.", isError: true };
 
-        const items = await convex.query(
+        const items = await fetchQuery(
           api.storyboard.storyboardItems.listByProject,
           { projectId: projectId as any }
         );
@@ -247,7 +246,7 @@ export async function dispatchDirectorTool(
         const frame = sorted[frameNum - 1];
         if (!frame) return { output: `Frame ${frameNum} not found.`, isError: true };
 
-        await convex.mutation(api.storyboard.storyboardItems.updateFrameNotes, {
+        await fetchMutation(api.storyboard.storyboardItems.updateFrameNotes, {
           id: frame._id,
           notes: String(input.notes || ""),
         });
@@ -267,7 +266,7 @@ export async function dispatchDirectorTool(
           return { output: "Provide at least style_prompt or format_preset.", isError: true };
         }
 
-        await convex.mutation(api.storyboard.projects.update, updateData as any);
+        await fetchMutation(api.storyboard.projects.update, updateData as any);
 
         const changes: string[] = [];
         if (input.style_prompt) changes.push("style prompt");
@@ -286,7 +285,7 @@ export async function dispatchDirectorTool(
           return { output: "scene_id and frames array are required.", isError: true };
 
         // Get current max order
-        const existingItems = await convex.query(
+        const existingItems = await fetchQuery(
           api.storyboard.storyboardItems.listByProject,
           { projectId: projectId as any }
         );
@@ -297,7 +296,7 @@ export async function dispatchDirectorTool(
         const createdIds: any[] = [];
         for (let i = 0; i < frames.length; i++) {
           const f = frames[i];
-          const id = await convex.mutation(api.storyboard.storyboardItems.create, {
+          const id = await fetchMutation(api.storyboard.storyboardItems.create, {
             projectId: projectId as any,
             sceneId,
             order: maxOrder + 1 + i,
@@ -313,10 +312,10 @@ export async function dispatchDirectorTool(
           if (f.image_prompt) updateFields.imagePrompt = f.image_prompt;
           if (f.video_prompt) updateFields.videoPrompt = f.video_prompt;
           if (Object.keys(updateFields).length > 1) {
-            await convex.mutation(api.storyboard.storyboardItems.update, updateFields as any);
+            await fetchMutation(api.storyboard.storyboardItems.update, updateFields as any);
           }
           if (f.notes) {
-            await convex.mutation(api.storyboard.storyboardItems.updateFrameNotes, {
+            await fetchMutation(api.storyboard.storyboardItems.updateFrameNotes, {
               id: id as any,
               notes: f.notes,
             });
@@ -334,7 +333,7 @@ export async function dispatchDirectorTool(
         if (!updates || updates.length === 0)
           return { output: "updates array is required.", isError: true };
 
-        const items = await convex.query(
+        const items = await fetchQuery(
           api.storyboard.storyboardItems.listByProject,
           { projectId: projectId as any }
         );
@@ -356,11 +355,11 @@ export async function dispatchDirectorTool(
           if (update.video_prompt) updateData.videoPrompt = String(update.video_prompt);
 
           if (Object.keys(updateData).length > 1) {
-            await convex.mutation(api.storyboard.storyboardItems.update, updateData as any);
+            await fetchMutation(api.storyboard.storyboardItems.update, updateData as any);
           }
 
           if (update.notes) {
-            await convex.mutation(api.storyboard.storyboardItems.updateFrameNotes, {
+            await fetchMutation(api.storyboard.storyboardItems.updateFrameNotes, {
               id: frame._id,
               notes: String(update.notes),
             });
@@ -405,7 +404,7 @@ export async function dispatchDirectorTool(
         const query = String(input.query || "").trim();
         if (!query) return { output: "A search query is required.", isError: true };
 
-        const articles = await convex.query(api.knowledgeBase.searchArticlesUnified, {
+        const articles = await fetchQuery(api.knowledgeBase.searchArticlesUnified, {
           query,
           limit: 5,
         });
