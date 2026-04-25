@@ -133,6 +133,16 @@ export interface ImageAIPanelProps {
   generatedItemImages?: Array<{ id: string; url: string; filename: string }>;
   generatedProjectImages?: Array<{ id: string; url: string; filename: string }>;
   onSelectGeneratedImage?: (url: string) => void;
+  showMask?: boolean;
+  setShowMask?: (value: boolean) => void;
+  onZoomChange?: (value: number) => void;
+  onAddReferenceFromUrl?: (url: string) => Promise<void>;
+  onDownloadCanvas?: (() => void) | undefined;
+  onSaveAsOriginal?: (() => void) | undefined;
+  onSaveToUploadFolder?: () => void;
+  onUploadOverride?: () => void;
+  onCombine?: () => void;
+  originalImage?: string;
 }
 
 // ── Available Models ─────────────────────────────────────────────────

@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useSubscription } from "@/hooks/useSubscription";
-import PricingShowcase from "@/app/storyboard-studio/components/account/PricingShowcase";
+import PricingShowcase from "@/components/pricing/PricingShowcase";
 import Link from "next/link";
 
 export default function PricingPage() {
@@ -15,14 +14,12 @@ export default function PricingPage() {
       window.location.href = "/sign-up";
       return;
     }
-    // Navigate to in-app billing page
     window.location.href = "/storyboard-studio?tab=plans";
   };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <div className="p-4 md:p-8 lg:p-12 max-w-[1400px] mx-auto">
-        {/* Nav link */}
         <div className="flex items-center justify-between mb-8">
           <Link href="/" className="text-sm text-gray-500 hover:text-white transition-colors">
             &larr; Back to home
@@ -40,6 +37,7 @@ export default function PricingPage() {
         <PricingShowcase
           currentPlan={currentPlan ?? undefined}
           onSelectPlan={handleSelectPlan}
+          isLoggedIn={!!user}
         />
       </div>
     </div>

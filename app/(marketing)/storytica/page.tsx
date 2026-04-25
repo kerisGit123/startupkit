@@ -6,11 +6,11 @@ import {
   ArrowRight, Check, Star, Shield,
   Menu, X, FileText, Video, Coins,
   Minus, Plus, Layers, Zap, MessageSquare,
-  Image, Camera, Brush, Box, User, Building2,
+  Image, Camera, Brush, Box,
 } from "lucide-react";
-import { PricingTable, useUser } from "@clerk/nextjs";
-import { dark } from "@clerk/ui/themes";
+import { useUser } from "@clerk/nextjs";
 import SupportChatWidget from "@/components/support-chat/SupportChatWidget";
+import PricingShowcase, { WhyStorytica } from "@/components/pricing/PricingShowcase";
 
 /* ─── reveal ─────────────────────────────────────────────────────────── */
 function useRv(t = 0.1) {
@@ -49,7 +49,6 @@ export default function StorticaLanding() {
   const { user } = useUser();
   const [nav, setNav] = useState(false);
   const [ready, setReady] = useState(false);
-  const [pricingMode, setPricingMode] = useState<"personal" | "organization">("personal");
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
 
   const img = "/storytica";
@@ -315,88 +314,33 @@ export default function StorticaLanding() {
         </div>
       </section>
 
-      {/* ═══ PRICING (Clerk PricingTable) ═══ */}
+      {/* ═══ PRICING ═══ */}
       <section id="pricing" className="py-20">
-        <div className="max-w-[1100px] mx-auto px-6">
-          <R><div className="text-center mb-10">
-            <h2 className="text-[1.8rem] lg:text-[2.2rem] font-extrabold mb-3">Simple, Transparent Pricing</h2>
-            <p className="text-[15px] text-[#888]">Start free. Upgrade when you need more.</p>
-          </div></R>
-
-          {/* Personal / Organization toggle */}
+        <div className="max-w-[1200px] mx-auto px-6">
           <R>
-            <div className="flex justify-center mb-10">
-              <div className="inline-flex items-center bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-1 gap-1">
-                <button
-                  onClick={() => setPricingMode("personal")}
-                  className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    pricingMode === "personal" ? "bg-teal-600 text-white shadow-lg" : "text-[#888] hover:text-white"
-                  }`}
-                >
-                  <User className="w-4 h-4" /> Personal
-                </button>
-                <button
-                  onClick={() => setPricingMode("organization")}
-                  className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    pricingMode === "organization" ? "bg-teal-600 text-white shadow-lg" : "text-[#888] hover:text-white"
-                  }`}
-                >
-                  <Building2 className="w-4 h-4" /> Organization
-                </button>
-              </div>
+            <PricingShowcase
+              onSelectPlan={() => (window.location.href = "/sign-up")}
+              isLoggedIn={!!user}
+              compact
+            />
+          </R>
+          <R>
+            <div className="text-center mt-4">
+              <a
+                href="/pricing"
+                className="inline-flex items-center gap-2 text-teal-400 hover:text-teal-300 text-sm font-medium transition-colors"
+              >
+                View full pricing, features & comparison
+                <ArrowRight className="w-4 h-4" />
+              </a>
             </div>
           </R>
 
-          {/* Clerk PricingTable — using dark base theme */}
+          {/* Why Storytica — below pricing cards */}
           <R>
-            <div className="storytica-clerk-pricing">
-              <PricingTable
-                forOrganizations={pricingMode === "organization"}
-                appearance={{
-                  baseTheme: dark,
-                  variables: {
-                    colorPrimary: "#14b8a6",
-                    colorBackground: "#1a1a1a",
-                    fontFamily: "'Inter', sans-serif",
-                    borderRadius: "0.75rem",
-                  },
-                }}
-              />
+            <div className="mt-16">
+              <WhyStorytica />
             </div>
-            {/* Force dark card backgrounds & teal CTAs */}
-            <style>{`
-              .storytica-clerk-pricing .cl-pricingTableCard,
-              .storytica-clerk-pricing [class*="pricingTableCard"]:not([class*="pricingTableCardFee"]):not([class*="pricingTableCardTitle"]):not([class*="pricingTableCardFeature"]) {
-                background-color: #1a1a1a !important;
-                border-color: #2a2a2a !important;
-                color: #fff !important;
-              }
-              .storytica-clerk-pricing button[class*="pricingTableCardCta"],
-              .storytica-clerk-pricing .cl-button__pricingTableCardCta {
-                background-color: #0d9488 !important;
-                color: #fff !important;
-                border: none !important;
-                font-weight: 600 !important;
-              }
-              .storytica-clerk-pricing button[class*="pricingTableCardCta"]:hover {
-                background-color: #14b8a6 !important;
-              }
-              .storytica-clerk-pricing h2,
-              .storytica-clerk-pricing h3,
-              .storytica-clerk-pricing [class*="pricingTableCardTitle"] {
-                color: #fff !important;
-              }
-              .storytica-clerk-pricing [class*="pricingTableCardFee"] {
-                color: #fff !important;
-              }
-              .storytica-clerk-pricing [class*="pricingTableCardDescription"],
-              .storytica-clerk-pricing [class*="pricingTableCardFeePeriod"] {
-                color: #888 !important;
-              }
-              .storytica-clerk-pricing [class*="pricingTableCardFeature"] {
-                color: #c0c0c0 !important;
-              }
-            `}</style>
           </R>
         </div>
       </section>

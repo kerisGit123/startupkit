@@ -20,7 +20,7 @@ import { getCreditPackages } from "@/lib/credit-pricing";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
 import { TransferCreditsDialog } from "./TransferCreditsDialog";
 import { CreditTransactionHistory } from "./CreditTransactionHistory";
-import PricingShowcase from "./PricingShowcase";
+import PricingShowcase from "@/components/pricing/PricingShowcase";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -544,6 +544,7 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
             <div className="space-y-8">
               <PricingShowcase
                 currentPlan={currentPlan ?? undefined}
+                isLoggedIn={!!user}
               />
             </div>
           )}

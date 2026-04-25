@@ -35,10 +35,13 @@ const GENERATION_ESTIMATES = {
   },
 };
 
-interface PricingShowcaseProps {
+export interface PricingShowcaseProps {
   currentPlan?: string;
   onSelectPlan?: (plan: string) => void;
-  showClerkTable?: boolean;
+  /** When false, hides Buy Credits section (guest users can't purchase) */
+  isLoggedIn?: boolean;
+  /** When true, hides WhyStorytica + FeatureComparison (use them standalone on landing) */
+  compact?: boolean;
 }
 
 // Map our internal plan keys to Clerk plan slugs for CheckoutButton
@@ -50,7 +53,8 @@ const PLAN_CLERK_SLUGS: Record<string, string> = {
 export default function PricingShowcase({
   currentPlan,
   onSelectPlan,
-  showClerkTable = false,
+  isLoggedIn = false,
+  compact = false,
 }: PricingShowcaseProps) {
   const [billing, setBilling] = useState<"monthly" | "annual">("annual");
 
@@ -378,111 +382,59 @@ export default function PricingShowcase({
         })}
       </div>
 
-      {/* ── Credit Top-Up ──────────────────────────────────────────── */}
-      <div className="max-w-4xl mx-auto mb-16">
-        <div className="rounded-2xl border border-[#2a2a2a] bg-gradient-to-r from-[#111] via-[#141414] to-[#111] p-8">
-          <div className="text-center mb-6">
-            <h3 className="text-xl font-bold text-white mb-2 flex items-center justify-center gap-2">
-              <Gem className="w-5 h-5 text-emerald-400" />
-              Need More Credits?
-            </h3>
-            <p className="text-sm text-gray-400">
-              No subscription required. Buy credits anytime — they never expire.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { credits: 1000, price: "$9.90", perCredit: "$0.0099", badge: null },
-              { credits: 5000, price: "$49.50", perCredit: "$0.0099", badge: null },
-              { credits: 25000, price: "$247.50", perCredit: "$0.0099", badge: null },
-            ].map((pkg) => (
-              <div
-                key={pkg.credits}
-                className="relative rounded-xl border border-[#2a2a2a] bg-[#0a0a0a] p-5 text-center transition-all hover:translate-y-[-2px]"
-              >
-                {pkg.badge && (
-                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-500 text-white text-xs font-bold">
-                    {pkg.badge}
-                  </span>
-                )}
-                <p className="text-2xl font-bold text-white mb-1">
-                  {pkg.credits.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">credits</p>
-                <p className="text-xl font-bold text-white mb-1">{pkg.price}</p>
-                <p className="text-xs text-gray-500 mb-4">{pkg.perCredit}/credit</p>
-                <button className="w-full py-2.5 rounded-lg bg-[#222] text-white text-sm font-medium hover:bg-[#2a2a2a] border border-[#333] transition-all">
-                  Buy Credits
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Why Storytica ──────────────────────────────────────────── */}
-      <div className="max-w-5xl mx-auto mb-16">
-        <div className="text-center mb-8">
-          <h3 className="text-2xl font-bold text-white mb-2">
-            What makes Storytica different
-          </h3>
-          <p className="text-gray-400 text-sm">
-            Built for storyboarding. Not just another AI image generator.
-          </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Top row: 3 outer cards */}
-          {[
-            { icon: Users, title: "No per-seat charges", desc: "Pro includes 5 seats. Business includes 15. One plan covers your whole team — competitors charge per seat." },
-            { icon: Building2, title: "One plan, multiple orgs", desc: "Business plan supports 3 organizations. No separate billing per org — manage all clients from one subscription." },
-            { icon: Shield, title: "Credits never expire", desc: "Purchased top-up credits last forever. Every competitor resets monthly or expires in 90 days." },
-          ].map((item) => (
-            <div key={item.title} className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
-              <item.icon className="w-5 h-5 text-gray-400 mb-3" />
-              <h4 className="text-sm font-semibold text-white mb-1.5">{item.title}</h4>
-              <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+      {/* ── Credit Top-Up (only for logged-in users) ───────────────── */}
+      {isLoggedIn && (
+        <div className="max-w-4xl mx-auto mb-16">
+          <div className="rounded-2xl border border-[#2a2a2a] bg-gradient-to-r from-[#111] via-[#141414] to-[#111] p-8">
+            <div className="text-center mb-6">
+              <h3 className="text-xl font-bold text-white mb-2 flex items-center justify-center gap-2">
+                <Gem className="w-5 h-5 text-emerald-400" />
+                Need More Credits?
+              </h3>
+              <p className="text-sm text-gray-400">
+                No subscription required. Buy credits anytime — they never expire.
+              </p>
             </div>
-          ))}
-
-          {/* Middle row: outer + center featured + outer */}
-          <div className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
-            <Palette className="w-5 h-5 text-gray-400 mb-3" />
-            <h4 className="text-sm font-semibold text-white mb-1.5">25+ AI models, you choose</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">Pick cheap fast drafts or premium quality — not locked to one model. Image, video, music, audio, analyze.</p>
-          </div>
-
-          {/* Center featured card */}
-          <div className="rounded-xl border border-teal-500/30 bg-gradient-to-b from-teal-950/20 to-[#111] p-6 hover:translate-y-[-1px] transition-all flex flex-col items-center text-center">
-            <Film className="w-7 h-7 text-teal-400 mb-3" />
-            <h4 className="text-base font-bold text-white mb-2">Storyboard-first platform</h4>
-            <p className="text-xs text-gray-400 leading-relaxed">Script to storyboard to video editor to export — the only all-in-one pipeline built for visual storytelling.</p>
-          </div>
-
-          <div className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
-            <Camera className="w-5 h-5 text-gray-400 mb-3" />
-            <h4 className="text-sm font-semibold text-white mb-1.5">Pro creative tools</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">3D camera angles, motion presets, speed ramps, color palettes, face swap, inpaint sections — not just generate & download.</p>
-          </div>
-
-          {/* Bottom row: 3 outer cards */}
-          {[
-            { icon: Layers, title: "Canvas + annotations", desc: "Draw, add bubble text, stickers, annotations directly on frames. Full canvas editor with AI inpainting built in." },
-            { icon: Zap, title: "Real-time collaboration", desc: "Every change syncs instantly across your team. Frames, prompts, generations, edits — all live. No refresh, no polling." },
-            { icon: Star, title: "Transparent pricing", desc: "See exact credit cost before every generation. No hidden fees, no bait-and-switch, no unlimited plans that aren't." },
-          ].map((item) => (
-            <div key={item.title} className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
-              <item.icon className="w-5 h-5 text-gray-400 mb-3" />
-              <h4 className="text-sm font-semibold text-white mb-1.5">{item.title}</h4>
-              <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                { credits: 1000, price: "$9.90", perCredit: "$0.0099", badge: null },
+                { credits: 5000, price: "$49.50", perCredit: "$0.0099", badge: null },
+                { credits: 25000, price: "$247.50", perCredit: "$0.0099", badge: null },
+              ].map((pkg) => (
+                <div
+                  key={pkg.credits}
+                  className="relative rounded-xl border border-[#2a2a2a] bg-[#0a0a0a] p-5 text-center transition-all hover:translate-y-[-2px]"
+                >
+                  {pkg.badge && (
+                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-500 text-white text-xs font-bold">
+                      {pkg.badge}
+                    </span>
+                  )}
+                  <p className="text-2xl font-bold text-white mb-1">
+                    {pkg.credits.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">credits</p>
+                  <p className="text-xl font-bold text-white mb-1">{pkg.price}</p>
+                  <p className="text-xs text-gray-500 mb-4">{pkg.perCredit}/credit</p>
+                  <button className="w-full py-2.5 rounded-lg bg-[#222] text-white text-sm font-medium hover:bg-[#2a2a2a] border border-[#333] transition-all">
+                    Buy Credits
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Feature Comparison Table ───────────────────────────────── */}
-      <div className="max-w-5xl mx-auto mb-10">
-        <FeatureComparisonTable />
-      </div>
+      {/* ── Why Storytica + Feature Comparison (unless compact) ───── */}
+      {!compact && (
+        <>
+          <WhyStorytica />
+          <div className="max-w-5xl mx-auto mb-10">
+            <FeatureComparisonTable />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -516,7 +468,7 @@ function PlanCTAButton({ plan, active, currentPlan, clerkPlanId, billingPeriod, 
   const isUpgrade = targetRank > currentRank;
   const isDowngrade = targetRank < currentRank;
 
-  // Active plan → "Manage Subscription" via Clerk's SubscriptionDetailsButton
+  // Active plan -> "Manage Subscription" via Clerk's SubscriptionDetailsButton
   if (active) {
     return (
       <SignedIn>
@@ -529,7 +481,7 @@ function PlanCTAButton({ plan, active, currentPlan, clerkPlanId, billingPeriod, 
     );
   }
 
-  // Downgrade to Free → cancel subscription via SubscriptionDetailsButton
+  // Downgrade to Free -> cancel subscription via SubscriptionDetailsButton
   if (plan.id === "free" && isDowngrade) {
     return (
       <SignedIn>
@@ -542,7 +494,7 @@ function PlanCTAButton({ plan, active, currentPlan, clerkPlanId, billingPeriod, 
     );
   }
 
-  // Free plan, user is already free → no action
+  // Free plan, user is already free -> no action
   if (plan.id === "free" && !isDowngrade) {
     return (
       <button
@@ -554,7 +506,7 @@ function PlanCTAButton({ plan, active, currentPlan, clerkPlanId, billingPeriod, 
     );
   }
 
-  // Paid plans → use Clerk CheckoutButton (works for both upgrade and downgrade)
+  // Paid plans -> use Clerk CheckoutButton (works for both upgrade and downgrade)
   if (clerkPlanId) {
     const label = isUpgrade
       ? `Upgrade to ${plan.id === "pro" ? "Pro" : "Business"}`
@@ -586,9 +538,69 @@ function PlanCTAButton({ plan, active, currentPlan, clerkPlanId, billingPeriod, 
   );
 }
 
-// ── Feature Comparison Table (collapsible) ──────────────────────────────────
+// ── Why Storytica (exported for landing page) ───────────────────────────────
 
-function FeatureComparisonTable() {
+export function WhyStorytica() {
+  return (
+    <div className="max-w-5xl mx-auto mb-16">
+      <div className="text-center mb-8">
+        <h3 className="text-2xl font-bold text-white mb-2">
+          What makes Storytica different
+        </h3>
+        <p className="text-gray-400 text-sm">
+          Built for storyboarding. Not just another AI image generator.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[
+          { icon: Users, title: "No per-seat charges", desc: "Pro includes 5 seats. Business includes 15. One plan covers your whole team — competitors charge per seat." },
+          { icon: Building2, title: "One plan, multiple orgs", desc: "Business plan supports 3 organizations. No separate billing per org — manage all clients from one subscription." },
+          { icon: Shield, title: "Credits never expire", desc: "Purchased top-up credits last forever. Every competitor resets monthly or expires in 90 days." },
+        ].map((item) => (
+          <div key={item.title} className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
+            <item.icon className="w-5 h-5 text-gray-400 mb-3" />
+            <h4 className="text-sm font-semibold text-white mb-1.5">{item.title}</h4>
+            <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+          </div>
+        ))}
+
+        <div className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
+          <Palette className="w-5 h-5 text-gray-400 mb-3" />
+          <h4 className="text-sm font-semibold text-white mb-1.5">25+ AI models, you choose</h4>
+          <p className="text-xs text-gray-500 leading-relaxed">Pick cheap fast drafts or premium quality — not locked to one model. Image, video, music, audio, analyze.</p>
+        </div>
+
+        <div className="rounded-xl border border-teal-500/30 bg-gradient-to-b from-teal-950/20 to-[#111] p-6 hover:translate-y-[-1px] transition-all flex flex-col items-center text-center">
+          <Film className="w-7 h-7 text-teal-400 mb-3" />
+          <h4 className="text-base font-bold text-white mb-2">Storyboard-first platform</h4>
+          <p className="text-xs text-gray-400 leading-relaxed">Script to storyboard to video editor to export — the only all-in-one pipeline built for visual storytelling.</p>
+        </div>
+
+        <div className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
+          <Camera className="w-5 h-5 text-gray-400 mb-3" />
+          <h4 className="text-sm font-semibold text-white mb-1.5">Pro creative tools</h4>
+          <p className="text-xs text-gray-500 leading-relaxed">3D camera angles, motion presets, speed ramps, color palettes, face swap, inpaint sections — not just generate & download.</p>
+        </div>
+
+        {[
+          { icon: Layers, title: "Canvas + annotations", desc: "Draw, add bubble text, stickers, annotations directly on frames. Full canvas editor with AI inpainting built in." },
+          { icon: Zap, title: "Real-time collaboration", desc: "Every change syncs instantly across your team. Frames, prompts, generations, edits — all live. No refresh, no polling." },
+          { icon: Star, title: "Transparent pricing", desc: "See exact credit cost before every generation. No hidden fees, no bait-and-switch, no unlimited plans that aren't." },
+        ].map((item) => (
+          <div key={item.title} className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
+            <item.icon className="w-5 h-5 text-gray-400 mb-3" />
+            <h4 className="text-sm font-semibold text-white mb-1.5">{item.title}</h4>
+            <p className="text-xs text-gray-500 leading-relaxed">{item.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Feature Comparison Table (exported for landing page) ────────────────────
+
+export function FeatureComparisonTable() {
   const [expanded, setExpanded] = useState(false);
 
   const categories = [
