@@ -8,7 +8,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2, Lock
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2, Lock, LayoutGrid,
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -538,6 +538,8 @@ export function ImageAIPanel({
   const [webSearch, setWebSearch] = useState(false);
   const [generateAudio, setGenerateAudio] = useState(true);
   const [cleanOutput, setCleanOutput] = useState(true); // Appends "no subtitles, no music, no text" for cleaner output
+  const [gridSize, setGridSize] = useState(1); // 1=1x1, 4=2x2, 9=3x3, 16=4x4
+  const [showGridDropdown, setShowGridDropdown] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeType, setAnalyzeType] = useState<"image" | "video" | "audio">("image");
   const [analyzeMediaUrl, setAnalyzeMediaUrl] = useState("");
@@ -1813,14 +1815,15 @@ export function ImageAIPanel({
       return;
     }
 
-    // Step 1: Check if user has sufficient credits
+    // Step 1: Check if user has sufficient credits (multiply by gridSize for grid generation)
+    const totalCreditsNeeded = displayedCredits * gridSize;
     const currentCredits = getBalance ?? 0;
-    if (currentCredits < displayedCredits) {
-      toast.error(`Insufficient credits. Need ${displayedCredits} credits, but you only have ${currentCredits}.`);
+    if (currentCredits < totalCreditsNeeded) {
+      toast.error(`Insufficient credits. Need ${totalCreditsNeeded} credits (${displayedCredits} x ${gridSize}), but you only have ${currentCredits}.`);
       return;
     }
-    
-    console.log("Step 1: Credits check passed");
+
+    console.log("Step 1: Credits check passed, gridSize:", gridSize, "totalCredits:", totalCreditsNeeded);
     
     try {
       // Note: Placeholder record creation and credit deduction are handled downstream
@@ -1968,7 +1971,15 @@ export function ImageAIPanel({
         const mergedUrls = seedanceMode === "lipsync" ? (firstFrameUrl ? [firstFrameUrl] : [])
           : (seedanceMode === "ugc" || seedanceMode === "showcase") ? ugcImageUrls
           : undefined;
-        onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls);
+        // Grid generation: call onGenerate multiple times for gridSize > 1
+        const genCount = (outputMode === "image" && gridSize > 1) ? gridSize : 1;
+        for (let i = 0; i < genCount; i++) {
+          if (i > 0) await new Promise(r => setTimeout(r, 500)); // small delay between calls
+          onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls);
+        }
+        if (genCount > 1) {
+          toast.success(`${genCount} images generating (${genCount} x ${displayedCredits} = ${genCount * displayedCredits} credits)`);
+        }
       }
       
     } catch (error) {
@@ -5059,11 +5070,56 @@ export function ImageAIPanel({
               </button>
             )}
 
+            {/* Grid generation selector — image mode only */}
+            {outputMode === "image" && (
+              <div className="relative">
+                <button
+                  onClick={() => { setShowGridDropdown(!showGridDropdown); }}
+                  className={`flex items-center gap-1 px-1.5 py-1 rounded-md text-[13px] transition-colors cursor-pointer ${
+                    gridSize > 1 ? "text-teal-400 bg-teal-500/10" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                  }`}
+                  title="Grid generation — generate multiple variations"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  <span>{gridSize === 1 ? "1x1" : gridSize === 4 ? "2x2" : gridSize === 9 ? "3x3" : "4x4"}</span>
+                </button>
+                {showGridDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowGridDropdown(false)} />
+                    <div className="absolute bottom-full left-0 mb-2 w-[140px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50 py-1">
+                      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary)">
+                        Grid Generation
+                      </div>
+                      {[
+                        { value: 1, label: "1x1", desc: "Single image" },
+                        { value: 4, label: "2x2", desc: "4 variations" },
+                        { value: 9, label: "3x3", desc: "9 variations" },
+                        { value: 16, label: "4x4", desc: "16 variations" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setGridSize(opt.value); setShowGridDropdown(false); }}
+                          className={`w-full flex items-center justify-between px-3 py-1.5 text-[12px] transition-colors ${
+                            gridSize === opt.value
+                              ? "text-teal-300 bg-teal-500/10"
+                              : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                          }`}
+                        >
+                          <span className="font-medium">{opt.label}</span>
+                          <span className="text-[10px] text-(--text-tertiary)">{opt.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Cost per generation */}
             {selectedModelOption.value !== "ai-music-api/generate-persona" && (
               <div className="flex items-center gap-1 text-[12px] text-(--text-secondary)">
                 <Coins className="w-4 h-4 text-amber-400" strokeWidth={1.75} />
-                <span>{displayedCredits}</span>
+                <span>{gridSize > 1 ? `${displayedCredits} x ${gridSize} = ${displayedCredits * gridSize}` : displayedCredits}</span>
               </div>
             )}
 
