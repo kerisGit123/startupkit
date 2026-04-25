@@ -28,6 +28,7 @@ import { AIGeneratorModal } from "../ai/AIGeneratorModal";
 import EditImageAIPanel, { type AIEditMode } from "./EditImageAIPanel";
 import { ImageAIPanel, type ImageAIEditMode } from "../ai/VideoImageAIPanel";
 import { CreditBadge } from "../shared/CreditBadge";
+import { DirectorChatPanel } from "@/components/director/DirectorChatPanel";
 import { SceneEditorHeader } from "./SceneEditorHeader";
 import { StoryboardStrip } from "./StoryboardStrip";
 import { VideoPreviewDialog } from "../shared/VideoPreviewDialog";
@@ -482,6 +483,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   // Debug: Track generated images changes
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
+  const [showDirectorChat, setShowDirectorChat] = useState(false);
   const generatedImageRef = useRef<HTMLImageElement>(null);
   const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'videoimage'>('videoimage');
   const [showUploadOverrideBrowser, setShowUploadOverrideBrowser] = useState(false);
@@ -4788,6 +4790,20 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 {showImageAIPanel ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 <span className="text-[8px] font-medium leading-none">{showImageAIPanel ? 'Hide' : 'Show'}</span>
               </button>
+              {/* AI Director Toggle Button - Below Hide/Show */}
+              <button
+                onClick={() => setShowDirectorChat(!showDirectorChat)}
+                className={`absolute top-[72px] left-4 z-[9999] w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all pointer-events-auto ${
+                  showDirectorChat
+                    ? 'bg-amber-500/15 text-amber-400'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                }`}
+                style={{ pointerEvents: 'auto' }}
+                title="AI Director"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span className="text-[8px] font-medium leading-none">Director</span>
+              </button>
               
               {/* AI Panel overlay on canvas */}
               {showImageAIPanel && (
@@ -7114,6 +7130,16 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         refMode={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).refMode}
         models={(USE_CASES[imageUseCase] ?? USE_CASES["character-design"]).models}
       />
+
+      {/* AI Director Panel */}
+      {showDirectorChat && (
+        <DirectorChatPanel
+          projectId={projectId || ""}
+          currentFrameNumber={activeShot ? shots.findIndex(s => s.id === activeShot.id) + 1 : undefined}
+          currentSceneId={activeShot ? `scene-${activeShot.scene}` : undefined}
+          onClose={() => setShowDirectorChat(false)}
+        />
+      )}
     </div>
   );
 }
