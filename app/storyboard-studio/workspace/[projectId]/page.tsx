@@ -22,6 +22,7 @@ import { BatchGenerateDialog } from "../../components/storyboard/BatchGenerateDi
 import { PresetManager } from "../../components/storyboard/PresetManager";
 import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
 import { SceneEditor } from "../../components/editor/SceneEditor";
+import { DirectorChatPanel } from "@/components/director/DirectorChatPanel";
 import { TagEditor } from "../../components/storyboard/TagEditor";
 import { DisplayFilters } from "../../components/storyboard/DisplayFilters";
 import { TopNavSearch } from "../../components/dashboard/TopNavSearch";
@@ -540,6 +541,7 @@ export default function StoryboardWorkspacePage() {
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [selectedItemForElement, setSelectedItemForElement] = useState<Id<"storyboard_items"> | null>(null);
   const [showSceneEditor, setShowSceneEditor] = useState(false);
+  const [showDirectorChat, setShowDirectorChat] = useState(false);
   const [selectedSceneItem, setSelectedSceneItem] = useState<any>(null);
   const [elementLibraryDraft, setElementLibraryDraft] = useState<{
     imageUrls?: string[];
@@ -1549,6 +1551,12 @@ export default function StoryboardWorkspacePage() {
                       <Users className="w-3.5 h-3.5" />
                       Elements
                     </button>
+                    <button onClick={() => setShowDirectorChat(!showDirectorChat)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition ${showDirectorChat ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-[#3D3D3D] hover:bg-[#2C2C2C] text-[#A0A0A0]"}`}
+                      title="AI Director — creative assistant">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Director
+                    </button>
                     <button onClick={() => hasProFeatures ? setShowPresetManager(true) : toast.info("Upgrade to Pro to use Presets")}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition ${hasProFeatures ? "bg-[#3D3D3D] hover:bg-[#2C2C2C] text-[#A0A0A0]" : "bg-[#3D3D3D] text-[#666] cursor-not-allowed"}`}
                       title={hasProFeatures ? "Manage saved presets" : "Pro feature — Upgrade to unlock"}>
@@ -2173,6 +2181,15 @@ export default function StoryboardWorkspacePage() {
         <div className="fixed inset-0 z-[100]">
           <VideoEditor projectId={pid} onClose={() => setTab("storyboard")} projectName={project?.name} />
         </div>
+      )}
+
+      {/* AI Director — right-side chat panel */}
+      {showDirectorChat && (
+        <DirectorChatPanel
+          projectId={pid}
+          companyId={companyId}
+          onClose={() => setShowDirectorChat(false)}
+        />
       )}
     </div>
   );
