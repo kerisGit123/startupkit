@@ -2187,7 +2187,7 @@ export default function StoryboardWorkspacePage() {
       {showDirectorChat && (
         <DirectorChatPanel
           projectId={pid}
-          companyId={companyId}
+          companyId={currentCompanyId}
           onClose={() => setShowDirectorChat(false)}
         />
       )}
