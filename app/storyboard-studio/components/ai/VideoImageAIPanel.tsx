@@ -543,6 +543,7 @@ export function ImageAIPanel({
   const [analyzeMediaUrl, setAnalyzeMediaUrl] = useState("");
   const [analyzeResult, setAnalyzeResult] = useState("");
   const [showAnalyzeBrowser, setShowAnalyzeBrowser] = useState(false);
+  const [isApplyingStyle, setIsApplyingStyle] = useState(false);
 
   // Get media duration from URL
   const getMediaDuration = (url: string, type: 'video' | 'audio'): Promise<number> => {
@@ -3273,6 +3274,46 @@ export function ImageAIPanel({
                     >
                       <Copy className="w-3 h-3" /> Copy
                     </button>
+                    {backgroundImage && (
+                      <button
+                        onClick={async () => {
+                          if (!backgroundImage || isApplyingStyle) return;
+                          setIsApplyingStyle(true);
+                          try {
+                            const response = await fetch("/api/inpaint", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                image: backgroundImage,
+                                prompt: `Apply this visual style to the image: ${analyzeResult}`,
+                                model: "gpt-image/1.5-image-to-image",
+                              }),
+                            });
+                            if (!response.ok) throw new Error("Style transfer failed");
+                            const result = await response.json();
+                            const resultImage = result.image ?? result.url ?? result.output;
+                            if (resultImage && onSetOriginalImage) {
+                              onSetOriginalImage(resultImage);
+                              toast.success("Style applied to image!");
+                            }
+                          } catch (err) {
+                            toast.error("Failed to apply style. Try again.");
+                            console.error("[style-transfer]", err);
+                          } finally {
+                            setIsApplyingStyle(false);
+                          }
+                        }}
+                        disabled={isApplyingStyle}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-purple-400 hover:bg-purple-500/10 transition disabled:opacity-50"
+                      >
+                        {isApplyingStyle ? (
+                          <div className="w-3 h-3 border border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                        ) : (
+                          <Wand2 className="w-3 h-3" />
+                        )}
+                        Apply to Image
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -3692,6 +3733,8 @@ export function ImageAIPanel({
                           setCurrentPrompt(plainText);
                           onUserPromptChange?.(plainText);
                         }}
+                        backgroundImage={backgroundImage}
+                        onSetOriginalImage={onSetOriginalImage}
                       />
                     ) : (
                       <button

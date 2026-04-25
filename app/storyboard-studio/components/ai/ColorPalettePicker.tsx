@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Palette, X, Save, Download, Pipette, Trash2 } from "lucide-react";
+import { Palette, X, Save, Download, Pipette, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -29,6 +29,10 @@ interface ColorPalettePickerProps {
   onCaptureClick?: () => void;
   /** Insert palette text into prompt textarea for user editing */
   onInsertToPrompt?: (text: string) => void;
+  /** Current canvas image URL for "Apply to Image" */
+  backgroundImage?: string | null;
+  /** Callback to set the canvas image after color grading */
+  onSetOriginalImage?: (imageUrl: string) => void;
 }
 
 // ── Build prompt text from colors ────────────────────────────────────────
@@ -51,10 +55,13 @@ export function ColorPalettePicker({
   canOpenR2,
   onCaptureClick,
   onInsertToPrompt,
+  backgroundImage,
+  onSetOriginalImage,
 }: ColorPalettePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showSaveInput, setShowSaveInput] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [isApplyingGrade, setIsApplyingGrade] = useState(false);
   const [showLoadMenu, setShowLoadMenu] = useState(false);
   const [isEyedropping, setIsEyedropping] = useState(false);
   const [hoveredColor, setHoveredColor] = useState<string | null>(null);
@@ -617,6 +624,53 @@ export function ColorPalettePicker({
                     title="Insert into prompt textarea for editing"
                   >
                     Send to Prompt
+                  </button>
+                )}
+                {backgroundImage && onSetOriginalImage && hasColors && (
+                  <button
+                    onClick={async () => {
+                      if (isApplyingGrade) return;
+                      setIsApplyingGrade(true);
+                      try {
+                        const palettePrompt = buildColorPalettePromptText(colors);
+                        const response = await fetch("/api/inpaint", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            image: backgroundImage,
+                            prompt: `Apply this color grading to the image, preserving all content: ${palettePrompt}`,
+                            model: "gpt-image/1.5-image-to-image",
+                          }),
+                        });
+                        if (!response.ok) throw new Error("Color grading failed");
+                        const result = await response.json();
+                        const resultImage = result.image ?? result.url ?? result.output;
+                        if (resultImage) {
+                          onSetOriginalImage(resultImage);
+                          toast.success("Color grade applied!");
+                        }
+                      } catch (err) {
+                        toast.error("Failed to apply color grade.");
+                        console.error("[color-grade]", err);
+                      } finally {
+                        setIsApplyingGrade(false);
+                      }
+                    }}
+                    disabled={isApplyingGrade}
+                    className="shrink-0 px-2.5 py-1.5 rounded-lg text-[9px] font-medium bg-purple-500/15 border border-purple-500/30 text-purple-300 hover:bg-purple-500/25 transition-colors whitespace-nowrap disabled:opacity-50"
+                    title="Apply color palette to current image via AI"
+                  >
+                    {isApplyingGrade ? (
+                      <span className="flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 border border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                        Applying...
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <Wand2 className="w-3 h-3" />
+                        Apply to Image
+                      </span>
+                    )}
                   </button>
                 )}
               </div>
