@@ -103,38 +103,39 @@ export function CanvasEditor({
 }: CanvasEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
-  
-  // Debug: Track imageUrl changes
-  useEffect(() => {
-    console.log("DEBUG: CanvasEditor imageUrl changed to: ",imageUrl?.substring(0,50));
-  }, [imageUrl]);
-
-  // Update image transform when zoomLevel changes
-  useEffect(() => {
-    const container = containerRef.current;
-    const img = getMainCanvasImage();
-    if (!container || !img || !img.naturalWidth || !img.naturalHeight) return;
-    
-    const cW = container.offsetWidth;
-    const cH = container.offsetHeight;
-    if (!cW || !cH) return;
-    
-    const baseScale = Math.min(cW / img.naturalWidth, cH / img.naturalHeight);
-    const zoomScale = baseScale * (zoomLevel / 100);
-    const tx = (cW - img.naturalWidth * zoomScale) / 2;
-    const ty = (cH - img.naturalHeight * zoomScale) / 2;
-    img.style.transform = `translate(${tx}px, ${ty}px) scale(${zoomScale})`;
-  }, [zoomLevel]);
-  const dragRef = useRef<DragInfo>(null);
-  const rotDragRef = useRef<RotDragInfo>(null);
   const [outerSize, setOuterSize] = useState({ w: 0, h: 0 });
-  // ...
+  const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
   const [isPainting, setIsPainting] = useState(false);
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [_selectedBubbleId, _setSelectedBubbleId] = useState<string | null>(null);
   const [_selectedTextId, _setSelectedTextId] = useState<string | null>(null);
   const [_selectedAssetId, _setSelectedAssetId] = useState<string | null>(null);
-  const [containerSize, setContainerSize] = useState({ w: 800, h: 500 });
+
+  // Debug: Track imageUrl changes
+  useEffect(() => {
+    console.log("DEBUG: CanvasEditor imageUrl changed to: ",imageUrl?.substring(0,50));
+  }, [imageUrl]);
+
+  // Update image transform when zoomLevel or container size changes
+  useEffect(() => {
+    const container = containerRef.current;
+    const img = getMainCanvasImage();
+    if (!container || !img || !img.naturalWidth || !img.naturalHeight) return;
+
+    const cW = container.offsetWidth;
+    const cH = container.offsetHeight;
+    if (!cW || !cH) return;
+
+    const baseScale = Math.min(cW / img.naturalWidth, cH / img.naturalHeight);
+    const zoomScale = baseScale * (zoomLevel / 100);
+    const tx = (cW - img.naturalWidth * zoomScale) / 2;
+    const ty = (cH - img.naturalHeight * zoomScale) / 2;
+    img.style.transform = `translate(${tx}px, ${ty}px) scale(${zoomScale})`;
+    onImageLoad?.(baseScale);
+  }, [zoomLevel, containerSize.w, containerSize.h]);
+
+  const dragRef = useRef<DragInfo>(null);
+  const rotDragRef = useRef<RotDragInfo>(null);
   const [editingBubbleId, setEditingBubbleId] = useState<string | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; kind: "bubble" | "text" | "asset" | "canvas" | "shape"; id?: string; submenu?: 'tailDirection' | 'layer' | 'bubbleType' | 'textProperties' | 'shapeProperties' | 'colorPalette'; parentX?: number; parentY?: number; parentWidth?: number; parentHeight?: number; menuItemIndex?: number; menuItemHeight?: number } | null>(null);
@@ -967,15 +968,16 @@ export function CanvasEditor({
   const ar = aspectRatio ? (arMap[aspectRatio] ?? null) : null;
 
   // Compute exact pixel box that fits inside outer container preserving aspect ratio
-  // Leave 100px padding on all sides so the canvas never touches the edges
-  // Add extra 128px bottom padding to avoid being hidden by bottom panel
-  const PAD = 100;
-  const TOP_PAD = 100; // Ensure minimum 100px top padding
-  const BOTTOM_EXTRA = 128;
+  // Responsive padding: smaller on mobile, larger on desktop
+  const isMobile = outerSize.w < 640;
+  const SIDE_PAD = isMobile ? 16 : 60;
+  const TOP_PAD = isMobile ? 8 : 10;
+  const BOTTOM_PAD = isMobile ? 8 : 20;
+  const BOTTOM_EXTRA = isMobile ? 60 : 80; // space for bottom panel
   let canvasStyle: React.CSSProperties = { width: "100%", height: "100%" };
   if (ar && outerSize.w > 0 && outerSize.h > 0) {
-    const maxW = outerSize.w - PAD * 2;
-    const maxH = outerSize.h - TOP_PAD - PAD - BOTTOM_EXTRA; // Use TOP_PAD for top, PAD for bottom
+    const maxW = outerSize.w - SIDE_PAD * 2;
+    const maxH = outerSize.h - TOP_PAD - BOTTOM_PAD - BOTTOM_EXTRA;
     // "contain" logic: fit by width first, fall back to height if overflows
     let w = maxW;
     let h = w / ar;
@@ -983,11 +985,11 @@ export function CanvasEditor({
       h = maxH;
       w = h * ar;
     }
-    canvasStyle = { width: `${w * 1.1}px`, height: `${h * 1.1}px` };
+    canvasStyle = { width: `${w}px`, height: `${h}px` };
   }
 
   return (
-    <div ref={outerRef} className="relative w-full h-full flex items-center justify-center bg-(--bg-primary) overflow-hidden">
+    <div ref={outerRef} className="relative w-full h-full flex items-start justify-center bg-(--bg-primary) overflow-hidden pt-2 sm:pt-5">
       <div ref={containerRef} className="relative bg-(--bg-primary)" data-canvas-editor="true"
         style={{ ...canvasStyle, cursor }}
         onMouseDown={handleMouseDown}
