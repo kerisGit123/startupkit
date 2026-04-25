@@ -11,7 +11,7 @@ export interface PricingParams {
 }
 
 // Import Convex functions for database queries
-import { api } from "../../../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 
 export interface CostResult {
   credits: number;

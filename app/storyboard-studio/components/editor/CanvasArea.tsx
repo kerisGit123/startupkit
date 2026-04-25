@@ -160,7 +160,7 @@ export function CanvasArea({
           // Pass brush props for all inpaint models
           brushSize={maskBrushSize}
           isEraser={isEraser}
-          maskOpacity={maskOpacity}
+          maskOpacity={maskOpacity ?? 0.5}
           showMask={showMask}
           hiddenObjectIds={hiddenIds}
           onSelectionChange={setCanvasSelection}

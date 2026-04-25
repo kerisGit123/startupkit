@@ -4,7 +4,13 @@ import { useState, useEffect, useMemo } from "react";
 import { Search, Plus, Package, Check, AlertCircle, Loader2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { debounce } from "lodash";
+// Simple debounce utility (avoids lodash dependency)
+function debounce<T extends (...args: any[]) => any>(fn: T, ms: number) {
+  let timer: ReturnType<typeof setTimeout>;
+  const debounced = (...args: Parameters<T>) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+  debounced.cancel = () => clearTimeout(timer);
+  return debounced;
+}
 
 interface CreateElementProps {
   projectId: string;

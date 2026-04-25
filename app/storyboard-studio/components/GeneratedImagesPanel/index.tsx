@@ -249,7 +249,7 @@ export function GeneratedImagesPanel({
           categoryId: file.categoryId ? String(file.categoryId) : "",
           taskId: file.taskId,
           userId: file.userId,
-          metadata: file.metadata,
+          rawMetadata: file.metadata,
         } as GeneratedImageCard & { responseCode?: number; responseMessage?: string; creditsUsed?: number; prompt?: string; isShared?: boolean; category?: string; tags?: string[]; size?: number; categoryId?: string; taskId?: string; userId?: string; metadata?: any };
       });
   }, [activeShot?.id, projectFiles]);

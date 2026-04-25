@@ -310,17 +310,17 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
       let resetResult: { deletedSubscriptionEntries: number; newBalance: number } | null = null;
       await runStep("Reset credits to zero", async () => {
         resetResult = await resetCredits({ companyId });
-        if (resetResult.newBalance !== 0) {
+        if (resetResult?.newBalance !== 0) {
           return {
             name: "Reset credits to zero",
             status: "fail",
-            error: `newBalance=${resetResult.newBalance}, expected 0`,
+            error: `newBalance=${resetResult?.newBalance}, expected 0`,
           };
         }
         return {
           name: "Reset credits to zero",
           status: "pass",
-          details: `Deleted ${resetResult.deletedSubscriptionEntries} sub entries, balance=0`,
+          details: `Deleted ${resetResult?.deletedSubscriptionEntries} sub entries, balance=0`,
         };
       });
 
@@ -331,24 +331,24 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
           companyId,
           plan: effectivePlan,
         });
-        if (!firstGrant.granted) {
+        if (!firstGrant?.granted) {
           return {
             name: "Force monthly grant (first call)",
             status: "fail",
             error: `granted=false after reset — expected true`,
           };
         }
-        if (firstGrant.amount !== entitlements.monthlyCredits) {
+        if (firstGrant?.amount !== entitlements.monthlyCredits) {
           return {
             name: "Force monthly grant (first call)",
             status: "fail",
-            error: `amount=${firstGrant.amount}, expected ${entitlements.monthlyCredits}`,
+            error: `amount=${firstGrant?.amount}, expected ${entitlements.monthlyCredits}`,
           };
         }
         return {
           name: "Force monthly grant (first call)",
           status: "pass",
-          details: `Granted ${firstGrant.amount} credits`,
+          details: `Granted ${firstGrant?.amount} credits`,
         };
       });
 
@@ -659,9 +659,9 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
       let personalGrantResult: { granted: boolean; amount?: number; reason?: string } | null = null;
       await runStep("[B9] Force monthly grant for personal", async () => {
         personalGrantResult = await ensureMonthlyGrant({ companyId: personalCompanyId, plan: userPlan });
-        if (!personalGrantResult.granted) return { name: "[B9] Force monthly grant for personal", status: "fail", error: `granted=false after reset. reason='${personalGrantResult.reason ?? "?"}'.` };
-        if (personalGrantResult.amount !== expectedPersonalGrant) return { name: "[B9] Force monthly grant for personal", status: "fail", error: `amount=${personalGrantResult.amount}, expected ${expectedPersonalGrant}` };
-        return { name: "[B9] Force monthly grant for personal", status: "pass", details: `Granted ${personalGrantResult.amount} credits for '${userPlan}'` };
+        if (!personalGrantResult?.granted) return { name: "[B9] Force monthly grant for personal", status: "fail", error: `granted=false after reset. reason='${personalGrantResult?.reason ?? "?"}'.` };
+        if (personalGrantResult?.amount !== expectedPersonalGrant) return { name: "[B9] Force monthly grant for personal", status: "fail", error: `amount=${personalGrantResult?.amount}, expected ${expectedPersonalGrant}` };
+        return { name: "[B9] Force monthly grant for personal", status: "pass", details: `Granted ${personalGrantResult?.amount} credits for '${userPlan}'` };
       });
 
       await runStep("[B10] Second grant is idempotent no-op", async () => {
@@ -817,7 +817,7 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
     lines.push("## Plan slug mapping (env vars)");
     lines.push(`- free → \`${CLERK_PLAN_SLUGS.free}\``);
     lines.push(`- pro_personal → \`${CLERK_PLAN_SLUGS.pro_personal}\``);
-    lines.push(`- starter → \`${CLERK_PLAN_SLUGS.starter}\``);
+    lines.push(`- starter → \`${(CLERK_PLAN_SLUGS as Record<string, string>).starter}\``);
     lines.push(`- business → \`${CLERK_PLAN_SLUGS.business}\``);
     lines.push("");
     lines.push("## Entitlements (from PLAN_LIMITS[effectivePlan])");

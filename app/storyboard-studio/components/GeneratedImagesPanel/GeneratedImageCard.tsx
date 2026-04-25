@@ -33,7 +33,9 @@ interface GeneratedImageCard {
   metadata: GeneratedImageMetadata;
   status: 'processing' | 'completed' | 'error';
   isFavorite: boolean;
-  fileType?: 'image' | 'video' | 'audio' | 'music'; // Add fileType to distinguish between images, videos, audio, and music
+  fileType?: 'image' | 'video' | 'audio' | 'music';
+  filename?: string;
+  prompt?: string;
 }
 
 interface GeneratedImageCardProps {

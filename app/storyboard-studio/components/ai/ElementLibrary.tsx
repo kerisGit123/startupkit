@@ -1424,7 +1424,7 @@ export function ElementLibrary({
                                       thumbnailUrl: url,
                                       referenceUrls: [url]
                                     };
-                                    onSelectImage(url, `${elementName} - Image ${index + 1}`, mockElement);
+                                    onSelectImage(url, `${elementName} - Image ${index + 1}`, mockElement as any);
                                     
                                     // Show success notification to user
                                     setTimeout(() => {
@@ -1760,9 +1760,6 @@ export function ElementLibrary({
           <div className="w-[90vw] max-w-4xl h-[80vh]">
             <FileBrowser
               projectId={projectId}
-              companyId={projectCompanyId || ""}
-              userId={userId}
-              user={user}
               onClose={() => setShowRefFileBrowser(false)}
               imageSelectionMode={true}
               onSelectFile={(url, type) => {

@@ -106,26 +106,33 @@ export default function StorticaLanding() {
       {/* ═══ HERO ═══ */}
       <section className="pt-28 pb-6 lg:pt-36 lg:pb-10">
         <div className="max-w-[1200px] mx-auto px-6 text-center">
-          {/* Badge */}
-          <div className={`flex items-center justify-center gap-3 mb-6 transition-all duration-700 ${ready ? "opacity-100" : "opacity-0 translate-y-3"}`}>
-            <div className="flex -space-x-1.5">
-              {["bg-teal-500", "bg-cyan-500", "bg-blue-500", "bg-purple-500"].map((c, i) => (
-                <div key={i} className={`w-6 h-6 rounded-full ${c} border-2 border-[#111111] text-[8px] font-bold flex items-center justify-center`}>{["A", "K", "N", "T"][i]}</div>
-              ))}
+          {/* Metrics badge */}
+          <div className={`flex items-center justify-center gap-4 mb-6 transition-all duration-700 ${ready ? "opacity-100" : "opacity-0 translate-y-3"}`}>
+            <div className="flex items-center gap-1.5 text-[12px] text-[#888]">
+              <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+              <span><span className="text-white font-semibold">25+</span> AI models</span>
             </div>
-            <div className="flex gap-0.5">{[...Array(5)].map((_, i) => <Star key={i} className="w-3 h-3 text-amber-400 fill-amber-400" />)}</div>
-            <span className="text-[11px] text-[#555]">Trusted by creators</span>
+            <span className="text-[#333]">|</span>
+            <div className="flex items-center gap-1.5 text-[12px] text-[#888]">
+              <Film className="w-3.5 h-3.5 text-teal-400" />
+              <span>Image, video, music & audio</span>
+            </div>
+            <span className="text-[#333]">|</span>
+            <div className="flex items-center gap-1.5 text-[12px] text-[#888]">
+              <Shield className="w-3.5 h-3.5 text-teal-400" />
+              <span>Credits never expire</span>
+            </div>
           </div>
 
           {/* Heading */}
           <h1 className={`text-[2.5rem] sm:text-[3.5rem] lg:text-[4.2rem] font-extrabold leading-[1.05] tracking-tight mb-5 transition-all duration-1000 ${ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`} style={{ transitionDelay: "150ms" }}>
-            AI Storyboard Studio
+            Professional Storyboards
             <br />
-            for <span className="text-teal-400">Film Directors & Creators</span>
+            in <span className="text-teal-400">Minutes, Not Days</span>
           </h1>
 
           <p className={`text-base lg:text-lg text-[#888] leading-relaxed max-w-2xl mx-auto mb-6 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
-            Turn text into storyboards with 25+ AI models. Generate images, videos, music, and voiceovers. Edit with professional canvas tools, compose in the video editor, and go from script to final cut in one place.
+            Turn any script into a visual storyboard with 25+ AI models. Generate images, videos, music, and voiceovers. Edit on canvas, compose in the video editor, and export — all in one place.
           </p>
 
           {/* Bullets */}
@@ -138,8 +145,9 @@ export default function StorticaLanding() {
           {/* CTA */}
           <div className={`mb-12 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "560ms" }}>
             <a href="/sign-up" className="group inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#111111] font-bold text-base px-8 py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-teal-500/20">
-              Create Storyboard <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              Start Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </a>
+            <p className="text-[11px] text-[#555] mt-2.5">No credit card required</p>
           </div>
 
           {/* Full-width hero screenshot */}
@@ -290,8 +298,15 @@ export default function StorticaLanding() {
         </div>
       </section>
 
-      {/* ═══ TESTIMONIALS ═══ */}
+      {/* ═══ WHY STORYTICA ═══ */}
       <section className="py-20 bg-[#0e0e0e]">
+        <div className="max-w-[1200px] mx-auto px-6">
+          <R><WhyStorytica /></R>
+        </div>
+      </section>
+
+      {/* ═══ TESTIMONIALS ═══ */}
+      <section className="py-20">
         <div className="max-w-[900px] mx-auto px-6">
           <R><h2 className="text-[1.8rem] font-extrabold text-center mb-10">What Our Users Say</h2></R>
           <div className="grid md:grid-cols-2 gap-5">
@@ -336,12 +351,6 @@ export default function StorticaLanding() {
             </div>
           </R>
 
-          {/* Why Storytica — below pricing cards */}
-          <R>
-            <div className="mt-16">
-              <WhyStorytica />
-            </div>
-          </R>
         </div>
       </section>
 

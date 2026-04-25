@@ -380,7 +380,7 @@ export function ProjectsDashboard({
             </div>
             <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
               <TopNavFilters
-                onFiltersChange={setFilters}
+                onFiltersChange={setFilters as any}
                 projectCount={finalFilteredProjects.length}
               />
               <button

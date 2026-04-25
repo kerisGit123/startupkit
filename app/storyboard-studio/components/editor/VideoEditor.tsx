@@ -748,6 +748,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     if (clips.length === 0) { toast.warning("Add clips first"); return; }
     if (typeof VideoEncoder === "undefined") { toast.error("Use Chrome or Edge"); return; }
     setExporting(true); setExportProgress(0);
+    const blobUrls: string[] = [];
     try {
       const FPS = 30, W = 1920, H = 1080, total = Math.ceil(totalDur * FPS);
       const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
@@ -761,7 +762,6 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       toast.info("Loading media files...");
       const videoEls: Record<string, HTMLVideoElement> = {};
       const imageBitmaps: Record<string, ImageBitmap> = {};
-      const blobUrls: string[] = [];
 
       for (let i = 0; i < clips.length; i++) {
         const c = clips[i];

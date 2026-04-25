@@ -33,9 +33,29 @@ const Paintbrush = ({ className }: { className?: string }) => (
 // ── Types ─────────────────────────────────────────────────────────────
 export type AIEditMode = "area-edit" | "annotate";
 
+interface ReferenceImageMetadata {
+  companyId: string;
+  elementId?: string;
+  fileId?: string;
+  r2Key?: string;
+  addedAt: number;
+  originalId?: string;
+  originalSource?: string;
+  element?: any;
+  type?: string;
+  source?: string;
+  selectedAt?: number;
+  category?: string;
+  isFavorite?: boolean;
+  isGlobal?: boolean;
+  elementType?: string;
+  elementName?: string;
+}
+
 interface ReferenceImage {
   id: string;
   url: string;
+  source?: string;
 }
 
 export interface EditImageAIPanelProps {
@@ -101,7 +121,11 @@ export interface EditImageAIPanelProps {
   // Generated images for reference selection
   generatedItemImages?: Array<{ id: string; url: string; filename: string }>;
   generatedProjectImages?: Array<{ id: string; url: string; filename: string }>;
-  onAddReferenceFromUrl?: (url: string) => void;
+  onAddReferenceFromUrl?: (url: string) => void | Promise<void>;
+  activeShotId?: string;
+  originalImage?: string;
+  userId?: string;
+  user?: any;
 }
 
 // ── Available Models ─────────────────────────────────────────────────
@@ -242,6 +266,8 @@ export default function EditImageAIPanel({
   const { models, loading: pricingLoading, error: pricingError, getModelCredits: hookGetModelCredits } = usePricingData();
   const [selectedQuality, setSelectedQuality] = useState("1K"); // Default quality for Nano Banana/Topaz
   const [gptImageQuality, setGptImageQuality] = useState("medium"); // Default quality for GPT Image
+  const [outputMode, setOutputMode] = useState("image"); // Output mode: image or video
+  const [resolution, setResolution] = useState("1K"); // Resolution setting
   
   // NEW: Prompt actions state
   const [savePromptName, setSavePromptName] = useState("");
@@ -306,12 +332,12 @@ export default function EditImageAIPanel({
     console.log('🎯 Max reference images:', maxReferenceImages);
     
     // Check if we've reached the maximum reference images limit
-    if (maxReferenceImages > 0 && referenceImages.length >= maxReferenceImages) {
-      console.log('❌ Reference limit reached:', referenceImages.length, '/', maxReferenceImages);
+    if (maxReferenceImages > 0 && (referenceImages?.length ?? 0) >= maxReferenceImages) {
+      console.log('❌ Reference limit reached:', referenceImages?.length ?? 0, '/', maxReferenceImages);
       showToast(`Maximum ${maxReferenceImages} reference images allowed for this mode`, 'error');
       return;
     }
-    
+
     try {
       // Create a mock element object like ElementLibrary does
       const mockElement = {
@@ -327,10 +353,10 @@ export default function EditImageAIPanel({
       handleImageSelect('element', {
         url: img.url,
         name: mockElement.name,
-        source: 'duplicate',
         metadata: {
           originalId: img.id,
           originalSource: img.source,
+          source: 'duplicate',
           element: mockElement
         }
       });
@@ -437,7 +463,7 @@ export default function EditImageAIPanel({
   // Handle add reference
   const handleAddReference = (file: File) => {
     // Check if we've reached the maximum reference images limit
-    if (maxReferenceImages > 0 && referenceImages.length >= maxReferenceImages) {
+    if (maxReferenceImages > 0 && (referenceImages?.length ?? 0) >= maxReferenceImages) {
       showToast(`Maximum ${maxReferenceImages} reference images allowed for this mode`, 'error');
       return;
     }
@@ -484,16 +510,16 @@ export default function EditImageAIPanel({
     console.log('🎯 Capture button clicked');
     
     // Check if we've reached the maximum reference images limit
-    if (maxReferenceImages > 0 && referenceImages.length >= maxReferenceImages) {
+    if (maxReferenceImages > 0 && (referenceImages?.length ?? 0) >= maxReferenceImages) {
       showToast(`Maximum ${maxReferenceImages} reference images allowed for this mode`, 'error');
       return;
     }
-    
+
     // Reference current image as reference image (no download needed)
     try {
       console.log('🔍 Starting CanvasEditor-specific search...');
-      let targetElement = null;
-      let imageUrl = null;
+      let targetElement: HTMLElement | HTMLCanvasElement | null = null;
+      let imageUrl: string | null = null;
       
       // Method 1: Look for the CanvasEditor container with data-canvas-editor="true"
       const canvasEditorContainer = document.querySelector('[data-canvas-editor="true"]');
@@ -502,7 +528,7 @@ export default function EditImageAIPanel({
       if (canvasEditorContainer) {
         // Method 2: Look for the main image inside the CanvasEditor
         // This is the currently displayed image that the user sees
-        const mainImage = canvasEditorContainer.querySelector('img[data-canvas-base-image="true"], img');
+        const mainImage = canvasEditorContainer.querySelector('img[data-canvas-base-image="true"], img') as HTMLImageElement | null;
         console.log('📸 Found main image in CanvasEditor:', !!mainImage);
         
         if (mainImage) {
@@ -534,8 +560,8 @@ export default function EditImageAIPanel({
         if (!targetElement) {
           const canvases = canvasEditorContainer.querySelectorAll('canvas');
           console.log(`📊 Found ${canvases.length} canvas elements in CanvasEditor`);
-          
-          let bestCanvas = null;
+
+          let bestCanvas: HTMLCanvasElement | null = null;
           let bestScore = 0;
           
           for (let i = 0; i < canvases.length; i++) {
@@ -573,8 +599,8 @@ export default function EditImageAIPanel({
         console.log('🔄 CanvasEditor not found, searching all canvases...');
         const allCanvases = document.querySelectorAll('canvas');
         console.log(`📊 Found ${allCanvases.length} total canvas elements`);
-        
-        let bestCanvas = null;
+
+        let bestCanvas: HTMLCanvasElement | null = null;
         let bestScore = 0;
         
         for (let i = 0; i < allCanvases.length; i++) {
@@ -626,18 +652,18 @@ export default function EditImageAIPanel({
       console.log('🎯 This captures the currently displayed content in the CanvasEditor');
       
       // Handle image elements (create URL reference)
-      if (targetElement.tagName === 'IMG' && imageUrl) {
+      if (targetElement instanceof HTMLImageElement && imageUrl) {
         console.log('🖼️ Creating URL-based reference for displayed image:', imageUrl);
-        
+
         if (onAddReferenceImage) {
           const filename = imageUrl.split('/').pop() || `canvas-reference-${Date.now()}.png`;
           const file = new File([''], filename, { type: 'image/png' });
-          
+
           // Add the expected metadata properties that SceneEditor looks for
           (file as any).__r2Url = imageUrl; // SceneEditor will use this as the URL
           (file as any).__r2Key = filename; // Store the filename as R2 key
           (file as any).__isTemporary = false; // Mark as not temporary
-          
+
           onAddReferenceImage(file);
           showToast('Image captured and added to reference images', 'success');
           console.log('✅ Successfully captured displayed image as reference');
@@ -647,7 +673,7 @@ export default function EditImageAIPanel({
         }
       }
       // Handle canvas elements (capture current visual content)
-      else if (targetElement.tagName === 'CANVAS') {
+      else if (targetElement instanceof HTMLCanvasElement) {
         console.log('🖼️ Capturing current canvas visual content...');
         targetElement.toBlob((blob) => {
           if (blob) {
@@ -777,7 +803,7 @@ export default function EditImageAIPanel({
     });
     
     const selected = modelOptions.find(m => m.value === normalizedModel) || modelOptions[0];
-    const credits = selected && (selected as any).credits ? (selected as any).credits : getModelCredits(normalizedModel);
+    const credits = selected && (selected as any).credits ? (selected as any).credits : getModelCredits(normalizedModel ?? '');
     
     console.log('[DEBUG] getSelectedModelCredits result:', {
       selected: selected ? { value: selected.value, label: selected.label, credits: selected.credits } : null,
@@ -1504,7 +1530,7 @@ export default function EditImageAIPanel({
         )})}
         
         {/* Combined Upload Button with Slide Menu (shared component) */}
-        {maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
+        {maxReferenceImages > 0 && (referenceImages?.length ?? 0) < maxReferenceImages && (
           <AddImageMenu
             onUploadClick={() => fileInputRef.current?.click()}
             onR2Click={() => setShowFileBrowser(true)}
@@ -1657,7 +1683,7 @@ export default function EditImageAIPanel({
     const modeTabs: {
       id: AIEditMode;
       label: string;
-      icon: React.ComponentType<{ className?: string }>;
+      icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
     }[] = [
       { id: "area-edit", label: "Area Edit", icon: Scan },
       { id: "annotate", label: "Annote", icon: Wand2 },
