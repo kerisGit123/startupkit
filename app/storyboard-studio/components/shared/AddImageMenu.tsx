@@ -32,6 +32,8 @@ export interface AddImageMenuProps {
   label?: string;
   /** Media type — changes icon and colors (default: "image") */
   mediaType?: "image" | "video" | "audio";
+  /** Hide the Upload button */
+  hideUpload?: boolean;
 }
 
 export function AddImageMenu({
@@ -48,6 +50,7 @@ export function AddImageMenu({
   onSelectGeneratedImage,
   label,
   mediaType = "image",
+  hideUpload = false,
 }: AddImageMenuProps) {
   const resolvedLabel = label || (mediaType === "video" ? "Add Video" : mediaType === "audio" ? "Add Audio" : "Add Image");
   const IconComponent = mediaType === "video" ? Film : mediaType === "audio" ? Volume2 : Plus;
@@ -103,17 +106,19 @@ export function AddImageMenu({
               <div className="p-3">
                 <div className="flex gap-2">
                   {/* Upload from computer */}
-                  <button
-                    onClick={() => {
-                      onUploadClick();
-                      setShowMenu(false);
-                    }}
-                    className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
-                    title="Upload from computer"
-                  >
-                    <Upload className="w-4 h-4 text-emerald-400" />
-                    <span className="text-xs">Upload</span>
-                  </button>
+                  {!hideUpload && (
+                    <button
+                      onClick={() => {
+                        onUploadClick();
+                        setShowMenu(false);
+                      }}
+                      className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
+                      title="Upload from computer"
+                    >
+                      <Upload className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs">Upload</span>
+                    </button>
+                  )}
 
                   {/* R2 File Browser */}
                   {onR2Click && (

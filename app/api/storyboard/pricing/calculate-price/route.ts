@@ -68,30 +68,29 @@ export async function POST(req: NextRequest) {
           });
           break;
 
-        case 'getSeedance15':
-          // getSeedance15(base, multiplier, resolution, audio, duration)
-          const resolutionMultipliers = {
-            '480p': 1,
-            '720p': 2,
-            '1080p': 4,
-            '4K': 5
+        case 'getSeedance15': {
+          // Seedance 1.5 Pro: fixed Kie credit costs per resolution/duration/audio
+          // Audio = 2x the no-audio Kie cost. Kie rates from API docs:
+          //   480p: 4s=7, 8s=14, 12s=19 | 720p: 4s=14, 8s=28, 12s=42 | 1080p: 4s=30, 8s=60, 12s=90
+          const s15KieCosts: Record<string, Record<string, number>> = {
+            '480p': { '4': 7, '8': 14, '12': 19 },
+            '480P': { '4': 7, '8': 14, '12': 19 },
+            '720p': { '4': 14, '8': 28, '12': 42 },
+            '720P': { '4': 14, '8': 28, '12': 42 },
+            '1080p': { '4': 30, '8': 60, '12': 90 },
+            '1080P': { '4': 30, '8': 60, '12': 90 },
           };
-          const audioMultiplier = audio ? 1.5 : 1;
-          const durationMultiplier = Math.ceil(duration / 5); // Every 5 seconds adds multiplier
-          const resolutionMultiplier = resolutionMultipliers[resolution] || 1;
-          credits = Math.ceil((model.creditCost || 0) * (model.factor || 1) * resolutionMultiplier * audioMultiplier * durationMultiplier);
-          console.log("[pricing-calc] Seedance formula calculation:", {
-            base: model.creditCost,
-            factor: model.factor,
-            resolution,
-            audio,
-            duration,
-            resolutionMultiplier,
-            audioMultiplier,
-            durationMultiplier,
-            result: credits
+          const s15ResCosts = s15KieCosts[resolution] || s15KieCosts['480p'];
+          // Find closest duration tier (4, 8, or 12)
+          const s15Dur = duration <= 4 ? '4' : duration <= 8 ? '8' : '12';
+          const s15KieBase = s15ResCosts[s15Dur] || s15ResCosts['4'];
+          const s15AudioMul = audio ? 2 : 1;
+          credits = Math.ceil(s15KieBase * s15AudioMul * (model.factor || 1));
+          console.log("[pricing-calc] Seedance 1.5 Pro formula:", {
+            resolution, duration, s15Dur, audio, kieBase: s15KieBase, audioMul: s15AudioMul, factor: model.factor, result: credits
           });
           break;
+        }
 
         case 'getTopazUpscale':
           // getTopazUpscale(base, multiplier, upscaleFactor)
@@ -138,17 +137,35 @@ export async function POST(req: NextRequest) {
 
         case 'getSeedance20': {
           // Per-second pricing: resolution + video input type * duration * factor
-          // no_video = cheaper (text-to-video), video_input = more expensive (image/video-to-video)
-          // 480p: no_video=11.5, video_input=19 | 720p: no_video=25, video_input=41
-          const seedCosts: Record<string, { noVideo: number; videoInput: number }> = {
-            '480p': { noVideo: 11.5, videoInput: 19 },
-            '720p': { noVideo: 25, videoInput: 41 },
+          // with_input (img2vid) = CHEAPER per second (has reference frame)
+          // no_input (txt2vid) = MORE EXPENSIVE per second (generates from scratch)
+          // 480p: with_input=11.5, no_input=19 | 720p: with_input=25, no_input=41
+          const seed20Costs: Record<string, { withInput: number; noInput: number }> = {
+            '480p': { withInput: 11.5, noInput: 19 },
+            '720p': { withInput: 25, noInput: 41 },
           };
-          const seedRes = seedCosts[resolution] || seedCosts['480p'];
-          const seedCostPerSec = audio ? seedRes.videoInput : seedRes.noVideo;
-          credits = Math.ceil(seedCostPerSec * duration * (model.factor || 1));
+          const seed20Res = seed20Costs[resolution] || seed20Costs['480p'];
+          const seed20CostPerSec = audio ? seed20Res.withInput : seed20Res.noInput;
+          credits = Math.ceil(seed20CostPerSec * duration * (model.factor || 1));
           console.log("[pricing-calc] Seedance 2.0 formula:", {
-            resolution, hasVideoInput: audio, costPerSec: seedCostPerSec, duration, factor: model.factor, result: credits
+            resolution, hasVideoInput: audio, costPerSec: seed20CostPerSec, duration, factor: model.factor, result: credits
+          });
+          break;
+        }
+
+        case 'getSeedance20Fast': {
+          // Per-second pricing, same structure as Seedance 2.0 but cheaper rates
+          // with_input (img2vid) = CHEAPER | no_input (txt2vid) = MORE EXPENSIVE
+          // 480p: with_input=9, no_input=15.5 | 720p: with_input=20, no_input=33
+          const seed20fCosts: Record<string, { withInput: number; noInput: number }> = {
+            '480p': { withInput: 9, noInput: 15.5 },
+            '720p': { withInput: 20, noInput: 33 },
+          };
+          const seed20fRes = seed20fCosts[resolution] || seed20fCosts['480p'];
+          const seed20fCostPerSec = audio ? seed20fRes.withInput : seed20fRes.noInput;
+          credits = Math.ceil(seed20fCostPerSec * duration * (model.factor || 1));
+          console.log("[pricing-calc] Seedance 2.0 Fast formula:", {
+            resolution, hasVideoInput: audio, costPerSec: seed20fCostPerSec, duration, factor: model.factor, result: credits
           });
           break;
         }

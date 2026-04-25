@@ -1,6 +1,7 @@
 "use client";
 
-import { Printer, Download } from "lucide-react";
+import { useState } from "react";
+import { Printer, Download, FileDown, Loader2 } from "lucide-react";
 import { DarkModal } from "../shared/DarkModal";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -23,9 +24,27 @@ interface WorkspaceExportModalProps {
   onClose: () => void;
 }
 
+/** Load an image as base64 data URL, returns null on failure */
+async function loadImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function WorkspaceExportModal({
   projectName, script, items, frameRatio, onClose,
 }: WorkspaceExportModalProps) {
+  const [pdfBusy, setPdfBusy] = useState(false);
   const handlePrint = () => {
     const sorted = [...items].sort((a, b) => a.order - b.order);
     const ratio = frameRatio === "9:16" ? "9/16" : frameRatio === "1:1" ? "1/1" : "16/9";
@@ -98,6 +117,139 @@ export function WorkspaceExportModal({
     };
   };
 
+  const handleDownloadPDF = async () => {
+    if (pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const sorted = [...items].sort((a, b) => a.order - b.order);
+
+      // Landscape A4: 297 x 210 mm
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();   // 297
+      const pageH = pdf.internal.pageSize.getHeight();   // 210
+      const margin = 12;
+      const usableW = pageW - margin * 2;
+
+      // ── Title page ──
+      pdf.setFontSize(28);
+      pdf.setFont("helvetica", "bold");
+      pdf.text(projectName, pageW / 2, 60, { align: "center" });
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(100);
+      pdf.text(`Storyboard  |  ${sorted.length} frames  |  ${frameRatio}`, pageW / 2, 72, { align: "center" });
+      pdf.text(new Date().toLocaleDateString(), pageW / 2, 80, { align: "center" });
+      pdf.setTextColor(0);
+
+      if (script.trim()) {
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "italic");
+        const scriptLines = pdf.splitTextToSize(script.slice(0, 1200), usableW - 40);
+        pdf.text(scriptLines, pageW / 2, 100, { align: "center", maxWidth: usableW - 40 });
+      }
+
+      // ── Preload images ──
+      const imageDataMap = new Map<string, string>();
+      const urls = sorted.map((f) => f.imageUrl).filter(Boolean) as string[];
+      const results = await Promise.allSettled(urls.map((u) => loadImageAsDataUrl(u)));
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled" && r.value) imageDataMap.set(urls[i], r.value);
+      });
+
+      // ── Frame pages — 2x2 grid per page ──
+      const cols = 2;
+      const rows = 2;
+      const perPage = cols * rows;
+      const gap = 8;
+      const cellW = (usableW - gap * (cols - 1)) / cols;
+      // Aspect ratio for image area
+      const imgRatio = frameRatio === "9:16" ? 9 / 16 : frameRatio === "1:1" ? 1 : 16 / 9;
+      const imgH = cellW / imgRatio;
+      const infoH = 14; // space for title+desc below image
+      const cellH = imgH + infoH;
+      const startY = margin + 8;
+
+      for (let p = 0; p < Math.ceil(sorted.length / perPage); p++) {
+        pdf.addPage("a4", "landscape");
+        const pageFrames = sorted.slice(p * perPage, (p + 1) * perPage);
+
+        // Page header
+        pdf.setFontSize(8);
+        pdf.setTextColor(150);
+        pdf.text(`${projectName}  —  Page ${p + 1}`, margin, margin + 2);
+        pdf.setTextColor(0);
+
+        for (let i = 0; i < pageFrames.length; i++) {
+          const frame = pageFrames[i];
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const x = margin + col * (cellW + gap);
+          const y = startY + row * (cellH + gap);
+
+          // Image area background
+          pdf.setFillColor(240, 240, 240);
+          pdf.roundedRect(x, y, cellW, imgH, 2, 2, "F");
+
+          // Image
+          const dataUrl = frame.imageUrl ? imageDataMap.get(frame.imageUrl) : null;
+          if (dataUrl) {
+            try {
+              pdf.addImage(dataUrl, "JPEG", x, y, cellW, imgH);
+            } catch { /* skip broken images */ }
+          } else {
+            pdf.setFontSize(9);
+            pdf.setTextColor(180);
+            pdf.text("No image", x + cellW / 2, y + imgH / 2, { align: "center" });
+            pdf.setTextColor(0);
+          }
+
+          // Frame number badge
+          const frameIdx = p * perPage + i + 1;
+          const badge = String(frameIdx).padStart(2, "0");
+          pdf.setFillColor(0, 0, 0);
+          pdf.roundedRect(x + 2, y + 2, 10, 5, 1, 1, "F");
+          pdf.setFontSize(7);
+          pdf.setTextColor(255);
+          pdf.text(badge, x + 7, y + 5.5, { align: "center" });
+          pdf.setTextColor(0);
+
+          // Duration badge
+          pdf.setFillColor(0, 0, 0);
+          const durText = `${frame.duration}s`;
+          pdf.roundedRect(x + cellW - 12, y + 2, 10, 5, 1, 1, "F");
+          pdf.setFontSize(7);
+          pdf.setTextColor(255);
+          pdf.text(durText, x + cellW - 7, y + 5.5, { align: "center" });
+          pdf.setTextColor(0);
+
+          // Title
+          pdf.setFontSize(9);
+          pdf.setFont("helvetica", "bold");
+          pdf.text(frame.title.slice(0, 60), x + 2, y + imgH + 5);
+          pdf.setFont("helvetica", "normal");
+
+          // Description
+          if (frame.description) {
+            pdf.setFontSize(7);
+            pdf.setTextColor(100);
+            const descLines = pdf.splitTextToSize(frame.description.slice(0, 120), cellW - 4);
+            pdf.text(descLines, x + 2, y + imgH + 10);
+            pdf.setTextColor(0);
+          }
+        }
+      }
+
+      const filename = `${projectName.replace(/\s+/g, "-").toLowerCase()}-storyboard.pdf`;
+      pdf.save(filename);
+    } catch (err) {
+      console.error("[PDF export]", err);
+      alert("PDF export failed. Please try Print/Save as PDF instead.");
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
   const handleExportJSON = () => {
     const sorted = [...items].sort((a, b) => a.order - b.order);
     const payload = {
@@ -133,6 +285,17 @@ export function WorkspaceExportModal({
         </div>
 
         <div className="p-5 space-y-3">
+          <button onClick={handleDownloadPDF} disabled={pdfBusy}
+            className="w-full flex items-center gap-3 p-4 bg-white/4 hover:bg-white/8 border border-white/8 hover:border-white/16 rounded-xl transition text-left disabled:opacity-50">
+            <div className="w-9 h-9 rounded-lg bg-teal-600/20 flex items-center justify-center shrink-0">
+              {pdfBusy ? <Loader2 className="w-4 h-4 text-teal-400 animate-spin" /> : <FileDown className="w-4 h-4 text-teal-400" />}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white">Download PDF</p>
+              <p className="text-xs text-gray-500 mt-0.5">Landscape A4 with images, titles & descriptions</p>
+            </div>
+          </button>
+
           <button onClick={handlePrint}
             className="w-full flex items-center gap-3 p-4 bg-white/4 hover:bg-white/8 border border-white/8 hover:border-white/16 rounded-xl transition text-left">
             <div className="w-9 h-9 rounded-lg bg-purple-600/20 flex items-center justify-center shrink-0">

@@ -68,6 +68,13 @@ export function BatchGenerateDialog({ projectId, companyId, userId, items, proje
     });
   }, [items, skipExisting]);
 
+  // Skip reasons for user feedback
+  const skipReasons = useMemo(() => {
+    const noPrompt = items.filter(item => !item.imagePrompt?.trim()).length;
+    const hasImage = skipExisting ? items.filter(item => item.imagePrompt?.trim() && item.imageUrl).length : 0;
+    return { noPrompt, hasImage };
+  }, [items, skipExisting]);
+
   // Credit cost per frame
   const creditPerFrame = useMemo(() => {
     const model = availableModels.find(m => m.id === selectedModel);
@@ -311,6 +318,12 @@ export function BatchGenerateDialog({ projectId, companyId, userId, items, proje
               <span className="text-[#A0A0A0]">Frames to generate</span>
               <span className="text-white font-medium">{framesToGenerate.length} / {items.length}</span>
             </div>
+            {skipReasons.noPrompt > 0 && (
+              <p className="text-[10px] text-amber-400 ml-1">{skipReasons.noPrompt} frame{skipReasons.noPrompt > 1 ? "s have" : " has"} no prompt</p>
+            )}
+            {skipReasons.hasImage > 0 && (
+              <p className="text-[10px] text-[#6E6E6E] ml-1">{skipReasons.hasImage} frame{skipReasons.hasImage > 1 ? "s" : ""} skipped (already have images)</p>
+            )}
             <div className="flex justify-between text-xs">
               <span className="text-[#A0A0A0]">Credits per frame</span>
               <span className="text-white font-medium">{creditPerFrame}</span>

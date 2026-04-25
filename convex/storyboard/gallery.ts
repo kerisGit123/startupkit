@@ -127,7 +127,7 @@ export const listSharedFiles = query({
     limit: v.optional(v.number()),
     sortBy: v.optional(v.literal("recent")),
     filterModel: v.optional(v.string()),
-    filterFileType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"))),
+    filterFileType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music"))),
   },
   handler: async (ctx, args) => {
     const limit = args.limit ?? 40;

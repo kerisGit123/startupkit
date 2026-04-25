@@ -47,6 +47,13 @@ export const createFromN8n = mutation({
   },
 });
 
+// Per-plan frame-per-project limits. Keep in sync with lib/plan-config.ts.
+const FRAME_LIMITS: Record<string, number> = {
+  free: 20,
+  pro_personal: Number.MAX_SAFE_INTEGER,
+  business: Number.MAX_SAFE_INTEGER,
+};
+
 export const create = mutation({
   args: {
     projectId: v.id("storyboard_projects"),
@@ -64,13 +71,35 @@ export const create = mutation({
     if (!identity) {
       throw new Error("User not authenticated");
     }
-    
+
     // Get user's organization from auth context
     const userOrganizationId = identity.orgId;
     const userId = identity.subject;
-    
+
     const companyId = (userOrganizationId || userId) as string;
-    
+
+    // Enforce frame limit for free users (server-side defense)
+    let effectivePlan = "free";
+    const balance = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .first();
+    if (balance?.ownerPlan && FRAME_LIMITS[balance.ownerPlan] !== undefined) {
+      effectivePlan = balance.ownerPlan;
+    }
+
+    const maxFrames = FRAME_LIMITS[effectivePlan] ?? 20;
+    const existingItems = await ctx.db
+      .query("storyboard_items")
+      .withIndex("by_order", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    if (existingItems.length >= maxFrames) {
+      throw new Error(
+        `Frame limit reached for ${effectivePlan} plan (${maxFrames} frames per project). Upgrade to Pro for unlimited.`,
+      );
+    }
+
     return await ctx.db.insert("storyboard_items", {
       ...args,
       companyId, // Use the calculated companyId

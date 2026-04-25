@@ -23,9 +23,9 @@ StartupKit has exactly two paid products. They are independent — buying one do
 
 | Plan | Price | Monthly credits | Storage | Orgs | Members per org |
 |---|---|---|---|---|---|
-| Free | $0 | 100 | 300 MB | 0 | 1 |
-| Pro | $39.90/mo or $32/mo annual | 2,500 | 10 GB | 1 | 5 |
-| Business | $69.90/mo or $63/mo annual | 6,900 | 20 GB | 3 | 15 |
+| Free | $0 | 50 | 300 MB | 0 | 1 |
+| Pro | $45/mo or $39.90/mo annual | 3,500 | 10 GB | 1 | 5 |
+| Business | $119/mo or $89.90/mo annual | 8,000 | 20 GB | 3 | 15 |
 
 Annual billing applies a discount and is charged in one upfront payment.
 
@@ -53,7 +53,7 @@ If Clerk Billing pro-rates a refund for the unused portion of your billing cycle
 - **Upgrade** (Free → Pro, Pro → Business, Free → Business):
   - You receive the **full new monthly credit allowance** immediately.
   - **Existing unused credits are preserved** — the upgrade is purely additive.
-  - Example: Free user with 90 unused credits upgrades to Pro → balance becomes 90 + 2,500 = 2,590.
+  - Example: Free user with 90 unused credits upgrades to Pro → balance becomes 90 + 3,500 = 3,590.
 - **Downgrade** (Business → Pro, Pro → Free, Business → Free):
   - The unused portion of the previous plan's monthly grant is **clawed back**.
   - The new plan's monthly grant is then applied.
@@ -185,7 +185,7 @@ If you cancel your subscription, your orgs become lapsed (see §5).
 
 ### 6.2 Where org credits come from
 
-Organizations do **not** receive automatic monthly credit grants. The monthly grant lands in your personal workspace, and you transfer credits to your orgs via the **Transfer Credits** dialog. This prevents accidentally double-granting (personal: 2,500 + org: 2,500 = 5,000 from one $39.90 subscription).
+Organizations do **not** receive automatic monthly credit grants. The monthly grant lands in your personal workspace, and you transfer credits to your orgs via the **Transfer Credits** dialog. This prevents accidentally double-granting (personal: 3,500 + org: 3,500 = 7,000 from one $39.90 subscription).
 
 Org members can spend from the org's transferred credit pool but cannot transfer credits in or out.
 

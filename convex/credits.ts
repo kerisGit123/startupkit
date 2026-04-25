@@ -345,7 +345,7 @@ async function grantMonthlyCreditsIfDue(
   //   - same plan, new month         → calendar rollover: claw back, add new
   //
   // Skipping clawback on upgrades means a free → pro mid-month user gets the
-  // full +2500 instead of being penalized for unused free credits. The
+  // full +3500 instead of being penalized for unused free credits. The
   // downgrade clawback prevents accumulating credits by cycling subscriptions.
   let planChanged = false;
   let isDowngrade = false;
@@ -366,7 +366,7 @@ async function grantMonthlyCreditsIfDue(
   // Model B: orgs NEVER receive auto-grants. All subscription credits
   // land in the user's personal workspace. The user then distributes
   // to their orgs via the Transfer Credits dialog. This prevents
-  // double-granting (personal gets 2500 + org gets 2500 = 5000 for
+  // double-granting (personal gets 3500 + org gets 3500 = 7000 for
   // one $39.90 subscription).
   const isOrg = args.companyId.startsWith("org_");
   if (isOrg) {
@@ -851,9 +851,9 @@ export function requireWebhookSecret(secret: string | undefined): void {
  * Duplicated here because Convex mutations can't import from lib/.
  */
 const MONTHLY_CREDITS: Record<string, number> = {
-  free: 100,
-  pro_personal: 2500, // merged old Pro (2000) + Starter Team (2500) → use 2500
-  business: 6900,
+  free: 50,
+  pro_personal: 3500,
+  business: 8000,
 };
 
 /**

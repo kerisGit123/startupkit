@@ -41,6 +41,8 @@ export const createPricingModel = mutation({
     modelName: v.string(),
     modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music")),
     pricingType: v.union(v.literal("fixed"), v.literal("formula")),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("temp_down"))),
+    isHot: v.optional(v.boolean()),
     creditCost: v.optional(v.number()),
     factor: v.optional(v.number()),
     formulaJson: v.optional(v.string()),
@@ -70,12 +72,14 @@ export const createPricingModel = mutation({
     if (existing) {
       throw new Error(`Pricing model ${args.modelId} already exists`);
     }
-    
+
     const modelId = await ctx.db.insert("storyboard_model_credit", {
       modelId: args.modelId,
       modelName: args.modelName,
       modelType: args.modelType,
       isActive: true,
+      visibility: args.visibility ?? "public",
+      isHot: args.isHot ?? false,
       pricingType: args.pricingType,
       creditCost: args.creditCost,
       factor: args.factor,
@@ -96,6 +100,8 @@ export const updatePricingModel = mutation({
     modelName: v.optional(v.string()),
     modelType: v.optional(v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music"))),
     isActive: v.optional(v.boolean()),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("temp_down"))),
+    isHot: v.optional(v.boolean()),
     pricingType: v.optional(v.union(v.literal("fixed"), v.literal("formula"))),
     creditCost: v.optional(v.number()),
     factor: v.optional(v.number()),
@@ -133,6 +139,8 @@ export const updatePricingModel = mutation({
     if (args.modelName !== undefined) updateData.modelName = args.modelName;
     if (args.modelType !== undefined) updateData.modelType = args.modelType;
     if (args.isActive !== undefined) updateData.isActive = args.isActive;
+    if (args.visibility !== undefined) updateData.visibility = args.visibility;
+    if (args.isHot !== undefined) updateData.isHot = args.isHot;
     if (args.pricingType !== undefined) updateData.pricingType = args.pricingType;
     if (args.creditCost !== undefined) updateData.creditCost = args.creditCost;
     if (args.factor !== undefined) updateData.factor = args.factor;

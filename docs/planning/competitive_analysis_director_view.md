@@ -161,7 +161,7 @@
 
 ## What Makes Us Unique (Our Advantages)
 
-1. **Multi-model AI generation** — we support 15+ AI models (Nano Banana, Seedance, Kling, Veo, Grok, GPT Image, etc.). No competitor offers this breadth.
+1. **Multi-model AI generation** — we support 25+ AI models (Nano Banana, Seedance, Kling, Veo, Grok, GPT Image, etc.). No competitor offers this breadth.
 
 2. **Integrated music/audio AI** — AI Music, Cover Song, TTS, InfiniteTalk. LTX and Runway don't have this.
 

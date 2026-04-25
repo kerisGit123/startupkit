@@ -257,6 +257,105 @@ Props:
   - onEditorInput — optional, called after loading text (EditImageAIPanel uses this)
 ```
 
+### Prompt Context Menu (built into PromptTextarea)
+```
+File:     app/storyboard-studio/components/shared/PromptTextarea.tsx
+Trigger:  Right-click on contentEditable prompt textarea
+
+Menu:     bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl
+          w-[200px] py-1.5
+          Portal to document.body, z-[9999]
+          Opens UPWARD from click point (textarea is at bottom of screen)
+
+Section Headers: text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary)
+                 "Edit" section, "Camera" section (video mode only)
+
+Items:    px-3 py-2 text-[13px] text-(--text-primary) hover:bg-white/5
+          Icon: w-4 h-4 text-(--text-secondary) strokeWidth={1.75}
+          Shortcut: ml-auto text-[11px] text-(--text-tertiary)
+          gap-2.5
+
+Divider:  h-px bg-[#32363E] mx-2 my-1
+
+Submenu:  Camera Motion — opens to the RIGHT of main menu
+          w-[180px], same bg/border/rounded-xl
+          Section header: "MOTION PRESET"
+          Items: px-3 py-2 text-[13px]
+
+Backdrop: fixed inset-0 z-[9998]
+
+Behavior: Saves cursor Range on right-click, restores on insert
+          Copy: clipboard API, Paste: insert at saved cursor
+          Camera Motion: inserts text with <br> at saved cursor position
+```
+
+### Camera Motion Presets
+```
+Location: Prompt actions area (next to Actions dropdown)
+Trigger:  Button with Film icon + selected label + ChevronDown
+          Active: text-(--accent-blue) border-(--accent-blue)/30 bg-(--accent-blue)/8
+          Inactive: text-(--text-secondary) border-white/8
+
+Dropdown: absolute bottom-full right-0 mb-2
+          w-[170px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl
+          max-h-[280px] overflow-y-auto py-1.5
+
+Items:    15 presets: Static, Dolly In/Out, Crane Up/Down, Pan L/R,
+          Tilt Up/Down, Orbit, Tracking, Handheld, Zoom In/Out
+          px-3 py-2 text-[13px]
+          Selected: bg-white/8
+
+Behavior: Inserts motion description at cursor position (uses savedSelectionRef from usePromptEditor)
+          Video mode only
+```
+
+### Camera Studio (Virtual Camera Style)
+```
+File:     app/storyboard-studio/components/ai/VirtualCameraStyle.tsx
+
+Trigger:  Button with Camera icon + summary text
+          Same style as Camera Motion trigger button
+          Active: text-(--accent-blue) border-(--accent-blue)/30 bg-(--accent-blue)/8
+
+Panel:    Floating, portal to document.body
+          bg-(--bg-secondary) border border-(--border-primary) rounded-2xl shadow-2xl
+          w-[420px], positioned above trigger button
+          z-[9991]
+          Backdrop: bg-black/30 z-[9990]
+
+Header:   px-4 pt-3 pb-2
+          Camera icon + "Camera Studio" text-[14px] font-semibold
+          Reset button + X close button
+
+Cards:    4 selector cards in flex row, gap-2
+          Each card: rounded-xl, border border-(--border-primary), bg-(--bg-tertiary)/60
+          Active: border-(--accent-blue)/30 bg-(--accent-blue)/5
+          Section title: text-[9px] font-semibold tracking-wider uppercase text-(--text-tertiary)
+          Image area: h-[52px], max-h-[44px] object-contain
+          Focal Length: text-[28px] font-light tabular-nums (number display, no image)
+          Sublabel: text-[8px] uppercase tracking-wider text-(--text-tertiary)
+          Name: text-[10px] font-medium
+
+Dropdown: Opens upward (bottom-full), w-[200px]
+          Aperture section: right-0 aligned (right edge)
+          Other sections: left-0 aligned
+          bg-(--bg-secondary) border border-(--border-primary) rounded-xl
+          Items: px-3 py-2, image 28px + label + sublabel
+          Selected indicator: 6px blue dot
+
+Data:     Camera: 9 options (Default + ARRI, Hasselblad, iPhone, GoPro, DJI Drone, Film 35mm, Polaroid, VHS)
+          Lens: 7 options (Default + Spherical, Anamorphic, Vintage, Macro, Tilt-Shift, Fisheye)
+          Focal Length: 8 options (Default + 14/24/35/50/85/135/200mm)
+          Aperture: 7 options (Default + f/1.4, f/2.0, f/2.8, f/4.0, f/8.0, f/16)
+
+Images:   /storytica/cameras/ (ARRI.png, HASSELBLAD.png, IPHONE.png, GOPRO.png,
+          DJI_DRONE.png, 35MM_FILM.png, POLAROID.png, VHS_CAMCORDER.png, LENS.png, APERTURE.png)
+
+Behavior: Appends combined camera description to finalPrompt at generation time
+          Works for both image and video modes
+          buildCameraPromptText() combines all selections into natural language
+```
+
 ### Prompt Textarea
 ```
 Container: bg-transparent (inherits panel bg)

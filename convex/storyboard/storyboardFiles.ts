@@ -440,6 +440,40 @@ export const getByR2Key = query({
   },
 });
 
+// Migration: convert old Suno music files from fileType "audio" to "music"
+export const migrateAudioToMusic = mutation({
+  handler: async (ctx) => {
+    const allFiles = await ctx.db.query("storyboard_files").collect();
+    let updated = 0;
+    for (const file of allFiles) {
+      if (
+        file.fileType === "audio" &&
+        file.model &&
+        file.model.startsWith("ai-music-api/")
+      ) {
+        await ctx.db.patch(file._id, { fileType: "music" });
+        updated++;
+      }
+    }
+    return { updated, total: allFiles.length };
+  },
+});
+
+// Migration: fix category "uploaded" → "uploads"
+export const migrateUploadedToUploads = mutation({
+  handler: async (ctx) => {
+    const allFiles = await ctx.db.query("storyboard_files").collect();
+    let updated = 0;
+    for (const file of allFiles) {
+      if (file.category === "uploaded") {
+        await ctx.db.patch(file._id, { category: "uploads" });
+        updated++;
+      }
+    }
+    return { updated, total: allFiles.length };
+  },
+});
+
 // List completed audio/music files for Extend Music dropdown
 export const listAudioFiles = query({
   args: {
@@ -453,7 +487,7 @@ export const listAudioFiles = query({
       .collect();
     return files
       .filter(f =>
-        f.fileType === "audio" &&
+        f.fileType === "music" &&
         f.status === "completed" &&
         f.metadata?.audioId &&
         (!categoryId || String(f.categoryId) === categoryId)
@@ -574,7 +608,7 @@ export const updateFromCallback = mutation({
 // hardcoded list below, its breakdown row is omitted but the total still
 // reflects it via storageByCompany.
 const KNOWN_CATEGORIES = ["uploads", "generated", "elements", "storyboard", "videos", "temps", "other"];
-const KNOWN_FILE_TYPES = ["image", "video", "audio", "other"];
+const KNOWN_FILE_TYPES = ["image", "video", "audio", "music", "other"];
 
 export const getStorageUsage = query({
   args: { companyId: v.string() },

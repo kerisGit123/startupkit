@@ -72,7 +72,7 @@ export const storeFileMetadata = mutation({
     }
     
     // Validate file type
-    const validFileTypes = ["image", "video", "audio", "document"];
+    const validFileTypes = ["image", "video", "audio", "music", "document"];
     if (!validFileTypes.includes(fileType)) {
       throw new Error(`Invalid file type: ${fileType}. Must be one of: ${validFileTypes.join(", ")}`);
     }

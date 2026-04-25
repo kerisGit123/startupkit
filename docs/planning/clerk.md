@@ -50,7 +50,7 @@ PLAN_LIMITS = {
     maxOrgs: 3,
     maxMembersPerOrg: 15,
     maxProjects: Infinity,
-    monthlyCredits: 6900,
+    monthlyCredits: 8000,
     storageMB: 20480,  // 20 GB
   },
 }
@@ -189,11 +189,11 @@ canUseFeature("business")      // true only if Business
 
 | Feature | Free | Pro | Business |
 |---------|------|-----|----------|
-| AI Generation | ✅ (buy credits) | ✅ (2,500/mo + buy) | ✅ (6,900/mo + buy) |
+| AI Generation | ✅ (buy credits) | ✅ (3,500/mo + buy) | ✅ (8,000/mo + buy) |
 | Projects | 3 max | Unlimited | Unlimited |
 | Organizations | ❌ | 1 org, 5 members | 3 orgs, 15 members |
 | Storage | 300 MB | 10 GB | 20 GB |
-| Monthly Credits | 100 | 2,500 | 6,900 |
+| Monthly Credits | 100 | 3,500 | 8,000 |
 
 ---
 
@@ -279,7 +279,7 @@ User clicks "Upgrade" → Clerk Billing Portal → Subscription checkout
 1. Free user needs team features or more credits
 2. Click "Upgrade to Pro" → Clerk Billing portal
 3. Subscribe to Pro plan
-4. Get 2,500 monthly credits + org creation
+4. Get 3,500 monthly credits + org creation
 5. Create organization → Invite team members
 
 ### Org Member Experience

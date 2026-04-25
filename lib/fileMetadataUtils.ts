@@ -18,7 +18,7 @@ export async function storeFileMetadata(params: {
   // Required fields
   r2Key: string;           // R2 storage key (e.g., "org_123/uploads/file.jpg")
   filename: string;        // Original filename
-  fileType: "image" | "video" | "audio" | "document";
+  fileType: "image" | "video" | "audio" | "music" | "document";
   mimeType: string;        // MIME type (e.g., "image/jpeg")
   size: number;            // File size in bytes
   category: "temps" | "uploads" | "generated" | "elements" | "storyboard" | "videos";

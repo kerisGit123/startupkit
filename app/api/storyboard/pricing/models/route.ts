@@ -39,6 +39,8 @@ export async function POST(req: NextRequest) {
       modelName: body.modelName,
       modelType: body.modelType,
       pricingType: body.pricingType,
+      visibility: body.visibility,
+      isHot: body.isHot,
       creditCost: body.creditCost,
       factor: body.factor,
       formulaJson: body.formulaJson,

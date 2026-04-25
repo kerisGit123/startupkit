@@ -126,12 +126,12 @@ export default function StorticaLanding() {
           </h1>
 
           <p className={`text-base lg:text-lg text-[#888] leading-relaxed max-w-2xl mx-auto mb-6 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
-            Turn text into storyboards with 15+ AI models. Generate images, videos, music, and voiceovers. Edit with professional canvas tools, compose in the video editor, and go from script to final cut in one place.
+            Turn text into storyboards with 25+ AI models. Generate images, videos, music, and voiceovers. Edit with professional canvas tools, compose in the video editor, and go from script to final cut in one place.
           </p>
 
           {/* Bullets */}
           <div className={`flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-8 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
-            {["15+ AI models (image, video, music, audio)", "Consistent characters & elements", "Video editor with multi-track timeline"].map(b => (
+            {["25+ AI models (image, video, music, audio)", "Consistent characters & elements", "Video editor with multi-track timeline"].map(b => (
               <span key={b} className="flex items-center gap-2 text-[13px] text-[#aaa]"><Check className="w-3.5 h-3.5 text-teal-400" />{b}</span>
             ))}
           </div>
@@ -200,7 +200,7 @@ export default function StorticaLanding() {
           <div className="grid md:grid-cols-3 gap-5">
             {[
               { n: "Step 1", t: "WRITE YOUR SCRIPT", d: "Paste your script or type a prompt. AI converts it into scenes with shot breakdowns, dialogue, and camera directions.", img: `${img}/storyboard_home.png` },
-              { n: "Step 2", t: "GENERATE WITH AI", d: "Choose from 15+ AI models — images, videos, music, voiceovers. Use the element library for consistent characters across every shot.", img: `${img}/storyboardItem.png` },
+              { n: "Step 2", t: "GENERATE WITH AI", d: "Choose from 25+ AI models — images, videos, music, voiceovers. Use the element library for consistent characters across every shot.", img: `${img}/storyboardItem.png` },
               { n: "Step 3", t: "EDIT & COMPOSE", d: "Refine with canvas tools. Compose in the multi-track video editor. Add music and voiceovers. Export as PDF, MP4, or WAV.", img: `${img}/elementLibrary.png` },
             ].map((s, i) => (
               <R key={s.n} delay={i * 120}>
@@ -406,13 +406,20 @@ export default function StorticaLanding() {
         <div className="max-w-[650px] mx-auto px-6">
           <R><h2 className="text-[1.8rem] font-extrabold text-center mb-8">Frequently Asked Questions</h2></R>
           <R><div>
-            <Faq q="What AI models are available?" a="15+ models across 4 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS." />
+            <Faq q="What AI models are available?" a="25+ models across 4 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Character Edit, Nano Banana Edit, Crisp Upscale. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS. Plus: AI Analyze (image/video/audio), Prompt Enhance." />
             <Faq q="Can I maintain consistent characters?" a="Yes. The Element Library saves characters, props, and styles with reference images. Drag them into any frame or mention with @Image tags in prompts." />
-            <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 100 credits/month. Top-up packs available from $9.90." />
+            <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 50 credits/month. Top-up packs available from $9.90." />
             <Faq q="Is there a video editor?" a="Yes. Multi-track timeline with video and audio tracks. Split, trim, reorder, snapshot frames, and export to MP4 or WAV." />
             <Faq q="Does it support team collaboration?" a="Yes. Create organizations, invite members with roles (Admin, Member, Viewer). Members share the org's credit pool and storage." />
-            <Faq q="Is there a free plan?" a="Yes. 100 credits/month, 300MB storage. No credit card required. Upgrade anytime for more credits and storage." />
+            <Faq q="Is there a free plan?" a="Yes. 50 credits/month, 300MB storage. No credit card required. Upgrade anytime for more credits and pro workflow tools." />
           </div></R>
+          <R>
+            <div className="mt-8 text-center">
+              <a href="/faq" className="inline-flex items-center gap-2 text-sm text-teal-400 hover:text-teal-300 transition-colors font-medium">
+                View all FAQ <ArrowRight className="w-4 h-4" />
+              </a>
+            </div>
+          </R>
         </div>
       </section>
 
@@ -423,7 +430,7 @@ export default function StorticaLanding() {
             <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 lg:p-12 grid lg:grid-cols-2 gap-8 items-center">
               <div>
                 <h2 className="text-[1.8rem] lg:text-[2rem] font-extrabold leading-tight mb-3">From script to final cut in one place</h2>
-                <p className="text-[14px] text-[#888] mb-6">15+ AI models. Canvas editor. Video timeline. Music generation. Start free.</p>
+                <p className="text-[14px] text-[#888] mb-6">25+ AI models. Canvas editor. Video timeline. Music generation. Start free.</p>
                 <a href="/sign-up" className="group inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#111111] font-bold text-sm px-7 py-3 rounded-lg transition-all">
                   Start Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </a>
@@ -454,6 +461,7 @@ export default function StorticaLanding() {
                 { label: "Community", href: "/community" },
               ]},
               { t: "Resources", l: [
+                { label: "FAQ", href: "/faq" },
                 { label: "Docs", href: "#" },
                 { label: "Tutorials", href: "#" },
                 { label: "Blog", href: "#" },

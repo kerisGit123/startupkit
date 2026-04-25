@@ -2,8 +2,8 @@
 
 ## Implementation Status
 
-> **Last updated:** 2026-04-23
-> All Phase 1, 2, and 3 features are **IMPLEMENTED**. Phase 4 remains planned.
+> **Last updated:** 2026-04-24
+> All Phase 1, 2, and 3 features are **IMPLEMENTED**. Phase 3.5 (Camera Control) added. Phase 4 remains planned.
 
 | Phase | Feature | Status | File(s) |
 |-------|---------|--------|---------|
@@ -19,6 +19,10 @@
 | **2** | Director's Notes | **DONE** | `StoryboardStrip.tsx`, `SceneEditor.tsx` |
 | **3** | Blend Modes in VideoEditor | **DONE** | `VideoEditor.tsx` |
 | **3** | Subtitle Track in VideoEditor | **DONE** | `VideoEditor.tsx` |
+| **3.5** | Camera Motion Presets (15 presets) | **DONE** | `VideoImageAIPanel.tsx`, `PromptTextarea.tsx` |
+| **3.5** | Camera Studio (floating panel, 4 selectors) | **DONE** | `VirtualCameraStyle.tsx`, `VideoImageAIPanel.tsx` |
+| **3.5** | Prompt Context Menu (Copy/Paste/Camera Motion) | **DONE** | `PromptTextarea.tsx` |
+| **3.5** | Add Frame button in filmstrip | **DONE** | `StoryboardStrip.tsx`, `SceneEditor.tsx` |
 | **4** | Multi-shot AI generation | Planned | — |
 | **4** | Script-to-storyboard import | Planned | — |
 
@@ -33,6 +37,17 @@
 | `app/storyboard-studio/components/editor/StoryboardStrip.tsx` | Main filmstrip component (~900 lines) with all Phase 1 & 2 features |
 | `app/storyboard-studio/components/shared/VideoPreviewDialog.tsx` | Shared video player dialog with snapshot buttons (used by GeneratedImageCard + SceneEditor) |
 | `lib/storyboard/snapshotUtils.ts` | Shared `captureVideoFrame()` and `captureImageFrame()` utilities |
+| `app/storyboard-studio/components/ai/VirtualCameraStyle.tsx` | Camera Studio floating panel — 4 selector cards (Camera/Lens/Focal Length/Aperture) with product images |
+
+### Files Modified (2026-04-24 Session)
+
+| File | Changes |
+|------|---------|
+| `app/storyboard-studio/components/ai/VideoImageAIPanel.tsx` | Camera motion presets (15 options), Camera Studio integration, prompt assembly for virtual camera |
+| `app/storyboard-studio/components/shared/PromptTextarea.tsx` | Built-in right-click context menu (Copy/Paste/Camera Motion submenu), cursor position preservation |
+| `app/storyboard-studio/components/editor/StoryboardStrip.tsx` | Add frame (+) button at end of filmstrip, `onAddFrame` prop |
+| `app/storyboard-studio/components/editor/SceneEditor.tsx` | `createItem` mutation, `handleAddFrame` handler for filmstrip |
+| `app/storyboard-studio/shared/CanvasEditor.tsx` | Fixed Ctrl+C/V interception — added `isContentEditable` guard so clipboard works in prompt textarea |
 
 ### Files Modified
 

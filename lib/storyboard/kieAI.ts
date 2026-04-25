@@ -318,6 +318,18 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   let kieModel = actualModel;
   if (actualModel === 'gpt-image') {
     kieModel = 'gpt-image/1.5-image-to-image';
+  } else if (actualModel === 'gpt-image-2-image-to-image') {
+    // Parse mode from quality param JSON: { type: 'gpt-image-2', mode: 'image-to-image' | 'text-to-image', nsfwChecker: boolean }
+    let gpt2Mode = 'image-to-image';
+    let gpt2Nsfw = false;
+    try {
+      const gpt2Params = JSON.parse(params.quality || '{}');
+      if (gpt2Params.type === 'gpt-image-2') {
+        gpt2Mode = gpt2Params.mode || 'image-to-image';
+        gpt2Nsfw = gpt2Params.nsfwChecker ?? false;
+      }
+    } catch {}
+    kieModel = gpt2Mode === 'text-to-image' ? 'gpt-image-2-text-to-image' : 'gpt-image-2-image-to-image';
   }
   
   const resolution = actualModel === 'nano-banana-2'
@@ -474,7 +486,17 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
       input_urls: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       aspect_ratio: "1:1",
       quality: params.quality || "high"
-    } : actualModel?.startsWith('gpt-image') ? {
+    } : actualModel === 'gpt-image-2-image-to-image' ? (() => {
+      let gpt2Nsfw = false;
+      try { const p = JSON.parse(params.quality || '{}'); gpt2Nsfw = p.nsfwChecker ?? false; } catch {}
+      const inputUrls = [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean);
+      return {
+        prompt: fullPrompt,
+        ...(inputUrls.length > 0 && { input_urls: inputUrls }),
+        aspect_ratio: params.aspectRatio || "auto",
+        nsfw_checker: gpt2Nsfw,
+      };
+    })() : actualModel?.startsWith('gpt-image') ? {
       prompt: fullPrompt,
       input_urls: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
       aspect_ratio: "1:1",

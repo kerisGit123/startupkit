@@ -28,6 +28,8 @@ interface CameraAnglePickerProps {
   subjectImageUrl?: string;
   companyId?: string;
   userId?: string;
+  /** Insert angle text into prompt textarea for user editing */
+  onInsertToPrompt?: (text: string) => void;
 }
 
 // ── Prompt Text Builder ──────────────────────────────────────────────────
@@ -159,6 +161,7 @@ function WireframeGlobe({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef(false);
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
   const sizeRef = useRef({ w: 0, h: 0, cx: 0, cy: 0, r: 0 });
   const imgRef = useRef<HTMLImageElement | null>(null);
   const imgLoadedRef = useRef(false);
@@ -368,37 +371,63 @@ function WireframeGlobe({
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // ── Direction labels (projected) ──
-    ctx.font = "8px system-ui, -apple-system, sans-serif";
+    // ── Direction labels (projected) — larger, color-coded ──
     ctx.textBaseline = "middle";
-
-    // Front label (azimuth=0, on equator, bottom of view since we look from above)
-    const frontP = project3D(0, 0, cx, cy, r);
-    ctx.fillStyle = "rgba(255,255,255,0.3)";
     ctx.textAlign = "center";
+
+    // Determine which quadrant the camera is in for highlighting
+    const rNorm = ((rotation % 360) + 360) % 360;
+    const isFrontView = rNorm <= 45 || rNorm >= 315;
+    const isBackView = rNorm >= 135 && rNorm <= 225;
+    const isLeftView = rNorm > 45 && rNorm < 135;
+    const isRightView = rNorm > 225 && rNorm < 315;
+
+    // Front label
+    const frontP = project3D(0, 0, cx, cy, r);
+    ctx.font = `bold ${isFrontView ? 10 : 9}px system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = isFrontView ? "rgba(59, 130, 246, 0.8)" : "rgba(255,255,255,0.3)";
     ctx.fillText("FRONT", frontP.x, frontP.y + 14);
 
-    // Back label
+    // Back label — more visible, highlighted when camera faces back
     const backP = project3D(180, 0, cx, cy, r);
-    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.font = `bold ${isBackView ? 10 : 9}px system-ui, -apple-system, sans-serif`;
+    ctx.fillStyle = isBackView ? "rgba(239, 68, 68, 0.8)" : "rgba(255,255,255,0.25)";
     ctx.fillText("BACK", backP.x, backP.y - 10);
 
     // Left
     const leftP = project3D(90, 0, cx, cy, r);
+    ctx.font = `bold 9px system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    ctx.fillStyle = isLeftView ? "rgba(168, 85, 247, 0.7)" : "rgba(255,255,255,0.2)";
     ctx.fillText("L", leftP.x + 6, leftP.y);
 
     // Right
     const rightP = project3D(-90, 0, cx, cy, r);
     ctx.textAlign = "right";
+    ctx.fillStyle = isRightView ? "rgba(168, 85, 247, 0.7)" : "rgba(255,255,255,0.2)";
     ctx.fillText("R", rightP.x - 6, rightP.y);
 
     // Top indicator
     const topP = project3D(0, 90, cx, cy, r);
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(255,255,255,0.12)";
+    ctx.font = "bold 8px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = tilt >= 50 ? "rgba(34, 197, 94, 0.7)" : "rgba(255,255,255,0.12)";
     ctx.fillText("TOP", topP.x, topP.y - 8);
+
+    // ── Active direction badge (bottom of globe) ──
+    const dirLabel = isBackView ? "BACK" : isLeftView ? "LEFT" : isRightView ? "RIGHT" : isFrontView ? "FRONT" : "";
+    if (dirLabel && !isFrontView) {
+      const badgeColor = isBackView ? "rgba(239, 68, 68, 0.15)" : "rgba(168, 85, 247, 0.12)";
+      const textColor = isBackView ? "rgba(239, 68, 68, 0.9)" : "rgba(168, 85, 247, 0.8)";
+      const badgeW = ctx.measureText(dirLabel).width + 12;
+      ctx.fillStyle = badgeColor;
+      ctx.beginPath();
+      ctx.roundRect(cx - badgeW / 2, cy + r + 4, badgeW, 16, 4);
+      ctx.fill();
+      ctx.fillStyle = textColor;
+      ctx.font = "bold 8px system-ui, -apple-system, sans-serif";
+      ctx.fillText(dirLabel, cx, cy + r + 12);
+    }
   }, [rotation, tilt, zoom]);
 
   useEffect(() => {
@@ -420,22 +449,16 @@ function WireframeGlobe({
     if (!canvas) return { rotation: 0, tilt: 0 };
     const rect = canvas.getBoundingClientRect();
     const { cx, cy, r } = sizeRef.current;
-    // Screen coords relative to center
     const sx = (clientX - rect.left - cx) / r;
     const sy = -(clientY - rect.top - cy) / r;
-    // Clamp to sphere surface
     const len = Math.sqrt(sx * sx + sy * sy);
     const scale = len > 1 ? 1 / len : 1;
     const nx = sx * scale;
     const ny = sy * scale;
-    // Invert the view rotation: un-rotate around X by +VIEW_ELEV
-    // nx = x3, ny = y3r, and we need z3r from sphere surface
     const z3r = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-    // Un-rotate: y3 = ny*cos + z3r*sin, z3 = -ny*sin + z3r*cos
     const y3 = ny * COS_VIEW + z3r * SIN_VIEW;
     const x3 = nx;
     const z3 = -ny * SIN_VIEW + z3r * COS_VIEW;
-    // Convert to azimuth/tilt
     let newRotation = Math.round((Math.atan2(x3, z3) * 180) / Math.PI);
     newRotation = ((newRotation % 360) + 360) % 360;
     const newTilt = Math.round((Math.asin(Math.max(-1, Math.min(1, y3))) * 180) / Math.PI);
@@ -545,7 +568,7 @@ function AngleSlider({
 
 // ── Main Component ───────────────────────────────────────────────────────
 
-export function CameraAnglePicker({ settings, onSettingsChange, subjectImageUrl, companyId, userId }: CameraAnglePickerProps) {
+export function CameraAnglePicker({ settings, onSettingsChange, subjectImageUrl, companyId, userId, onInsertToPrompt }: CameraAnglePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [presetIdx, setPresetIdx] = useState(-1);
   const [showPresets, setShowPresets] = useState(false);
@@ -887,19 +910,34 @@ export function CameraAnglePicker({ settings, onSettingsChange, subjectImageUrl,
                 </div>
               )}
 
-              {/* ── Apply button ── */}
-              <div className="px-4 pb-3">
+              {/* ── Apply / Send to Prompt buttons ── */}
+              <div className="px-4 pb-3 flex gap-2">
                 <button
                   onClick={handleApply}
-                  className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
                     !isDefault
                       ? "bg-(--accent-blue) text-white hover:bg-(--accent-blue)/90"
                       : "bg-white/6 text-(--text-secondary) hover:bg-white/10"
                   }`}
                 >
                   <Check className="w-3.5 h-3.5" strokeWidth={2} />
-                  {!isDefault ? "Apply Angle" : "Done"}
+                  {!isDefault ? "Apply" : "Done"}
                 </button>
+                {onInsertToPrompt && !isDefault && (
+                  <button
+                    onClick={() => {
+                      const text = buildAnglePromptText(settings);
+                      if (text) {
+                        onInsertToPrompt(text);
+                        onSettingsChange({ ...DEFAULT_ANGLE_SETTINGS });
+                        setIsOpen(false);
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg text-[12px] font-medium bg-white/6 text-(--text-secondary) hover:bg-white/10 transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    Send to Prompt
+                  </button>
+                )}
               </div>
             </div>
           </>,

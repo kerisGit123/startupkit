@@ -81,21 +81,21 @@ export default function BillingPolicyPage() {
               <tr>
                 <Td>Free</Td>
                 <Td>$0</Td>
-                <Td>100</Td>
+                <Td>50</Td>
                 <Td>300 MB</Td>
                 <Td>0 / 1</Td>
               </tr>
               <tr>
                 <Td>Pro</Td>
-                <Td>$39.90/mo or $32/mo annual</Td>
-                <Td>2,500</Td>
+                <Td>$45/mo or $39.90/mo annual</Td>
+                <Td>3,500</Td>
                 <Td>10 GB</Td>
                 <Td>1 / 5</Td>
               </tr>
               <tr>
                 <Td>Business</Td>
-                <Td>$69.90/mo or $63/mo annual</Td>
-                <Td>6,900</Td>
+                <Td>$119/mo or $89.90/mo annual</Td>
+                <Td>8,000</Td>
                 <Td>20 GB</Td>
                 <Td>3 / 15</Td>
               </tr>

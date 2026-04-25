@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { X, Pencil, Trash2, FileText, Camera, Compass, Palette, Film, Package, StickyNote } from "lucide-react";
+import { X, Pencil, Trash2, FileText, Camera, Compass, Palette, Package, StickyNote } from "lucide-react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
@@ -14,12 +14,9 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string 
   style:           { label: "Styles",       icon: Palette,    color: "text-purple-400" },
 };
 
-// Full config including future categories (for icon/color lookup on existing records)
+// Lookup for icon/color on any category (including ones not in tabs)
 const ALL_CATEGORY_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
   ...CATEGORY_CONFIG,
-  format:          { label: "Formats",      icon: Film,       color: "text-amber-400" },
-  "color-palette": { label: "Colors",       icon: Palette,    color: "text-pink-400" },
-  "camera-motion": { label: "Motion",       icon: Film,       color: "text-orange-400" },
   bundle:          { label: "Bundles",       icon: Package,    color: "text-emerald-400" },
 };
 
@@ -132,7 +129,7 @@ export function PresetManager({ companyId, onClose }: PresetManagerProps) {
                             placeholder="Name"
                             className="w-full px-2 py-1 bg-(--bg-secondary) border border-(--border-primary) rounded text-xs text-(--text-primary) outline-none focus:border-(--accent-blue)/50"
                           />
-                          {!["style", "prompt", "note"].includes(preset.category) && (
+                          {!["style", "note", "camera-studio", "camera-angle"].includes(preset.category) && (
                             <input
                               value={editDescription}
                               onChange={(e) => setEditDescription(e.target.value)}
@@ -155,7 +152,7 @@ export function PresetManager({ companyId, onClose }: PresetManagerProps) {
                       ) : (
                         <>
                           <p className="text-xs text-(--text-primary) truncate">{preset.name}</p>
-                          {preset.description && !["style", "prompt", "note"].includes(preset.category) && (
+                          {preset.description && !["style", "note", "camera-studio", "camera-angle"].includes(preset.category) && (
                             <p className="text-[10px] text-(--text-tertiary) truncate">{preset.description}</p>
                           )}
                           {preset.prompt && (

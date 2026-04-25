@@ -36,6 +36,7 @@ import { uploadToR2 } from "@/lib/uploadToR2";
 import { captureVideoFrame } from "@/lib/storyboard/snapshotUtils";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatures } from "@/hooks/useFeatures";
 import { api } from "@/convex/_generated/api";
 
 type CanvasTool = CanvasActiveTool;
@@ -104,6 +105,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const companyId = useCurrentCompanyId();
   // Credit balance now handled by CreditBadge component
   const { plan: currentPlan } = useSubscription();
+  const { maxFramesPerProject } = useFeatures();
   
 
   const sanitizeCompanyId = useCallback((value?: string | null) => {
@@ -520,6 +522,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const deductCredits = useMutation(api.credits.deductCredits);
   const refundCredits = useMutation(api.credits.refundCredits);
   const reorderItems = useMutation(api.storyboard.storyboardItems.reorder);
+  const createItem = useMutation(api.storyboard.storyboardItems.create);
   const updateFrameStatus = useMutation(api.storyboard.storyboardItems.updateFrameStatus);
   const removeItem = useMutation(api.storyboard.storyboardItems.remove);
   const updateFrameNotes = useMutation(api.storyboard.storyboardItems.updateFrameNotes);
@@ -3863,6 +3866,34 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     }
   }, [updateFrameNotes, onShotsChange, shots]);
 
+  const handleAddFrame = useCallback(async () => {
+    if (!projectId) return;
+    if (shots.length >= maxFramesPerProject) {
+      toast.info(`Free plan is limited to ${maxFramesPerProject} frames. Upgrade to Pro for unlimited.`);
+      return;
+    }
+    try {
+      const maxOrder = shots.reduce((max, s) => Math.max(max, s.order ?? 0), 0);
+      const activeScene = activeShot?.scene ?? 1;
+      const newOrder = maxOrder + 1;
+      const newId = await createItem({
+        projectId,
+        sceneId: `scene-${activeScene}`,
+        order: newOrder,
+        title: `Shot ${newOrder + 1}`,
+        duration: 4,
+        generatedBy: "manual",
+      });
+      if (newId) {
+        onNavigateToShot(newId as string);
+      }
+      toast.success("Frame added");
+    } catch (err) {
+      console.error("[StoryboardStrip] Add frame failed:", err);
+      toast.error("Failed to add frame");
+    }
+  }, [projectId, shots, activeShot, createItem, onNavigateToShot, maxFramesPerProject]);
+
   // Helper functions that were removed but needed - functions restored
   const saveField = (field: "voice" | "notes" | "action") => {
     if (!editingField || !activeShotId) return;
@@ -4183,6 +4214,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           onFrameStatusChange={handleStripFrameStatus}
           onDelete={handleStripDelete}
           onEditNotes={handleStripEditNotes}
+          onAddFrame={projectId ? handleAddFrame : undefined}
           onPlayVideo={(videoUrl) => {
             setVideoState({
               status: 'ready',

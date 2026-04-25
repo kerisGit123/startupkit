@@ -1,10 +1,12 @@
 # Competitive Analysis — Storyboard Studio
 
-> **Last updated:** 2026-04-23
-> Analysis of 6 direct competitors against our platform.
+> **Last updated:** 2026-04-25
+> Analysis of 8 direct competitors against our platform.
 >
-> **Recent session (2026-04-23):** Built 16 features across Director's View, VideoEditor, and UI polish.
-> See `plan_director_view.md` for implementation details and `plan_final_design.md` for design specs.
+> **Recent session (2026-04-25 #2):** Added full pricing comparison section (us vs Higgsfield). Updated Higgsfield pricing with actual plan data (Basic $5/70cr, Plus $39/1000cr, Ultra $99/3000cr, Business $62/seat/1500cr). Documented Kie AI cost structure ($0.04/gen). Identified pricing gap: Higgsfield delivers 2x more gens at same $39 price. Recommended fix: drop Nano Banana 2 from 10 to 5 credits/gen. Created `plan_pricing_strategy.md`.
+> **Previous session (2026-04-25 #1):** Built Color Palette Picker (Higgsfield Soul HEX equivalent — eyedropper from canvas, 6 color slots, save/load presets, auto-append to prompts, image proxy for CORS). Soul HEX gap now fully closed.
+> **Previous session (2026-04-24):** Built 3D Camera Angle Picker (Higgsfield-style wireframe globe, rotation/tilt/zoom sliders, 12 presets, prompt auto-append). Camera control system now complete (Camera Studio + Camera Motion + 3D Angle Picker).
+> See `plan_director_view.md` for implementation details, `plan_final_design.md` for design specs, `plan_pricing_strategy.md` for pricing strategy.
 
 ---
 
@@ -176,7 +178,18 @@
 - 40+ creative AI applications
 - Mobile accessible
 
-**Pricing:** Credit-based. Starter $15/mo (200 credits), Plus $39/mo (1000 credits), Ultra $99/mo (3000 credits).
+**Pricing (annual billing):**
+
+| Plan | Monthly | Annual | Credits/mo | Nano Banana 2/gen | Gens/mo | Cost/gen |
+|------|---------|--------|-----------|-------------------|---------|----------|
+| Basic | $5 | $5 (no discount) | 70 | 2 credits | 35 | $0.143 |
+| Plus | $49 | **$39** (20% off) | 1,000 | 2 credits | 500 | $0.078 |
+| Ultra | $129 | **$99** (23% off) | 3,000 (slider up to 9,000) | 2 credits | 1,500 | $0.066 |
+| Business | $89/seat | **$62/seat** (30% off) | 1,500/seat (slider up to 4,500) | 2 credits | 750 | $0.083 |
+
+Plus features: All models, 6 parallel video + 8 parallel image, all features, early access to advanced AI.
+Ultra features: All models, 8 parallel video + 8 parallel image, lowest cost per credit (55% cheaper), one 365-day unlimited video model, 7-day unlimited (Nano Banana Pro 2K, Nano Banana 2 2K, Kling 3.0).
+Business features: All features & models, 2-15 members, shared credit pool, 16 parallel video + 16 parallel image, priority support, shareable Soul IDs, SSO.
 
 **Target:** Content creators, marketers, filmmakers, production studios, enterprises.
 
@@ -211,6 +224,73 @@
 
 ---
 
+## 1b. Pricing Comparison — Us vs Higgsfield (Primary Competitor)
+
+> **Date:** 2026-04-25
+> Detailed pricing analysis. See also `plan_pricing_strategy.md` for full strategy document.
+
+### Our Cost Structure (Kie AI Supplier)
+
+| Kie Package | Price | Kie Credits | Cost/Credit |
+|-------------|-------|-------------|-------------|
+| Base | $5 | 1,000 | $0.005 |
+| Mid | $50 | 10,000 | $0.005 |
+| High (5% bonus) | $500 | 105,000 | $0.00476 |
+| Top (10% bonus) | $1,250 | 275,000 | $0.00455 |
+
+**Nano Banana 2 costs us 8 Kie credits = $0.04/gen (or $0.036 with 10% bonus top-up).**
+
+### Our Plans vs Higgsfield Plans
+
+| Metric | Our Free | Our Pro $39.90 | Our Business $79.90 | HF Basic $5 | HF Plus $39 | HF Ultra $99 |
+|--------|----------|---------------|--------------------|----|----|----|
+| Credits/mo | 100 | 3,500 | 8,000 | 70 | 1,000 | 3,000 |
+| Credits/gen | 10 | 10 | 10 | 2 | 2 | 2 |
+| Gens/mo | 10 | 250 | 690 | 35 | 500 | 1,500 |
+| Cost/gen | free | $0.16 | $0.10 | $0.143 | $0.078 | $0.066 |
+| Storage | 300 MB | 10 GB | 20 GB | - | - | - |
+| Seats | 1 | 5 | 15 | 1 | 1 | 1 |
+| Projects | 3 | Unlimited | Unlimited | - | - | - |
+| Orgs | - | 1 | 3 | - | - | - |
+
+### Head-to-Head at $39/mo
+
+| | Us (Pro $39.90) | Higgsfield (Plus $39) |
+|--|-----------------|----------------------|
+| Credits/mo | 3,500 | 1,000 |
+| Credits per gen | 10 | 2 |
+| **Gens/mo** | **250** | **500** |
+| Cost per gen | $0.16 | $0.078 |
+| Our cost per gen | $0.04 | -- |
+| Our margin per gen | $0.12 (75%) | -- |
+
+**Problem: Higgsfield delivers 2x more generations at the same $39 price point.**
+
+### Our Non-Price Advantages
+
+- Free tier (Higgsfield cheapest is $5/mo)
+- Credit top-ups with no subscription ($10 = 1,000 credits, one-time)
+- Credits never expire (Higgsfield credits expire monthly)
+- Full storyboard studio platform (not just image/video gen)
+- Storage, multi-seat collaboration, organizations
+- Multi-model AI (image + video + music + TTS + analysis) under one credit system
+
+### Recommended Fix
+
+**Option A (recommended): Drop Nano Banana 2 from 10 to 5 credits/gen**
+- Pro: 2,500 / 5 = 500 gens/mo (matches Higgsfield Plus)
+- Business: 6,900 / 5 = 1,380 gens/mo (close to Higgsfield Ultra's 1,500)
+- Our cost: $0.04, user pays $0.05 = 20-28% margin (sustainable)
+
+**Option B: Increase credits in plans (keep 10 credits/gen)**
+- Pro: bump from 2,500 to 5,000 credits
+- Business: bump from 6,900 to 15,000 credits
+- Maintains current margin structure but increases subscription value
+
+See `plan_pricing_strategy.md` for full analysis with margin tables.
+
+---
+
 ## 2. Feature Comparison Matrix
 
 ### Pre-Production & Planning
@@ -224,9 +304,9 @@
 | Storyboard grid view | YES | - | - | YES | YES | - | - | - | YES |
 | Director's filmstrip | **YES** | - | - | Basic | - | - | - | Per-shot | YES |
 | Animatic playback (image+video) | **YES** | - | - | YES | YES | - | - | - | YES |
-| 3D camera angle picker (sphere UI → prompt) | Planned | - | - | **YES** (3D scene) | - | - | - | - | **YES** (keyframes) |
-| Camera motion presets (dolly/crane/pan/orbit/etc) | Planned (have capability, need UI buttons) | - | - | YES | - | - | - | YES | **YES** |
-| Virtual camera physics (lens/DOF) | - | - | - | - | - | - | - | **YES** | - |
+| 3D camera angle picker (sphere UI → prompt) | **YES** (wireframe globe, rotation/tilt/zoom, 12 presets) | - | - | **YES** (3D scene) | - | - | - | **YES** (Angles 2.0) | **YES** (keyframes) |
+| Camera motion presets (dolly/crane/pan/orbit/etc) | **YES** (15 presets + context menu) | - | - | YES | - | - | - | YES | **YES** |
+| Virtual camera physics (lens/DOF) | **YES** (Camera Studio: 9 cameras, 6 lenses, 8 focal lengths, 6 apertures) | - | - | - | - | - | - | **YES** | - |
 | AI co-director (auto shot breakdown) | - | - | - | - | - | - | - | **YES** | - |
 | Shot list generation | - | - | - | YES | - | - | - | YES | - |
 | Pitch deck creation | - | - | - | YES | - | - | - | - | YES |
@@ -258,7 +338,7 @@
 | AI inpaint/area edit | **YES** | - | YES | - | - | YES | YES | YES | - |
 | Image upscaling | YES | - | - | - | - | YES | YES | YES | - |
 | Background removal | - | - | - | - | - | YES | YES | YES | - |
-| Style transfer | - | - | - | YES | - | - | YES | - | YES |
+| Style transfer / Copy Style | Planned (vision AI → style prompt) | - | YES | YES | - | - | YES | - | YES |
 | Face swap / character swap | - | - | - | - | - | - | - | **YES** | - |
 | Keyframe animation | - | - | - | - | - | - | - | - | **YES** |
 
@@ -363,18 +443,20 @@
 
 ### Things competitors do better
 
-| # | Gap | Who does it better | Impact | Suggested action |
+| # | Gap | Who does it better | Impact | Status / Decision |
 |---|-----|-------------------|--------|-----------------|
-| 1 | **No stock asset library** | Artlist (millions of clips, music, SFX) | Medium — our AI generates content instead of browsing stock. But templates help onboarding | Add 10-20 starter templates (commercial, short film, explainer) |
-| 2 | **No 3D camera control** | Storyboarder.ai (3D scene), LTX Studio (keyframes), Higgsfield (virtual camera physics) | Medium — useful for precise shot composition | **Planned: 3D sphere angle picker** — draggable camera on sphere, maps to prompt text. Small effort (~200 lines), no 3D reconstruction needed. AI model handles the rendering |
-| 3 | **No custom model training** | OpenArt (train on your own images, share community models) | High for brand consistency — artists want to train on their style | Large effort. Explore Kie AI LoRA support if available |
-| 4 | **No mobile app** | ImagineArt (100M+ downloads), Artlist | Medium — web-first is fine for pro users | Build lightweight mobile review companion (view storyboard, approve frames, add notes). Uses existing Convex real-time |
-| 5 | **No script format import** | Storyboarder.ai (PDF, FDX, Fountain, Word) | Low-medium — filmmakers use Final Draft format | Small effort: add file upload → text extraction to existing script parser |
-| 6 | **No review/approval workflow** | Krock.io (frame-accurate comments, version comparison, approval chains) | High for agency/team workflows | Medium effort: add reviewer role, per-frame approve/reject, comment threads |
-| 7 | **No workflow/pipeline builder** | ImagineArt (visual pipeline: chain AI steps) | Medium — power users want automation | Medium-large effort. Interesting for "generate image → upscale → generate video → add music" automation |
-| 8 | **No community/marketplace** | OpenArt (community models), ImagineArt (apps marketplace) | Low-medium — more relevant for consumer market | You have gallery sharing already. Consider "remix" (fork shared project as template) |
-| 9 | **No NLE integrations** | Krock.io (Adobe CC, DaVinci, FCP) | Low — our editor replaces NLEs for most use cases | Future: export to Premiere XML / DaVinci EDL format |
-| 10 | **Scale gap** | Artlist ($300M ARR), ImagineArt (30M users), Storyboarder (250K) | Early stage disadvantage | Focus on unique all-in-one value prop. Storyboarder's 250K users are natural upgrade candidates |
+| 1 | ~~No stock asset library~~ | ~~Artlist~~ | ~~Medium~~ | **Not a gap** — Gallery sharing covers this. AI generates content instead of browsing stock |
+| 2 | ~~No 3D camera control~~ | ~~Storyboarder.ai, LTX, Higgsfield~~ | ~~Medium~~ | **DONE** — 3D Camera Angle Picker (wireframe globe, rotation/tilt/zoom, 12 presets, prompt auto-append) |
+| 3 | ~~No custom model training~~ | ~~OpenArt~~ | ~~High~~ | **Not needed** — Prompt-based consistency via Element @mentions achieves same result. B2B product doesn't need community model training |
+| 4 | ~~No mobile app~~ | ~~ImagineArt, Artlist~~ | ~~Medium~~ | **Not needed** — B2B product, not B2C. Web-first is correct for professional users |
+| 5 | ~~No script format import~~ | ~~Storyboarder.ai~~ | ~~Low~~ | **Low priority** — Most users paste text directly. `.fdx` (Final Draft) and `.fountain` (plain-text screenplay markup) are niche formats |
+| 6 | ~~No review/approval workflow~~ | ~~Krock.io~~ | ~~High~~ | **Low priority** — Keep it simple. Existing collaboration via Clerk orgs is sufficient for now |
+| 7 | ~~No workflow/pipeline builder~~ | ~~ImagineArt~~ | ~~Medium~~ | **Planned post-launch** — Need to get to market first. Will revisit after initial traction |
+| 8 | ~~No community/marketplace~~ | ~~OpenArt, ImagineArt~~ | ~~Low~~ | **Not needed** — Discord community works. Gallery sharing + remix covers the use case |
+| 9 | ~~No NLE integrations~~ | ~~Krock.io~~ | ~~Low~~ | **Low priority** — Our video editor replaces NLEs (Premiere, DaVinci, FCP) for most use cases. Export to XML/EDL is future nice-to-have |
+| 10 | **Scale gap** | Artlist ($300M ARR), ImagineArt (30M users), Storyboarder (250K) | Early stage | Focus on unique all-in-one value prop. Storyboarder's 250K users are natural upgrade candidates |
+
+**Result: 9 of 10 original gaps are either closed, not needed, or deprioritized. Only scale gap remains (natural for a pre-launch product).**
 
 ---
 
@@ -426,31 +508,89 @@ We occupy a unique position: **high pre-production planning + high AI generation
 
 ## 6. Action Plan — What To Build Next
 
-### Priority 1: Quick wins (1-2 days each)
+### Priority 1: Quick wins — before launch
+
+| # | Action | Status |
+|---|--------|--------|
+| 1 | ~~**3D Camera Angle Picker**~~ | **DONE** |
+| 2 | ~~**Camera Motion Presets**~~ | **DONE** |
+| 3 | ~~**Camera Studio (virtual camera physics)**~~ | **DONE** |
+| 4 | ~~**Batch frame generation**~~ — "Generate All" button + dialog with model picker, resolution, skip-existing, elements toggle, credit summary | **DONE** |
+| 5 | ~~**Style metadata auto-append**~~ — project `stylePrompt` + `formatPreset` + `colorPalette` automatically prepended to all generation prompts | **DONE** |
+| 6 | ~~**AI Analyze — Image, Video & Audio Intelligence**~~ (via OpenRouter → Gemini) — ANALYZE tab in VideoImageAIPanel, image/video/audio analysis, credit-based | **DONE** |
+| 7 | ~~**Content Format Presets**~~ — 12 format types (Film, YouTube, Reel, Commercial, etc.) with auto-append to prompts | **DONE** |
+| 8 | ~~**Presets System**~~ — `storyboard_presets` table for saving/loading camera studio, angle, style, note settings across projects | **DONE** |
+
+### Priority 1b: AI Analyze Feature (Image & Video Intelligence)
+
+**Backend:** Single OpenRouter integration (`openrouter.ai/api`) — one API key, access to all models. Passthrough pricing (same as direct APIs). Can swap models by changing a string.
+
+**Why OpenRouter over direct APIs:**
+- One integration covers GPT-4o + Gemini Pro + Claude (no separate API keys/accounts)
+- Auto-fallback if a model is down
+- Model switching without code changes — just change the model ID
+- Same pricing as direct APIs
+
+**Image analysis features (using Gemini Flash Lite — $0.25/1M input, cheapest):**
+
+| Feature | What it does | Credit cost | API cost |
+|---|---|---|---|
+| **Copy Style** | Analyzes lighting, color grading, mood, camera look, era/aesthetic → generates style prompt → saves as project `stylePrompt` → auto-appends to all future generations | 1 credit | ~$0.0003 |
+| **Describe Scene** | Extracts scene content (who, what, where, actions, props) → auto-fills image/video prompt in textarea | 1 credit | ~$0.0003 |
+| **Copy Camera** | Extracts camera angle, lens, framing, DOF → auto-sets Camera Studio + Angle Picker settings | 1 credit | ~$0.0003 |
+
+**Video analysis features (using Gemini 3.1 Pro — $2/1M input, best video understanding):**
+
+| Feature | What it does | Credit cost | API cost |
+|---|---|---|---|
+| **Copy Style from Video** | Analyzes color grading, lighting, mood across multiple frames → more accurate than single image | 2 credits | ~$0.005 |
+| **Describe Video** | Scene breakdown, actions, transitions, pacing → reverse storyboard (auto-generate frames from reference video) | 2 credits | ~$0.005 |
+| **Copy Camera Movement** | Detects dolly, pan, tilt, tracking, handheld, static → auto-sets Camera Motion preset | 2 credits | ~$0.005 |
+
+**Why Gemini Pro for video (not GPT-4o):**
+- GPT-4o has no native video input — must extract frames as images (loses motion/timing info)
+- Gemini 3.1 Pro has native video upload with temporal understanding — sees actual movement, pacing, transitions
+- Gemini scores 78.2% on Video-MME benchmark vs GPT-4o at ~71%
+- Gemini's 2M token context window can process long videos without chunking
+
+**UI:** Right-click context menu on any image or video:
+```
+On images:  📋 Copy Style (1cr)  ·  📝 Describe Scene (1cr)  ·  🎥 Copy Camera (1cr)
+On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy Camera Move (2cr)
+```
+
+**Implementation:**
+1. Add OpenRouter API route (`app/api/ai-analyze/route.ts`) — single endpoint, accepts `{ type, model, imageUrl/videoUrl }`
+2. Add context menu items on GalleryCard, FileBrowser, and Generated Panel images/videos
+3. Deduct credits before API call (existing credit system)
+4. Route to correct model: image tasks → `google/gemini-flash-lite`, video tasks → `google/gemini-3.1-pro`
+5. Parse response and apply: style → `stylePrompt`, scene → prompt textarea, camera → Camera Studio/Angle Picker/Motion settings
+
+**Infrastructure already exists:**
+- OpenAI 4o Vision endpoint (`api/closer-look/route.ts`) — can reference for pattern
+- Project `stylePrompt` field + `STYLE_PROMPTS` constants + style UI
+- Credit deduction system
+- Camera Studio + Angle Picker + Motion Presets (targets for auto-set)
+- Right-click context menus on images/videos
+
+### Priority 2: Post-launch
 
 | # | Action | Competitive impact |
 |---|--------|-------------------|
-| 1 | **3D Camera Angle Picker** — interactive sphere with draggable camera dot. Maps azimuth/elevation/roll to prompt text ("bird's eye view", "low angle, looking up", "dutch tilt 30°"). Pure JS/CSS, ~200 lines. Appends to generation prompt automatically. Achieves 80% of Storyboarder.ai's 3D camera with 5% of the effort | Closes gap with Storyboarder.ai + LTX Studio camera control. Visual, intuitive, no typing needed |
-| 2 | **Script format import** — upload .fdx/.fountain/.pdf → extract text → feed to existing script parser | Closes gap with Storyboarder.ai's #1 onboarding feature |
-| 3 | **Batch frame generation** — "Generate all images" button that queues AI generation for every scene | Every competitor with AI offers this. Table-stakes feature |
-| 4 | **Style metadata auto-append** — project `visualStyle` + `genre` automatically prepended to all generation prompts | Ensures consistency without manual copy-paste. Matches Storyboarder.ai + Lovart |
+| 7 | **AI Co-Director (Claude Agent)** — chatbot with project context + tool use. 80% infrastructure exists | Our biggest differentiator if built. Beats Higgsfield's Mr. Higgs because it feeds into our full pipeline |
+| 8 | **Auto-sequence video** — chain frames via Seedance `first-last-frame` mode to generate connected video sequence | Unique — nobody has automated continuity-chained video. Snapshot-to-next is 80% of this |
+| 9 | **Workflow/pipeline builder** — visual canvas to chain AI steps | Post-market. Power-user feature |
 
-### Priority 2: Medium effort (1-2 weeks each)
+### Deprioritized / Not needed
 
-| # | Action | Competitive impact |
-|---|--------|-------------------|
-| 5 | **Review/approval workflow** — reviewer role, per-frame approve/reject, comment threads | Opens agency/team market. Competes with Krock.io's core feature |
-| 6 | **Starter templates** — 10-20 pre-built projects (commercial, short film, explainer, product demo) with sample scripts + styles | Reduces blank-canvas intimidation. Every SaaS tool needs templates |
-| 7 | **Auto-sequence video** — chain frames via Seedance `first-last-frame` mode to generate connected video sequence | Unique feature — nobody has automated continuity-chained video. Your snapshot-to-next is 80% of this |
-
-### Priority 3: Larger bets (future)
-
-| # | Action | Competitive impact |
-|---|--------|-------------------|
-| 8 | **Workflow/pipeline builder** — visual canvas to chain AI steps | Matches ImagineArt's differentiator. Power-user feature |
-| 9 | **Mobile review companion** — lightweight app for reviewing storyboards, approving frames, adding notes | Leverages existing Convex real-time. Expands reach beyond desktop |
-| 10 | **Gallery remix** — fork a shared project as your own template | Expands existing gallery into a marketplace. Low effort for high community value |
-| 11 | **NLE export** — export timeline as Premiere XML / DaVinci EDL | Lets users finish in professional NLEs. Bridge feature for high-end users |
+| # | Action | Decision |
+|---|--------|----------|
+| — | Script format import (.fdx/.fountain) | Low priority — most users paste text. Niche formats |
+| — | Review/approval workflow | Keep simple — existing Clerk orgs collaboration is sufficient |
+| — | Mobile app | B2B product — web-first is correct |
+| — | Community/marketplace | Discord community works. Gallery sharing covers the use case |
+| — | NLE export (Premiere XML / DaVinci EDL) | Future nice-to-have, not needed for launch |
+| — | Retake (re-render video segment) | Blocked on Kie AI API support |
 
 ---
 
@@ -458,19 +598,26 @@ We occupy a unique position: **high pre-production planning + high AI generation
 
 Total unique features counted across all comparison tables:
 
-| Platform | Features | Strongest area |
-|----------|:--------:|---------------|
-| **Us** | **55** | All-in-one (planning + AI + editing + continuity) |
-| Higgsfield | 24 | AI models (30+) + Cinema Studio + character persistence |
-| LTX Studio | 23 | Script-to-video + Elements consistency + camera control |
-| ImagineArt | 16 | AI generation breadth + workflow builder |
-| Storyboarder.ai | 14 | Pre-production planning + 3D camera |
-| Artlist | 11 | Stock assets + video editing |
-| OpenArt | 10 | Custom model training + community |
-| Krock.io | 7 | Review/approval workflows + NLE integrations |
-| Lovart | 5 | Design agent UX |
+| Platform | Features | Change | Strongest area |
+|----------|:--------:|:------:|---------------|
+| **Us** | **69** | +1 | All-in-one (planning + AI + editing + continuity + camera + analyzer + presets + batch + color palette) |
+| Higgsfield | 24 | — | AI models (30+) + Cinema Studio + character persistence |
+| LTX Studio | 23 | — | Script-to-video + Elements consistency + camera control |
+| ImagineArt | 16 | — | AI generation breadth + workflow builder |
+| Storyboarder.ai | 14 | — | Pre-production planning + 3D camera |
+| Artlist | 11 | — | Stock assets + video editing |
+| OpenArt | 10 | — | Custom model training + community |
+| Krock.io | 7 | — | Review/approval workflows + NLE integrations |
+| Lovart | 5 | — | Design agent UX |
 
-**We still lead with 55 features — 2.3x more than our nearest competitor (Higgsfield at 24).** The gap is narrower against LTX Studio and Higgsfield than the others, but our unique Director's View (11 features nobody else has) and music AI remain unmatched.
+**We lead with 69 features — 2.9x more than our nearest competitor (Higgsfield at 24).** Color Palette Picker closes the Soul HEX gap vs Higgsfield. Director's View (11 features nobody else has), complete camera control system, and music AI remain unmatched.
+
+**However, Higgsfield undercuts us on pricing per generation** — they deliver 2x more Nano Banana 2 gens at the same $39/mo price point (500 vs 250 gens). Our feature lead is strong but pricing competitiveness needs addressing. See Section 1b and `plan_pricing_strategy.md`.
+
+**Session history:**
+- **2026-04-25 #2:** Pricing comparison section added. Higgsfield pricing updated with actual data. Kie AI cost structure documented. Pricing strategy document created.
+- **2026-04-25 #1:** Color Palette Picker (eyedropper, 6 slots, save/load presets, image proxy, prompt auto-append). Soul HEX gap closed.
+- **2026-04-24 #3:** Style auto-append, Format presets (12), AI Analyzer (3 media types), Batch generation, Color palette schema, Presets system (save/load), Custom style migration to presets, Analyzer pricing.
 
 ---
 
@@ -520,55 +667,93 @@ Detailed analysis of what competitors have and how we compare.
 | **Retake** | Select 2-16s segment of video → regenerate just that part, model matches surrounding frames | **No** | No way to re-render a middle segment. Would need API support from Kie AI |
 | **Storyboard Generator** | Script → auto-divide into scenes/shots, extract characters as Elements, choose image model + aspect ratio | **YES** | Our `buildStoryboard` + n8n pipeline does the same |
 | **Timeline Editor** | Sequence clips, test continuity, evaluate pacing | **YES** | Our VideoEditor with multi-track timeline, trim, blend modes, subtitles — more capable |
-| **Keyframe Animation** | Set keyframes for camera crane, orbit, tracking per frame | **No** | We don't have per-keyframe control. Our prompt-based approach is simpler but less precise |
+| **Keyframe Animation** | Set keyframes for camera crane, orbit, tracking per frame | **Not needed** | Per-keyframe camera control only matters for real 3D rendering. AI video models (Seedance, Kling, etc.) handle camera motion through prompt text. Our Camera Motion Presets + 3D Angle Picker achieve the same result |
 | **Audio-to-video** | Generate video driven by audio input | **No** | Could be added via Seedance 2.0 multimodal mode (accepts audio refs) |
 | **Video-to-video** | Transform existing video with AI | **No** | Not implemented yet |
 
-**Summary: LTX has 2 features we truly lack (Retake, Keyframe). We have 6 features they lack (music AI, canvas+AI, blend modes, subtitles, real-time sync, Director's View).**
+**Summary: LTX has 1 feature we truly lack (Retake — re-render video segment, depends on API support). Keyframe animation is not needed for AI video models. We have 6 features they lack (music AI, canvas+AI, blend modes, subtitles, real-time sync, Director's View).**
 
-### Higgsfield — Feature-by-Feature vs Us
+### Higgsfield — Feature-by-Feature vs Us (Honest Reassessment 2026-04-24)
 
-| Their Feature | How it works | Do we have it? | Our equivalent / gap |
+Higgsfield is our most formidable competitor. Cinema Studio 3.5 is a deeply integrated filmmaking platform with proprietary model-level intelligence. After thorough research, here is the honest gap analysis:
+
+#### What we MATCH or BEAT
+
+| Their Feature | How it works | Our equivalent |
+|---|---|---|
+| **Virtual Camera Physics** | Camera body, lens, focal length, DOF simulation | **YES** — Camera Studio (9 cameras, 6 lenses, 8 focal lengths, 6 apertures) |
+| **Angles 2.0** | 3D wireframe globe camera angle picker | **YES** — CameraAnglePicker (same UX, wireframe globe, rotation/tilt/zoom) |
+| **Camera Movements** | Dolly, pan, tilt, crane + stack up to 3 simultaneously | **YES** — 15 motion presets. Seedance supports 3 simultaneous movements via prompt text |
+| **Soul ID** | Persistent character identity across generations | **YES** — Element library with character type + prompt @mentions |
+| **30+ AI Models** | Sora 2, Kling 3.0, Veo 3.1, Seedance 2.0, GPT Image 2, etc. | **YES** — 15+ models, same key ones |
+| **Lipsync Studio** | Character image + audio → talking head video | **YES** — Seedance 2.0 lipsync mode |
+| **Face Swap** | Replace faces or characters in video | **Partial** — Canvas inpaint covers this (draw over face → AI replaces) |
+| **Multi-shot generation** | Feed reference images → multi-angle/multi-cut video | **YES** — Seedance UGC (6 images) + Showcase (9 images) modes |
+
+#### What they have that we DON'T
+
+| Their Feature | What it does | Can we build it? | Effort |
 |---|---|---|---|
-| **Cinema Studio 3.5** | Professional filmmaking workspace with per-shot camera/style control | **Partial** | Our SceneEditor with Director's View filmstrip. They have per-shot camera presets, we have per-shot prompts |
-| **Mr. Higgs AI Co-Director** | AI understands your project, auto-breaks scene into shots, sets camera/style, writes prompts | **No** | Our n8n pipeline does scene breakdown but not AI-driven per-shot camera/style planning. **Could build with AI prompt generation** |
-| **Virtual Camera Physics** | Simulate real camera hardware — body (ARRI), lens (Anamorphic), focal length, depth of field | **No** | Achievable via prompt engineering ("shot on ARRI Alexa, 35mm anamorphic, shallow DOF"). **Planned: Camera Style dropdown** |
-| **Soul ID** | Persistent character identity across all generations | **YES** | Our `storyboard_elements` with character type + prompt @mentions |
-| **Photodump** | One-click multi-scene generation with character consistency | **No** | No batch multi-scene yet. **Planned: batch frame generation** |
-| **30+ AI Models** | Sora 2, Kling 3.0, Veo 3.1, Seedance 2.0, GPT Image 2, Soul 2.0, Nano Banana Pro, etc. | **YES** | We have 15+ models — fewer but same key ones. They have more niche models |
-| **Lipsync Studio** | Character image + audio → talking head video | **YES** | Seedance 2.0 lipsync mode |
-| **Face Swap / Character Swap** | Replace faces or full characters in video | **No** | Not implemented |
-| **Marketing Studio** | Generate multiple ad formats from one product | **No** | Not our focus, but Seedance UGC/Showcase modes overlap |
+| **Mr. Higgs AI Co-Director** | AI understands project context, auto-breaks scenes into shots, sets camera/style/prompts in real-time | **Yes** — Claude Agent with tool use. 80% infrastructure exists | Medium |
+| **Genre Presets** (Action, Horror, Comedy, Noir, Drama, Epic, Suspense) | Genre changes pacing, motion energy, lighting behavior, and camera logic — not just a style filter, it changes how the entire scene is constructed and moves | **Yes** — genre-specific prompt templates that describe pacing/energy/lighting behavior. Append to generation prompt like style presets | Small |
+| **Speed Ramp Presets** (8 types: Linear, Flash In, Flash Out, Slow-mo, Bullet Time, Impact, Ramp Up, Auto) | Per-shot timing and pacing control within the video | **Partial** — can describe in prompt ("slow motion cinematic", "bullet time freeze") but no precise frame-level control. AI models interpret timing from text | Small |
+| **Soul Cast** (Character Builder) | Full character creator — genre, era, physique, backstory, personality, 14 genre templates. Deeper than simple reference images | **Yes** — extend our Element system with more fields (backstory, personality, era, physique). UI + schema change | Medium |
+| ~~**Soul HEX** (Color Control)~~ | ~~Precise hex color values applied across all generations for consistent color grading~~ | **DONE** — ColorPalettePicker: eyedropper from reference image, 6 color slots, save/load presets, auto-append to prompts | **DONE** |
+| **Soul Cinema** (Proprietary Image Model) | Cinematic image model with natural grain, film textures, compositions like real film stills. Highest quality output | **No** — proprietary model. We use third-party models. Their visual quality may be superior for cinematic output | Can't replicate |
+| **Native Audio Sync** | Generates SFX, speech, and music synchronized to video content during generation — collapses entire post-production audio pipeline | **No** — we have separate music AI + TTS but not synced to video at generation time. This is model-level capability | Can't replicate |
+| **Physics-Aware Generation** | Objects interact realistically — gravity, fabric movement, collisions, environmental interactions | **No** — model-level intelligence. Seedance/Kling have some physics but not at Higgsfield's claimed level | Can't replicate |
+| **Cinematic Reasoning** | Model understands story intent from reference images alone — knows what kind of scene you want from visual context | **No** — model-level intelligence. We rely on explicit prompt text | Can't replicate |
+| **Soul Photodump** | One-click 15-26 photos of same character in different settings/outfits/moods. Viral social media format | **Partial** — could build as batch generation with character Element + varied scene prompts | Medium |
+| **Marketing Studio** | Generate multiple ad formats (social, display, video) from one product in one click | **No** — not our core focus, but Seedance UGC/Showcase overlaps partially | Low priority |
 
-**Summary: Higgsfield has 3 features we truly lack (AI co-director, virtual camera physics, face swap). We have 7 features they lack (storyboard pipeline, multi-track timeline, subtitles, blend modes, canvas+AI, music AI, Director's View).**
+#### Honest categorization
+
+**Things we can match through prompt engineering + UI (buildable):**
+- Genre presets, speed ramps, camera stacking, ~~Soul HEX color control~~ (DONE), character builder depth, photodump batch
+
+**Things we CANNOT replicate (model-level proprietary):**
+- Soul Cinema image quality, native audio sync, physics-aware generation, cinematic reasoning
+
+**Summary: Higgsfield has 6 remaining features we don't have. 2 are buildable (AI co-director, speed ramps). 4 are model-level proprietary capabilities we cannot replicate (Soul Cinema, native audio sync, physics-aware generation, cinematic reasoning). Soul HEX is now closed (ColorPalettePicker). However, we still have 8+ features they lack (storyboard planning pipeline, multi-track timeline with subtitles, blend modes, canvas draw + AI inpaint, music AI, Director's View filmstrip with comparison/continuity, real-time Convex sync, color palette with eyedropper + presets). The competition is closer than previously assessed.**
 
 ### Storyboarder.ai — Feature-by-Feature vs Us
 
 | Their Feature | How it works | Do we have it? | Our equivalent / gap |
 |---|---|---|---|
-| **3D Camera Control** | From one image, orbit/pan/tilt/zoom camera in 3D space — bird's eye, low angle, dutch tilt, OTS | **No** | Uses 3D scene reconstruction. **Planned: 3D sphere angle picker** — simpler approach, drag camera on sphere → prompt text. 80% of the value, 5% of the effort |
+| **3D Camera Control** | From one image, orbit/pan/tilt/zoom camera in 3D space — bird's eye, low angle, dutch tilt, OTS | **YES** | **DONE** — CameraAnglePicker: wireframe globe with 3D perspective, rotation/tilt/zoom sliders, 12 presets, prompt auto-append. Different approach (prompt-based vs 3D reconstruction) but same UX result |
 | **Script Format Import** | Accept PDF, FDX (Final Draft), Fountain, Word, plain text | **Partial** | We have plain text parser. **Missing: .fdx/.fountain file upload + extraction** |
 | **Visual Consistency** | Character appearance maintained across scenes | **YES** | Element library + prompt @mentions |
 | **Sketch-to-image** | Rough sketch → refined AI image | **Partial** | Our canvas draw → AI inpaint is similar but different workflow |
 | **Unlimited Generation** | No credit system, generate as much as you want | **No** | We use credits. Different business model — not a bug |
 | **Pitch Deck Creation** | Export storyboard as professional pitch deck with templates | **No** | We export as PDF/images but no pitch deck templates |
 
-**Summary: Storyboarder has 1 feature we truly lack (3D camera). We have 10+ features they lack (multi-model AI, video editor, music, canvas+AI, Director's View, blend modes, subtitles, etc.).**
+**Summary: Storyboarder has 0 features we truly lack (3D camera gap now closed). We have 10+ features they lack (multi-model AI, video editor, music, canvas+AI, Director's View, blend modes, subtitles, etc.).**
 
 ### What we should build to close ALL major gaps
 
-| Gap | Competitor | Our approach | Effort |
+| Gap | Competitor | Our approach | Status |
 |---|---|---|---|
-| **3D Camera Angle Picker** | Storyboarder, LTX | Interactive sphere, drag camera dot → prompt text auto-generated. Pure JS, ~200 lines | **Small** |
-| **Camera Motion Presets** | LTX, Higgsfield | Dropdown in VideoImageAIPanel toolbar: Static, Dolly In, Dolly Out, Crane Up, Crane Down, Pan Left, Pan Right, Orbit, Tracking, Handheld. Click → appends motion text to video prompt (e.g. "smooth dolly in toward subject"). Seedance 2.0 + Kling already understand these — just need the UI buttons | **Small** |
-| **Camera Style Presets** | Higgsfield | Dropdown: "ARRI Alexa 35mm Anamorphic", "Handheld DV", "Drone 4K" → append to prompt | **Small** |
-| **Script Format Import** | Storyboarder, LTX | Upload .fdx/.fountain → extract text → feed to existing parser | **Small** |
-| **Batch Frame Generation** | Higgsfield (Photodump) | "Generate all images" button → queue one generation per scene | **Small** |
-| **Retake (re-render segment)** | LTX | Select video segment → regenerate. Needs API support | **Large** |
-| **AI Co-Director (Claude Agent)** | Higgsfield (Mr. Higgs) | Chatbot with project context + tool use. User describes scene → Claude generates script, breaks into shots, sets camera/style, writes prompts, calls `buildStoryboard` mutation. See detailed plan below | **Medium** |
-| **Face/Character Swap** | Higgsfield | Needs specialized model or API | **Large** |
+| **3D Camera Angle Picker** | Storyboarder, LTX, Higgsfield | Wireframe globe, rotation/tilt/zoom, 12 presets, prompt auto-append | **DONE** |
+| **Camera Motion Presets** | LTX, Higgsfield | 15 presets + Seedance 3-movement stacking via prompt | **DONE** |
+| **Camera Style Presets (Camera Studio)** | Higgsfield | 9 cameras, 6 lenses, 8 focal lengths, 6 apertures, prompt auto-append | **DONE** |
+| **Face/Character Swap** | Higgsfield | Covered by canvas inpaint — draw over face, describe new face, AI replaces | **Covered** |
+| **Keyframe Animation** | LTX | Not needed — AI models handle motion via prompt text, not keyframes | **Not needed** |
+| **Script Format Import** | Storyboarder, LTX | Low priority — most users paste text directly. `.fdx`/`.fountain` are niche | **Low priority** |
+| **Batch Frame Generation / Photodump** | Higgsfield | "Generate All" button + dialog with model picker, resolution, elements toggle, credit summary. Sequential with 1s delay | **DONE** |
+| **Retake (re-render segment)** | LTX | Select video segment → regenerate. Depends on Kie AI API support | **Blocked on API** |
+| **AI Co-Director (Claude Agent)** | Higgsfield (Mr. Higgs) | Chatbot with project context + tool use. 80% infrastructure exists. See detailed plan below | **Medium — TODO** |
+| **Content Format Presets** | — | 12 format types (Film, Documentary, YouTube, Reel, Commercial, Music Video, Vlog, Tutorial, Presentation, Podcast, Product Demo, Cinematic Ad) with auto-append | **DONE** (replaces Genre Presets — formats control framing/pacing, not visual aesthetics) |
+| **Speed Ramp Presets** | Higgsfield | Timing descriptions in prompt ("slow motion", "bullet time", "flash in") — 8 presets | **Small — TODO** |
+| ~~**Soul HEX Color Control**~~ | ~~Higgsfield~~ | ColorPalettePicker: eyedropper from reference image canvas (6 hex colors), save/load presets (`storyboard_presets` category="color-palette"), auto-append to generation prompts. Image proxy API for CORS bypass. AddImageMenu (R2/Capture/Generated) | **DONE** |
+| ~~**Soul Cast Character Builder**~~ | ~~Higgsfield~~ | **Not needed** — our Element system already covers this. Elements have name, description, thumbnailUrl, referenceUrls, @mentions in prompts, linked per frame, batch generation with refs. Soul Cast's backstory/personality/era fields don't affect image generation (models only see prompt + reference images). Face consistency is model-level, not solvable by adding form fields | **Not needed** |
+| **AI Analyze (Image/Video/Audio)** | Lovart, Storyboarder | ANALYZE tab in VideoImageAIPanel. OpenRouter → Gemini Flash (images, 1cr) + Gemini Pro (video 3cr, audio 1cr). Shot-by-shot video timestamps, lyrics extraction, speech transcription | **DONE** |
+| **Presets System** | — | `storyboard_presets` table for saving/loading camera studio, angle, style, note settings. Preset Manager dialog. Cross-project, workspace-scoped | **DONE** |
+| **Soul Cinema quality** | Higgsfield | Proprietary model — cannot replicate | **Can't build** |
+| **Native Audio Sync** | Higgsfield | Model-level synced SFX/speech/music during generation | **Can't build** |
+| **Physics-Aware Generation** | Higgsfield | Model-level realistic object interactions | **Can't build** |
+| **Cinematic Reasoning** | Higgsfield | Model-level story intent understanding from images | **Can't build** |
 
-The top 5 are all **small effort** and would close the gap with every competitor except for Retake and Face Swap (which are large and depend on API support).
+**Status: 12 DONE/covered/not-needed. 2 buildable TODOs (AI co-director, speed ramps). 1 blocked on API (retake). 4 model-level proprietary (can't build). 1 deprioritized (script import).**
 
 ### AI Co-Director — Implementation Plan
 
@@ -670,10 +855,445 @@ StoryboardStrip + Canvas show new frames immediately
 - OpenArt = custom training + community
 - Lovart = design agent
 
-We are the **only tool where a filmmaker can write a script, auto-build a storyboard, generate images with 15+ AI models, edit on canvas with AI inpainting, assemble in a multi-track timeline with subtitles and blend modes, generate music with custom personas, use the Director's View filmstrip for continuity, and export — all without leaving one web app.**
+We are the **only tool where a filmmaker can write a script, auto-build a storyboard, generate images with 15+ AI models, edit on canvas with AI inpainting, control camera angles with a 3D sphere picker + virtual camera studio + 15 motion presets, assemble in a multi-track timeline with subtitles and blend modes, generate music with custom personas, use the Director's View filmstrip for continuity, and export — all without leaving one web app.**
 
-### Key threats (updated with Higgsfield + LTX)
+### Competitor gap summary (updated 2026-04-25 session #4)
 
-- **LTX Studio** is our most direct competitor — same script-to-storyboard-to-video pipeline, Elements system like ours, timeline editor. But they use their own models only (we have 15+), no music AI, no canvas draw+AI, no real-time sync, no credit pricing. If they add multi-model support, the gap narrows fast.
-- **Higgsfield** has the most AI models (30+) and Cinema Studio with AI co-director. But no storyboard planning pipeline, no multi-track timeline with subtitles/blend modes, no canvas editing, no music AI. They're generation-first, not pipeline-first.
-- The defense remains: **deepen the pipeline integration**. Features like snapshot-to-next-frame, element @mentions, Director's View with comparison mode, and auto-sequence video create switching costs that are hard to replicate by bolting features onto a generation-only tool.
+| Competitor | Features they have that we lack | Buildable? | Our advantage over them |
+|---|---|---|---|
+| **Higgsfield** | **4** — AI co-director, speed ramps, Soul Cinema model, native audio sync, physics-aware generation, cinematic reasoning | 2 buildable, 4 model-level (can't replicate). Soul HEX closed. Soul Cast not needed (covered by Element system) | 10+ features they lack (pipeline, timeline, subtitles, blend modes, canvas+AI, music AI, Director's View, AI Analyzer, Presets, Format system, batch gen, color palette) |
+| **LTX Studio** | **1** — Retake only (keyframe not needed for AI video) | Blocked on API | 6+ features they lack |
+| **Storyboarder.ai** | **0** — all gaps closed | — | 10+ features they lack |
+| **ImagineArt** | **0** — workflow builder planned post-launch | — | Pipeline structure they lack |
+| **OpenArt** | **0** — custom training not needed for B2B | — | Everything except community |
+| **Krock.io** | **0** — keeping review simple | — | Everything except NLE integrations |
+| **Artlist** | **0** — gallery sharing covers stock library | — | Pipeline + AI generation |
+| **Lovart** | **0** — different market | — | Everything |
+
+**Gaps closed this session (2026-04-25 #4):** Soul HEX Color Control (ColorPalettePicker — eyedropper, 6 slots, save/load presets, image proxy, prompt auto-append). Higgsfield gap narrowed from 5 to 4 features.
+
+**Higgsfield is still the real threat** but the gap is nearly closed on the buildable side. Their remaining advantages are mostly model-level proprietary (Soul Cinema, physics, cinematic reasoning, native audio sync) — 4 features we cannot replicate. Only **2 buildable gaps remain: AI co-director and speed ramps**.
+
+### Key threats (honest)
+
+- **Higgsfield** remains dangerous but our feature gap has **narrowed significantly**. Of their original 10+ advantages, we've closed 7 (batch gen, format presets, color palette picker, AI analyze, photodump, Soul Cast, Soul HEX). Their remaining moat is proprietary model intelligence (4 features) + 2 buildable features (co-director, speed ramps).
+- **Higgsfield pricing threat:** RESOLVED. Multiplier changed from 1.2 to 0.625 across 7 hot model IDs. GPT Image 2 at 4 credits ($0.04) is now 48% cheaper than Higgsfield's $0.078/gen. NB2 at 5 credits ($0.05) is 36% cheaper. See `plan_pricing_strategy.md` for full breakdown.
+- **LTX Studio** is our most direct pipeline competitor — same script-to-video vision. But they use own models only (we have 15+), no music AI, no canvas draw+AI, no real-time sync, no AI Analyzer, no presets system, no color palette picker.
+- **Our pricing advantages:** Free tier (Higgsfield starts at $5), credit top-ups with no subscription ($10 one-time), credits never expire, multi-seat collaboration included in plans, model choice (cheap drafts vs quality finals).
+
+---
+
+## 12b. Pricing Strategy — Implementation Complete (2026-04-25)
+
+### What Was Done
+
+Changed multiplier from 1.2 to 0.625 on 7 hot model IDs (5 distinct models). Added `isHot` field to DB schema for future strategy model management. Added Strategy tab, Pricing Breakdown panel, and Hot badge to Pricing Management UI.
+
+### 7 Hot Models (0.625 multiplier, ~20% margin)
+
+| Model | Kie Cost | User Credits | User Pays | Margin | Use Case |
+|-------|---------|-------------|-----------|--------|----------|
+| GPT Image 2 1K | $0.03 | 4 | $0.04 | 25% | Cheapest image gen |
+| Nano Banana 2 1K | $0.04 | 5 | $0.05 | 20% | Fast drafts |
+| Nano Banana Pro 1K/2K | $0.09 | 12 | $0.12 | 25% | Quality finals |
+| Seedance 2 Fast 480P 5s | $0.225 | 29 | $0.29 | 22% | Fast video |
+| Seedance 2.0 480P 5s | $0.2875 | 36 | $0.36 | 20% | Standard video |
+| Seedance 1.5 Pro 480P 4s | $0.035 | 5 | $0.05 | 30% | Cheapest video |
+| Z-Image | $0.0045 | 1 | $0.01 | 55% | Ultra-cheap image |
+
+### Gens Per Plan (at cheapest model per type)
+
+| Plan | Credits/mo | GPT Image 2 1K (4cr) | NB2 1K (5cr) | Z-Image (1cr) | Seedance 1.5 Pro 480P 4s (5cr) |
+|------|-----------|---------------------|-------------|---------------|-------------------------------|
+| Free | 100 | 25 gens | 20 gens | 100 gens | 20 gens |
+| Pro $39.90 | 2,500 | **625 gens** | 500 gens | 2,500 gens | 500 gens |
+| Business $69.90 | 6,900 | **1,725 gens** | 1,380 gens | 6,900 gens | 1,380 gens |
+
+### Landing Page Data (use near pricing section)
+
+Suggested copy for the landing page pricing area:
+
+**Headline:** "Generate images from $0.04. Videos from $0.05. Credits never expire."
+
+**Feature bullets for plans:**
+- Free: "100 credits/month = up to 100 image generations"
+- Pro: "3,500 credits/month = up to 875 image generations or 700 video clips"
+- Business: "8,000 credits/month = up to 2,000 image generations or 1,600 video clips"
+
+**Trust badges:**
+- "Credits never expire" (unique vs all competitors)
+- "No subscription required — buy $10 credit packs anytime"
+- "Choose your model — cheap drafts or quality finals"
+- "Transparent pricing — see cost before you generate"
+
+**vs Competitor callout (optional):**
+- "48% cheaper than Higgsfield per image generation"
+- "Free tier included — competitors start at $5/mo"
+
+---
+
+## 13. Claude Agent Skills — Future AI Architecture
+
+> **Reference:** [Claude Agent Skills Guide](https://platform.claude.com/docs/en/build-with-claude/skills-guide)
+> **Status:** Planning — post-launch priority
+> **Last updated:** 2026-04-24
+
+### What Are Agent Skills?
+
+Agent Skills are organized folders of instructions, scripts, and resources that extend Claude's capabilities through the API. Instead of cramming everything into one system prompt, you package domain-specific intelligence into reusable, composable skill modules that Claude can invoke.
+
+### Why Agent Skills Matter for Us
+
+Our current Anthropic integration is **already 80% of the way there**:
+
+| Layer | Current State | With Agent Skills |
+|---|---|---|
+| **Support Chatbot** | Working — Claude Haiku 4.5, SSE streaming, 11 tools, knowledge base search, ticket creation, rate limiting, session persistence | Same infrastructure, but skills replace monolithic system prompt |
+| **System Prompt** | Single `buildSystemPrompt()` — one big prompt for everything | **Modular skills** — `support-agent/`, `director-agent/`, `brand-analyst/` etc. |
+| **Tools** | `AUTHED_TOOLS` (11 tools) + `ANON_TOOLS` (1 tool) in one file | **Per-skill tool sets** — each skill brings its own tools |
+| **Context** | Generic — knows about Storytica features | **Project-aware** — skills can inject project state (scenes, elements, style) |
+
+### Existing Infrastructure (What We Already Have)
+
+```
+lib/support/anthropic.ts        → Anthropic SDK client (claude-haiku-4-5)
+lib/support/tools.ts            → 11 tool definitions + dispatchTool()
+lib/support/systemPrompt.ts     → buildSystemPrompt() (landing/studio variants)
+app/api/support/chat/route.ts   → SSE streaming endpoint with tool loop (8 iterations)
+convex/supportChat.ts           → Session persistence + rate limiting
+convex/supportTools.ts          → Convex queries/mutations for tool dispatch
+convex/knowledgeBase.ts         → Knowledge base search (searchArticlesUnified)
+```
+
+### Planned Agent Skills
+
+#### Skill 1: `support-agent` (Refactor of existing chatbot)
+
+**What:** Refactor current support chatbot into a proper Agent Skill structure.
+
+**Current tools (keep as-is):**
+- `get_my_profile`, `get_my_subscription`, `get_my_credit_balance`
+- `list_my_credit_transactions`, `get_ai_model_pricing`
+- `list_my_recent_generations`, `get_generation_details`
+- `list_my_invoices`, `list_my_support_tickets`, `create_support_ticket`
+- `search_knowledge_base`
+
+**Skill structure:**
+```
+skills/
+  support-agent/
+    instructions.md       → System prompt (refactored from buildSystemPrompt)
+    tools.json            → Tool definitions (from AUTHED_TOOLS / ANON_TOOLS)
+    knowledge/            → Static knowledge files (pricing, FAQ, policies)
+```
+
+**Effort:** Small — restructuring, no new functionality.
+
+---
+
+#### Skill 2: `director-agent` (AI Co-Director — replaces Section 9 plan)
+
+**What:** Claude-powered AI director that understands project context and can create/modify storyboards, set camera angles, write prompts, and trigger generation.
+
+**New tools (project-aware):**
+| Tool | Description | Convex Target |
+|---|---|---|
+| `get_project_context` | Read project metadata, style, genre, elements | `storyboard/projects` queries |
+| `list_scenes` | Get all scenes/frames with prompts and status | `storyboard/storyboardItems` queries |
+| `create_shots` | Create multiple storyboard frames from shot breakdown | `storyboardItems.buildStoryboard` mutation |
+| `update_shot_prompt` | Set image/video prompt for a specific frame | `storyboardItems.update` mutation |
+| `set_camera_settings` | Apply camera body, lens, focal length, aperture, angle, motion to a frame | Update prompt metadata |
+| `create_element` | Create a character/environment/prop element | `storyboard/elements` mutation |
+| `set_project_style` | Update project visual style, genre, color grading | `storyboard/projects.update` mutation |
+| `trigger_batch_generate` | Queue image generation for selected or all frames | Batch generation endpoint |
+| `generate_music` | Create background music for the project | Music generation endpoint |
+
+**System prompt context injection:**
+```
+When user opens Director Chat, inject:
+- Project name, genre, visual style, aspect ratio
+- All elements (characters with descriptions, environments, props)
+- All scenes (frame number, prompt, status, camera settings)
+- Current style prompt / color grading
+→ Claude sees the entire project state and can make informed decisions
+```
+
+**Skill structure:**
+```
+skills/
+  director-agent/
+    instructions.md       → Director persona, filmmaking knowledge
+    tools.json            → 9 project-aware tool definitions
+    examples/             → Example conversations (car commercial, music video, etc.)
+    genres/               → Genre-specific prompt templates (Action, Horror, Noir, etc.)
+```
+
+**Model:** Claude Sonnet 4.6 (better reasoning for creative direction) or Haiku 4.5 (faster for simple commands).
+
+**Effort:** Medium — new tools + new endpoint + chat UI. But 80% infrastructure exists.
+
+---
+
+#### Skill 3: `brand-analyst` (Brand Guidelines Analyzer)
+
+**What:** Analyzes uploaded brand assets (logos, color palettes, typography, mood boards) and generates structured brand guidelines that feed into project style settings.
+
+**New tools:**
+| Tool | Description |
+|---|---|
+| `analyze_brand_image` | Vision analysis of uploaded brand asset → extract colors, typography, mood |
+| `generate_brand_guidelines` | Compile analysis into structured brand document |
+| `apply_brand_to_project` | Set project style, color grading, element descriptions from brand |
+| `create_brand_elements` | Auto-create elements (logo, brand colors, fonts) from analysis |
+
+**Integration with existing:**
+- Uses OpenRouter (Gemini Vision) for image analysis — already built in `app/api/ai-analyze/route.ts`
+- Feeds into project `stylePrompt` and element library
+- Works with `brand-guidelines/page.tsx` (already exists as a page)
+
+**Skill structure:**
+```
+skills/
+  brand-analyst/
+    instructions.md       → Brand analysis persona, design system knowledge
+    tools.json            → 4 brand-specific tools
+    templates/            → Brand guideline templates (corporate, creative, minimal)
+```
+
+**Effort:** Medium — new analysis logic + UI for brand page.
+
+---
+
+#### Skill 4: `script-analyst` (Script Intelligence)
+
+**What:** Analyzes scripts for pacing, structure, shot suggestions, and auto-generates optimized prompts per scene.
+
+**New tools:**
+| Tool | Description |
+|---|---|
+| `analyze_script_structure` | Parse script → identify act structure, beats, pacing issues |
+| `suggest_shots` | For each scene, suggest camera angles, framing, motion |
+| `optimize_prompts` | Rewrite image/video prompts for better AI generation results |
+| `estimate_duration` | Calculate estimated video duration per scene and total |
+
+**Effort:** Small — mostly prompt engineering + existing script parser.
+
+---
+
+### Architecture: How Skills Plug Into Existing System
+
+```
+┌─────────────────────────────────────────────────┐
+│  Frontend (React)                                │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐ │
+│  │ Support  │ │ Director │ │ Brand Guidelines │ │
+│  │ Chat     │ │ Chat     │ │ Analyzer         │ │
+│  └────┬─────┘ └────┬─────┘ └────────┬─────────┘ │
+└───────┼────────────┼────────────────┼────────────┘
+        │            │                │
+        ▼            ▼                ▼
+┌─────────────────────────────────────────────────┐
+│  API Routes (Next.js)                            │
+│  /api/support/chat   → support-agent skill       │
+│  /api/director/chat  → director-agent skill      │
+│  /api/brand/analyze  → brand-analyst skill       │
+└───────┬────────────┬────────────────┬────────────┘
+        │            │                │
+        ▼            ▼                ▼
+┌─────────────────────────────────────────────────┐
+│  Anthropic SDK (shared client)                   │
+│  lib/support/anthropic.ts                        │
+│  ┌──────────────────────────────────────────┐    │
+│  │  Claude API with tool_use                │    │
+│  │  - Model selection per skill             │    │
+│  │  - SSE streaming (existing pattern)      │    │
+│  │  - Tool loop (existing, up to 8 iter)    │    │
+│  │  - Prompt caching (existing)             │    │
+│  └──────────────────────────────────────────┘    │
+└───────┬────────────┬────────────────┬────────────┘
+        │            │                │
+        ▼            ▼                ▼
+┌─────────────────────────────────────────────────┐
+│  Tool Dispatch (per-skill tool sets)             │
+│  lib/support/tools.ts      → support tools       │
+│  lib/director/tools.ts     → director tools      │
+│  lib/brand/tools.ts        → brand tools         │
+└───────┬────────────┬────────────────┬────────────┘
+        │            │                │
+        ▼            ▼                ▼
+┌─────────────────────────────────────────────────┐
+│  Convex (real-time database)                     │
+│  - supportTools.ts     (existing)                │
+│  - storyboardItems.ts  (existing)                │
+│  - projects.ts         (existing)                │
+│  - elements            (existing)                │
+│  - knowledgeBase.ts    (existing)                │
+└─────────────────────────────────────────────────┘
+```
+
+### Implementation Priority
+
+| # | Skill | Why | Effort | When |
+|---|---|---|---|---|
+| 1 | `support-agent` refactor | Clean up existing code, establish skill pattern | Small | Pre-launch |
+| 2 | `director-agent` | Biggest differentiator — beats Higgsfield's Mr. Higgs | Medium | Post-launch P1 |
+| 3 | `brand-analyst` | Brand guidelines page already exists, natural fit | Medium | Post-launch P2 |
+| 4 | `script-analyst` | Enhances existing script parser | Small | Post-launch P3 |
+
+### Cost Estimates
+
+| Skill | Model | Avg tokens/call | Est. cost/call | Monthly (1K users) |
+|---|---|---|---|---|
+| `support-agent` | Haiku 4.5 | ~2K in + 500 out | ~$0.002 | ~$60 |
+| `director-agent` | Sonnet 4.6 | ~8K in + 2K out | ~$0.04 | ~$400 |
+| `brand-analyst` | Sonnet 4.6 + Gemini Vision | ~5K in + 1K out | ~$0.03 | ~$150 |
+| `script-analyst` | Haiku 4.5 | ~4K in + 1K out | ~$0.005 | ~$50 |
+
+### Key Decisions
+
+1. **Skill loading:** Skills loaded server-side per endpoint — no client-side skill selection. Each API route knows which skill it serves.
+2. **Model per skill:** Support uses Haiku (fast, cheap). Director/Brand use Sonnet (better reasoning). Can upgrade to Opus for premium users.
+3. **Tool isolation:** Each skill has its own tool set. Director can't create support tickets. Support can't modify storyboards. Clean separation of concerns.
+4. **Session management:** Extend existing `support_chat_sessions` schema or create `director_chat_sessions` table. Same pattern — Convex persistence + rate limiting.
+5. **Credit cost:** Director and Brand skills consume user credits (they trigger AI generation). Support is free (no generation).
+
+---
+
+### Before launch: quick wins remaining
+
+1. **Batch frame generation** — small effort, table-stakes
+2. **Style metadata auto-append** — small effort, consistency boost
+3. **AI Analyze (Copy Style / Video)** — small effort via OpenRouter, unique differentiator
+4. **Genre presets** — small effort, prompt templates
+5. **Speed ramp presets** — small effort, prompt text
+6. **Soul HEX color control** — small effort, color picker → prompt
+
+### Post-launch priorities
+
+1. **AI Co-Director** — medium effort, biggest differentiator potential
+2. **Soul Cast character builder** — medium effort, extend Element system
+3. **Photodump batch generation** — medium effort, batch with variations
+
+---
+
+## 11. What Was Built (2026-04-24 Session)
+
+4 features implemented:
+
+| # | Feature | Category |
+|---|---------|----------|
+| 1 | **Camera Motion Presets** — 15 presets (Static, Dolly In/Out, Crane Up/Down, Pan L/R, Tilt Up/Down, Orbit, Tracking, Handheld, Zoom In/Out). Toolbar dropdown button + right-click context menu submenu. Inserts motion text at cursor position in prompt textarea | Camera Control |
+| 2 | **Camera Studio** — Floating panel with 4 selector cards (Camera, Lens, Focal Length, Aperture). 9 camera bodies with product images (ARRI, Hasselblad, iPhone, GoPro, DJI Drone, Film 35mm, Polaroid, VHS). 6 lens types, 8 focal lengths, 6 aperture stops. Appends combined camera description to prompt at generation time. Works for both image and video models | Camera Control |
+| 3 | **Prompt Context Menu** — Right-click context menu on PromptTextarea shared component. Copy (Ctrl+C), Paste (Ctrl+V), Camera Motion submenu (video mode only). Opens upward, submenu to the right. Uses design system CSS variables. Portal to body for z-index | Prompt UX |
+| 4 | **Add Frame to Director's View** — Plus (+) button at end of filmstrip to create new frames. Creates frame via `storyboardItems.create` mutation, auto-navigates to new frame | Director's View |
+
+**Also fixed:**
+- Ctrl+C/Ctrl+V in prompt textarea — CanvasEditor's global keydown handler was intercepting clipboard shortcuts for contentEditable elements. Added `isContentEditable` guard
+- Camera motion dropdown right-aligned to button edge to prevent right-side overflow
+- Context menu cursor position preservation — saves selection range on right-click, restores on insert
+
+**Files created:**
+- `app/storyboard-studio/components/ai/VirtualCameraStyle.tsx` — Camera Studio floating panel component
+- `public/storytica/cameras/` — 10 camera/lens/aperture product images (ARRI, Hasselblad, iPhone, GoPro, DJI Drone, 35mm Film, Polaroid, VHS, Lens, Aperture)
+
+**Files modified:**
+- `app/storyboard-studio/components/ai/VideoImageAIPanel.tsx` — Camera motion state/options, Camera Studio integration, prompt assembly
+- `app/storyboard-studio/components/shared/PromptTextarea.tsx` — Built-in context menu with Copy/Paste/Camera Motion
+- `app/storyboard-studio/components/editor/StoryboardStrip.tsx` — Add frame (+) button, `onAddFrame` prop
+- `app/storyboard-studio/components/editor/SceneEditor.tsx` — `createItem` mutation, `handleAddFrame` handler
+- `app/storyboard-studio/shared/CanvasEditor.tsx` — Fixed Ctrl+C/V interception for contentEditable elements
+
+---
+
+## 12. What Was Built (2026-04-24 Session #2)
+
+1 major feature implemented:
+
+| # | Feature | Category |
+|---|---------|----------|
+| 1 | **3D Camera Angle Picker** — Higgsfield-style wireframe globe with 3D perspective projection (25° view-from-above). Draggable camera dot on sphere surface with depth-based opacity (front lines brighter, back lines dimmer). Rotation (0-360°), Tilt (-90 to 90°), Zoom (-100 to 100) sliders. Zoom visually moves dot in/out with dashed orbit ring indicator. 12 presets (Front, 3/4 View, Profile, Back, Bird's Eye, Low Angle, Worm's Eye, Over Shoulder, Close-Up, Wide, High 3/4, Dutch Low). Collapsible preset panel (hidden by default). Apply button to confirm. Live prompt preview showing "Will append to prompt". Left/right arrows to cycle presets. Optional subject thumbnail inside globe. Prompt text auto-appended on generate (same pattern as Camera Studio) | Camera Control |
+
+**Gaps closed:**
+- **3D Camera Control** — was our #2 gap vs Storyboarder.ai, LTX Studio, Higgsfield. Now fully closed
+- **Virtual Camera Physics** — combined with Camera Studio (built in session #1), we now match Higgsfield's full virtual camera system
+
+**Camera control system now complete (3 components):**
+1. **Camera Studio** — camera body, lens, focal length, aperture (hardware simulation)
+2. **Camera Motion Presets** — 15 motion types (dolly, crane, pan, orbit, tracking, etc.)
+3. **3D Camera Angle Picker** — rotation, tilt, zoom (spatial positioning)
+
+**Files created:**
+- `app/storyboard-studio/components/ai/CameraAnglePicker.tsx` — 3D wireframe globe component with WireframeGlobe canvas, AngleSlider, presets, prompt builder
+
+**Files modified:**
+- `app/storyboard-studio/components/ai/VideoImageAIPanel.tsx` — CameraAnglePicker state, import, render (next to Camera Studio), prompt assembly
+
+---
+
+## 14. What Was Built (2026-04-24 Session #3)
+
+8 features implemented:
+
+| # | Feature | Category |
+|---|---------|----------|
+| 1 | **Style Auto-Append** — project `stylePrompt` automatically prepends to all generation prompts. "No Style" clear card in style dropdown | Style System |
+| 2 | **Content Format Presets** — 12 format types (Film, Documentary, YouTube, Reel/TikTok, Commercial, Music Video, Vlog, Tutorial, Presentation, Podcast, Product Demo, Cinematic Ad). Format badge dropdown in workspace toolbar. Auto-appends framing/pacing/camera behavior to prompts | Format System |
+| 3 | **AI Analyzer** — ANALYZE tab in VideoImageAIPanel. Image analysis (camera, lighting, style, scene → prompt, 1cr). Video analysis (shot-by-shot with timestamps, 3cr). Audio analysis (speech transcription, lyrics extraction, sound description, 1cr). OpenRouter → Gemini Flash/Pro. AddImageMenu with mediaType prop for video/audio. FileBrowser handles fileType="analysis". storyboard_files records | AI Analyzer |
+| 4 | **Batch Frame Generation** — "Generate All" button in workspace toolbar. BatchGenerateDialog with model picker (Nano Banana 2/Pro, GPT Image 2, Z-Image), resolution, skip-existing toggle, use-elements toggle, credit summary, progress bar. Sequential with 1s delay. Same API as SceneEditor | Batch Generation |
+| 5 | **Color Palette** — `colorPalette` field on `storyboard_projects` (referenceUrl + 5 hex colors). Auto-appends to generation prompts. Ready for client-side palette extraction UI | Color System |
+| 6 | **Presets System** — `storyboard_presets` table with CRUD mutations. Categories: style, note, camera-studio, camera-angle, bundle. Camera Studio save/load in panel header. Camera Angle Picker save/load in panel header. PromptActions save note + saved notes dialog. Preset Manager dialog in workspace toolbar (filter by category, edit, delete). Cross-project, workspace-scoped | Presets |
+| 7 | **Custom Style Migration** — Custom styles now save to `storyboard_presets` (category="style") instead of `promptTemplates`. All three style selectors (workspace, wizard, dashboard) load from presets. Edit/delete via pencil/X buttons on hover | Style System |
+| 8 | **Pricing Models** — 3 new pricing entries in `DEFAULT_PRICING_MODELS`: ai-analyze/image (1cr), ai-analyze/video (3cr), ai-analyze/audio (1cr) | Pricing |
+
+**Also fixed:**
+- Camera Angle built-in presets renamed from "Presets" to "Samples" (avoid naming conflict with user presets)
+- AddImageMenu accepts `mediaType` prop — video (green/Film icon), audio (purple/Volume2 icon)
+- FileBrowser analysis cards: Scan icon, amber color, text preview, "Copy Result" in context menu
+- PresetManager hides unused categories (format, camera-motion, color-palette)
+- PresetManager hides description for style/note/camera/angle presets (only name + prompt)
+- Saved Notes dialog uses portal to document.body for correct centering
+
+**Files created:**
+- `app/api/ai-analyze/route.ts` — OpenRouter API route (image/video/audio analysis)
+- `app/storyboard-studio/components/storyboard/BatchGenerateDialog.tsx` — Batch generation dialog
+- `app/storyboard-studio/components/storyboard/PresetManager.tsx` — Preset management dialog
+- `convex/storyboard/presets.ts` — CRUD mutations for presets
+
+**Files modified:**
+- `convex/schema.ts` — formatPreset, colorPalette on projects + storyboard_presets table
+- `convex/storyboard/projects.ts` — formatPreset, colorPalette in update mutation
+- `app/storyboard-studio/constants.ts` — FORMAT_PRESETS (12) + FORMAT_PROMPT_MAP
+- `app/storyboard-studio/workspace/[projectId]/page.tsx` — Format badge, No Style card, Generate All button, Presets button, BatchGenerateDialog, PresetManager, style presets loading
+- `app/storyboard-studio/components/ai/VideoImageAIPanel.tsx` — ANALYZE tab, auto-append (style+format+colors), handleAnalyze, credit flow, companyId/userId props to tools
+- `app/storyboard-studio/components/ai/FileBrowser.tsx` — fileType="analysis" handling
+- `app/storyboard-studio/components/ai/VirtualCameraStyle.tsx` — Save/Load presets
+- `app/storyboard-studio/components/ai/CameraAnglePicker.tsx` — Save/Load presets, "Samples" rename
+- `app/storyboard-studio/components/shared/AddImageMenu.tsx` — mediaType prop
+- `app/storyboard-studio/components/shared/PromptActionsDropdown.tsx` — Save Note, Saved Notes dialog
+- `app/storyboard-studio/components/dashboard/ProjectsDashboard.tsx` — Style presets from storyboard_presets
+- `app/storyboard-studio/components/dashboard/WizardSteps.tsx` — Style presets from storyboard_presets
+- `lib/storyboard/pricing.ts` — 3 analyzer pricing models
+
+---
+
+## 15. What Was Built (2026-04-25 Session #4)
+
+1 feature implemented:
+
+| # | Feature | Category |
+|---|---------|----------|
+| 1 | **Color Palette Picker** — Higgsfield Soul HEX equivalent. Floating panel (portal, same pattern as Camera Studio/Angle Picker). Reference image via AddImageMenu (R2/Capture/Generated — Upload and Elements hidden via `hideUpload` prop). Image renders on `<canvas>`, crosshair cursor eyedropper picks pixel color on click. 6 color slots with hex labels. Click filled slot → native `<input type="color">` to fine-tune. Hover preview (hex badge overlay). Save to `storyboard_presets` (category="color-palette", stores 6 hex colors + reference image URL + name). Load via dropup menu (thumbnail + name + 6 color dots + delete). Auto-appends `"Color graded with dominant palette: #hex1, #hex2, ..."` to generation prompt. Rose/pink accent color. Trigger button shows 6 mini color dots when active | Color System |
+
+**Also built:**
+- `app/api/image-proxy/route.ts` — Server-side image proxy for CORS bypass. External R2/CDN images fetched server-side → returned as raw bytes → browser creates blob URL (same-origin) → canvas `getImageData()` works for pixel reading. Domain whitelist (r2.dev, cloudflarestorage.com). Cached 24h
+- `hideUpload` prop on `AddImageMenu` — conditionally hides Upload button. Used by ColorPalettePicker to show only R2/Capture/Generated (3 options instead of 5)
+
+**Files created:**
+- `app/storyboard-studio/components/ai/ColorPalettePicker.tsx` — Color palette picker component
+- `app/api/image-proxy/route.ts` — Image proxy API route for CORS bypass
+
+**Files modified:**
+- `app/storyboard-studio/components/ai/VideoImageAIPanel.tsx` — ColorPalettePicker import, state, render (next to Camera Studio + Angle Picker), prompt assembly (colorPaletteColors priority over project-level colorPalette), palette FileBrowser instance
+- `app/storyboard-studio/components/shared/AddImageMenu.tsx` — `hideUpload` prop
+
+**Gaps closed:** Soul HEX Color Control (was "Schema DONE, UI TODO" → now fully **DONE**). Higgsfield buildable gap narrowed from 3 to 2 (AI co-director + speed ramps remain).

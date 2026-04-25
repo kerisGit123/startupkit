@@ -8,7 +8,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2, Lock
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -23,6 +23,7 @@ import { usePricingData } from "@/app/storyboard-studio/components/shared/usePri
 import { uploadToR2, getR2PublicUrl } from "@/lib/r2";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatures } from "@/hooks/useFeatures";
 import PromptLibrary from "./PromptLibrary";
 import { FORMAT_PROMPT_MAP } from "../../constants";
 import { FileBrowser } from "./FileBrowser";
@@ -35,6 +36,8 @@ import { PromptActionsDropdown } from "../shared/PromptActionsDropdown";
 import { VirtualCameraStyle, buildCameraPromptText } from "./VirtualCameraStyle";
 import { CameraAnglePicker, buildAnglePromptText, DEFAULT_ANGLE_SETTINGS } from "./CameraAnglePicker";
 import type { CameraAngleSettings } from "./CameraAnglePicker";
+import { ColorPalettePicker, buildColorPalettePromptText, type ColorPaletteColors } from "./ColorPalettePicker";
+import { SpeedRampEditor, buildSpeedRampPromptText, type SpeedCurve } from "./SpeedRampEditor";
 
 // Constants for mention system
 const TEXTAREA_MIN_HEIGHT = 60;
@@ -228,6 +231,7 @@ export function ImageAIPanel({
   const currentCompanyId = useCurrentCompanyId();
   // Plan drives auto-grant of monthly credits inside deductCredits
   const { plan: currentPlan } = useSubscription();
+  const { hasProFeatures } = useFeatures();
   
   const [activeTool, setActiveTool] = useState("canvas-object");
   const [showBrushSizeMenu, setShowBrushSizeMenu] = useState(false);
@@ -709,6 +713,9 @@ export function ImageAIPanel({
   const [cameraMotion, setCameraMotion] = useState("none");
   const [virtualCameraSettings, setVirtualCameraSettings] = useState<import("./VirtualCameraStyle").VirtualCameraSettings>({ camera: "default", lens: "none", focalLength: "none", aperture: "none" });
   const [cameraAngleSettings, setCameraAngleSettings] = useState<CameraAngleSettings>({ ...DEFAULT_ANGLE_SETTINGS });
+  const [colorPaletteColors, setColorPaletteColors] = useState<ColorPaletteColors>({ colors: [] });
+  const [speedRampCurve, setSpeedRampCurve] = useState<SpeedCurve>([2, 2, 2, 2, 2]);
+  const [showPaletteFileBrowser, setShowPaletteFileBrowser] = useState(false);
   const [showCameraMotionDropdown, setShowCameraMotionDropdown] = useState(false);
 
   // Camera motion presets — appended to video prompt as natural language
@@ -1627,6 +1634,7 @@ export function ImageAIPanel({
 
   // ── KIE AI Generate Function with Complete Callback Workflow ─────────────────────────────────────────────
   const [generateCooldown, setGenerateCooldown] = useState(false);
+  const [isEnhancing, setIsEnhancing] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   // ── AI Analyze: user-selected media type + URL ─────────────────────────
@@ -1868,10 +1876,16 @@ export function ImageAIPanel({
           if (projectData?.formatPreset && FORMAT_PROMPT_MAP[projectData.formatPreset]) {
             parts.push(FORMAT_PROMPT_MAP[projectData.formatPreset]);
           }
-          if (projectData?.colorPalette?.colors?.length) {
+          if (colorPaletteColors.colors.length > 0) {
+            parts.push(buildColorPalettePromptText(colorPaletteColors));
+          } else if (projectData?.colorPalette?.colors?.length) {
             const colorNames = projectData.colorPalette.colors.map((c: string) => c.toUpperCase()).join(', ');
             parts.push(`Color graded with dominant palette: ${colorNames}.`);
           }
+          // Speed ramp (video only)
+          const speedRampText = buildSpeedRampPromptText(speedRampCurve);
+          if (speedRampText) parts.push(speedRampText);
+
           if (parts.length > 0) {
             finalPrompt = parts.join(' ') + ' ' + finalPrompt;
           }
@@ -3373,6 +3387,61 @@ export function ImageAIPanel({
                   </div>
                 )}
 
+                {/* Enhance button */}
+                {(outputMode === "image" || outputMode === "video") && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <button
+                    onClick={async () => {
+                      const prompt = extractPlainText();
+                      if (!prompt.trim()) { toast("Write a prompt first"); return; }
+                      if (isEnhancing) return;
+                      setIsEnhancing(true);
+                      try {
+                        await deductCredits({
+                          companyId: companyId || "",
+                          tokens: 1,
+                          reason: "Prompt enhancement",
+                          model: "claude-haiku-4-5",
+                          action: "prompt-enhance",
+                          plan: plan || undefined,
+                        });
+                        const res = await fetch("/api/prompt-enhance", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ prompt, userId: user?.id, mode: outputMode }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) { toast.error(data.error || "Enhancement failed"); return; }
+                        const el = editorRef.current;
+                        if (el && data.enhanced) {
+                          el.textContent = data.enhanced;
+                          setEditorIsEmpty(false);
+                          setCurrentPrompt(data.enhanced);
+                          onUserPromptChange?.(data.enhanced);
+                          toast.success("Prompt enhanced (1 cr)");
+                        }
+                      } catch (err: any) {
+                        toast.error(err?.message || "Enhancement failed");
+                      } finally {
+                        setIsEnhancing(false);
+                      }
+                    }}
+                    disabled={isEnhancing || editorIsEmpty}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[12px] transition-colors cursor-pointer border ${
+                      isEnhancing
+                        ? "text-amber-400 border-amber-400/30 bg-amber-400/8"
+                        : "text-(--text-secondary) border-white/8 hover:text-amber-400 hover:bg-amber-400/8 disabled:opacity-40 disabled:cursor-not-allowed"
+                    }`}
+                    title="Enhance prompt with AI (1 credit)"
+                  >
+                    {isEnhancing ? (
+                      <div className="w-3 h-3 border border-amber-400/40 border-t-amber-400 rounded-full animate-spin" />
+                    ) : (
+                      <Wand2 className="w-3 h-3" strokeWidth={1.75} />
+                    )}
+                    <span>{isEnhancing ? "Enhancing..." : "Enhance"}</span>
+                  </button>
+                )}
+
                 <PromptActionsDropdown
                   editorRef={editorRef}
                   editorIsEmpty={editorIsEmpty}
@@ -3470,27 +3539,147 @@ export function ImageAIPanel({
                   </div>
                 )}
 
-                {/* Virtual Camera Style — image and video modes */}
-                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                  <div className="inline-block ml-2">
-                    <VirtualCameraStyle
-                      settings={virtualCameraSettings}
-                      onSettingsChange={setVirtualCameraSettings}
-                      companyId={companyId}
-                      userId={user?.id}
-                    />
+                {/* Speed Ramp Editor — video mode only (Pro+) */}
+                {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="inline-block ml-1">
+                    {hasProFeatures ? (
+                      <SpeedRampEditor
+                        curve={speedRampCurve}
+                        onCurveChange={setSpeedRampCurve}
+                        onInsertToPrompt={(text) => {
+                          const el = editorRef.current;
+                          if (!el || !text) return;
+                          const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                          if (hasContent) {
+                            el.innerHTML = el.innerHTML + '<br>' + text;
+                          } else {
+                            el.textContent = text;
+                          }
+                          const plainText = el.innerText || '';
+                          setEditorIsEmpty(false);
+                          setCurrentPrompt(plainText);
+                          onUserPromptChange?.(plainText);
+                        }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => toast.info("Upgrade to Pro to use Speed Ramp")}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
+                        title="Pro feature — Upgrade to unlock"
+                      >
+                        <Lock className="w-3 h-3" strokeWidth={1.75} />
+                        <span>Speed</span>
+                      </button>
+                    )}
                   </div>
                 )}
 
-                {/* 3D Camera Angle Picker — image and video modes */}
+                {/* Virtual Camera Style — image and video modes (Pro+) */}
+                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="inline-block ml-2">
+                    {hasProFeatures ? (
+                      <VirtualCameraStyle
+                        settings={virtualCameraSettings}
+                        onSettingsChange={setVirtualCameraSettings}
+                        companyId={companyId}
+                        userId={user?.id}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => toast.info("Upgrade to Pro to use Camera Studio")}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
+                        title="Pro feature — Upgrade to unlock"
+                      >
+                        <Lock className="w-3 h-3" strokeWidth={1.75} />
+                        <span>Camera</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* 3D Camera Angle Picker — image and video modes (Pro+) */}
                 {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
                   <div className="inline-block ml-1">
-                    <CameraAnglePicker
-                      settings={cameraAngleSettings}
-                      onSettingsChange={setCameraAngleSettings}
-                      companyId={companyId}
-                      userId={user?.id}
-                    />
+                    {hasProFeatures ? (
+                      <CameraAnglePicker
+                        settings={cameraAngleSettings}
+                        onSettingsChange={setCameraAngleSettings}
+                        companyId={companyId}
+                        userId={user?.id}
+                        onInsertToPrompt={(text) => {
+                          const el = editorRef.current;
+                          if (!el || !text) return;
+                          const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                          if (hasContent) {
+                            el.innerHTML = el.innerHTML + '<br>' + text;
+                          } else {
+                            el.textContent = text;
+                          }
+                          const plainText = el.innerText || '';
+                          setEditorIsEmpty(false);
+                          setCurrentPrompt(plainText);
+                          onUserPromptChange?.(plainText);
+                        }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => toast.info("Upgrade to Pro to use Camera Angle")}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
+                        title="Pro feature — Upgrade to unlock"
+                      >
+                        <Lock className="w-3 h-3" strokeWidth={1.75} />
+                        <span>Angle</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Color Palette Picker — image and video modes (Pro+) */}
+                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="inline-block ml-1">
+                    {hasProFeatures ? (
+                      <ColorPalettePicker
+                        colors={colorPaletteColors}
+                        onColorsChange={setColorPaletteColors}
+                        companyId={companyId}
+                        userId={user?.id}
+                        generatedItemImages={generatedItemImages}
+                        generatedProjectImages={generatedProjectImages}
+                        onR2Click={() => setShowPaletteFileBrowser(true)}
+                        canOpenR2={canOpenFileBrowser()}
+                        onCaptureClick={() => {
+                          const canvasEditor = document.querySelector('[data-canvas-editor="true"]');
+                          if (!canvasEditor) return;
+                          const mainImage = canvasEditor.querySelector('img[data-canvas-base-image="true"], img') as HTMLImageElement;
+                          if (mainImage?.src) {
+                            setColorPaletteColors(prev => ({ ...prev, referenceUrl: mainImage.src }));
+                          }
+                        }}
+                        onInsertToPrompt={(text) => {
+                          const el = editorRef.current;
+                          if (!el || !text) return;
+                          const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                          if (hasContent) {
+                            el.innerHTML = el.innerHTML + '<br>' + text;
+                          } else {
+                            el.textContent = text;
+                          }
+                          const plainText = el.innerText || '';
+                          setEditorIsEmpty(false);
+                          setCurrentPrompt(plainText);
+                          onUserPromptChange?.(plainText);
+                        }}
+                      />
+                    ) : (
+                      <button
+                        onClick={() => toast.info("Upgrade to Pro to use Color Palette")}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
+                        title="Pro feature — Upgrade to unlock"
+                      >
+                        <Lock className="w-3 h-3" strokeWidth={1.75} />
+                        <span>Palette</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -4844,6 +5033,16 @@ export function ImageAIPanel({
                   <>
                     <Sparkles className="w-4 h-4" />
                     Generate
+                    {/* Active auto-append indicators */}
+                    {cameraAngleSettings.rotation !== 0 || cameraAngleSettings.tilt !== 0 || cameraAngleSettings.zoom !== 0 ? (
+                      <span className="text-[9px] bg-blue-500/30 text-blue-200 px-1 py-0.5 rounded font-normal">Angle</span>
+                    ) : null}
+                    {!speedRampCurve.every(v => v === 2) && (
+                      <span className="text-[9px] bg-violet-500/30 text-violet-200 px-1 py-0.5 rounded font-normal">Speed</span>
+                    )}
+                    {colorPaletteColors.colors.length > 0 && (
+                      <span className="text-[9px] bg-rose-500/30 text-rose-200 px-1 py-0.5 rounded font-normal">Palette</span>
+                    )}
                     <span className="text-xs opacity-75">+ {displayedCredits}</span>
                   </>
                 )}
@@ -4942,6 +5141,28 @@ export function ImageAIPanel({
           onSelectFile={(url, type) =>
             type === 'image' && handleFileBrowserSelect(url, type)
           }
+        />
+      )}
+
+      {/* Palette FileBrowser — for color palette image picking */}
+      {showPaletteFileBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          companyId={currentCompanyId || ""}
+          isOpen={showPaletteFileBrowser}
+          onClose={() => setShowPaletteFileBrowser(false)}
+          imageSelectionMode={true}
+          filterTypes={['image']}
+          onSelectImage={(imageUrl) => {
+            setColorPaletteColors(prev => ({ ...prev, referenceUrl: imageUrl }));
+            setShowPaletteFileBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image') {
+              setColorPaletteColors(prev => ({ ...prev, referenceUrl: url }));
+              setShowPaletteFileBrowser(false);
+            }
+          }}
         />
       )}
 

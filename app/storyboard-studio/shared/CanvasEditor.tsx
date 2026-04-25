@@ -882,6 +882,8 @@ export function CanvasEditor({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Don't intercept when typing in contentEditable elements (e.g. prompt textarea)
+      if (e.target instanceof HTMLElement && e.target.isContentEditable) return;
       
       // Copy
       if ((e.ctrlKey || e.metaKey) && e.key === "c") {

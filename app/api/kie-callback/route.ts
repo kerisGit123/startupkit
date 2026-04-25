@@ -537,25 +537,27 @@ export async function POST(request: NextRequest) {
       const mimeType = sourceBlob.type || 'image/png';
       const timestamp = Date.now();
       const generationMetadata = fileRecord?.metadata ?? {};
-      // Audio detection first (takes priority) — check URL, mime, fileType, AND model name
-      const isAudio = fileRecord?.fileType === 'audio' || mimeType.startsWith('audio/') || resultUrl.match(/\.(mp3|wav|m4a|ogg|aac)(\?|$)/i) || fileRecord?.model?.includes('music');
-      const isVideo = !isAudio && (fileRecord?.fileType === 'video' || mimeType.startsWith('video/') || resultUrl.match(/\.(mp4|webm|mov)(\?|$)/i));
+      // Audio/Music detection first (takes priority) — check URL, mime, fileType, AND model name
+      const isMusic = fileRecord?.fileType === 'music' || fileRecord?.model?.includes('music');
+      const isAudio = !isMusic && (fileRecord?.fileType === 'audio' || mimeType.startsWith('audio/') || resultUrl.match(/\.(mp3|wav|m4a|ogg|aac)(\?|$)/i));
+      const isVideo = !isMusic && !isAudio && (fileRecord?.fileType === 'video' || mimeType.startsWith('video/') || resultUrl.match(/\.(mp4|webm|mov)(\?|$)/i));
 
-      console.log('[kie-callback] File type detection:', { fileType: fileRecord?.fileType, mimeType, isVideo, isAudio, resultUrl: resultUrl.substring(0, 80) });
+      console.log('[kie-callback] File type detection:', { fileType: fileRecord?.fileType, mimeType, isVideo, isAudio, isMusic, resultUrl: resultUrl.substring(0, 80) });
 
       let finalR2Key: string;
       let finalUrl: string | undefined;
       let fileSizeBytes: number;
 
-      if (isAudio) {
-        // ── AUDIO: Save directly to {companyId}/generated/ as correct extension ──
+      if (isMusic || isAudio) {
+        // ── MUSIC/AUDIO: Save directly to {companyId}/generated/ as correct extension ──
         const urlExt = resultUrl.match(/\.(\w+)(\?|$)/)?.[1] || 'mp3';
         const audioExt = ['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(urlExt) ? urlExt : 'mp3';
-        finalR2Key = `${companyId}/generated/ai-music-${timestamp}.${audioExt}`;
+        const prefix = isMusic ? 'ai-music' : 'tts-audio';
+        finalR2Key = `${companyId}/generated/${prefix}-${timestamp}.${audioExt}`;
         await uploadToR2(sourceBlob, finalR2Key);
         finalUrl = getR2PublicUrl(finalR2Key);
         fileSizeBytes = sourceBlob.size;
-        console.log('[kie-callback] Audio saved directly:', { r2Key: finalR2Key, sizeMB: (fileSizeBytes / (1024 * 1024)).toFixed(2) });
+        console.log(`[kie-callback] ${isMusic ? 'Music' : 'Audio'} saved directly:`, { r2Key: finalR2Key, sizeMB: (fileSizeBytes / (1024 * 1024)).toFixed(2) });
       } else if (isVideo) {
         // ── VIDEO: Save directly to {companyId}/generated/ as .mp4 ──
         const videoExt = mimeType.includes('webm') ? 'webm' : mimeType.includes('mov') ? 'mov' : 'mp4';

@@ -10,6 +10,7 @@ import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { getCurrentCompanyId, useCurrentCompanyId } from "@/lib/auth-utils";
+import { useFeatures } from "@/hooks/useFeatures";
 import { FrameFavoriteButton } from "../../components/editor/FrameFavoriteButton";
 import { FramePrimaryImageButton } from "../../components/editor/FramePrimaryImageButton";
 import { WorkspaceExportModal } from "../../components/modals/WorkspaceExportModal";
@@ -125,6 +126,7 @@ export default function StoryboardWorkspacePage() {
   const project = useQuery(api.storyboard.projects.get, { id: pid });
   const items = useQuery(api.storyboard.moveItems.getStoryboardItemsOrdered, { projectId: pid });
   const currentCompanyId = useCurrentCompanyId() || "personal";
+  const { hasProFeatures, maxFramesPerProject } = useFeatures();
   // Credit balance now handled by CreditBadge component
   const customStyles = useQuery(api.promptTemplates.getByCompany, { companyId: currentCompanyId });
   const customStyleTemplates = customStyles?.filter(t => t.type === "style") ?? [];
@@ -1531,10 +1533,10 @@ export default function StoryboardWorkspacePage() {
                       <Trash2 className="w-3.5 h-3.5" />
                       Remove Duplicates
                     </button>
-                    <button onClick={() => setShowBatchGenerate(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-white text-xs font-medium rounded-lg transition"
-                      title="Generate images for all frames with prompts">
-                      <Sparkles className="w-3.5 h-3.5" />
+                    <button onClick={() => hasProFeatures ? setShowBatchGenerate(true) : toast.info("Upgrade to Pro to use Batch Generate")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${hasProFeatures ? "bg-blue-500 hover:bg-blue-400 text-white" : "bg-[#3D3D3D] text-[#666] cursor-not-allowed"}`}
+                      title={hasProFeatures ? "Generate images for all frames with prompts" : "Pro feature — Upgrade to unlock"}>
+                      {hasProFeatures ? <Sparkles className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                       Generate All
                     </button>
                     <button onClick={() => setShowFileBrowser(true)}
@@ -1547,10 +1549,10 @@ export default function StoryboardWorkspacePage() {
                       <Users className="w-3.5 h-3.5" />
                       Elements
                     </button>
-                    <button onClick={() => setShowPresetManager(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition"
-                      title="Manage saved presets">
-                      <Settings className="w-3.5 h-3.5" />
+                    <button onClick={() => hasProFeatures ? setShowPresetManager(true) : toast.info("Upgrade to Pro to use Presets")}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition ${hasProFeatures ? "bg-[#3D3D3D] hover:bg-[#2C2C2C] text-[#A0A0A0]" : "bg-[#3D3D3D] text-[#666] cursor-not-allowed"}`}
+                      title={hasProFeatures ? "Manage saved presets" : "Pro feature — Upgrade to unlock"}>
+                      {hasProFeatures ? <Settings className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
                       Presets
                     </button>
                     <button onClick={() => setShowExportModal(true)}
@@ -1632,32 +1634,43 @@ export default function StoryboardWorkspacePage() {
                     </div>
                   ))}
                   {/* Add frame button */}
-                  <button
-                    disabled={isAddingFrame}
-                    className="flex flex-col items-center justify-center border-2 border-dashed border-[#3D3D3D]/50 rounded-xl hover:border-[#4A90E2]/50 hover:bg-[#4A90E2]/5 transition-all duration-300 text-[#6E6E6E] hover:text-[#4A90E2] disabled:opacity-50 disabled:cursor-not-allowed group"
-                    style={{ aspectRatio: project.settings.frameRatio === "9:16" ? "9/16" : project.settings.frameRatio === "1:1" ? "1/1" : "16/9" }}
-                    onClick={async () => {
-                      if (isAddingFrame) return;
-                      setIsAddingFrame(true);
-                      try {
-                        await createItem({
-                          projectId: pid,
-                          // ✅ Remove companyId - calculated on server from auth context
-                          sceneId: `manual-${Date.now()}`,
-                          order: (items?.length ?? 0),
-                          title: `Frame ${(items?.length ?? 0) + 1}`,
-                          description: "",
-                          duration: 5,
-                          generatedBy: user?.id || "unknown"
-                        });
-                      } finally { setIsAddingFrame(false); }
-                    }}>
-                    {isAddingFrame
-                      ? <Loader2 className="w-6 h-6 mb-1 animate-spin" />
-                      : <Plus className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />}
-                    <span className="text-xs font-medium">{isAddingFrame ? "Adding…" : "Add Frame"}</span>
-                    <span className="text-xs text-[#A0A0A0] mt-1">Create manually</span>
-                  </button>
+                  {(items?.length ?? 0) >= maxFramesPerProject ? (
+                    <button
+                      className="flex flex-col items-center justify-center border-2 border-dashed border-[#3D3D3D]/50 rounded-xl text-[#666] cursor-not-allowed group"
+                      style={{ aspectRatio: project.settings.frameRatio === "9:16" ? "9/16" : project.settings.frameRatio === "1:1" ? "1/1" : "16/9" }}
+                      onClick={() => toast.info(`Free plan is limited to ${maxFramesPerProject} frames. Upgrade to Pro for unlimited.`)}
+                    >
+                      <Lock className="w-5 h-5 mb-1" />
+                      <span className="text-xs font-medium">Frame limit ({maxFramesPerProject})</span>
+                      <span className="text-xs text-[#A0A0A0] mt-1">Upgrade to Pro</span>
+                    </button>
+                  ) : (
+                    <button
+                      disabled={isAddingFrame}
+                      className="flex flex-col items-center justify-center border-2 border-dashed border-[#3D3D3D]/50 rounded-xl hover:border-[#4A90E2]/50 hover:bg-[#4A90E2]/5 transition-all duration-300 text-[#6E6E6E] hover:text-[#4A90E2] disabled:opacity-50 disabled:cursor-not-allowed group"
+                      style={{ aspectRatio: project.settings.frameRatio === "9:16" ? "9/16" : project.settings.frameRatio === "1:1" ? "1/1" : "16/9" }}
+                      onClick={async () => {
+                        if (isAddingFrame) return;
+                        setIsAddingFrame(true);
+                        try {
+                          await createItem({
+                            projectId: pid,
+                            sceneId: `manual-${Date.now()}`,
+                            order: (items?.length ?? 0),
+                            title: `Frame ${(items?.length ?? 0) + 1}`,
+                            description: "",
+                            duration: 5,
+                            generatedBy: user?.id || "unknown"
+                          });
+                        } finally { setIsAddingFrame(false); }
+                      }}>
+                      {isAddingFrame
+                        ? <Loader2 className="w-6 h-6 mb-1 animate-spin" />
+                        : <Plus className="w-6 h-6 mb-1 group-hover:scale-110 transition-transform" />}
+                      <span className="text-xs font-medium">{isAddingFrame ? "Adding…" : "Add Frame"}</span>
+                      <span className="text-xs text-[#A0A0A0] mt-1">Create manually</span>
+                    </button>
+                  )}
                 </div>
               </>
             )}

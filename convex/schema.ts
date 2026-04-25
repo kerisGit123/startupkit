@@ -2077,7 +2077,7 @@ export default defineSchema({
   storyboard_presets: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
-    category: v.string(), // "camera-studio" | "camera-angle" | "camera-motion" | "color-palette" | "style" | "format" | "prompt" | "note" | "bundle"
+    category: v.string(), // "camera-studio" | "camera-angle" | "style" | "note" | "bundle"
     format: v.string(), // JSON blob — system reads/writes tool state
     prompt: v.optional(v.string()), // Human-readable prompt text this preset produces
     thumbnailUrl: v.optional(v.string()),
@@ -2162,6 +2162,8 @@ export default defineSchema({
     modelName: v.string(),                  // "Nano Banana 2", "Seedance 1.5 Pro"
     modelType: v.union(v.literal("image"), v.literal("video"), v.literal("audio"), v.literal("music")),
     isActive: v.boolean(),                   // true = available, false = disabled
+    visibility: v.optional(v.union(v.literal("public"), v.literal("temp_down"))), // public = visible to users, temp_down = admin only (dev in progress)
+    isHot: v.optional(v.boolean()),              // true = strategy pricing model (0.625 multiplier, hot badge)
     pricingType: v.union(v.literal("fixed"), v.literal("formula")),
     
     // For fixed pricing

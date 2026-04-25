@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { MessageCircle, X, Send, Loader2, RotateCcw } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, RotateCcw, Home, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -77,6 +77,207 @@ interface Message {
   isError?: boolean;
 }
 
+/* ─── FAQ decision tree (hardcoded — zero API calls) ────────────────── */
+interface FaqNode {
+  q: string;
+  a: string;
+  /** Extra keywords that help search match this node (not shown to user) */
+  tags?: string;
+  followUp?: FaqNode[];
+}
+
+const FAQ_TREE: FaqNode[] = [
+  {
+    q: "What does Storytica do?",
+    a: "Storytica is an AI-powered storyboard studio.\n\n**What you can do:**\n- Write a script and generate visual storyboard frames\n- Create video clips, music, and audio\n- Edit with canvas editor (brush, inpaint, shapes)\n- Maintain consistent characters with Element Library\n- Collaborate with your team in real-time\n- Export as PDF, PNG/JPG, video, or script",
+    followUp: [
+      {
+        q: "What AI models are available?",
+        a: "**25+ models across 4 categories:**\n\n**Image:** Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Character Edit, Nano Banana Edit\n\n**Video:** Seedance 1.5 Pro, Seedance 2.0, Seedance 2.0 Fast, Kling 3.0 Motion, Veo 3.1\n\n**Music:** AI Music, Cover Song\n\n**Audio:** ElevenLabs TTS\n\n**Utility:** AI Analyze, Prompt Enhance",
+        followUp: [
+          {
+            q: "Nano Banana 2",
+            a: "**Nano Banana 2** - General purpose image model\n\n**Credits per image:**\n- 1K quality: 5 credits\n- 2K quality: 8 credits\n- 4K quality: 12 credits\n\n**Per 1,000 credits:** ~200 images (1K)\n**Best for:** Storyboard frames, all styles",
+            tags: "nano banana NB2 image price cost credits generation",
+            followUp: [
+              { q: "Tips for Nano Banana 2", a: "**Getting the best results:**\n\n- Use **1K** for drafts and iteration (5 cr)\n- Switch to **2K/4K** only for final frames\n- Works well with all art styles\n- Add **@Image** elements for character consistency\n- Use **Prompt Enhance** (1 cr) to improve prompts\n- Pair with **AI Analyze** to describe reference images", tags: "tips how to use nano banana" },
+            ],
+          },
+          {
+            q: "GPT Image 2",
+            a: "**GPT Image 2** - Photorealistic image model\n\n**Credits:** 4 per image\n**Modes:** Text-to-image and image-to-image\n**Refs:** Up to 16 reference images\n\n**Per 1,000 credits:** ~250 images\n**Best for:** Photorealism, text rendering, product shots",
+            tags: "gpt image GPT photorealistic price cost credits generation",
+            followUp: [
+              { q: "Tips for GPT Image 2", a: "**Getting the best results:**\n\n- Our **cheapest** image model at 4 credits\n- Excels at **photorealism** and **text in images**\n- Use **image-to-image** mode with up to 16 refs for style matching\n- Great for product shots and realistic scenes\n- Combine with **Element Library** for character consistency\n- Use for final hero frames after drafting with Z-Image", tags: "tips how to use gpt image" },
+            ],
+          },
+          {
+            q: "Seedance 2.0",
+            a: "**Seedance 2.0** - High-quality video\n\n**480p (5s):**\n- With video input: ~36 credits\n- Text-to-video: ~60 credits\n\n**720p (5s):**\n- With video input: ~79 credits\n- Text-to-video: ~129 credits\n\n**Pro plan (3,500 cr):** ~97 videos (480p)",
+            tags: "seedance 2 video price cost credits generation per second",
+            followUp: [
+              { q: "Tips for Seedance 2.0", a: "**Getting the best results:**\n\n- Use **image-to-video** mode (cheaper + better quality with reference)\n- Start at **480p** for previews, upgrade to 720p for finals\n- Keep clips **5s** for best cost-to-quality ratio\n- Use **Motion presets** for camera movement control\n- Generate the image first with NB2/GPT, then animate", tags: "tips how to use seedance 2" },
+              { q: "img2vid vs txt2vid?", a: "**Image-to-video (img2vid):**\n- Cheaper (36 vs 60 cr at 480p 5s)\n- Better quality (has reference frame)\n- More control over the output\n\n**Text-to-video (txt2vid):**\n- No reference needed\n- Good for abstract/conceptual scenes\n- More expensive\n\n**Recommendation:** Generate an image first, then use img2vid.", tags: "image to video text to video difference" },
+            ],
+          },
+          {
+            q: "Seedance 2.0 Fast",
+            a: "**Seedance 2.0 Fast** - Faster, lower cost\n\n**480p (5s):**\n- With video input: 29 credits\n- Text-to-video: ~49 credits\n\n**720p (5s):**\n- With video input: 63 credits\n- Text-to-video: ~104 credits\n\n**Pro plan (3,500 cr):** ~120 videos (480p)",
+            tags: "seedance fast video price cost credits generation quick",
+            followUp: [
+              { q: "Tips for Seedance 2.0 Fast", a: "**Getting the best results:**\n\n- Best for **storyboard previews** and iteration\n- ~30% cheaper than Seedance 2.0\n- Use **img2vid** mode for best value (29 cr vs 49 cr)\n- Great for testing motion before committing to Seedance 2.0\n- Works well with **Speed Ramp** for dynamic pacing", tags: "tips how to use seedance fast" },
+            ],
+          },
+          {
+            q: "Seedance 1.5 Pro",
+            a: "**Seedance 1.5 Pro** - Cinema quality + audio\n\n**480p:**\n- 4s: 5 credits (no audio) / 9 credits (audio)\n- 8s: 9 credits / 18 credits\n- 12s: 12 credits / 24 credits\n\n**720p:** 4s: 9 cr / 8s: 18 cr / 12s: 27 cr\n\n**Pro plan (3,500 cr):** ~700 videos (480p 4s)",
+            tags: "seedance 1.5 video price cost credits generation cheap budget",
+            followUp: [
+              { q: "Tips for Seedance 1.5 Pro", a: "**Getting the best results:**\n\n- **Cheapest video** at 5 credits (480p 4s)\n- Enable **audio** for synced SFX and dialogue\n- Use **4s clips** for storyboard previews\n- Supports **1080p** for high-res final output\n- Great for dialogue scenes with lip sync\n- Use **Camera Studio** presets for cinematic shots", tags: "tips how to use seedance 1.5 cinema audio" },
+              { q: "Audio vs no audio?", a: "**With audio** (2x cost):\n- Synced sound effects\n- Dialogue and lip sync\n- Background music\n- Great for final presentation\n\n**Without audio** (half cost):\n- Visual only\n- Best for storyboard previews\n- Use when you'll add audio separately\n\n**Tip:** Draft without audio, add it on final versions.", tags: "audio sound sfx dialogue" },
+            ],
+          },
+          {
+            q: "Z-Image",
+            a: "**Z-Image** - Cheapest image model\n\n**Credits:** Just 1 per image\n**Per 1,000 credits:** ~1,000 images\n\n**Best for:** Quick iterations, drafts, brainstorming",
+            tags: "z-image cheap budget price cost credits generation",
+            followUp: [
+              { q: "Tips for Z-Image", a: "**Getting the best results:**\n\n- Use for **rapid iteration** and brainstorming\n- Generate 10-20 variations at 1 credit each\n- Pick the best composition, then regenerate with **NB2** or **GPT Image 2**\n- Great for **prompt testing** before spending more credits\n- Pair with **Prompt Enhance** to refine prompts cheaply", tags: "tips how to use z-image cheap" },
+            ],
+          },
+          {
+            q: "Which video model should I use?",
+            a: "**Quick comparison:**\n\n- **Seedance 1.5 Pro** - Best value (5 cr for 480p 4s), has audio sync\n- **Seedance 2.0 Fast** - Fast rendering, good quality\n- **Seedance 2.0** - Highest quality video\n- **Kling 3.0 Motion** - Best for motion control\n- **Veo 3.1** - Google's latest model",
+            tags: "video compare",
+          },
+        ],
+      },
+      {
+        q: "Can I keep characters consistent?",
+        a: "**Yes!** Use the **Element Library** to:\n\n- Save characters, props, and styles with reference images\n- Drag elements into any frame\n- Use **@Image** tags in prompts\n- Maintain consistency across all scenes",
+        followUp: [
+          { q: "What is the Prompt Library?", a: "Save and reuse your favorite prompts.\n\n- Build a collection for different styles and moods\n- Quickly generate consistent results\n- Share prompts across projects" },
+        ],
+      },
+      {
+        q: "How do I export my storyboard?",
+        a: "**Export options:**\n\n- **PDF** - Landscape format with visuals\n- **PNG/JPG** - Individual frames\n- **Video** - Animatic via timeline editor\n- **Script** - Text-only export\n\nAll available from the storyboard view.",
+        tags: "pdf export download print",
+      },
+    ],
+  },
+  {
+    q: "How do credits work?",
+    a: "Each AI generation costs credits based on **model**, **resolution**, and **duration**.\n\n- Exact cost shown before you generate\n- Credits **never expire**\n- Different models = different costs",
+    tags: "price cost money charge",
+    followUp: [
+      {
+        q: "How much do generations cost?",
+        a: "**Image models (per image):**\n- Z-Image: 1 credit\n- GPT Image 2: 4 credits\n- Nano Banana 2: 5 credits (1K)\n- Nano Banana Pro: 12 credits (1K)\n\n**Video models (480p 5s):**\n- Seedance 1.5 Pro: 5 cr (4s)\n- Seedance 2.0 Fast: 29 cr\n- Seedance 2.0: 36 cr\n\nExact cost always shown before generating.",
+        tags: "price pricing expensive cheap generation",
+      },
+      {
+        q: "How many images can I generate?",
+        a: "**Pro plan (3,500 credits/mo):**\n\n**Images:**\n- GPT Image 2: ~875 images\n- Nano Banana 2: ~700 images (1K)\n- Z-Image: ~3,500 images\n\n**Videos:**\n- Seedance 1.5 Pro: ~700 clips (480p 4s)\n- Seedance 2.0 Fast: ~120 clips (480p 5s)\n\n**Free plan (50 credits):**\n~12 images or ~10 short videos",
+        tags: "price cost estimate how many 1000 credits calculation per generation",
+      },
+      {
+        q: "Can I buy extra credits?",
+        a: "**Yes!** Credit top-up packs:\n\n- 1,000 credits - $9.90\n- 5,000 credits - $44.90\n- 25,000 credits - $199.00\n\nNo subscription required. Top-up credits **never expire**.",
+        tags: "price buy purchase top up",
+      },
+      {
+        q: "Do credits expire?",
+        a: "**No.** Credits never expire, whether from your subscription or a top-up purchase.",
+      },
+    ],
+  },
+  {
+    q: "What are the plans & pricing?",
+    a: "**Free** - $0/mo\n50 credits, 3 projects, 300 MB\n\n**Pro** - from $39.90/mo\n3,500 credits, unlimited projects, 10 GB, 5 seats\n\n**Business** - from $89.90/mo\n8,000 credits, unlimited projects, 20 GB, 15 seats, 3 orgs\n\nNo credit card required for free plan.",
+    tags: "price cost subscription plan money",
+    followUp: [
+      { q: "Is there a free plan?", a: "**Yes!**\n\n- 50 credits/month\n- 3 projects (20 frames each)\n- 300 MB storage\n- All 25+ AI models included\n- No credit card required", tags: "price free cost" },
+      { q: "Can I cancel anytime?", a: "**Yes.** Cancel anytime from your account settings.\n\nYou keep access and remaining credits until the end of your billing period.", tags: "refund cancel" },
+      {
+        q: "What's included in Pro vs Business?",
+        a: "**Pro** (from $39.90/mo):\n- 3,500 credits/mo\n- 10 GB storage\n- 5 seats, 1 org\n\n**Business** (from $89.90/mo):\n- 8,000 credits/mo\n- 20 GB storage\n- 15 seats, 3 orgs\n\nBoth: unlimited projects, no per-seat charges.",
+        tags: "price compare difference",
+      },
+    ],
+  },
+  {
+    q: "Does it support teams?",
+    a: "**Yes!** Create organizations and invite members.\n\n**Roles:**\n- **Admin** - Full access + billing\n- **Member** - Create & edit, use credits\n- **Viewer** - Read-only access\n\nTeam members share the org's credit pool and storage.",
+    tags: "collaboration organization invite",
+    followUp: [
+      { q: "What are the team roles?", a: "**Admin** - Full access including billing and member management\n\n**Member** - Can create and edit storyboards, use credits\n\n**Viewer** - Read-only access to view storyboards" },
+      { q: "How many team members?", a: "**Free:** 1 user only\n**Pro:** Up to 5 seats + 1 organization\n**Business:** Up to 15 seats + 3 organizations\n\nNo per-seat charges on any plan.", tags: "seats limit" },
+    ],
+  },
+  {
+    q: "How do I use...?",
+    a: "Tap a feature below to learn how to use it.",
+    tags: "how to use feature guide tutorial help",
+    followUp: [
+      {
+        q: "Element Library",
+        a: "**Element Library** - Keep characters consistent\n\n**How to use:**\n1. Open Element Library in the sidebar\n2. Click **+ Add** to save a character/prop/style\n3. Upload a reference image\n4. Give it a name and description\n\n**In prompts:** Type **@Image** to reference saved elements\n**In frames:** Drag elements directly into any frame\n\nElements are shared across all projects.",
+        tags: "element library character consistent how to use reference image",
+      },
+      {
+        q: "Canvas Editor",
+        a: "**Canvas Editor** - Edit frames visually\n\n**Tools available:**\n- **Brush** - Draw directly on frames\n- **Inpaint** - Select an area and AI regenerates it\n- **Text** - Add text overlays\n- **Shapes** - Rectangles, circles, lines\n- **Speech Bubbles** - Comic-style dialogue\n- **Stickers** - Drag and drop\n\n**Tip:** Use **Inpaint** to fix small areas without regenerating the whole frame.",
+        tags: "canvas editor draw inpaint brush how to use edit paint",
+      },
+      {
+        q: "Script to Storyboard",
+        a: "**Script to Storyboard** - Auto-generate frames\n\n**How to use:**\n1. Write or paste your script in the project\n2. Click **Generate Storyboard**\n3. AI breaks your script into scenes\n4. Each scene becomes a frame with dialogue and camera notes\n\n**Tip:** Include camera directions in your script (e.g. \"CLOSE-UP\", \"WIDE SHOT\") for better results.",
+        tags: "script storyboard auto generate scene breakdown how to use",
+      },
+      {
+        q: "Video Editor",
+        a: "**Video Editor** - Multi-track timeline (Pro+)\n\n**Features:**\n- **Video track** - Arrange clips on timeline\n- **Audio track** - Add music/SFX\n- **Split & trim** - Cut clips precisely\n- **Subtitles** - Add text overlays\n- **Blend modes** - Layer effects\n- **Export** - MP4 or WAV\n\n**Tip:** Use **Snapshot** to capture a frame from any point in the timeline.",
+        tags: "video editor timeline multi track how to use export mp4 subtitle",
+      },
+      {
+        q: "Batch Generation",
+        a: "**Batch Generation** - Generate multiple frames (Pro+)\n\n**How to use:**\n1. Select frames in your storyboard\n2. Click **Batch Generate**\n3. Choose your model and settings\n4. All selected frames generate at once\n\n**Tip:** Use with **Presets** to apply the same style across all frames.",
+        tags: "batch generate multiple frames how to use bulk",
+      },
+      {
+        q: "Camera Studio",
+        a: "**Camera Studio** - Virtual camera control (Pro+)\n\n**Features:**\n- **3D Angle Picker** - Set camera angle visually\n- **Motion Presets** - 15+ camera movements (dolly, pan, tilt, tracking)\n- **Speed Ramp** - Dynamic pacing for video clips\n- **Color Palette** - Set mood and color grading\n\n**Tip:** Use **Motion Presets** with Seedance models for cinematic camera movement.",
+        tags: "camera studio 3d angle motion preset speed ramp how to use",
+      },
+      {
+        q: "Director's View",
+        a: "**Director's View** - Review your storyboard (Pro+)\n\n**Features:**\n- **Filmstrip** - See all frames at a glance\n- **Compare** - View frames side-by-side\n- **Animatic playback** - Play through your storyboard\n- **Notes** - Add production notes to frames\n\n**Tip:** Use Compare mode to pick the best version of a frame.",
+        tags: "director view filmstrip compare animatic how to use review",
+      },
+      {
+        q: "AI Analyze",
+        a: "**AI Analyze** - Understand your content\n\n**What it does:**\n- **Image** (1 credit) - Describe composition, style, objects\n- **Video** (3 credits) - Scene breakdown, actions, transitions\n- **Audio** (1 credit) - Transcription and description\n\n**Tip:** Use on reference images to generate prompts that match the style.",
+        tags: "ai analyze describe image video audio how to use",
+      },
+      {
+        q: "Prompt Enhance",
+        a: "**Prompt Enhance** - Improve your prompts (1 credit)\n\n**What it does:**\n- Adds detail and composition guidance\n- Suggests stylistic improvements\n- Optimizes for the selected AI model\n\n**Tip:** Write a basic prompt, then Enhance it before generating. Saves credits by getting better results on the first try.",
+        tags: "prompt enhance improve how to use better results",
+      },
+    ],
+  },
+  {
+    q: "Is my content private?",
+    a: "**Yes.**\n\n- Your content is **never** used to train AI models\n- Files stored privately on Cloudflare R2\n- Only you and your team can access your files",
+    tags: "security privacy data safe train",
+  },
+  {
+    q: "View all FAQ",
+    a: "",
+  },
+];
+
 interface SupportChatWidgetProps {
   variant: "landing" | "studio";
 }
@@ -94,8 +295,23 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [faqPath, setFaqPath] = useState<FaqNode[][]>([FAQ_TREE]);
+  const [faqSearch, setFaqSearch] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Flatten all FAQ nodes for search
+  const allFaqNodes = useMemo(() => {
+    const flat: FaqNode[] = [];
+    const walk = (nodes: FaqNode[]) => {
+      for (const n of nodes) {
+        if (n.a) flat.push(n);
+        if (n.followUp) walk(n.followUp);
+      }
+    };
+    walk(FAQ_TREE);
+    return flat;
+  }, []);
 
   useEffect(() => {
     if (open && scrollRef.current) {
@@ -111,6 +327,8 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
     setStreaming(false);
     setActiveTool(null);
     setInput("");
+    setFaqPath([FAQ_TREE]);
+    setFaqSearch("");
   }, []);
 
   const sendMessage = useCallback(async () => {
@@ -360,11 +578,9 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
             {messages.length === 0 && (
               <div className="pt-8 text-center text-muted-foreground">
                 <MessageCircle className="mx-auto mb-3 h-8 w-8 opacity-40" />
-                <p className="mb-2 font-medium">How can I help?</p>
+                <p className="mb-1 font-medium">How can I help?</p>
                 <p className="text-xs">
-                  {isSignedIn
-                    ? "Try: “How many credits do I have?”, “What plan am I on?”, or “Why did my video fail?”"
-                    : "Try: “What does Storytica do?”, “How does pricing work?”, or “Is there a free plan?”"}
+                  Tap a question below or type your own
                 </p>
               </div>
             )}
@@ -412,6 +628,94 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
               </div>
             )}
           </div>
+
+          {/* FAQ balloons — persistent above input */}
+          {!streaming && (() => {
+            const searching = faqSearch.trim().length > 0;
+            const visibleNodes = searching
+              ? (() => {
+                  const term = faqSearch.toLowerCase();
+                  return allFaqNodes.filter((n) => {
+                    const haystack = `${n.q} ${n.a} ${n.tags || ""}`.toLowerCase();
+                    // Match if search term appears anywhere, or any word starts with the term
+                    return (
+                      haystack.includes(term) ||
+                      haystack.split(/\s+/).some((w) => w.startsWith(term))
+                    );
+                  });
+                })()
+              : faqPath[faqPath.length - 1] ?? [];
+
+            return (
+              <div className="border-t px-3 pt-2 pb-1">
+                {/* Search + nav row */}
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  {faqPath.length > 1 && !searching && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => { setFaqPath([FAQ_TREE]); setFaqSearch(""); }}
+                        title="Home"
+                        className="shrink-0 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      >
+                        <Home className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFaqPath((p) => p.slice(0, -1))}
+                        className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        &larr; Back
+                      </button>
+                    </>
+                  )}
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      value={faqSearch}
+                      onChange={(e) => setFaqSearch(e.target.value)}
+                      placeholder="Search FAQ..."
+                      className="w-full rounded-md border bg-background pl-6 pr-2 py-1 text-[11px] outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                  </div>
+                </div>
+
+                {/* Balloon buttons */}
+                <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
+                  {visibleNodes.map((node) => (
+                    <button
+                      key={node.q}
+                      type="button"
+                      onClick={() => {
+                        if (node.q === "View all FAQ") {
+                          window.open("/faq", "_blank", "noopener");
+                          return;
+                        }
+                        const uId = uid();
+                        const aId = uid();
+                        setMessages((prev) => [
+                          ...prev,
+                          { id: uId, role: "user", content: node.q },
+                          { id: aId, role: "assistant", content: node.a },
+                        ]);
+                        if (!searching && node.followUp?.length) {
+                          setFaqPath((p) => [...p, node.followUp!]);
+                        }
+                        setFaqSearch("");
+                      }}
+                      className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] text-primary hover:bg-primary/10 transition-colors text-left"
+                    >
+                      {node.q}
+                    </button>
+                  ))}
+                  {searching && visibleNodes.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground py-1">No matching questions</p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Input */}
           <div className="border-t p-3">

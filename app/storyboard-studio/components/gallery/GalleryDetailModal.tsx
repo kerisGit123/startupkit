@@ -58,10 +58,12 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
 
   const imageUrl = file?.r2Key ? `${R2_PUBLIC_URL}/${file.r2Key}` : file?.sourceUrl || "";
   const isVideo = file?.fileType === "video";
+  const isMusic = file?.fileType === "music";
   const isAudio = file?.fileType === "audio";
+  const isAudioLike = isMusic || isAudio;
 
   useEffect(() => {
-    if (!imageUrl || isVideo || isAudio) return;
+    if (!imageUrl || isVideo || isAudioLike) return;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => setPalette(extractPalette(img));
@@ -89,7 +91,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             r2Key: file.r2Key,
-            filename: file.filename || `gallery-${file._id}.${isAudio ? "mp3" : isVideo ? "mp4" : "png"}`,
+            filename: file.filename || `gallery-${file._id}.${isAudioLike ? "mp3" : isVideo ? "mp4" : "png"}`,
           }),
         });
         const data = await res.json();
@@ -153,10 +155,10 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
 
           {/* Left: Media */}
           <div className="flex-1 flex items-center justify-center overflow-hidden bg-[#1A1A1A]">
-            {isAudio ? (
+            {isAudioLike ? (
               <div className="flex flex-col items-center justify-center gap-6 p-8 w-full">
-                <div className="w-24 h-24 rounded-full bg-purple-500/20 flex items-center justify-center">
-                  <Music className="w-12 h-12 text-purple-400" />
+                <div className={`w-24 h-24 rounded-full ${isMusic ? 'bg-purple-500/20' : 'bg-blue-500/20'} flex items-center justify-center`}>
+                  <Music className={`w-12 h-12 ${isMusic ? 'text-purple-400' : 'text-blue-400'}`} />
                 </div>
                 <audio src={imageUrl} controls autoPlay className="w-full max-w-md" />
               </div>
@@ -179,7 +181,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
               {/* Title */}
               <div>
                 <h2 className="text-xl text-white font-bold leading-tight mb-1.5">
-                  {isAudio ? "Music" : isVideo ? "Video" : "Image"} · {modelShort}
+                  {isMusic ? "Music" : isAudio ? "Audio" : isVideo ? "Video" : "Image"} · {modelShort}
                 </h2>
                 {promptPreview && (
                   <p className="text-[13px] text-[#A0A0A0] leading-relaxed">{promptPreview}</p>
@@ -235,7 +237,7 @@ export function GalleryDetailModal({ fileId, onClose }: GalleryDetailModalProps)
                     onClick={handleDownload}
                     className="px-4 py-1.5 rounded-full bg-[#2C2C2C] text-white text-xs font-medium hover:bg-[#3D3D3D] transition border border-[#3D3D3D]"
                   >
-                    {isAudio ? "Audio" : isVideo ? "Video" : "Image"}
+                    {isMusic ? "Music" : isAudio ? "Audio" : isVideo ? "Video" : "Image"}
                   </button>
                   {file.prompt && (
                     <button

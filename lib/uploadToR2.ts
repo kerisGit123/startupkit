@@ -33,7 +33,7 @@ export interface UploadResult {
   r2Key: string;
   publicUrl: string;
   filename: string;
-  fileType: 'image' | 'video' | 'audio' | 'file';
+  fileType: 'image' | 'video' | 'audio' | 'music' | 'file';
   mimeType: string;
   size: number;
   category: string;

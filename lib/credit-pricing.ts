@@ -17,17 +17,17 @@ export interface CreditPackage {
 /**
  * Get credit packages with pricing from environment variables or defaults
  *
- * Pricing targets ~55-62% net margin after Stripe fees, assuming Kie wholesale
- * cost of $0.005/credit and the 1.2x burn multiplier in storyboard_model_credit.
- * Top-up per-credit rates are intentionally higher than the Pro subscription
- * rate (~$0.00995/credit) to preserve the subscription incentive.
+ * Pricing: flat $0.0099/credit across all packs.
+ * No bulk discount — simpler pricing, better margins.
+ * Kie wholesale cost: $0.005/credit → ~50% gross margin on top-ups.
  */
 export function getCreditPackages(): CreditPackage[] {
-  // Default values
+  // Default values — flat rate $0.0099/credit, no bulk discount
+  // Margin is already thin at 19% ($0.0099 revenue vs $0.008 Kie cost per user credit)
   const defaults = {
-    small:  { credits: 1000,  amountInCents: 990 },    // $9.90   → $0.00990/credit
-    medium: { credits: 5000,  amountInCents: 4490 },   // $44.90  → $0.00898/credit (Save 9%)
-    large:  { credits: 25000, amountInCents: 19900 },  // $199.00 → $0.00796/credit (Save 20%)
+    small:  { credits: 1000,  amountInCents: 990 },    // $9.90   → $0.0099/credit
+    medium: { credits: 5000,  amountInCents: 4950 },   // $49.50  → $0.0099/credit
+    large:  { credits: 25000, amountInCents: 24750 },  // $247.50 → $0.0099/credit
   };
 
   // Override from environment if available
@@ -53,8 +53,7 @@ export function getCreditPackages(): CreditPackage[] {
       credits: mediumCredits,
       price: `USD ${(mediumPrice / 100).toFixed(2)}`,
       amountInCents: mediumPrice,
-      highlighted: true,
-      badge: "Save 9%",
+      highlighted: false,
     },
     {
       id: "large",
@@ -62,7 +61,6 @@ export function getCreditPackages(): CreditPackage[] {
       price: `USD ${(largePrice / 100).toFixed(2)}`,
       amountInCents: largePrice,
       highlighted: false,
-      badge: "Save 20%",
     },
   ];
 }
@@ -81,17 +79,15 @@ export const DEFAULT_CREDIT_PACKAGES: CreditPackage[] = [
   {
     id: "medium",
     credits: 5000,
-    price: "USD 44.90",
-    amountInCents: 4490,
-    highlighted: true,
-    badge: "Save 9%",
+    price: "USD 49.50",
+    amountInCents: 4950,
+    highlighted: false,
   },
   {
     id: "large",
     credits: 25000,
-    price: "USD 199.00",
-    amountInCents: 19900,
+    price: "USD 247.50",
+    amountInCents: 24750,
     highlighted: false,
-    badge: "Save 20%",
   },
 ];

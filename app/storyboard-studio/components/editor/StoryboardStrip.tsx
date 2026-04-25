@@ -3,7 +3,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
-  ChevronLeft, ChevronRight, Film, Play, Pause, X,
+  ChevronLeft, ChevronRight, Film, Play, Pause, X, Plus,
   Camera, SkipForward, CheckCircle2, Copy, Trash2, GripVertical,
   Columns3, Loader2, StickyNote,
 } from "lucide-react";
@@ -39,6 +39,8 @@ interface StoryboardStripProps {
   onSelectOutput?: (url: string) => void;
   /** Called when user clicks a generated video output to play it */
   onPlayVideoOutput?: (url: string) => void;
+  /** Called when user clicks the + button to add a new frame */
+  onAddFrame?: () => void;
 }
 
 // Derive frame status from available media
@@ -508,6 +510,7 @@ export function StoryboardStrip({
   onSelectOutput,
   onPlayVideoOutput,
   onEditNotes,
+  onAddFrame,
 }: StoryboardStripProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(!isMobile);
@@ -898,6 +901,19 @@ export function StoryboardStrip({
                   ))}
                 </React.Fragment>
               ))}
+
+              {/* Add Frame button */}
+              {onAddFrame && (
+                <button
+                  onClick={onAddFrame}
+                  className="shrink-0 w-[80px] h-[52px] rounded-lg border border-dashed border-(--border-primary) hover:border-(--accent-blue)/50
+                             flex items-center justify-center bg-(--bg-primary)/30 hover:bg-(--accent-blue)/5
+                             transition-colors cursor-pointer group"
+                  title="Add new frame"
+                >
+                  <Plus className="w-5 h-5 text-(--text-tertiary) group-hover:text-(--accent-blue) transition-colors" strokeWidth={1.75} />
+                </button>
+              )}
             </div>
 
             {/* Right scroll arrow */}

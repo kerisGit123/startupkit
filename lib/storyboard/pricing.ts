@@ -17,6 +17,8 @@ export interface PricingModel {
   modelName: string;
   modelType: "image" | "video" | "audio" | "music";
   isActive: boolean;
+  visibility?: "public" | "temp_down"; // public = visible to users, temp_down = admin only (dev in progress)
+  isHot?: boolean; // true = strategy pricing model (0.625 multiplier, hot badge)
   pricingType: "fixed" | "formula";
   creditCost?: number;
   factor?: number;
@@ -152,36 +154,31 @@ export function getGptImagePrice(
  *   1080p, audio, 12s → 269 credits
  */
 export function getSeedance15(
-  base: number,
+  _base: number,
   multiplier: number,
   resolution: string,
   audio: boolean,
   duration: number
 ): number {
-  const resolutionMultipliers: Record<string, number> = {
-    "480p": 1,
-    "720p": 2,
-    "1080p": 4,
-    "4K": 5,
+  // Kie credit costs per resolution+duration from API docs (no-audio base).
+  // Audio = 2x the no-audio Kie cost.
+  // 480p: 4s=7, 8s=14, 12s=19 | 720p: 4s=14, 8s=28, 12s=42 | 1080p: 4s=30, 8s=60, 12s=90
+  const kieCosts: Record<string, Record<string, number>> = {
+    "480p": { "4": 7, "8": 14, "12": 19 },
+    "480P": { "4": 7, "8": 14, "12": 19 },
+    "720p": { "4": 14, "8": 28, "12": 42 },
+    "720P": { "4": 14, "8": 28, "12": 42 },
+    "1080p": { "4": 30, "8": 60, "12": 90 },
+    "1080P": { "4": 30, "8": 60, "12": 90 },
   };
 
-  let durationMultiplier = 1;
-  if (duration <= 4) {
-    durationMultiplier = 1;
-  } else if (duration <= 8) {
-    durationMultiplier = 2;
-  } else if (duration <= 12) {
-    durationMultiplier = 4;
-  } else {
-    const additionalBlocks = Math.ceil((duration - 12) / 4);
-    durationMultiplier = 4 + additionalBlocks;
-  }
-
+  const resCosts = kieCosts[resolution] || kieCosts["480p"];
+  const durKey = duration <= 4 ? "4" : duration <= 8 ? "8" : "12";
+  const kieBase = resCosts[durKey] || resCosts["4"];
   const audioMultiplier = audio ? 2 : 1;
-  const resolutionMultiplier = resolutionMultipliers[resolution] || 1;
 
   return Math.ceil(
-    base * multiplier * resolutionMultiplier * audioMultiplier * durationMultiplier
+    kieBase * audioMultiplier * multiplier
   );
 }
 
@@ -371,10 +368,11 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "Nano Banana 2",
     modelType: "image",
     isActive: true,
+    isHot: true,
     pricingType: "formula",
     assignedFunction: "getNanoBananaPrice",
     creditCost: 8,
-    factor: 1.2,
+    factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 8,
@@ -391,10 +389,11 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "Nano Banana Pro",
     modelType: "image",
     isActive: true,
+    isHot: true,
     pricingType: "formula",
     assignedFunction: "getNanoBananaPrice",
     creditCost: 18,
-    factor: 1.2,
+    factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
         base_cost: 18,
@@ -420,16 +419,20 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "Seedance 1.5 Pro",
     modelType: "video",
     isActive: true,
+    isHot: true,
     pricingType: "formula",
     assignedFunction: "getSeedance15",
     creditCost: 7,
-    factor: 1.2,
+    factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
-        base_cost: 7,
-        resolution_multipliers: { "480P": 1, "720P": 2, "1080P": 4 },
+        note: "Fixed Kie credits per resolution+duration. Audio = 2x. User = ceil(kie * factor).",
         audio_multiplier: 2,
-        duration_multipliers: { "4s": 1, "8s": 2, "12s": 4 },
+        resolutions: {
+          "480P": { "4s": 7, "8s": 14, "12s": 19 },
+          "720P": { "4s": 14, "8s": 28, "12s": 42 },
+          "1080P": { "4s": 30, "8s": 60, "12s": 90 },
+        },
       },
     }),
   },
@@ -517,14 +520,15 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "GPT Image 2 Text to Image",
     modelType: "image",
     isActive: true,
+    isHot: true,
     pricingType: "fixed",
-    creditCost: 12,
-    factor: 1.2,
+    creditCost: 6,
+    factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
         unit: "per_image",
-        base_cost: 12,
-        note: "12 credits per image. Text-to-image generation from prompt only.",
+        base_cost: 6,
+        note: "Kie cost: 6 credits. User charged: 4 credits (ceil(6 × 0.625)). ~25% margin.",
       },
     }),
   },
@@ -533,15 +537,16 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "GPT Image 2 Image to Image",
     modelType: "image",
     isActive: true,
+    isHot: true,
     pricingType: "fixed",
-    creditCost: 12,
-    factor: 1.2,
+    creditCost: 6,
+    factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
         unit: "per_image",
-        base_cost: 12,
+        base_cost: 6,
         max_input_images: 16,
-        note: "12 credits per image. Up to 16 input reference images. Supports auto/1:1/9:16/16:9 aspect ratios.",
+        note: "Kie cost: 6 credits. User charged: 4 credits (ceil(6 × 0.625)). ~25% margin.",
       },
     }),
   },
@@ -624,10 +629,11 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "Seedance 2.0",
     modelType: "video",
     isActive: true,
+    isHot: true,
     pricingType: "formula",
     assignedFunction: "getSeedance20",
     creditCost: 11.5,
-    factor: 1.2,
+    factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
         unit: "credits_per_second",
@@ -651,10 +657,11 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelName: "Seedance 2.0 Fast",
     modelType: "video",
     isActive: true,
+    isHot: true,
     pricingType: "formula",
     assignedFunction: "getSeedance20Fast",
     creditCost: 9,
-    factor: 1.2,
+    factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
         unit: "credits_per_second",
@@ -839,5 +846,16 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
         note: "Transcribes speech or extracts lyrics from audio. Uses Gemini Pro 1.5 via OpenRouter. Cost: ~$0.005/request.",
       },
     }),
+  },
+  // ── Prompt Enhance (Anthropic Haiku) ──────────────────────────────────────
+  {
+    modelId: "prompt-enhance",
+    modelName: "Prompt Enhance",
+    modelType: "text",
+    isActive: true,
+    ...Object.fromEntries(Object.entries({
+      base: { credits: 1, unit: "per enhancement" },
+      note: "Enhances prompts with cinematic detail using Claude Haiku 4.5. Cost: ~$0.001/request.",
+    }).map(([k, v]) => [k, v])),
   },
 ];

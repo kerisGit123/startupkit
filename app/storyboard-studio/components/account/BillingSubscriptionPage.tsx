@@ -8,10 +8,8 @@ import {
   Info, AlertCircle, Shield, Sparkles, CreditCard as CreditCardIcon,
   Loader2, FileText, DollarSign, Search, User,
 } from "lucide-react";
-import { PricingTable } from "@clerk/nextjs";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
-import { dark } from "@clerk/ui/themes";
 import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -22,6 +20,7 @@ import { getCreditPackages } from "@/lib/credit-pricing";
 import CreditBalanceDisplay from "./CreditBalanceDisplay";
 import { TransferCreditsDialog } from "./TransferCreditsDialog";
 import { CreditTransactionHistory } from "./CreditTransactionHistory";
+import PricingShowcase from "./PricingShowcase";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -50,20 +49,20 @@ const PLANS = [
     credits: 100,
     maxOrgs: 0,
     maxSeats: 1,
-    features: ["100 credits/month", "1 project", "PDF export"],
+    features: ["50 credits/month", "3 projects", "PDF export"],
   },
   {
     key: "pro_personal",
     name: "Pro",
     kind: "personal" as const,
-    priceMonthly: 39.9,
-    priceYearly: 32, // $384/yr
-    priceLabel: "$39.90 / month",
-    credits: 2500,
+    priceMonthly: 45,
+    priceYearly: 39.9, // $478.80/yr
+    priceLabel: "$39.90 / month (annual)",
+    credits: 3500,
     maxOrgs: 1,
     maxSeats: 5,
     features: [
-      "2,500 credits/month",
+      "3,500 credits/month",
       "Unlimited projects",
       "1 organization, 5 seats",
       "10 GB storage",
@@ -74,16 +73,16 @@ const PLANS = [
     key: "business",
     name: "Business",
     kind: "organization" as const,
-    priceMonthly: 79,
-    priceYearly: 63, // $756/yr
-    priceLabel: "$79 / month",
-    credits: 6900,
+    priceMonthly: 119,
+    priceYearly: 89.9, // $1,078.80/yr
+    priceLabel: "$89.90 / month (annual)",
+    credits: 8000,
     maxOrgs: 3,
     maxSeats: 15,
     popular: true,
     features: [
       "Everything in Pro",
-      "6,900 credits/month",
+      "8,000 credits/month",
       "3 organizations",
       "15 seats per org",
       "20 GB storage",
@@ -543,72 +542,9 @@ export default function BillingSubscriptionPage({ sidebarOpen, onToggleSidebar }
 
           {activeTab === "plans" && (
             <div className="space-y-8">
-              {/* Plans Header */}
-              <div className="text-center mb-10">
-                <h2 className="text-2xl lg:text-3xl font-bold text-(--text-primary) mb-3 flex items-center justify-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-teal-500/20 flex items-center justify-center">
-                    <Sparkles className="w-6 h-6 text-teal-400" />
-                  </div>
-                  Choose Your Plan
-                </h2>
-                <p className="text-lg text-(--text-secondary) max-w-2xl mx-auto">
-                  Select the perfect plan for your creative workflow
-                </p>
-              </div>
-
-              {/* All plans are now User Plans — no Personal/Organization toggle.
-                  Pro and Business unlock team features via the
-                  ownerPlan snapshot propagation system. Subscribing is a
-                  direct user action, no org required. */}
-
-              {/* Clerk PricingTable */}
-              <div className="storytica-clerk-pricing max-w-5xl mx-auto">
-                <PricingTable
-                  forOrganizations={false}
-                  appearance={{
-                    baseTheme: dark,
-                    variables: {
-                      colorPrimary: "#14b8a6",
-                      colorBackground: "#1a1a1a",
-                      fontFamily: "'Inter', sans-serif",
-                      borderRadius: "0.75rem",
-                    },
-                  }}
-                />
-              </div>
-              <style>{`
-                .storytica-clerk-pricing .cl-pricingTableCard,
-                .storytica-clerk-pricing [class*="pricingTableCard"]:not([class*="pricingTableCardFee"]):not([class*="pricingTableCardTitle"]):not([class*="pricingTableCardFeature"]) {
-                  background-color: #1a1a1a !important;
-                  border-color: #2a2a2a !important;
-                  color: #fff !important;
-                }
-                .storytica-clerk-pricing button[class*="pricingTableCardCta"],
-                .storytica-clerk-pricing .cl-button__pricingTableCardCta {
-                  background-color: #0d9488 !important;
-                  color: #fff !important;
-                  border: none !important;
-                  font-weight: 600 !important;
-                }
-                .storytica-clerk-pricing button[class*="pricingTableCardCta"]:hover {
-                  background-color: #14b8a6 !important;
-                }
-                .storytica-clerk-pricing h2,
-                .storytica-clerk-pricing h3,
-                .storytica-clerk-pricing [class*="pricingTableCardTitle"] {
-                  color: #fff !important;
-                }
-                .storytica-clerk-pricing [class*="pricingTableCardFee"] {
-                  color: #fff !important;
-                }
-                .storytica-clerk-pricing [class*="pricingTableCardDescription"],
-                .storytica-clerk-pricing [class*="pricingTableCardFeePeriod"] {
-                  color: #888 !important;
-                }
-                .storytica-clerk-pricing [class*="pricingTableCardFeature"] {
-                  color: #c0c0c0 !important;
-                }
-              `}</style>
+              <PricingShowcase
+                currentPlan={currentPlan ?? undefined}
+              />
             </div>
           )}
 
