@@ -16,8 +16,17 @@ import type Anthropic from "@anthropic-ai/sdk";
  * Response: text/event-stream (SSE)
  */
 export async function POST(req: NextRequest) {
+  try {
   // ── Auth ──────────────────────────────────────────────────────────
-  const { userId: clerkUserId, orgId } = await auth();
+  let clerkUserId: string | null = null;
+  let orgId: string | null = null;
+  try {
+    const authResult = await auth();
+    clerkUserId = authResult.userId;
+    orgId = authResult.orgId ?? null;
+  } catch (authErr) {
+    console.error("[ai-director] Auth error:", authErr);
+  }
   if (!clerkUserId) {
     return new Response(
       JSON.stringify({ error: "Authentication required" }),
@@ -229,4 +238,11 @@ export async function POST(req: NextRequest) {
       Connection: "keep-alive",
     },
   });
+  } catch (outerErr) {
+    console.error("[ai-director] Unhandled error:", outerErr);
+    return new Response(
+      JSON.stringify({ error: outerErr instanceof Error ? outerErr.message : "Internal server error" }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
 }

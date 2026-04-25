@@ -127,7 +127,12 @@ export function DirectorChatPanel({
         });
 
         if (!res.ok || !res.body) {
-          throw new Error(`Request failed: ${res.status}`);
+          let errMsg = `Request failed: ${res.status}`;
+          try {
+            const errJson = await res.json();
+            errMsg = errJson.error || errMsg;
+          } catch {}
+          throw new Error(errMsg);
         }
 
         const reader = res.body.getReader();
