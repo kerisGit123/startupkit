@@ -2214,6 +2214,30 @@ export default defineSchema({
     .index("by_name", ["name"]),
 
   // ============================================
+  // AI DIRECTOR: Per-project creative assistant
+  // ============================================
+  director_chat_sessions: defineTable({
+    projectId: v.id("storyboard_projects"),
+    userId: v.string(),
+    companyId: v.string(),
+    messages: v.array(v.object({
+      role: v.union(v.literal("user"), v.literal("assistant")),
+      content: v.string(),
+      timestamp: v.number(),
+      toolCalls: v.optional(v.array(v.object({
+        name: v.string(),
+        input: v.optional(v.any()),
+        output: v.optional(v.string()),
+      }))),
+    })),
+    messageCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_user_project", ["userId", "projectId"]),
+
+  // ============================================
   // SUPPORT CHAT: Haiku-powered chatbot sessions
   // ============================================
   support_chat_sessions: defineTable({
