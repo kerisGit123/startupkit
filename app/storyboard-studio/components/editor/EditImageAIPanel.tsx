@@ -37,6 +37,12 @@ const ENHANCE_PRESETS = [
   { id: "color-tone", label: "Color & Tone", prompt: "Professional color correction, enhance color vibrancy, improve tonal range, cinematic color grading, balanced highlights and shadows" },
   { id: "cinematic", label: "Cinematic", prompt: "Cinematic film grade enhancement, add subtle film grain, anamorphic lens quality, professional color grading, shallow depth of field feel" },
   { id: "full", label: "Full Enhance", prompt: "Professional image enhancement: sharpen details, improve skin texture, enhance colors, cinematic color grading, increase clarity, natural retouching" },
+  { id: "bw-film", label: "B&W Film", prompt: "Convert to black and white film photography, rich tonal range, deep blacks, bright whites, classic silver gelatin print look, Kodak Tri-X grain texture, dramatic contrast" },
+  { id: "16mm-film", label: "16mm Film", prompt: "Apply 16mm film stock look, visible film grain, slightly soft focus, warm color cast, lifted blacks, vintage color science, nostalgic indie film aesthetic" },
+  { id: "old-lens", label: "Old Lens", prompt: "Apply vintage lens characteristics, soft vignetting, subtle chromatic aberration, dreamy glow in highlights, slightly desaturated colors, classic portrait lens rendering" },
+  { id: "split-tone", label: "Split Tone", prompt: "Apply split toning color grade, cool blue shadows with warm amber highlights, cinematic color separation, teal and orange look, balanced mid-tones" },
+  { id: "soft-skin", label: "Soft Skin", prompt: "Apply soft skin beauty retouching, smooth skin texture, preserve pores subtly, soft diffused glow, beauty dish lighting feel, magazine editorial finish" },
+  { id: "natural", label: "Natural", prompt: "Apply natural color correction, true-to-life colors, balanced white point, neutral skin tones, clean highlights, natural shadow detail, no artificial grading" },
 ];
 
 const RELIGHT_PRESETS = [
