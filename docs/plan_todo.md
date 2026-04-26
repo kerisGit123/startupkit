@@ -1,19 +1,48 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-26 (Session #10)
+> **Last updated:** 2026-04-27 (Session #13)
 
 ---
 
-## Recently Completed (Session #10 — 2026-04-26)
+## Recently Completed (Session #11-13 — 2026-04-26/27)
 
-- [x] **Fix: Audio in video export** — MP4s now include audio track (AAC via WebCodecs AudioEncoder + mp4-muxer). Audio clips decoded via Web Audio API, mixed into stereo buffer at timeline positions, encoded as AAC 128kbps and muxed into MP4.
+### Security Hardening & Audit (Sessions #11-13)
+
+- [x] **Frame numbering bug** — Fixed grid, list, move controls, Director review to use sequential `index + 1`
+- [x] **Hardcoded secrets removed** — n8n webhook secret, freeimage.host API key, imgbb key, ngrok fallback URL moved to env vars. Added to `env.example`
+- [x] **user.deleted now lapses orgs** — Clerk webhook calls `propagateOwnerPlanChange("free")` on user deletion
+- [x] **Dead `org_subscriptions` table removed from all queries** — Admin dashboards now read from `credits_balance.ownerPlan`
+- [x] **Plan prices corrected** — Admin analytics updated from `pro: $29, business: $99` to `pro_personal: $45, business: $119, ultra: $299`
+- [x] **Dead `initialSignupCredits` removed** — Never read, removed from schema and seed
+- [x] **FrameFavoriteButton state drift fixed** — Uses prop directly with Convex reactivity
+- [x] **Credit granting race condition** — Confirmed safe via Convex OCC. Added docs
+- [x] **assign-role bypass closed** — Removed first-setup auto-promote. First super_admin set in Clerk Dashboard
+- [x] **requireWebhookSecret hardened** — Now throws if `WEBHOOK_SECRET` not set
+- [x] **subscription.paused handler** — Treats paused subscriptions like cancellation
+- [x] **subscription.updated bug fixed** — No longer downgrades to "free" on billing info updates
+- [x] **Clawback math verified** — Code already filters by `type === "usage"` at index level
+- [x] **Marketing page img→NextImage** — 5 static images in storytica/page.tsx converted
+- [x] **Admin route role checks** — `cleanup-stats`, `cleanup-temp-files`, `search-users` now require `super_admin`
+- [x] **Convex admin mutations auth** — `createAdminUser`, `updateAdminRole`, `deactivateAdmin` now verify caller identity
+- [x] **credits_ledger index** — Added `by_stripePaymentIntentId` index for refund lookups
+
+### Code Quality (Session #13)
+
+- [x] **console.log cleanup** — Removed 641+ calls from .tsx files, 562+ from API routes
+- [x] **alert()/confirm() → toast** — Replaced 82 occurrences across admin pages
+- [x] **Mock components removed** — Dead `AIGeneratorModal`, `ExportModal`, `AssetGenerator`, `projects/[id]` page cleaned up
+- [x] **setInterval memory leaks fixed** — VideoImageAIPanel and EditImageAIPanel now use useEffect cleanup
+- [x] **Admin page loading states** — Added skeleton/spinner loading for 6+ admin pages
+
+### Session #10 (2026-04-26)
+
+- [x] **Fix: Audio in video export** — MP4s now include audio track
 
 ### Session #9 (2026-04-26)
 
 - [x] Flux model cleanup — removed 6 redundant models, ~500 lines deleted
 - [x] Post-processing pipeline (Cinema Studio) — Enhance, Relight, Remove BG, Reframe/Extend
 - [x] Style Transfer, Color Grade, Grid Generation
-- [x] Plan doc — plan_post_processing.md
 
 ### Session #8 (2026-04-26)
 
@@ -51,28 +80,48 @@
 
 ---
 
-## Priority 1 — Tomorrow / Next Session
+## Priority 1 — Security (Remaining)
+
+### API Route Auth — Still Needed
+
+- [ ] **Open email relays** — `/api/send-email`, `/api/send-system-email`, `/api/test-email` have zero auth
+- [ ] **Unprotected AI generation routes** — `generate-image`, `generate-video`, `generate-script`, `generate-tts`, `ai-analyze`, `inpaint` have no auth
+- [ ] **KIE callback routes lack signature verification** — public, no HMAC check
+- [ ] **n8n webhook subpath no auth** — `handleN8nWebhook` path has no secret check
+- [ ] **R2 delete endpoint ownership verification** — any authenticated user can delete any R2 object
+- [ ] **File type/size validation on upload routes**
+
+---
+
+## Priority 2 — Features / Polish
 
 ### AI Director — Polish
+
 - [ ] Tune system prompt based on real usage
 - [ ] Test director tools end-to-end with real project
 
 ### Video Editor (plan_videoEditor.md)
+
 - [x] ~~Fix: Audio in video export~~ — **DONE** (Session #10)
 - [ ] Subtitle enhancements (outline/shadow, multi-line, font selector)
 - [ ] Audio mixing (volume per clip, fade in/out)
 - [ ] Resolution/framerate selector
 
-### TypeScript Errors
-- [x] All resolved (Session #8) — `npx tsc --noEmit` passes clean, `ignoreBuildErrors` removed from next.config.ts
-
 ### Auto-Sequence Video (from comparison doc)
+
 - [ ] Chain frames via Seedance `first-last-frame` mode for continuity-chained video
 - [ ] Snapshot-to-next is 80% of this — just need the automation
 
+### Billing Polish
+
+- [ ] Wire credit top-up buttons to purchase confirmation dialog
+- [ ] Model picker shows credit cost per model + resolution
+- [ ] "Cheapest option" badge on budget models
+- [ ] Personal workspace lapsed banner (billing policy says show, `useSubscription` skips personal)
+
 ---
 
-## Priority 2 — Pricing & Billing
+## Priority 3 — Pricing & Billing
 
 ### Ultra Tier + AI Director Monetization (NEEDS DISCUSSION)
 
@@ -85,7 +134,6 @@
 - **Option A: Org-level daily pool**
   - Pro: 20 msgs/day org-wide, Business: 50/day, Ultra: 300/day
   - 1 counter per org per day in Convex
-  - Owner sees usage in dashboard, can manage team
   - Pro: simple, prevents abuse. Con: new tracking infrastructure, daily reset logic
 
 - **Option B: Per-seat pricing**
@@ -97,7 +145,6 @@
   - Each Director message costs 1 credit (text) or 3 credits (vision)
   - No new billing infra — reuse existing `deductCredits` in API route
   - Self-regulating: 15 users sharing 8,000 credits naturally limits abuse
-  - Ultra's 25,000 credits absorbs heavy Director + generation usage
   - Pro: zero new infrastructure, self-balancing. Con: users may avoid Director to "save credits"
 
 - **Option D: Hybrid — free pool + credits overflow**
@@ -105,21 +152,9 @@
   - After pool exhausted, each message costs 1-3 credits
   - Pro: best of both worlds. Con: most complex to implement
 
-**Also need to decide:**
-- [ ] Does the teaser include write tools (update prompts) or read-only?
-- [ ] Vision blocked entirely on non-Ultra, or allow 1-2 per day?
-- [ ] Are we using Clerk Billing or Stripe directly for Ultra?
-- [ ] Margin check: 25,000 credits wholesale ($125) + Claude API (~$240/mo heavy) = $365 cost vs $299 revenue — need to cap or price at $349?
-
-### Other billing items
-- [ ] Wire credit top-up buttons to purchase confirmation dialog
-- [ ] Model picker shows credit cost per model + resolution
-- [ ] "Cheapest option" badge on budget models
-- [ ] Credit slider for Business plan
-
 ---
 
-## Priority 3 — Landing Page (Needs Assets)
+## Priority 4 — Landing Page (Needs Assets)
 
 - [ ] Record hero video loop (10-15s workflow demo)
 - [ ] Record GIF/WebM for 6 feature cards (3-5s each)
@@ -129,20 +164,23 @@
 
 ---
 
-## Priority 4 — Paused / Deferred
+## Priority 5 — Paused / Deferred
 
 ### Booking System (plan_booking.md) — PAUSED
+
 - [x] Phase 1: Claude agent with booking tools (done but untested)
 - [ ] Phase 2: Merge `clients` into `contacts`
 - [ ] Phase 3: Public self-booking page
 - [ ] Phase 4: Google Calendar sync
 
 ### Director View — Future
+
 - [ ] AI script generation, AI element detection
 - [ ] Auto-sequence pipeline, cross-frame consistency
 - [ ] Batch multi-shot video
 
 ### Video Editor — Low Priority
+
 - [ ] Multi-layer video (overlay, PiP, transitions)
 
 ---
@@ -165,6 +203,7 @@
 ## Testing (plan_testing.md)
 
 ~114 manual test cases exist but are unexecuted:
+
 - [ ] Style auto-append (17), format presets (6), AI analyzer (24)
 - [ ] Presets system (26), batch gen (14), color palette (5)
 - [ ] AddImageMenu (5), prompt assembly (5), integration (12)
