@@ -24,7 +24,7 @@ export type ToolName =
   | "get_generation_details"
   | "list_my_invoices"
   | "list_my_support_tickets"
-  | "create_support_ticket"
+  | "create_support_ticket" // kept for error-fallback auto-ticket only
   | "search_knowledge_base";
 
 const SEARCH_KNOWLEDGE_BASE_TOOL: Anthropic.Tool = {
@@ -80,13 +80,13 @@ export const AUTHED_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_my_credit_transactions",
     description:
-      "List credit ledger entries (purchases, monthly grants, usage deductions, refunds) for the user's active workspace. Use when the user asks why their balance changed, what they spent credits on, or to track generation costs. IMPORTANT: When the user asks about a specific time period (e.g. 'this month', 'last week'), always set since_date to the start of that period (ISO date string like '2026-04-01'). The returned summary only covers the returned rows, so filtering by date is critical for accurate period totals.",
+      "List credit ledger entries (purchases, monthly grants, usage deductions, refunds) for the user's active workspace. Use when the user asks why their balance changed, what they spent credits on, or to track generation costs. IMPORTANT: When the user asks about a specific time period (e.g. 'this month', 'last week'), always set since_date to the start of that period (ISO date string like '2026-04-01'). The response includes a pre-computed 'summary' with exact totals and a 'breakdownByCategory' with per-feature spent/refunded/net — use those numbers directly in your answer. Do NOT re-derive totals from the raw transactions list.",
     input_schema: {
       type: "object",
       properties: {
         limit: {
           type: "number",
-          description: "How many recent transactions to return (1-50, default 20).",
+          description: "How many transactions to return (1-1000, default 500). Use a higher value when the user is very active.",
         },
         since_date: {
           type: "string",
@@ -116,7 +116,7 @@ export const AUTHED_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_my_recent_generations",
     description:
-      "List the user's most recent storyboard generations (image, video, music) with status and model used. Use when the user asks 'where's my video', 'what's the status of my generation', or wants to see their recent work.",
+      "List the user's most recent storyboard frame generations (image, video, music) with status and model used. Use when the user asks 'where's my video', 'what's the status of my generation', or wants to see their recent work. NOTE: This only covers frame-level generations. AI Analyze operations (image/video/audio analysis) are NOT tracked here — check list_my_credit_transactions for refund entries to find AI Analyze failures.",
     input_schema: {
       type: "object",
       properties: {
@@ -168,76 +168,84 @@ export const AUTHED_TOOLS: Anthropic.Tool[] = [
       required: [],
     },
   },
-  {
-    name: "create_support_ticket",
-    description:
-      "Create a support ticket for the user. Use when you cannot resolve the issue yourself (refund requests, account under review, payment problems, bug reports, explicit human escalation requests). Always include specific context in the description — what the user is trying to do, what went wrong, and any data you already looked up. After success, tell the user the ticket number.",
-    input_schema: {
-      type: "object",
-      properties: {
-        subject: {
-          type: "string",
-          description: "Short title for the ticket, under 80 characters.",
-        },
-        description: {
-          type: "string",
-          description:
-            "Detailed description of the issue. Include what the user wants, what's blocking them, and any relevant data you already looked up (credit balance, subscription, etc).",
-        },
-        category: {
-          type: "string",
-          enum: [
-            "billing",
-            "plans",
-            "usage",
-            "general",
-            "credit",
-            "technical",
-            "invoice",
-            "service",
-            "other",
-          ],
-          description: "Best-fit category for routing.",
-        },
-        priority: {
-          type: "string",
-          enum: ["low", "medium", "high", "urgent"],
-          description:
-            "Priority: low (minor), medium (normal, default), high (blocking work), urgent (account suspended / payment failure).",
-        },
-      },
-      required: ["subject", "description", "category", "priority"],
-    },
-  },
+  // create_support_ticket removed from AI tools — tickets are created by users
+  // through the Support page only. The AI diagnoses issues and directs users
+  // to the Support page when it cannot resolve the problem.
+  // The tool dispatch still exists for the error-fallback auto-ticket flow.
   SEARCH_KNOWLEDGE_BASE_TOOL,
 ];
 
-const PRICING_OVERVIEW = `
-Storytica credit costs are calculated per generation based on the model, resolution, duration, and whether audio is included. The exact cost is always shown in the UI before you click generate, so there are no surprise charges.
-
-General ranges:
-- Image generation (Nano Banana, Flux 2 Pro, etc.): typically 4-15 credits per image, varies by model and resolution.
-- Video generation (Seedance 1.5 / 2.0, Kling 3.0, Veo 3.1, Grok): typically 7-80+ credits depending on resolution (480P / 720P / 1080P), duration (4s / 8s / 12s), and audio inclusion. Higher resolution + longer duration = more credits. Audio roughly doubles the cost.
-- Upscaling (Topaz): adds credits proportional to the source resolution.
-- Music generation (Suno-based): fixed cost per track.
-
-The Free plan gives 5 AI generations per month at no cost. Paid plans include a monthly credit grant plus the ability to top up anytime. Full pricing: /pricing page.
-`.trim();
+// ── Model pricing table (built from pricing.ts source of truth) ──────────
+// User-facing credit costs (what the user pays). These are the final prices
+// shown in the UI. NEVER expose supplier costs, factors, or margins.
+const MODEL_PRICING: {
+  name: string;
+  type: string;
+  credits: string;
+  note?: string;
+}[] = [
+  // Image models
+  { name: "Nano Banana 2", type: "image", credits: "1K: 5, 2K: 10, 4K: 18" },
+  { name: "Nano Banana Pro", type: "image", credits: "1K: 18, 2K: 18, 4K: 24" },
+  { name: "Z-Image", type: "image", credits: "1", note: "Cheapest image model. Quick drafts." },
+  { name: "GPT Image 2", type: "image", credits: "4", note: "Text-to-image or image-to-image." },
+  { name: "Nano Banana Edit", type: "image", credits: "5" },
+  { name: "Character Edit", type: "image", credits: "6" },
+  { name: "Ideogram V3 Reframe", type: "image", credits: "8" },
+  { name: "Remove Background", type: "image", credits: "1" },
+  { name: "Crisp Upscale", type: "image", credits: "1" },
+  { name: "Topaz Upscale (image)", type: "image", credits: "1x: 10, 2x: 12, 4x: 15" },
+  // Video models
+  { name: "Seedance 1.5 Pro", type: "video", credits: "480P 4s: 5, 720P 4s: 9, 1080P 4s: 19. Audio doubles cost.", note: "Duration multiplier: 8s ×2, 12s ×3." },
+  { name: "Seedance 2.0", type: "video", credits: "480P: 8–12/s, 720P: 16–26/s", note: "Per-second. Video-input cheaper than text-only." },
+  { name: "Seedance 2.0 Fast", type: "video", credits: "480P: 6–10/s, 720P: 13–21/s", note: "Per-second. Faster, slightly cheaper." },
+  { name: "Kling 3.0 Motion", type: "video", credits: "720P: 24, 1080P: 33" },
+  { name: "Veo 3.1", type: "video", credits: "Fast: 72, Quality: 300" },
+  { name: "Grok Imagine", type: "video", credits: "480P: 2, 720P: 4" },
+  { name: "InfiniteTalk (Lip Sync)", type: "video", credits: "480P: 4/s, 720P: 15/s" },
+  { name: "Topaz Video Upscale", type: "video", credits: "1x/2x: 10/s, 4x: 17/s" },
+  // Audio models
+  { name: "AI Music Generator", type: "audio", credits: "15", note: "Up to 4 min, 2 variations." },
+  { name: "Cover Song", type: "audio", credits: "15" },
+  { name: "Extend Music", type: "audio", credits: "15" },
+  { name: "Create Persona", type: "audio", credits: "0", note: "Free." },
+  { name: "ElevenLabs TTS", type: "audio", credits: "12 per 1,000 chars (max 5,000)" },
+  // AI Analyze
+  { name: "AI Analyze Image", type: "analyze", credits: "1" },
+  { name: "AI Analyze Video", type: "analyze", credits: "3" },
+  { name: "AI Analyze Audio", type: "analyze", credits: "1" },
+  { name: "Prompt Enhance", type: "utility", credits: "1" },
+];
 
 function renderPricing(modelName?: string): string {
-  if (!modelName) return PRICING_OVERVIEW;
-  const m = modelName.toLowerCase();
-  if (m.includes("seedance"))
-    return `Seedance pricing: base cost around 7 credits, multiplied by resolution (480P x1, 720P x2, 1080P x4) and duration (4s x1, 8s x2, 12s x4). Audio adds a 2x multiplier. Example: a 8s 720P Seedance 1.5 clip with audio ≈ 7 × 2 × 2 × 2 = 56 credits. The UI always shows the final cost before you generate.\n\n${PRICING_OVERVIEW}`;
-  if (m.includes("veo") || m.includes("kling") || m.includes("grok"))
-    return `${modelName} pricing uses a similar structure: a base cost multiplied by resolution and duration. Check the cost shown in the studio before generating — it reflects your exact choices.\n\n${PRICING_OVERVIEW}`;
-  if (m.includes("banana") || m.includes("flux") || m.includes("gpt"))
-    return `${modelName} is an image model. Cost is typically 4-15 credits per image depending on resolution. Exact cost shown in the UI before generating.\n\n${PRICING_OVERVIEW}`;
-  if (m.includes("suno") || m.includes("music"))
-    return `Music generation (Suno-based) uses a fixed per-track cost. Exact cost shown in the UI before generating.\n\n${PRICING_OVERVIEW}`;
-  if (m.includes("topaz") || m.includes("upscale"))
-    return `Topaz upscaling adds credits proportional to the source resolution and duration. Exact cost shown before you upscale.\n\n${PRICING_OVERVIEW}`;
-  return PRICING_OVERVIEW;
+  const footer = `\nThe exact cost is always shown in the UI before you generate. Paid plans include a monthly credit grant plus the ability to top up anytime. Full pricing: /pricing page.`;
+
+  if (!modelName) {
+    // Full pricing table
+    const lines = MODEL_PRICING.map(
+      (m) => `- ${m.name} (${m.type}): ${m.credits} credits${m.note ? ` — ${m.note}` : ""}`
+    );
+    return `Storytica credit costs by model:\n\n${lines.join("\n")}${footer}`;
+  }
+
+  // Find matching model(s)
+  const q = modelName.toLowerCase();
+  const matches = MODEL_PRICING.filter(
+    (m) => m.name.toLowerCase().includes(q) || q.includes(m.name.toLowerCase())
+  );
+
+  if (matches.length > 0) {
+    const lines = matches.map(
+      (m) => `${m.name}: ${m.credits} credits${m.note ? ` — ${m.note}` : ""}`
+    );
+    return `${lines.join("\n")}${footer}`;
+  }
+
+  // No exact match — return full table
+  const lines = MODEL_PRICING.map(
+    (m) => `- ${m.name} (${m.type}): ${m.credits} credits${m.note ? ` — ${m.note}` : ""}`
+  );
+  return `No exact match for "${modelName}". Here are all available models:\n\n${lines.join("\n")}${footer}`;
 }
 
 function fmtDate(ms: number | null | undefined): string {
@@ -287,12 +295,19 @@ export async function dispatchTool(
         if (!sub)
           return {
             output:
-              "No active subscription found. This user is likely on the Free plan.",
+              "No active subscription found. This user is on the Free plan.",
             isError: false,
           };
+        // Map internal plan keys to friendly names
+        const planNames: Record<string, string> = {
+          free: "Free",
+          pro_personal: "Pro ($39.90/mo annual, $45/mo monthly)",
+          business: "Business ($89.90/mo annual, $119/mo monthly)",
+        };
         return {
           output: stringifyResult({
             plan: sub.plan,
+            planName: planNames[sub.plan] ?? sub.plan,
             status: sub.status ?? "unknown",
             cancelScheduled: sub.cancelAtPeriodEnd,
             renewsOn: fmtDate(sub.currentPeriodEnd),
@@ -313,63 +328,140 @@ export async function dispatchTool(
       }
 
       case "list_my_credit_transactions": {
-        const limit = Math.min(Math.max(Number(input.limit) || 20, 1), 50);
+        const limit = Math.min(Math.max(Number(input.limit) || 500, 1), 1000);
         const sinceDate =
           typeof input.since_date === "string" ? input.since_date : undefined;
         const sinceMs = sinceDate ? new Date(sinceDate).getTime() : undefined;
 
-        let rows = await ctx.convex.query(
+        const rows = await ctx.convex.query(
           api.supportTools.listCreditTransactions,
-          { secret: ctx.secret, companyId: ctx.companyId, limit }
+          {
+            secret: ctx.secret,
+            companyId: ctx.companyId,
+            limit,
+            sinceMs: sinceMs && !Number.isNaN(sinceMs) ? sinceMs : undefined,
+          }
         );
-
-        // Client-side date filter (the Convex query doesn't support date range)
-        if (sinceMs && !Number.isNaN(sinceMs)) {
-          rows = rows.filter((r) => r.createdAt >= sinceMs);
-        }
 
         if (rows.length === 0)
           return { output: "No credit transactions found for this period.", isError: false };
 
-        // Pre-compute summary so the model doesn't have to do math
+        // Pre-compute summary so the model doesn't have to do math.
+        // Normalize reason strings into short categories so spend + refund
+        // for the same feature land in one bucket.
+        function normalizeCategory(reason: string | null | undefined): string {
+          if (!reason) return "Other";
+          const r = reason.toLowerCase();
+          if (r.includes("analyze audio")) return "AI Analyze Audio";
+          if (r.includes("analyze video")) return "AI Analyze Video";
+          if (r.includes("analyze image")) return "AI Analyze Image";
+          if (r.includes("video generation") || r.includes("video gen"))
+            return "AI Video Generation";
+          if (r.includes("image generation") || r.includes("image gen"))
+            return "AI Image Generation";
+          if (r.includes("music generation") || r.includes("music gen"))
+            return "AI Music Generation";
+          if (r.includes("cover song")) return "AI Cover Song";
+          if (r.includes("lip sync")) return "AI Lip Sync";
+          if (r.includes("extend music")) return "AI Extend Music";
+          if (r.includes("tts") || r.includes("text-to-speech") || r.includes("elevenlabs"))
+            return "Text-to-Speech";
+          if (r.includes("upscal")) return "AI Upscaling";
+          // KIE callback refunds: "AI Generation Failed - filename.ext"
+          // Try to infer the original category from the filename extension
+          if (r.includes("ai generation failed")) {
+            if (r.endsWith(".mp4") || r.endsWith(".mov") || r.endsWith(".webm"))
+              return "AI Video Generation";
+            if (r.endsWith(".png") || r.endsWith(".jpg") || r.endsWith(".jpeg") || r.endsWith(".webp"))
+              return "AI Image Generation";
+            if (r.endsWith(".mp3") || r.endsWith(".wav") || r.endsWith(".ogg"))
+              return "AI Music/Audio Generation";
+            return "AI Generation (Failed)";
+          }
+          // Other refund patterns from specific error handlers
+          if (r.includes("refund") && r.includes("cover")) return "AI Cover Song";
+          if (r.includes("refund") && r.includes("tts")) return "Text-to-Speech";
+          if (r.includes("refund") && r.includes("extend")) return "AI Extend Music";
+          if (r.includes("refund") && r.includes("music")) return "AI Music Generation";
+          if (r.includes("wrongly marked")) return "AI Cover Song";
+          if (r.includes("copyrighted")) return "AI Cover Song";
+          if (r.includes("refund")) return "Other";
+          return reason.length > 40 ? reason.slice(0, 40) : reason;
+        }
+
+        // Only count usage + refund rows in the spending summary.
+        // Exclude subscription grants, clawbacks, purchases, plan changes etc.
+        const usageTypes = new Set(["usage", "refund"]);
         let totalSpent = 0;
         let totalRefunded = 0;
         let totalReceived = 0;
-        const spentByAction: Record<string, number> = {};
-        const refundByAction: Record<string, number> = {};
+        const categories: Record<
+          string,
+          { spent: number; refunded: number; attempts: number; failedAttempts: number }
+        > = {};
         for (const r of rows) {
           const t = r.tokens ?? 0;
-          const label = r.reason ?? r.type ?? "unknown";
-          if (t < 0) {
+          if (!usageTypes.has(r.type ?? "")) {
+            // Count non-usage positive tokens as "received" (grants, purchases)
+            if (t > 0) totalReceived += t;
+            continue;
+          }
+          const cat = normalizeCategory(r.reason);
+          if (t < 0 && r.type === "usage") {
             totalSpent += Math.abs(t);
-            spentByAction[label] = (spentByAction[label] ?? 0) + Math.abs(t);
-          } else if (r.type === "refund") {
+            if (!categories[cat])
+              categories[cat] = { spent: 0, refunded: 0, attempts: 0, failedAttempts: 0 };
+            categories[cat].spent += Math.abs(t);
+            categories[cat].attempts += 1;
+          } else if (r.type === "refund" && t > 0) {
             totalRefunded += t;
-            refundByAction[label] = (refundByAction[label] ?? 0) + t;
-          } else if (t > 0) {
-            totalReceived += t;
+            if (!categories[cat])
+              categories[cat] = { spent: 0, refunded: 0, attempts: 0, failedAttempts: 0 };
+            categories[cat].refunded += t;
+            categories[cat].failedAttempts += 1;
           }
         }
 
+        // Build a simple per-category breakdown with net
+        const breakdown = Object.entries(categories).map(([name, c]) => ({
+          category: name,
+          creditsSpent: c.spent,
+          creditsRefunded: c.refunded,
+          netCredits: c.spent - c.refunded,
+          attempts: c.attempts,
+          failedAttempts: c.failedAttempts,
+        }));
+
+        // Only include the 20 most recent usage/refund rows in the raw list
+        // to keep the AI context small. The summary already covers everything.
+        const recentUsageRows = rows
+          .filter((r) => usageTypes.has(r.type ?? ""))
+          .slice(0, 20);
+
+        const usageCount = rows.filter((r) => usageTypes.has(r.type ?? "")).length;
+
         const summary = {
+          INSTRUCTION: "ONLY use the exact numbers below in your response. Do NOT invent, fabricate, or modify any transaction, amount, or date. If a field is missing, say you do not have that data.",
           period: sinceDate
             ? `Since ${sinceDate}`
             : `Last ${rows.length} transactions`,
           summary: {
-            totalSpent,
-            totalRefunded,
-            netSpent: totalSpent - totalRefunded,
-            totalReceived,
-            transactionCount: rows.length,
+            totalCreditsDeducted: totalSpent,
+            totalCreditsRefunded: totalRefunded,
+            netCreditsUsed: totalSpent - totalRefunded,
+            totalCreditsReceived: totalReceived,
+            usageTransactionCount: usageCount,
           },
-          spentByCategory: spentByAction,
-          refundedByCategory: refundByAction,
-          transactions: rows.map((r) => ({
+          breakdownByCategory: breakdown,
+          recentTransactions: recentUsageRows.map((r) => ({
             date: fmtDate(r.createdAt),
             type: r.type,
             credits: r.tokens,
             reason: r.reason,
           })),
+          note: recentUsageRows.length < usageCount
+            ? `Showing ${recentUsageRows.length} most recent usage transactions. The summary above covers all ${usageCount} usage/refund transactions.`
+            : undefined,
         };
         return { output: stringifyResult(summary), isError: false };
       }
@@ -441,7 +533,10 @@ export async function dispatchTool(
           limit,
         });
         if (rows.length === 0)
-          return { output: "No invoices on file.", isError: false };
+          return {
+            output: "No invoices found in the system. Note: Subscriptions managed through Clerk billing may not generate invoices in this table. The user can check their billing details under Billing in the studio sidebar. Do NOT guess why there are no invoices — just state the fact.",
+            isError: false,
+          };
         return {
           output: stringifyResult(
             rows.map((r) => ({

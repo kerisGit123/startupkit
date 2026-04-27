@@ -726,7 +726,7 @@ export default function StoryboardPage() {
         accept="image/*,video/*,audio/*,.pdf"
         onChange={handleFileUpload}
       />
-      <SupportChatWidget variant="studio" />
+      <SupportChatWidget variant="studio" onNavigate={(key) => setActiveNav(key)} />
     </div>
   );
 }

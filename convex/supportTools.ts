@@ -57,16 +57,29 @@ export const getActiveSubscription = query({
   },
   handler: async (ctx, args) => {
     assertSecret(args.secret);
+
+    // Primary source: credits_balance.ownerPlan (set by Clerk webhook)
+    // This is the source of truth for the effective plan in both
+    // personal workspaces and orgs.
+    const balance = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .first();
+
+    // Fallback: check org_subscriptions (legacy Stripe-managed plans)
     const sub = await ctx.db
       .query("org_subscriptions")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
       .first();
-    if (!sub) return null;
+
+    const plan = balance?.ownerPlan ?? sub?.plan ?? null;
+    if (!plan) return null;
+
     return {
-      plan: sub.plan,
-      status: sub.status ?? null,
-      cancelAtPeriodEnd: sub.cancelAtPeriodEnd ?? false,
-      currentPeriodEnd: sub.currentPeriodEnd ?? null,
+      plan,
+      status: sub?.status ?? (plan === "free" ? "free" : "active"),
+      cancelAtPeriodEnd: sub?.cancelAtPeriodEnd ?? false,
+      currentPeriodEnd: sub?.currentPeriodEnd ?? null,
     };
   },
 });
@@ -94,14 +107,35 @@ export const listCreditTransactions = query({
     secret: v.string(),
     companyId: v.string(),
     limit: v.optional(v.number()),
+    sinceMs: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     assertSecret(args.secret);
+    const limit = args.limit ?? 50;
+
+    if (args.sinceMs) {
+      // Use compound index for efficient date-range query
+      const rows = await ctx.db
+        .query("credits_ledger")
+        .withIndex("by_companyId_createdAt", (q) =>
+          q.eq("companyId", args.companyId).gte("createdAt", args.sinceMs!)
+        )
+        .order("desc")
+        .take(limit);
+      return rows.map((r) => ({
+        type: r.type,
+        tokens: r.tokens,
+        reason: r.reason ?? null,
+        amountPaid: r.amountPaid ?? null,
+        createdAt: r.createdAt,
+      }));
+    }
+
     const rows = await ctx.db
       .query("credits_ledger")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
       .order("desc")
-      .take(args.limit ?? 10);
+      .take(limit);
     return rows.map((r) => ({
       type: r.type,
       tokens: r.tokens,

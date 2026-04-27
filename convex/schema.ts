@@ -535,6 +535,7 @@ export default defineSchema({
     action: v.optional(v.string()),
   })
     .index("by_companyId", ["companyId"])
+    .index("by_companyId_createdAt", ["companyId", "createdAt"])
     .index("by_invoiceId", ["invoiceId"])
     .index("by_user", ["userId"])
     .index("by_company_type", ["companyId", "type"]),

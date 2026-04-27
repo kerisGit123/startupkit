@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
-import { MessageCircle, X, Send, Loader2, RotateCcw, Home, Search } from "lucide-react";
+import { MessageCircle, X, Send, Loader2, RotateCcw, Home, Search, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -75,6 +75,8 @@ interface Message {
   content: string;
   isStreaming?: boolean;
   isError?: boolean;
+  /** User rating: 1 = thumbs up, -1 = thumbs down, undefined = not rated */
+  rating?: 1 | -1;
 }
 
 /* ─── FAQ decision tree (hardcoded — zero API calls) ────────────────── */
@@ -84,6 +86,18 @@ interface FaqNode {
   /** Extra keywords that help search match this node (not shown to user) */
   tags?: string;
   followUp?: FaqNode[];
+  /** If true, sends the question to the AI instead of showing hardcoded answer.
+   *  Used for account-specific questions that need tool calls (balance, spending, etc.) */
+  askAI?: boolean;
+}
+
+/** Top-level categories shown as tab buttons */
+interface FaqCategory {
+  label: string;
+  icon: string;
+  nodes: FaqNode[];
+  /** Only show this category when the user is signed in */
+  authOnly?: boolean;
 }
 
 const FAQ_TREE: FaqNode[] = [
@@ -97,7 +111,7 @@ const FAQ_TREE: FaqNode[] = [
         followUp: [
           {
             q: "Nano Banana 2",
-            a: "**Nano Banana 2** - General purpose image model\n\n**Credits per image:**\n- 1K quality: 5 credits\n- 2K quality: 8 credits\n- 4K quality: 12 credits\n\n**Per 1,000 credits:** ~200 images (1K)\n**Best for:** Storyboard frames, all styles",
+            a: "**Nano Banana 2** - General purpose image model\n\n**Credits per image:**\n- 1K quality: 5 credits\n- 2K quality: 10 credits\n- 4K quality: 18 credits\n\n**Per 1,000 credits:** ~200 images (1K)\n**Best for:** Storyboard frames, all styles",
             tags: "nano banana NB2 image price cost credits generation",
             followUp: [
               { q: "Tips for Nano Banana 2", a: "**Getting the best results:**\n\n- Use **1K** for drafts and iteration (5 cr)\n- Switch to **2K/4K** only for final frames\n- Works well with all art styles\n- Add **@Image** elements for character consistency\n- Use **Prompt Enhance** (1 cr) to improve prompts\n- Pair with **AI Analyze** to describe reference images", tags: "tips how to use nano banana" },
@@ -278,8 +292,148 @@ const FAQ_TREE: FaqNode[] = [
   },
 ];
 
+/* ─── Categorized FAQ ─────────────────────────────────────────────── */
+const FAQ_CATEGORIES: FaqCategory[] = [
+  {
+    label: "FAQ",
+    icon: "💬",
+    nodes: [
+      FAQ_TREE[0], // What does Storytica do?
+      FAQ_TREE[1], // How do credits work?
+      FAQ_TREE[2], // What are the plans & pricing?
+      FAQ_TREE[3], // Does it support teams?
+      FAQ_TREE[5], // Is my content private?
+    ],
+  },
+  {
+    label: "How to",
+    icon: "📖",
+    nodes: [
+      ...(FAQ_TREE[4]?.followUp ?? []), // Element Library, Canvas Editor, Script, Video Editor, etc.
+    ],
+  },
+  {
+    label: "Models",
+    icon: "🤖",
+    nodes: [
+      ...(FAQ_TREE[0]?.followUp?.[0]?.followUp ?? []), // Individual model nodes (NB2, GPT, Seedance, Z-Image, etc.)
+    ],
+  },
+  {
+    label: "My Account",
+    icon: "👤",
+    authOnly: true,
+    nodes: [
+      { q: "What's my credit balance?", a: "", askAI: true, tags: "credits balance how many left remaining" },
+      { q: "How much did I spend this month?", a: "", askAI: true, tags: "spending usage credits month cost deducted" },
+      { q: "What plan am I on?", a: "", askAI: true, tags: "plan subscription pro free business tier" },
+      { q: "Did I get a refund?", a: "", askAI: true, tags: "refund credits returned failed generation" },
+      { q: "Why did my generation fail?", a: "", askAI: true, tags: "generation failed error broken not working" },
+      { q: "Show my invoices", a: "", askAI: true, tags: "invoice receipt billing payment history" },
+      { q: "Why did my balance change?", a: "", askAI: true, tags: "balance changed credits missing deducted where" },
+    ],
+  },
+  {
+    label: "Support",
+    icon: "🎫",
+    authOnly: true,
+    nodes: [
+      {
+        q: "Refund policy",
+        a: "**Refund Policy:**\n\n- **Failed generations** are automatically refunded — credits return to your balance instantly\n- If auto-refund didn't happen, our team reviews within 24-48 hours\n- **Subscription refunds** are handled case-by-case\n- **Top-up credits** are non-refundable once used\n\nCheck if you already received auto-refunds below.",
+        tags: "refund policy return money credits back",
+        followUp: [
+          { q: "Did I get a refund?", a: "", askAI: true, tags: "refund credits returned" },
+          { q: "Request a refund via ticket", a: "To request a manual refund, please [create a support ticket](#nav:support) from the **Support** section in the left sidebar.\n\nInclude:\n- Which generation failed\n- Approximate date\n- Credits deducted\n\nOur team reviews refund requests within 24-48 hours.", tags: "refund request ticket create" },
+        ],
+      },
+      {
+        q: "Report a bug",
+        a: "**Let's troubleshoot first:**\n\n1. **What happened?** — Expected vs actual behavior\n2. **Where?** — Which page or feature?\n3. **When?** — Every time or just once?\n4. **How?** — Steps to trigger the bug\n\nCheck common issues below first:",
+        tags: "bug report issue broken error problem glitch",
+        followUp: [
+          { q: "Generation stuck or failed", a: "**Generations can take up to 2 minutes.** If longer:\n\n1. Check your storyboard — the frame may have updated\n2. Failed generations are **auto-refunded** instantly\n3. Try a simpler prompt or **480p** for videos\n\nCheck if you got a refund below:",
+            tags: "stuck generation timeout loading",
+            followUp: [
+              { q: "Did I get a refund?", a: "", askAI: true, tags: "refund check" },
+              { q: "Why did my generation fail?", a: "", askAI: true, tags: "generation failed reason" },
+              { q: "Still not resolved", a: "Please [create a support ticket](#nav:support) from the **Support** section in the left sidebar.\n\nInclude:\n- Which model you used\n- The prompt (if possible)\n- Screenshot of the error\n\nOur team responds within 24 hours.", tags: "ticket escalate" },
+            ],
+          },
+          { q: "Canvas/editor not working", a: "**Try these fixes:**\n\n1. **Refresh the page** — most glitches resolve on reload\n2. **Clear browser cache** — old assets can cause display issues\n3. **Try Chrome/Edge** — best browser support\n4. **Check your internet** — canvas needs a stable connection",
+            tags: "canvas editor broken inpaint brush",
+            followUp: [
+              { q: "Still not working", a: "Please [create a support ticket](#nav:support) from the **Support** section in the left sidebar.\n\nInclude:\n- What you were trying to do\n- Screenshot of the issue\n- Browser name and version\n\nOur team responds within 24 hours.", tags: "ticket create bug" },
+            ],
+          },
+          { q: "Billing or credit issue", a: "**Check these first:**\n\n- **Missing credits?** — Failed generations are auto-refunded\n- **Wrong balance?** — Ask \"Why did my balance change?\" in **My Account**\n- **Subscription issue?** — Ask \"What plan am I on?\" in **My Account**",
+            tags: "billing credits wrong charge",
+            followUp: [
+              { q: "Did I get a refund?", a: "", askAI: true, tags: "refund check" },
+              { q: "Still not resolved", a: "Please [create a support ticket](#nav:support) from the **Support** section in the left sidebar.\n\nInclude:\n- What charge looks wrong\n- Expected vs actual credit amount\n- Date it happened\n\nOur team responds within 24 hours.", tags: "billing ticket create" },
+            ],
+          },
+          { q: "Something else", a: "Please [create a support ticket](#nav:support) from the **Support** section in the left sidebar.\n\nInclude:\n- What you were trying to do\n- What happened instead\n- Steps to reproduce\n- Screenshots if possible\n\nOur team responds within 24 hours.", tags: "other issue ticket create" },
+        ],
+      },
+      {
+        q: "Contact support",
+        a: "**Try self-service first — it's faster:**\n\n- **Credits/billing** → **My Account** tab\n- **How to use a feature** → **How to** tab\n- **Generation failed** → **My Account** → \"Why did my generation fail?\"\n- **Refund** → **Refund policy** above\n\nIf you still need help, [create a support ticket](#nav:support) from the **Support** section in the left sidebar. Our team responds within 24 hours.",
+        tags: "contact support human agent ticket help email",
+      },
+    ],
+  },
+];
+
+/* ─── Proactive follow-up suggestions ─────────────────────────────── */
+/* After the AI answers a question, suggest related follow-ups.
+   Key = keyword that appears in the user's original question.
+   Value = array of follow-up questions to show as clickable chips. */
+const FOLLOW_UP_MAP: { keywords: string[]; suggestions: string[] }[] = [
+  {
+    keywords: ["balance", "how many credits"],
+    suggestions: ["How much did I spend this month?", "Can I buy extra credits?", "What plan am I on?"],
+  },
+  {
+    keywords: ["spend", "spent", "usage"],
+    suggestions: ["What's my credit balance?", "Did I get a refund?", "Show my invoices"],
+  },
+  {
+    keywords: ["plan", "subscription"],
+    suggestions: ["What's my credit balance?", "Can I cancel anytime?", "What's included in Pro vs Business?"],
+  },
+  {
+    keywords: ["refund", "returned"],
+    suggestions: ["Why did my generation fail?", "Did I get a refund?", "Show my invoices"],
+  },
+  {
+    keywords: ["fail", "failed", "error", "broken"],
+    suggestions: ["Did I get a refund?", "Why did my generation fail?", "What's my credit balance?"],
+  },
+  {
+    keywords: ["invoice", "receipt", "billing"],
+    suggestions: ["What plan am I on?", "How much did I spend this month?"],
+  },
+  {
+    keywords: ["changed", "missing", "where did"],
+    suggestions: ["How much did I spend this month?", "Did I get a refund?"],
+  },
+];
+
+function getFollowUpSuggestions(userMessage: string): string[] {
+  const msg = userMessage.toLowerCase();
+  for (const entry of FOLLOW_UP_MAP) {
+    if (entry.keywords.some((kw) => msg.includes(kw))) {
+      return entry.suggestions;
+    }
+  }
+  return [];
+}
+
 interface SupportChatWidgetProps {
   variant: "landing" | "studio";
+  /** Called when the user clicks a link to navigate within the studio (e.g. to Support page) */
+  onNavigate?: (navKey: string) => void;
 }
 
 const uid = () =>
@@ -287,7 +441,7 @@ const uid = () =>
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
 
-export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
+export default function SupportChatWidget({ variant, onNavigate }: SupportChatWidgetProps) {
   const { isSignedIn } = useUser();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -296,6 +450,13 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
   const [streaming, setStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [faqPath, setFaqPath] = useState<FaqNode[][]>([FAQ_TREE]);
+  const [faqCategory, setFaqCategory] = useState<string | null>(null);
+
+  // Visible categories based on auth state
+  const visibleCategories = useMemo(
+    () => FAQ_CATEGORIES.filter((c) => !c.authOnly || isSignedIn),
+    [isSignedIn],
+  );
   const [faqSearch, setFaqSearch] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -305,13 +466,13 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
     const flat: FaqNode[] = [];
     const walk = (nodes: FaqNode[]) => {
       for (const n of nodes) {
-        if (n.a) flat.push(n);
+        if (n.a || n.askAI) flat.push(n);
         if (n.followUp) walk(n.followUp);
       }
     };
-    walk(FAQ_TREE);
+    for (const cat of visibleCategories) walk(cat.nodes);
     return flat;
-  }, []);
+  }, [visibleCategories]);
 
   useEffect(() => {
     if (open && scrollRef.current) {
@@ -328,12 +489,14 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
     setActiveTool(null);
     setInput("");
     setFaqPath([FAQ_TREE]);
+    setFaqCategory(null);
     setFaqSearch("");
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const trimmed = input.trim();
+  const sendMessage = useCallback(async (overrideMessage?: string) => {
+    const trimmed = (overrideMessage ?? input).trim();
     if (!trimmed || streaming) return;
+    if (!overrideMessage) setInput("");
 
     const userMsgId = uid();
     const assistantMsgId = uid();
@@ -439,13 +602,24 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
           if (event.type === "session" && event.sessionId) {
             setSessionId(event.sessionId);
           } else if (event.type === "text" && event.delta) {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsgId
-                  ? { ...m, content: m.content + event.delta }
-                  : m
-              )
-            );
+            // Filter out leaked tool call JSON from DeepSeek
+            // DeepSeek sometimes outputs tool calls as text instead of proper function calls
+            let delta = event.delta as string;
+            // Strip JSON blocks that look like tool calls: {"category":"billing",...}
+            delta = delta.replace(/```?json\s*\{[^}]*\}\s*```?/g, "");
+            // Strip standalone tool call artifacts
+            delta = delta.replace(/\{"\w+":\s*"[^"]*"(?:,\s*"\w+":\s*"[^"]*")*\}/g, "");
+            // Strip tool separator markers
+            delta = delta.replace(/<[|｜]tool[▁_]sep[|｜]>/g, "");
+            if (delta.trim()) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMsgId
+                    ? { ...m, content: m.content + delta }
+                    : m
+                )
+              );
+            }
             setActiveTool(null);
           } else if (event.type === "tool_call" && event.name) {
             setActiveTool(event.name);
@@ -477,10 +651,18 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
         }
       }
 
+      // Final cleanup: strip any remaining tool call artifacts from the message
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsgId ? { ...m, isStreaming: false } : m
-        )
+        prev.map((m) => {
+          if (m.id !== assistantMsgId) return m;
+          let cleaned = m.content
+            .replace(/```?json\s*\{[\s\S]*?\}\s*```?/g, "")
+            .replace(/\{"\w+":\s*"[^"]*"(?:,\s*"\w+":\s*"[^"]*")*\}/g, "")
+            .replace(/<[|｜]tool[▁_]sep[|｜]>/g, "")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+          return { ...m, content: cleaned, isStreaming: false };
+        })
       );
     } catch (err) {
       if ((err as Error).name === "AbortError") return;
@@ -510,6 +692,22 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
       sendMessage();
     }
   };
+
+  // Intercept #nav: links to navigate within the studio
+  const handleChatClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === "A") {
+      const href = target.getAttribute("href") ?? "";
+      if (href.startsWith("#nav:")) {
+        e.preventDefault();
+        const navKey = href.slice(5); // e.g. "support"
+        if (onNavigate) {
+          onNavigate(navKey);
+          setOpen(false); // close chat widget
+        }
+      }
+    }
+  }, [onNavigate]);
 
   return (
     <>
@@ -571,8 +769,10 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
           </div>
 
           {/* Messages */}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
           <div
             ref={scrollRef}
+            onClick={handleChatClick}
             className="flex-1 space-y-3 overflow-y-auto px-4 py-4 text-sm"
           >
             {messages.length === 0 && (
@@ -585,39 +785,106 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
               </div>
             )}
 
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={cn(
-                  "flex",
-                  m.role === "user" ? "justify-end" : "justify-start"
-                )}
-              >
-                <div
-                  className={cn(
-                    "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2",
-                    m.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : m.isError
-                        ? "bg-destructive/10 text-destructive"
-                        : "bg-muted text-foreground"
+            {messages.map((m, idx) => {
+              // Find the preceding user message for follow-up suggestions
+              const prevUserMsg = m.role === "assistant" && idx > 0
+                ? messages.slice(0, idx).reverse().find((pm) => pm.role === "user")
+                : null;
+              const isLastAssistant = m.role === "assistant" && !m.isStreaming && m.content &&
+                idx === messages.length - 1;
+              const followUps = isLastAssistant && prevUserMsg
+                ? getFollowUpSuggestions(prevUserMsg.content)
+                : [];
+
+              return (
+                <div key={m.id}>
+                  <div
+                    className={cn(
+                      "flex",
+                      m.role === "user" ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2",
+                        m.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : m.isError
+                            ? "bg-destructive/10 text-destructive"
+                            : "bg-muted text-foreground"
+                      )}
+                    >
+                      {m.content ? (
+                        m.role === "assistant" && !m.isError ? (
+                          renderInlineMarkdown(m.content)
+                        ) : (
+                          m.content
+                        )
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Thinking…</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Thumbs up/down rating for completed assistant messages */}
+                  {m.role === "assistant" && !m.isStreaming && m.content && (
+                    <div className="flex items-center gap-1 mt-1 ml-1">
+                      <button
+                        type="button"
+                        onClick={() => setMessages((prev) =>
+                          prev.map((pm) => pm.id === m.id ? { ...pm, rating: pm.rating === 1 ? undefined : 1 } : pm)
+                        )}
+                        className={cn(
+                          "h-5 w-5 flex items-center justify-center rounded transition-colors",
+                          m.rating === 1
+                            ? "text-emerald-600 bg-emerald-500/20"
+                            : "text-muted-foreground/50 hover:text-emerald-600 hover:bg-emerald-500/10"
+                        )}
+                        title="Helpful"
+                      >
+                        <ThumbsUp className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMessages((prev) =>
+                          prev.map((pm) => pm.id === m.id ? { ...pm, rating: pm.rating === -1 ? undefined : -1 } : pm)
+                        )}
+                        className={cn(
+                          "h-5 w-5 flex items-center justify-center rounded transition-colors",
+                          m.rating === -1
+                            ? "text-red-600 bg-red-500/20"
+                            : "text-muted-foreground/50 hover:text-red-600 hover:bg-red-500/10"
+                        )}
+                        title="Not helpful"
+                      >
+                        <ThumbsDown className="h-3 w-3" />
+                      </button>
+                    </div>
                   )}
-                >
-                  {m.content ? (
-                    m.role === "assistant" && !m.isError ? (
-                      renderInlineMarkdown(m.content)
-                    ) : (
-                      m.content
-                    )
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      <span>Thinking…</span>
-                    </span>
+
+                  {/* Proactive follow-up suggestions */}
+                  {followUps.length > 0 && !streaming && (
+                    <div className="flex flex-wrap gap-1 mt-1.5 ml-1">
+                      {followUps.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => {
+                            sendMessage(suggestion);
+                          }}
+                          className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-[10px] text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {activeTool && (
               <div className="flex justify-start">
@@ -632,41 +899,60 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
           {/* FAQ balloons — persistent above input */}
           {!streaming && (() => {
             const searching = faqSearch.trim().length > 0;
+            const inSubMenu = faqPath.length > 1;
+
+            // When searching: show matching nodes across all categories
+            // When in sub-menu (followUp drill-down): show that sub-menu
+            // When a category is selected: show that category's nodes
+            // Default: show category tabs
             const visibleNodes = searching
               ? (() => {
                   const term = faqSearch.toLowerCase();
                   return allFaqNodes.filter((n) => {
                     const haystack = `${n.q} ${n.a} ${n.tags || ""}`.toLowerCase();
-                    // Match if search term appears anywhere, or any word starts with the term
                     return (
                       haystack.includes(term) ||
                       haystack.split(/\s+/).some((w) => w.startsWith(term))
                     );
                   });
                 })()
-              : faqPath[faqPath.length - 1] ?? [];
+              : inSubMenu
+                ? faqPath[faqPath.length - 1] ?? []
+                : faqCategory
+                  ? (visibleCategories.find((c) => c.label === faqCategory)?.nodes ?? [])
+                  : [];
+
+            const showCategoryTabs = !searching && !inSubMenu && !faqCategory;
 
             return (
               <div className="border-t px-3 pt-2 pb-1">
                 {/* Search + nav row */}
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  {faqPath.length > 1 && !searching && (
+                  {(inSubMenu || faqCategory) && !searching && (
                     <>
                       <button
                         type="button"
-                        onClick={() => { setFaqPath([FAQ_TREE]); setFaqSearch(""); }}
+                        onClick={() => {
+                          if (inSubMenu) {
+                            setFaqPath([FAQ_TREE]);
+                          }
+                          setFaqCategory(null);
+                          setFaqSearch("");
+                        }}
                         title="Home"
                         className="shrink-0 h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                       >
                         <Home className="h-3 w-3" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setFaqPath((p) => p.slice(0, -1))}
-                        className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        &larr; Back
-                      </button>
+                      {inSubMenu && (
+                        <button
+                          type="button"
+                          onClick={() => setFaqPath((p) => p.slice(0, -1))}
+                          className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          &larr; Back
+                        </button>
+                      )}
                     </>
                   )}
                   <div className="relative flex-1">
@@ -681,38 +967,72 @@ export default function SupportChatWidget({ variant }: SupportChatWidgetProps) {
                   </div>
                 </div>
 
-                {/* Balloon buttons */}
-                <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
-                  {visibleNodes.map((node) => (
+                {/* Category tabs */}
+                {showCategoryTabs && (
+                  <div className="flex flex-wrap gap-1.5 mb-1">
+                    {visibleCategories.map((cat) => (
+                      <button
+                        key={cat.label}
+                        type="button"
+                        onClick={() => setFaqCategory(cat.label)}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                          cat.authOnly
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
+                            : "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
+                        }`}
+                      >
+                        {cat.icon} {cat.label}
+                      </button>
+                    ))}
                     <button
-                      key={node.q}
                       type="button"
-                      onClick={() => {
-                        if (node.q === "View all FAQ") {
-                          window.open("/faq", "_blank", "noopener");
-                          return;
-                        }
-                        const uId = uid();
-                        const aId = uid();
-                        setMessages((prev) => [
-                          ...prev,
-                          { id: uId, role: "user", content: node.q },
-                          { id: aId, role: "assistant", content: node.a },
-                        ]);
-                        if (!searching && node.followUp?.length) {
-                          setFaqPath((p) => [...p, node.followUp!]);
-                        }
-                        setFaqSearch("");
-                      }}
-                      className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] text-primary hover:bg-primary/10 transition-colors text-left"
+                      onClick={() => window.open("/faq", "_blank", "noopener")}
+                      className="rounded-full border border-muted-foreground/20 bg-muted/50 px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted transition-colors"
                     >
-                      {node.q}
+                      View all FAQ
                     </button>
-                  ))}
-                  {searching && visibleNodes.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground py-1">No matching questions</p>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {/* Balloon buttons (when category selected or searching) */}
+                {!showCategoryTabs && (
+                  <div className="flex flex-wrap gap-1.5 max-h-[100px] overflow-y-auto">
+                    {visibleNodes.map((node) => (
+                      <button
+                        key={node.q}
+                        type="button"
+                        onClick={() => {
+                          if (node.askAI) {
+                            sendMessage(node.q);
+                            setFaqSearch("");
+                            return;
+                          }
+                          const uId = uid();
+                          const aId = uid();
+                          setMessages((prev) => [
+                            ...prev,
+                            { id: uId, role: "user", content: node.q },
+                            { id: aId, role: "assistant", content: node.a },
+                          ]);
+                          if (!searching && node.followUp?.length) {
+                            setFaqPath((p) => [...p, node.followUp!]);
+                          }
+                          setFaqSearch("");
+                        }}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors text-left ${
+                          node.askAI
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-400"
+                            : "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
+                        }`}
+                      >
+                        {node.q}
+                      </button>
+                    ))}
+                    {searching && visibleNodes.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground py-1">No matching questions</p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })()}
