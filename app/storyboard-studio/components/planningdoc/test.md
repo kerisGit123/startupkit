@@ -35,16 +35,6 @@ to
 }
 
 
-cloudflared tunnel --url http://localhost:3000
-
-
-
-
-
-peheji7215@mypethealh.com
-peheji7215@mypethealh.com
-
-peheji7215
 
 
 
