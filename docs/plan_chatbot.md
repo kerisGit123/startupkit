@@ -2,7 +2,8 @@
 
 > **Last updated:** 2026-04-27
 > **Status:** Production
-> **Model:** DeepSeek V3 via OpenRouter (planned migration from Claude Haiku 4.5)
+> **Primary Model:** DeepSeek V3 via OpenRouter (~$0.0009/msg)
+> **Fallback Model:** Claude Haiku 4.5 via Anthropic SDK (~$0.0032/msg)
 
 ---
 
@@ -12,27 +13,56 @@
 User (browser)
   │
   ├── FAQ Balloon clicked ──► Hardcoded answer (zero API calls)
+  │     Categories: FAQ, How to, Models, My Account, Support
   │
-  └── Custom question typed
+  └── Custom question / Account balloon clicked
         │
         ▼
   SupportChatWidget.tsx (client)
         │  POST /api/support/chat
         │  SSE streaming
+        │  JSON leak filter (strips DeepSeek artifacts)
         ▼
   route.ts (server)
         │
         ├── Rate limit check (Convex)
         ├── Session management (Convex)
-        ├── Build system prompt
-        ├── Attach tools (authed vs anon)
+        ├── Build system prompt (with current date injection)
+        ├── Attach tools (authed: 10 tools, anon: 1 tool)
         │
-        ▼
-  Claude Haiku 4.5 (Anthropic API)
-        │
-        ├── Text response ──► streamed to client
-        └── Tool calls ──► dispatchTool() ──► Convex queries ──► back to Haiku
+        ├── Try DeepSeek V3 (OpenRouter) ──► primary
+        │     └── On failure ──► fallback to Haiku
+        └── Or Haiku directly (if no OPENROUTER_API_KEY)
+              │
+              ├── Text response ──► streamed to client (filtered)
+              └── Tool calls ──► dispatchTool() ──► Convex queries ──► back to model
 ```
+
+---
+
+## DeepSeek V3 — Reliability Notes
+
+### Known Issues (as of 2026-04-27)
+
+| Issue | Severity | Mitigation |
+|-------|----------|------------|
+| **Language leaking** — randomly outputs Chinese, Arabic, Bengali text mid-response | Medium | Language-matching rule in system prompt + client-side artifact filter. Not 100% reliable. |
+| **Data fabrication** — invents plausible-sounding transactions, dates, amounts not in tool results | High | "Never fabricate" rule in system prompt + `INSTRUCTION` field injected into tool results. Mostly effective but occasional leaks. |
+| **JSON tool call leaks** — outputs raw JSON `{"category":"billing",...}` as text instead of proper function calls | Medium | Client-side regex filter strips JSON blocks, tool separators. Final cleanup on message complete. |
+| **Ignores instructions** — sometimes ignores "do not create tickets" or "use pre-computed numbers" rules | Low | Removed `create_support_ticket` from tool list entirely (can't call what doesn't exist). Pre-computed summaries reduce need for AI reasoning. |
+| **Over-asking clarifying questions** — asks 3-4 questions before acting, even when told "max 1" | Low | Decision tree in system prompt maps common questions to exact tool+field. Reduced but not eliminated. |
+
+### Why DeepSeek Despite Issues?
+
+- **72% cheaper** than Haiku ($0.0009 vs $0.0032 per message)
+- FAQ balloons handle 70-80% of questions with zero API calls
+- Pre-computed summaries mean the AI just reads numbers, rarely needs to reason
+- Guardrails (anti-fabrication, no-math, decision tree) catch most issues
+- Haiku available as automatic fallback if DeepSeek errors
+
+### If Quality Becomes Unacceptable
+
+To switch primary to Haiku, set `OPENROUTER_API_KEY` to empty in env. The route automatically falls back to Haiku when no OpenRouter key is set. Cost increases ~3.5x.
 
 ---
 
@@ -40,14 +70,14 @@ User (browser)
 
 | File | Purpose |
 |------|---------|
-| `components/support-chat/SupportChatWidget.tsx` | Client widget — UI, FAQ decision tree, SSE streaming, message rendering |
-| `app/api/support/chat/route.ts` | Server route — auth, rate limit, Anthropic streaming, tool loop, session persistence |
-| `lib/support/anthropic.ts` | Anthropic client singleton, model config constants |
-| `lib/support/systemPrompt.ts` | System prompt builder — product facts, rules, escalation, knowledge base instructions |
-| `lib/support/tools.ts` | Tool definitions (AUTHED_TOOLS, ANON_TOOLS) + `dispatchTool()` handler |
+| `components/support-chat/SupportChatWidget.tsx` | Client widget — UI, categorized FAQ, follow-up suggestions, thumbs up/down, JSON leak filter, `#nav:` link handler |
+| `app/api/support/chat/route.ts` | Server route — auth, rate limit, DeepSeek/Haiku streaming, tool loop, session persistence, error-fallback ticket |
+| `lib/openrouter.ts` | OpenRouter client for DeepSeek V3, Anthropic→OpenAI format adapters |
+| `lib/support/anthropic.ts` | Anthropic client singleton, model config constants (Haiku fallback) |
+| `lib/support/systemPrompt.ts` | System prompt builder — rules, date injection, decision tree, anti-fabrication guardrails |
+| `lib/support/tools.ts` | Tool definitions (10 authed + 1 anon) + `dispatchTool()` + MODEL_PRICING table |
 | `convex/supportChat.ts` | Convex mutations/queries — sessions, messages, rate limits |
-| `convex/supportTools.ts` | Convex queries for tool calls — profile, subscription, credits, invoices, generations, tickets |
-| `app/(marketing)/faq/page.tsx` | Dedicated FAQ page — 50+ questions, 8 categories |
+| `convex/supportTools.ts` | Convex queries for tool calls — profile, subscription (from credits_balance.ownerPlan), credits, invoices, generations |
 
 ---
 
@@ -55,90 +85,53 @@ User (browser)
 
 ### Props
 - `variant: "landing" | "studio"` — determines system prompt context hint
+- `onNavigate?: (navKey: string) => void` — called when user clicks `#nav:` links (e.g. navigate to Support page)
 
 ### State
-- `messages` — array of `{ id, role, content, isStreaming?, isError? }`
+- `messages` — array of `{ id, role, content, isStreaming?, isError?, rating? }`
 - `sessionId` — Convex session ID (authed users only)
-- `faqPath` — decision tree navigation stack (`FaqNode[][]`)
+- `faqPath` — decision tree navigation stack
+- `faqCategory` — selected category tab (FAQ, How to, Models, My Account, Support)
 - `faqSearch` — search filter text
 - `streaming` — whether a response is in progress
-- `activeTool` — name of tool currently being called (shown as indicator)
+- `activeTool` — name of tool currently being called
 
-### FAQ Decision Tree (`FAQ_TREE`)
+### FAQ Categories (balloon tabs)
 
-Hardcoded FAQ balloons that answer common questions with **zero API calls**:
+| Category | Icon | Auth | Type | Content |
+|----------|------|------|------|---------|
+| FAQ | 💬 | All | Hardcoded | Product, credits, pricing, teams, privacy |
+| How to | 📖 | All | Hardcoded | Element Library, Canvas, Script, Video Editor, etc. |
+| Models | 🤖 | All | Hardcoded | Per-model pricing + tips (NB2, GPT, Seedance, Z-Image, etc.) |
+| My Account | 👤 | Signed-in | AI (askAI) | Balance, spending, plan, refunds, invoices, generation failures |
+| Support | 🎫 | Signed-in | Hardcoded + AI | Refund policy, bug diagnosis tree, contact support → `#nav:support` links |
 
-| Top-level balloon | Follow-ups | Total paths |
-|---|---|---|
-| What does Storytica do? | AI models (6 models + tips each), character consistency, export | ~20 |
-| How do credits work? | Generation costs, estimates per plan, top-ups, expiry | 4 |
-| What are the plans & pricing? | Free plan, cancel, Pro vs Business | 3 |
-| How do I use...? | Element Library, Canvas, Script-to-Storyboard, Video Editor, Batch Gen, Camera Studio, Director's View, AI Analyze, Prompt Enhance | 9 |
-| Does it support teams? | Roles, seat limits | 2 |
-| Is my content private? | — | 1 |
-| View all FAQ | Opens `/faq` page | — |
+**My Account** balloons send the question to the AI via `sendMessage(overrideMessage)`.
+**Support** balloons guide users through self-service diagnosis before showing ticket links.
 
-**Search:** Filters across all nodes using word-start matching + hidden `tags` field.
-**Navigation:** Home button (reset to root), Back button (up one level).
-**Rendering:** Answers use `\n` line breaks, `**bold**` labels, `- bullet` lists. Rendered by `renderInlineMarkdown()` with `whitespace-pre-wrap`.
+### Proactive Follow-up Suggestions
 
-### Message Flow (custom question)
+After AI answers, clickable chips appear based on keyword matching:
+- "balance" → suggests: spending, buy credits, plan
+- "spend/spent" → suggests: balance, refund, invoices
+- "refund" → suggests: generation fail, refund check, invoices
+- "fail/error" → suggests: refund, generation fail, balance
+- 7 keyword patterns total
 
-1. User types message → added to `messages` as `role: "user"`
-2. Empty assistant message added with `isStreaming: true`
-3. `POST /api/support/chat` with `{ message, variant, sessionId?, clientHistory? }`
-4. SSE events received: `text` (delta), `tool_call`, `tool_result`, `session`, `done`, `error`
-5. Text deltas appended to assistant message content
-6. On `done`, `isStreaming` set to false
+### Thumbs Up/Down Rating
 
-### Markdown Renderer (`renderInlineMarkdown`)
+Every completed assistant message shows small 👍/👎 buttons. Rating stored on the message object (ready for persistence to DB).
 
-Supports inline only:
-- `**bold**` → `<strong>`
-- `*italic*` → `<em>`
-- `[text](url)` → `<a>` (with URL safety check)
+### JSON Leak Filter
 
-No block-level rendering. Newlines preserved by CSS `whitespace-pre-wrap`.
+DeepSeek sometimes outputs tool calls as text. Client-side filter:
+1. **Streaming filter** — strips JSON blocks, tool separators from each delta
+2. **Final cleanup** — on message complete, regex removes any remaining artifacts
+3. Patterns: `` ```json {...}``` ``, standalone `{"key":"value"}`, `<|tool_sep|>` markers
 
----
+### In-App Navigation Links
 
-## Server Route (`app/api/support/chat/route.ts`)
-
-### Request
-```typescript
-POST /api/support/chat
-{
-  message: string;         // max 4000 chars
-  variant: "landing" | "studio";
-  sessionId?: string;      // Convex session ID for continuing conversation
-  clientHistory?: { role: "user" | "assistant"; content: string }[];  // anon only
-}
-```
-
-### Flow
-
-1. **Auth check** — `auth()` from Clerk. Determines authed vs anon path.
-2. **Rate limit** — Convex mutation `checkAndIncrementRateLimit`. Authed: 30/hr, Anon: 10/hr.
-3. **Session** — Authed: create or continue Convex session. Anon: no persistence.
-4. **Build messages** — Authed: load full session history from Convex. Anon: use `clientHistory` (last 12 messages).
-5. **System prompt** — `buildSystemPrompt({ authed, variant })`.
-6. **Prompt caching** — `cache_control: { type: "ephemeral" }` on system prompt and last message.
-7. **Tool loop** — Up to `MAX_TOOL_ITERATIONS` (8) rounds. Each round:
-   - Stream response from Haiku
-   - If `stop_reason === "end_turn"` or no tool calls → done
-   - Otherwise: execute tools via `dispatchTool()`, append results, loop
-8. **Persist** — Authed: save assistant message + tool calls + token usage to Convex.
-9. **Error fallback** — On failure: auto-create support ticket, stream fallback message.
-
-### Response (SSE)
-```
-data: {"type":"session","sessionId":"..."}
-data: {"type":"text","delta":"Hello! "}
-data: {"type":"tool_call","name":"get_my_credit_balance"}
-data: {"type":"tool_result","name":"get_my_credit_balance","isError":false}
-data: {"type":"text","delta":"You have 2,450 credits."}
-data: {"type":"done"}
-```
+FAQ text uses `#nav:support` links. Click handler intercepts these and calls `onNavigate("support")` to navigate within the studio without page reload. Chat widget closes after navigation.
 
 ---
 
@@ -146,25 +139,40 @@ data: {"type":"done"}
 
 ### Structure
 ```
-SHARED_RULES          — role, tone, safety, confidentiality
+SHARED_RULES          — role, tone, safety, confidentiality, LANGUAGE MATCHING
+dateContext            — "Today is 2026-04-27. Month start is 2026-04-01."
 PRODUCT_FACTS         — what Storytica is, models, pricing summary
 KNOWLEDGE_BASE_RULES  — always search KB first for factual questions
-AUTHED_EXTRAS         — tool usage instructions (signed-in users)
+AUTHED_EXTRAS         — anti-fabrication rule, no-math rule, decision tree (10 patterns)
   or ANON_EXTRAS      — no account tools, encourage signup
-ESCALATION_RULES      — when to create support tickets (authed only)
+ESCALATION_RULES      — diagnose first, direct to Support page (no AI ticket creation)
 variantHint()         — context: landing page vs studio
 ```
 
-### Key Rules
-- **Off-topic refusal** — only answers Storytica questions
-- **Never reveal** — supplier names (Kie AI), costs/margins, API routes, schema
-- **Prompt injection defense** — ignore "ignore previous instructions" attempts
-- **Knowledge Base first** — always call `search_knowledge_base` before using baseline knowledge
-- **Proactive tool use** — call tools immediately, don't ask user for IDs
-- **Credit pricing** — defers to `get_ai_model_pricing` tool (no hardcoded costs in prompt)
+### Key Rules (added 2026-04-27)
 
-### Token Size
-~2,100 tokens (after removing hardcoded credit table). Previously ~2,500.
+- **Language matching** — "ALWAYS reply in the same language the user writes in"
+- **Current date injection** — dynamic today + month start so "this month" works
+- **Never fabricate** — every number, date, transaction must come from a tool result
+- **Never do math** — use pre-computed summary fields directly
+- **Decision tree** — 10 common questions mapped to exact tool + field
+- **No ticket creation** — AI cannot create tickets, directs users to Support page
+- **INSTRUCTION field** — injected into tool results: "ONLY use exact numbers below"
+
+### Decision Tree (common questions → tool + field)
+
+| User asks | Tool | Read field |
+|-----------|------|------------|
+| "How many credits?" | `get_my_credit_balance` | `balance` |
+| "How much spent this month?" | `list_my_credit_transactions` + `since_date` | `summary.netCreditsUsed` + `breakdownByCategory` |
+| "What plan am I on?" | `get_my_subscription` | `plan`, `planName` |
+| "Did I get a refund?" | `list_my_credit_transactions` | `summary.totalCreditsRefunded` |
+| "Why did generation fail?" | `list_my_recent_generations` + `list_my_credit_transactions` | Both (analyze covers refund entries) |
+| "How much does X cost?" | `get_ai_model_pricing` | Quote pricing text directly |
+| "Show invoices" | `list_my_invoices` | List each row |
+| "Why balance changed?" | `list_my_credit_transactions` | `recentTransactions` (exact data only) |
+| "I want a refund" | `list_my_credit_transactions` | Check auto-refunds → direct to Support page |
+| "Report a bug" | Diagnose with tools | Direct to Support page if unresolved |
 
 ---
 
@@ -175,39 +183,78 @@ variantHint()         — context: landing page vs studio
 |------|---------|
 | `search_knowledge_base` | Query team-curated KB articles |
 
-### Authed Tools (11)
+### Authed Tools (10 — `create_support_ticket` removed)
 | Tool | Purpose | Inputs |
 |------|---------|--------|
 | `get_my_profile` | Name, email, account date, blocked status | — |
-| `get_my_subscription` | Plan, status, renewal date, cancellation | — |
+| `get_my_subscription` | Plan (from credits_balance.ownerPlan), status, renewal | — |
 | `get_my_credit_balance` | Current credit balance | — |
-| `list_my_credit_transactions` | Recent ledger entries (purchases, usage, grants) | `limit?` (1-20) |
-| `get_ai_model_pricing` | Credit costs per model/resolution | `model_name?` |
+| `list_my_credit_transactions` | Ledger entries with pre-computed summary | `limit?` (1-1000), `since_date?` (ISO) |
+| `get_ai_model_pricing` | Credit costs from MODEL_PRICING table (28 models) | `model_name?` |
 | `list_my_recent_generations` | Recent storyboard generations with status | `limit?` (1-20) |
 | `get_generation_details` | Detailed status for one generation | `item_id` |
 | `list_my_invoices` | Billing history / receipts | `limit?` (1-10) |
 | `list_my_support_tickets` | Existing tickets with status | — |
-| `create_support_ticket` | Escalate to human support | `subject`, `description`, `category`, `priority` |
 | `search_knowledge_base` | Query KB articles | `query` |
 
-### Tool Dispatch
-`dispatchTool()` switches on tool name, calls Convex queries via `ctx.convex`, formats results as JSON strings. All Convex calls authenticated via `SUPPORT_INTERNAL_SECRET`.
+**Note:** `create_support_ticket` was removed from AI tools. Users create tickets through the Support page. The tool dispatch code still exists for the error-fallback auto-ticket flow (server-side only, when the AI pipeline crashes).
+
+### Credit Transaction Tool — Pre-computed Output
+
+The `list_my_credit_transactions` tool returns:
+
+```json
+{
+  "INSTRUCTION": "ONLY use exact numbers below...",
+  "period": "Since 2026-04-01",
+  "summary": {
+    "totalCreditsDeducted": 6614,
+    "totalCreditsRefunded": 1342,
+    "netCreditsUsed": 5272,
+    "usageTransactionCount": 329
+  },
+  "breakdownByCategory": [
+    { "category": "AI Video Generation", "creditsSpent": 5299, "creditsRefunded": 1169, "netCredits": 4130 },
+    ...
+  ],
+  "recentTransactions": [ ... last 20 usage/refund rows ... ]
+}
+```
+
+The AI reads `summary` and `breakdownByCategory` directly — no arithmetic needed.
+
+### MODEL_PRICING Table (28 models)
+
+Hardcoded from `lib/storyboard/pricing.ts`. Includes exact credit costs for all models:
+- Image: NB2, NB Pro, Z-Image (1 cr), GPT Image 2, Character Edit, NB Edit, etc.
+- Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0, Veo 3.1, Grok, Lip Sync
+- Audio: Music, Cover Song, Extend, TTS
+- Utility: AI Analyze (image/video/audio), Prompt Enhance
+
+### Category Normalization (`normalizeCategory`)
+
+Maps varied reason strings to consistent categories for spending breakdowns:
+- `"AI video generation with seedance-1.5"` → "AI Video Generation"
+- `"AI Generation Failed - video.mp4"` → "AI Video Generation" (inferred from .mp4 extension)
+- `"AI Analyze video — refund (failed)"` → "AI Analyze Video"
+- `"Refund: Cover song failed"` → "AI Cover Song"
 
 ---
 
 ## Database (Convex)
 
 ### Tables
-| Table | Fields | Purpose |
-|-------|--------|---------|
-| `support_chat_sessions` | userId, orgId, variant, title, messageCount, totalTokensIn/Out, timestamps | One per conversation |
-| `support_chat_messages` | sessionId, role, content, toolCalls[], tokensIn/Out, createdAt | Message history |
-| `support_chat_rate_limits` | key, count, windowStart | Hourly rate limiting |
+| Table | Purpose |
+|-------|---------|
+| `support_chat_sessions` | One per conversation (userId, variant, messageCount, tokens) |
+| `support_chat_messages` | Message history (role, content, toolCalls, tokens) |
+| `support_chat_rate_limits` | Hourly rate limiting by key |
 
-### Indexes
-- `support_chat_sessions.by_userId` — lookup user's sessions
-- `support_chat_sessions.by_createdAt` — admin reports
-- `support_chat_rate_limits.by_key` — rate limit lookup
+### Key Index (added 2026-04-27)
+- `credits_ledger.by_companyId_createdAt` — compound index for efficient date-range credit queries
+
+### Subscription Source
+- `getActiveSubscription` reads `credits_balance.ownerPlan` (set by Clerk webhook), NOT `org_subscriptions` (empty/legacy table)
 
 ---
 
@@ -216,16 +263,20 @@ variantHint()         — context: landing page vs studio
 ### Environment Variables
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `ANTHROPIC_API_KEY` | Yes | Claude API access |
+| `OPENROUTER_API_KEY` | No* | DeepSeek V3 access. If missing, falls back to Haiku. |
+| `ANTHROPIC_API_KEY` | Yes | Haiku fallback |
 | `SUPPORT_INTERNAL_SECRET` | Yes | Authenticates tool calls to Convex |
 | `NEXT_PUBLIC_CONVEX_URL` | Yes | Convex backend URL |
 
-### Constants (`lib/support/anthropic.ts`)
-| Constant | Value | Purpose |
-|----------|-------|---------|
-| `SUPPORT_MODEL` | `claude-haiku-4-5` | Model used for chat |
-| `MAX_TOKENS` | `4096` | Max response tokens |
-| `MAX_TOOL_ITERATIONS` | `8` | Max tool call rounds per message |
+*Set to empty to force Haiku-only mode.
+
+### Constants
+| Constant | Value | Location |
+|----------|-------|----------|
+| `DEEPSEEK_MODEL` | `deepseek/deepseek-chat-v3-0324` | `lib/openrouter.ts` |
+| `SUPPORT_MODEL` | `claude-haiku-4-5` | `lib/support/anthropic.ts` |
+| `MAX_TOKENS` | `4096` | `lib/support/anthropic.ts` |
+| `MAX_TOOL_ITERATIONS` | `8` | `lib/support/anthropic.ts` |
 
 ### Rate Limits
 | User type | Limit | Window |
@@ -238,277 +289,80 @@ variantHint()         — context: landing page vs studio
 ## Cost Optimization
 
 ### FAQ Balloons (biggest saving)
-- ~50 FAQ paths answer common questions with zero API calls
-- Covers: pricing, models, credits, features, teams, privacy, how-to guides
-- Searchable with word-start matching + tags
-- **Estimated 70-80% reduction** in Haiku calls
+- 5 category tabs with ~60+ FAQ paths — zero API calls
+- Covers: pricing, models, credits, features, teams, privacy, how-to, bug diagnosis
+- **Estimated 70-80% reduction** in AI calls
 
-### System Prompt Trim
-- Removed 15-line hardcoded credit cost table (~400 tokens saved per call)
-- Replaced with instruction to use `get_ai_model_pricing` tool
-- Also prevents stale pricing answers
+### Pre-computed Summaries
+- Credit totals computed server-side in `dispatchTool()`
+- AI reads numbers, never calculates
+- Eliminates math errors from DeepSeek
 
-### Prompt Caching
+### MODEL_PRICING Table
+- 28 models with exact prices from `pricing.ts`
+- AI quotes from table, never guesses costs
+
+### Prompt Caching (Haiku fallback)
 - `cache_control: { type: "ephemeral" }` on system prompt and last message
-- Cached tokens cost 10% of normal input rate
-- Cache write costs 25% premium (one-time)
-
-### Potential Future Optimizations
-- **Sliding window** — limit authed history to last 10 messages (saves ~10-25% on long conversations)
-- **Streaming abort** — user can close chat mid-stream (already supported via AbortController)
-- **Knowledge Base expansion** — more KB articles = fewer cases where Haiku improvises
-
----
-
-## FAQ Page (`/faq`)
-
-### Route
-- Path: `/faq`
-- File: `app/(marketing)/faq/page.tsx`
-- Public route (added to `middleware.ts`)
-- Linked from: landing page FAQ section ("View all FAQ"), footer, chat widget balloon
-
-### Content (8 categories, 50+ questions)
-1. **Getting Started** — what is Storytica, sign up, free plan, what you can create
-2. **AI Models** — available models, per-model costs (NB2, GPT Image 2, Seedance 2.0/Fast/1.5 Pro, Z-Image), model comparison
-3. **Model Tips & Best Practices** — per-model usage tips, img2vid vs txt2vid, audio vs no audio
-4. **Credits & Pricing** — how credits work, generation costs, estimates per plan, top-ups, expiry, cancel
-5. **Features & Tools** — script-to-storyboard, canvas editor, element library, video editor, camera studio, director's view, batch gen, AI analyze, prompt enhance, export, music
-6. **Team & Collaboration** — team support, seat limits, roles
-7. **Privacy & Security** — content training, file storage, data safety
-
-### Style
-- Dark theme matching landing page (#111111 background)
-- Bubble/card style — rounded cards that expand on click
-- Categorized sections with teal accent headers
-- CTA at bottom to sign up or go home
-
----
-
-## Admin Reports
-
-> **Note:** The standalone `support-chat-reports` page was removed in the admin cleanup (2025-04-25).
-> Chat session data is still in Convex (`support_chat_sessions`, `support_chat_messages` tables)
-> and can be queried via the inbox or directly in the Convex dashboard.
 
 ---
 
 ## Error Handling
 
 ### Graceful Degradation
-When Anthropic API fails:
-1. Auto-creates a support ticket with the user's last message (authed only)
-2. Streams a friendly fallback message with ticket number
-3. Persists fallback message to session history
-4. User can retry or reach support via dashboard
+When AI pipeline fails completely:
+1. Auto-creates support ticket with user's message (server-side only)
+2. Streams friendly fallback message with ticket number
+3. Persists to session history
 
-### Rate Limiting
-- Returns `429` with JSON: `{ error: "rate_limited", message: "...", resetAt: timestamp }`
-- UI shows the rate limit message in an error-styled bubble
+### DeepSeek → Haiku Fallback
+If DeepSeek request throws, route catches and retries with Haiku. Logged as `[support-chat] DeepSeek failed, falling back to Haiku`.
 
 ---
 
 ## Extending the Chatbot
 
 ### Adding a new tool
-1. Add tool name to `ToolName` union type in `lib/support/tools.ts`
-2. Add tool definition to `AUTHED_TOOLS` array (name, description, input_schema)
-3. Add `case` to `dispatchTool()` switch statement
-4. Add Convex query/mutation in `convex/supportTools.ts`
-5. Export from `convex/_generated/api.d.ts` (auto-generated)
+1. Add tool name to `ToolName` union in `lib/support/tools.ts`
+2. Add tool definition to `AUTHED_TOOLS` array
+3. Add `case` to `dispatchTool()` switch
+4. Add Convex query in `convex/supportTools.ts`
+5. Update decision tree in `systemPrompt.ts` if it's a common question
 
 ### Adding FAQ questions
-1. Add to `FAQ_TREE` in `SupportChatWidget.tsx` — include `q`, `a`, optional `tags`, optional `followUp`
-2. Add matching question to `FAQ_DATA` in `app/(marketing)/faq/page.tsx`
-3. Use `\n` for line breaks, `**bold**` for labels, `- ` for bullet lists in answers
+1. Add to appropriate category in `FAQ_CATEGORIES` in `SupportChatWidget.tsx`
+2. For AI-powered questions: set `askAI: true`
+3. For ticket links: use `#nav:support` URLs
+4. Update `FOLLOW_UP_MAP` if the question should appear as a suggestion
 
-### Changing the model
-- Edit `SUPPORT_MODEL` in `lib/support/anthropic.ts`
-- Supported: any Anthropic model ID (e.g. `claude-sonnet-4-5`, `claude-haiku-4-5`)
-- Cost implication: Sonnet is ~10x more expensive than Haiku
-
-### Adding a new system prompt section
-- Edit `buildSystemPrompt()` in `lib/support/systemPrompt.ts`
-- Keep total system prompt under ~3,000 tokens to maintain cache efficiency
-- Use the knowledge base for frequently-changing content instead of hardcoding
-
-### Adjusting rate limits
-- `RATE_LIMIT_AUTHED` and `RATE_LIMIT_ANON` constants in `app/api/support/chat/route.ts`
-- Window is 1 hour, managed by Convex `support_chat_rate_limits` table
-
----
-
-## Model Routing Strategy
-
-> **Decided:** 2026-04-27
-
-### Model Assignments
-
-| Feature | Model | Provider | Cost/msg | Status |
-|---------|-------|----------|----------|--------|
-| **Support Chat** | DeepSeek V3 | OpenRouter | ~$0.0009 | DECIDED — Phase 1 |
-| **Director** (free for Pro+) | DeepSeek V3 | OpenRouter | ~$0.0009 | DECIDED — Phase 1 |
-| **Agent** ($120/seat) | Claude Haiku 4.5 | Anthropic SDK | ~$0.0032 | DECIDED — stays on Haiku |
-| **Vision** (image analysis) | Claude Haiku 4.5 | Anthropic SDK | ~$0.0032 | DECIDED — only Haiku supports vision |
-
-### Director Capabilities (on DeepSeek V3 — no vision)
-
-| Can do | Can't do |
-|--------|----------|
-| Read project data (frames, scenes, elements) | See/analyze images (no vision) |
-| Enhance/improve prompts | Trigger generation (no credits) |
-| Suggest style, composition, lighting | Execute any actions |
-| Recommend models | Access post-processing |
-| Search knowledge base | |
-| Create/batch update frame prompts | |
-
-Director understands your project through data (prompts, metadata, element names) but cannot look at actual images.
-
-### Agent Smart Routing (Phase 2 — future optimization)
-
-Agent starts on Haiku-only. Future phase could mix models within Agent mode:
-
-| Agent action | Model | Why |
-|---|---|---|
-| Conversation / planning | DeepSeek V3 | Cheap, good enough for text |
-| create_execution_plan | DeepSeek V3 | Just building a JSON plan |
-| Tool calls (spending credits) | Haiku | Reliable routing, credits at stake |
-| Vision (analyze_frame_image) | Haiku | Only option |
-| trigger_image/video/post_processing | Haiku | Actually spending money |
-
-Complexity note: requires switching models mid-conversation based on predicted tool usage. Defer until costs justify it.
-
-### Routing Logic (auto, not user-selectable)
-
-```text
-Support Chat:
-  model = DeepSeek V3 (via OpenRouter)
-  fallback = Haiku (if OPENROUTER_API_KEY not set or OpenRouter error)
-
-Director/Agent Chat:
-  if mode == "director":
-      model = DeepSeek V3 (via OpenRouter)
-  elif mode == "agent":
-      model = Claude Haiku 4.5 (via Anthropic SDK)
-
-  if OPENROUTER_API_KEY not set:
-      fallback = Claude Haiku 4.5 for everything
-```
-
-No user-facing model picker. Reasons:
-1. Users care about results, not model names
-2. Smart routing gives best cost/quality tradeoff automatically
-3. Prevents users from picking expensive models and eroding margins
-
-### Implementation Notes — OpenRouter Format Adapter
-
-OpenRouter uses OpenAI-compatible tool calling format, not Anthropic format.
-Need a one-time adapter (~100 lines) to translate:
-- `AUTHED_TOOLS` / `ANON_TOOLS` → OpenAI function schema
-- OpenAI `tool_calls` response → Anthropic-style `tool_use` blocks
-- Existing `dispatchTool()` stays unchanged
-
-### Cost Projections
-
-**Per-message cost** (~1,500 input + 500 output tokens):
-
-| Model | Per message | Per 100 msgs |
-|-------|-----------|-------------|
-| DeepSeek V3 | $0.00089 | $0.089 |
-| Haiku 4.5 | $0.0032 | $0.32 |
-| **Savings** | **72%** | |
-
-**Director daily cost on DeepSeek V3:**
-
-| Usage level | Msgs/day | Cost/day | Cost/month |
-|---|---|---|---|
-| Light user | 10 | $0.009 | $0.27 |
-| Average user | 30 | $0.027 | $0.81 |
-| Heavy user (at 100 cap) | 100 | $0.089 | $2.67 |
-| 50 users average | 1,500 total | $1.35 | $40.50 |
-| 100 users average | 3,000 total | $2.70 | $81.00 |
-
-**At scale (monthly):**
-
-| Scale | Haiku only | With DeepSeek routing | Savings |
-|-------|-----------|----------------------|---------|
-| 50 active Director users | $144/mo | $40/mo | $104/mo (72%) |
-| 100 active Director users | $288/mo | $81/mo | $207/mo (72%) |
-| Support chat (100 users, 5 msgs/day avg) | $48/mo | $13/mo | $35/mo (72%) |
-| Agent seats (stays on Haiku) | no change | no change | — |
-
-Director on DeepSeek is essentially free to run. Even 100 heavy users maxing the daily cap costs ~$267/month — easily covered by a handful of Pro subscriptions ($45/mo each).
-
-### Fallback Behavior
-
-- If `OPENROUTER_API_KEY` is not set, all routes fall back to Haiku via Anthropic SDK
-- If OpenRouter returns an error, retry once with Haiku as fallback
-- Support chat graceful degradation (auto-ticket creation) still applies
-
-### Pricing Decision: Director is FREE for Pro+
-
-Director is not charged separately. Rationale:
-- Cost is negligible (~$0.81/user/month avg on DeepSeek)
-- Free Director drives Agent seat upsell ($120/month)
-- Paywall would kill adoption and conversion funnel
-- If costs spike, tighten daily cap (100 → 50) instead of adding paywall
-
-### Agent Seat Architecture (via Stripe + Convex, not Clerk)
-
-Clerk handles: WHO is in the org + their role
-Convex handles: WHAT features each user has access to (seat type)
-Stripe handles: billing for quantity-based seat subscriptions
-
-Flow:
-1. Org admin buys N agent seats via Stripe (quantity-based subscription item)
-2. Stripe webhook → Convex creates/updates `agent_seats` records
-3. Org admin assigns seats to specific members (UI in org settings)
-4. User opens Agent mode → check `agent_seats` for their userId
-5. No seat → teaser mode (30 free msgs/month) or "ask your admin"
-
----
-
-## Message Usage Limits
-
-### Per-Feature Limits
-
-| Feature | Limit | Window | Overflow Behavior |
-|---------|-------|--------|-------------------|
-| **Support Chat (authed)** | 30 msgs | per hour | 429 rate limit, show reset time |
-| **Support Chat (anon)** | 10 msgs | per hour | 429 rate limit, show reset time |
-| **Director** (free for Pro+) | 100 msgs | per day | Soft cap, "try again tomorrow" message |
-| **Agent** ($120/seat) | 5,000 msgs | per month | 1 credit/msg overflow (seamless, no hard lock) |
-| **Agent teaser** (Pro/Business, no seat) | 30 msgs | per month | "Upgrade to Agent seat" prompt |
-
-### Tracking
-
-- Support chat: existing `support_chat_rate_limits` table (hourly window)
-- Director: new daily counter in `director_chat_sessions` or dedicated rate limit table
-- Agent: monthly counter tracked per seat in Convex, reset on billing cycle
-- Agent teaser: monthly counter per user, reset on calendar month
-
-### UI Patterns (inspired by Claude usage bar)
-
-- Show remaining messages in chat header: "82/100 messages today"
-- Progress bar fills as usage increases
-- Warning at 80% usage: bar turns amber
-- At limit: clear message with reset time, no hard lockout feeling
-- Agent overflow: "You've used your 5,000 included messages. Additional messages cost 1 credit each." (seamless, auto-deduct)
+### Changing the primary model
+- Remove `OPENROUTER_API_KEY` from env to force Haiku
+- Or change `DEEPSEEK_MODEL` in `lib/openrouter.ts` to another OpenRouter model
 
 ---
 
 ## Implementation Checklist
 
 ### Phase 1 — Model Routing
-- [ ] Create `lib/openrouter.ts` — OpenRouter client for DeepSeek V3
-- [ ] Add `OPENROUTER_API_KEY` to `env.example`
-- [ ] Switch Support chat from Haiku to DeepSeek V3 (with Haiku fallback)
-- [ ] Switch Director chat to DeepSeek V3 for `mode=director`
-- [ ] Keep Agent chat on Haiku for `mode=agent` + vision tasks
-- [ ] Test: Support chat answers FAQ/billing questions correctly on DeepSeek
-- [ ] Test: Director gives creative advice on DeepSeek
-- [ ] Test: Agent executes tool chains reliably on Haiku
-- [ ] Test: Vision (analyze_frame_image) works on Haiku only
+- [x] Create `lib/openrouter.ts` — OpenRouter client for DeepSeek V3
+- [x] Add `OPENROUTER_API_KEY` to `env.example`
+- [x] Switch Support chat from Haiku to DeepSeek V3 (with Haiku fallback)
+- [x] Switch Director chat to DeepSeek V3 for `mode=director`
+- [x] Keep Agent chat on Haiku for `mode=agent` + vision tasks
+- [x] Test: Support chat answers FAQ/billing questions correctly on DeepSeek
+- [x] Fix: Credit spending query (compound index, sinceMs, limit 500)
+- [x] Fix: Pre-computed summaries (no AI math)
+- [x] Fix: Plan detection (credits_balance.ownerPlan)
+- [x] Fix: Model pricing table (28 models from pricing.ts)
+- [x] Fix: Anti-fabrication guardrails + decision tree
+- [x] Fix: Language matching + date injection
+- [x] Fix: JSON leak filter (client-side)
+- [x] Add: Categorized FAQ balloons (5 tabs)
+- [x] Add: Proactive follow-up suggestions
+- [x] Add: Thumbs up/down rating
+- [x] Add: Guided bug report / refund diagnosis tree
+- [x] Add: In-app navigation via #nav: links
+- [x] Remove: create_support_ticket from AI tools (users go to Support page)
 
 ### Phase 2 — Message Usage Limits
 - [ ] Add daily message counter for Director (Convex table/field)
@@ -518,3 +372,10 @@ Flow:
 - [ ] UI: progress bar with amber warning at 80%
 - [ ] UI: limit-reached message with reset time
 - [ ] Agent overflow: seamless 1 credit/msg deduction after cap
+
+### Phase 3 — Future Improvements
+- [ ] Persist thumbs up/down ratings to Convex for analytics
+- [ ] Satisfaction dashboard (% positive, worst-rated questions)
+- [ ] Conversation memory across sessions (returning user context)
+- [ ] Invoice integration (pull from Stripe/Clerk billing data)
+- [ ] Consider switching primary to Haiku if DeepSeek quality unacceptable

@@ -1,10 +1,27 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-27 (Session #15)
+> **Last updated:** 2026-04-27 (Session #16)
 
 ---
 
-## Recently Completed (Session #11-14 — 2026-04-26/27)
+## Recently Completed (Session #11-16 — 2026-04-26/27)
+
+### Support Chatbot Overhaul (Session #16 — 2026-04-27)
+
+- [x] **Fix credit spending query** — Added `by_companyId_createdAt` compound index, server-side date filtering via `sinceMs`, limit raised to 500. Was returning only 10 of 400+ transactions.
+- [x] **Pre-computed credit summaries** — All totals (spent/refunded/net + per-category breakdown) computed server-side. AI reads numbers directly, never does arithmetic. Added `INSTRUCTION` field in tool results.
+- [x] **Fix plan detection** — `getActiveSubscription` now reads `credits_balance.ownerPlan` (Clerk webhook source) instead of empty `org_subscriptions` table. Was always showing "Free plan".
+- [x] **Model pricing table** — Replaced vague "4-15 credits" text with 28-model pricing table from `pricing.ts`. Z-Image correctly shows 1 credit (was guessed as 10).
+- [x] **Anti-fabrication guardrails** — System prompt "never fabricate" rule, decision tree mapping 10 common questions to exact tool+field, language-matching rule, dynamic date injection.
+- [x] **JSON leak filter** — Client-side regex strips DeepSeek tool-call artifacts (`json {...}`, `<|tool_sep|>`) from streamed text.
+- [x] **Categorized FAQ balloons** — 5 tabs: FAQ, How to, Models, My Account (AI), Support (diagnosis tree). Account balloons send to AI via `sendMessage(override)`.
+- [x] **Guided bug/refund diagnosis** — Support category walks users through troubleshooting before showing ticket link. Refund policy shown first.
+- [x] **Remove AI ticket creation** — `create_support_ticket` removed from AI tools. Users directed to Support page via `#nav:support` links with `onNavigate` callback.
+- [x] **Proactive follow-up suggestions** — Clickable chips after AI answers (7 keyword patterns: balance→spending, refund→fail, etc.)
+- [x] **Thumbs up/down rating** — Every AI response gets rating buttons. Ready for DB persistence.
+- [x] **In-app navigation links** — `#nav:support` URLs intercepted by click handler, navigates studio sidebar without page reload.
+- [x] **Fix NB2 pricing in FAQ** — Was 2K:8/4K:12, corrected to 2K:10/4K:18.
+- [x] **Fix contradictory escalation rules** — Removed "tell user ticket created" instruction that contradicted "never create tickets" rule.
 
 ### AI Analyze & R2 Video Fix (Session #15 — 2026-04-27)
 
