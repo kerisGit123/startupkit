@@ -71,6 +71,22 @@
 
 ---
 
+## Studio Naming Convention (DECIDED 2026-04-27)
+
+**Storyboard Studio** is the top-level umbrella. Two sub-studios:
+
+| Sub-Studio | Purpose | Controls |
+|------------|---------|----------|
+| **Frame Studio** | Image/frame generation & composition | Lighting, style, composition, single frames |
+| **Cinema Studio** | Video generation & post-processing | Motion, camera movement, video output, post-processing pipeline |
+
+- Inspired by Higgsfield's Soul Cinema (image) vs Cinema Studio (video) split
+- **Frame Studio** = crafting the visual look per frame
+- **Cinema Studio** = bringing frames to life as video + post-processing tools
+- Hierarchy: `Storyboard Studio > Frame Studio | Cinema Studio`
+
+---
+
 ## Cinema Studio / Post-Processing — Status
 
 | Tool | Status | Model | Credits |
