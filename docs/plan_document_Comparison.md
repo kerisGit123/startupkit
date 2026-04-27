@@ -197,7 +197,20 @@ Business features: All features & models, 2-15 members, shared credit pool, 16 p
 
 **Target:** Content creators, marketers, filmmakers, production studios, enterprises.
 
-**Their moat:** Cinema Studio with AI co-director + virtual camera physics simulation + Soul ID character persistence. Most feature-rich AI video platform. Direct competitor to our storyboard + AI pipeline.
+**Cinema Studio 3.5 (latest — April 2026):**
+- Mr. Higgs AI Director with per-shot camera + style control
+- Real-time collaboration on projects
+- 80+ creative apps (face swap, lipsync, AI headshot, VFX presets)
+- Marketing Studio (URL → ad video in multiple formats)
+- Higgsfield Audio (TTS, voice swap, video translation)
+- Higgsfield Chat social network (shared projects, karma system)
+- SOUL 2.0 proprietary image model + Soul Cinema cinematic model
+- Soul Cast full character builder (genre, era, physique, personality)
+- Native audio generation (SFX + speech + music synced to video)
+- Physics-aware generation, cinematic reasoning from reference images
+- Brush inpainting, Topaz upscale, color grading, background removal
+
+**Their moat:** Cinema Studio 3.5 with AI co-director + 80+ apps + Marketing Studio + social network + proprietary models (Soul 2.0, Soul Cinema) + native audio sync. Most feature-rich AI video platform overall. 4.5M generations/day. Direct competitor to our storyboard + AI pipeline.
 
 ---
 
@@ -225,6 +238,34 @@ Business features: All features & models, 2-15 members, shared credit pool, 16 p
 **Target:** Filmmakers, directors, TV networks, advertising agencies, in-house creative studios, content creators.
 
 **Their moat:** Elements consistency system + camera motion presets + script-to-video pipeline. Purpose-built for professional filmmaking workflows. Our closest competitor in the planning-to-production pipeline.
+
+---
+
+### Zopia AI (zopia.ai)
+
+**What they are:** AI Film Agent — the world's first end-to-end AI short-drama production agent. Multi-agent system that handles script → storyboard → video → editing autonomously. Currently in closed beta.
+
+**Key features:**
+- **Director Agent** — multi-agent pipeline: scriptwriting, asset extraction, storyboarding, video generation, self-review, timeline editing — all autonomous
+- Natural language control ("add a beat where she notices him")
+- 100% character & scene consistency across 30+ shots (proprietary multi-agent coordination)
+- Automated scriptwriting from loglines to full screenplays
+- Continuous storyboard generation with character/environment reference inheritance
+- Automated self-review (flags visual inconsistencies for approval)
+- Built-in timeline editor (clip duration, shot reorder)
+- Multiple visual styles: live-action, dark fantasy/wuxia, Korean drama, 3D CG, animated
+- Video models: Kling 3.0, Vidu Q3, Seedance 2.0 (coming), CogVideo, HunyuanVideo
+- Image models: GPT-4o, Flux, Minimax
+- Team collaboration with credit allocation and role-based access
+- Desktop app (Windows/macOS) + web Studio
+
+**Pricing:** Currently free beta — 2,000 daily credits (enough for 4-5 short-drama sequences/day). Planned paid tiers: Starter, Basic, Pro (Seedance 2.0 Pro), Ultimate (all models, 1080P, team management, commercial rights). Exact prices not yet public.
+
+**Target:** Solo creators, short-drama channels, content entrepreneurs, small production teams.
+
+**Their moat:** End-to-end autonomous agent that produces finished short dramas from a single prompt. Multi-agent coordination for character consistency. Purpose-built for short-form serialized content. Free beta capturing early market.
+
+**Limitations:** No audio in timeline editor (must export to CapCut/etc for music/SFX/dialogue). Optimized for short-form only. No canvas editing. No post-processing pipeline. No music AI. Closed beta with waitlist.
 
 ---
 
@@ -499,8 +540,9 @@ We occupy a unique position: **high pre-production planning + high AI generation
 
 | Threat | Competitor | Why |
 |--------|-----------|-----|
-| **Highest** | LTX Studio | Same pipeline vision (script → storyboard → video), Elements consistency system, camera presets, timeline editor, team collaboration. Most directly overlapping feature set. Our defense: multi-model AI (they use own models only), music AI, canvas draw+AI, real-time Convex sync, credit-based pricing |
-| **Highest** | Higgsfield | 30+ AI models (same as ours), Cinema Studio with AI co-director, Soul ID character persistence, 4.5M generations/day. Our defense: storyboard planning pipeline, canvas editing, multi-track timeline with subtitles, music AI, element @mentions |
+| **Highest** | Zopia AI | **NEW THREAT.** End-to-end autonomous Director Agent: script → storyboard → video → edit in one prompt. Multi-agent character consistency across 30+ shots. Same models (Kling 3.0, Seedance 2.0). Free beta capturing early market. Our defense: 11 post-processing tools (they have 0), canvas editing, music AI, camera system, manual creative control, established pricing model. They're automation-first, we're control-first |
+| **Highest** | LTX Studio | Same pipeline vision (script → storyboard → video), Elements consistency system, camera presets, timeline editor, team collaboration. Our defense: multi-model AI (they use own models only), music AI, canvas draw+AI, real-time Convex sync, credit-based pricing, AI Director + Agent, Cinema Grade |
+| **Highest** | Higgsfield | 30+ AI models (same as ours), Cinema Studio with AI co-director, Soul ID character persistence, 4.5M generations/day. Our defense: storyboard planning pipeline, canvas editing, multi-track timeline with subtitles, music AI, element @mentions, Cinema Grade (12 film stocks) |
 | **High** | ImagineArt | Same AI models, 30M users, adding workflow builder. If they add storyboard + timeline, they become dangerous. Our defense: project structure pipeline |
 | **High** | Storyboarder.ai | Same target audience (filmmakers), 250K users, script import, 3D camera. But no multi-model AI, no timeline, no music. Their users are our upgrade path |
 | **Medium** | Artlist | $300M, launching AI Studio. But stock-first DNA, subscription model, no storyboard planning. Different market segment |
@@ -610,35 +652,106 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 
 ---
 
-## 7. Feature Count Scorecard
+## 7. Feature Count Scorecard (updated 2026-04-27, session #12 — HONEST reassessment with Cinema Studio 3.5)
 
-Total unique features counted across all comparison tables:
+### Competitive Score (out of 100) — honest
 
-| Platform | Features | Change | Strongest area |
-|----------|:--------:|:------:|---------------|
-| **Us** | **76** | +7 | All-in-one (planning + AI + editing + continuity + camera + analyzer + presets + batch + color palette + speed ramps + FAQ + PDF export + pricing page) |
-| Higgsfield | 24 | — | AI models (30+) + Cinema Studio + character persistence |
-| LTX Studio | 23 | — | Script-to-video + Elements consistency + camera control |
-| ImagineArt | 16 | — | AI generation breadth + workflow builder |
-| Storyboarder.ai | 14 | — | Pre-production planning + 3D camera |
-| Artlist | 11 | — | Stock assets + video editing |
-| OpenArt | 10 | — | Custom model training + community |
-| Krock.io | 7 | — | Review/approval workflows + NLE integrations |
-| Lovart | 5 | — | Design agent UX |
+| Platform | Score | Rationale |
+|----------|:-----:|-----------|
+| Higgsfield | **88** | Cinema Studio 3.5 + 80+ apps + 30+ models + Marketing Studio + social network + native audio + SOUL 2.0. Most features overall. Loses points: no storyboard pipeline, weak timeline, no music generation |
+| **Us** | **86** | Deepest all-in-one pipeline. 11 post-processing tools, Cinema Grade, AI Agent 22 tools, canvas, music AI, camera system, timeline + audio export. Loses points: fewer models (15 vs 30+), no marketing studio, no social network, no 80+ apps breadth |
+| LTX Studio | 72 | Good pipeline vision, but own models only, no music/canvas AI, no post-processing depth |
+| Zopia AI | 70 | Strongest autonomous agent, but zero post-processing, no canvas, no music, no camera control, beta only |
+| ImagineArt | 58 | Broad AI + scale (30M users), zero project structure |
+| Storyboarder.ai | 48 | Good planning, limited AI models |
+| Artlist | 45 | Stock empire ($300M ARR), basic AI/planning |
+| OpenArt | 40 | Custom training + community, no video/planning |
+| Krock.io | 32 | Review/approval niche, no generation |
+| Lovart | 25 | Design agent, different market |
 
-**We lead with 76 features — 3.2x more than our nearest competitor (Higgsfield at 24).** Speed ramps, FAQ system, PDF export, pricing page redesign, landing page, and prompt enhance added since last count. Director's View (11 features nobody else has), complete camera control system, and music AI remain unmatched.
+**Honest truth: Higgsfield is now ahead on raw score.** Cinema Studio 3.5 with 80+ apps, Marketing Studio, social network, and native audio is a LOT. But we win on **pipeline depth** for professional production — the question is whether depth beats breadth.
+
+### Category Breakdown (score out of 10) — honest
+
+| Category | Us | Higgsfield 3.5 | Zopia | LTX | ImagineArt | Storyboarder |
+|----------|:---:|:----------:|:-----:|:---:|:----------:|:------------:|
+| Pre-Production & Planning | **10** | 6 | 7 | 8 | 1 | 8 |
+| AI Generation (models) | 8 | **10** | 8 | 6 | 8 | 4 |
+| Camera System | **10** | **10** | 2 | 8 | 2 | 7 |
+| Editing & Canvas | **10** | 6 | 1 | 2 | 4 | 2 |
+| Video Editor / Timeline | **10** | 4 | 4 | 6 | 0 | 0 |
+| Post-Processing | **10** | 6 | 0 | 2 | 5 | 0 |
+| Director's View & Continuity | **10** | 4 | 3 | 5 | 0 | 2 |
+| AI Agent / Co-Director | **9** | 8 | **10** | 2 | 2 | 0 |
+| Apps / Ecosystem Breadth | 3 | **10** | 2 | 3 | 7 | 2 |
+| Marketing / Ads Tools | 0 | **9** | 0 | 0 | 3 | 0 |
+| Music & Audio | **9** | 7 | 0 | 0 | 0 | 0 |
+| Collaboration & Social | 7 | **9** | 5 | 7 | 6 | 1 |
+| Pricing Competitiveness | **9** | 5 | 8 | 5 | 7 | 8 |
+
+**Where we WIN (7 categories):** Pre-Production, Editing & Canvas, Video Editor, Post-Processing, Director's View, Music & Audio, Pricing.
+**Where Higgsfield WINS (5 categories):** AI Generation breadth, Apps ecosystem, Marketing/Ads, Collaboration/Social, Camera (tied).
+**Where Zopia WINS (1 category):** AI Agent autonomy.
+
+### Head-to-Head — HONEST
+
+| vs Competitor | They have, we don't | We have, they don't | Net | Who wins what |
+|---|:---:|:---:|:---:|---|
+| vs Higgsfield 3.5 | 5 (native audio sync, 80+ apps, Marketing Studio, social network, SOUL 2.0 model) | 8 (storyboard pipeline, multi-track timeline + audio export, canvas draw, music AI, Cinema Grade 12 stocks, Director's View, Agent Mode 22 tools, element @mentions) | **Us +3** | We win depth, they win breadth |
+| vs Zopia | 2 (full autonomy, auto self-review) | 15+ (post-processing, canvas, camera, music, Cinema Grade, timeline) | **Us +13** | We win everything except autonomy |
+| vs LTX Studio | 1 (Retake) | 8+ | **Us +7** | We win convincingly |
+| vs Storyboarder | 0 | 12+ | **Us +12** | Total dominance |
+| vs ImagineArt | 0 | Pipeline structure | **Us +7** | Different league |
+
+### What's Holding Us Back — honest gaps to close
+
+| Gap | Impact | Fix | Effort |
+|-----|:------:|-----|--------|
+| No Marketing Studio / Ads tools | -3 | **PLANNED** — Simple TikTok/social ads in video editor (aspect ratios, text overlays, CTA templates) | Medium |
+| No 80+ apps ecosystem | -2 | Not buildable short-term. Focus on core pipeline depth instead | Long-term |
+| Fewer models (15 vs 30+) | -1 | Add models via Kie AI as they become available. Kling O3, Wan 2.6, Sora 2 etc | Small per model |
+| No social network/community | -1 | Not needed for B2B. Discord community + gallery sharing covers this | Not building |
+| No native audio sync | -1 | Model-architecture feature, can't replicate | Can't fix |
+
+### With TikTok Ads Builder (planned)
+
+If we add simple ad creation in the video editor, scores shift:
+
+| Category | Current | After Ads | Higgsfield |
+|----------|:-------:|:---------:|:----------:|
+| Marketing / Ads Tools | 0 | **5** | 9 |
+| **Overall Score** | **86** | **89** | 88 |
+
+Simple ads builder (aspect ratio presets for 9:16/1:1/16:9, text overlay with CTA templates, logo placement, music bed from AI) would close the biggest gap vs Higgsfield and put us back ahead on overall score.
+
+### What's Holding Us Back from 100/100
+
+| Missing | Impact | Buildable? | Status |
+|---------|:------:|:----------:|--------|
+| ~~Soul Cinema proprietary model~~ | ~~-2~~ | ~~No~~ | **CLOSED** — Cinema Grade: 12 film stock presets |
+| Native audio sync | -1 | No | Model-architecture feature, no API equivalent |
+| ~~Physics-aware generation~~ | ~~-1~~ | ~~No~~ | **CLOSED** — GPT Image 2 + Seedance/Kling handle physics natively |
+| ~~Cinematic reasoning~~ | ~~-1~~ | ~~No~~ | **CLOSED** — AI Director vision + GPT Image 2 contextual understanding |
+| Full autonomous production (Zopia-style) | -2 | **Yes** | Agent Mode exists but requires plan approval. Could add "auto mode" toggle |
+| Agent Mode billing (Stripe seats) | -1 | **Yes** | Planned — $120/seat/month |
+| Auto-sequence video | -1 | **Yes** | 80% done (snapshot-to-next exists) |
 
 **Pricing gap RESOLVED** — hot model multiplier (0.625) makes GPT Image 2 at $0.04/gen 48% cheaper than Higgsfield's $0.078/gen. See `plan_pricing_strategy.md`.
 
 **Session history:**
-- **2026-04-25 #7:** Landing page quick wins (outcome headline, no-CC badge, value props, section reorder).
-- **2026-04-25 #6:** Pricing page redesign (PricingShowcase, Clerk CheckoutButton, gen estimates). ElevenLabs TTS speaker icon.
-- **2026-04-25 #5:** FAQ system (chat widget 50+ paths + /faq page), PDF export (jsPDF A4), SpeedRampEditor (8 presets), prompt enhance API, pricing bug fixes (Seedance 2.0/Fast/1.5 Pro), system prompt optimization.
-- **2026-04-25 #4:** Color Palette Picker (eyedropper, 6 slots, save/load presets, image proxy, prompt auto-append). Soul HEX gap closed.
-- **2026-04-25 #3:** Pricing comparison section. Higgsfield pricing data. Kie AI cost structure. Hot model multiplier (0.625).
-- **2026-04-25 #2:** Style auto-append, Format presets (12), AI Analyzer (3 media types), Batch generation, Color palette schema, Presets system, Analyzer pricing.
-- **2026-04-25 #1:** Camera Angle Picker, Camera Studio, Camera Motion Presets.
-- **2026-04-24:** Director's View (11 features), blend modes, subtitles, competitive analysis doc created.
+- **2026-04-27 #12:** Zopia AI competitor analysis. Cinema Grade (12 film stocks). Physics/cinematic reasoning gaps closed. AI Agent Mode (22 tools). Landing + pricing page updated.
+- **2026-04-26 #11:** Frame numbering bug fix (sequential index).
+- **2026-04-26 #10:** Audio in video export (AAC via WebCodecs AudioEncoder + mp4-muxer). Competitive scorecard.
+- **2026-04-26 #9:** Cinema Studio post-processing — 10 tools vs Higgsfield's 5.
+- **2026-04-26 #8:** AI Director Phase 1-4 (tools, UI, smart context, vision). 100 TypeScript errors fixed.
+- **2026-04-25 #7:** Landing page quick wins.
+- **2026-04-25 #6:** Pricing page redesign. ElevenLabs TTS.
+- **2026-04-25 #5:** FAQ system, PDF export, SpeedRampEditor, prompt enhance.
+- **2026-04-25 #4:** Color Palette Picker. Soul HEX gap closed.
+- **2026-04-25 #3:** Pricing comparison, Kie AI cost structure, hot model multiplier.
+- **2026-04-25 #2:** Style auto-append, Format presets, AI Analyzer, Batch gen, Presets.
+- **2026-04-25 #1:** Camera Angle Picker, Camera Studio, Motion Presets.
+- **2026-04-24:** Director's View (11 features), blend modes, subtitles, comparison doc created.
 
 ---
 
@@ -774,7 +887,53 @@ Higgsfield is our most formidable competitor. Cinema Studio 3.5 is a deeply inte
 | **Physics-Aware Generation** | Higgsfield | Model-level realistic object interactions | **Can't build** |
 | **Cinematic Reasoning** | Higgsfield | Model-level story intent understanding from images | **Can't build** |
 
-**Status: 13 DONE/covered/not-needed. 1 buildable TODO (AI co-director). 1 blocked on API (retake). 4 model-level proprietary (can't build). 1 deprioritized (script import).**
+**Status: 14 DONE/covered/not-needed. 0 buildable TODOs remaining. 1 blocked on API (retake). 1 model-level proprietary (native audio sync). 1 deprioritized (script import).**
+
+### Zopia AI — Feature-by-Feature vs Us (Added 2026-04-27)
+
+**Zopia is a NEW highest-threat competitor.** They're building an autonomous Director Agent that produces finished short dramas from a single prompt. Different philosophy from us: they're automation-first (fire-and-forget), we're control-first (creative tools with AI assist).
+
+#### What Zopia has that we DON'T
+
+| Their Feature | What it does | Can we match? | Impact |
+|---|---|---|---|
+| **End-to-end autonomous production** | Single prompt → finished short drama (script, storyboard, video, editing, export) with zero manual steps | **Partially** — our Agent Mode does multi-step execution with plan approval, but not fully "unmanned 24h production" | High |
+| **Automated self-review** | Agent flags visual inconsistencies (costume shifts, prop changes) automatically before export | **Yes** — AI Director vision (Phase 4) can do this. Need to add as explicit tool | Small |
+| **Multi-agent coordination** | Specialized agents (scriptwriter, director, storyboard artist, editor, reviewer) work in sequence | **Partially** — our Agent is one Claude instance with 22 tools. Not multi-agent but functionally equivalent | Medium |
+| **Native audio-visual sync in edit** | Auto-syncs transitions, music, dubbing in timeline during autonomous production | **No** — our timeline is manual. We have music AI + TTS but user composes manually | Medium |
+| **Desktop app** | Windows + macOS native app alongside web | **No** — web-only (correct for B2B, but Zopia captures desktop preference) | Low |
+
+#### What WE have that Zopia DOESN'T
+
+| Our Feature | Impact | Why it matters |
+|---|---|---|
+| **11 post-processing tools** (Enhance, Relight, Cinema Grade, Remove BG, Reframe, Style Transfer, Color Grade, Upscale x2, Grid Gen, Inpaint) | **Critical** — Zopia has ZERO post-processing. Generate and done | Professional quality requires refinement |
+| **Canvas draw + AI inpaint** (brush, shapes, text, area edit, 10+ models) | **Critical** — Zopia has no manual editing at all | Creative control over AI output |
+| **Cinema Grade (12 film stocks)** | **High** — Zopia has no color science tools | Professional cinematic look |
+| **Camera system** (3D angle picker, Camera Studio 9 bodies/6 lenses, 15 motion presets, speed ramps) | **High** — Zopia uses AI-decided camera only | Cinematographers want control |
+| **Music AI + TTS + Personas** | **High** — Zopia has no audio generation at all (their biggest weakness) | Complete production requires audio |
+| **Multi-track video editor** (subtitles, blend modes, audio tracks, AAC export) | **High** — Zopia has basic clip reorder only | Post-production editing |
+| **Color Palette Picker** (eyedropper, 6 slots, presets) | **Medium** — Zopia has no color tools | Visual consistency control |
+| **Element library with @mentions** | **Medium** — Zopia has character refs but no structured library | Reusable across projects |
+| **Director's View** (filmstrip, comparison, animatic, notes) | **Medium** — Zopia has basic storyboard view | Professional pre-production oversight |
+| **Presets system** (save/load camera, style, notes across projects) | **Medium** — Zopia has no presets | Workflow efficiency |
+| **Real-time Convex sync** (no save button) | **Medium** — Zopia unknown | Collaboration UX |
+| **Credit-based transparent pricing** | **Medium** — Zopia is free beta now but pricing TBD | Business sustainability |
+| **Batch generation with model choice** | **Low** — Zopia auto-picks models | Power user flexibility |
+
+#### Honest assessment
+
+**Zopia's advantage: Speed to finished output.** One prompt → finished short drama. Our Agent Mode requires plan approval and step-by-step oversight. Zopia is "hire a production team" while we're "work with a production team."
+
+**Our advantage: Creative control + quality.** Zopia produces draft-quality output with no refinement tools. We have 11 post-processing tools, canvas editing, camera control, music AI, and professional timeline. Our output is higher quality because users can refine.
+
+**Different markets:** Zopia targets solo creators who want finished content fast (short-drama YouTube channels, social media). We target filmmakers, agencies, and studios who want creative control over professional output.
+
+**Key risk:** If Zopia adds post-processing tools + music AI, they become very dangerous. Watch closely.
+
+**Key opportunity:** Zopia users who outgrow "one-click" quality will upgrade to us for creative control. Position as the "graduate" platform.
+
+---
 
 ### AI Co-Director — Implementation Plan
 
@@ -863,10 +1022,11 @@ StoryboardStrip + Canvas show new frames immediately
 
 ---
 
-## 10. Key Takeaway
+## 10. Key Takeaway (updated 2026-04-27, session #12)
 
-**Our unique moat is the all-in-one pipeline.** Every competitor excels at one or two slices:
+**Our unique moat is the all-in-one pipeline + professional creative control.** Every competitor excels at one or two slices:
 
+- Zopia AI = autonomous Director Agent + character consistency (but zero post-processing, no audio, no canvas)
 - LTX Studio = script-to-video + elements consistency
 - Higgsfield = AI models (30+) + Cinema Studio + character persistence
 - Storyboarder.ai = planning + 3D camera
@@ -876,31 +1036,60 @@ StoryboardStrip + Canvas show new frames immediately
 - OpenArt = custom training + community
 - Lovart = design agent
 
-We are the **only tool where a filmmaker can write a script, auto-build a storyboard, generate images with 15+ AI models, edit on canvas with AI inpainting, control camera angles with a 3D sphere picker + virtual camera studio + 15 motion presets, assemble in a multi-track timeline with subtitles and blend modes, generate music with custom personas, use the Director's View filmstrip for continuity, and export — all without leaving one web app.**
+We are the **only tool where a filmmaker can chat with an AI Director (22 tools, vision-enabled), have an Agent autonomously build multi-frame stories, post-process with Cinema Grade (12 film stocks) and 11 Cinema Studio tools, edit on canvas with AI inpainting (10+ models), control camera angles with a 3D sphere picker + virtual camera studio + 15 motion presets, assemble in a multi-track timeline with subtitles and blend modes and audio export, generate music with custom personas, use the Director's View filmstrip for continuity — all without leaving one web app.**
 
-### Competitor gap summary (updated 2026-04-25 session #7)
+### Competitor gap summary (updated 2026-04-27 session #12 — honest with Higgsfield 3.5)
 
-| Competitor | Features they have that we lack | Buildable? | Our advantage over them |
+| Competitor | They have, we don't | We have, they don't | Net | Reality check |
+|---|---|---|---|---|
+| **Higgsfield 3.5** | 5 (native audio sync, 80+ apps, Marketing Studio, social network, SOUL 2.0 model) | 8 (storyboard pipeline, multi-track timeline + audio export, canvas draw, music AI generation, Cinema Grade 12 stocks, Director's View 11 features, Agent Mode 22 tools, element @mentions) | **Us +3** | They win breadth, we win depth. Score: them 88, us 86 |
+| **Zopia AI** | 2 (full unmanned autonomy, auto self-review) | 15+ (11 post-processing tools, canvas, music AI, camera system, Cinema Grade, timeline, color palette, presets) | **Us +13** | We crush them on everything except fire-and-forget |
+| **LTX Studio** | 1 (Retake — blocked on API) | 8+ (AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, real-time sync, AI Analyzer, presets) | **Us +7** | Clear win |
+| **Storyboarder.ai** | 0 | 12+ | **Us +12** | Total dominance |
+| **ImagineArt** | 0 | Pipeline structure | **Us +7** | Different league |
+
+### Key threats (honest — with Higgsfield 3.5 reassessment)
+
+- **Higgsfield 3.5 is now #1 by raw score (88 vs our 86).** Cinema Studio 3.5 + 80+ apps + Marketing Studio + social network + native audio is a LOT of breadth we can't match short-term. But we win 7 of 13 categories (pipeline depth). **The 2-point gap closes to +1 in our favor with TikTok Ads builder** — our cheapest high-impact move.
+- **Zopia AI** is the wildcard. Free autonomous agent capturing early market. Zero post-processing or audio is their fatal weakness. **Key risk:** if they add tools. **Key opportunity:** their users graduate to us.
+- **Higgsfield pricing:** RESOLVED. GPT Image 2 at $0.04/gen is 48% cheaper than their $0.078/gen.
+- **LTX Studio** is closest pipeline competitor but lacks AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade.
+- **Our pricing advantages:** Free tier (Higgsfield $5), credit top-ups ($10 one-time), credits never expire, multi-seat included, transparent per-generation cost.
+
+### Path to #1: TikTok/Social Ads Builder (PLANNED)
+
+**The fastest way to overtake Higgsfield.** Their Marketing Studio is a separate product (URL → ad). We can integrate ads directly into the video editor where users already create content.
+
+**What to build (leverages existing infrastructure):**
+
+| Feature | Effort | Existing infrastructure |
+|---------|--------|----------------------|
+| Social format presets (9:16 TikTok, 1:1 IG, 16:9 YT) | Small | Aspect ratio system exists |
+| Text overlay with CTA templates ("Shop Now", "Learn More") | Medium | Subtitle track exists, extend with styled text |
+| Logo/watermark placement (upload, pin to corner) | Small | Canvas overlay system exists |
+| Music bed from AI library | Small | Music AI + timeline audio exists |
+| Ad templates (Product Showcase, Before/After, Testimonial, Countdown, UGC-style) | Medium | Preset system exists |
+| Platform-specific export ("Export as TikTok Ad 9:16 15s") | Small | WebCodecs export exists |
+
+**Score impact:** Marketing/Ads category 0 → 5. Overall 86 → **89**, overtaking Higgsfield (88).
+
+**Why this works better than Higgsfield's approach:** They built Marketing Studio as a separate product. Our ads builder lives inside the same video editor users already know — no context switch, no separate workflow. Create a storyboard, generate with AI, Cinema Grade it, add CTA text + logo, export as TikTok ad. One pipeline.
+
+### Why $120/seat Agent is justified
+
+| | Zopia (free) | Higgsfield ($39-129/mo) | Our Agent ($120/seat/month) |
 |---|---|---|---|
-| **Higgsfield** | **5** — AI co-director, Soul Cinema model, native audio sync, physics-aware generation, cinematic reasoning | 1 buildable (co-director), 4 model-level (can't replicate). Speed ramps DONE. Soul HEX DONE. Soul Cast not needed | 12+ features they lack (pipeline, timeline, subtitles, blend modes, canvas+AI, music AI, Director's View, AI Analyzer, Presets, Format system, batch gen, color palette, speed ramps, FAQ, PDF export) |
-| **LTX Studio** | **1** — Retake only (keyframe not needed for AI video) | Blocked on API | 6+ features they lack |
-| **Storyboarder.ai** | **0** — all gaps closed | — | 10+ features they lack |
-| **ImagineArt** | **0** — workflow builder planned post-launch | — | Pipeline structure they lack |
-| **OpenArt** | **0** — custom training not needed for B2B | — | Everything except community |
-| **Krock.io** | **0** — keeping review simple | — | Everything except NLE integrations |
-| **Artlist** | **0** — gallery sharing covers stock library | — | Pipeline + AI generation |
-| **Lovart** | **0** — different market | — | Everything |
+| **Agent autonomy** | Full fire-and-forget | Mr. Higgs advisory | 22 tools, plan approval, autonomous execution |
+| **Post-processing** | 0 tools | ~5 tools | **11 tools + Cinema Grade** |
+| **Music & audio** | None | TTS only | **Music AI + TTS + Personas** |
+| **Ads creation** | None | Marketing Studio (URL→ad) | **PLANNED** — integrated in video editor |
+| **Timeline** | Basic clip reorder | Per-shot control | **Multi-track + subtitles + blend + audio export** |
+| **Target** | Solo creators | Creators + marketers | **Agencies + studios with paying clients** |
+| **Business model** | Free (VC burn) | Subscription + credits | Seat ($120) + credits (19%+ margin) |
 
-**Gaps closed since session #4:** Speed Ramp Editor (8 presets with visual curve). Higgsfield buildable gap narrowed from 2 to 1 (AI co-director only).
+**The $120 justification:** Our users bill clients $1,000-10,000+ per project. $120/seat for an AI production team member that generates, post-processes with Cinema Grade, creates TikTok ads, and exports client-ready video is a **no-brainer ROI**. Zopia gives a rough draft. Higgsfield gives generation breadth. We give the **complete professional production pipeline**.
 
-**Higgsfield is still the real threat** but all buildable gaps except one are now closed. Their remaining advantages are mostly model-level proprietary (Soul Cinema, physics, cinematic reasoning, native audio sync) — 4 features we cannot replicate. Only **1 buildable gap remains: AI co-director**.
-
-### Key threats (honest)
-
-- **Higgsfield** remains dangerous but our feature gap has **narrowed significantly**. Of their original 10+ advantages, we've closed 7 (batch gen, format presets, color palette picker, AI analyze, photodump, Soul Cast, Soul HEX). Their remaining moat is proprietary model intelligence (4 features) + 2 buildable features (co-director, speed ramps).
-- **Higgsfield pricing threat:** RESOLVED. Multiplier changed from 1.2 to 0.625 across 7 hot model IDs. GPT Image 2 at 4 credits ($0.04) is now 48% cheaper than Higgsfield's $0.078/gen. NB2 at 5 credits ($0.05) is 36% cheaper. See `plan_pricing_strategy.md` for full breakdown.
-- **LTX Studio** is our most direct pipeline competitor — same script-to-video vision. But they use own models only (we have 15+), no music AI, no canvas draw+AI, no real-time sync, no AI Analyzer, no presets system, no color palette picker.
-- **Our pricing advantages:** Free tier (Higgsfield starts at $5), credit top-ups with no subscription ($10 one-time), credits never expire, multi-seat collaboration included in plans, model choice (cheap drafts vs quality finals).
+**Positioning:** "Higgsfield for breadth. Zopia for speed. **Storytica for professional production.**"
 
 ---
 

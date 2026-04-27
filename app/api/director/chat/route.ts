@@ -3,9 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { getAnthropicClient, MAX_TOKENS, MAX_TOOL_ITERATIONS } from "@/lib/support/anthropic";
-import { DIRECTOR_TOOLS } from "@/lib/director/agent-tools";
+import { getToolsForMode } from "@/lib/director/agent-tools";
 import { dispatchDirectorTool, type DirectorToolContext } from "@/lib/director/tool-executor";
-import { buildDirectorSystemPrompt } from "@/lib/director/system-prompt";
+import { buildDirectorSystemPrompt, buildAgentSystemPrompt } from "@/lib/director/system-prompt";
 import type Anthropic from "@anthropic-ai/sdk";
 
 export async function POST(req: NextRequest) {
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { projectId, message, currentFrameNumber, currentSceneId } = body;
+    const { projectId, message, currentFrameNumber, currentSceneId, mode = "director" } = body;
     if (!projectId || !message) {
       return new Response(JSON.stringify({ error: "projectId and message are required" }), {
         status: 400, headers: { "Content-Type": "application/json" },
@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     claudeMessages.push({ role: "user", content: message });
 
     // ── System prompt ───────────────────────────────────────────────
-    const systemPrompt = buildDirectorSystemPrompt({
+    const promptOptions = {
       projectName: project.name,
       frameCount: items.length,
       sceneCount: sceneIds.size,
@@ -109,7 +109,13 @@ export async function POST(req: NextRequest) {
       formatPreset: (project as any).formatPreset || "",
       currentFrameNumber,
       currentSceneId,
-    });
+    };
+    const systemPrompt = mode === "agent"
+      ? buildAgentSystemPrompt(promptOptions)
+      : buildDirectorSystemPrompt(promptOptions);
+
+    // Select tools based on mode
+    const tools = getToolsForMode(mode);
 
     // ── Tool context (pass convex client for tools) ─────────────────
     const toolCtx: DirectorToolContext = {
@@ -139,7 +145,7 @@ export async function POST(req: NextRequest) {
               model: "claude-haiku-4-5",
               max_tokens: MAX_TOKENS,
               system: systemPrompt,
-              tools: DIRECTOR_TOOLS,
+              tools: tools,
               messages: currentMessages,
             });
 
@@ -163,6 +169,21 @@ export async function POST(req: NextRequest) {
               const result = await dispatchDirectorTool(tb.name, tb.input, toolCtx);
               toolCallLog.push({ name: tb.name, input: tb.input, output: result.output });
               send({ type: "tool_result", name: tb.name, isError: result.isError });
+
+              // Check if tool returned a plan approval request
+              if (tb.name === "create_execution_plan" && !result.isError) {
+                try {
+                  const planData = JSON.parse(result.output);
+                  if (planData.__plan_approval) {
+                    send({
+                      type: "plan_approval",
+                      steps: planData.steps,
+                      totalCredits: planData.totalCredits,
+                      balance: planData.balance,
+                    });
+                  }
+                } catch {}
+              }
 
               // Vision: if tool returns imageUrl, fetch it and include as image content block
               if (result.imageUrl && !result.isError) {

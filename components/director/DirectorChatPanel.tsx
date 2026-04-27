@@ -1,7 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Send, Sparkles, Trash2, Loader2, Wrench } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { X, Send, Sparkles, Trash2, Loader2, Wrench, Bot, MessageSquare } from "lucide-react";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -11,7 +14,24 @@ interface Message {
   content: string;
   isStreaming?: boolean;
   isError?: boolean;
+  isPlanApproval?: boolean;
+  planData?: PlanData;
 }
+
+interface PlanData {
+  steps: PlanStep[];
+  totalCredits: number;
+  status: "pending" | "approved" | "rejected";
+}
+
+interface PlanStep {
+  action: string;
+  frameNumber?: number;
+  model?: string;
+  credits: number;
+}
+
+type AgentMode = "director" | "agent";
 
 interface DirectorChatPanelProps {
   projectId: string;
@@ -60,6 +80,16 @@ const TOOL_LABELS: Record<string, string> = {
   analyze_frame_image: "Analyzing image...",
   get_model_recommendations: "Checking models...",
   search_knowledge_base: "Searching...",
+  get_credit_balance: "Checking credits...",
+  get_model_pricing: "Comparing models...",
+  create_execution_plan: "Planning...",
+  trigger_image_generation: "Generating image...",
+  trigger_video_generation: "Generating video...",
+  trigger_post_processing: "Processing...",
+  get_prompt_templates: "Loading templates...",
+  get_presets: "Loading presets...",
+  enhance_prompt: "Enhancing prompt...",
+  browse_project_files: "Browsing files...",
 };
 
 // ── Component ───────────────────────────────────────────────────────
@@ -73,13 +103,51 @@ export function DirectorChatPanel({
   initialMessage,
   onClose,
 }: DirectorChatPanelProps) {
+  const { user } = useUser();
+  const userId = user?.id;
+  const INITIAL_VISIBLE = 10;
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [mode, setMode] = useState<AgentMode>("director");
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [hiddenCount, setHiddenCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const session = useQuery(
+    api.directorChat.getSession,
+    userId && projectId ? { projectId: projectId as any, userId } : "skip"
+  );
+  const clearSessionMutation = useMutation(api.directorChat.clearSession);
+  const allRestoredRef = useRef<Message[]>([]);
+
+  useEffect(() => {
+    if (session?.messages && !historyLoaded && messages.length === 0) {
+      const allRestored: Message[] = session.messages.map((msg, i) => ({
+        id: `restored-${i}-${msg.timestamp}`,
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+      }));
+      allRestoredRef.current = allRestored;
+      if (allRestored.length > INITIAL_VISIBLE) {
+        setMessages(allRestored.slice(-INITIAL_VISIBLE));
+        setHiddenCount(allRestored.length - INITIAL_VISIBLE);
+      } else if (allRestored.length > 0) {
+        setMessages(allRestored);
+      }
+      setHistoryLoaded(true);
+    }
+  }, [session, historyLoaded, messages.length]);
+
+  const loadPreviousMessages = () => {
+    if (hiddenCount > 0 && allRestoredRef.current.length > 0) {
+      setMessages(allRestoredRef.current);
+      setHiddenCount(0);
+    }
+  };
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -127,6 +195,7 @@ export function DirectorChatPanel({
             message: text.trim(),
             currentFrameNumber,
             currentSceneId,
+            mode,
           }),
           signal: controller.signal,
         });
@@ -190,6 +259,19 @@ export function DirectorChatPanel({
                   setStreaming(false);
                   return;
 
+                case "plan_approval":
+                  setMessages((prev) => [
+                    ...prev,
+                    {
+                      id: `plan-${Date.now()}`,
+                      role: "assistant",
+                      content: "",
+                      isPlanApproval: true,
+                      planData: { steps: event.steps || [], totalCredits: event.totalCredits || 0, status: "pending" },
+                    },
+                  ]);
+                  break;
+
                 case "done":
                   setMessages((prev) =>
                     prev.map((m) =>
@@ -220,7 +302,7 @@ export function DirectorChatPanel({
         abortRef.current = null;
       }
     },
-    [projectId, currentFrameNumber, currentSceneId, streaming]
+    [projectId, currentFrameNumber, currentSceneId, streaming, mode]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -230,10 +312,23 @@ export function DirectorChatPanel({
     }
   };
 
-  const clearHistory = () => {
+  const clearHistory = async () => {
     setMessages([]);
-    // TODO: call convex directorChat.clearSession
+    setHistoryLoaded(false);
+    setHiddenCount(0);
+    allRestoredRef.current = [];
+    if (userId && projectId) {
+      try { await clearSessionMutation({ projectId: projectId as any, userId }); } catch {}
+    }
   };
+
+  const handlePlanApproval = useCallback(
+    (planMsgId: string, approved: boolean) => {
+      setMessages((prev) => prev.map((m) => m.id === planMsgId && m.planData ? { ...m, planData: { ...m.planData, status: approved ? "approved" : "rejected" } } : m));
+      sendMessage(approved ? "Approved. Execute the plan." : "Rejected. Do not execute.");
+    },
+    [sendMessage]
+  );
 
   // ── Auto-send initialMessage (e.g. from "Review this frame" button) ──
   const initialMessageSent = useRef<string | null>(null);
@@ -246,7 +341,7 @@ export function DirectorChatPanel({
 
   // ── Quick actions (context-aware) ──────────────────────────────────
 
-  const quickActions = currentFrameNumber
+  const directorQuickActions = currentFrameNumber
     ? [
         ...(currentFrameImageUrl
           ? [{ label: `Analyze frame ${currentFrameNumber} image`, prompt: `Analyze the generated image for frame ${currentFrameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. Give specific feedback on what works and what could be improved.` }]
@@ -260,15 +355,42 @@ export function DirectorChatPanel({
         { label: "Suggest style", prompt: "Based on my project, suggest a visual style prompt that would work well. Consider the genre, mood, and content." },
       ];
 
+  const agentQuickActions = [
+    { label: "Generate all frames", prompt: "Check my credit balance and generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
+    { label: "Build a story", prompt: "I want to create a new story. Help me plan the scenes and frames, then generate all the images. Ask me about the story first." },
+    { label: "Generate videos", prompt: "Generate videos for all frames that have images but no videos. Use Seedance 1.5 Pro at 480p for budget. Show me the plan first." },
+  ];
+  const quickActions = mode === "agent" ? agentQuickActions : directorQuickActions;
+
   // ── Render ────────────────────────────────────────────────────────
 
   return (
     <div className="fixed right-0 top-0 h-full w-[400px] z-[60] flex flex-col bg-[#0f0f13] border-l border-[#2a2a32] shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a32] shrink-0">
-        <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span className="text-sm font-semibold text-white">AI Director</span>
+        <div className="flex items-center gap-1 bg-[#1a1a22] rounded-lg p-0.5 border border-[#2a2a32]">
+          <button
+            onClick={() => setMode("director")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
+              mode === "director"
+                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            <Sparkles className="w-3 h-3" />
+            Director
+          </button>
+          <button
+            onClick={() => setMode("agent")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
+              mode === "agent"
+                ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
+                : "text-gray-500 hover:text-gray-300"
+            }`}
+          >
+            <Bot className="w-3 h-3" />
+            Agent
+          </button>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -289,12 +411,25 @@ export function DirectorChatPanel({
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {hiddenCount > 0 && (
+          <button onClick={loadPreviousMessages} className="w-full py-2 px-3 rounded-lg bg-[#1a1a22] border border-[#2a2a32] text-xs text-gray-500 hover:text-gray-300 hover:border-gray-600 transition flex items-center justify-center gap-2">
+            <MessageSquare className="w-3 h-3" />
+            <span>{hiddenCount} earlier message{hiddenCount !== 1 ? "s" : ""}</span>
+          </button>
+        )}
+
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            <Sparkles className="w-8 h-8 text-amber-400/60 mb-3" />
-            <p className="text-sm text-gray-400 mb-1">AI Director</p>
+            {mode === "agent" ? (
+              <Bot className="w-8 h-8 text-purple-400/60 mb-3" />
+            ) : (
+              <Sparkles className="w-8 h-8 text-amber-400/60 mb-3" />
+            )}
+            <p className="text-sm text-gray-400 mb-1">{mode === "agent" ? "AI Agent" : "AI Director"}</p>
             <p className="text-xs text-gray-600 mb-4">
-              I can review your storyboard, write prompts, set up shots, and break scripts into frames.
+              {mode === "agent"
+                ? "I can generate images, create videos, manage credits, and execute multi-step plans for your project."
+                : "I can review your storyboard, write prompts, set up shots, and break scripts into frames."}
             </p>
             <div className="flex flex-col gap-2 w-full">
               {quickActions.map((action) => (
@@ -310,31 +445,64 @@ export function DirectorChatPanel({
           </div>
         )}
 
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={`max-w-[85%] px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap ${
-                msg.role === "user"
-                  ? "bg-blue-600/20 text-blue-100 border border-blue-500/20"
-                  : msg.isError
-                    ? "bg-red-500/10 text-red-300 border border-red-500/20"
-                    : "bg-[#1a1a22] text-gray-300 border border-[#2a2a32]"
-              }`}
-            >
-              {renderInlineMarkdown(msg.content || (msg.isStreaming ? "" : "..."))}
-              {msg.isStreaming && !msg.content && (
-                <span className="inline-flex gap-1 text-gray-500">
-                  <span className="animate-pulse">.</span>
-                  <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>.</span>
-                  <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>.</span>
-                </span>
-              )}
+        {messages.map((msg) =>
+          msg.isPlanApproval && msg.planData ? (
+            <div key={msg.id} className="flex justify-start">
+              <div className="max-w-[90%] rounded-xl border border-purple-500/30 bg-purple-500/5 p-3 space-y-2">
+                <p className="text-xs font-semibold text-purple-300">Execution Plan</p>
+                <div className="space-y-1">
+                  {msg.planData.steps.map((step, i) => (
+                    <div key={i} className="flex items-center justify-between text-[12px]">
+                      <span className="text-gray-300">
+                        {step.action}
+                        {step.frameNumber != null && <span className="text-gray-500 ml-1">F{step.frameNumber}</span>}
+                        {step.model && <span className="text-gray-600 ml-1">({step.model})</span>}
+                      </span>
+                      <span className="text-amber-400 ml-2 shrink-0">{step.credits} cr</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between pt-1 border-t border-[#2a2a32]">
+                  <span className="text-xs text-gray-400">Total: <strong className="text-white">{msg.planData.totalCredits} credits</strong></span>
+                  {msg.planData.status === "pending" ? (
+                    <div className="flex gap-2">
+                      <button onClick={() => handlePlanApproval(msg.id, true)} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition">Approve</button>
+                      <button onClick={() => handlePlanApproval(msg.id, false)} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition">Cancel</button>
+                    </div>
+                  ) : (
+                    <span className={`text-[11px] font-medium ${msg.planData.status === "approved" ? "text-green-400" : "text-red-400"}`}>
+                      {msg.planData.status === "approved" ? "Approved" : "Rejected"}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          ) : (
+            <div
+              key={msg.id}
+              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-[85%] px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap ${
+                  msg.role === "user"
+                    ? "bg-blue-600/20 text-blue-100 border border-blue-500/20"
+                    : msg.isError
+                      ? "bg-red-500/10 text-red-300 border border-red-500/20"
+                      : "bg-[#1a1a22] text-gray-300 border border-[#2a2a32]"
+                }`}
+              >
+                {renderInlineMarkdown(msg.content || (msg.isStreaming ? "" : "..."))}
+                {msg.isStreaming && !msg.content && (
+                  <span className="inline-flex gap-1 text-gray-500">
+                    <span className="animate-pulse">.</span>
+                    <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>.</span>
+                    <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>.</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        )}
 
         {/* Tool call indicator */}
         {activeTool && (
@@ -354,9 +522,11 @@ export function DirectorChatPanel({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              currentFrameNumber
-                ? `Ask about frame ${currentFrameNumber}...`
-                : "Ask the AI Director..."
+              mode === "agent"
+                ? "Tell the agent what to build..."
+                : currentFrameNumber
+                  ? `Ask about frame ${currentFrameNumber}...`
+                  : "Ask the AI Director..."
             }
             disabled={streaming}
             rows={1}

@@ -163,6 +163,9 @@ export async function dispatchDirectorTool(
             hasImage: !!frame.imageUrl,
             hasVideo: !!frame.videoUrl,
             hasAudio: !!frame.audioUrl,
+            imageUrl: frame.imageUrl || null,
+            videoUrl: frame.videoUrl || null,
+            audioUrl: frame.audioUrl || null,
             linkedElements: (frame.linkedElements || []).map((e: any) => ({
               name: e.name,
               type: e.type,
@@ -202,7 +205,8 @@ export async function dispatchDirectorTool(
               description: e.description || "",
               usageCount: e.usageCount || 0,
               status: e.status,
-              hasReferenceImages: (e.referenceUrls || []).length > 0,
+              thumbnailUrl: e.thumbnailUrl || null,
+              referenceUrls: e.referenceUrls || [],
             }))
           ),
           isError: false,
@@ -462,6 +466,190 @@ export async function dispatchDirectorTool(
         }));
 
         return { output: stringifyResult(trimmed), isError: false };
+      }
+
+      case "get_credit_balance": {
+        try {
+          const balance = await convex.query(api.credits.getBalance, { companyId: ctx.companyId });
+          return { output: `Current credit balance: ${balance} credits.`, isError: false };
+        } catch {
+          return { output: "Could not fetch credit balance.", isError: true };
+        }
+      }
+
+      case "get_model_pricing": {
+        const modelId = input.model_id ? String(input.model_id) : undefined;
+        const allPricing = {
+          image: [
+            { id: "nano-banana-2", name: "Nano Banana 2", credits: { "1K": 5, "2K": 10, "4K": 18 }, note: "Best value. Fast, reliable." },
+            { id: "nano-banana-pro", name: "Nano Banana Pro", credits: { "1K": 18, "2K": 24 }, note: "Higher detail." },
+            { id: "gpt-image-2-image-to-image", name: "GPT Image 2", credits: 15, note: "Best photorealistic." },
+            { id: "z-image", name: "Z-Image", credits: 1, note: "Cheapest. Quick drafts." },
+          ],
+          video: [
+            { id: "bytedance/seedance-1.5-pro", name: "Seedance 1.5 Pro", credits: { "480p_5s": 5, "480p_10s": 10, "720p_5s": 15, "720p_10s": 30, "1080p_5s": 45, "1080p_10s": 90 }, note: "Best value video." },
+            { id: "google/veo-3.1", name: "Veo 3.1", credits: { fast: 60, quality: 250 }, note: "Highest quality." },
+          ],
+        };
+        if (modelId) {
+          const all = [...allPricing.image, ...allPricing.video];
+          const found = all.find((m) => m.id === modelId);
+          return found ? { output: stringifyResult(found), isError: false } : { output: `Model "${modelId}" not found.`, isError: false };
+        }
+        return { output: stringifyResult(allPricing), isError: false };
+      }
+
+      case "create_execution_plan": {
+        const steps = input.steps as any[];
+        if (!steps || steps.length === 0) return { output: "Plan must have at least one step.", isError: true };
+        const totalCredits = steps.reduce((sum: number, s: any) => sum + (s.credits || 0), 0);
+        let balance = 0;
+        try { balance = await convex.query(api.credits.getBalance, { companyId: ctx.companyId }); } catch {}
+        if (balance < totalCredits) return { output: `Insufficient credits. Plan requires ${totalCredits} but you have ${balance}.`, isError: false };
+        return {
+          output: JSON.stringify({
+            __plan_approval: true,
+            steps: steps.map((s: any) => ({ action: s.action || "Unknown step", tool: s.tool, frameNumber: s.frame_number, model: s.model, credits: s.credits || 0, params: s.params || {} })),
+            totalCredits, balance,
+          }),
+          isError: false,
+        };
+      }
+
+      case "trigger_image_generation": {
+        const frameNum = Number(input.frame_number);
+        if (!frameNum || frameNum < 1) return { output: "frame_number must be a positive number.", isError: true };
+        const items = await convex.query(api.storyboard.storyboardItems.listByProject, { projectId: projectId as any });
+        const sorted = (items as any[]).sort((a, b) => a.order - b.order);
+        const frame = sorted[frameNum - 1];
+        if (!frame) return { output: `Frame ${frameNum} not found.`, isError: true };
+        if (!frame.imagePrompt) return { output: `Frame ${frameNum} has no image prompt.`, isError: true };
+        const model = String(input.model || "nano-banana-2");
+        const resolution = String(input.resolution || "1K");
+        const aspectRatio = String(input.aspect_ratio || "16:9");
+        const creditMap: Record<string, Record<string, number>> = { "nano-banana-2": { "1K": 5, "2K": 10, "4K": 18 }, "nano-banana-pro": { "1K": 18, "2K": 24 }, "z-image": { "1K": 1 }, "gpt-image-2-image-to-image": { "1K": 15 } };
+        const creditsUsed = creditMap[model]?.[resolution] ?? 5;
+        let referenceImageUrls: string[] = [];
+        if (input.reference_element) {
+          const elements = await convex.query(api.storyboard.storyboardElements.listByProject, { projectId: projectId as any });
+          const el = (elements as any[]).find((e) => e.name.toLowerCase() === String(input.reference_element).toLowerCase());
+          if (el?.referenceUrls?.length > 0) referenceImageUrls = el.referenceUrls;
+        }
+        let referenceFrameUrl: string | undefined;
+        if (input.reference_frame) {
+          const refFrame = sorted[Number(input.reference_frame) - 1];
+          if (refFrame?.imageUrl) referenceFrameUrl = refFrame.imageUrl;
+        }
+        try {
+          const genRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/storyboard/generate-image`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sceneContent: frame.imagePrompt, style: "realistic", quality: resolution, aspectRatio, itemId: frame._id, enhance: !!input.enhance_prompt, companyId: ctx.companyId, userId: ctx.userId, projectId, creditsUsed, model, ...(referenceFrameUrl && { imageUrl: referenceFrameUrl }), ...(referenceImageUrls.length > 0 && { referenceImageUrls }) }),
+          });
+          if (!genRes.ok) return { output: `Generation failed: ${await genRes.text()}`, isError: true };
+          const genResult = await genRes.json();
+          return { output: `Image generation started for frame ${frameNum} ("${frame.title}") using ${model} at ${resolution}. Cost: ${creditsUsed} credits.`, isError: false };
+        } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "trigger_video_generation": {
+        const frameNum = Number(input.frame_number);
+        if (!frameNum || frameNum < 1) return { output: "frame_number must be a positive number.", isError: true };
+        const items = await convex.query(api.storyboard.storyboardItems.listByProject, { projectId: projectId as any });
+        const sorted = (items as any[]).sort((a, b) => a.order - b.order);
+        const frame = sorted[frameNum - 1];
+        if (!frame) return { output: `Frame ${frameNum} not found.`, isError: true };
+        if (!frame.imageUrl) return { output: `Frame ${frameNum} has no generated image.`, isError: true };
+        const model = String(input.model || "bytedance/seedance-1.5-pro");
+        const resolution = String(input.resolution || "480p");
+        const duration = String(input.duration || "5s");
+        const videoCreditMap: Record<string, number> = { "480p_5s": 5, "480p_8s": 8, "480p_10s": 10, "720p_5s": 15, "720p_8s": 24, "720p_10s": 30, "1080p_5s": 45, "1080p_8s": 72, "1080p_10s": 90 };
+        const durationKey = duration.replace("s", "");
+        const creditsUsed = videoCreditMap[`${resolution}_${durationKey}s`] ?? 5;
+        const videoPrompt = frame.videoPrompt || frame.imagePrompt || "cinematic motion";
+        try {
+          const genRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/storyboard/generate-image`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sceneContent: videoPrompt, style: "realistic", quality: "standard", aspectRatio: "16:9", itemId: frame._id, enhance: false, companyId: ctx.companyId, userId: ctx.userId, projectId, creditsUsed, model, imageUrl: frame.imageUrl, duration }),
+          });
+          if (!genRes.ok) return { output: `Video generation failed: ${await genRes.text()}`, isError: true };
+          const genResult = await genRes.json();
+          return { output: `Video generation started for frame ${frameNum} ("${frame.title}") using ${model} at ${resolution}, ${duration}. Cost: ${creditsUsed} credits.`, isError: false };
+        } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "get_prompt_templates": {
+        const typeFilter = input.type === "all" ? undefined : (input.type as string);
+        try {
+          const templates = await convex.query(api.promptTemplates.getByCompany, { companyId: ctx.companyId });
+          let filtered = templates as any[];
+          if (typeFilter) filtered = filtered.filter((t) => t.type === typeFilter);
+          if (filtered.length === 0) return { output: `No prompt templates found${typeFilter ? ` for type "${typeFilter}"` : ""}.`, isError: false };
+          return { output: stringifyResult(filtered.slice(0, 30).map((t: any) => ({ name: t.name, type: t.type, prompt: t.prompt, notes: t.notes || "", usageCount: t.usageCount || 0 }))), isError: false };
+        } catch { return { output: "Could not load prompt templates.", isError: true }; }
+      }
+
+      case "get_presets": {
+        const category = input.category === "all" ? undefined : (input.category as string);
+        try {
+          const presets = await convex.query(api.storyboard.presets.list, { companyId: ctx.companyId, ...(category && { category }) });
+          if (!presets || presets.length === 0) return { output: `No presets found${category ? ` for category "${category}"` : ""}.`, isError: false };
+          return { output: stringifyResult((presets as any[]).slice(0, 20).map((p) => ({ id: p._id, name: p.name, category: p.category, prompt: p.prompt || "", format: p.format ? (() => { try { return JSON.parse(p.format); } catch { return p.format; } })() : null, usageCount: p.usageCount || 0 }))), isError: false };
+        } catch { return { output: "Could not load presets.", isError: true }; }
+      }
+
+      case "trigger_post_processing": {
+        const frameNum = Number(input.frame_number);
+        if (!frameNum || frameNum < 1) return { output: "frame_number must be a positive number.", isError: true };
+        const items = await convex.query(api.storyboard.storyboardItems.listByProject, { projectId: projectId as any });
+        const sorted = (items as any[]).sort((a, b) => a.order - b.order);
+        const frame = sorted[frameNum - 1];
+        if (!frame) return { output: `Frame ${frameNum} not found.`, isError: true };
+        if (!frame.imageUrl) return { output: `Frame ${frameNum} has no generated image.`, isError: true };
+        const operation = String(input.operation);
+        const preset = String(input.preset || "");
+        const customPrompt = String(input.custom_prompt || "");
+        const ENHANCE_PRESETS: Record<string, string> = { "Cinematic": "Cinematic film grade enhancement, add subtle film grain, rich color depth", "Face & Skin": "Enhance facial details, natural skin retouching, restore clarity", "Sharpen": "Enhance fine details, sharpen textures and edges", "Natural": "True-to-life colors, balanced white point, neutral skin tones", "Full Enhance": "Professional photo enhancement: sharpen details, enhance colors, fix exposure" };
+        const RELIGHT_PRESETS: Record<string, string> = { "Dramatic Side": "Strong directional side light from left, deep shadows", "Golden Hour": "Warm golden hour sunlight, long shadows, amber glow", "Blue Hour": "Cool blue twilight lighting, soft ambient", "Neon Night": "Neon colored lighting, cyberpunk city glow", "Moonlight": "Cold moonlight from above, blue-silver tones", "Studio Rembrandt": "Classic Rembrandt lighting, triangle of light on cheek", "Backlit / Rim": "Strong backlight creating rim light and silhouette edge glow" };
+        let model = "gpt-image-2-image-to-image"; let prompt = customPrompt; let creditsUsed = 4;
+        switch (operation) {
+          case "enhance": prompt = prompt || ENHANCE_PRESETS[preset] || ENHANCE_PRESETS["Full Enhance"]!; break;
+          case "relight": prompt = prompt || RELIGHT_PRESETS[preset] || RELIGHT_PRESETS["Dramatic Side"]!; break;
+          case "remove_bg": model = "recraft/remove-background"; prompt = "remove background"; creditsUsed = 1; break;
+          case "reframe": model = "ideogram/v3-reframe"; prompt = preset || "16:9"; creditsUsed = 7; break;
+          default: return { output: `Unknown operation: ${operation}`, isError: true };
+        }
+        try {
+          const ppRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/inpaint`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: frame.imageUrl, prompt, model, companyId: ctx.companyId, userId: ctx.userId, projectId, itemId: frame._id, creditsUsed }) });
+          if (!ppRes.ok) return { output: `Post-processing failed: ${await ppRes.text()}`, isError: true };
+          const ppResult = await ppRes.json();
+          return { output: `${operation} applied to frame ${frameNum} ("${frame.title}"). ${preset ? `Preset: ${preset}. ` : ""}Cost: ${creditsUsed} credits.`, isError: false };
+        } catch (err) { return { output: `Post-processing failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "enhance_prompt": {
+        const rawPrompt = String(input.prompt || "").trim();
+        if (!rawPrompt) return { output: "A prompt is required.", isError: true };
+        try {
+          const enhRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/prompt-enhance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: rawPrompt, userId: ctx.userId, mode: String(input.mode || "image") }) });
+          if (!enhRes.ok) return { output: `Prompt enhancement failed: ${await enhRes.text()}`, isError: true };
+          const enhResult = await enhRes.json();
+          return { output: `Enhanced prompt:\n\n${enhResult.enhanced || enhResult.prompt || enhResult.text || ""}`, isError: false };
+        } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "browse_project_files": {
+        const category = input.category === "all" ? undefined : (input.category as string);
+        const fileType = input.file_type === "all" ? undefined : (input.file_type as string);
+        const limit = Number(input.limit || 20);
+        try {
+          const files = await convex.query(api.storyboard.storyboardFiles.listByProject, { projectId: projectId as any });
+          let filtered = files as any[];
+          if (category) filtered = filtered.filter((f) => f.category === category);
+          if (fileType) filtered = filtered.filter((f) => f.fileType === fileType);
+          filtered = filtered.sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0)).slice(0, limit);
+          if (filtered.length === 0) return { output: "No files found.", isError: false };
+          return { output: stringifyResult(filtered.map((f) => ({ id: f._id, filename: f.filename, fileType: f.fileType, category: f.category, status: f.status, model: f.model || null, sourceUrl: f.sourceUrl || null, creditsUsed: f.creditsUsed || 0 }))), isError: false };
+        } catch { return { output: "Could not browse project files.", isError: true }; }
       }
 
       default:

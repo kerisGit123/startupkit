@@ -2241,6 +2241,66 @@ export default defineSchema({
     .index("by_user_project", ["userId", "projectId"]),
 
   // ============================================
+  // AI AGENT: Async task queue for agent execution plans
+  // ============================================
+  agent_tasks: defineTable({
+    sessionId: v.id("director_chat_sessions"),
+    projectId: v.id("storyboard_projects"),
+    companyId: v.string(),
+    userId: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("executing"),
+      v.literal("waiting"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+    ),
+    steps: v.array(v.object({
+      action: v.string(),
+      tool: v.string(),
+      frameNumber: v.optional(v.number()),
+      model: v.optional(v.string()),
+      credits: v.number(),
+      params: v.optional(v.any()),
+      status: v.union(v.literal("pending"), v.literal("running"), v.literal("completed"), v.literal("failed")),
+      result: v.optional(v.string()),
+      taskId: v.optional(v.string()),
+      fileId: v.optional(v.string()),
+    })),
+    currentStepIndex: v.number(),
+    totalCredits: v.number(),
+    creditsUsed: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_project", ["projectId"])
+    .index("by_status", ["status"]),
+
+  // Agent analytics for future improvements
+  director_analytics: defineTable({
+    sessionId: v.optional(v.id("director_chat_sessions")),
+    projectId: v.optional(v.id("storyboard_projects")),
+    userId: v.optional(v.string()),
+    orgId: v.optional(v.string()),
+    event: v.union(
+      v.literal("tool_call"),
+      v.literal("correction"),
+      v.literal("plan_approved"),
+      v.literal("plan_rejected"),
+      v.literal("generation_triggered"),
+      v.literal("generation_completed"),
+      v.literal("generation_failed"),
+    ),
+    data: v.optional(v.any()),
+    timestamp: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_event", ["event"]),
+
+  // ============================================
   // SUPPORT CHAT: Haiku-powered chatbot sessions
   // ============================================
   support_chat_sessions: defineTable({

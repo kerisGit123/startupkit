@@ -20,6 +20,7 @@ import type * as adminSubscriptions from "../adminSubscriptions.js";
 import type * as adminTickets from "../adminTickets.js";
 import type * as adminUserManagement from "../adminUserManagement.js";
 import type * as adminUsers from "../adminUsers.js";
+import type * as agentTasks from "../agentTasks.js";
 import type * as alerts from "../alerts.js";
 import type * as analytics from "../analytics.js";
 import type * as bookingMutations from "../bookingMutations.js";
@@ -142,6 +143,7 @@ declare const fullApi: ApiFromModules<{
   adminTickets: typeof adminTickets;
   adminUserManagement: typeof adminUserManagement;
   adminUsers: typeof adminUsers;
+  agentTasks: typeof agentTasks;
   alerts: typeof alerts;
   analytics: typeof analytics;
   bookingMutations: typeof bookingMutations;

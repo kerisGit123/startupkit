@@ -4,7 +4,17 @@
 
 ---
 
-## Recently Completed (Session #11-13 — 2026-04-26/27)
+## Recently Completed (Session #11-14 — 2026-04-26/27)
+
+### AI Agent Mode (Session #14 — 2026-04-27)
+
+- [x] **AI Agent Mode** — Full autonomous agent with 22 tools (12 Director + 10 Agent). Can generate images/video, post-process, use element references for character consistency, load prompt templates and presets, enhance prompts, browse project files.
+- [x] **Chat persistence** — Loads existing session from Convex on panel open. Shows last 10 messages + "Load previous" button for older history.
+- [x] **Director/Agent mode toggle** — UI toggle in chat header. Director = free creative advice. Agent = autonomous execution with plan approval.
+- [x] **Plan approval flow** — Agent creates execution plan card with step list, credit costs, Approve/Cancel buttons. No credits spent without approval.
+- [x] **Async task queue schema** — `agent_tasks` + `director_analytics` tables in Convex for future async resume and usage analytics.
+- [x] **Reference image support** — `reference_element` passes element referenceUrls to generation for character consistency. `reference_frame` uses another frame as img2img reference.
+- [x] **Agent pricing model decided** — Director free for Pro+. Agent $120/seat/month with 5,000 msg cap + 1 credit/msg overflow. 30 free agent msgs/month teaser for Pro/Business.
 
 ### Security Hardening & Audit (Sessions #11-13)
 
@@ -95,10 +105,13 @@
 
 ## Priority 2 — Features / Polish
 
-### AI Director — Polish
+### AI Agent — Test & Polish
 
-- [ ] Tune system prompt based on real usage
-- [ ] Test director tools end-to-end with real project
+- [ ] End-to-end test: run dev server, use Agent Mode, "build me a 6-frame story"
+- [ ] Tune system prompt based on real agent behavior
+- [ ] Test reference image generation (element referenceUrls for character consistency)
+- [ ] Test post-processing pipeline through agent (enhance, relight)
+- [ ] Test prompt templates and presets loading through agent
 
 ### Video Editor (plan_videoEditor.md)
 
@@ -123,34 +136,32 @@
 
 ## Priority 3 — Pricing & Billing
 
-### Ultra Tier + AI Director Monetization (NEEDS DISCUSSION)
+### AI Director + Agent Monetization (DECIDED 2026-04-27)
 
-**Problem:** AI Director has no billing. Org members (up to 15 on Business, 25 on Ultra) can abuse unlimited Director access. Vision analysis is ~10x token cost of text messages.
+**Model: Director (free teaser) + Agent Seats ($120/seat/month)**
 
-**Proposed Ultra tier:** ~$299/month, 25,000 credits, 5 orgs, 25 members/org, 50GB storage, unlimited Director + vision.
+- **Director** = free for all Pro+ users. Creative advice, prompt writing, vision analysis. Cannot trigger generation.
+- **Agent** = $120/seat/month. Everything Director does + triggers generation, post-processing, creates execution plans.
+- **Brain = seat, Hands = credits.** Agent conversations covered by seat. Generation costs credits from org pool.
+- **5,000 msgs/month cap** per seat. After cap: 1 credit/msg overflow (seamless, no hard lock).
+- **30 free agent msgs/month** teaser for Pro/Business. Ultra includes 1 seat free.
 
-**Billing options for Director — pick one:**
+| Plan | Director | Agent Teaser | Agent Seats |
+|------|----------|-------------|-------------|
+| Free | No | No | No |
+| Pro ($45/mo) | Free | 30 msgs/month | Buy up to 1 ($120/mo) |
+| Business ($119/mo) | Free | 30 msgs/month | Buy up to 3 ($120/mo each) |
+| Ultra ($299/mo) | Free | — | 1 included + up to 5 ($120/mo each) |
 
-- **Option A: Org-level daily pool**
-  - Pro: 20 msgs/day org-wide, Business: 50/day, Ultra: 300/day
-  - 1 counter per org per day in Convex
-  - Pro: simple, prevents abuse. Con: new tracking infrastructure, daily reset logic
+**Implementation needed (deferred until agent is proven):**
 
-- **Option B: Per-seat pricing**
-  - Director is an add-on: ~$10/seat/month
-  - Ultra includes 5 Director seats, extras $10 each
-  - Pro: direct revenue per user. Con: complex billing UX, Clerk/Stripe seat management
-
-- **Option C: Credit-based (simplest)**
-  - Each Director message costs 1 credit (text) or 3 credits (vision)
-  - No new billing infra — reuse existing `deductCredits` in API route
-  - Self-regulating: 15 users sharing 8,000 credits naturally limits abuse
-  - Pro: zero new infrastructure, self-balancing. Con: users may avoid Director to "save credits"
-
-- **Option D: Hybrid — free pool + credits overflow**
-  - Small free daily pool (Pro: 10, Business: 30, Ultra: 100 msgs/day)
-  - After pool exhausted, each message costs 1-3 credits
-  - Pro: best of both worlds. Con: most complex to implement
+- [ ] Agent seat table in Convex (`agent_seats`)
+- [ ] Seat assignment UI in org owner dashboard
+- [ ] Stripe add-on subscription for agent seats
+- [ ] Access check in director/chat route (seat assigned? teaser remaining?)
+- [ ] Teaser counter (30 msgs/month, resets monthly)
+- [ ] Overflow billing after 5,000 msgs
+- [ ] Upsell prompts in Director when it can't execute
 
 ---
 
@@ -193,10 +204,10 @@
 | Upscale/Enhance/Relight/Inpaint/Angles | **CLOSED** — 10 tools vs their 5 |
 | Color Grading presets | **CLOSED** — 11 presets |
 | Grid Generation | **CLOSED** — 1x1 to 4x4 |
-| AI Co-Director | **CLOSED** — 4 phases done |
+| AI Co-Director | **CLOSED** — 4 phases + Agent Mode (22 tools, autonomous generation, plan approval, character consistency via element refs) |
 | Remaining Higgsfield gaps | 4 model-level proprietary (Soul Cinema model, native audio sync, physics-aware gen, cinematic reasoning) — can't replicate |
 
-**All buildable gaps are now CLOSED. Only model-level proprietary features remain.**
+**All buildable gaps are now CLOSED. Agent Mode goes beyond Higgsfield — no competitor has an AI that both advises and executes within project context.**
 
 ---
 
@@ -208,3 +219,4 @@
 - [ ] Presets system (26), batch gen (14), color palette (5)
 - [ ] AddImageMenu (5), prompt assembly (5), integration (12)
 - [ ] Post-processing tools (NEW — need test cases)
+- [ ] AI Agent tools (NEW — need test cases)
