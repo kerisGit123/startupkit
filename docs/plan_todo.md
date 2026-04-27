@@ -1,10 +1,17 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-27 (Session #13)
+> **Last updated:** 2026-04-27 (Session #15)
 
 ---
 
 ## Recently Completed (Session #11-14 — 2026-04-26/27)
+
+### AI Analyze & R2 Video Fix (Session #15 — 2026-04-27)
+
+- [x] **AI Analyze "image not valid" fix** — Added magic byte validation, SVG rejection, size limits (7MB image / 15MB video), user-friendly error messages
+- [x] **Video analyze with .png extension** — Route now trusts user's media type selection instead of overriding based on URL extension. Corrects content-type to `video/mp4` for mismatched extensions
+- [x] **R2 video saved as .png root cause** — Fixed `kie-callback` mime detection (no longer defaults to `image/png` for unknown blobs) and video R2 key now always uses `.mp4` extension (`generated-video-{timestamp}.mp4`)
+- [x] **Audio analyze content-type fix** — Same pattern: overrides to `audio/mpeg` when extension doesn't match user selection
 
 ### AI Agent Mode (Session #14 — 2026-04-27)
 
@@ -121,6 +128,28 @@
 
 ## Priority 2 — Features / Polish
 
+### TikTok/Social Ads Builder (NEW — highest ROI, overtakes Higgsfield 3.5)
+
+**Score impact: 86 → 89, overtakes Higgsfield's 88. Cheapest path to #1.**
+
+Leverages existing infrastructure — mostly templates + presets on top of existing tools.
+
+| Feature | Effort | Existing infrastructure |
+|---------|--------|----------------------|
+| Social format presets (9:16 TikTok, 1:1 IG, 16:9 YT) | Small | Aspect ratio system exists |
+| Text overlay with CTA templates ("Shop Now", "Learn More", "Swipe Up") | Medium | Subtitle track exists, extend with styled text |
+| Logo/watermark placement (upload, pin to corner) | Small | Canvas overlay system exists |
+| Music bed from AI library | Small | Music AI + timeline audio exists |
+| Ad templates (Product Showcase, Before/After, Testimonial, Countdown, UGC-style) | Medium | Preset system exists |
+| Platform-specific export ("Export as TikTok Ad 9:16 15s") | Small | WebCodecs export exists |
+
+- [ ] Social format presets (9:16, 1:1, 16:9) in video editor
+- [ ] CTA text overlay templates (styled text on subtitle track)
+- [ ] Logo/watermark upload + corner placement
+- [ ] Ad template presets (Product Showcase, Before/After, Testimonial, Countdown, UGC-style)
+- [ ] Platform-specific export with format/duration constraints
+- [ ] "Create Ad" quick-start flow from storyboard
+
 ### AI Agent — Test & Polish
 
 - [ ] End-to-end test: run dev server, use Agent Mode, "build me a 6-frame story"
@@ -212,18 +241,32 @@
 
 ---
 
-## Competitive Gap Summary (updated 2026-04-26)
+## Competitive Gap Summary (updated 2026-04-27 — Higgsfield 3.5 reassessment)
 
 | Competitor Feature | Status |
 |-------------------|--------|
-| Soul Cinema quality | **CLOSED** — post-processing pipeline |
+| Soul Cinema quality | **CLOSED** — Cinema Grade (12 film stocks) + post-processing pipeline |
 | Upscale/Enhance/Relight/Inpaint/Angles | **CLOSED** — 10 tools vs their 5 |
-| Color Grading presets | **CLOSED** — 11 presets |
+| Color Grading presets | **CLOSED** — 12 film stock presets + 11 color grade presets |
 | Grid Generation | **CLOSED** — 1x1 to 4x4 |
-| AI Co-Director | **CLOSED** — 4 phases + Agent Mode (22 tools, autonomous generation, plan approval, character consistency via element refs) |
-| Remaining Higgsfield gaps | 4 model-level proprietary (Soul Cinema model, native audio sync, physics-aware gen, cinematic reasoning) — can't replicate |
+| AI Co-Director | **CLOSED** — 4 phases + Agent Mode (22 tools) |
+| Physics-aware generation | **CLOSED** — GPT Image 2 handles physics natively |
+| Cinematic reasoning | **CLOSED** — AI Director vision + GPT Image 2 contextual understanding |
+| Native audio sync | **OPEN** — model-level proprietary, 1 remaining Higgsfield gap |
+| 80+ Higgsfield apps | **CAN'T MATCH** — breadth play, not our strategy |
+| Marketing Studio (URL→ad) | **PLANNED** — TikTok/Social Ads Builder (in-editor, better UX) |
+| Higgsfield social network | **SKIP** — not relevant to B2B/agency target |
 
-**All buildable gaps are now CLOSED. Agent Mode goes beyond Higgsfield — no competitor has an AI that both advises and executes within project context.**
+### Honest scorecard (post Higgsfield 3.5)
+
+| Platform | Score | After Ads Builder |
+|----------|:-----:|:-----------------:|
+| Higgsfield 3.5 | **88** | 88 |
+| **Us (Storytica)** | **86** | **89** |
+| LTX Studio | 72 | 72 |
+| Zopia AI | 70 | 70 |
+
+**TikTok Ads Builder is the #1 priority to overtake Higgsfield. Score 86 → 89.**
 
 ---
 

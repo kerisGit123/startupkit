@@ -13,28 +13,89 @@ function mimeFromUrl(url: string): string {
   const ext = url.split("?")[0].split(".").pop()?.toLowerCase();
   const map: Record<string, string> = {
     png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
-    webp: "image/webp", gif: "image/gif", svg: "image/svg+xml",
+    webp: "image/webp", gif: "image/gif",
     mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
     mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", m4a: "audio/mp4",
   };
   return (ext && map[ext]) || "image/png";
 }
 
+// Max size for inline base64 (Gemini limit ~20MB, but OpenRouter has ~10MB request body limit)
+const MAX_IMAGE_BYTES = 7 * 1024 * 1024; // 7MB raw = ~9.3MB base64
+const MAX_VIDEO_BYTES = 15 * 1024 * 1024; // 15MB raw
+
+// Validate image magic bytes
+function isValidImageData(buffer: Buffer): boolean {
+  if (buffer.length < 4) return false;
+  // PNG: 89 50 4E 47
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
+  // WEBP: RIFF....WEBP
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) return true;
+  // GIF: GIF8
+  if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) return true;
+  return false;
+}
+
 // Convert any media URL to a base64 data URL that OpenRouter/Google can consume.
 // Google rejects some remote URLs (R2, etc.), so we download and inline them.
-async function toDataUrl(mediaUrl: string): Promise<string> {
-  if (mediaUrl.startsWith("data:")) return mediaUrl;
+async function toDataUrl(mediaUrl: string, mediaType: "image" | "video" | "audio"): Promise<string> {
+  if (mediaUrl.startsWith("data:")) {
+    // Validate data URL size
+    const sizeEstimate = Math.round(mediaUrl.length * 0.75); // base64 → raw bytes estimate
+    const maxSize = mediaType === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+    if (sizeEstimate > maxSize) {
+      throw new Error(`File too large (~${Math.round(sizeEstimate / 1024 / 1024)}MB). Max ${Math.round(maxSize / 1024 / 1024)}MB for ${mediaType}.`);
+    }
+    return mediaUrl;
+  }
 
   const res = await fetch(mediaUrl, { signal: AbortSignal.timeout(30000) });
-  if (!res.ok) throw new Error(`Failed to fetch media: ${res.status}`);
+  if (!res.ok) throw new Error(`Failed to fetch media: ${res.status} ${res.statusText}`);
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  // Size check
+  const maxSize = mediaType === "video" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  if (buffer.length > maxSize) {
+    throw new Error(`File too large (${Math.round(buffer.length / 1024 / 1024)}MB). Max ${Math.round(maxSize / 1024 / 1024)}MB for ${mediaType}.`);
+  }
+
+  // Validate image data if it's supposed to be an image
+  if (mediaType === "image" && !isValidImageData(buffer)) {
+    // Check if it's SVG (text-based, not supported by Gemini)
+    const head = buffer.slice(0, 200).toString("utf-8").toLowerCase();
+    if (head.includes("<svg") || head.includes("<?xml")) {
+      throw new Error("SVG images are not supported. Please use PNG, JPEG, or WEBP.");
+    }
+    // Check if we got an HTML error page instead of image data
+    if (head.includes("<!doctype") || head.includes("<html")) {
+      throw new Error("URL returned an HTML page instead of image data. The link may have expired.");
+    }
+    console.warn(`[ai-analyze] Image magic bytes not recognized. First 8 bytes: ${buffer.slice(0, 8).toString("hex")}. Proceeding anyway...`);
+  }
 
   const headerType = res.headers.get("content-type") || "";
   // Use header content-type only if it's specific; fall back to extension-based detection
-  const contentType = headerType && !headerType.includes("octet-stream")
+  let contentType = headerType && !headerType.includes("octet-stream")
     ? headerType.split(";")[0].trim()
     : mimeFromUrl(mediaUrl);
 
-  const buffer = Buffer.from(await res.arrayBuffer());
+  // If content-type doesn't match user's selected media type, use a sensible default
+  // (R2 files often have wrong extensions, e.g. video stored as .png)
+  if (mediaType === "video" && !contentType.startsWith("video/")) {
+    contentType = "video/mp4";
+  } else if (mediaType === "audio" && !contentType.startsWith("audio/")) {
+    contentType = "audio/mpeg";
+  }
+
+  // Reject SVG content-type
+  if (contentType.includes("svg")) {
+    throw new Error("SVG images are not supported by Gemini. Please use PNG, JPEG, or WEBP.");
+  }
+
   return `data:${contentType};base64,${buffer.toString("base64")}`;
 }
 
@@ -142,44 +203,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Missing mediaUrl" }, { status: 400 });
     }
 
-    // Auto-detect actual media type from URL/mime to prevent mismatches
-    // (e.g. user selects "video" but provides a .png URL)
-    const detectedMime = mediaUrl.startsWith("data:")
-      ? (mediaUrl.match(/data:([^;]+)/)?.[1] || "")
-      : mimeFromUrl(mediaUrl);
-    const actualType: "image" | "video" | "audio" =
-      detectedMime.startsWith("video/") ? "video"
-      : detectedMime.startsWith("audio/") ? "audio"
-      : "image";
-
-    // Use the actual detected type for the API call, but keep user's prompt selection
-    const effectiveType = actualType;
-    if (effectiveType !== mediaType) {
-      console.log(`[ai-analyze] Type mismatch: user selected "${mediaType}" but URL is "${effectiveType}" (${detectedMime}). Using "${effectiveType}" for API.`);
-    }
+    // Trust the user's selected media type — R2 files often have wrong extensions
+    // (e.g. a video stored as .png). The user knows what they uploaded.
+    const effectiveType = mediaType;
 
     const model = effectiveType === "video" ? VIDEO_MODEL
       : effectiveType === "audio" ? AUDIO_MODEL
       : IMAGE_MODEL;
 
-    // Use the user's selected prompt (they may want video-style analysis of an image)
     const systemPrompt = ANALYSIS_PROMPTS[mediaType];
 
-    // Build media content part based on actual detected type
     const content: any[] = [
       { type: "text", text: systemPrompt },
     ];
 
     if (effectiveType === "video") {
-      // Video uses video_url content type; prefer Vertex AI (supports data URLs)
       console.log(`[ai-analyze] Sending video URL: ${mediaUrl.substring(0, 80)}...`);
-      const videoUrl = mediaUrl.startsWith("data:") ? mediaUrl : await toDataUrl(mediaUrl);
+      const videoUrl = await toDataUrl(mediaUrl, "video");
       console.log(`[ai-analyze] Video ready (${Math.round(videoUrl.length / 1024)}KB)`);
       content.push({ type: "video_url", video_url: { url: videoUrl } });
     } else {
-      // Images and audio use image_url with base64 data URL
       console.log(`[ai-analyze] Resolving ${effectiveType} URL to data URL...`);
-      const dataUrl = await toDataUrl(mediaUrl);
+      const dataUrl = await toDataUrl(mediaUrl, effectiveType);
       console.log(`[ai-analyze] Data URL ready (${Math.round(dataUrl.length / 1024)}KB)`);
       content.push({ type: "image_url", image_url: { url: dataUrl } });
     }
@@ -215,7 +260,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!response.ok) {
       const errorData = await response.text();
       console.error("[ai-analyze] OpenRouter error:", response.status, errorData);
-      return NextResponse.json({ error: `AI analysis failed (${response.status}): ${errorData.substring(0, 200)}` }, { status: 500 });
+      // Parse and give user-friendly error
+      let userError = `AI analysis failed (${response.status})`;
+      if (errorData.includes("image is not valid")) {
+        userError = "Image could not be processed. Try a different image (PNG/JPEG/WEBP, under 7MB).";
+      } else if (errorData.includes("too large") || errorData.includes("size")) {
+        userError = "File is too large for analysis. Please use a smaller file.";
+      } else {
+        userError += `: ${errorData.substring(0, 200)}`;
+      }
+      return NextResponse.json({ error: userError }, { status: 500 });
     }
 
     const data = await response.json();

@@ -537,9 +537,21 @@ export async function POST(request: NextRequest) {
       }
 
       const sourceBlob = await sourceResponse.blob();
-      const mimeType = sourceBlob.type || 'image/png';
+      const blobType = sourceBlob.type || '';
       const timestamp = Date.now();
       const generationMetadata = fileRecord?.metadata ?? {};
+      // Determine mime from blob, response header, or URL extension — never default to image/png blindly
+      const mimeType = blobType && !blobType.includes('octet-stream')
+        ? blobType
+        : (() => {
+            const ext = resultUrl.split('?')[0].split('.').pop()?.toLowerCase();
+            const map: Record<string, string> = {
+              mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+              mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg', m4a: 'audio/mp4',
+              png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp',
+            };
+            return (ext && map[ext]) || 'image/png';
+          })();
       // Audio/Music detection first (takes priority) — check URL, mime, fileType, AND model name
       const isMusic = fileRecord?.fileType === 'music' || fileRecord?.model?.includes('music');
       const isAudio = !isMusic && (fileRecord?.fileType === 'audio' || mimeType.startsWith('audio/') || resultUrl.match(/\.(mp3|wav|m4a|ogg|aac)(\?|$)/i));
@@ -562,9 +574,9 @@ export async function POST(request: NextRequest) {
         fileSizeBytes = sourceBlob.size;
         console.log(`[kie-callback] ${isMusic ? 'Music' : 'Audio'} saved directly:`, { r2Key: finalR2Key, sizeMB: (fileSizeBytes / (1024 * 1024)).toFixed(2) });
       } else if (isVideo) {
-        // ── VIDEO: Save directly to {companyId}/generated/ as .mp4 ──
+        // ── VIDEO: Save with correct video extension (never reuse original filename which may be .png) ──
         const videoExt = mimeType.includes('webm') ? 'webm' : mimeType.includes('mov') ? 'mov' : 'mp4';
-        finalR2Key = `${companyId}/generated/${fileRecord?.filename || `video-${timestamp}.${videoExt}`}`;
+        finalR2Key = `${companyId}/generated/generated-video-${timestamp}.${videoExt}`;
         await uploadToR2(sourceBlob, finalR2Key);
         finalUrl = getR2PublicUrl(finalR2Key);
         fileSizeBytes = sourceBlob.size;
