@@ -138,4 +138,3 @@ Want me to work through them one by one next session? I'd suggest this order: su
 
 docs/planning/plan_support_chat_cache_marker.md.
 
-ANTHROPIC_API_KEY=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
