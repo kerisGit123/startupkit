@@ -1,8 +1,8 @@
 # Chatbot System — Storytica Support Assistant
 
-> **Last updated:** 2026-04-25
+> **Last updated:** 2026-04-27
 > **Status:** Production
-> **Model:** Claude Haiku 4.5 via Anthropic SDK
+> **Model:** DeepSeek V3 via OpenRouter (planned migration from Claude Haiku 4.5)
 
 ---
 
@@ -335,3 +335,186 @@ When Anthropic API fails:
 ### Adjusting rate limits
 - `RATE_LIMIT_AUTHED` and `RATE_LIMIT_ANON` constants in `app/api/support/chat/route.ts`
 - Window is 1 hour, managed by Convex `support_chat_rate_limits` table
+
+---
+
+## Model Routing Strategy
+
+> **Decided:** 2026-04-27
+
+### Model Assignments
+
+| Feature | Model | Provider | Cost/msg | Status |
+|---------|-------|----------|----------|--------|
+| **Support Chat** | DeepSeek V3 | OpenRouter | ~$0.0009 | DECIDED — Phase 1 |
+| **Director** (free for Pro+) | DeepSeek V3 | OpenRouter | ~$0.0009 | DECIDED — Phase 1 |
+| **Agent** ($120/seat) | Claude Haiku 4.5 | Anthropic SDK | ~$0.0032 | DECIDED — stays on Haiku |
+| **Vision** (image analysis) | Claude Haiku 4.5 | Anthropic SDK | ~$0.0032 | DECIDED — only Haiku supports vision |
+
+### Director Capabilities (on DeepSeek V3 — no vision)
+
+| Can do | Can't do |
+|--------|----------|
+| Read project data (frames, scenes, elements) | See/analyze images (no vision) |
+| Enhance/improve prompts | Trigger generation (no credits) |
+| Suggest style, composition, lighting | Execute any actions |
+| Recommend models | Access post-processing |
+| Search knowledge base | |
+| Create/batch update frame prompts | |
+
+Director understands your project through data (prompts, metadata, element names) but cannot look at actual images.
+
+### Agent Smart Routing (Phase 2 — future optimization)
+
+Agent starts on Haiku-only. Future phase could mix models within Agent mode:
+
+| Agent action | Model | Why |
+|---|---|---|
+| Conversation / planning | DeepSeek V3 | Cheap, good enough for text |
+| create_execution_plan | DeepSeek V3 | Just building a JSON plan |
+| Tool calls (spending credits) | Haiku | Reliable routing, credits at stake |
+| Vision (analyze_frame_image) | Haiku | Only option |
+| trigger_image/video/post_processing | Haiku | Actually spending money |
+
+Complexity note: requires switching models mid-conversation based on predicted tool usage. Defer until costs justify it.
+
+### Routing Logic (auto, not user-selectable)
+
+```text
+Support Chat:
+  model = DeepSeek V3 (via OpenRouter)
+  fallback = Haiku (if OPENROUTER_API_KEY not set or OpenRouter error)
+
+Director/Agent Chat:
+  if mode == "director":
+      model = DeepSeek V3 (via OpenRouter)
+  elif mode == "agent":
+      model = Claude Haiku 4.5 (via Anthropic SDK)
+
+  if OPENROUTER_API_KEY not set:
+      fallback = Claude Haiku 4.5 for everything
+```
+
+No user-facing model picker. Reasons:
+1. Users care about results, not model names
+2. Smart routing gives best cost/quality tradeoff automatically
+3. Prevents users from picking expensive models and eroding margins
+
+### Implementation Notes — OpenRouter Format Adapter
+
+OpenRouter uses OpenAI-compatible tool calling format, not Anthropic format.
+Need a one-time adapter (~100 lines) to translate:
+- `AUTHED_TOOLS` / `ANON_TOOLS` → OpenAI function schema
+- OpenAI `tool_calls` response → Anthropic-style `tool_use` blocks
+- Existing `dispatchTool()` stays unchanged
+
+### Cost Projections
+
+**Per-message cost** (~1,500 input + 500 output tokens):
+
+| Model | Per message | Per 100 msgs |
+|-------|-----------|-------------|
+| DeepSeek V3 | $0.00089 | $0.089 |
+| Haiku 4.5 | $0.0032 | $0.32 |
+| **Savings** | **72%** | |
+
+**Director daily cost on DeepSeek V3:**
+
+| Usage level | Msgs/day | Cost/day | Cost/month |
+|---|---|---|---|
+| Light user | 10 | $0.009 | $0.27 |
+| Average user | 30 | $0.027 | $0.81 |
+| Heavy user (at 100 cap) | 100 | $0.089 | $2.67 |
+| 50 users average | 1,500 total | $1.35 | $40.50 |
+| 100 users average | 3,000 total | $2.70 | $81.00 |
+
+**At scale (monthly):**
+
+| Scale | Haiku only | With DeepSeek routing | Savings |
+|-------|-----------|----------------------|---------|
+| 50 active Director users | $144/mo | $40/mo | $104/mo (72%) |
+| 100 active Director users | $288/mo | $81/mo | $207/mo (72%) |
+| Support chat (100 users, 5 msgs/day avg) | $48/mo | $13/mo | $35/mo (72%) |
+| Agent seats (stays on Haiku) | no change | no change | — |
+
+Director on DeepSeek is essentially free to run. Even 100 heavy users maxing the daily cap costs ~$267/month — easily covered by a handful of Pro subscriptions ($45/mo each).
+
+### Fallback Behavior
+
+- If `OPENROUTER_API_KEY` is not set, all routes fall back to Haiku via Anthropic SDK
+- If OpenRouter returns an error, retry once with Haiku as fallback
+- Support chat graceful degradation (auto-ticket creation) still applies
+
+### Pricing Decision: Director is FREE for Pro+
+
+Director is not charged separately. Rationale:
+- Cost is negligible (~$0.81/user/month avg on DeepSeek)
+- Free Director drives Agent seat upsell ($120/month)
+- Paywall would kill adoption and conversion funnel
+- If costs spike, tighten daily cap (100 → 50) instead of adding paywall
+
+### Agent Seat Architecture (via Stripe + Convex, not Clerk)
+
+Clerk handles: WHO is in the org + their role
+Convex handles: WHAT features each user has access to (seat type)
+Stripe handles: billing for quantity-based seat subscriptions
+
+Flow:
+1. Org admin buys N agent seats via Stripe (quantity-based subscription item)
+2. Stripe webhook → Convex creates/updates `agent_seats` records
+3. Org admin assigns seats to specific members (UI in org settings)
+4. User opens Agent mode → check `agent_seats` for their userId
+5. No seat → teaser mode (30 free msgs/month) or "ask your admin"
+
+---
+
+## Message Usage Limits
+
+### Per-Feature Limits
+
+| Feature | Limit | Window | Overflow Behavior |
+|---------|-------|--------|-------------------|
+| **Support Chat (authed)** | 30 msgs | per hour | 429 rate limit, show reset time |
+| **Support Chat (anon)** | 10 msgs | per hour | 429 rate limit, show reset time |
+| **Director** (free for Pro+) | 100 msgs | per day | Soft cap, "try again tomorrow" message |
+| **Agent** ($120/seat) | 5,000 msgs | per month | 1 credit/msg overflow (seamless, no hard lock) |
+| **Agent teaser** (Pro/Business, no seat) | 30 msgs | per month | "Upgrade to Agent seat" prompt |
+
+### Tracking
+
+- Support chat: existing `support_chat_rate_limits` table (hourly window)
+- Director: new daily counter in `director_chat_sessions` or dedicated rate limit table
+- Agent: monthly counter tracked per seat in Convex, reset on billing cycle
+- Agent teaser: monthly counter per user, reset on calendar month
+
+### UI Patterns (inspired by Claude usage bar)
+
+- Show remaining messages in chat header: "82/100 messages today"
+- Progress bar fills as usage increases
+- Warning at 80% usage: bar turns amber
+- At limit: clear message with reset time, no hard lockout feeling
+- Agent overflow: "You've used your 5,000 included messages. Additional messages cost 1 credit each." (seamless, auto-deduct)
+
+---
+
+## Implementation Checklist
+
+### Phase 1 — Model Routing
+- [ ] Create `lib/openrouter.ts` — OpenRouter client for DeepSeek V3
+- [ ] Add `OPENROUTER_API_KEY` to `env.example`
+- [ ] Switch Support chat from Haiku to DeepSeek V3 (with Haiku fallback)
+- [ ] Switch Director chat to DeepSeek V3 for `mode=director`
+- [ ] Keep Agent chat on Haiku for `mode=agent` + vision tasks
+- [ ] Test: Support chat answers FAQ/billing questions correctly on DeepSeek
+- [ ] Test: Director gives creative advice on DeepSeek
+- [ ] Test: Agent executes tool chains reliably on Haiku
+- [ ] Test: Vision (analyze_frame_image) works on Haiku only
+
+### Phase 2 — Message Usage Limits
+- [ ] Add daily message counter for Director (Convex table/field)
+- [ ] Add monthly message counter for Agent seats (Convex table/field)
+- [ ] Add teaser counter for Agent (30 free msgs/month for Pro/Business without seat)
+- [ ] UI: message count display in chat header
+- [ ] UI: progress bar with amber warning at 80%
+- [ ] UI: limit-reached message with reset time
+- [ ] Agent overflow: seamless 1 credit/msg deduction after cap

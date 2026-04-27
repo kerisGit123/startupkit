@@ -80,13 +80,18 @@ export const AUTHED_TOOLS: Anthropic.Tool[] = [
   {
     name: "list_my_credit_transactions",
     description:
-      "List recent credit ledger entries (purchases, monthly grants, usage deductions, refunds) for the user's active workspace. Use when the user asks why their balance changed, what they spent credits on, or to track recent generation costs.",
+      "List credit ledger entries (purchases, monthly grants, usage deductions, refunds) for the user's active workspace. Use when the user asks why their balance changed, what they spent credits on, or to track generation costs. IMPORTANT: When the user asks about a specific time period (e.g. 'this month', 'last week'), always set since_date to the start of that period (ISO date string like '2026-04-01'). The returned summary only covers the returned rows, so filtering by date is critical for accurate period totals.",
     input_schema: {
       type: "object",
       properties: {
         limit: {
           type: "number",
-          description: "How many recent transactions to return (1-20, default 10).",
+          description: "How many recent transactions to return (1-50, default 20).",
+        },
+        since_date: {
+          type: "string",
+          description:
+            "Only return transactions on or after this ISO date (e.g. '2026-04-01'). Use this when the user asks about a specific period like 'this month' or 'last 7 days'.",
         },
       },
       required: [],
@@ -308,25 +313,65 @@ export async function dispatchTool(
       }
 
       case "list_my_credit_transactions": {
-        const limit = Math.min(Math.max(Number(input.limit) || 10, 1), 20);
-        const rows = await ctx.convex.query(
+        const limit = Math.min(Math.max(Number(input.limit) || 20, 1), 50);
+        const sinceDate =
+          typeof input.since_date === "string" ? input.since_date : undefined;
+        const sinceMs = sinceDate ? new Date(sinceDate).getTime() : undefined;
+
+        let rows = await ctx.convex.query(
           api.supportTools.listCreditTransactions,
           { secret: ctx.secret, companyId: ctx.companyId, limit }
         );
+
+        // Client-side date filter (the Convex query doesn't support date range)
+        if (sinceMs && !Number.isNaN(sinceMs)) {
+          rows = rows.filter((r) => r.createdAt >= sinceMs);
+        }
+
         if (rows.length === 0)
-          return { output: "No credit transactions yet.", isError: false };
-        return {
-          output: stringifyResult(
-            rows.map((r) => ({
-              date: fmtDate(r.createdAt),
-              type: r.type,
-              tokens: r.tokens,
-              reason: r.reason,
-              amountPaid: r.amountPaid,
-            }))
-          ),
-          isError: false,
+          return { output: "No credit transactions found for this period.", isError: false };
+
+        // Pre-compute summary so the model doesn't have to do math
+        let totalSpent = 0;
+        let totalRefunded = 0;
+        let totalReceived = 0;
+        const spentByAction: Record<string, number> = {};
+        const refundByAction: Record<string, number> = {};
+        for (const r of rows) {
+          const t = r.tokens ?? 0;
+          const label = r.reason ?? r.type ?? "unknown";
+          if (t < 0) {
+            totalSpent += Math.abs(t);
+            spentByAction[label] = (spentByAction[label] ?? 0) + Math.abs(t);
+          } else if (r.type === "refund") {
+            totalRefunded += t;
+            refundByAction[label] = (refundByAction[label] ?? 0) + t;
+          } else if (t > 0) {
+            totalReceived += t;
+          }
+        }
+
+        const summary = {
+          period: sinceDate
+            ? `Since ${sinceDate}`
+            : `Last ${rows.length} transactions`,
+          summary: {
+            totalSpent,
+            totalRefunded,
+            netSpent: totalSpent - totalRefunded,
+            totalReceived,
+            transactionCount: rows.length,
+          },
+          spentByCategory: spentByAction,
+          refundedByCategory: refundByAction,
+          transactions: rows.map((r) => ({
+            date: fmtDate(r.createdAt),
+            type: r.type,
+            credits: r.tokens,
+            reason: r.reason,
+          })),
         };
+        return { output: stringifyResult(summary), isError: false };
       }
 
       case "get_ai_model_pricing": {
