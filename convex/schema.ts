@@ -1781,6 +1781,7 @@ export default defineSchema({
     scriptType: v.optional(v.string()), // "ANIMATED_STORIES" | "KIDS_ANIMATED_STORIES" | etc.
     
     isFavorite: v.optional(v.boolean()),
+    aspectRatio: v.optional(v.string()), // "16:9" | "9:16" | "1:1" | "4:5" — project canvas ratio
     style: v.optional(v.string()), // "cinematic" | "sketch" | "anime" | "cartoon" | etc. — top-level project theme
     stylePrompt: v.optional(v.string()), // The actual style prompt text appended to all generations in this project
     formatPreset: v.optional(v.string()), // "film" | "documentary" | "youtube" | "reel" | etc. — content format prompt template key
@@ -2147,7 +2148,8 @@ export default defineSchema({
       v.literal("action"),
       v.literal("video"),
       v.literal("other"),
-      v.literal("custom")
+      v.literal("custom"),
+      v.literal("notes")
     ),
     prompt: v.string(),
     notes: v.optional(v.string()),

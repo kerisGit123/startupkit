@@ -8,7 +8,7 @@ import { Search, Plus, Edit, Trash2, Copy, Star, Grid, List, X, Zap, Clock, Save
 interface Prompt {
   _id: string;
   name: string;
-  type: 'character' | 'environment' | 'prop' | 'design' | 'camera' | 'action' | 'video' | 'other';
+  type: 'character' | 'environment' | 'prop' | 'design' | 'camera' | 'action' | 'video' | 'other' | 'notes';
   prompt: string;
   notes?: string;
   companyId: string;
@@ -27,6 +27,7 @@ const PROMPT_CATEGORIES = [
   { key: 'camera', label: 'Camera' },
   { key: 'action', label: 'Action' },
   { key: 'video', label: 'Video' },
+  { key: 'notes', label: 'Notes' },
   { key: 'other', label: 'Other' },
 ] as const;
 
@@ -3159,7 +3160,7 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
   const [editingTemplate, setEditingTemplate] = useState<Prompt | null>(null);
   const [displayedCount, setDisplayedCount] = useState(ITEMS_PER_PAGE);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'personal' | 'system'>('personal');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'personal' | 'system'>('all');
   // Fetch templates from Convex
   const userTemplates = useQuery(api.promptTemplates.getByCompany, { 
     companyId: userCompanyId 
@@ -3367,9 +3368,14 @@ const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: Promp
             {/* Category filter tabs */}
             <div className="flex gap-1 flex-wrap mb-4">
               {PROMPT_CATEGORIES.map((cat) => {
+                const sourceFiltered = allTemplates.filter(t =>
+                  sourceFilter === 'all' ? true :
+                  sourceFilter === 'system' ? (t as any).isSystem === true :
+                  (t as any).isSystem !== true
+                );
                 const count = cat.key === 'all'
-                  ? allTemplates.length
-                  : allTemplates.filter(t => t.type === cat.key).length;
+                  ? sourceFiltered.length
+                  : sourceFiltered.filter(t => t.type === cat.key).length;
                 return (
                   <button
                     key={cat.key}
@@ -3743,6 +3749,7 @@ const PromptEditorModal = ({ template, isOpen, onClose, onSave }: any) => {
               <option value="prop">Prop</option>
               <option value="camera">Camera</option>
               <option value="action">Action</option>
+              <option value="notes">Notes</option>
               <option value="other">Other</option>
             </select>
           </div>

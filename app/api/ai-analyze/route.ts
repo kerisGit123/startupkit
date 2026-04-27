@@ -3,10 +3,40 @@ import { NextRequest, NextResponse } from "next/server";
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-// Models — cheapest for images, best for video/audio
-const IMAGE_MODEL = "google/gemini-flash-1.5";
-const VIDEO_MODEL = "google/gemini-pro-1.5";
-const AUDIO_MODEL = "google/gemini-pro-1.5";
+// Models — Gemini 2.5 Flash supports image, video, and audio
+const IMAGE_MODEL = "google/gemini-2.5-flash";
+const VIDEO_MODEL = "google/gemini-2.5-flash";
+const AUDIO_MODEL = "google/gemini-2.5-flash";
+
+// Guess MIME type from URL extension (R2 often returns application/octet-stream)
+function mimeFromUrl(url: string): string {
+  const ext = url.split("?")[0].split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+    webp: "image/webp", gif: "image/gif", svg: "image/svg+xml",
+    mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+    mp3: "audio/mpeg", wav: "audio/wav", ogg: "audio/ogg", m4a: "audio/mp4",
+  };
+  return (ext && map[ext]) || "image/png";
+}
+
+// Convert any media URL to a base64 data URL that OpenRouter/Google can consume.
+// Google rejects some remote URLs (R2, etc.), so we download and inline them.
+async function toDataUrl(mediaUrl: string): Promise<string> {
+  if (mediaUrl.startsWith("data:")) return mediaUrl;
+
+  const res = await fetch(mediaUrl, { signal: AbortSignal.timeout(30000) });
+  if (!res.ok) throw new Error(`Failed to fetch media: ${res.status}`);
+
+  const headerType = res.headers.get("content-type") || "";
+  // Use header content-type only if it's specific; fall back to extension-based detection
+  const contentType = headerType && !headerType.includes("octet-stream")
+    ? headerType.split(";")[0].trim()
+    : mimeFromUrl(mediaUrl);
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
 
 // Single-purpose system prompts per media type
 const ANALYSIS_PROMPTS: Record<string, string> = {
@@ -112,31 +142,49 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Missing mediaUrl" }, { status: 400 });
     }
 
-    const model = mediaType === "video" ? VIDEO_MODEL
-      : mediaType === "audio" ? AUDIO_MODEL
+    // Auto-detect actual media type from URL/mime to prevent mismatches
+    // (e.g. user selects "video" but provides a .png URL)
+    const detectedMime = mediaUrl.startsWith("data:")
+      ? (mediaUrl.match(/data:([^;]+)/)?.[1] || "")
+      : mimeFromUrl(mediaUrl);
+    const actualType: "image" | "video" | "audio" =
+      detectedMime.startsWith("video/") ? "video"
+      : detectedMime.startsWith("audio/") ? "audio"
+      : "image";
+
+    // Use the actual detected type for the API call, but keep user's prompt selection
+    const effectiveType = actualType;
+    if (effectiveType !== mediaType) {
+      console.log(`[ai-analyze] Type mismatch: user selected "${mediaType}" but URL is "${effectiveType}" (${detectedMime}). Using "${effectiveType}" for API.`);
+    }
+
+    const model = effectiveType === "video" ? VIDEO_MODEL
+      : effectiveType === "audio" ? AUDIO_MODEL
       : IMAGE_MODEL;
 
+    // Use the user's selected prompt (they may want video-style analysis of an image)
     const systemPrompt = ANALYSIS_PROMPTS[mediaType];
 
-    // Build message content
+    // Build media content part based on actual detected type
     const content: any[] = [
       { type: "text", text: systemPrompt },
     ];
 
-    if (mediaType === "image" || mediaType === "video") {
-      content.push({
-        type: "image_url",
-        image_url: { url: mediaUrl },
-      });
-    } else if (mediaType === "audio") {
-      // Gemini Pro supports audio via URL in the same image_url format
-      content.push({
-        type: "image_url",
-        image_url: { url: mediaUrl },
-      });
+    if (effectiveType === "video") {
+      // Video uses video_url content type; prefer Vertex AI (supports data URLs)
+      console.log(`[ai-analyze] Sending video URL: ${mediaUrl.substring(0, 80)}...`);
+      const videoUrl = mediaUrl.startsWith("data:") ? mediaUrl : await toDataUrl(mediaUrl);
+      console.log(`[ai-analyze] Video ready (${Math.round(videoUrl.length / 1024)}KB)`);
+      content.push({ type: "video_url", video_url: { url: videoUrl } });
+    } else {
+      // Images and audio use image_url with base64 data URL
+      console.log(`[ai-analyze] Resolving ${effectiveType} URL to data URL...`);
+      const dataUrl = await toDataUrl(mediaUrl);
+      console.log(`[ai-analyze] Data URL ready (${Math.round(dataUrl.length / 1024)}KB)`);
+      content.push({ type: "image_url", image_url: { url: dataUrl } });
     }
 
-    console.log(`[ai-analyze] Analyzing ${mediaType} with model ${model}`);
+    console.log(`[ai-analyze] Analyzing ${effectiveType} (user: ${mediaType}) with model ${model}`);
 
     const response = await fetch(OPENROUTER_URL, {
       method: "POST",
@@ -156,14 +204,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         ],
         max_tokens: 4096,
         temperature: 0.3,
+        // For video/audio, prefer Vertex AI (supports data URLs) over AI Studio (YouTube only)
+        ...(effectiveType !== "image" && {
+          provider: { order: ["vertex-ai", "google"] },
+        }),
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(120000),
     });
 
     if (!response.ok) {
       const errorData = await response.text();
       console.error("[ai-analyze] OpenRouter error:", response.status, errorData);
-      return NextResponse.json({ error: `AI analysis failed: ${response.status}` }, { status: response.status });
+      return NextResponse.json({ error: `AI analysis failed (${response.status}): ${errorData.substring(0, 200)}` }, { status: 500 });
     }
 
     const data = await response.json();

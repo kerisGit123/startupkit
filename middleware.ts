@@ -19,6 +19,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/booking/(.*)",
   "/api/chat(.*)",
   "/api/inpaint(.*)",
+  "/api/ai-analyze(.*)",
   "/api/support/chat(.*)",
 ]);
 

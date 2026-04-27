@@ -60,15 +60,16 @@ export function PromptActionsDropdown({
   const [saveName, setSaveName] = useState("");
   const [presetDialog, setPresetDialog] = useState<"prompt" | "note" | null>(null);
 
-  const createPreset = useMutation(api.storyboard.presets.create);
-  const incrementUsage = useMutation(api.storyboard.presets.incrementUsage);
-  const removePreset = useMutation(api.storyboard.presets.remove);
+  const createTemplate = useMutation(api.promptTemplates.create);
+  const incrementUsage = useMutation(api.promptTemplates.incrementUsage);
+  const removeTemplate = useMutation(api.promptTemplates.remove);
 
-  // Load saved notes
-  const savedNotes = useQuery(
-    api.storyboard.presets.list,
-    companyId ? { companyId, category: "note" } : "skip"
+  // Load saved notes from promptTemplates (type: "notes")
+  const allTemplates = useQuery(
+    api.promptTemplates.getByCompany,
+    companyId ? { companyId } : "skip"
   );
+  const savedNotes = (allTemplates || []).filter((t: any) => t.type === "notes");
 
   const itemClass = "w-full px-3 py-2 text-left text-[13px] text-(--text-primary) hover:bg-white/5 transition-colors flex items-center gap-2.5 disabled:opacity-30 disabled:cursor-not-allowed";
   const iconClass = "w-4 h-4 text-(--text-secondary)";
@@ -85,21 +86,21 @@ export function PromptActionsDropdown({
     setOpen(false);
   };
 
-  const handleSaveToPreset = async (category: "prompt" | "note") => {
-    if (!companyId || !userId || !saveName.trim()) return;
+  const handleSaveNote = async () => {
+    if (!companyId || !saveName.trim()) return;
     const text = extractPlainText();
     if (!text.trim()) { toast.error("Nothing to save"); return; }
 
     try {
-      await createPreset({
+      await createTemplate({
         name: saveName.trim(),
-        category,
-        format: JSON.stringify({ text }),
+        type: "notes" as const,
         prompt: text,
         companyId,
-        userId,
+        isPublic: false,
+        tags: [],
       });
-      toast.success(`${category === "prompt" ? "Prompt" : "Note"} saved as "${saveName.trim()}"`);
+      toast.success(`Note saved as "${saveName.trim()}"`);
       setSaveName("");
       setShowSaveDialog(null);
       setOpen(false);
@@ -250,7 +251,7 @@ export function PromptActionsDropdown({
               <input
                 value={saveName}
                 onChange={(e) => setSaveName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveToPreset("note")}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveNote()}
                 placeholder="Note name..."
                 autoFocus
                 className="w-full px-2.5 py-1.5 bg-(--bg-primary) border border-(--border-primary) rounded-lg text-xs text-(--text-primary) placeholder:text-(--text-tertiary) outline-none focus:border-(--accent-blue)/50 mb-2"
@@ -258,7 +259,7 @@ export function PromptActionsDropdown({
               <div className="flex gap-2 justify-end">
                 <button onClick={() => setShowSaveDialog(null)} className="px-3 py-1 text-[11px] text-(--text-secondary) hover:text-(--text-primary) transition">Cancel</button>
                 <button
-                  onClick={() => handleSaveToPreset("note")}
+                  onClick={() => handleSaveNote()}
                   disabled={!saveName.trim()}
                   className="px-3 py-1 text-[11px] bg-(--accent-blue) text-white rounded-lg transition hover:bg-(--accent-blue-hover) disabled:opacity-40"
                 >
@@ -295,7 +296,7 @@ export function PromptActionsDropdown({
                           <button
                             onClick={() => {
                               loadText(note.prompt || "");
-                              incrementUsage({ id: note._id });
+                              incrementUsage({ id: note._id as any });
                               setPresetDialog(null);
                             }}
                             className="px-2 py-0.5 text-[10px] bg-(--accent-blue) text-white rounded transition hover:bg-(--accent-blue-hover)"
@@ -304,7 +305,7 @@ export function PromptActionsDropdown({
                           </button>
                           <button
                             onClick={() => {
-                              removePreset({ id: note._id });
+                              removeTemplate({ id: note._id as any });
                               toast.success(`"${note.name}" deleted`);
                             }}
                             className="p-1 rounded hover:bg-red-500/10 transition"
