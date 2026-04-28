@@ -6,8 +6,9 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   X, Shuffle, ChevronDown, ChevronRight, ChevronLeft, Sparkles, Check, User, Trees, Package,
-  ImagePlus, Send, FileText, Crop,
+  ImagePlus, Send, FileText, Crop, Upload, Trash2,
 } from "lucide-react";
+import { uploadToR2 } from "@/lib/uploadToR2";
 import {
   type ForgeElementType,
   type ForgeStep,
@@ -256,6 +257,87 @@ function FieldEraSlider({ field, value, onChange }: { field: ForgeField; value: 
       {/* Fade edges */}
       <div className="absolute inset-y-0 left-0 w-24 bg-linear-to-r from-(--bg-secondary) to-transparent pointer-events-none z-10" />
       <div className="absolute inset-y-0 right-0 w-24 bg-linear-to-l from-(--bg-secondary) to-transparent pointer-events-none z-10" />
+    </div>
+  );
+}
+
+function FieldImageUpload({
+  field, value, onChange, companyId, projectId, userId,
+}: {
+  field: ForgeField; value: string; onChange: (v: string) => void;
+  companyId?: string; projectId: string; userId: string;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setUploading(true);
+    try {
+      const result = await uploadToR2({
+        file,
+        category: "elements",
+        projectId,
+        userId,
+        companyId,
+        tags: ["reference-photo"],
+      });
+      if (result.url) onChange(result.url);
+    } catch (e) {
+      console.error("[FieldImageUpload] Upload failed:", e);
+    } finally {
+      setUploading(false);
+    }
+  }, [companyId, projectId, userId, onChange]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }, [handleFile]);
+
+  if (value) {
+    return (
+      <div className="relative group w-full h-36 rounded-xl overflow-hidden border border-(--border-primary)">
+        <img src={value} alt={field.label} className="w-full h-full object-cover" />
+        <button
+          onClick={() => onChange("")}
+          className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white/80 hover:text-white hover:bg-red-500/80 opacity-0 group-hover:opacity-100 transition-all"
+        >
+          <Trash2 size={14} />
+        </button>
+        <div className="absolute bottom-0 inset-x-0 bg-black/50 px-3 py-1 text-[11px] text-(--text-secondary)">
+          {field.label}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={handleDrop}
+      onClick={() => inputRef.current?.click()}
+      className="w-full h-36 rounded-xl border-2 border-dashed border-(--border-primary) hover:border-(--accent-blue)/40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors"
+    >
+      {uploading ? (
+        <div className="animate-spin w-6 h-6 border-2 border-(--accent-blue) border-t-transparent rounded-full" />
+      ) : (
+        <>
+          <Upload size={20} className="text-(--text-tertiary)" />
+          <span className="text-[12px] text-(--text-tertiary)">{field.placeholder || `Upload ${field.label}`}</span>
+        </>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+        }}
+      />
     </div>
   );
 }
@@ -776,6 +858,7 @@ export function ElementForge({
       case "era-slider": return <FieldEraSlider field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
       case "carousel": return <FieldCarousel field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
       case "combobox": return <FieldCombobox field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      case "image-upload": return <FieldImageUpload field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} companyId={companyId} projectId={projectId as string} userId={userId} />;
       default: return null;
     }
   };
