@@ -1,10 +1,14 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-28 (Session #21 — EditImageAIPanel post-processing → storyboard_files + GPT Image 2 Img2Img)
+> **Last updated:** 2026-04-28 (Session #22 — Landing page copy update + Element Forge/Cinema Studio naming)
 
 ---
 
 ## Recently Completed (Session #11-21 — 2026-04-26/28)
+
+### Session #22 — 2026-04-28 (Landing Page Copy Update)
+
+- [x] **Landing page copy refresh** — "Canvas Editor" → "Cinema Studio", "Element Library" → "Element Forge" with wizard description, Cinema Grade references Cinema Studio, AI Storyboarding mentions Cinema Studio flow
 
 ### Session #21 — 2026-04-28 (EditImageAIPanel Post-Processing Pipeline + GPT Image 2 Img2Img)
 

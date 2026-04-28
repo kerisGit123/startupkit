@@ -16,7 +16,7 @@ export interface ParsedScene {
 export interface SceneParseResult {
   scenes: ParsedScene[];
   duplicates: Array<{
-    sceneNumber: number;
+    sceneNumber: string;
     title: string;
     count: number;
   }>;
@@ -25,24 +25,26 @@ export interface SceneParseResult {
 
 export function parseScriptScenes(content: string): SceneParseResult {
   const scenes: ParsedScene[] = [];
-  const sceneRegex = /SCENE\s+(\d+)[:\s]+([^\n]+)\n([\s\S]*?)(?=SCENE\s+\d+[:\s]|$)/gi;
+  // Match SCENE 1, SCENE 1A, SCENE 1B, SCENE 2A etc. with : or — or - or space as separator
+  const sceneRegex = /SCENE\s+(\d+[A-Z]?)\s*[:\s—–-]+\s*([^\n]+)\n([\s\S]*?)(?=SCENE\s+\d+[A-Z]?\s*[:\s—–-]|$)/gi;
   let match;
-  const usedSceneNumbers = new Set<number>();
-  const duplicateScenes = new Map<number, { title: string; count: number }>();
+  const usedSceneIds = new Set<string>();
+  const duplicateScenes = new Map<string, { title: string; count: number }>();
   const warnings: string[] = [];
 
   while ((match = sceneRegex.exec(content)) !== null) {
-    const [, num, title, body] = match;
-    const sceneNumber = parseInt(num);
+    const [, sceneId, title, body] = match;
+    const sceneKey = sceneId.toUpperCase();
+    const sceneNumber = parseInt(sceneId);
     const cleanBody = body.trim();
 
-    // Track duplicates
-    if (usedSceneNumbers.has(sceneNumber)) {
-      const existing = duplicateScenes.get(sceneNumber) || { title: title.trim(), count: 1 };
-      duplicateScenes.set(sceneNumber, { ...existing, count: existing.count + 1 });
+    // Track duplicates by full ID (1A, 1B are different)
+    if (usedSceneIds.has(sceneKey)) {
+      const existing = duplicateScenes.get(sceneKey) || { title: title.trim(), count: 1 };
+      duplicateScenes.set(sceneKey, { ...existing, count: existing.count + 1 });
       continue;
     }
-    usedSceneNumbers.add(sceneNumber);
+    usedSceneIds.add(sceneKey);
 
     const charRegex = /^([A-Z][A-Z\s]{1,20}):/gm;
     const characters = [...new Set([...cleanBody.matchAll(charRegex)].map((m) => m[1].trim()))];
@@ -107,7 +109,7 @@ export function parseScriptScenes(content: string): SceneParseResult {
     };
 
     scenes.push({
-      id: `scene-${sceneNumber}`,
+      id: `scene-${sceneKey.toLowerCase()}`,
       title: title.trim(),
       content: cleanBody,
       characters: allCharacters,

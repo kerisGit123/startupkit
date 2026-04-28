@@ -521,6 +521,10 @@ export default function StoryboardWorkspacePage() {
   const [scriptDirty, setScriptDirty] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showBuildDialog, setShowBuildDialog] = useState(false);
+  const [showExtendDialog, setShowExtendDialog] = useState(false);
+  const [extendPrompt, setExtendPrompt] = useState("");
+  const [extendSceneCount, setExtendSceneCount] = useState(4);
+  const [isExtending, setIsExtending] = useState(false);
   const [showStyleDropdown, setShowStyleDropdown] = useState(false);
   const [showCustomStyleForm, setShowCustomStyleForm] = useState(false);
   const [customStyleName, setCustomStyleName] = useState("");
@@ -684,153 +688,65 @@ export default function StoryboardWorkspacePage() {
     if (!src.trim()) return;
     setIsBuilding(true);
     try {
-      const parseResult = parseScriptScenes(src);
-      const scenes = parseResult.scenes;
-      console.log(`[Build Storyboard Frontend] Parsed scenes:`, scenes.map(s => ({ id: s.id, title: s.title, duration: s.duration, characters: s.characters })));
-      console.log(`[Build Storyboard Frontend] Build config:`, config);
-      console.log(`[Build Storyboard Frontend] Total scenes found: ${scenes.length}`);
-      console.log(`[Build Storyboard Frontend] Script length: ${src.length}`);
-      
-      // Apply rebuild strategy logic
-      let filteredScenes = scenes;
-      if (config.rebuildStrategy === "append_update" && config.selectedScenes && config.selectedScenes.length > 0) {
-        // For Add/Update mode: filter scenes based on selection
-        filteredScenes = scenes.filter(scene => 
-          config.selectedScenes.includes(scene.id) // Update selected scenes (scene.id from script)
-          || !items || !items.some(item => item.sceneId === scene.id) // Add new scenes (scene.id from script)
-        );
-        console.log(`[Build Storyboard] Filtered ${filteredScenes.length} scenes for Add/Update mode`);
-        console.log(`[Build Storyboard] Selected scenes for update:`, config.selectedScenes);
-        console.log(`[Build Storyboard] Available existing sceneIds:`, items?.map(item => item.sceneId));
-      } else if (config.rebuildStrategy === "hard_rebuild") {
-        // For Replace All mode: use all scenes
-        filteredScenes = scenes;
-        console.log(`[Build Storyboard] Using all ${scenes.length} scenes for Hard Rebuild mode`);
-      }
-      
-      console.log(`[Build Storyboard] Final scenes to process: ${filteredScenes.length}`);
-      console.log(`[Build Storyboard] Build type: ${config.buildType}`);
-      console.log(`[Build Storyboard] Element strategy: ${config.elementStrategy}`);
-      
-      if (filteredScenes.length === 0) {
-        console.log(`[Build Storyboard] No scenes to process after filtering`);
-        return;
-      }
-      
-      const frontendCompanyId = currentCompanyId;
-      
-      let result;
-      if (config.buildType === "enhanced") {
-        // Use enhanced extraction API
-        const response = await fetch('/api/storyboard/enhanced-script-extraction', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            scriptContent: src,
-            projectId: pid,
-            companyId: frontendCompanyId // Pass the current companyId for consistency
-          })
-        });
-        
-        console.log(`[Enhanced Build Storyboard] API Response status: ${response.status}`);
-        console.log(`[Enhanced Build Storyboard] API Response headers:`, Object.fromEntries(response.headers.entries()));
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[Enhanced Build Storyboard] API Error (${response.status}):`, errorText);
-          throw new Error(`Enhanced extraction failed: ${response.status} - ${errorText}`);
-        }
-        
-        const enhancedResult = await response.json();
-        console.log(`[Enhanced Build Storyboard] Extracted ${enhancedResult.extractedElements?.length || 0} elements with detailed descriptions`);
-        console.log(`[Enhanced Build Storyboard] Element details:`, enhancedResult.extractedElements?.map(e => ({ name: e.name, type: e.type, locationType: e.locationType })));
-        
-        // Apply element strategy
-        let finalElements = enhancedResult.extractedElements || [];
-        let skipElementCreation = false;
-        
-        if (config.elementStrategy === "preserve") {
-          // Preserve existing elements - skip all element creation in backend
-          skipElementCreation = true;
-          console.log(`[Build Storyboard] Preserving existing elements, skipping all element creation`);
-        } else if (config.elementStrategy === "regenerate") {
-          // Regenerate elements - use enhanced elements from AI extraction
-          console.log(`[Build Storyboard] Regenerating elements with ${finalElements.length} enhanced elements from smart detection`);
-        }
-        
-        // Build storyboard with enhanced elements and filtered scenes via Site API
-        const buildResponse = await fetch('/api/n8n-webhook', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            projectId: pid,
-            buildType: config.buildType || 'enhanced',
-            rebuildStrategy: config.rebuildStrategy,
-            scriptType: config.scriptType || 'ANIMATED_STORIES',
-            language: config.language || 'en',
-            script: src,
-            scenes: filteredScenes.map(({ technical, ...scene }) => scene),
-            enhancedElements: skipElementCreation ? undefined : finalElements,
-            metadata: enhancedResult.metadata, // Pass extracted metadata (genre, visualStyle, etc.)
-          })
-        });
-        
-        if (!buildResponse.ok) {
-          const errorData = await buildResponse.json();
-          throw new Error(errorData.error || 'Build request failed');
-        }
-        
-        result = await buildResponse.json();
-      } else {
-        // Normal build - no AI extraction
-        let skipElementCreation = false;
-        
-        if (config.elementStrategy === "preserve") {
-          // Preserve existing elements - skip all element creation
-          skipElementCreation = true;
-          console.log(`[Build Storyboard] Normal build preserving existing elements`);
-        } else if (config.elementStrategy === "regenerate") {
-          // For normal build with regenerate, allow fallback element creation from scene locations
-          console.log(`[Build Storyboard] Normal build with element regeneration (fallback from scene locations)`);
-        }
-        
-        // Build storyboard with filtered scenes via Site API
-        const normalBuildResponse = await fetch('/api/n8n-webhook', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            projectId: pid,
-            buildType: config.buildType || 'normal',
-            rebuildStrategy: config.rebuildStrategy,
-            scriptType: config.scriptType || 'ANIMATED_STORIES',
-            language: config.language || 'en',
-            script: src,
-            scenes: filteredScenes.map(({ technical, ...scene }) => scene),
-            enhancedElements: skipElementCreation ? undefined : undefined, // No enhanced elements for normal build
-          })
-        });
-        
-        if (!normalBuildResponse.ok) {
-          const errorData = await normalBuildResponse.json();
-          throw new Error(errorData.error || 'Build request failed');
-        }
-        
-        result = await normalBuildResponse.json();
-      }
-      
-      console.log(`[Build Storyboard] Created ${result?.createdItems} frames, ${result?.createdCharacters} characters, and ${result?.createdEnvironments} environments`);
-      
+      // Save script first if dirty
       if (scriptDirty) {
-        await updateScript({ id: pid, script: src, scenes, isAIGenerated: false });
+        const parseResult = parseScriptScenes(src);
+        await updateScript({ id: pid, script: src, scenes: parseResult.scenes, isAIGenerated: false });
         setScriptDirty(false);
       }
+
+      // Fire and forget — Convex reactivity shows frames in real-time
+      fetch('/api/storyboard/build-storyboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: pid,
+          rebuildStrategy: config.rebuildStrategy || "replace_all",
+        }),
+      }).then(async (response) => {
+        if (!response.ok) {
+          const text = await response.text();
+          let msg = "Build failed";
+          try { msg = JSON.parse(text).error || msg; } catch {}
+          toast.error(msg);
+        }
+      }).catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Build failed");
+      });
+
+      toast.info("Building storyboard... frames will appear as they're created.");
       setTab("storyboard");
     } finally {
       setIsBuilding(false);
+    }
+  };
+
+  const handleExtendStory = async () => {
+    setIsExtending(true);
+    try {
+      const response = await fetch('/api/storyboard/extend-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: pid,
+          prompt: extendPrompt || undefined,
+          sceneCount: extendSceneCount,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Extend failed');
+      }
+
+      const result = await response.json();
+      toast.success(`Added ${result.scenesCreated} new scenes`);
+      setShowExtendDialog(false);
+      setExtendPrompt("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to extend story");
+    } finally {
+      setIsExtending(false);
     }
   };
 
@@ -1030,14 +946,26 @@ export default function StoryboardWorkspacePage() {
 
           {tab === "storyboard" && (
             <>
-              {/* Search and Filters - similar to ProjectsDashboard */}
+              {/* Extend Story */}
+              {items && items.length > 0 && (
+                <button
+                  onClick={() => setShowExtendDialog(true)}
+                  disabled={isExtending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Extend Story
+                </button>
+              )}
+
+              {/* Search and Filters */}
               <div className="flex items-center gap-2">
-                <TopNavSearch 
-                  onSearch={setSearchQuery} 
-                  placeholder="Search frames, tags, status..." 
+                <TopNavSearch
+                  onSearch={setSearchQuery}
+                  placeholder="Search frames, tags, status..."
                 />
-                <TopNavFilters 
-                  onFiltersChange={handleFiltersChange} 
+                <TopNavFilters
+                  onFiltersChange={handleFiltersChange}
                   projectCount={filteredItems.length}
                   isStoryboard={true}
                 />
@@ -2154,6 +2082,81 @@ export default function StoryboardWorkspacePage() {
         />
       )}
       
+      {/* Extend Story Dialog */}
+      {showExtendDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[#3D3D3D] bg-[#2C2C2C] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#3D3D3D] px-6 py-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Plus className="w-5 h-5 text-purple-400" />
+                Extend Story
+              </h2>
+              <button onClick={() => setShowExtendDialog(false)} className="text-[#6E6E6E] hover:text-white transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#A0A0A0] mb-2">What happens next? (optional)</label>
+                <textarea
+                  value={extendPrompt}
+                  onChange={(e) => setExtendPrompt(e.target.value)}
+                  placeholder="e.g. The creature retreats and the crew discovers a hidden cave..."
+                  rows={3}
+                  className="w-full rounded-lg border border-[#3D3D3D] bg-[#1A1A1A] px-3 py-2 text-sm text-white placeholder:text-[#6E6E6E] outline-none focus:border-purple-500/40 resize-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#A0A0A0] mb-2">Number of new scenes</label>
+                <div className="flex items-center gap-2">
+                  {[2, 4, 6, 8].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setExtendSceneCount(n)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                        extendSceneCount === n
+                          ? "bg-purple-600 text-white"
+                          : "bg-[#3D3D3D] text-[#A0A0A0] hover:text-white"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-[#6E6E6E]">
+                AI will read your existing {items?.length || 0} frames and continue the story.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-[#3D3D3D] px-6 py-4">
+              <button
+                onClick={() => setShowExtendDialog(false)}
+                className="px-4 py-2 text-sm text-[#A0A0A0] hover:text-white transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExtendStory}
+                disabled={isExtending}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isExtending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Extending...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Extend
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Notification Component */}
       {notification && notification.visible && (
         <div className={`fixed top-4 right-4 z-50 max-w-md p-4 rounded-lg shadow-lg border transition-all transform ${

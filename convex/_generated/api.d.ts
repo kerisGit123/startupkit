@@ -105,7 +105,6 @@ import type * as storyboard_gallery from "../storyboard/gallery.js";
 import type * as storyboard_kieAiConfig from "../storyboard/kieAiConfig.js";
 import type * as storyboard_members from "../storyboard/members.js";
 import type * as storyboard_moveItems from "../storyboard/moveItems.js";
-import type * as storyboard_n8nWebhookCallback from "../storyboard/n8nWebhookCallback.js";
 import type * as storyboard_personas from "../storyboard/personas.js";
 import type * as storyboard_presets from "../storyboard/presets.js";
 import type * as storyboard_pricing from "../storyboard/pricing.js";
@@ -228,7 +227,6 @@ declare const fullApi: ApiFromModules<{
   "storyboard/kieAiConfig": typeof storyboard_kieAiConfig;
   "storyboard/members": typeof storyboard_members;
   "storyboard/moveItems": typeof storyboard_moveItems;
-  "storyboard/n8nWebhookCallback": typeof storyboard_n8nWebhookCallback;
   "storyboard/personas": typeof storyboard_personas;
   "storyboard/presets": typeof storyboard_presets;
   "storyboard/pricing": typeof storyboard_pricing;

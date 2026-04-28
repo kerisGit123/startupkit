@@ -12,8 +12,6 @@ const isPublicRoute = createRouteMatcher([
 
   "/api/clerk/webhook(.*)",
   "/api/stripe/webhook(.*)",
-  "/api/n8n/callback(.*)",
-  "/api/n8n-webhook(.*)",
   "/api/kie-callback(.*)",
   "/api/storyboard/kie-callback(.*)",
   "/api/booking/(.*)",

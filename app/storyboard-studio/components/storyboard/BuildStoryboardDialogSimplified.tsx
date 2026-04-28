@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { AlertCircle, Play, Sparkles, CheckCircle2 } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { Play, Sparkles, CheckCircle2 } from "lucide-react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -17,34 +16,6 @@ interface BuildStoryboardDialogSimplifiedProps {
   onSuccess?: () => void;
 }
 
-const SCRIPT_TYPES = [
-  { value: "ANIMATED_STORIES", label: "Animated Stories", description: "General animated storytelling" },
-  { value: "KIDS_ANIMATED_STORIES", label: "Kids Animated Stories", description: "Child-friendly animation content" },
-  { value: "EDUCATIONAL_ANIMATIONS", label: "Educational Animations", description: "Learning-focused animations" },
-  { value: "TUTORIAL_ANIMATIONS", label: "Tutorial Animations", description: "Step-by-step tutorials" },
-  { value: "DOCUMENTARY_SHORTS", label: "Documentary Shorts", description: "Short documentary films" },
-  { value: "EDUCATIONAL_SCIENCE_HISTORY", label: "Educational Science History", description: "Historical and scientific content" },
-  { value: "FINANCE_EDUCATION", label: "Finance Education", description: "Financial concepts and tutorials" },
-  { value: "AI_MUSIC_SONG_VIDEO", label: "AI Music Song Video", description: "Music video generation" },
-  { value: "HEALTH_EDUCATION", label: "Health Education", description: "Medical and wellness content" },
-  { value: "ADVERTISING", label: "Advertising", description: "Commercial content creation" },
-  { value: "TUTORIAL_STEP_BY_STEP", label: "Tutorial Step by Step", description: "Detailed tutorials" }
-];
-
-const LANGUAGES = [
-  { value: "en", label: "English", flag: "🇺🇸" },
-  { value: "zh", label: "中文", flag: "🇨🇳" },
-  { value: "fr", label: "Français", flag: "🇫🇷" },
-  { value: "es", label: "Español", flag: "🇪🇸" },
-  { value: "de", label: "Deutsch", flag: "🇩🇪" },
-  { value: "it", label: "Italiano", flag: "🇮🇹" },
-  { value: "pt", label: "Português", flag: "🇵🇹" },
-  { value: "ru", label: "Русский", flag: "🇷🇺" },
-  { value: "ar", label: "العربية", flag: "🇸🇦" },
-  { value: "ja", label: "日本語", flag: "🇯🇵" },
-  { value: "ko", label: "한국어", flag: "🇰🇷" }
-];
-
 export function BuildStoryboardDialogSimplified({
   open,
   onOpenChange,
@@ -52,58 +23,45 @@ export function BuildStoryboardDialogSimplified({
   onSuccess
 }: BuildStoryboardDialogSimplifiedProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [scriptType, setScriptType] = useState("ANIMATED_STORIES");
-  const [language, setLanguage] = useState("en");
   const project = useQuery(api.storyboard.projects.get, {
     id: projectId as Id<"storyboard_projects">,
   });
 
-  const handleBuild = async () => {
+  const handleBuild = () => {
     setIsSubmitting(true);
-    try {
-      const response = await fetch('/api/n8n-webhook', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId: projectId,
-          buildType: "enhanced", // Fixed to enhanced
-          rebuildStrategy: "replace_all", // Fixed to replace all
-          scriptType: scriptType,
-          language: language,
-          companyId: project?.companyId || '',
-          script: project?.script || ''
-        })
-      });
-      
+
+    // Fire and forget — Convex reactivity shows frames appearing in real-time
+    fetch('/api/storyboard/build-storyboard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        projectId: projectId,
+        rebuildStrategy: "replace_all",
+      }),
+    }).then(async (response) => {
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Build request failed');
+        const text = await response.text();
+        let msg = "Build request failed";
+        try { msg = JSON.parse(text).error || msg; } catch {}
+        toast.error(msg);
       }
-      
-      const result = await response.json();
-      
-      if (result.success) {
-        onSuccess?.();
-        onOpenChange(false);
-      } else {
-        throw new Error(result.error || 'Build failed');
-      }
-    } catch (error) {
-      console.error('Build failed:', error);
-      // You might want to show an error message to the user here
-    } finally {
-      setIsSubmitting(false);
-    }
+    }).catch((err) => {
+      toast.error(err instanceof Error ? err.message : "Build failed");
+    });
+
+    // Close immediately — user sees frames appear via Convex reactivity
+    toast.info("Building storyboard... frames will appear as they're created.");
+    onSuccess?.();
+    onOpenChange(false);
+    setIsSubmitting(false);
   };
 
-  const sceneCount = project?.script ? 
+  const sceneCount = project?.script ?
     project.script.split('SCENE').length - 1 : 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden border border-[#3D3D3D] !bg-[#2C2C2C] p-0 text-[#FFFFFF] shadow-2xl sm:max-w-2xl rounded-2xl">
+      <DialogContent className="overflow-hidden border border-[#3D3D3D] bg-[#2C2C2C]! p-0 text-[#FFFFFF] shadow-2xl sm:max-w-2xl rounded-2xl">
         <DialogHeader className="border-b border-[#3D3D3D] px-6 py-4">
           <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-[#FFFFFF]">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#4A90E2] shadow-lg shadow-[#4A90E2]/20">
@@ -114,142 +72,66 @@ export function BuildStoryboardDialogSimplified({
         </DialogHeader>
 
         <div className="px-6 py-6 space-y-6">
-          {/* Description */}
-          <div className="text-center">
-            <p className="text-[#A0A0A0] mb-6">
-              Create storyboard items from your script with AI-powered elements and visuals
-            </p>
-          </div>
+          <p className="text-[#A0A0A0] text-center">
+            AI will parse your script, extract elements, and create storyboard frames automatically.
+          </p>
 
-          {/* Features Checklist */}
+          {/* What happens */}
           <div className="rounded-xl border border-[#3D3D3D] bg-[#3D3D3D]/20 p-6">
-            <h3 className="text-base font-medium text-[#FFFFFF] mb-4">What will happen automatically:</h3>
+            <h3 className="text-base font-medium text-[#FFFFFF] mb-4">What will happen:</h3>
             <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-[#A0A0A0]">Parse script scenes automatically</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-[#A0A0A0]">Create storyboard items for all scenes</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-[#A0A0A0]">Generate AI elements and visuals</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-[#A0A0A0]">Replace existing items with fresh content</span>
-              </div>
+              {[
+                "Parse script scenes (structured or freeform)",
+                "Extract characters, environments, and props",
+                "Create storyboard frames with image & video prompts",
+                "Set default generation models per scene",
+              ].map((text) => (
+                <div key={text} className="flex items-center gap-3">
+                  <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0" />
+                  <span className="text-sm text-[#A0A0A0]">{text}</span>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Script Settings */}
-          <div className="rounded-xl border border-[#3D3D3D] bg-[#3D3D3D]/20 p-6">
-            <h3 className="text-base font-medium text-[#FFFFFF] mb-4">Script Settings</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label className="text-sm font-medium text-[#A0A0A0] mb-2 block">Script Type</Label>
-                <Select value={scriptType} onValueChange={setScriptType}>
-                  <SelectTrigger className="border-[#3D3D3D] bg-[#1A1A1A] text-[#FFFFFF]">
-                    <SelectValue placeholder="Select script type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SCRIPT_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        <div className="flex flex-col">
-                          <span>{type.label}</span>
-                          <span className="text-xs text-[#6E6E6E]">{type.description}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium text-[#A0A0A0] mb-2 block">Language</Label>
-                <Select value={language} onValueChange={setLanguage}>
-                  <SelectTrigger className="border-[#3D3D3D] bg-[#1A1A1A] text-[#FFFFFF]">
-                    <SelectValue placeholder="Select language" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGES.map((lang) => (
-                      <SelectItem key={lang.value} value={lang.value}>
-                        <div className="flex items-center gap-2">
-                          <span>{lang.flag}</span>
-                          <span>{lang.label}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div className="rounded-lg border border-[#3D3D3D] bg-[#3D3D3D]/20 p-3">
+              <div className="text-xs text-[#6E6E6E] mb-1">Scenes Detected</div>
+              <div className="text-lg font-medium text-[#FFFFFF]">{sceneCount || "Auto"}</div>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4 text-center mt-4">
-              <div>
-                <div className="text-xs text-[#6E6E6E] mb-1">Scenes Found</div>
-                <div className="text-sm font-medium text-[#FFFFFF]">{sceneCount}</div>
-              </div>
-              <div>
-                <div className="text-xs text-[#6E6E6E] mb-1">Build Mode</div>
-                <div className="text-sm font-medium text-[#FFFFFF]">Enhanced</div>
-              </div>
+            <div className="rounded-lg border border-[#3D3D3D] bg-[#3D3D3D]/20 p-3">
+              <div className="text-xs text-[#6E6E6E] mb-1">Build Mode</div>
+              <div className="text-lg font-medium text-[#FFFFFF]">Replace All</div>
             </div>
           </div>
 
           {/* Warning */}
-          <div className="rounded-xl border border-[#52C41A]/40 bg-[#52C41A]/10 p-4">
-              <div className="flex items-center gap-2 font-medium text-[#52C41A]">
-              <CheckCircle2 className="h-4 w-4" />
-              Smart Build
-            </div>
-            <p className="mt-2 text-sm text-[#52C41A]">
-              Script-based content will be replaced with new items from your script.
-              <br />
-              <strong>Manual frames are automatically preserved.</strong>
-              <br />
-              <span className="text-xs text-[#6E6E6E]">Private elements will be regenerated, public elements preserved.</span>
-            </p>
-          </div>
-
-          {/* Alternative Option */}
-          <div className="text-center">
-            <p className="text-sm text-[#6E6E6E] mb-2">
-              Want to add frames manually instead?
-            </p>
-            <p className="text-xs text-[#6E6E6E]">
-              Use the "+ Add Frame" button to create individual storyboard items
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <p className="text-sm text-amber-400">
+              This will replace all existing frames with new ones from the script.
             </p>
           </div>
         </div>
 
         <DialogFooter className="border-t border-[#3D3D3D] bg-[#3D3D3D]/20 px-6 py-4">
           <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-            <Button 
-              variant="outline" 
-              onClick={() => onOpenChange(false)} 
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
               className="border-[#3D3D3D] bg-[#3D3D3D] text-[#A0A0A0] hover:bg-[#3D3D3D]"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleBuild}
               disabled={isSubmitting || !project?.script}
               className="bg-[#4A90E2] text-white hover:bg-[#357ABD] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full"></div>
-                  Building...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Build from Script
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />
+                Build from Script
+              </div>
             </Button>
           </div>
         </DialogFooter>
