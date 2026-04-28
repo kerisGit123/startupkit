@@ -2059,6 +2059,9 @@ export default defineSchema({
     // Usage tracking
     lastUsedAt: v.optional(v.number()),
     
+    // Structured identity from Element Forge wizard (character/environment/prop)
+    identity: v.optional(v.any()),
+
     // Cleanup tracking
     isOrphaned: v.optional(v.boolean()),
     orphanedAt: v.optional(v.number()),

@@ -1314,6 +1314,9 @@ export default function EditImageAIPanel({
               <ToolBtn active={activeTool === "canvas-object"} onClick={() => pick("canvas-object")} title="Canvas Object (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
+              <ToolBtn active={activeTool === "move"} onClick={() => pick("move")} title="Move / Pan">
+                <Hand className={ic} />
+              </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-[#32363E] my-0.5" />
               <ToolBtn active={activeTool === "text"} onClick={() => pick("text")} title="Text">
@@ -1360,6 +1363,9 @@ export default function EditImageAIPanel({
               <ToolBtn active={activeTool === "canvas-object"} onClick={() => pick("canvas-object")} title="Canvas Object (no tool)">
                 <MousePointer className={ic} />
               </ToolBtn>
+              <ToolBtn active={activeTool === "move"} onClick={() => pick("move")} title="Move / Pan">
+                <Hand className={ic} />
+              </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-[#32363E] my-0.5" />
               <ToolBtn active={activeTool === "brush"} onClick={() => pick("brush")} title="Brush">
@@ -1390,34 +1396,8 @@ export default function EditImageAIPanel({
                   }}
                 />
               </button>
-              <ToolBtn 
-                active={activeTool === "image-to-image"} 
-                onClick={() => {
-                  pick("image-to-image");
-                  setShowBrushSizeMenu(false);
-                }} 
-                title="Image to Image"
-                className="image-to-image-button"
-              >
-                <Image className={`${ic} ${activeTool === "image-to-image" ? "text-cyan-400" : ""}`} />
-              </ToolBtn>
               <ToolBtn active={activeTool === "crop"} onClick={() => pick("crop")} title="Crop">
                 <Scissors className={ic} />
-              </ToolBtn>
-              <ToolBtn active={activeTool === "upscale"} onClick={() => pick("upscale")} title="Upscale">
-                <ArrowUp className={`${ic} ${activeTool === "upscale" ? "text-yellow-400" : ""}`} />
-              </ToolBtn>
-              <ToolBtn active={activeTool === "enhance"} onClick={() => pick("enhance")} title="Enhance (Face, Detail, Color)">
-                <Sparkles className={`${ic} ${activeTool === "enhance" ? "text-purple-400" : ""}`} />
-              </ToolBtn>
-              <ToolBtn active={activeTool === "relight"} onClick={() => pick("relight")} title="Relight (Change Lighting)">
-                <Sun className={`${ic} ${activeTool === "relight" ? "text-amber-400" : ""}`} />
-              </ToolBtn>
-              <ToolBtn active={activeTool === "remove-bg"} onClick={() => pick("remove-bg")} title="Remove Background">
-                <ImageOff className={`${ic} ${activeTool === "remove-bg" ? "text-rose-400" : ""}`} />
-              </ToolBtn>
-              <ToolBtn active={activeTool === "reframe"} onClick={() => pick("reframe")} title="Reframe / Extend">
-                <Expand className={`${ic} ${activeTool === "reframe" ? "text-teal-400" : ""}`} />
               </ToolBtn>
               {/* Separator */}
               <div className="w-full h-px bg-[#32363E] my-0.5" />
@@ -1525,66 +1505,6 @@ export default function EditImageAIPanel({
           className="hidden"
           onChange={handleLeftImageUpload}
         />
-      </div>
-    );
-  };
-
-  // ── Right Toolbar (Annotate + Area Edit) ───────────────────────────
-  const renderRightToolbar = () => {
-    const grp = "flex flex-col gap-0.5 bg-(--bg-secondary)/95 backdrop-blur-md rounded-lg p-1 shadow-lg border border-(--border-primary)";
-
-    return (
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2">
-        {/* Move Tool */}
-        <div className={grp}>
-          <ToolBtn active={activeTool === "move"} onClick={() => pick("move")} title="Move Canvas">
-            <Hand className={ic} />
-          </ToolBtn>
-        </div>
-        
-        {/* Group 1: Retrieve, Save to Uploads, Delete */}
-        <div className={grp}>
-          <ToolBtn active={false} onClick={() => pick("upload-override")} title="Retrieve from File Browser">
-            <FolderDown className={ic} />
-          </ToolBtn>
-          <ToolBtn active={false} onClick={() => pick("save-to-uploads")} title="Save to Upload Folder">
-            <Download className={ic} />
-          </ToolBtn>
-          {onCombine && (
-            <ToolBtn active={false} onClick={onCombine} title="Combine Layers">
-              <Layers className={ic} />
-            </ToolBtn>
-          )}
-          <ToolBtn danger active={false} onClick={() => pick("delete")} title="Delete">
-            <Trash2 className={ic} />
-          </ToolBtn>
-        </div>
-
-        {/* Group 2: Download, Save to Storyboard */}
-        <div className={grp}>
-          <ToolBtn active={false} onClick={() => pick("download")} title="Download to Desktop">
-            <MonitorDown className={ic} />
-          </ToolBtn>
-          <ToolBtn active={false} onClick={() => pick("save")} title="Save to Storyboard Item Image">
-            <Save className={ic} />
-          </ToolBtn>
-        </div>
-
-        {/* Group 3: Zoom In, Zoom Out, Fit */}
-        <div className={grp}>
-          <ToolBtn active={false} onClick={() => pick("zoom-in")} title="Zoom In">
-            <ZoomIn className={ic} />
-          </ToolBtn>
-          <ToolBtn active={false} onClick={() => pick("zoom-out")} title="Zoom Out">
-            <ZoomOut className={ic} />
-          </ToolBtn>
-          <ToolBtn active={false} onClick={() => pick("fit-screen")} title="Fit to Screen">
-            <Maximize2 className={ic} />
-          </ToolBtn>
-          <div className="text-[10px] text-(--text-secondary) text-center mt-0.5">
-            {zoomLevel}%
-          </div>
-        </div>
       </div>
     );
   };
@@ -1888,6 +1808,45 @@ export default function EditImageAIPanel({
 
         {/* Main Panel */}
         <div className="bg-(--bg-secondary)/95 backdrop-blur-md rounded-2xl">
+          {/* Post-Processing Tools Bar (area-edit mode only) */}
+          {mode === "area-edit" && (
+            <div className="flex items-center gap-0.5 px-2 py-1.5 overflow-x-auto">
+              {[
+                { id: "_inpaint", label: "Inpaint", icon: Brush, color: "text-blue-400", bgColor: "bg-blue-500/15" },
+                { id: "image-to-image", label: "Img2Img", icon: Image, color: "text-cyan-400", bgColor: "bg-cyan-500/15" },
+                { id: "upscale", label: "Upscale", icon: ArrowUp, color: "text-yellow-400", bgColor: "bg-yellow-500/15" },
+                { id: "enhance", label: "Enhance", icon: Sparkles, color: "text-purple-400", bgColor: "bg-purple-500/15" },
+                { id: "relight", label: "Relight", icon: Sun, color: "text-amber-400", bgColor: "bg-amber-500/15" },
+                { id: "remove-bg", label: "BG Remove", icon: ImageOff, color: "text-rose-400", bgColor: "bg-rose-500/15" },
+                { id: "reframe", label: "Reframe", icon: Expand, color: "text-teal-400", bgColor: "bg-teal-500/15" },
+              ].map((tool) => {
+                const postProcessIds = ["image-to-image", "upscale", "enhance", "relight", "remove-bg", "reframe"];
+                const isActive = tool.id === "_inpaint"
+                  ? !postProcessIds.includes(activeTool)
+                  : activeTool === tool.id;
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => {
+                      if (tool.id === "_inpaint") {
+                        pick("canvas-object");
+                      } else {
+                        pick(tool.id);
+                      }
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium tracking-wide transition-all whitespace-nowrap ${
+                      isActive
+                        ? `${tool.bgColor} ${tool.color}`
+                        : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                    }`}
+                  >
+                    <tool.icon className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    <span>{tool.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {/* User Prompt Area (only in area-edit mode) */}
           {renderUserPromptArea()}
 
@@ -2083,7 +2042,6 @@ export default function EditImageAIPanel({
         {/* Canvas area with toolbars */}
         <div className="flex-1 relative">
           <div className="pointer-events-auto">{renderLeftToolbar()}</div>
-          <div className="pointer-events-auto">{renderRightToolbar()}</div>
         </div>
 
         {/* Bottom: Reference panel + Bottom bar */}

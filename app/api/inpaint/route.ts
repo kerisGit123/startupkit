@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 
 export const maxDuration = 300;
 
@@ -772,6 +773,8 @@ async function runSeedreamV4(image: string, prompt: string): Promise<string> {
 // ── Main route ────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   try {
     console.log('[API/inpaint] Received request');
     console.log('[API/inpaint] Request method:', req.method);

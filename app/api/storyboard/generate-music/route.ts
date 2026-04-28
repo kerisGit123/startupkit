@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from "@clerk/nextjs/server";
 import { generateMusic } from '@/lib/storyboard/videoAI';
 import { resolveKieApiKey } from '@/lib/storyboard/kieAI';
 
 export async function POST(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   try {
     const body = await req.json();
     const { prompt, style, title, instrumental, model, negativeTags, vocalGender, personaId, callbackUrl, companyId } = body;

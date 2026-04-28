@@ -139,6 +139,7 @@ export const update = mutation({
     description: v.optional(v.string()),
     status: v.optional(v.string()),
     isFavorite: v.optional(v.boolean()),
+    aspectRatio: v.optional(v.string()), // "16:9" | "9:16" | "1:1" | "4:5"
     style: v.optional(v.string()), // Top-level project theme: "cinematic" | "sketch" | "anime" | etc.
     stylePrompt: v.optional(v.string()), // Actual style prompt text appended to generations
     formatPreset: v.optional(v.string()), // Format preset key: "film" | "documentary" | "youtube" | "reel" | etc.

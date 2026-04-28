@@ -196,7 +196,9 @@ export const usePricingData = () => {
         const response = await fetch('/api/storyboard/pricing/models');
         
         if (!response.ok) {
-          throw new Error('Failed to fetch pricing models');
+          console.warn("[usePricingData] API returned", response.status, "— using defaults");
+          setModels(DEFAULT_PRICING_MODELS);
+          return;
         }
 
         const data = await response.json();

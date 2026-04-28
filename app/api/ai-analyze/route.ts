@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -184,6 +185,8 @@ Do NOT use markdown formatting. Write plain text only.`,
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   if (!OPENROUTER_API_KEY) {
     return NextResponse.json({ error: "OpenRouter API key not configured" }, { status: 500 });
   }

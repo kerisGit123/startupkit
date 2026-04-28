@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from "@clerk/nextjs/server";
 
 const KIE_API_KEY = process.env.KIE_AI_API_KEY;
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 
 export async function POST(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   try {
     console.log('[API/generate-seedance] Seedance 1.5 Pro generation request received');
 

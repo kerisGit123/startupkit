@@ -15,11 +15,13 @@ import { FileBrowser } from "../ai/FileBrowser";
 import {
   TimelineClip, SubtitleClip, OverlayLayer,
   R2_PUBLIC_URL, formatTime, getVisDur, getClipAtTime,
+  ASPECT_RATIOS, getCanvasSize,
 } from "./video-editor/types";
 import { useExport } from "./video-editor/useExport";
 import { PreviewCanvas } from "./video-editor/PreviewCanvas";
 import { ControlBar } from "./video-editor/ControlBar";
 import { TimelineTracks } from "./video-editor/TimelineTracks";
+import { LayerPanel } from "./video-editor/LayerPanel";
 
 // ─── Component ──────────────────────────────────────────────────────────
 
@@ -33,6 +35,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const { user } = useUser();
   const companyId = useCurrentCompanyId();
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
+  const updateProject = useMutation(api.storyboard.projects.update);
 
   // ── State ──────────────────────────────────────────────────────────────
 
@@ -41,15 +44,23 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const [subtitleClips, setSubtitleClips] = useState<SubtitleClip[]>([]);
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayer[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
-  const [selectedTrack, setSelectedTrack] = useState<"video" | "audio" | "subtitle" | "overlay">("video");
+  const [selectedTrack, setSelectedTrack] = useState<"video" | "audio" | "overlay">("video");
   const [selectedSubtitleId, setSelectedSubtitleId] = useState<string | null>(null);
   const [selectedOverlayId, setSelectedOverlayId] = useState<string | null>(null);
   const [bgColor, setBgColor] = useState("#000000");
+  const [showLayerPanel, setShowLayerPanel] = useState(false);
 
   const clips = selectedTrack === "video" ? videoClips : audioClips;
   const setClips = selectedTrack === "video" ? setVideoClips : setAudioClips;
 
-  const [playing, setPlaying] = useState(false);
+  const [playing, _setPlaying] = useState(false);
+  const setPlaying = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
+    _setPlaying(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      playingRef.current = next;
+      return next;
+    });
+  }, []);
   const [currentTime, setCurrentTime] = useState(0);
   const [pxPerSec, setPxPerSec] = useState(100);
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
@@ -58,11 +69,13 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const [rangeCutStart, setRangeCutStart] = useState(0);
   const [rangeCutEnd, setRangeCutEnd] = useState(30);
   const [clipboard, setClipboard] = useState<TimelineClip | null>(null);
-  const [history, setHistory] = useState<TimelineClip[][]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
+  const historyRef = useRef<any[]>([]);
+  const historyIndexRef = useRef(-1);
+  const isUndoRedoing = useRef(false);
+  const [, forceRender] = useState(0);
   const [trimming, setTrimming] = useState<{
     clipId: string; side: "left" | "right"; startX: number;
-    origTS: number; origTE: number;
+    origTS: number; origTE: number; origDur: number;
   } | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [clipContextMenu, setClipContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
@@ -78,11 +91,14 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const progressBarRef = useRef<HTMLDivElement>(null);
   const timeDisplayRef = useRef<HTMLSpanElement>(null);
   const animRef = useRef<number>(0);
+  const playingRef = useRef(false);
   const playStart = useRef({ realTime: 0, offset: 0 });
 
   // ── Queries ─────────────────────────────────────────────────────────────
 
+  const project = useQuery(api.storyboard.projects.get, { id: projectId });
   const projectFiles = useQuery(api.storyboard.storyboardFiles.listByProject, { projectId });
+  const canvasSize = useMemo(() => getCanvasSize(project?.aspectRatio), [project?.aspectRatio]);
 
   const mediaFiles = useMemo(() => {
     if (!projectFiles) return [];
@@ -98,29 +114,64 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
   const videoDur = videoClips.reduce((s, c) => s + getVisDur(c), 0);
   const audioDur = audioClips.reduce((s, c) => s + getVisDur(c), 0);
-  const totalDur = Math.max(videoDur, audioDur);
+  const overlayMaxEnd = overlayLayers.length > 0 ? Math.max(...overlayLayers.map(l => l.endTime || 0)) : 0;
+  const totalDur = Math.max(videoDur, audioDur, overlayMaxEnd) || 0;
 
-  // ── Undo ────────────────────────────────────────────────────────────────
+  // ── Undo / Redo ─────────────────────────────────────────────────────────
+  // Uses refs to avoid stale closure issues with React state batching.
+  // pushHistory snapshots current state BEFORE a change happens.
 
   const pushHistory = useCallback(() => {
-    setHistory(prev => [...prev.slice(0, historyIndex + 1), [videoClips, audioClips] as any]);
-    setHistoryIndex(prev => prev + 1);
-  }, [videoClips, audioClips, historyIndex]);
+    if (isUndoRedoing.current) return;
+    const snap = [videoClips, audioClips, overlayLayers];
+    // Trim future entries (discard redo stack on new action)
+    const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
+    const limited = trimmed.length >= 50 ? trimmed.slice(1) : trimmed;
+    historyRef.current = [...limited, snap];
+    historyIndexRef.current = historyRef.current.length - 1;
+  }, [videoClips, audioClips, overlayLayers]);
 
   const undo = useCallback(() => {
-    if (historyIndex < 0) return;
-    const [v, a] = history[historyIndex] as any;
+    const h = historyRef.current;
+    const idx = historyIndexRef.current;
+    if (idx < 0 || h.length === 0) return;
+    const entry = h[idx];
+    if (!entry || !Array.isArray(entry)) return;
+    // Save current state for redo if at the top
+    if (idx >= h.length - 1) {
+      historyRef.current = [...h, [videoClips, audioClips, overlayLayers]];
+    }
+    const [v, a, o] = entry;
+    isUndoRedoing.current = true;
     setVideoClips(v);
     setAudioClips(a);
-    setHistoryIndex(prev => prev - 1);
-    toast.success("Undone");
-  }, [history, historyIndex]);
+    if (o) setOverlayLayers(o);
+    historyIndexRef.current = idx - 1;
+    forceRender(n => n + 1);
+    setTimeout(() => { isUndoRedoing.current = false; }, 0);
+  }, [videoClips, audioClips, overlayLayers]);
+
+  const redo = useCallback(() => {
+    const h = historyRef.current;
+    const nextIdx = historyIndexRef.current + 2;
+    if (nextIdx >= h.length) return;
+    const entry = h[nextIdx];
+    if (!entry || !Array.isArray(entry)) return;
+    const [v, a, o] = entry;
+    isUndoRedoing.current = true;
+    setVideoClips(v);
+    setAudioClips(a);
+    if (o) setOverlayLayers(o);
+    historyIndexRef.current = nextIdx - 1;
+    forceRender(n => n + 1);
+    setTimeout(() => { isUndoRedoing.current = false; }, 0);
+  }, []);
 
   // ── Export ──────────────────────────────────────────────────────────────
 
   const { handleExport, exporting, exportProgress } = useExport({
     videoClips, audioClips, subtitleClips, overlayLayers,
-    totalDur, selectedTrack, companyId, userId: user?.id, projectId, logUpload,
+    totalDur, selectedTrack, bgColor, canvasSize, companyId, userId: user?.id, projectId, logUpload,
   });
 
   // ── Playback ────────────────────────────────────────────────────────────
@@ -129,19 +180,25 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const lastSyncAudioId = useRef<string>("");
 
   const syncPreview = useCallback((t: number) => {
+    const isPlaying = playingRef.current;
     const vr = getClipAtTime(videoClips, t);
     if (vr && (vr.clip.type === "video" || vr.clip.type === "image") && previewRef.current) {
       const vid = previewRef.current;
       const videoChanged = lastSyncVideoId.current !== vr.clip.id;
       lastSyncVideoId.current = vr.clip.id;
       if (vr.clip.type === "video") {
-        if (videoChanged || vid.src !== vr.clip.src) {
-          vid.src = vr.clip.src; vid.load(); vid.currentTime = vr.offset; vid.muted = false;
-          if (playing) {
-            const tryPlay = () => { vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); }); };
-            if (vid.readyState >= 2) tryPlay(); else vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); };
+        if (videoChanged) {
+          vid.muted = false;
+          vid.volume = 1.0;
+          vid.src = vr.clip.src; vid.load(); vid.currentTime = vr.offset;
+          if (isPlaying) {
+            vid.play().catch(() => {
+              vid.oncanplay = () => { vid.oncanplay = null; vid.play().catch(() => {}); };
+            });
+          } else {
+            vid.pause();
           }
-        } else if (!playing) {
+        } else if (!isPlaying) {
           vid.currentTime = vr.offset;
         }
       }
@@ -156,12 +213,16 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       const aud = audioRef.current;
       const audioChanged = lastSyncAudioId.current !== ar.clip.id;
       lastSyncAudioId.current = ar.clip.id;
-      if (audioChanged || aud.src !== ar.clip.src) {
+      if (audioChanged) {
         aud.src = ar.clip.src; aud.load(); aud.currentTime = ar.offset;
-        if (playing) {
-          if (aud.readyState >= 2) aud.play().catch(() => {}); else aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); };
+        if (isPlaying) {
+          aud.play().catch(() => {
+            aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); };
+          });
+        } else {
+          aud.pause();
         }
-      } else if (!playing) {
+      } else if (!isPlaying) {
         aud.currentTime = ar.offset;
       }
     }
@@ -169,28 +230,38 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       audioRef.current.pause();
       lastSyncAudioId.current = "";
     }
-  }, [videoClips, audioClips, playing]);
+  }, [videoClips, audioClips]);
 
   const startPlay = useCallback(() => {
     if (totalDur <= 0) return;
+    playingRef.current = true;
     setPlaying(true);
     playStart.current = { realTime: performance.now(), offset: currentTime };
 
     const vr = getClipAtTime(videoClips, currentTime);
     if (vr && vr.clip.type === "video" && previewRef.current) {
       const vid = previewRef.current;
-      if (vid.src !== vr.clip.src) { vid.src = vr.clip.src; vid.load(); }
-      vid.currentTime = vr.offset; vid.muted = false;
-      const tryPlay = () => { vid.play().catch(() => { vid.muted = true; vid.play().catch(() => {}); }); };
-      if (vid.readyState >= 2) tryPlay(); else vid.oncanplay = () => { vid.oncanplay = null; tryPlay(); };
+      vid.muted = false;
+      vid.volume = 1.0;
+      const srcChanged = !vid.src || !vid.src.includes(vr.clip.src.split("/").pop()!.split("?")[0]);
+      if (srcChanged) { vid.src = vr.clip.src; vid.load(); }
+      vid.currentTime = vr.offset;
+      // Try play immediately (within user gesture), retry on canplay if needed
+      vid.play().catch((err) => {
+        console.warn("[VideoEditor] play() failed, retrying on canplay:", err.message);
+        vid.oncanplay = () => { vid.oncanplay = null; vid.play().catch(() => {}); };
+      });
       lastSyncVideoId.current = vr.clip.id;
     }
     const ar = getClipAtTime(audioClips, currentTime);
     if (ar && audioRef.current) {
       const aud = audioRef.current;
-      if (aud.src !== ar.clip.src) { aud.src = ar.clip.src; aud.load(); }
+      const srcChanged = !aud.src || !aud.src.includes(ar.clip.src.split("/").pop()!.split("?")[0]);
+      if (srcChanged) { aud.src = ar.clip.src; aud.load(); }
       aud.currentTime = ar.offset;
-      if (aud.readyState >= 2) aud.play().catch(() => {}); else aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); };
+      aud.play().catch(() => {
+        aud.oncanplay = () => { aud.oncanplay = null; aud.play().catch(() => {}); };
+      });
       lastSyncAudioId.current = ar.clip.id;
     }
 
@@ -202,7 +273,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         if (audioRef.current) audioRef.current.pause();
         return;
       }
-      if (playheadRef.current) playheadRef.current.style.left = `${t * pxPerSec + 56}px`;
+      if (playheadRef.current) playheadRef.current.style.left = `${t * pxPerSec + 48}px`;
       if (progressBarRef.current) progressBarRef.current.style.width = `${t * pxPerSec}px`;
       if (timeDisplayRef.current) timeDisplayRef.current.textContent = `${formatTime(t)} / ${formatTime(totalDur)}`;
       if (Math.floor(t * 4) !== Math.floor((t - 1 / 60) * 4)) setCurrentTime(t);
@@ -245,9 +316,10 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     if (file.fileType === "video" || file.fileType === "audio" || file.fileType === "music") {
       dur = await new Promise<number>(r => {
         const el = file.fileType === "video" ? document.createElement("video") : document.createElement("audio");
-        el.src = src; el.preload = "metadata";
-        el.onloadedmetadata = () => r(el.duration || 5);
-        el.onerror = () => r(5); setTimeout(() => r(5), 5000);
+        el.preload = "metadata"; el.muted = true;
+        el.onloadedmetadata = () => { el.src = ""; r(el.duration || 5); };
+        el.onerror = () => r(5); setTimeout(() => { el.src = ""; r(5); }, 5000);
+        el.src = src;
       });
     }
     const clipType = file.fileType === "video" ? "video" : file.fileType === "image" ? "image" : "audio";
@@ -256,6 +328,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       type: clipType,
       src, name: file.filename || file.model || "Untitled",
       duration: dur, trimStart: 0, trimEnd: 0, originalDuration: dur,
+      prompt: file.prompt || undefined,
     };
     if (clipType === "audio") {
       setAudioClips(p => [...p, c]);
@@ -467,7 +540,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const onTrimDown = useCallback((e: React.MouseEvent, id: string, side: "left" | "right") => {
     e.stopPropagation(); e.preventDefault();
     const c = videoClips.find(x => x.id === id) || audioClips.find(x => x.id === id);
-    if (c) setTrimming({ clipId: id, side, startX: e.clientX, origTS: c.trimStart, origTE: c.trimEnd });
+    if (c) setTrimming({ clipId: id, side, startX: e.clientX, origTS: c.trimStart, origTE: c.trimEnd, origDur: c.duration });
   }, [videoClips, audioClips]);
 
   useEffect(() => {
@@ -476,6 +549,11 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       const dt = (e.clientX - trimming.startX) / pxPerSec;
       const trimMapper = (c: TimelineClip) => {
         if (c.id !== trimming.clipId) return c;
+        // Images: right edge extends/shrinks duration freely (no original media to constrain)
+        if (c.type === "image" && trimming.side === "right") {
+          const newDur = Math.max(0.5, trimming.origDur + dt);
+          return { ...c, duration: newDur, originalDuration: newDur };
+        }
         if (trimming.side === "left") return { ...c, trimStart: Math.max(0, Math.min(trimming.origTS + dt, c.duration - c.trimEnd - 0.1)) };
         return { ...c, trimEnd: Math.max(0, Math.min(trimming.origTE - dt, c.duration - c.trimStart - 0.1)) };
       };
@@ -492,7 +570,8 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     if (showRangeCut) return;
     if (!timelineRef.current) return;
     const r = timelineRef.current.getBoundingClientRect();
-    const t = Math.max(0, Math.min((e.clientX - r.left + timelineRef.current.scrollLeft - 56) / pxPerSec, totalDur));
+    const raw = (e.clientX - r.left + timelineRef.current.scrollLeft - 48) / pxPerSec;
+    const t = Math.max(0, Math.min(isNaN(raw) ? 0 : raw, totalDur || 0));
     setCurrentTime(t); syncPreview(t);
   }, [pxPerSec, totalDur, syncPreview, showRangeCut]);
 
@@ -556,6 +635,14 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     }
   }, [videoClips, currentTime]);
 
+  // Clamp currentTime when totalDur shrinks (e.g. after removing clips)
+  useEffect(() => {
+    if (totalDur > 0 && currentTime > totalDur) setCurrentTime(totalDur);
+  }, [totalDur, currentTime]);
+
+  // Auto-show layer panel when overlay track selected
+  useEffect(() => { if (selectedTrack === "overlay") setShowLayerPanel(true); }, [selectedTrack]);
+
   // ── Keyboard Shortcuts ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -564,19 +651,36 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       if (e.code === "Space") { e.preventDefault(); toggle(); }
       if ((e.code === "Delete" || e.code === "Backspace") && selectedClipId) removeClip(selectedClipId);
       if ((e.code === "Delete" || e.code === "Backspace") && selectedOverlayId) {
+        pushHistory();
         setOverlayLayers(p => p.filter(l => l.id !== selectedOverlayId));
         setSelectedOverlayId(null);
       }
       if (e.code === "KeyS" && !e.ctrlKey && !e.metaKey) splitClip();
-      if ((e.ctrlKey || e.metaKey) && e.code === "KeyC") { e.preventDefault(); copyClip(); }
-      if ((e.ctrlKey || e.metaKey) && e.code === "KeyV") { e.preventDefault(); pasteClip(); }
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyC") {
+        e.preventDefault();
+        if (selectedOverlayId) {
+          const ol = overlayLayers.find(l => l.id === selectedOverlayId);
+          if (ol) setClipboard({ ...ol } as any);
+        } else copyClip();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.code === "KeyV") {
+        e.preventDefault();
+        const cb = clipboard as any;
+        if (cb && cb.startTime !== undefined && cb.endTime !== undefined && !cb.src) {
+          pushHistory();
+          const copy = { ...cb, id: `ol-${Date.now()}-paste`, x: (cb.x ?? 0) + 30, y: (cb.y ?? 0) + 30 };
+          setOverlayLayers(p => [...p, copy]);
+          setSelectedOverlayId(copy.id);
+        } else pasteClip();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyZ") { e.preventDefault(); redo(); return; }
       if ((e.ctrlKey || e.metaKey) && e.code === "KeyZ") { e.preventDefault(); undo(); }
       if (e.code === "ArrowLeft") setCurrentTime(t => Math.max(0, t - 0.5));
       if (e.code === "ArrowRight") setCurrentTime(t => Math.min(totalDur, t + 0.5));
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [toggle, selectedClipId, selectedOverlayId, removeClip, splitClip, copyClip, pasteClip, undo, totalDur]);
+  }, [toggle, selectedClipId, selectedOverlayId, removeClip, splitClip, copyClip, pasteClip, undo, redo, pushHistory, totalDur]);
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -597,21 +701,32 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={handleExport} disabled={exporting || (selectedTrack === "audio" ? audioClips.length === 0 : videoClips.length === 0)}
+          <select
+            value={project?.aspectRatio || "16:9"}
+            onChange={(e) => updateProject({ id: projectId, aspectRatio: e.target.value })}
+            className="px-2 py-1 text-[10px] bg-[#1a1a24] border border-[#2a2a35] rounded text-[#A0A0A0] outline-none cursor-pointer"
+            title="Canvas aspect ratio"
+          >
+            {ASPECT_RATIOS.map(r => <option key={r.key} value={r.key}>{r.label} ({r.w}×{r.h})</option>)}
+          </select>
+          <button onClick={handleExport} disabled={exporting || (selectedTrack === "audio" ? audioClips.length === 0 : (videoClips.length === 0 && overlayLayers.length === 0))}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-30 text-white text-xs font-semibold rounded-lg transition">
             {exporting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {exportProgress}%</> : <><Download className="w-3.5 h-3.5" /> Export {selectedTrack === "audio" ? "WAV" : "MP4"}</>}
           </button>
         </div>
       </div>
 
-      {/* Preview */}
-      <div className="flex-1 flex items-center justify-center bg-black relative min-h-0">
-        <PreviewCanvas cur={curVideo} previewRef={previewRef} audioRef={audioRef}
-          currentTime={currentTime} subtitleClips={subtitleClips}
-          overlayLayers={overlayLayers} setOverlayLayers={setOverlayLayers}
-          selectedOverlayId={selectedOverlayId} setSelectedOverlayId={setSelectedOverlayId}
-          bgColor={bgColor}
-          exporting={exporting} exportProgress={exportProgress} />
+      {/* Preview + Layer Panel */}
+      <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex items-center justify-center bg-black relative min-h-0">
+          <PreviewCanvas cur={curVideo} videoClips={videoClips} previewRef={previewRef} audioRef={audioRef}
+            currentTime={currentTime} subtitleClips={subtitleClips}
+            overlayLayers={overlayLayers} setOverlayLayers={setOverlayLayers}
+            selectedOverlayId={selectedOverlayId} setSelectedOverlayId={setSelectedOverlayId}
+            bgColor={bgColor} playing={playing}
+            canvasSize={canvasSize}
+            exporting={exporting} exportProgress={exportProgress}
+            onBeforeChange={pushHistory} />
 
         {curVideo && (curVideo.clip.type === "video" || curVideo.clip.type === "image") && (
           <div className="absolute top-3 right-3 z-10">
@@ -680,6 +795,19 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
             </div>
           </div>
         )}
+        </div>
+
+        {/* Layer Panel */}
+        {showLayerPanel && (
+          <LayerPanel
+            overlayLayers={overlayLayers} setOverlayLayers={setOverlayLayers}
+            selectedOverlayId={selectedOverlayId} setSelectedOverlayId={setSelectedOverlayId}
+            currentTime={currentTime} totalDur={totalDur}
+            bgColor={bgColor} setBgColor={setBgColor}
+            mediaFiles={mediaFiles} canvasSize={canvasSize}
+            onBeforeChange={pushHistory}
+          />
+        )}
       </div>
 
       {/* Bottom Panel */}
@@ -694,12 +822,10 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           currentTime={currentTime} setCurrentTime={setCurrentTime} totalDur={totalDur}
           timeDisplayRef={timeDisplayRef} pxPerSec={pxPerSec} setPxPerSec={setPxPerSec}
           timelineRef={timelineRef}
-          subtitleClips={subtitleClips} setSubtitleClips={setSubtitleClips}
-          selectedSubtitleId={selectedSubtitleId} setSelectedSubtitleId={setSelectedSubtitleId}
-          overlayLayers={overlayLayers} setOverlayLayers={setOverlayLayers}
-          selectedOverlayId={selectedOverlayId} setSelectedOverlayId={setSelectedOverlayId}
-          bgColor={bgColor} setBgColor={setBgColor}
-          mediaFiles={mediaFiles}
+          showLayerPanel={showLayerPanel} setShowLayerPanel={setShowLayerPanel}
+          undo={undo} redo={redo}
+          canUndo={historyIndexRef.current >= 0}
+          canRedo={historyIndexRef.current + 2 < historyRef.current.length}
         />
         <TimelineTracks
           videoClips={videoClips} audioClips={audioClips}
@@ -708,6 +834,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           selectedSubtitleId={selectedSubtitleId}
           selectedOverlayId={selectedOverlayId}
           setSelectedOverlayId={setSelectedOverlayId}
+          setOverlayLayers={setOverlayLayers}
           pxPerSec={pxPerSec} currentTime={currentTime} totalDur={totalDur}
           playing={playing} draggedClipId={draggedClipId}
           showRangeCut={showRangeCut} rangeCutStart={rangeCutStart} rangeCutEnd={rangeCutEnd}
@@ -720,6 +847,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           syncPreview={syncPreview} setClipContextMenu={setClipContextMenu}
           timelineRef={timelineRef} playheadRef={playheadRef}
           progressBarRef={progressBarRef} playStart={playStart}
+          onBeforeLayerChange={pushHistory}
         />
       </div>
 

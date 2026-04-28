@@ -100,6 +100,18 @@ export const remove = mutation({
     const file = await ctx.db.get(id);
     if (!file) return;
 
+    // Ownership check when called from client (has auth context).
+    // Server-side API routes use ConvexHttpClient without auth and enforce
+    // ownership themselves before calling this mutation.
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity) {
+      const callerCompanyId = (identity as any).org_id ?? identity.subject;
+      const fileOwner = file.companyId || file.uploadedBy;
+      if (fileOwner && fileOwner !== callerCompanyId && fileOwner !== identity.subject) {
+        throw new Error("Forbidden: you do not own this file");
+      }
+    }
+
     // Soft delete — keep record for credit audit trail
     await ctx.db.patch(id, {
       r2Key: "",
@@ -216,6 +228,18 @@ export const deleteWithR2 = mutation({
     const file = await ctx.db.get(id);
     if (!file) throw new Error("File not found");
 
+    // Ownership check when called from client (has auth context).
+    // Server-side API routes use ConvexHttpClient without auth and enforce
+    // ownership themselves before calling this mutation.
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity) {
+      const callerCompanyId = (identity as any).org_id ?? identity.subject;
+      const fileOwner = file.companyId || file.uploadedBy;
+      if (fileOwner && fileOwner !== callerCompanyId && fileOwner !== identity.subject) {
+        throw new Error("Forbidden: you do not own this file");
+      }
+    }
+
     // TODO: Delete from R2 bucket
     // This would require R2 admin credentials or a separate API route
 
@@ -290,7 +314,10 @@ export const listFiltered = query({
     if (args.category === "temps") {
       let tempsQuery = ctx.db
         .query("storyboard_files")
-        .filter((q) => q.eq(q.field("category"), "temps"));
+        .filter((q) => q.and(
+          q.eq(q.field("category"), "temps"),
+          q.neq(q.field("status"), "deleted")
+        ));
 
       if (args.fileType) {
         const ft = args.fileType;
@@ -309,7 +336,8 @@ export const listFiltered = query({
     // Normal case: use by_companyId index
     let baseQuery = ctx.db
       .query("storyboard_files")
-      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId));
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .filter((q) => q.neq(q.field("status"), "deleted"));
 
     // Apply server-side filters
     if (args.category && args.fileType) {

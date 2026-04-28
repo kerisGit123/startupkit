@@ -144,6 +144,8 @@ export interface TriggerImageGenerationParams {
   originalImageUrl?: string;
   outputFormat?: string;
   callbackUrl?: string;
+  convexToken?: string;
+  cinemaMetadata?: Record<string, any>;
 }
 
 // Video generation interface for Seedance 1.5 Pro
@@ -160,11 +162,13 @@ export interface TriggerVideoGenerationParams {
   resolution?: string;
   duration?: string;
   audio?: boolean;
+  convexToken?: string;
 }
 
 export async function triggerVideoGeneration(params: TriggerVideoGenerationParams) {
   // Initialize Convex client for credit operations
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  if (params.convexToken) convex.setAuth(params.convexToken);
   const { api } = await import("../../convex/_generated/api");
 
   // Default credit cost for video generation
@@ -354,6 +358,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
   // Initialize Convex client for server-side operations
   const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  if (params.convexToken) convex.setAuth(params.convexToken);
   const { api } = await import("../../convex/_generated/api");
   const requiredCredits = params.creditsUsed || (params.quality ? IMAGE_CREDITS[params.quality] : undefined) || IMAGE_CREDITS.standard || 5;
 
@@ -399,6 +404,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     tags: [],
     uploadedBy: params.userId,
     metadata: {
+      ...params.cinemaMetadata,
       model: actualModel,
       style: params.style,
       quality: params.quality,

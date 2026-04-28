@@ -33,7 +33,7 @@ import { ManagePersonaDialog } from "../shared/ManagePersonaDialog";
 import { ElementLibrary } from "./ElementLibrary";
 import { TtsVoiceSelector, TtsLanguageSelector, TTS_DEFAULT_VOICE } from "../shared/TtsVoiceSelector";
 import { PromptActionsDropdown } from "../shared/PromptActionsDropdown";
-import { VirtualCameraStyle, buildCameraPromptText } from "./VirtualCameraStyle";
+import { VirtualCameraStyle, buildCameraPromptText, buildCinemaStudioMetadata, type CinemaStudioMetadata } from "./VirtualCameraStyle";
 import { CameraAnglePicker, buildAnglePromptText, DEFAULT_ANGLE_SETTINGS } from "./CameraAnglePicker";
 import type { CameraAngleSettings } from "./CameraAnglePicker";
 import { ColorPalettePicker, buildColorPalettePromptText, type ColorPaletteColors } from "./ColorPalettePicker";
@@ -77,7 +77,7 @@ interface ReferenceImage {
 export interface ImageAIPanelProps {
   mode: ImageAIEditMode;
   onModeChange: (mode: ImageAIEditMode) => void;
-  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string, ugcImageUrls?: string[]) => void;
+  onGenerate: (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string, ugcImageUrls?: string[], cinemaMetadata?: CinemaStudioMetadata) => void;
   credits?: number;
   model?: string;
   onModelChange?: (model: string) => void;
@@ -1974,7 +1974,14 @@ export function ImageAIPanel({
         const genCount = (outputMode === "image" && gridSize > 1) ? gridSize : 1;
         for (let i = 0; i < genCount; i++) {
           if (i > 0) await new Promise(r => setTimeout(r, 500)); // small delay between calls
-          onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls);
+          const cinemaMetadata = buildCinemaStudioMetadata(virtualCameraSettings, {
+            model: selectedModelOption.value,
+            quality: qualityParam,
+            aspectRatio,
+            prompt: finalPrompt,
+            cameraMotion: cameraMotion !== "none" ? cameraMotion : undefined,
+          });
+          onGenerate(displayedCredits, qualityParam, aspectRatio, videoDuration, audioParam, finalPrompt, veoQualityParam, veoModeParam, klingOrientParam, klingSourceParam, videoUrlsParam, audioUrlsParam, seedanceModeParam, firstFrameParam, lastFrameParam, mergedUrls, cinemaMetadata);
         }
         if (genCount > 1) {
           toast.success(`${genCount} images generating (${genCount} x ${displayedCredits} = ${genCount * displayedCredits} credits)`);

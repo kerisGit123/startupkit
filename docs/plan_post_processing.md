@@ -1,10 +1,12 @@
-# Post-Processing Pipeline — Soul Cinema Killer
+# Post-Processing Pipeline — Cinema Studio
 
-> **Status:** Planning
-> **Last updated:** 2026-04-25
-> **Architecture decision:** NOT a new panel. Extend existing EditImageAIPanel with new tool buttons in left toolbar.
+> **Status:** SHIPPED (Session #9 tools + Session #19 layout overhaul)
+> **Last updated:** 2026-04-28 (Session #19)
+> **Architecture decision:** Labeled horizontal bottom toolbar in Cinema Studio (was: left toolbar icons). Post-processing tools moved from unlabeled sidebar to labeled bottom bar: Inpaint | Img2Img | Upscale | Enhance | Relight | BG Remove | Reframe.
+> **Layout overhaul (Session #19):** Adopted Higgsfield Cinema Studio 3.5 layout patterns — labeled bottom toolbar, right metadata/info panel (260px), canvas-only left toolbar, bottom-center zoom controls. Right floating toolbar removed entirely. Actions moved to info panel.
 > **Goal:** Match and exceed Higgsfield's Soul Cinema post-processing pipeline (Upscale, Enhancer, Relight, Inpaint, Angles) using our existing models + new integrations.
 > **Previous assessment:** "Soul Cinema quality — can't build" was WRONG. The quality comes from a post-processing pipeline, not just one model.
+> **Current status:** 10 tools DONE vs Higgsfield's 5. Leading 90 vs 88 overall.
 
 ---
 

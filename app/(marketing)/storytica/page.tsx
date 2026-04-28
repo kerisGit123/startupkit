@@ -148,12 +148,12 @@ export default function StorticaLanding() {
           </h1>
 
           <p className={`text-base lg:text-lg text-[#888] leading-relaxed max-w-2xl mx-auto mb-6 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
-            Turn any script into a visual storyboard with 25+ AI models. Generate images, videos, music, and voiceovers. Edit on canvas, compose in the video editor, and export — all in one place.
+            Turn any script into a visual storyboard with 25+ AI models. Generate images, videos, music, and voiceovers. Let the AI Director manage your project, edit on canvas with Cinema Grade, compose in the multi-layer video editor with transitions — all in one place.
           </p>
 
           {/* Bullets */}
           <div className={`flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-8 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
-            {["25+ AI models (image, video, music, audio, utility)", "Consistent characters & elements", "Video editor with multi-track timeline"].map(b => (
+            {["25+ AI models (image, video, music, audio, utility)", "AI Director agent with 22 tools", "Video editor with transitions, overlays & layers"].map(b => (
               <span key={b} className="flex items-center gap-2 text-[13px] text-[#aaa]"><Check className="w-3.5 h-3.5 text-teal-400" />{b}</span>
             ))}
           </div>
@@ -275,8 +275,8 @@ export default function StorticaLanding() {
 
           <div className="grid md:grid-cols-3 gap-5">
             {[
-              { t: "AI STORYBOARDING", d: "Generate frames from text prompts. Auto scene breakdown with tags, status badges, and camera notes per frame. 4 image models including GPT Image 2 photorealism.", img: `${img}/storyboardItem.png` },
-              { t: "AI VIDEO GENERATION", d: "8 video engines — Seedance 1.5/2.0, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk lip sync. Control resolution, duration, mode, and aspect ratio.", img: `${img}/AIModal.png` },
+              { t: "AI STORYBOARDING", d: "Generate frames from text prompts. Auto scene breakdown with tags, status badges, and camera notes per frame. 9 image models including GPT Image 2 photorealism, Flux 2 Pro, and Character Edit for consistency.", img: `${img}/storyboardItem.png` },
+              { t: "AI VIDEO GENERATION", d: "8 video engines — Seedance 1.5/2.0, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk lip sync. Multi-shot UGC and Showcase modes for product videos.", img: `${img}/AIModal.png` },
               { t: "AI MUSIC & AUDIO", d: "Generate original music, cover songs with custom personas, extend tracks, and create voiceovers with ElevenLabs TTS. Full audio production pipeline.", img: `${img}/elementLibrary.png` },
             ].map((f, i) => (
               <R key={f.t} delay={i * 100}>
@@ -294,9 +294,9 @@ export default function StorticaLanding() {
           {/* Second row */}
           <div className="grid md:grid-cols-3 gap-5 mt-12">
             {[
-              { t: "CANVAS EDITOR", d: "Brush, inpaint, area edit, text, shapes. AI image-to-image editing. Crop, zoom, pan. Professional editing without leaving the storyboard.", img: `${img}/toolbox.png` },
-              { t: "VIDEO EDITOR", d: "Multi-track timeline with video and audio tracks. Split, trim, reorder clips. Snapshot frames. Export to MP4 or WAV. Compose your final cut.", img: `${img}/fileBrowser.png` },
-              { t: "ELEMENT LIBRARY", d: "Save characters, props, styles as reusable elements. Drag into any frame for consistent characters across all scenes.", img: `${img}/elementLibrary.png` },
+              { t: "CANVAS EDITOR", d: "Brush, inpaint, area edit, text, shapes. AI image-to-image editing. Cinema Grade with 12 film stock presets. Style transfer, background removal, and 11 post-processing tools.", img: `${img}/toolbox.png` },
+              { t: "VIDEO EDITOR", d: "Multi-layer timeline with video, audio, and subtitle tracks. Overlay system with text, images, video PiP, and shapes. 5 transition types (crossfade, wipe, slide, dissolve, fade). Blend modes, opacity, scrolling text. Export to MP4 or WAV.", img: `${img}/fileBrowser.png` },
+              { t: "AI DIRECTOR", d: "AI agent with 22 tools that breaks scripts into shots, generates storyboards, and manages your entire project. Plan approval flow, reference image support, and full project context awareness.", img: `${img}/elementLibrary.png` },
             ].map((f, i) => (
               <R key={f.t} delay={i * 100}>
                 <div className="group">
@@ -317,10 +317,10 @@ export default function StorticaLanding() {
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: Coins, t: "Credit System", d: "See exact cost before generating. Pay per model, not per subscription tier." },
+              { icon: Coins, t: "Credit System", d: "See exact cost before generating. Pay per model, not per subscription tier. Credits never expire." },
               { icon: Users, t: "Team Collaboration", d: "Invite members, assign roles. Organization switcher for multi-team workflows." },
-              { icon: Layers, t: "Prompt Library", d: "Save, organize, and reuse prompts across projects." },
-              { icon: Shield, t: "Privacy First", d: "Your content is never used to train AI models." },
+              { icon: Camera, t: "Cinema Grade", d: "12 film stock presets — Kodak, Fujifilm, CineStill. Style transfer, background removal, and 11 post-processing tools." },
+              { icon: Layers, t: "Element Library", d: "Save characters, props, and styles as reusable elements. Reference with @mentions in prompts for consistency." },
             ].map((f, i) => (
               <R key={f.t} delay={i * 50}>
                 <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 h-full">
@@ -398,7 +398,8 @@ export default function StorticaLanding() {
             <Faq q="What AI models are available?" a="25+ models across 5 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Flux 2 Flex Image-to-Image, Character Edit, Nano Banana Edit, Crisp Upscale, Topaz Image Upscale. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Video Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS. Utility: AI Analyze (image/video/audio), Prompt Enhance." />
             <Faq q="Can I maintain consistent characters?" a="Yes. The Element Library saves characters, props, and styles with reference images. Drag them into any frame or mention with @Image tags in prompts." />
             <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 50 credits/month. Top-up packs available from $9.90." />
-            <Faq q="Is there a video editor?" a="Yes. Multi-track timeline with video and audio tracks. Split, trim, reorder, snapshot frames, and export to MP4 or WAV." />
+            <Faq q="Is there a video editor?" a="Yes. Multi-layer timeline with video, audio, and subtitle tracks. Overlay system for text, images, video picture-in-picture, and shapes. 5 transition types (crossfade, wipe, slide, dissolve, fade-to-color). Blend modes, opacity control, scrolling text overlays, and aspect ratio selector (16:9, 9:16, 1:1). Export to MP4 or WAV." />
+            <Faq q="Is there an AI Director?" a="Yes. The AI Director agent has 22 tools that can break scripts into shots, generate storyboards, manage elements, and control your entire project. It works with a plan approval flow so you stay in control." />
             <Faq q="Does it support team collaboration?" a="Yes. Create organizations, invite members with roles (Admin, Member, Viewer). Members share the org's credit pool and storage." />
             <Faq q="Is there a free plan?" a="Yes. 50 credits/month, 300MB storage. No credit card required. Upgrade anytime for more credits and pro workflow tools." />
           </div></R>
@@ -419,7 +420,7 @@ export default function StorticaLanding() {
             <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 lg:p-12 grid lg:grid-cols-2 gap-8 items-center">
               <div>
                 <h2 className="text-[1.8rem] lg:text-[2rem] font-extrabold leading-tight mb-3">From script to final cut in one place</h2>
-                <p className="text-[14px] text-[#888] mb-6">25+ AI models. Canvas editor. Video timeline. Music generation. Start free.</p>
+                <p className="text-[14px] text-[#888] mb-6">25+ AI models. AI Director. Multi-layer video editor. Cinema Grade. Music generation. Start free.</p>
                 <a href="/sign-up" className="group inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#111111] font-bold text-sm px-7 py-3 rounded-lg transition-all">
                   Start Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </a>

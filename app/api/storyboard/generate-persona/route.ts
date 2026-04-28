@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from "@clerk/nextjs/server";
 import { generatePersona } from '@/lib/storyboard/videoAI';
 
 export async function POST(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   try {
     const body = await req.json();
     const { taskId, audioId, name, description, vocalStart, vocalEnd, style, companyId } = body;

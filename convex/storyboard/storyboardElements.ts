@@ -53,6 +53,7 @@ export const create = mutation({
     tags: v.array(v.string()),
     createdBy: v.string(),
     visibility: v.optional(v.union(v.literal("private"), v.literal("public"), v.literal("shared"))),
+    identity: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     // Get user from auth context
@@ -60,18 +61,18 @@ export const create = mutation({
     if (!identity) {
       throw new Error("User not authenticated");
     }
-    
+
     // Get user's organization from auth context
     const userOrganizationId = identity.orgId;
     const userId = identity.subject;
-    
+
     const project = await ctx.db.get(args.projectId);
     if (!project) {
       throw new Error("Project not found");
     }
 
     const companyId = (project.companyId || userOrganizationId || userId) as string;
-    
+
     return await ctx.db.insert("storyboard_elements", {
       projectId: args.projectId,
       companyId,
@@ -85,6 +86,7 @@ export const create = mutation({
       usageCount: 0,
       visibility: args.visibility ?? "private",
       status: "ready",
+      identity: args.identity,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -205,6 +207,7 @@ export const update = mutation({
     visibility: v.optional(v.union(v.literal("private"), v.literal("shared"), v.literal("public"))),
     sharedWith: v.optional(v.array(v.id("storyboard_projects"))),
     status: v.optional(v.string()),
+    identity: v.optional(v.any()),
   },
   handler: async (ctx, { id, ...fields }) => {
     const element = await ctx.db.get(id);

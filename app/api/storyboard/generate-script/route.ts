@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { parseScriptScenes } from "@/lib/storyboard/sceneParser";
 
 export async function POST(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   try {
     const { prompt, genre, targetDuration, style } = await req.json();
 

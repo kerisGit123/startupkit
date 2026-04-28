@@ -8,6 +8,8 @@ import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkle
 import { useCurrentCompanyId, getCurrentCompanyId, logUserInfo } from "@/lib/auth-utils";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { FileBrowser } from "./FileBrowser";
+import { ElementForge } from "./ElementForge";
+import type { ForgeElementType } from "./elementForgeConfig";
 
 // ─── URL Helper Functions ───────────────────────────────────────────────────────
 const getFileUrl = (r2Key: string): string => {
@@ -265,6 +267,7 @@ export function ElementLibrary({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showRefFileBrowser, setShowRefFileBrowser] = useState(false);
+  const [forgeState, setForgeState] = useState<{ open: boolean; mode: "create" | "edit"; type: ForgeElementType; element?: any } | null>(null);
   const [visibility, setVisibility] = useState<"private" | "public" | "shared">("private");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -1084,9 +1087,13 @@ export function ElementLibrary({
                 <p className="mt-2 text-sm text-(--text-tertiary)">Create your first element to get started</p>
                 <button
                   onClick={() => {
-                    console.log("[ElementLibrary] Create Element clicked - clearing form and opening panel");
-                    setShowCreate(true);
-                    setEditingId(null); // Clear any existing editing state
+                    const forgeTypes = ["character", "prop", "environment"];
+                    if (forgeTypes.includes(activeType)) {
+                      setForgeState({ open: true, mode: "create", type: activeType as ForgeElementType });
+                    } else {
+                      setShowCreate(true);
+                      setEditingId(null);
+                    }
                   }}
                   className="mt-4 px-6 py-3 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) text-white rounded-xl font-medium hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
@@ -1112,9 +1119,13 @@ export function ElementLibrary({
                     </button>
                     <button
                       onClick={() => {
-                        console.log("[ElementLibrary] Toolbar Create Element clicked - clearing form and opening panel");
-                        setShowCreate(true);
-                        setEditingId(null); // Clear any existing editing state
+                        const forgeTypes = ["character", "prop", "environment"];
+                        if (forgeTypes.includes(activeType)) {
+                          setForgeState({ open: true, mode: "create", type: activeType as ForgeElementType });
+                        } else {
+                          setShowCreate(true);
+                          setEditingId(null);
+                        }
                       }}
                       className="px-4 py-2 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) text-white rounded-xl font-medium hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) transition-all duration-200 shadow-lg hover:shadow-xl text-sm"
                     >
@@ -1277,8 +1288,18 @@ export function ElementLibrary({
                           )}
                           <button
                             onClick={() => {
-                              setEditingId(element._id);
-                              setShowCreate(true);
+                              const forgeTypes = ["character", "prop", "environment"];
+                              if (forgeTypes.includes(element.type)) {
+                                setForgeState({
+                                  open: true,
+                                  mode: "edit",
+                                  type: element.type as ForgeElementType,
+                                  element,
+                                });
+                              } else {
+                                setEditingId(element._id);
+                                setShowCreate(true);
+                              }
                             }}
                             className="flex items-center gap-2 text-xs text-(--accent-blue) hover:text-(--accent-blue-hover) transition-colors"
                           >
@@ -1777,6 +1798,21 @@ export function ElementLibrary({
             />
           </div>
         </div>
+      )}
+
+      {/* Element Forge — structured wizard for character/environment/prop */}
+      {forgeState?.open && (
+        <ElementForge
+          mode={forgeState.mode}
+          type={forgeState.type}
+          projectId={projectId}
+          userId={userId}
+          element={forgeState.element}
+          onSave={() => {
+            setForgeState(null);
+          }}
+          onClose={() => setForgeState(null)}
+        />
       )}
     </div>
   );

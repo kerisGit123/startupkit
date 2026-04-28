@@ -16,6 +16,20 @@ export interface VirtualCameraSettings {
   aperture: string;
 }
 
+export interface CinemaStudioMetadata {
+  feature?: string;         // "Cinema Studio"
+  camera?: string;          // "ARRI Alexa"
+  lens?: string;            // "Anamorphic"
+  focalLength?: string;     // "50mm"
+  aperture?: string;        // "f/4"
+  model?: string;           // AI model ID
+  quality?: string;         // "1K" | "2K" | "4K"
+  aspectRatio?: string;     // "16:9"
+  dimensions?: string;      // "1920x1080"
+  prompt?: string;          // Generation prompt
+  cameraMotion?: string;    // "dolly-in" | "orbit" etc.
+}
+
 interface Option {
   value: string;
   label: string;
@@ -33,7 +47,7 @@ interface VirtualCameraStyleProps {
 
 // ── Option Data ──────────────────────────────────────────────────────────
 
-const CAMERA_OPTIONS: Option[] = [
+export const CAMERA_OPTIONS: Option[] = [
   { value: "default", label: "Default", sublabel: "", promptText: "" },
   { value: "arri", label: "ARRI Alexa", sublabel: "CINEMA", image: "/storytica/cameras/ARRI.png", promptText: "Shot on ARRI Alexa, cinematic color science, wide dynamic range" },
   { value: "hasselblad", label: "Hasselblad", sublabel: "MEDIUM FORMAT", image: "/storytica/cameras/HASSELBLAD.png", promptText: "Shot on Hasselblad medium format, rich detail, creamy depth" },
@@ -45,7 +59,7 @@ const CAMERA_OPTIONS: Option[] = [
   { value: "vhs", label: "VHS", sublabel: "RETRO", image: "/storytica/cameras/VHS_CAMCORDER.png", promptText: "VHS camcorder look, scan lines, tracking artifacts, retro video" },
 ];
 
-const LENS_OPTIONS: Option[] = [
+export const LENS_OPTIONS: Option[] = [
   { value: "none", label: "Default", sublabel: "", promptText: "" },
   { value: "spherical", label: "Spherical", sublabel: "STANDARD", image: "/storytica/cameras/LENS.png", promptText: "spherical lens, natural rendering" },
   { value: "anamorphic", label: "Anamorphic", sublabel: "CINEMATIC", image: "/storytica/cameras/LENS.png", promptText: "anamorphic lens, oval bokeh, horizontal lens flares, widescreen cinematic" },
@@ -55,7 +69,7 @@ const LENS_OPTIONS: Option[] = [
   { value: "fisheye", label: "Fisheye", sublabel: "ULTRA-WIDE", image: "/storytica/cameras/LENS.png", promptText: "fisheye lens, ultra-wide barrel distortion" },
 ];
 
-const FOCAL_LENGTH_OPTIONS: Option[] = [
+export const FOCAL_LENGTH_OPTIONS: Option[] = [
   { value: "none", label: "—", promptText: "" },
   { value: "14", label: "14", promptText: "14mm ultra-wide focal length" },
   { value: "24", label: "24", promptText: "24mm wide-angle focal length" },
@@ -66,7 +80,7 @@ const FOCAL_LENGTH_OPTIONS: Option[] = [
   { value: "200", label: "200", promptText: "200mm telephoto focal length, compressed perspective" },
 ];
 
-const APERTURE_OPTIONS: Option[] = [
+export const APERTURE_OPTIONS: Option[] = [
   { value: "none", label: "Default", sublabel: "", promptText: "" },
   { value: "1.4", label: "f/1.4", sublabel: "SHALLOW", image: "/storytica/cameras/APERTURE.png", promptText: "f/1.4 wide aperture, extremely shallow depth of field, creamy bokeh" },
   { value: "2.0", label: "f/2.0", sublabel: "SOFT", image: "/storytica/cameras/APERTURE.png", promptText: "f/2.0 aperture, shallow depth of field, soft background" },
@@ -77,6 +91,27 @@ const APERTURE_OPTIONS: Option[] = [
 ];
 
 // ── Build Prompt Text ────────────────────────────────────────────────────
+
+export function buildCinemaStudioMetadata(
+  settings: VirtualCameraSettings,
+  opts?: { model?: string; quality?: string; aspectRatio?: string; prompt?: string; cameraMotion?: string }
+): CinemaStudioMetadata {
+  const cam = CAMERA_OPTIONS.find(o => o.value === settings.camera);
+  const lens = LENS_OPTIONS.find(o => o.value === settings.lens);
+  const fl = FOCAL_LENGTH_OPTIONS.find(o => o.value === settings.focalLength);
+  const ap = APERTURE_OPTIONS.find(o => o.value === settings.aperture);
+  const meta: CinemaStudioMetadata = { feature: "Cinema Studio" };
+  if (cam && settings.camera !== "default") meta.camera = cam.label;
+  if (lens && settings.lens !== "none") meta.lens = lens.label;
+  if (fl && settings.focalLength !== "none") meta.focalLength = `${fl.label}mm`;
+  if (ap && settings.aperture !== "none") meta.aperture = `f/${ap.value}`;
+  if (opts?.model) meta.model = opts.model;
+  if (opts?.quality) meta.quality = opts.quality;
+  if (opts?.aspectRatio) meta.aspectRatio = opts.aspectRatio;
+  if (opts?.prompt) meta.prompt = opts.prompt;
+  if (opts?.cameraMotion) meta.cameraMotion = opts.cameraMotion;
+  return meta;
+}
 
 export function buildCameraPromptText(settings: VirtualCameraSettings): string {
   const parts: string[] = [];

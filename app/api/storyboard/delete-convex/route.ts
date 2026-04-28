@@ -14,7 +14,7 @@ import { Id } from '@/convex/_generated/dataModel';
 export async function POST(request: NextRequest) {
   try {
     // Auth check
-    const { userId } = await auth();
+    const { userId, orgId } = await auth();
     if (!userId) {
       console.error('[delete-convex] Unauthorized - no userId found');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -34,8 +34,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid fileId format' }, { status: 400 });
     }
 
+    // Ownership check: verify the file belongs to the user's company
+    const companyId = orgId || userId;
+    const file = await convex.query(api.storyboard.storyboardFiles.getById, {
+      id: fileId as Id<'storyboard_files'>,
+    });
+    if (!file) {
+      // File doesn't exist — treat as already deleted
+      return NextResponse.json({ success: true, fileId, warning: 'File not found in database' });
+    }
+    // Check companyId first; fall back to uploadedBy for legacy files without companyId
+    const fileOwner = file.companyId || file.uploadedBy;
+    if (fileOwner && fileOwner !== companyId && fileOwner !== userId) {
+      console.error('[delete-convex] Ownership mismatch:', { fileId, fileOwner, callerCompanyId: companyId, callerUserId: userId });
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     console.log('[delete-convex] Attempting to remove storyboard_files record:', fileId);
-    
+
     try {
       await convex.mutation(api.storyboard.storyboardFiles.remove, {
         id: fileId as Id<'storyboard_files'>,

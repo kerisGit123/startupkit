@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { sendEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
+  const { userId } = await auth();
+  if (!userId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   try {
     const { to } = await req.json();
 

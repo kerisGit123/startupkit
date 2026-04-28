@@ -7,6 +7,7 @@ import { getToolsForMode } from "@/lib/director/agent-tools";
 import { dispatchDirectorTool, type DirectorToolContext } from "@/lib/director/tool-executor";
 import { buildDirectorSystemPrompt, buildAgentSystemPrompt } from "@/lib/director/system-prompt";
 import type Anthropic from "@anthropic-ai/sdk";
+import sharp from "sharp";
 
 export async function POST(req: NextRequest) {
   try {
@@ -193,10 +194,26 @@ export async function POST(req: NextRequest) {
                 try {
                   const imgRes = await fetch(result.imageUrl, { signal: AbortSignal.timeout(10000) });
                   if (imgRes.ok) {
-                    const buffer = Buffer.from(await imgRes.arrayBuffer());
+                    let buffer = Buffer.from(await imgRes.arrayBuffer());
+                    let mediaType: "image/png" | "image/jpeg" | "image/gif" | "image/webp" = "image/jpeg";
+
+                    const MAX_IMAGE_BYTES = 4.5 * 1024 * 1024; // 4.5 MB (safe margin under 5 MB API limit)
+                    if (buffer.byteLength > MAX_IMAGE_BYTES) {
+                      // Resize large images: scale down and compress as JPEG
+                      const metadata = await sharp(buffer).metadata();
+                      const scaleFactor = Math.sqrt(MAX_IMAGE_BYTES / buffer.byteLength);
+                      const newWidth = Math.round((metadata.width || 1920) * scaleFactor);
+                      buffer = await sharp(buffer)
+                        .resize({ width: newWidth, withoutEnlargement: true })
+                        .jpeg({ quality: 80 })
+                        .toBuffer();
+                      mediaType = "image/jpeg";
+                    } else {
+                      const ct = imgRes.headers.get("content-type") || "image/png";
+                      mediaType = (ct.startsWith("image/") ? ct : "image/png") as typeof mediaType;
+                    }
+
                     const base64 = buffer.toString("base64");
-                    const ct = imgRes.headers.get("content-type") || "image/png";
-                    const mediaType = (ct.startsWith("image/") ? ct : "image/png") as "image/png" | "image/jpeg" | "image/gif" | "image/webp";
                     contentBlocks.push({
                       type: "image",
                       source: { type: "base64", media_type: mediaType, data: base64 },

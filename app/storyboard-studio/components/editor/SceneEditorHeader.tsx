@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, RectangleHorizontal } from "lucide-react";
+import { ChevronLeft, ChevronRight, RectangleHorizontal, Film } from "lucide-react";
 import { AppUserButton as UserButton } from "@/components/AppUserButton";
 import { OrgSwitcher } from "@/components/OrganizationSwitcherWithLimits";
 import { CreditBadge } from "../shared/CreditBadge";
@@ -16,6 +16,8 @@ interface SceneEditorHeaderProps {
   onNavigateToShot?: (shotId: string) => void;
   onShotsChange: (shots: Shot[]) => void;
   onShowInfoDialog: () => void;
+  showDirector?: boolean;
+  onToggleDirector?: () => void;
 }
 
 export function SceneEditorHeader({
@@ -27,6 +29,8 @@ export function SceneEditorHeader({
   onNavigateToShot,
   onShotsChange,
   onShowInfoDialog,
+  showDirector,
+  onToggleDirector,
 }: SceneEditorHeaderProps) {
   const sortedShots = [...shots].sort((a, b) => (a.order || 0) - (b.order || 0));
   const currentIndex = sortedShots.findIndex(s => s.id === activeShotId);
@@ -81,6 +85,19 @@ export function SceneEditorHeader({
           ));
         }}
       />
+
+      {/* God View (filmstrip) toggle */}
+      {onToggleDirector && (
+        <button
+          onClick={onToggleDirector}
+          className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
+            showDirector ? "text-(--text-primary) bg-white/10" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+          }`}
+          title={showDirector ? "Hide Filmstrip" : "Show Filmstrip"}
+        >
+          <Film className="w-3.5 h-3.5" strokeWidth={1.75} />
+        </button>
+      )}
 
       {/* Info button */}
       <button

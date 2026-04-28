@@ -484,6 +484,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
   const [showGenPanel, setShowGenPanel] = useState(false);
   const [showImageAIPanel, setShowImageAIPanel] = useState(true);
   const [showDirectorChat, setShowDirectorChat] = useState(false);
+  const [showGodView, setShowGodView] = useState(false);
+  const [showFrameInfo, setShowFrameInfo] = useState(true);
   const generatedImageRef = useRef<HTMLImageElement>(null);
   const [activeAIPanel, setActiveAIPanel] = useState<'editimage' | 'videoimage'>('videoimage');
   const [showUploadOverrideBrowser, setShowUploadOverrideBrowser] = useState(false);
@@ -1924,7 +1926,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     cropY?: number,
     cropWidth?: number,
     cropHeight?: number,
-    originalImageUrl?: string
+    originalImageUrl?: string,
+    cinemaMetadata?: Record<string, any>
   ): Promise<{ fileId: string; taskId: string; creditsUsed: number } | null> => {
     try {
       console.log('[generateImageWithCredits] Calling API with:', {
@@ -1977,7 +1980,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           cropY,          // Pass crop Y coordinate
           cropWidth,      // Pass crop width
           cropHeight,     // Pass crop height
-          originalImageUrl // Pass original image URL for compositing
+          originalImageUrl, // Pass original image URL for compositing
+          cinemaMetadata, // Cinema Studio metadata
         }),
       });
 
@@ -4198,10 +4202,12 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           onNavigateToShot={onNavigateToShot}
           onShotsChange={onShotsChange}
           onShowInfoDialog={() => setShowInfoDialog(true)}
+          showDirector={showGodView}
+          onToggleDirector={() => setShowGodView(!showGodView)}
         />
 
         {/* ── Director's Filmstrip (God View) ── */}
-        <StoryboardStrip
+        {showGodView && <StoryboardStrip
           shots={shots}
           activeShotId={activeShotId}
           onNavigateToShot={goTo}
@@ -4240,7 +4246,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               });
             }
           }}
-        />
+        />}
 
       {/* ── Main area ── */}
       <div className={`flex-1 flex overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
@@ -4305,6 +4311,22 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               )}
               <span className="text-[8px] font-medium leading-none">{activeAIPanel === 'editimage' ? 'Video' : 'Edit'}</span>
             </button>
+
+            {/* Frame Info Panel Toggle */}
+            {!isMobile && (
+              <button
+                onClick={() => setShowFrameInfo(!showFrameInfo)}
+                className={`w-[44px] py-2.5 rounded-lg flex flex-col items-center gap-1 transition-all ${
+                  showFrameInfo
+                    ? 'bg-amber-500/15 text-amber-300'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                }`}
+                title="Toggle Frame Info"
+              >
+                <Info className="w-4 h-4" />
+                <span className="text-[8px] font-medium leading-none">Info</span>
+              </button>
+            )}
 
             {/* Combine Background - moved to left toolbar in EditImageAIPanel */}
             {false && activeAIPanel === 'editimage' && <button
@@ -4679,6 +4701,23 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               }
             }}
           />
+
+          {/* Bottom Center Zoom Controls */}
+          {!isMobile && (
+            <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-(--bg-secondary)/90 backdrop-blur-md rounded-lg px-2 py-1 shadow-lg border border-(--border-primary)">
+              <button onClick={handleZoomOut} className="p-1 text-(--text-secondary) hover:text-(--text-primary) transition-colors" title="Zoom Out">
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[10px] text-(--text-secondary) min-w-[32px] text-center">{zoomLevel}%</span>
+              <button onClick={handleZoomIn} className="p-1 text-(--text-secondary) hover:text-(--text-primary) transition-colors" title="Zoom In">
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-px h-3 bg-white/10 mx-0.5" />
+              <button onClick={handleFitToScreen} className="p-1 text-(--text-secondary) hover:text-(--text-primary) transition-colors" title="Fit to Screen">
+                <Square className="w-3 h-3" />
+              </button>
+            </div>
+          )}
 
           {/* Video preview dialog — shown when videoState is ready (from outputs row or animatic) */}
           {videoState.status === 'ready' && videoState.content?.videoUrl && (
@@ -5479,7 +5518,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     <ImageAIPanel
                       mode={aiEditMode === "annotate" ? "describe" : aiEditMode as ImageAIEditMode}
                       onModeChange={(mode) => setAiEditMode(mode as AIEditMode)}
-                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string, ugcImageUrls?: string[]) => {
+                      onGenerate={async (creditsUsed: number, quality: string, aspectRatio: string, duration: string, audioEnabled: boolean, extractedPrompt: string, veoQuality?: string, veoMode?: string, klingOrientation?: string, klingSource?: string, videoUrls?: string[], audioUrls?: string[], seedanceMode?: string, firstFrameUrl?: string, lastFrameUrl?: string, ugcImageUrls?: string[], cinemaMetadata?: Record<string, any>) => {
                         console.log("=== ELEMENT CREDIT-BASED GENERATION CALLED ===");
                         console.log("Element generation with mode:", aiEditMode, "model:", aiModel);
                         console.log("Prompt:", extractedPrompt);
@@ -5578,6 +5617,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               defaultAI: currentDefaultAI as any,
 
                               metadata: {
+                                ...cinemaMetadata,
                                 modelId: aiModel,
                                 modelName: aiModel,
                                 pricingType: "formula",
@@ -5708,6 +5748,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               defaultAI: currentDefaultAI as any,
 
                               metadata: {
+                                ...cinemaMetadata,
                                 modelId: aiModel,
                                 modelName: aiModel,
                                 pricingType: "formula",
@@ -5828,6 +5869,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
+                                ...cinemaMetadata,
                                 modelId: aiModel,
                                 modelName: "Topaz Video Upscale",
                                 pricingType: "formula",
@@ -5954,6 +5996,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
+                                ...cinemaMetadata,
                                 modelId: aiModel,
                                 modelName: "Grok Imagine",
                                 pricingType: "formula",
@@ -6092,6 +6135,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               aspectRatio: aspectRatio || undefined,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
+                                ...cinemaMetadata,
                                 modelId: aiModel,
                                 modelName: "InfiniteTalk From Audio",
                                 pricingType: "formula",
@@ -6200,6 +6244,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               aspectRatio: undefined,
                               defaultAI: currentDefaultAI as any,
                               metadata: {
+                                ...cinemaMetadata,
                                 modelId: aiModel,
                                 modelName: "AI Music Generator",
                                 pricingType: "fixed",
@@ -6295,7 +6340,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                               category: "generated", filename: `cover-song-${Date.now()}.mp3`, fileType: "music", mimeType: "audio/mpeg",
                               size: 0, status: "generating", creditsUsed, categoryId: activeShotId as any, sourceUrl: undefined, tags: [],
                               uploadedBy: user?.id || "", model: aiModel, prompt: extractedPrompt, aspectRatio: undefined, defaultAI: currentDefaultAI as any,
-                              metadata: { modelId: aiModel, modelName: "Cover Song", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
+                              metadata: { ...cinemaMetadata, modelId: aiModel, modelName: "Cover Song", pricingType: "fixed", quality, creditsConsumed: creditsUsed, generationTimestamp: Date.now(), behavior: { cropped: false, combined: false, referenceImagesUsed: 0 }, processingTime: 0, success: false },
                             });
                             await deductCredits({ companyId: companyId || "", tokens: creditsUsed, reason: `AI cover song generation`, plan: currentPlan });
                             try {
@@ -7005,9 +7050,161 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         </div>
 
       {/* Generated Images Panel (shown after inpaint) */}
-  
 
-      </div>
+      {/* ── Right: Frame Info Panel ── */}
+      {showFrameInfo && !isMobile && (
+        <div className="w-[260px] shrink-0 bg-(--bg-secondary)/95 backdrop-blur-md border-l border-(--border-primary) flex flex-col overflow-hidden">
+          {/* Prompt + Cinema Studio — from currently displayed generated file */}
+          {(() => {
+            const shotFiles = projectFiles
+              ?.filter(f => String(f.categoryId ?? "") === String(activeShotId) && f.category === "generated" && (f.status === "completed" || f.status === "ready"))
+              ?.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            // Match by current canvas image URL, fall back to latest
+            const currentImg = backgroundImage || activeShot?.imageUrl;
+            const latestFile = (currentImg && shotFiles?.find(f => (f as any).sourceUrl === currentImg || (f as any).r2Key && currentImg.includes((f as any).r2Key))) || shotFiles?.[0];
+            const meta = latestFile?.metadata as Record<string, any> | undefined;
+            const cinemaItems = [
+              { label: "Feature", value: meta?.feature },
+              { label: "Camera", value: meta?.camera },
+              { label: "Lens", value: meta?.lens },
+              { label: "Focal Length", value: meta?.focalLength },
+              { label: "Aperture", value: meta?.aperture },
+              { label: "Model", value: meta?.modelName || meta?.model || latestFile?.model },
+              { label: "Quality", value: meta?.quality },
+              { label: "Aspect Ratio", value: meta?.aspectRatio || latestFile?.aspectRatio },
+              { label: "Dimensions", value: meta?.dimensions },
+              { label: "Camera Motion", value: meta?.cameraMotion },
+              { label: "Created", value: latestFile?.createdAt ? new Date(latestFile.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : undefined },
+            ].filter(item => item.value);
+            const hasShot = activeShot?.shotSize || activeShot?.perspective || activeShot?.movement || activeShot?.lighting || activeShot?.mood;
+            const displayPrompt = (latestFile as any)?.prompt || meta?.prompt || activeShot?.imagePrompt || activeShot?.description || "";
+            return (
+              <>
+              {/* Prompt Section */}
+              <div className="px-4 pt-4 pb-3 border-b border-(--border-primary)">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary)">Prompt</span>
+                  {displayPrompt && (
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(displayPrompt); toast.success("Copied to clipboard"); }}
+                      className="text-[10px] text-(--text-secondary) hover:text-(--text-primary) px-1.5 py-0.5 rounded hover:bg-white/5 transition-colors"
+                    >
+                      Copy
+                    </button>
+                  )}
+                </div>
+                <p className="text-[12px] text-(--text-secondary) leading-relaxed max-h-[120px] overflow-y-auto">
+                  {displayPrompt || "No prompt set"}
+                </p>
+              </div>
+              {/* Cinema Studio + Frame Info */}
+              <div className="px-4 pt-3 pb-3 border-b border-(--border-primary) flex-1 overflow-y-auto">
+                {cinemaItems.length > 0 && (
+                  <>
+                    <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2.5 block">Cinema Studio</span>
+                    <div className="space-y-2 mb-3">
+                      {cinemaItems.map((item) => (
+                        <div key={item.label} className="flex items-start justify-between gap-2">
+                          <span className="text-[11px] text-(--text-tertiary) shrink-0">{item.label}</span>
+                          <span className="text-[11px] text-(--text-primary) font-medium text-right">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {hasShot && (
+                  <>
+                    <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2.5 block">Frame Info</span>
+                    <div className="space-y-2">
+                      {[
+                        { label: "Shot", value: activeShot?.shotSize },
+                        { label: "Perspective", value: activeShot?.perspective },
+                        { label: "Movement", value: activeShot?.movement },
+                        { label: "Lighting", value: activeShot?.lighting },
+                        { label: "Mood", value: activeShot?.mood },
+                        { label: "Location", value: activeShot?.location },
+                      ].filter(item => item.value).map((item) => (
+                        <div key={item.label} className="flex items-start justify-between gap-2">
+                          <span className="text-[11px] text-(--text-tertiary) shrink-0">{item.label}</span>
+                          <span className="text-[11px] text-(--text-primary) font-medium text-right">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {activeShot?.notes && (
+                  <div className="mt-3 pt-3 border-t border-(--border-primary)">
+                    <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-1.5 block">Notes</span>
+                    <p className="text-[11px] text-(--text-secondary) leading-relaxed">{activeShot.notes}</p>
+                  </div>
+                )}
+              </div>
+              </>
+            );
+          })()}
+
+          {/* Action Buttons */}
+          <div className="px-4 py-3 border-t border-(--border-primary)">
+            <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2 block">Actions</span>
+            <div className="grid grid-cols-2 gap-1">
+              {[
+                { icon: Save, label: "Save to Frame", onClick: handleSaveSelectedImageToStoryboardItem },
+                { icon: Image, label: "Retrieve", onClick: () => setShowUploadOverrideBrowser(true) },
+                { icon: Layers, label: "Combine", onClick: handleCombineLayers },
+                { icon: Trash2, label: "Delete", onClick: handleDeleteCanvasImage, danger: true },
+              ].map((btn) => (
+                <button
+                  key={btn.label}
+                  onClick={btn.onClick}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
+                    btn.danger
+                      ? "text-(--text-secondary) hover:text-red-400 hover:bg-red-500/10"
+                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                  }`}
+                >
+                  <btn.icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{btn.label}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1 mt-1">
+              <button
+                onClick={() => {
+                  const img = backgroundImage || activeShot?.imageUrl;
+                  if (img) {
+                    const link = document.createElement('a');
+                    link.href = `/api/storyboard/download-image?url=${encodeURIComponent(img)}`;
+                    link.download = `generated-image-${Date.now()}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Download</span>
+              </button>
+              <button
+                onClick={() => { handleSaveToR2().catch(() => {}); }}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Upload to R2</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowInfoDialog(true)}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors mt-1"
+            >
+              <Info className="w-3.5 h-3.5" />
+              <span>Full Frame Details</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      </div>{/* end main area */}
 
       {/* KIE Modal */}
       <AIGeneratorModal

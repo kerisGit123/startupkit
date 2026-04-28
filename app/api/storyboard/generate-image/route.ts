@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import {
   triggerImageGeneration,
   triggerVideoGeneration,
@@ -10,6 +11,16 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    // Get Convex auth token from Clerk
+    const authResult = await auth();
+    if (!authResult.userId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    let convexToken: string | null = null;
+    try {
+      convexToken = await authResult.getToken({ template: "convex" });
+    } catch {
+      try { convexToken = await authResult.getToken(); } catch {}
+    }
+
     const {
       sceneContent: prompt,
       technical, 
@@ -35,7 +46,8 @@ export async function POST(req: NextRequest) {
       originalImageUrl, // NEW - original image URL for compositing
       outputFormat,   // NEW - output format from VideoImageAIPanel
       duration,       // NEW - video duration for Seedance 1.5 Pro
-      audioEnabled    // NEW - audio enabled for Seedance 1.5 Pro
+      audioEnabled,   // NEW - audio enabled for Seedance 1.5 Pro
+      cinemaMetadata, // Cinema Studio metadata (camera, lens, focal, aperture, etc.)
     } = await req.json();
 
     console.log('[generate-image] API route received parameters:', {
@@ -105,6 +117,7 @@ export async function POST(req: NextRequest) {
         resolution: quality === "standard" ? "720p" : quality === "high" ? "1080p" : "480p", // Map quality to resolution
         duration: duration || "8s",
         audio: audioEnabled || false,
+        convexToken: convexToken ?? undefined,
       });
     } else {
       // Use image generation for other models
@@ -128,7 +141,9 @@ export async function POST(req: NextRequest) {
         cropWidth,      // NEW - pass crop width
         cropHeight,     // NEW - pass crop height
         originalImageUrl, // NEW - pass original image URL for compositing
-        outputFormat    // NEW - pass output format from VideoImageAIPanel
+        outputFormat,    // NEW - pass output format from VideoImageAIPanel
+        convexToken: convexToken ?? undefined,
+        cinemaMetadata, // Cinema Studio metadata
       });
     }
 

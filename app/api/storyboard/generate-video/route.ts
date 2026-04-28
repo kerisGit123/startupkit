@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import {
@@ -12,6 +13,8 @@ import {
 const CALLBACK_URL = `${process.env.NEXT_PUBLIC_APP_URL}/api/callback/video`;
 
 export async function POST(req: NextRequest) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   try {
     const { model, quality, duration, aspectRatio, prompt, imageUrl, itemId, companyId, userId } = await req.json();
 
