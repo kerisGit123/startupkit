@@ -1,10 +1,25 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-28 (Session #22 — Landing page copy update + Element Forge/Cinema Studio naming)
+> **Last updated:** 2026-04-29 (Session #23 — Element Forge Soul Cast redesign)
 
 ---
 
-## Recently Completed (Session #11-21 — 2026-04-26/28)
+## Recently Completed (Session #11-23 — 2026-04-26/29)
+
+### Session #23 — 2026-04-29 (Element Forge Soul Cast Redesign)
+
+- [x] **Higgsfield Soul Cast-style layout** — Redesigned Element Forge wizard to match Higgsfield's character creation UX
+- [x] **Sub-tab pattern** — Every step now uses `hasSubTabs: true`, showing one field at a time (Identity: Name/Gender/Age/Ethnicity, Physical Appearance: Build/Height/Eye Color/Hair Style/Hair Texture/Hair Color/Facial Hair, Personality: Archetype/Expression, Details: Features/Custom, Outfit: Style/Custom)
+- [x] **Carousel component** — `FieldCarousel` replaces all `visual-grid` usage. 160x180px cards, horizontal scrollable strip with left/right arrows, fade edges, selection ring + checkmark
+- [x] **Multi-carousel** — `FieldMultiCarousel` for multi-select fields (Details/Features)
+- [x] **Two-level carousel** — `FieldTwoLevelCarousel` for environment sub-settings
+- [x] **New Physical Appearance fields** — Hair Texture (Straight/Wavy/Curly/Coily), Facial Hair (7 options), Height expanded (Very short → Very tall), Eye Color with photo thumbnails
+- [x] **Height as era-slider** — scroll-snap dial instead of button group
+- [x] **Thumbnail generation** — Generated eyes (2x3) and hair+facial (3x4) grids via GPT Image 2, sliced with `scripts/slice-forge-thumbs.mjs` into 17 individual thumbnails
+- [x] **Dialog box refinements** — fixed height `h-[75vh]` (no jumping), compact badges with "Clear all" button, reference images as avatar circles in header
+- [x] **Template dropdown** — Custom styled dropdown replacing native select and tall card list
+- [x] **ThumbnailCropper CORS fix** — `fetch()` → `new Image()` with `crossOrigin="anonymous"` for R2 URLs
+- [x] **Design doc updated** — `docs/plan_final_design.md` section 16 added with full Element Forge design specs
 
 ### Session #22 — 2026-04-28 (Landing Page Copy Update)
 
@@ -277,7 +292,7 @@
 | Expression | Dropdown: Neutral, Happy, Serious, Angry, Sad, Confident | "[expression] expression" |
 | Distinguishing features | Text field (optional) | "[features]" |
 
-- [x] Character builder with structured fields → auto-compose prompt description (Session #20 — ElementForge.tsx)
+- [x] Character builder with structured fields → auto-compose prompt description (Session #20 — ElementForge.tsx, Session #23 — Soul Cast redesign with carousels + sub-tabs)
 - [ ] "Generate Reference Sheet" button — 1 click → generates 4 angles (front/side/back/3-quarter) using composed prompt, saves as referenceUrls. **Unique feature — nobody has this, not even Higgsfield's Soul Cast (generates 1 image only)**
 - [x] Live prompt preview showing what will be sent to AI (Session #20)
 

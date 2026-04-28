@@ -740,7 +740,74 @@ Preview:   Overlay on video preview area
 Export:    ctx.font, ctx.textAlign="center", background rect + text
 ```
 
-## 16. Files Modified (Complete List)
+## 16. Element Forge — Soul Cast-style Wizard (Session #23)
+
+### Layout
+- **Dialog box** — `w-[94vw] max-w-[1100px] h-[75vh]`, fixed height, no jumping between tabs
+- **Header row** — Human/Non-Human toggle (left), Randomize button, reference avatars as small circles (center), close X (right)
+- **Tab bar** — centered, underline active style: Identity, Era, Physical Appearance, Personality, Details, Outfit, Prompt
+- **Sub-tab bar** — sits directly below main tabs when step has `hasSubTabs: true`
+- **Content area** — `flex-1 overflow-y-auto`, single field per sub-tab, vertically centered for carousels
+- **Bottom bar** — badges row (compact, with "Clear all"), action bar (nav arrows, References, Thumbnail, Cancel, Save)
+
+### Sub-Tab Pattern (hasSubTabs)
+Every step uses sub-tabs — each field gets its own sub-tab, one at a time:
+
+| Step | Sub-tabs |
+|---|---|
+| Identity | Name, Gender, Age, Ethnicity |
+| Era | _(single field, no sub-tabs)_ |
+| Physical Appearance | Build, Height, Eye Color, Hair Style, Hair Texture, Hair Color, Facial Hair |
+| Personality | Archetype, Expression |
+| Details | Features (multi-select), Custom |
+| Outfit | Style, Custom |
+
+Active sub-tab: white text + underline. Filled sub-tabs: blue dot indicator.
+
+### Carousel Component (FieldCarousel)
+Replaces all `visual-grid` usage. Horizontal scrollable strip:
+- **Card size** — 160px wide x 180px tall, rounded-2xl
+- **Card types** — photo thumbnail (icon), color swatch (color), letter fallback
+- **Selection** — blue ring-2, check badge top-right (w-6 h-6)
+- **Arrows** — left/right circular buttons (w-11 h-11, bg-black/70), appear when scrollable
+- **Fade edges** — gradient fade on overflowing sides (w-20)
+- **Gap** — 20px between cards, centered with `justify-center`
+- **Scroll** — 350px per arrow click, smooth
+
+Variants:
+- `FieldCarousel` — single select, click toggles
+- `FieldMultiCarousel` — multi select (for Details/Features)
+- `FieldTwoLevelCarousel` — sub-settings shown as carousel after parent selected
+
+### Era Slider (FieldEraSlider)
+Scroll-snap dial with tick marks and centered label:
+- Draggable horizontal scroll, snaps to nearest item
+- Center indicator line (blue), ITEM_W = 100px
+- Label scales: center = 28px bold, neighbors fade in size and opacity
+- Used for: Era (24 options), Height (5 options: Very short -> Very tall)
+
+### Template Dropdown (TemplateDropdown)
+Custom styled dropdown for prompt templates (replaces native select):
+- **Trigger** — shows name + prompt snippet preview, ChevronDown rotates on open
+- **Panel** — bg-(--bg-secondary), rounded-xl, max-h-[240px] overflow-y-auto
+- **Items** — name + truncated prompt preview, selected item highlighted with accent blue
+
+### Badges
+- Compact row: `text-[10px]`, `bg-white/6`, X to remove individual
+- **Clear all** button at end — resets identity to name only
+
+### Thumbnail Assets
+Path: `/storytica/element_forge/thumbs/` — generated via grid prompts + `scripts/slice-forge-thumbs.mjs`
+
+Categories: Gender (4), Age (6), Build (5), Hair Style (10), Hair Texture (4), Facial Hair (7), Eye Color (6), Archetype (8), Expression (8), Detail (8), Outfit (10). Hair Color uses color swatches.
+
+### Files
+- `app/storyboard-studio/components/ai/ElementForge.tsx` — wizard UI, all field renderers
+- `app/storyboard-studio/components/ai/elementForgeConfig.ts` — step definitions, options, prompt composition
+- `app/storyboard-studio/components/ai/ThumbnailCropper.tsx` — crop modal
+- `scripts/slice-forge-thumbs.mjs` — grid image slicer
+
+## 17. Files Modified (Complete List)
 
 | File | Changes |
 |------|---------|

@@ -18,12 +18,14 @@ export interface ForgeStep {
   key: string;
   label: string;
   fields: ForgeField[];
+  /** When true, each field becomes its own sub-tab (Higgsfield Physical Appearance style) */
+  hasSubTabs?: boolean;
 }
 
 export interface ForgeField {
   key: string;
   label: string;
-  type: "button-group" | "visual-grid" | "color-dots" | "multi-select" | "text" | "textarea" | "dropdown" | "two-level" | "era-slider" | "combobox";
+  type: "button-group" | "visual-grid" | "color-dots" | "multi-select" | "text" | "textarea" | "dropdown" | "two-level" | "era-slider" | "combobox" | "carousel" | "multi-carousel";
   options?: ForgeOption[];
   subOptions?: Record<string, ForgeOption[]>; // For two-level fields
   placeholder?: string;
@@ -126,9 +128,11 @@ const BUILD_OPTIONS: ForgeOption[] = [
 ];
 
 const HEIGHT_OPTIONS: ForgeOption[] = [
+  { key: "very-short", label: "Very short" },
   { key: "short", label: "Short" },
   { key: "average", label: "Average" },
   { key: "tall", label: "Tall" },
+  { key: "very-tall", label: "Very tall" },
 ];
 
 const HAIR_COLOR_OPTIONS: ForgeOption[] = [
@@ -155,13 +159,30 @@ const HAIR_STYLE_OPTIONS: ForgeOption[] = [
   { key: "buzz-cut", label: "Buzz Cut", icon: T + "hair-buzz-cut.jpg" },
 ];
 
+const HAIR_TEXTURE_OPTIONS: ForgeOption[] = [
+  { key: "straight", label: "Straight", icon: T + "hair-texture-straight.jpg" },
+  { key: "wavy", label: "Wavy", icon: T + "hair-texture-wavy.jpg" },
+  { key: "curly", label: "Curly", icon: T + "hair-texture-curly.jpg" },
+  { key: "coily", label: "Coily", icon: T + "hair-texture-coily.jpg" },
+];
+
+const FACIAL_HAIR_OPTIONS: ForgeOption[] = [
+  { key: "clean-shaven", label: "Clean Shaven", icon: T + "facial-clean-shaven.jpg" },
+  { key: "stubble", label: "Stubble", icon: T + "facial-stubble.jpg" },
+  { key: "short-beard", label: "Short Beard", icon: T + "facial-short-beard.jpg" },
+  { key: "full-beard", label: "Full Beard", icon: T + "facial-full-beard.jpg" },
+  { key: "goatee", label: "Goatee", icon: T + "facial-goatee.jpg" },
+  { key: "moustache", label: "Moustache", icon: T + "facial-moustache.jpg" },
+  { key: "long-beard", label: "Long Beard", icon: T + "facial-long-beard.jpg" },
+];
+
 const EYE_COLOR_OPTIONS: ForgeOption[] = [
-  { key: "brown", label: "Brown", color: "#5c3317" },
-  { key: "blue", label: "Blue", color: "#4a90e2" },
-  { key: "green", label: "Green", color: "#2e8b57" },
-  { key: "hazel", label: "Hazel", color: "#8e7618" },
-  { key: "gray", label: "Gray", color: "#808080" },
-  { key: "amber", label: "Amber", color: "#cf8a00" },
+  { key: "brown", label: "Brown", color: "#5c3317", icon: T + "eye-brown.jpg" },
+  { key: "blue", label: "Blue", color: "#4a90e2", icon: T + "eye-blue.jpg" },
+  { key: "green", label: "Green", color: "#2e8b57", icon: T + "eye-green.jpg" },
+  { key: "hazel", label: "Hazel", color: "#8e7618", icon: T + "eye-hazel.jpg" },
+  { key: "gray", label: "Gray", color: "#808080", icon: T + "eye-gray.jpg" },
+  { key: "amber", label: "Amber", color: "#cf8a00", icon: T + "eye-amber.jpg" },
 ];
 
 const ARCHETYPE_OPTIONS: ForgeOption[] = [
@@ -459,11 +480,12 @@ const HUMAN_CHARACTER_STEPS: ForgeStep[] = [
   {
     key: "identity",
     label: "Identity",
+    hasSubTabs: true,
     fields: [
-      { key: "name", label: "Character Name", type: "text", placeholder: "e.g. Sarah Chen", required: true },
-      { key: "gender", label: "Gender", type: "visual-grid", options: GENDER_OPTIONS, columns: 4 },
-      { key: "ageRange", label: "Age", type: "visual-grid", options: AGE_OPTIONS, columns: 6 },
-      { key: "ethnicity", label: "Ethnicity", type: "button-group", options: ETHNICITY_OPTIONS },
+      { key: "name", label: "Name", type: "text", placeholder: "e.g. Sarah Chen", required: true },
+      { key: "gender", label: "Gender", type: "carousel", options: GENDER_OPTIONS },
+      { key: "ageRange", label: "Age", type: "carousel", options: AGE_OPTIONS },
+      { key: "ethnicity", label: "Ethnicity", type: "carousel", options: ETHNICITY_OPTIONS },
     ],
   },
   {
@@ -475,37 +497,43 @@ const HUMAN_CHARACTER_STEPS: ForgeStep[] = [
   },
   {
     key: "physique",
-    label: "Physique",
+    label: "Physical Appearance",
+    hasSubTabs: true,
     fields: [
-      { key: "build", label: "Build", type: "visual-grid", options: BUILD_OPTIONS, columns: 5 },
-      { key: "height", label: "Height", type: "button-group", options: HEIGHT_OPTIONS },
-      { key: "hairColor", label: "Hair Color", type: "color-dots", options: HAIR_COLOR_OPTIONS },
-      { key: "hairStyle", label: "Hair Style", type: "visual-grid", options: HAIR_STYLE_OPTIONS, columns: 5 },
-      { key: "eyeColor", label: "Eye Color", type: "color-dots", options: EYE_COLOR_OPTIONS },
+      { key: "build", label: "Build", type: "carousel", options: BUILD_OPTIONS },
+      { key: "height", label: "Height", type: "era-slider", options: HEIGHT_OPTIONS },
+      { key: "eyeColor", label: "Eye Color", type: "carousel", options: EYE_COLOR_OPTIONS },
+      { key: "hairStyle", label: "Hair Style", type: "carousel", options: HAIR_STYLE_OPTIONS },
+      { key: "hairTexture", label: "Hair Texture", type: "carousel", options: HAIR_TEXTURE_OPTIONS },
+      { key: "hairColor", label: "Hair Color", type: "carousel", options: HAIR_COLOR_OPTIONS },
+      { key: "facialHair", label: "Facial Hair", type: "carousel", options: FACIAL_HAIR_OPTIONS },
     ],
   },
   {
     key: "personality",
     label: "Personality",
+    hasSubTabs: true,
     fields: [
-      { key: "archetype", label: "Archetype", type: "visual-grid", options: ARCHETYPE_OPTIONS, columns: 4 },
-      { key: "expression", label: "Expression", type: "visual-grid", options: EXPRESSION_OPTIONS, columns: 4 },
+      { key: "archetype", label: "Archetype", type: "carousel", options: ARCHETYPE_OPTIONS },
+      { key: "expression", label: "Expression", type: "carousel", options: EXPRESSION_OPTIONS },
     ],
   },
   {
     key: "details",
     label: "Details",
+    hasSubTabs: true,
     fields: [
-      { key: "details", label: "Distinguishing Features", type: "multi-select", options: DETAIL_PRESETS },
-      { key: "detailsCustom", label: "Custom Details", type: "text", placeholder: "e.g. a slight scar on her cheek" },
+      { key: "details", label: "Features", type: "multi-carousel", options: DETAIL_PRESETS },
+      { key: "detailsCustom", label: "Custom", type: "text", placeholder: "e.g. a slight scar on her cheek" },
     ],
   },
   {
     key: "outfit",
     label: "Outfit",
+    hasSubTabs: true,
     fields: [
-      { key: "outfit", label: "Outfit Style", type: "visual-grid", options: OUTFIT_OPTIONS, columns: 5 },
-      { key: "outfitCustom", label: "Custom Outfit", type: "text", placeholder: "e.g. black leather jacket, dark pants" },
+      { key: "outfit", label: "Style", type: "carousel", options: OUTFIT_OPTIONS },
+      { key: "outfitCustom", label: "Custom", type: "text", placeholder: "e.g. black leather jacket, dark pants" },
     ],
   },
 ];
@@ -534,27 +562,30 @@ export const ENVIRONMENT_STEPS: ForgeStep[] = [
   {
     key: "setting",
     label: "Setting",
+    hasSubTabs: true,
     fields: [
-      { key: "name", label: "Location Name", type: "text", placeholder: "e.g. Dragon Gate Temple", required: true },
-      { key: "setting", label: "Setting", type: "visual-grid", options: SETTING_OPTIONS, columns: 4 },
-      { key: "subSetting", label: "Sub-Setting", type: "two-level", subOptions: SUB_SETTING_OPTIONS, columns: 4 },
+      { key: "name", label: "Name", type: "text", placeholder: "e.g. Dragon Gate Temple", required: true },
+      { key: "setting", label: "Setting", type: "carousel", options: SETTING_OPTIONS },
+      { key: "subSetting", label: "Location", type: "two-level", subOptions: SUB_SETTING_OPTIONS },
     ],
   },
   {
     key: "atmosphere",
     label: "Atmosphere",
+    hasSubTabs: true,
     fields: [
-      { key: "timeOfDay", label: "Time of Day", type: "button-group", options: TIME_OF_DAY_OPTIONS },
-      { key: "weather", label: "Weather", type: "button-group", options: WEATHER_OPTIONS },
+      { key: "timeOfDay", label: "Time of Day", type: "carousel", options: TIME_OF_DAY_OPTIONS },
+      { key: "weather", label: "Weather", type: "carousel", options: WEATHER_OPTIONS },
     ],
   },
   {
     key: "mood",
     label: "Mood & Details",
+    hasSubTabs: true,
     fields: [
-      { key: "mood", label: "Mood", type: "visual-grid", options: MOOD_OPTIONS, columns: 5 },
-      { key: "keyFeatures", label: "Key Features", type: "text", placeholder: "e.g. stone walls, red lanterns, mountain backdrop" },
-      { key: "customNotes", label: "Additional Notes", type: "text", placeholder: "Any extra details..." },
+      { key: "mood", label: "Mood", type: "carousel", options: MOOD_OPTIONS },
+      { key: "keyFeatures", label: "Features", type: "text", placeholder: "e.g. stone walls, red lanterns, mountain backdrop" },
+      { key: "customNotes", label: "Notes", type: "text", placeholder: "Any extra details..." },
     ],
   },
 ];
@@ -563,9 +594,10 @@ export const PROP_STEPS: ForgeStep[] = [
   {
     key: "basics",
     label: "Basics",
+    hasSubTabs: true,
     fields: [
-      { key: "name", label: "Prop Name", type: "text", placeholder: "e.g. Dragon's Blade", required: true },
-      { key: "category", label: "Category", type: "visual-grid", options: PROP_CATEGORY_OPTIONS, columns: 4 },
+      { key: "name", label: "Name", type: "text", placeholder: "e.g. Dragon's Blade", required: true },
+      { key: "category", label: "Category", type: "carousel", options: PROP_CATEGORY_OPTIONS },
     ],
   },
   {
@@ -638,15 +670,17 @@ export function composeCharacterPrompt(identity: Record<string, any>): string {
   if (identity.build) parts.push(`${labelFor(BUILD_OPTIONS, identity.build).toLowerCase()} build`);
   if (identity.height) parts.push(labelFor(HEIGHT_OPTIONS, identity.height).toLowerCase());
 
-  if (identity.hairColor && identity.hairStyle) {
-    parts.push(`${labelFor(HAIR_COLOR_OPTIONS, identity.hairColor).toLowerCase()} ${labelFor(HAIR_STYLE_OPTIONS, identity.hairStyle).toLowerCase()} hair`);
-  } else if (identity.hairColor) {
-    parts.push(`${labelFor(HAIR_COLOR_OPTIONS, identity.hairColor).toLowerCase()} hair`);
-  } else if (identity.hairStyle) {
-    parts.push(`${labelFor(HAIR_STYLE_OPTIONS, identity.hairStyle).toLowerCase()} hair`);
-  }
+  // Hair: combine color + texture + style
+  const hairParts: string[] = [];
+  if (identity.hairColor) hairParts.push(labelFor(HAIR_COLOR_OPTIONS, identity.hairColor).toLowerCase());
+  if (identity.hairTexture) hairParts.push(labelFor(HAIR_TEXTURE_OPTIONS, identity.hairTexture).toLowerCase());
+  if (identity.hairStyle) hairParts.push(labelFor(HAIR_STYLE_OPTIONS, identity.hairStyle).toLowerCase());
+  if (hairParts.length > 0) parts.push(`${hairParts.join(" ")} hair`);
 
   if (identity.eyeColor) parts.push(`${labelFor(EYE_COLOR_OPTIONS, identity.eyeColor).toLowerCase()} eyes`);
+  if (identity.facialHair && identity.facialHair !== "clean-shaven") {
+    parts.push(`with ${labelFor(FACIAL_HAIR_OPTIONS, identity.facialHair).toLowerCase()}`);
+  }
   if (identity.archetype) parts.push(`${labelFor(ARCHETYPE_OPTIONS, identity.archetype)} archetype`);
   if (identity.expression) parts.push(`${labelFor(EXPRESSION_OPTIONS, identity.expression).toLowerCase()} expression`);
 
@@ -784,7 +818,9 @@ export function randomizeIdentity(type: ForgeElementType): Record<string, any> {
       height: pick(HEIGHT_OPTIONS),
       hairColor: pick(HAIR_COLOR_OPTIONS),
       hairStyle: pick(HAIR_STYLE_OPTIONS),
+      hairTexture: pick(HAIR_TEXTURE_OPTIONS),
       eyeColor: pick(EYE_COLOR_OPTIONS),
+      facialHair: pick(FACIAL_HAIR_OPTIONS),
       archetype: pick(ARCHETYPE_OPTIONS),
       expression: pick(EXPRESSION_OPTIONS),
       details: [],

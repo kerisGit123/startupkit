@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
-  X, Shuffle, ChevronDown, ChevronRight, Sparkles, Check, User, Trees, Package,
+  X, Shuffle, ChevronDown, ChevronRight, ChevronLeft, Sparkles, Check, User, Trees, Package,
   ImagePlus, Send, FileText, Crop,
 } from "lucide-react";
 import {
@@ -314,6 +314,242 @@ function FieldColorDots({ field, value, onChange }: { field: ForgeField; value: 
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CAROUSEL — Higgsfield-style horizontal scrollable option strip
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function CarouselCard({ opt, selected, onClick }: { opt: ForgeOption; selected: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className={`relative shrink-0 flex flex-col items-center gap-2.5 rounded-2xl transition-all duration-200 overflow-hidden ${
+        selected ? "ring-2 ring-(--accent-blue) ring-offset-2 ring-offset-[var(--bg-secondary)]"
+          : "hover:brightness-110"
+      }`}
+      style={{ width: 160 }}
+    >
+      {opt.icon ? (
+        <div className={`w-[160px] h-[180px] overflow-hidden rounded-2xl transition-all duration-200 ${
+          selected ? "brightness-110" : "brightness-75 hover:brightness-100"
+        }`}>
+          <img src={opt.icon} alt={opt.label} className="w-full h-full object-cover" draggable={false} />
+        </div>
+      ) : opt.color ? (
+        <div className={`w-[160px] h-[180px] rounded-2xl flex items-center justify-center transition-all duration-200 bg-white/3 ${
+          selected ? "ring-2 ring-(--accent-blue)" : ""
+        }`}>
+          <div className="w-20 h-20 rounded-full border-3 shadow-lg transition-all" style={{
+            backgroundColor: opt.color,
+            borderColor: selected ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.12)",
+          }} />
+        </div>
+      ) : (
+        <div className={`w-[160px] h-[180px] rounded-2xl flex items-center justify-center text-[32px] font-bold transition-all ${
+          selected ? "bg-(--accent-blue)/15 text-(--accent-blue)" : "bg-white/4 text-(--text-tertiary)"
+        }`}>{opt.label.charAt(0)}</div>
+      )}
+      <span className={`text-[13px] font-medium text-center leading-tight ${
+        selected ? "text-(--text-primary)" : "text-(--text-tertiary)"
+      }`}>{opt.label}</span>
+      {selected && (
+        <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-(--accent-blue) flex items-center justify-center shadow-md">
+          <Check className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+        </div>
+      )}
+    </button>
+  );
+}
+
+function FieldCarousel({ field, value, onChange }: { field: ForgeField; value: string; onChange: (v: string) => void }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState);
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateScrollState); ro.disconnect(); };
+  }, [updateScrollState, field.options]);
+
+  // Scroll selected item into view on mount
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !value) return;
+    const idx = field.options?.findIndex(o => o.key === value) ?? -1;
+    if (idx >= 0) {
+      const child = el.children[idx] as HTMLElement;
+      if (child) child.scrollIntoView({ behavior: "auto", block: "nearest", inline: "center" });
+    }
+  }, []);
+
+  const scroll = (dir: number) => {
+    scrollRef.current?.scrollBy({ left: dir * 350, behavior: "smooth" });
+  };
+
+  return (
+    <div className="relative">
+      {/* Left arrow */}
+      {canScrollLeft && (
+        <button onClick={() => scroll(-1)}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur flex items-center justify-center text-white/80 hover:text-white hover:bg-black/90 transition-all shadow-lg">
+          <ChevronLeft className="w-5 h-5" strokeWidth={2} />
+        </button>
+      )}
+      {/* Right arrow */}
+      {canScrollRight && (
+        <button onClick={() => scroll(1)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur flex items-center justify-center text-white/80 hover:text-white hover:bg-black/90 transition-all shadow-lg">
+          <ChevronRight className="w-5 h-5" strokeWidth={2} />
+        </button>
+      )}
+
+      {/* Scrollable row */}
+      <div ref={scrollRef}
+        className="flex gap-5 overflow-x-auto py-4 px-4 scroll-smooth items-end justify-center"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as any}
+      >
+        {field.options?.map((opt) => (
+          <CarouselCard key={opt.key} opt={opt} selected={value === opt.key}
+            onClick={() => onChange(value === opt.key ? "" : opt.key)} />
+        ))}
+      </div>
+
+      {/* Fade edges */}
+      {canScrollLeft && <div className="absolute inset-y-0 left-0 w-20 bg-linear-to-r from-(--bg-secondary) to-transparent pointer-events-none z-10" />}
+      {canScrollRight && <div className="absolute inset-y-0 right-0 w-20 bg-linear-to-l from-(--bg-secondary) to-transparent pointer-events-none z-10" />}
+    </div>
+  );
+}
+
+function FieldMultiCarousel({ field, value, onChange }: { field: ForgeField; value: string[]; onChange: (v: string[]) => void }) {
+  const selected = Array.isArray(value) ? value : [];
+  const toggle = (key: string) => onChange(selected.includes(key) ? selected.filter(k => k !== key) : [...selected, key]);
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState);
+    const ro = new ResizeObserver(updateScrollState);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", updateScrollState); ro.disconnect(); };
+  }, [updateScrollState, field.options]);
+
+  const scroll = (dir: number) => {
+    scrollRef.current?.scrollBy({ left: dir * 350, behavior: "smooth" });
+  };
+
+  return (
+    <div className="relative">
+      {canScrollLeft && (
+        <button onClick={() => scroll(-1)}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur flex items-center justify-center text-white/80 hover:text-white hover:bg-black/90 transition-all shadow-lg">
+          <ChevronLeft className="w-5 h-5" strokeWidth={2} />
+        </button>
+      )}
+      {canScrollRight && (
+        <button onClick={() => scroll(1)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur flex items-center justify-center text-white/80 hover:text-white hover:bg-black/90 transition-all shadow-lg">
+          <ChevronRight className="w-5 h-5" strokeWidth={2} />
+        </button>
+      )}
+      <div ref={scrollRef}
+        className="flex gap-5 overflow-x-auto py-4 px-4 scroll-smooth items-end justify-center"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as any}>
+        {field.options?.map((opt) => (
+          <CarouselCard key={opt.key} opt={opt} selected={selected.includes(opt.key)}
+            onClick={() => toggle(opt.key)} />
+        ))}
+      </div>
+      {canScrollLeft && <div className="absolute inset-y-0 left-0 w-20 bg-linear-to-r from-(--bg-secondary) to-transparent pointer-events-none z-10" />}
+      {canScrollRight && <div className="absolute inset-y-0 right-0 w-20 bg-linear-to-l from-(--bg-secondary) to-transparent pointer-events-none z-10" />}
+    </div>
+  );
+}
+
+function FieldTwoLevelCarousel({ field, value, parentValue, onChange }: {
+  field: ForgeField; value: string; parentValue: string; onChange: (v: string) => void;
+}) {
+  const subOptions = parentValue ? (field.subOptions?.[parentValue] || []) : [];
+  if (!parentValue) return <div className="text-[13px] text-(--text-tertiary) italic py-4 text-center">Select a setting first</div>;
+  if (subOptions.length === 0) return null;
+
+  const fakeField: ForgeField = { key: field.key, label: field.label, type: "carousel", options: subOptions };
+  return <FieldCarousel field={fakeField} value={value} onChange={onChange} />;
+}
+
+function TemplateDropdown({ templates, selected, onSelect }: {
+  templates: { name: string; prompt: string }[];
+  selected: number;
+  onSelect: (i: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = templates[selected];
+
+  return (
+    <div>
+      <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
+        <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+        Reference Prompt Template
+      </label>
+      <div className="relative">
+        <button onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-(--border-primary) bg-(--bg-primary) text-left hover:border-white/15 transition-colors">
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-medium text-(--text-primary) truncate">{current?.name || "Select template"}</div>
+            <div className="text-[11px] text-(--text-tertiary) truncate mt-0.5">
+              {current?.prompt.replace(/\{description\}/g, "...").slice(0, 80)}
+            </div>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-(--text-tertiary) shrink-0 ml-3 transition-transform duration-200 ${open ? "rotate-180" : ""}`} strokeWidth={2} />
+        </button>
+
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl max-h-[240px] overflow-y-auto py-1">
+              {templates.map((t, i) => (
+                <button key={i} onClick={() => { onSelect(i); setOpen(false); }}
+                  className={`w-full text-left px-4 py-2.5 transition-colors ${
+                    i === selected
+                      ? "bg-(--accent-blue)/10 text-(--text-primary)"
+                      : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                  }`}>
+                  <div className="text-[13px] font-medium truncate">{t.name}</div>
+                  <div className="text-[10px] text-(--text-tertiary) truncate mt-0.5">
+                    {t.prompt.replace(/\{description\}/g, "...").slice(0, 100)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function VisualCard({ opt, selected, onClick }: { opt: ForgeOption; selected: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick}
@@ -410,6 +646,7 @@ export function ElementForge({
   ], [wizardSteps]);
 
   const [activeTab, setActiveTab] = useState(0);
+  const [subTabIdx, setSubTabIdx] = useState(0);
   const [identity, setIdentity] = useState<Record<string, any>>(() => {
     if (mode === "edit" && element?.identity) return { name: element.name, ...element.identity };
     return { name: element?.name || "", era: "2020s" };
@@ -534,8 +771,10 @@ export function ElementForge({
       case "color-dots": return <FieldColorDots field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
       case "visual-grid": return <FieldVisualGrid field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} columns={field.columns} />;
       case "multi-select": return <FieldMultiSelect field={field} value={val || []} onChange={(v) => updateField(field.key, v)} />;
-      case "two-level": return <FieldTwoLevel field={field} value={val || ""} parentValue={identity.setting || ""} onChange={(v) => updateField(field.key, v)} columns={field.columns} />;
+      case "multi-carousel": return <FieldMultiCarousel field={field} value={val || []} onChange={(v) => updateField(field.key, v)} />;
+      case "two-level": return <FieldTwoLevelCarousel field={field} value={val || ""} parentValue={identity.setting || ""} onChange={(v) => updateField(field.key, v)} />;
       case "era-slider": return <FieldEraSlider field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      case "carousel": return <FieldCarousel field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
       case "combobox": return <FieldCombobox field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
       default: return null;
     }
@@ -547,21 +786,11 @@ export function ElementForge({
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
 
-      <div className="relative w-[94vw] max-w-[1100px] h-[90vh] bg-(--bg-secondary)/98 backdrop-blur-xl border border-(--border-primary) rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative w-[94vw] max-w-[1100px] h-[75vh] bg-(--bg-secondary)/98 backdrop-blur-xl border border-(--border-primary) rounded-2xl shadow-2xl flex flex-col overflow-hidden">
 
         {/* ─── Header ──────────────────────────────────────────────────── */}
-        <div className="px-8 pt-6 pb-2">
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-[24px] font-bold text-(--text-primary) tracking-tight">
-                {mode === "edit" ? `EDIT ${meta.label.toUpperCase()}` : meta.title}
-              </h1>
-              <p className="text-[13px] text-(--text-tertiary) mt-1 max-w-lg">
-                {mode === "edit"
-                  ? `Update identity, appearance, and details for ${identity.name || "this " + meta.label.toLowerCase()}`
-                  : `Build your ${meta.label.toLowerCase()} from scratch \u2014 appearance, personality, and every detail in between.`}
-              </p>
-            </div>
+        <div className="px-8 pt-5 pb-2">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {/* Human / Non-Human toggle (character type only) */}
               {type === "character" && (
@@ -580,80 +809,76 @@ export function ElementForge({
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 border border-white/8 transition-all">
                 <Shuffle className="w-4 h-4" strokeWidth={1.75} /> Randomize
               </button>
-              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
-                <X className="w-5 h-5 text-(--text-secondary)" strokeWidth={1.75} />
-              </button>
             </div>
+
+            {/* Reference avatars (compact circles) */}
+            <div className="flex items-center gap-1">
+              {thumbnailUrl && (
+                <img src={thumbnailUrl} alt="Thumbnail" className="w-9 h-9 rounded-full object-cover border-2 border-(--accent-blue)/50" />
+              )}
+              {referenceUrls.slice(0, 3).map((url, i) => (
+                <img key={i} src={url} alt={`Ref ${i + 1}`}
+                  className="w-8 h-8 rounded-full object-cover border border-white/15 -ml-1.5 first:ml-0 cursor-pointer hover:border-white/40 transition-colors"
+                  onClick={() => setCropImageUrl(url)} />
+              ))}
+              {referenceUrls.length > 3 && (
+                <span className="w-8 h-8 rounded-full bg-white/10 border border-white/15 -ml-1.5 flex items-center justify-center text-[10px] font-bold text-white/60">
+                  +{referenceUrls.length - 3}
+                </span>
+              )}
+            </div>
+
+            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+              <X className="w-5 h-5 text-(--text-secondary)" strokeWidth={1.75} />
+            </button>
           </div>
 
           {/* Tabs — wizard steps + Prompt tab */}
-          <div className="flex items-center gap-1 mt-5">
+          <div className="flex items-center justify-center gap-1 mt-4">
             {tabs.map((tab, i) => (
-              <button key={tab.key} onClick={() => setActiveTab(i)}
-                className={`px-4 py-2 rounded-full text-[13px] font-medium transition-all duration-200 ${
+              <button key={tab.key} onClick={() => { setActiveTab(i); setSubTabIdx(0); }}
+                className={`px-4 py-2 text-[13px] font-medium transition-all duration-200 border-b-2 ${
                   i === activeTab
-                    ? "bg-white/12 text-(--text-primary)"
-                    : "text-(--text-tertiary) hover:text-(--text-secondary) hover:bg-white/4"
+                    ? "text-white border-white"
+                    : "text-(--text-tertiary) hover:text-(--text-secondary) border-transparent"
                 }`}>
                 {tab.label}
               </button>
             ))}
           </div>
-        </div>
 
-        {/* ─── Reference Images (both modes) ───────────────────────────── */}
-        <div className="px-8 py-3 border-y border-white/5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary)">
-              Reference Images ({referenceUrls.length})
-              {thumbnailUrl && " \u2022 Thumbnail set"}
-            </span>
-            <div className="flex items-center gap-2">
-              {referenceUrls.length > 0 && (
-                <button onClick={() => setCropImageUrl(referenceUrls[0])}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors">
-                  <Crop className="w-3.5 h-3.5" strokeWidth={1.75} /> Set Thumbnail
-                </button>
-              )}
-              {onOpenFileBrowser && (
-                <button onClick={onOpenFileBrowser}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors">
-                  <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.75} /> Browse Files
-                </button>
-              )}
+          {/* Sub-tab bar (for Physical Appearance etc) */}
+          {currentWizardStep?.hasSubTabs && (
+            <div className="flex items-center justify-center gap-1 mt-2">
+              {currentWizardStep.fields.map((field, i) => {
+                const hasValue = !!identity[field.key];
+                return (
+                  <button key={field.key} onClick={() => setSubTabIdx(i)}
+                    className={`relative px-3.5 py-1.5 text-[12px] font-medium transition-all duration-200 ${
+                      i === subTabIdx
+                        ? "text-white"
+                        : hasValue
+                          ? "text-(--text-secondary) hover:text-(--text-primary)"
+                          : "text-(--text-tertiary) hover:text-(--text-secondary)"
+                    }`}>
+                    {field.label}
+                    {i === subTabIdx && (
+                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-white rounded-full" />
+                    )}
+                    {hasValue && i !== subTabIdx && (
+                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-(--accent-blue) rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
             </div>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 min-h-[52px]">
-            {thumbnailUrl && (
-              <div className="relative shrink-0">
-                <img src={thumbnailUrl} alt="Thumbnail" className="w-12 h-12 rounded-lg object-cover border-2 border-(--accent-blue)/50" />
-                <span className="absolute -top-1.5 -right-1.5 text-[7px] font-bold bg-(--accent-blue) text-white px-1 py-0.5 rounded">THUMB</span>
-              </div>
-            )}
-            {referenceUrls.map((url, i) => (
-              <div key={i} className="relative shrink-0 group">
-                <img src={url} alt={`Ref ${i + 1}`}
-                  className="w-12 h-12 rounded-lg object-cover border border-(--border-primary) hover:border-(--accent-blue)/40 transition-colors cursor-pointer"
-                  onClick={() => setCropImageUrl(url)} />
-                <button onClick={() => setReferenceUrls(prev => prev.filter((_, idx) => idx !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <X className="w-2.5 h-2.5" strokeWidth={3} />
-                </button>
-              </div>
-            ))}
-            {referenceUrls.length === 0 && !thumbnailUrl && (
-              <div className="flex items-center gap-2 text-[11px] text-(--text-tertiary) italic">
-                <ImagePlus className="w-4 h-4" strokeWidth={1.5} />
-                No reference images yet — upload or browse R2
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {/* ─── Tab Content ─────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-8 py-6">
-          {/* Wizard step fields */}
-          {currentWizardStep && (
+        <div className="flex-1 overflow-y-auto px-8 py-4 min-h-0">
+          {/* Wizard step fields (non sub-tabbed) */}
+          {currentWizardStep && !currentWizardStep.hasSubTabs && (
             <div className="space-y-8">
               {currentWizardStep.fields.map((field) => (
                 <div key={field.key}>
@@ -667,10 +892,20 @@ export function ElementForge({
             </div>
           )}
 
+          {/* Sub-tabbed step — single field, vertically centered */}
+          {currentWizardStep?.hasSubTabs && (
+            <div className="flex flex-col items-center justify-center h-full w-full">
+              {(() => {
+                const field = currentWizardStep.fields[subTabIdx];
+                if (!field) return null;
+                return <div className="w-full">{renderField(field)}</div>;
+              })()}
+            </div>
+          )}
+
           {/* Prompt tab */}
           {currentTab.key === "prompt" && (
             <div className="space-y-6">
-              {/* Identity description (auto-composed) */}
               <div>
                 <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
                   Identity Description (auto-composed)
@@ -679,33 +914,11 @@ export function ElementForge({
                   {composedPrompt || "Fill in identity fields to see the composed description..."}
                 </div>
               </div>
-
-              {/* Template selector */}
-              <div>
-                <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
-                  <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  Reference Prompt Template
-                </label>
-                <div className="grid grid-cols-1 gap-2">
-                  {allTemplates.map((t, i) => (
-                    <button key={i} onClick={() => setSelectedTemplate(i)}
-                      className={`text-left px-4 py-3 rounded-xl border-2 transition-all duration-200 ${
-                        i === selectedTemplate
-                          ? "border-(--accent-blue)/50 bg-(--accent-blue)/8"
-                          : "border-white/5 bg-white/2 hover:border-white/10 hover:bg-white/4"
-                      }`}>
-                      <div className={`text-[13px] font-medium ${i === selectedTemplate ? "text-(--text-primary)" : "text-(--text-secondary)"}`}>
-                        {t.name}
-                      </div>
-                      <div className="text-[11px] text-(--text-tertiary) mt-1 line-clamp-2">
-                        {t.prompt.replace(/\{description\}/g, "...").slice(0, 120)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Final merged prompt preview */}
+              <TemplateDropdown
+                templates={allTemplates}
+                selected={selectedTemplate}
+                onSelect={setSelectedTemplate}
+              />
               <div>
                 <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
                   Final Prompt (sent to Studio)
@@ -721,34 +934,46 @@ export function ElementForge({
         {/* ─── Bottom Bar ──────────────────────────────────────────────── */}
         <div className="border-t border-white/6 bg-(--bg-primary)/60 backdrop-blur-sm">
           {/* Badges */}
-          <div className="flex items-center gap-3 px-8 pt-3 pb-2 min-h-[40px]">
-            <div className="flex flex-wrap gap-1.5 flex-1">
+          {badges.length > 0 && (
+            <div className="flex items-center gap-1.5 px-8 pt-2.5 pb-1.5 overflow-x-auto">
               {badges.map((badge) => (
                 <span key={badge.key}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/8 text-[11px] font-semibold text-(--text-primary) border border-white/5">
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/6 text-[10px] font-medium text-(--text-secondary) border border-white/4 shrink-0">
                   {badge.label}
                   <button onClick={() => removeBadge(badge.key)} className="text-(--text-tertiary) hover:text-(--text-primary) transition-colors">
-                    <X className="w-3 h-3" />
+                    <X className="w-2.5 h-2.5" />
                   </button>
                 </span>
               ))}
-              {badges.length === 0 && (
-                <span className="text-[11px] text-(--text-tertiary) italic">Select options to build identity...</span>
-              )}
+              <button onClick={() => setIdentity(prev => ({ name: prev.name }))}
+                className="shrink-0 px-2 py-0.5 rounded-md text-[10px] font-medium text-(--text-tertiary) hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                Clear all
+              </button>
             </div>
-          </div>
+          )}
 
           {/* Action bar */}
           <div className="flex items-center justify-between px-8 py-3 border-t border-white/4">
             <div className="flex items-center gap-2">
               <button onClick={() => setActiveTab(Math.max(0, activeTab - 1))} disabled={activeTab === 0}
-                className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
-                Previous
+                className="p-2 rounded-lg text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                <ChevronLeft className="w-4 h-4" strokeWidth={2} />
               </button>
-              {activeTab < tabs.length - 1 && (
-                <button onClick={() => setActiveTab(activeTab + 1)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium text-(--accent-blue) hover:bg-(--accent-blue)/8 transition-colors">
-                  Next <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
+              <button onClick={() => { if (activeTab < tabs.length - 1) setActiveTab(activeTab + 1); }} disabled={activeTab >= tabs.length - 1}
+                className="p-2 rounded-lg text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                <ChevronRight className="w-4 h-4" strokeWidth={2} />
+              </button>
+              <div className="w-px h-5 bg-white/8 mx-1" />
+              {onOpenFileBrowser && (
+                <button onClick={onOpenFileBrowser}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors">
+                  <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.75} /> References
+                </button>
+              )}
+              {referenceUrls.length > 0 && (
+                <button onClick={() => setCropImageUrl(referenceUrls[0])}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors">
+                  <Crop className="w-3.5 h-3.5" strokeWidth={1.75} /> Thumbnail
                 </button>
               )}
             </div>
@@ -760,13 +985,13 @@ export function ElementForge({
                 Cancel
               </button>
               <button onClick={handleSave} disabled={!canSave || saving}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold bg-white/8 hover:bg-white/12 text-(--text-primary) border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-(--accent-blue)/20">
                 <Sparkles className="w-4 h-4" strokeWidth={1.75} />
                 {saving ? "Saving..." : mode === "edit" ? "Save Changes" : `Create ${meta.label}`}
               </button>
               {showSendToStudio && onSendToStudio && (
                 <button onClick={handleSendToStudio} disabled={!canSave || saving}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[14px] font-semibold bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-(--accent-blue)/20">
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold bg-white/8 hover:bg-white/12 text-(--text-primary) border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
                   <Send className="w-4 h-4" strokeWidth={1.75} /> Send to Studio
                 </button>
               )}

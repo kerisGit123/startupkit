@@ -121,10 +121,15 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
       const sw = crop.size * scale;
       const sh = crop.size * scale;
 
-      // Fetch image as blob to avoid canvas taint from cross-origin
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const bitmap = await createImageBitmap(blob, Math.round(sx), Math.round(sy), Math.round(sw), Math.round(sh));
+      // Load image via <img> with crossOrigin to handle both blob URLs and cross-origin R2 URLs
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = imageUrl;
+      });
+      const bitmap = await createImageBitmap(img, Math.round(sx), Math.round(sy), Math.round(sw), Math.round(sh));
 
       const canvas = document.createElement("canvas");
       const outputSize = 256;
