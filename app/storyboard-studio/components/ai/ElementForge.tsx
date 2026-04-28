@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
-import { useMutation } from "convex/react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
-  X, Shuffle, ChevronDown, ChevronRight, Sparkles, Check, User, Trees, Package, Pencil, ImagePlus, Crop,
+  X, Shuffle, ChevronDown, ChevronRight, Sparkles, Check, User, Trees, Package,
+  ImagePlus, Send, FileText, Crop,
 } from "lucide-react";
 import {
   type ForgeElementType,
@@ -17,6 +18,20 @@ import {
   getIdentityBadges,
   randomizeIdentity,
 } from "./elementForgeConfig";
+import { ThumbnailCropper } from "./ThumbnailCropper";
+
+// Fallback templates if no prompt templates exist in the database
+const FALLBACK_TEMPLATES: Record<ForgeElementType, { name: string; prompt: string }[]> = {
+  character: [
+    { name: "Basic Character Reference", prompt: "Create a professional character reference sheet based on: {description}. Photorealistic, high detail, clean dark studio background, consistent lighting." },
+  ],
+  environment: [
+    { name: "Basic Environment Reference", prompt: "Cinematic establishing shot of {description}. Photorealistic, high detail, atmospheric lighting." },
+  ],
+  prop: [
+    { name: "Basic Prop Reference", prompt: "Product photography of {description}. Clean background, studio lighting, high detail." },
+  ],
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -27,9 +42,12 @@ interface ElementForgeProps {
   type: ForgeElementType;
   projectId: Id<"storyboard_projects">;
   userId: string;
+  companyId?: string;
+  showSendToStudio?: boolean;
   onSave: (element: { name: string; type: string; description: string; identity: Record<string, any> }) => void;
   onClose: () => void;
-  // Edit mode props
+  onSendToStudio?: (prompt: string, referenceUrls: string[]) => void;
+  onOpenFileBrowser?: () => void;
   element?: {
     _id: Id<"storyboard_elements">;
     name: string;
@@ -41,10 +59,10 @@ interface ElementForgeProps {
   } | null;
 }
 
-const TYPE_META: Record<ForgeElementType, { label: string; Icon: typeof User; accent: string }> = {
-  character: { label: "Character", Icon: User, accent: "text-purple-400" },
-  environment: { label: "Environment", Icon: Trees, accent: "text-emerald-400" },
-  prop: { label: "Prop", Icon: Package, accent: "text-blue-400" },
+const TYPE_META: Record<ForgeElementType, { label: string; Icon: typeof User; accent: string; title: string }> = {
+  character: { label: "Character", Icon: User, accent: "text-purple-400", title: "CREATE YOUR CHARACTER" },
+  environment: { label: "Environment", Icon: Trees, accent: "text-emerald-400", title: "CREATE YOUR ENVIRONMENT" },
+  prop: { label: "Prop", Icon: Package, accent: "text-blue-400", title: "CREATE YOUR PROP" },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -53,83 +71,286 @@ const TYPE_META: Record<ForgeElementType, { label: string; Icon: typeof User; ac
 
 function FieldText({ field, value, onChange }: { field: ForgeField; value: string; onChange: (v: string) => void }) {
   return (
-    <input
+    <input value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder}
+      className="w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3 text-[15px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors" />
+  );
+}
+
+function FieldTextarea({ field, value, onChange }: { field: ForgeField; value: string; onChange: (v: string) => void }) {
+  return (
+    <textarea
       value={value || ""}
       onChange={(e) => onChange(e.target.value)}
       placeholder={field.placeholder}
-      className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2 text-[13px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
+      rows={5}
+      className="w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3 text-[14px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors resize-y leading-relaxed"
     />
   );
 }
 
 function FieldButtonGroup({ field, value, onChange }: { field: ForgeField; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {field.options?.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => onChange(value === opt.key ? "" : opt.key)}
-          className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all duration-150 ${
-            value === opt.key
-              ? "bg-white/12 text-(--text-primary) ring-1 ring-(--accent-blue)/40"
-              : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
-          }`}
-        >
-          {opt.label}
-        </button>
+        <button key={opt.key} onClick={() => onChange(value === opt.key ? "" : opt.key)}
+          className={`px-4 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 border ${
+            value === opt.key ? "bg-(--accent-blue)/12 text-(--text-primary) border-(--accent-blue)/40"
+              : "text-(--text-secondary) border-transparent hover:bg-white/5 hover:text-(--text-primary)"
+          }`}>{opt.label}</button>
       ))}
+    </div>
+  );
+}
+
+function FieldEraSlider({ field, value, onChange }: { field: ForgeField; value: string; onChange: (v: string) => void }) {
+  const options = field.options || [];
+  const selectedIdx = options.findIndex(o => o.key === value);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const scrollStartX = useRef(0);
+  const ITEM_W = 100;
+
+  // The inner content has padding = 50% - ITEM_W/2 on each side
+  // so item[i] center is at: padding + i * ITEM_W + ITEM_W/2
+  const getPadding = useCallback(() => {
+    const el = containerRef.current;
+    return el ? (el.clientWidth / 2 - ITEM_W / 2) : 0;
+  }, []);
+
+  const scrollToIdx = useCallback((idx: number, smooth = true) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const pad = getPadding();
+    const target = pad + idx * ITEM_W + ITEM_W / 2 - el.clientWidth / 2;
+    el.scrollTo({ left: target, behavior: smooth ? "smooth" : "auto" });
+  }, [getPadding]);
+
+  const getIdxFromScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return 0;
+    const pad = getPadding();
+    const center = el.scrollLeft + el.clientWidth / 2;
+    const idx = Math.round((center - pad - ITEM_W / 2) / ITEM_W);
+    return Math.max(0, Math.min(options.length - 1, idx));
+  }, [options.length, getPadding]);
+
+  // Snap to nearest item center after scroll/drag ends
+  const snapToNearest = useCallback(() => {
+    const idx = getIdxFromScroll();
+    scrollToIdx(idx);
+    if (options[idx] && options[idx].key !== value) {
+      onChange(options[idx].key);
+    }
+  }, [options, value, onChange, getIdxFromScroll, scrollToIdx]);
+
+  // Scroll selected into center on mount / value change
+  useEffect(() => {
+    if (selectedIdx < 0) return;
+    // Small delay to ensure container is rendered with correct width
+    requestAnimationFrame(() => scrollToIdx(selectedIdx, false));
+  }, [selectedIdx, scrollToIdx]);
+
+  // Mouse drag handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    scrollStartX.current = containerRef.current?.scrollLeft || 0;
+    if (containerRef.current) containerRef.current.style.cursor = "grabbing";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return;
+      const dx = dragStartX.current - e.clientX;
+      containerRef.current.scrollLeft = scrollStartX.current + dx;
+    };
+    const handleMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      if (containerRef.current) containerRef.current.style.cursor = "grab";
+      snapToNearest();
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => { window.removeEventListener("mousemove", handleMouseMove); window.removeEventListener("mouseup", handleMouseUp); };
+  }, [snapToNearest]);
+
+  // Also snap after scroll (wheel/touch)
+  const scrollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleScroll = useCallback(() => {
+    clearTimeout(scrollTimer.current);
+    scrollTimer.current = setTimeout(snapToNearest, 150);
+  }, [snapToNearest]);
+
+  // Calculate which index is currently centered (for visual highlight)
+  const [centeredIdx, setCenteredIdx] = useState(selectedIdx >= 0 ? selectedIdx : 0);
+  const updateCentered = useCallback(() => {
+    setCenteredIdx(getIdxFromScroll());
+  }, [getIdxFromScroll]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateCentered);
+    return () => el.removeEventListener("scroll", updateCentered);
+  }, [updateCentered]);
+
+  return (
+    <div className="relative py-2">
+      {/* Center indicator line */}
+      <div className="absolute left-1/2 top-2 -translate-x-1/2 w-[3px] h-9 bg-(--accent-blue) rounded-full z-20 pointer-events-none" />
+
+      <div
+        ref={containerRef}
+        onMouseDown={handleMouseDown}
+        onScroll={handleScroll}
+        className="overflow-x-auto select-none"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: "grab" } as any}
+      >
+        <style>{`.era-drag::-webkit-scrollbar { display: none; }`}</style>
+        <div className="era-drag flex flex-col min-w-max" style={{ padding: `0 calc(50% - ${ITEM_W / 2}px)` }}>
+          {/* Ticks row */}
+          <div className="flex items-end h-10">
+            {options.map((_, i) => (
+              <div key={i} className="shrink-0 flex items-end justify-center" style={{ width: ITEM_W }}>
+                {/* 5 sub-ticks per item */}
+                <div className="flex items-end gap-[6px] w-full justify-around px-1">
+                  {[0,1,2,3,4].map(t => {
+                    const isMajor = t === 2;
+                    const dist = Math.abs(i - centeredIdx);
+                    const op = dist === 0 ? 0.6 : dist <= 2 ? 0.25 : 0.1;
+                    return <div key={t} className="w-px" style={{
+                      height: isMajor ? 18 : t % 2 === 0 ? 12 : 8,
+                      backgroundColor: `rgba(255,255,255,${op})`,
+                    }} />;
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Labels row */}
+          <div className="flex mt-1">
+            {options.map((opt, i) => {
+              const dist = Math.abs(i - centeredIdx);
+              const isCenter = dist === 0;
+              const opacity = isCenter ? 1 : dist === 1 ? 0.5 : dist === 2 ? 0.28 : 0.1;
+
+              return (
+                <div key={opt.key} className="shrink-0 text-center" style={{ width: ITEM_W }}>
+                  <span className="whitespace-nowrap block transition-all duration-150" style={{
+                    fontSize: isCenter ? 28 : dist === 1 ? 16 : 13,
+                    fontWeight: isCenter ? 800 : 500,
+                    opacity,
+                    color: "var(--text-primary)",
+                    letterSpacing: isCenter ? "-0.02em" : "0",
+                  }}>
+                    {opt.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {/* Fade edges */}
+      <div className="absolute inset-y-0 left-0 w-24 bg-linear-to-r from-(--bg-secondary) to-transparent pointer-events-none z-10" />
+      <div className="absolute inset-y-0 right-0 w-24 bg-linear-to-l from-(--bg-secondary) to-transparent pointer-events-none z-10" />
+    </div>
+  );
+}
+
+function FieldCombobox({ field, value, onChange }: { field: ForgeField; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value || "");
+  const options = field.options || [];
+  const filtered = options.filter(o => o.label.toLowerCase().includes(inputValue.toLowerCase()));
+
+  return (
+    <div className="relative">
+      <input
+        value={inputValue}
+        onChange={(e) => { setInputValue(e.target.value); onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={field.placeholder}
+        className="w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3 text-[15px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
+      />
+      {open && filtered.length > 0 && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl max-h-[200px] overflow-y-auto py-1">
+            {filtered.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => { setInputValue(opt.label); onChange(opt.label); setOpen(false); }}
+                className={`w-full text-left px-4 py-2 text-[13px] hover:bg-white/5 transition-colors ${
+                  inputValue === opt.label ? "text-(--text-primary) bg-white/5" : "text-(--text-secondary)"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function FieldColorDots({ field, value, onChange }: { field: ForgeField; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-3">
       {field.options?.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => onChange(value === opt.key ? "" : opt.key)}
-          title={opt.label}
-          className={`group flex items-center gap-1.5 px-2 py-1 rounded-md transition-all duration-150 ${
-            value === opt.key
-              ? "bg-white/12 ring-1 ring-(--accent-blue)/40"
-              : "hover:bg-white/5"
-          }`}
-        >
-          <span
-            className={`w-4 h-4 rounded-full border ${value === opt.key ? "border-white/40 scale-110" : "border-white/15"}`}
-            style={{ backgroundColor: opt.color }}
-          />
-          <span className={`text-[11px] ${value === opt.key ? "text-(--text-primary)" : "text-(--text-secondary)"}`}>
-            {opt.label}
-          </span>
+        <button key={opt.key} onClick={() => onChange(value === opt.key ? "" : opt.key)} title={opt.label}
+          className={`flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all duration-200 ${
+            value === opt.key ? "bg-white/8 ring-1 ring-(--accent-blue)/40 scale-105" : "hover:bg-white/5"
+          }`}>
+          <span className={`w-7 h-7 rounded-full border-2 transition-all ${value === opt.key ? "border-white/50 shadow-lg" : "border-white/10"}`}
+            style={{ backgroundColor: opt.color }} />
+          <span className={`text-[10px] font-medium ${value === opt.key ? "text-(--text-primary)" : "text-(--text-tertiary)"}`}>{opt.label}</span>
         </button>
       ))}
     </div>
   );
 }
 
+function VisualCard({ opt, selected, onClick }: { opt: ForgeOption; selected: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick}
+      className={`group relative flex flex-col items-center gap-2 rounded-2xl border-2 transition-all duration-200 overflow-hidden ${
+        selected ? "border-(--accent-blue)/60 bg-(--accent-blue)/8 shadow-lg shadow-(--accent-blue)/5"
+          : "border-white/5 bg-white/2 hover:border-white/12 hover:bg-white/4"
+      }`}>
+      {opt.icon ? (
+        <div className={`w-full overflow-hidden rounded-t-2xl transition-all duration-200 ${
+          selected ? "bg-[#3a4a5c]" : "bg-[#252a32] group-hover:bg-[#2c3340]"
+        }`}>
+          <img src={opt.icon} alt={opt.label} className={`w-full h-auto object-cover transition-all duration-200 ${
+            selected ? "brightness-110" : "brightness-90 group-hover:brightness-100"
+          }`} draggable={false} />
+        </div>
+      ) : (
+        <div className={`w-[80px] h-[80px] mx-auto mt-3 rounded-xl flex items-center justify-center text-[22px] font-bold transition-all ${
+          selected ? "bg-(--accent-blue)/15 text-(--accent-blue)" : "bg-white/4 text-(--text-tertiary) group-hover:bg-white/6"
+        }`}>{opt.label.charAt(0)}</div>
+      )}
+      <span className={`text-[12px] font-medium text-center leading-tight px-2 pb-2 ${
+        selected ? "text-(--text-primary)" : "text-(--text-secondary)"
+      }`}>{opt.label}</span>
+      {selected && (
+        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-(--accent-blue) flex items-center justify-center shadow-md">
+          <Check className="w-3 h-3 text-white" strokeWidth={2.5} />
+        </div>
+      )}
+    </button>
+  );
+}
+
 function FieldVisualGrid({ field, value, onChange, columns = 4 }: { field: ForgeField; value: string; onChange: (v: string) => void; columns?: number }) {
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
+    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
       {field.options?.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => onChange(value === opt.key ? "" : opt.key)}
-          className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-150 ${
-            value === opt.key
-              ? "border-(--accent-blue)/50 bg-(--accent-blue)/8 text-(--text-primary)"
-              : "border-(--border-primary) bg-(--bg-primary)/50 text-(--text-secondary) hover:border-(--border-secondary) hover:bg-white/3"
-          }`}
-        >
-          {/* Placeholder for future thumbnails */}
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[14px] font-bold ${
-            value === opt.key ? "bg-(--accent-blue)/15 text-(--accent-blue)" : "bg-white/5 text-(--text-tertiary)"
-          }`}>
-            {opt.label.charAt(0)}
-          </div>
-          <span className="text-[11px] font-medium text-center leading-tight">{opt.label}</span>
-        </button>
+        <VisualCard key={opt.key} opt={opt} selected={value === opt.key} onClick={() => onChange(value === opt.key ? "" : opt.key)} />
       ))}
     </div>
   );
@@ -137,74 +358,26 @@ function FieldVisualGrid({ field, value, onChange, columns = 4 }: { field: Forge
 
 function FieldMultiSelect({ field, value, onChange }: { field: ForgeField; value: string[]; onChange: (v: string[]) => void }) {
   const selected = Array.isArray(value) ? value : [];
-  const toggle = (key: string) => {
-    onChange(selected.includes(key) ? selected.filter(k => k !== key) : [...selected, key]);
-  };
-
+  const toggle = (key: string) => onChange(selected.includes(key) ? selected.filter(k => k !== key) : [...selected, key]);
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="grid grid-cols-4 gap-3">
       {field.options?.map((opt) => (
-        <button
-          key={opt.key}
-          onClick={() => toggle(opt.key)}
-          className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all duration-150 ${
-            selected.includes(opt.key)
-              ? "bg-white/12 text-(--text-primary) ring-1 ring-(--accent-blue)/40"
-              : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
-          }`}
-        >
-          {selected.includes(opt.key) && <Check className="w-3 h-3 inline mr-1" />}
-          {opt.label}
-        </button>
+        <VisualCard key={opt.key} opt={opt} selected={selected.includes(opt.key)} onClick={() => toggle(opt.key)} />
       ))}
     </div>
   );
 }
 
-function FieldTwoLevel({
-  field,
-  value,
-  parentValue,
-  onChange,
-  columns = 4,
-}: {
-  field: ForgeField;
-  value: string;
-  parentValue: string;
-  onChange: (v: string) => void;
-  columns?: number;
+function FieldTwoLevel({ field, value, parentValue, onChange, columns = 4 }: {
+  field: ForgeField; value: string; parentValue: string; onChange: (v: string) => void; columns?: number;
 }) {
   const subOptions = parentValue ? (field.subOptions?.[parentValue] || []) : [];
-
-  if (!parentValue) {
-    return (
-      <div className="text-[12px] text-(--text-tertiary) italic py-2">
-        Select a setting above to see sub-options
-      </div>
-    );
-  }
-
+  if (!parentValue) return <div className="text-[13px] text-(--text-tertiary) italic py-4">Select a setting above to see locations</div>;
   if (subOptions.length === 0) return null;
-
   return (
-    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
+    <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
       {subOptions.map((opt: ForgeOption) => (
-        <button
-          key={opt.key}
-          onClick={() => onChange(value === opt.key ? "" : opt.key)}
-          className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all duration-150 ${
-            value === opt.key
-              ? "border-(--accent-blue)/50 bg-(--accent-blue)/8 text-(--text-primary)"
-              : "border-(--border-primary) bg-(--bg-primary)/50 text-(--text-secondary) hover:border-(--border-secondary) hover:bg-white/3"
-          }`}
-        >
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-[14px] font-bold ${
-            value === opt.key ? "bg-(--accent-blue)/15 text-(--accent-blue)" : "bg-white/5 text-(--text-tertiary)"
-          }`}>
-            {opt.label.charAt(0)}
-          </div>
-          <span className="text-[11px] font-medium text-center leading-tight">{opt.label}</span>
-        </button>
+        <VisualCard key={opt.key} opt={opt} selected={value === opt.key} onClick={() => onChange(value === opt.key ? "" : opt.key)} />
       ))}
     </div>
   );
@@ -214,103 +387,129 @@ function FieldTwoLevel({
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export function ElementForge({ mode, type, projectId, userId, onSave, onClose, element }: ElementForgeProps) {
+export function ElementForge({
+  mode, type, projectId, userId, companyId,
+  showSendToStudio = false, onSave, onClose, onSendToStudio, onOpenFileBrowser, element,
+}: ElementForgeProps) {
   const meta = TYPE_META[type];
-  const steps = useMemo(() => getStepsForType(type), [type]);
 
-  // State
-  const [activeStep, setActiveStep] = useState(0);
+  // Human / Non-Human toggle (only for character type)
+  const [isNonHuman, setIsNonHuman] = useState(() => {
+    if (mode === "edit" && element?.identity) return !!element.identity.isNonHuman;
+    return false;
+  });
+
+  const wizardSteps = useMemo(() =>
+    getStepsForType(type, isNonHuman ? "non-human" : "human"),
+  [type, isNonHuman]);
+
+  // Add "Prompt" tab after wizard steps
+  const tabs = useMemo(() => [
+    ...wizardSteps.map(s => ({ key: s.key, label: s.label, type: "wizard" as const })),
+    { key: "prompt", label: "Prompt", type: "prompt" as const },
+  ], [wizardSteps]);
+
+  const [activeTab, setActiveTab] = useState(0);
   const [identity, setIdentity] = useState<Record<string, any>>(() => {
-    if (mode === "edit" && element?.identity) {
-      return { name: element.name, ...element.identity };
-    }
-    return { name: element?.name || "" };
+    if (mode === "edit" && element?.identity) return { name: element.name, ...element.identity };
+    return { name: element?.name || "", era: "2020s" };
   });
   const [saving, setSaving] = useState(false);
-  const [showPromptPreview, setShowPromptPreview] = useState(false);
+  const [referenceUrls, setReferenceUrls] = useState<string[]>(element?.referenceUrls || []);
+  const [selectedTemplate, setSelectedTemplate] = useState(0);
+  const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string>(element?.thumbnailUrl || "");
 
-  // Mutations
   const createElement = useMutation(api.storyboard.storyboardElements.create);
   const updateElement = useMutation(api.storyboard.storyboardElements.update);
 
-  // Derived
+  // Load ALL prompt templates for this type from the library (system + user)
+  const libraryTemplates = useQuery(api.promptTemplates.getByCompany, companyId ? { companyId } : "skip");
+  const allTemplates = useMemo(() => {
+    const matching = (libraryTemplates || [])
+      .filter((t: any) => t.type === type)
+      .map((t: any) => ({
+        name: t.name + (t.isSystem ? " (system)" : ""),
+        prompt: t.prompt,
+      }));
+    // Fallback if no templates in library
+    if (matching.length === 0) return FALLBACK_TEMPLATES[type] || [];
+    return matching;
+  }, [libraryTemplates, type]);
+
   const composedPrompt = useMemo(() => composePrompt(type, identity), [type, identity]);
   const badges = useMemo(() => getIdentityBadges(type, identity), [type, identity]);
-  const currentStep = steps[activeStep];
+  const currentTab = tabs[activeTab];
+  const currentWizardStep = currentTab.type === "wizard" ? wizardSteps.find(s => s.key === currentTab.key) : null;
   const canSave = Boolean(identity.name?.trim());
 
-  // Handlers
+  // Merge identity into template:
+  // - If template has {description}, replace it
+  // - Otherwise, append identity as context at the end
+  const referencePrompt = useMemo(() => {
+    const template = allTemplates[selectedTemplate];
+    if (!template) return composedPrompt;
+    if (template.prompt.includes("{description}")) {
+      return template.prompt.replace(/\{description\}/g, composedPrompt);
+    }
+    // Append identity context to the template prompt
+    return `${template.prompt}\n\nCharacter Identity: ${composedPrompt}`;
+  }, [allTemplates, selectedTemplate, composedPrompt]);
+
   const updateField = useCallback((key: string, value: any) => {
     setIdentity(prev => {
       const next = { ...prev, [key]: value };
-      // Clear sub-setting when setting changes
-      if (key === "setting") {
-        next.subSetting = "";
-      }
+      if (key === "setting") next.subSetting = "";
       return next;
     });
   }, []);
 
   const handleRandomize = useCallback(() => {
-    const name = identity.name; // Preserve name
-    const rand = randomizeIdentity(type);
-    setIdentity({ ...rand, name });
+    const name = identity.name;
+    setIdentity({ ...randomizeIdentity(type), name });
   }, [type, identity.name]);
 
   const handleSave = useCallback(async () => {
     if (!canSave || saving) return;
     setSaving(true);
-
     try {
       const { name, ...identityData } = identity;
       const description = composePrompt(type, identity);
-
       if (mode === "edit" && element?._id) {
         await updateElement({
-          id: element._id,
-          name: name.trim(),
-          description,
-          identity: identityData,
+          id: element._id, name: name.trim(), description, identity: identityData,
+          referenceUrls: referenceUrls.length > 0 ? referenceUrls : undefined,
+          thumbnailUrl: thumbnailUrl || undefined,
         });
       } else {
         await createElement({
-          projectId,
-          name: name.trim(),
-          type,
-          description,
-          thumbnailUrl: "",
-          referenceUrls: [],
-          tags: [],
-          createdBy: userId,
-          visibility: "private",
-          identity: identityData,
+          projectId, name: name.trim(), type, description,
+          thumbnailUrl: thumbnailUrl || "", referenceUrls, tags: [],
+          createdBy: userId, visibility: "private", identity: identityData,
         });
       }
-
-      onSave({
-        name: name.trim(),
-        type,
-        description,
-        identity: identityData,
-      });
+      onSave({ name: name.trim(), type, description, identity: identityData });
     } catch (error) {
       console.error("[ElementForge] Save failed:", error);
     } finally {
       setSaving(false);
     }
-  }, [canSave, saving, identity, type, mode, element, projectId, userId, onSave, createElement, updateElement]);
+  }, [canSave, saving, identity, type, mode, element, projectId, userId, referenceUrls, thumbnailUrl, onSave, createElement, updateElement]);
+
+  const handleSendToStudio = useCallback(async () => {
+    if (!canSave) return;
+    await handleSave();
+    onSendToStudio?.(referencePrompt, referenceUrls);
+  }, [canSave, handleSave, onSendToStudio, referencePrompt, referenceUrls]);
 
   const removeBadge = useCallback((badgeKey: string) => {
-    // Parse "fieldKey:value" or just "fieldKey"
     const colonIdx = badgeKey.indexOf(":");
     if (colonIdx > -1) {
       const fieldKey = badgeKey.slice(0, colonIdx);
       const val = badgeKey.slice(colonIdx + 1);
       setIdentity(prev => {
         const current = prev[fieldKey];
-        if (Array.isArray(current)) {
-          return { ...prev, [fieldKey]: current.filter((v: string) => v !== val) };
-        }
+        if (Array.isArray(current)) return { ...prev, [fieldKey]: current.filter((v: string) => v !== val) };
         return prev;
       });
     } else {
@@ -318,133 +517,149 @@ export function ElementForge({ mode, type, projectId, userId, onSave, onClose, e
     }
   }, []);
 
-  // ─── Render Field ──────────────────────────────────────────────────────────
+  // File upload removed — users browse files via R2 FileBrowser
+
+  const handleThumbnailCropped = useCallback((blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    setThumbnailUrl(url);
+    setCropImageUrl(null);
+  }, []);
 
   const renderField = (field: ForgeField) => {
     const val = identity[field.key];
-
     switch (field.type) {
-      case "text":
-        return <FieldText field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
-      case "button-group":
-        return <FieldButtonGroup field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
-      case "color-dots":
-        return <FieldColorDots field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
-      case "visual-grid":
-        return <FieldVisualGrid field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} columns={field.columns} />;
-      case "multi-select":
-        return <FieldMultiSelect field={field} value={val || []} onChange={(v) => updateField(field.key, v)} />;
-      case "two-level":
-        return <FieldTwoLevel field={field} value={val || ""} parentValue={identity.setting || ""} onChange={(v) => updateField(field.key, v)} columns={field.columns} />;
-      default:
-        return null;
+      case "text": return <FieldText field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      case "textarea": return <FieldTextarea field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      case "button-group": return <FieldButtonGroup field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      case "color-dots": return <FieldColorDots field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      case "visual-grid": return <FieldVisualGrid field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} columns={field.columns} />;
+      case "multi-select": return <FieldMultiSelect field={field} value={val || []} onChange={(v) => updateField(field.key, v)} />;
+      case "two-level": return <FieldTwoLevel field={field} value={val || ""} parentValue={identity.setting || ""} onChange={(v) => updateField(field.key, v)} columns={field.columns} />;
+      case "era-slider": return <FieldEraSlider field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      case "combobox": return <FieldCombobox field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
+      default: return null;
     }
   };
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ─── RENDER ────────────────────────────────────────────────────────────────
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
 
-      {/* Panel */}
-      <div className="relative w-[90vw] max-w-[820px] max-h-[88vh] bg-(--bg-secondary) border border-(--border-primary) rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative w-[94vw] max-w-[1100px] h-[90vh] bg-(--bg-secondary)/98 backdrop-blur-xl border border-(--border-primary) rounded-2xl shadow-2xl flex flex-col overflow-hidden">
 
         {/* ─── Header ──────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-          <div>
-            <h2 className="text-[18px] font-semibold text-(--text-primary) flex items-center gap-2">
-              <meta.Icon className={`w-5 h-5 ${meta.accent}`} strokeWidth={1.75} />
-              {mode === "edit" ? `Edit ${meta.label}` : `Create ${meta.label}`}
-            </h2>
-            <p className="text-[12px] text-(--text-tertiary) mt-0.5">
-              {mode === "edit"
-                ? `Update ${identity.name || meta.label.toLowerCase()} identity and details`
-                : `Build your ${meta.label.toLowerCase()}'s identity step by step`}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleRandomize}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
-            >
-              <Shuffle className="w-3.5 h-3.5" strokeWidth={1.75} />
-              Randomize
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-            >
-              <X className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} />
-            </button>
-          </div>
-        </div>
-
-        {/* ─── Step Tabs ───────────────────────────────────────────────── */}
-        <div className="flex items-center gap-0.5 px-5 py-2 border-b border-white/5 overflow-x-auto">
-          {steps.map((step, i) => (
-            <button
-              key={step.key}
-              onClick={() => setActiveStep(i)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap transition-all duration-150 ${
-                i === activeStep
-                  ? "bg-white/10 text-(--text-primary)"
-                  : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
-              }`}
-            >
-              <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
-                i === activeStep ? "bg-(--accent-blue) text-white" : "bg-white/8 text-(--text-tertiary)"
-              }`}>
-                {i + 1}
-              </span>
-              {step.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ─── Edit Mode: Images Section ───────────────────────────────── */}
-        {mode === "edit" && element?.referenceUrls && element.referenceUrls.length > 0 && (
-          <div className="px-5 py-3 border-b border-white/5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary)">
-                Reference Images ({element.referenceUrls.length})
-              </span>
+        <div className="px-8 pt-6 pb-2">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-[24px] font-bold text-(--text-primary) tracking-tight">
+                {mode === "edit" ? `EDIT ${meta.label.toUpperCase()}` : meta.title}
+              </h1>
+              <p className="text-[13px] text-(--text-tertiary) mt-1 max-w-lg">
+                {mode === "edit"
+                  ? `Update identity, appearance, and details for ${identity.name || "this " + meta.label.toLowerCase()}`
+                  : `Build your ${meta.label.toLowerCase()} from scratch \u2014 appearance, personality, and every detail in between.`}
+              </p>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {element.thumbnailUrl && (
-                <div className="relative shrink-0">
-                  <img
-                    src={element.thumbnailUrl}
-                    alt="Thumbnail"
-                    className="w-14 h-14 rounded-lg object-cover border-2 border-(--accent-blue)/50"
-                  />
-                  <span className="absolute -top-1 -right-1 text-[8px] font-bold bg-(--accent-blue) text-white px-1 rounded">
-                    THUMB
-                  </span>
+            <div className="flex items-center gap-3">
+              {/* Human / Non-Human toggle (character type only) */}
+              {type === "character" && (
+                <div className="flex items-center rounded-xl border border-white/8 overflow-hidden">
+                  <button onClick={() => { setIsNonHuman(false); setActiveTab(0); }}
+                    className={`px-4 py-2 text-[13px] font-medium transition-all ${
+                      !isNonHuman ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary)"
+                    }`}>Human</button>
+                  <button onClick={() => { setIsNonHuman(true); setIdentity(prev => ({ ...prev, isNonHuman: true })); setActiveTab(0); }}
+                    className={`px-4 py-2 text-[13px] font-medium transition-all ${
+                      isNonHuman ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary)"
+                    }`}>Non-Human</button>
                 </div>
               )}
-              {element.referenceUrls.map((url, i) => (
-                <img
-                  key={i}
-                  src={url}
-                  alt={`Ref ${i + 1}`}
-                  className="w-14 h-14 rounded-lg object-cover border border-(--border-primary) shrink-0"
-                />
-              ))}
+              <button onClick={handleRandomize}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 border border-white/8 transition-all">
+                <Shuffle className="w-4 h-4" strokeWidth={1.75} /> Randomize
+              </button>
+              <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+                <X className="w-5 h-5 text-(--text-secondary)" strokeWidth={1.75} />
+              </button>
             </div>
           </div>
-        )}
 
-        {/* ─── Step Content ────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {currentStep && (
-            <div className="space-y-5">
-              {currentStep.fields.map((field) => (
+          {/* Tabs — wizard steps + Prompt tab */}
+          <div className="flex items-center gap-1 mt-5">
+            {tabs.map((tab, i) => (
+              <button key={tab.key} onClick={() => setActiveTab(i)}
+                className={`px-4 py-2 rounded-full text-[13px] font-medium transition-all duration-200 ${
+                  i === activeTab
+                    ? "bg-white/12 text-(--text-primary)"
+                    : "text-(--text-tertiary) hover:text-(--text-secondary) hover:bg-white/4"
+                }`}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ─── Reference Images (both modes) ───────────────────────────── */}
+        <div className="px-8 py-3 border-y border-white/5">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary)">
+              Reference Images ({referenceUrls.length})
+              {thumbnailUrl && " \u2022 Thumbnail set"}
+            </span>
+            <div className="flex items-center gap-2">
+              {referenceUrls.length > 0 && (
+                <button onClick={() => setCropImageUrl(referenceUrls[0])}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors">
+                  <Crop className="w-3.5 h-3.5" strokeWidth={1.75} /> Set Thumbnail
+                </button>
+              )}
+              {onOpenFileBrowser && (
+                <button onClick={onOpenFileBrowser}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors">
+                  <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.75} /> Browse Files
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 min-h-[52px]">
+            {thumbnailUrl && (
+              <div className="relative shrink-0">
+                <img src={thumbnailUrl} alt="Thumbnail" className="w-12 h-12 rounded-lg object-cover border-2 border-(--accent-blue)/50" />
+                <span className="absolute -top-1.5 -right-1.5 text-[7px] font-bold bg-(--accent-blue) text-white px-1 py-0.5 rounded">THUMB</span>
+              </div>
+            )}
+            {referenceUrls.map((url, i) => (
+              <div key={i} className="relative shrink-0 group">
+                <img src={url} alt={`Ref ${i + 1}`}
+                  className="w-12 h-12 rounded-lg object-cover border border-(--border-primary) hover:border-(--accent-blue)/40 transition-colors cursor-pointer"
+                  onClick={() => setCropImageUrl(url)} />
+                <button onClick={() => setReferenceUrls(prev => prev.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <X className="w-2.5 h-2.5" strokeWidth={3} />
+                </button>
+              </div>
+            ))}
+            {referenceUrls.length === 0 && !thumbnailUrl && (
+              <div className="flex items-center gap-2 text-[11px] text-(--text-tertiary) italic">
+                <ImagePlus className="w-4 h-4" strokeWidth={1.5} />
+                No reference images yet — upload or browse R2
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ─── Tab Content ─────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto px-8 py-6">
+          {/* Wizard step fields */}
+          {currentWizardStep && (
+            <div className="space-y-8">
+              {currentWizardStep.fields.map((field) => (
                 <div key={field.key}>
-                  <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2">
+                  <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
                     {field.label}
-                    {field.required && <span className="text-red-400">*</span>}
+                    {field.required && <span className="text-red-400 text-[10px]">*</span>}
                   </label>
                   {renderField(field)}
                 </div>
@@ -452,97 +667,122 @@ export function ElementForge({ mode, type, projectId, userId, onSave, onClose, e
             </div>
           )}
 
-          {/* Step navigation hint */}
-          <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
-            <button
-              onClick={() => setActiveStep(Math.max(0, activeStep - 1))}
-              disabled={activeStep === 0}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-            {activeStep < steps.length - 1 ? (
-              <button
-                onClick={() => setActiveStep(activeStep + 1)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium text-(--accent-blue) hover:bg-(--accent-blue)/8 transition-colors"
-              >
-                Next
-                <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
-              </button>
-            ) : (
-              <span className="text-[11px] text-(--text-tertiary)">Last step</span>
-            )}
-          </div>
+          {/* Prompt tab */}
+          {currentTab.key === "prompt" && (
+            <div className="space-y-6">
+              {/* Identity description (auto-composed) */}
+              <div>
+                <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
+                  Identity Description (auto-composed)
+                </label>
+                <div className="p-4 rounded-xl bg-(--bg-primary) border border-(--border-primary) text-[13px] text-(--text-secondary) leading-relaxed">
+                  {composedPrompt || "Fill in identity fields to see the composed description..."}
+                </div>
+              </div>
+
+              {/* Template selector */}
+              <div>
+                <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
+                  <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+                  Reference Prompt Template
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {allTemplates.map((t, i) => (
+                    <button key={i} onClick={() => setSelectedTemplate(i)}
+                      className={`text-left px-4 py-3 rounded-xl border-2 transition-all duration-200 ${
+                        i === selectedTemplate
+                          ? "border-(--accent-blue)/50 bg-(--accent-blue)/8"
+                          : "border-white/5 bg-white/2 hover:border-white/10 hover:bg-white/4"
+                      }`}>
+                      <div className={`text-[13px] font-medium ${i === selectedTemplate ? "text-(--text-primary)" : "text-(--text-secondary)"}`}>
+                        {t.name}
+                      </div>
+                      <div className="text-[11px] text-(--text-tertiary) mt-1 line-clamp-2">
+                        {t.prompt.replace(/\{description\}/g, "...").slice(0, 120)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Final merged prompt preview */}
+              <div>
+                <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
+                  Final Prompt (sent to Studio)
+                </label>
+                <div className="p-4 rounded-xl bg-(--bg-primary) border border-(--border-primary) text-[13px] text-(--text-primary) leading-relaxed">
+                  {referencePrompt}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ─── Bottom Bar: Badges + Prompt Preview + Actions ───────────── */}
-        <div className="border-t border-white/5 bg-(--bg-primary)/40">
+        {/* ─── Bottom Bar ──────────────────────────────────────────────── */}
+        <div className="border-t border-white/6 bg-(--bg-primary)/60 backdrop-blur-sm">
           {/* Badges */}
-          {badges.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 px-5 pt-3 pb-1">
+          <div className="flex items-center gap-3 px-8 pt-3 pb-2 min-h-[40px]">
+            <div className="flex flex-wrap gap-1.5 flex-1">
               {badges.map((badge) => (
-                <span
-                  key={badge.key}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/8 text-[11px] font-medium text-(--text-primary)"
-                >
+                <span key={badge.key}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/8 text-[11px] font-semibold text-(--text-primary) border border-white/5">
                   {badge.label}
-                  <button
-                    onClick={() => removeBadge(badge.key)}
-                    className="ml-0.5 text-(--text-tertiary) hover:text-(--text-primary) transition-colors"
-                  >
+                  <button onClick={() => removeBadge(badge.key)} className="text-(--text-tertiary) hover:text-(--text-primary) transition-colors">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
               ))}
+              {badges.length === 0 && (
+                <span className="text-[11px] text-(--text-tertiary) italic">Select options to build identity...</span>
+              )}
             </div>
-          )}
-
-          {/* Prompt Preview (collapsible) */}
-          <div className="px-5 py-1">
-            <button
-              onClick={() => setShowPromptPreview(!showPromptPreview)}
-              className="flex items-center gap-1.5 text-[11px] font-medium text-(--text-tertiary) hover:text-(--text-secondary) transition-colors"
-            >
-              <ChevronDown className={`w-3 h-3 transition-transform ${showPromptPreview ? "" : "-rotate-90"}`} />
-              Prompt Preview
-            </button>
-            {showPromptPreview && (
-              <div className="mt-1.5 p-2.5 rounded-lg bg-(--bg-primary) border border-(--border-primary) text-[12px] text-(--text-secondary) leading-relaxed max-h-[80px] overflow-y-auto">
-                {composedPrompt || "Fill in fields to see the composed prompt..."}
-              </div>
-            )}
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center justify-between px-5 py-3">
-            <div className="text-[11px] text-(--text-tertiary)">
-              {identity.name?.trim()
-                ? <span className="text-(--text-secondary)">{identity.name.trim()}</span>
-                : <span className="italic">Enter a name to save</span>}
-            </div>
+          {/* Action bar */}
+          <div className="flex items-center justify-between px-8 py-3 border-t border-white/4">
             <div className="flex items-center gap-2">
-              <button
-                onClick={onClose}
-                className="px-4 py-1.5 rounded-lg text-[13px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
-              >
+              <button onClick={() => setActiveTab(Math.max(0, activeTab - 1))} disabled={activeTab === 0}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 disabled:opacity-20 disabled:cursor-not-allowed transition-colors">
+                Previous
+              </button>
+              {activeTab < tabs.length - 1 && (
+                <button onClick={() => setActiveTab(activeTab + 1)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-medium text-(--accent-blue) hover:bg-(--accent-blue)/8 transition-colors">
+                  Next <ChevronRight className="w-3.5 h-3.5" strokeWidth={2} />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-[12px] text-(--text-tertiary)">{identity.name?.trim() || "Unnamed"}</span>
+              <button onClick={onClose}
+                className="px-4 py-2 rounded-xl text-[13px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors">
                 Cancel
               </button>
-              <button
-                onClick={handleSave}
-                disabled={!canSave || saving}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-medium bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
-                {saving
-                  ? "Saving..."
-                  : mode === "edit"
-                    ? "Save Changes"
-                    : `Create ${meta.label}`}
+              <button onClick={handleSave} disabled={!canSave || saving}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold bg-white/8 hover:bg-white/12 text-(--text-primary) border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+                <Sparkles className="w-4 h-4" strokeWidth={1.75} />
+                {saving ? "Saving..." : mode === "edit" ? "Save Changes" : `Create ${meta.label}`}
               </button>
+              {showSendToStudio && onSendToStudio && (
+                <button onClick={handleSendToStudio} disabled={!canSave || saving}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[14px] font-semibold bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-(--accent-blue)/20">
+                  <Send className="w-4 h-4" strokeWidth={1.75} /> Send to Studio
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Thumbnail Cropper Modal */}
+      {cropImageUrl && (
+        <ThumbnailCropper
+          imageUrl={cropImageUrl}
+          onSave={handleThumbnailCropped}
+          onClose={() => setCropImageUrl(null)}
+        />
+      )}
     </div>
   );
 }

@@ -23,7 +23,7 @@ export interface ForgeStep {
 export interface ForgeField {
   key: string;
   label: string;
-  type: "button-group" | "visual-grid" | "color-dots" | "multi-select" | "text" | "dropdown" | "two-level";
+  type: "button-group" | "visual-grid" | "color-dots" | "multi-select" | "text" | "textarea" | "dropdown" | "two-level" | "era-slider" | "combobox";
   options?: ForgeOption[];
   subOptions?: Record<string, ForgeOption[]>; // For two-level fields
   placeholder?: string;
@@ -35,20 +35,74 @@ export interface ForgeField {
 // CHARACTER OPTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const T = "/storytica/element_forge/thumbs/";
+
+// ─── Era (shared between human and non-human) ───────────────────────────────
+
+export const ERA_OPTIONS: ForgeOption[] = [
+  { key: "prehistoric", label: "Prehistoric" },
+  { key: "ancient", label: "Ancient" },
+  { key: "medieval", label: "Medieval" },
+  { key: "renaissance", label: "Renaissance" },
+  { key: "1700s", label: "1700s" },
+  { key: "1800s", label: "1800s" },
+  { key: "1900s", label: "1900s" },
+  { key: "1910s", label: "1910s" },
+  { key: "1920s", label: "1920s" },
+  { key: "1930s", label: "1930s" },
+  { key: "1940s", label: "1940s" },
+  { key: "1950s", label: "1950s" },
+  { key: "1960s", label: "1960s" },
+  { key: "1970s", label: "1970s" },
+  { key: "1980s", label: "1980s" },
+  { key: "1990s", label: "1990s" },
+  { key: "2000s", label: "2000s" },
+  { key: "2010s", label: "2010s" },
+  { key: "2020s", label: "2020s" },
+  { key: "modern", label: "Modern" },
+  { key: "near-future", label: "Near Future" },
+  { key: "far-future", label: "Far Future" },
+  { key: "timeless", label: "Timeless" },
+  { key: "fantasy", label: "Fantasy" },
+];
+
+// ─── Non-human type presets (combobox — user can also type freely) ───────────
+
+const NON_HUMAN_TYPE_PRESETS: ForgeOption[] = [
+  { key: "robot", label: "Robot" },
+  { key: "mecha", label: "Mecha" },
+  { key: "android", label: "Android" },
+  { key: "cyborg", label: "Cyborg" },
+  { key: "monster", label: "Monster" },
+  { key: "creature", label: "Creature" },
+  { key: "alien", label: "Alien" },
+  { key: "ghost", label: "Ghost" },
+  { key: "spirit", label: "Spirit" },
+  { key: "demon", label: "Demon" },
+  { key: "angel", label: "Angel" },
+  { key: "vampire", label: "Vampire" },
+  { key: "zombie", label: "Zombie" },
+  { key: "dragon", label: "Dragon" },
+  { key: "elemental", label: "Elemental" },
+  { key: "animal", label: "Animal" },
+  { key: "mythical-beast", label: "Mythical Beast" },
+  { key: "ai", label: "AI / Digital Being" },
+];
+
 const GENDER_OPTIONS: ForgeOption[] = [
-  { key: "male", label: "Male" },
-  { key: "female", label: "Female" },
-  { key: "non-binary", label: "Non-binary" },
-  { key: "other", label: "Other" },
+  { key: "male", label: "Male", icon: T + "gender-male.jpg" },
+  { key: "female", label: "Female", icon: T + "gender-female.jpg" },
+  { key: "non-binary", label: "Non-binary", icon: T + "gender-nonbinary.jpg" },
+  { key: "other", label: "Other", icon: T + "gender-other.jpg" },
 ];
 
 const AGE_OPTIONS: ForgeOption[] = [
-  { key: "child", label: "Child" },
-  { key: "teen", label: "Teen" },
-  { key: "young-adult", label: "Young Adult" },
-  { key: "adult", label: "Adult" },
-  { key: "middle-aged", label: "Middle-aged" },
-  { key: "elderly", label: "Elderly" },
+  { key: "child", label: "Child", icon: T + "age-child.jpg" },
+  { key: "teen", label: "Teen", icon: T + "age-teen.jpg" },
+  { key: "young-adult", label: "Young Adult", icon: T + "age-young-adult.jpg" },
+  { key: "adult", label: "Adult", icon: T + "age-adult.jpg" },
+  { key: "middle-aged", label: "Middle-aged", icon: T + "age-middle-aged.jpg" },
+  { key: "elderly", label: "Elderly", icon: T + "age-elderly.jpg" },
 ];
 
 const ETHNICITY_OPTIONS: ForgeOption[] = [
@@ -64,11 +118,11 @@ const ETHNICITY_OPTIONS: ForgeOption[] = [
 ];
 
 const BUILD_OPTIONS: ForgeOption[] = [
-  { key: "slim", label: "Slim" },
-  { key: "average", label: "Average" },
-  { key: "athletic", label: "Athletic" },
-  { key: "muscular", label: "Muscular" },
-  { key: "stocky", label: "Stocky" },
+  { key: "slim", label: "Slim", icon: T + "build-slim.jpg" },
+  { key: "average", label: "Average", icon: T + "build-average.jpg" },
+  { key: "athletic", label: "Athletic", icon: T + "build-athletic.jpg" },
+  { key: "muscular", label: "Muscular", icon: T + "build-muscular.jpg" },
+  { key: "stocky", label: "Stocky", icon: T + "build-stocky.jpg" },
 ];
 
 const HEIGHT_OPTIONS: ForgeOption[] = [
@@ -89,16 +143,16 @@ const HAIR_COLOR_OPTIONS: ForgeOption[] = [
 ];
 
 const HAIR_STYLE_OPTIONS: ForgeOption[] = [
-  { key: "short-straight", label: "Short Straight" },
-  { key: "short-curly", label: "Short Curly" },
-  { key: "medium-straight", label: "Medium Straight" },
-  { key: "medium-wavy", label: "Medium Wavy" },
-  { key: "long-straight", label: "Long Straight" },
-  { key: "long-curly", label: "Long Curly" },
-  { key: "long-wavy", label: "Long Wavy" },
-  { key: "braids", label: "Braids" },
-  { key: "bald", label: "Bald" },
-  { key: "buzz-cut", label: "Buzz Cut" },
+  { key: "short-straight", label: "Short Straight", icon: T + "hair-short-straight.jpg" },
+  { key: "short-curly", label: "Short Curly", icon: T + "hair-short-curly.jpg" },
+  { key: "medium-straight", label: "Medium Straight", icon: T + "hair-medium-straight.jpg" },
+  { key: "medium-wavy", label: "Medium Wavy", icon: T + "hair-medium-wavy.jpg" },
+  { key: "long-straight", label: "Long Straight", icon: T + "hair-long-straight.jpg" },
+  { key: "long-curly", label: "Long Curly", icon: T + "hair-long-curly.jpg" },
+  { key: "long-wavy", label: "Long Wavy", icon: T + "hair-long-wavy.jpg" },
+  { key: "braids", label: "Braids", icon: T + "hair-braids.jpg" },
+  { key: "bald", label: "Bald", icon: T + "hair-bald.jpg" },
+  { key: "buzz-cut", label: "Buzz Cut", icon: T + "hair-buzz-cut.jpg" },
 ];
 
 const EYE_COLOR_OPTIONS: ForgeOption[] = [
@@ -111,49 +165,49 @@ const EYE_COLOR_OPTIONS: ForgeOption[] = [
 ];
 
 const ARCHETYPE_OPTIONS: ForgeOption[] = [
-  { key: "hero", label: "Hero" },
-  { key: "rebel", label: "Rebel" },
-  { key: "innocent", label: "Innocent" },
-  { key: "everyman", label: "Everyman" },
-  { key: "explorer", label: "Explorer" },
-  { key: "caregiver", label: "Caregiver" },
-  { key: "trickster", label: "Trickster" },
-  { key: "sage", label: "Sage" },
+  { key: "hero", label: "Hero", icon: T + "archetype-hero.jpg" },
+  { key: "rebel", label: "Rebel", icon: T + "archetype-rebel.jpg" },
+  { key: "innocent", label: "Innocent", icon: T + "archetype-innocent.jpg" },
+  { key: "everyman", label: "Everyman", icon: T + "archetype-everyman.jpg" },
+  { key: "explorer", label: "Explorer", icon: T + "archetype-explorer.jpg" },
+  { key: "caregiver", label: "Caregiver", icon: T + "archetype-caregiver.jpg" },
+  { key: "trickster", label: "Trickster", icon: T + "archetype-trickster.jpg" },
+  { key: "sage", label: "Sage", icon: T + "archetype-sage.jpg" },
 ];
 
 const EXPRESSION_OPTIONS: ForgeOption[] = [
-  { key: "neutral", label: "Neutral" },
-  { key: "happy", label: "Happy" },
-  { key: "serious", label: "Serious" },
-  { key: "angry", label: "Angry" },
-  { key: "sad", label: "Sad" },
-  { key: "confident", label: "Confident" },
-  { key: "mysterious", label: "Mysterious" },
-  { key: "fearful", label: "Fearful" },
+  { key: "neutral", label: "Neutral", icon: T + "expression-neutral.jpg" },
+  { key: "happy", label: "Happy", icon: T + "expression-happy.jpg" },
+  { key: "serious", label: "Serious", icon: T + "expression-serious.jpg" },
+  { key: "angry", label: "Angry", icon: T + "expression-angry.jpg" },
+  { key: "sad", label: "Sad", icon: T + "expression-sad.jpg" },
+  { key: "confident", label: "Confident", icon: T + "expression-confident.jpg" },
+  { key: "mysterious", label: "Mysterious", icon: T + "expression-mysterious.jpg" },
+  { key: "fearful", label: "Fearful", icon: T + "expression-fearful.jpg" },
 ];
 
 const DETAIL_PRESETS: ForgeOption[] = [
-  { key: "scar", label: "Scar" },
-  { key: "freckles", label: "Freckles" },
-  { key: "tattoos", label: "Tattoos" },
-  { key: "eye-patch", label: "Eye Patch" },
-  { key: "glasses", label: "Glasses" },
-  { key: "beard", label: "Beard" },
-  { key: "moustache", label: "Moustache" },
-  { key: "piercing", label: "Piercing" },
+  { key: "scar", label: "Scar", icon: T + "detail-scar.jpg" },
+  { key: "freckles", label: "Freckles", icon: T + "detail-freckles.jpg" },
+  { key: "tattoos", label: "Tattoos", icon: T + "detail-tattoos.jpg" },
+  { key: "eye-patch", label: "Eye Patch", icon: T + "detail-eye-patch.jpg" },
+  { key: "glasses", label: "Glasses", icon: T + "detail-glasses.jpg" },
+  { key: "beard", label: "Beard", icon: T + "detail-beard.jpg" },
+  { key: "moustache", label: "Moustache", icon: T + "detail-moustache.jpg" },
+  { key: "piercing", label: "Piercing", icon: T + "detail-piercing.jpg" },
 ];
 
 const OUTFIT_OPTIONS: ForgeOption[] = [
-  { key: "casual", label: "Casual" },
-  { key: "formal", label: "Formal" },
-  { key: "streetwear", label: "Streetwear" },
-  { key: "high-fashion", label: "High Fashion" },
-  { key: "military", label: "Military" },
-  { key: "sporty", label: "Sporty" },
-  { key: "fantasy", label: "Fantasy" },
-  { key: "sci-fi", label: "Sci-fi" },
-  { key: "historical", label: "Historical" },
-  { key: "uniform", label: "Uniform" },
+  { key: "casual", label: "Casual", icon: T + "outfit-casual.jpg" },
+  { key: "formal", label: "Formal", icon: T + "outfit-formal.jpg" },
+  { key: "streetwear", label: "Streetwear", icon: T + "outfit-streetwear.jpg" },
+  { key: "high-fashion", label: "High Fashion", icon: T + "outfit-high-fashion.jpg" },
+  { key: "military", label: "Military", icon: T + "outfit-military.jpg" },
+  { key: "sporty", label: "Sporty", icon: T + "outfit-sporty.jpg" },
+  { key: "fantasy", label: "Fantasy", icon: T + "outfit-fantasy.jpg" },
+  { key: "sci-fi", label: "Sci-fi", icon: T + "outfit-sci-fi.jpg" },
+  { key: "historical", label: "Historical", icon: T + "outfit-historical.jpg" },
+  { key: "uniform", label: "Uniform", icon: T + "outfit-uniform.jpg" },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -400,15 +454,23 @@ const PROP_CONDITION_OPTIONS: ForgeOption[] = [
 // STEP DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export const CHARACTER_STEPS: ForgeStep[] = [
+// Human-specific character steps
+const HUMAN_CHARACTER_STEPS: ForgeStep[] = [
   {
     key: "identity",
     label: "Identity",
     fields: [
       { key: "name", label: "Character Name", type: "text", placeholder: "e.g. Sarah Chen", required: true },
-      { key: "gender", label: "Gender", type: "button-group", options: GENDER_OPTIONS },
-      { key: "ageRange", label: "Age", type: "button-group", options: AGE_OPTIONS },
+      { key: "gender", label: "Gender", type: "visual-grid", options: GENDER_OPTIONS, columns: 4 },
+      { key: "ageRange", label: "Age", type: "visual-grid", options: AGE_OPTIONS, columns: 6 },
       { key: "ethnicity", label: "Ethnicity", type: "button-group", options: ETHNICITY_OPTIONS },
+    ],
+  },
+  {
+    key: "era",
+    label: "Era",
+    fields: [
+      { key: "era", label: "What period is your story set in?", type: "era-slider", options: ERA_OPTIONS },
     ],
   },
   {
@@ -418,7 +480,7 @@ export const CHARACTER_STEPS: ForgeStep[] = [
       { key: "build", label: "Build", type: "visual-grid", options: BUILD_OPTIONS, columns: 5 },
       { key: "height", label: "Height", type: "button-group", options: HEIGHT_OPTIONS },
       { key: "hairColor", label: "Hair Color", type: "color-dots", options: HAIR_COLOR_OPTIONS },
-      { key: "hairStyle", label: "Hair Style", type: "button-group", options: HAIR_STYLE_OPTIONS },
+      { key: "hairStyle", label: "Hair Style", type: "visual-grid", options: HAIR_STYLE_OPTIONS, columns: 5 },
       { key: "eyeColor", label: "Eye Color", type: "color-dots", options: EYE_COLOR_OPTIONS },
     ],
   },
@@ -427,7 +489,7 @@ export const CHARACTER_STEPS: ForgeStep[] = [
     label: "Personality",
     fields: [
       { key: "archetype", label: "Archetype", type: "visual-grid", options: ARCHETYPE_OPTIONS, columns: 4 },
-      { key: "expression", label: "Expression", type: "button-group", options: EXPRESSION_OPTIONS },
+      { key: "expression", label: "Expression", type: "visual-grid", options: EXPRESSION_OPTIONS, columns: 4 },
     ],
   },
   {
@@ -444,6 +506,26 @@ export const CHARACTER_STEPS: ForgeStep[] = [
     fields: [
       { key: "outfit", label: "Outfit Style", type: "visual-grid", options: OUTFIT_OPTIONS, columns: 5 },
       { key: "outfitCustom", label: "Custom Outfit", type: "text", placeholder: "e.g. black leather jacket, dark pants" },
+    ],
+  },
+];
+
+// Non-human character steps — simple: type + describe it, upload references, pick prompt template
+const NON_HUMAN_CHARACTER_STEPS: ForgeStep[] = [
+  {
+    key: "identity",
+    label: "Identity",
+    fields: [
+      { key: "name", label: "Character Name", type: "text", placeholder: "e.g. ATLAS-7, Shadow Lurker, Phantom Queen", required: true },
+      { key: "characterKind", label: "What is this character?", type: "combobox", options: NON_HUMAN_TYPE_PRESETS, placeholder: "e.g. Ghost, Mecha Robot, Shadow Dragon..." },
+      { key: "description", label: "Description", type: "textarea", placeholder: "Describe appearance in detail — shape, material, colors, features, size, abilities, personality, backstory..." },
+    ],
+  },
+  {
+    key: "era",
+    label: "Era",
+    fields: [
+      { key: "era", label: "What period is your story set in?", type: "era-slider", options: ERA_OPTIONS },
     ],
   },
 ];
@@ -506,9 +588,11 @@ export const PROP_STEPS: ForgeStep[] = [
   },
 ];
 
-export function getStepsForType(type: ForgeElementType): ForgeStep[] {
+export function getStepsForType(type: ForgeElementType, characterType?: string): ForgeStep[] {
   switch (type) {
-    case "character": return CHARACTER_STEPS;
+    case "character":
+      if (characterType && characterType !== "human") return NON_HUMAN_CHARACTER_STEPS;
+      return HUMAN_CHARACTER_STEPS;
     case "environment": return ENVIRONMENT_STEPS;
     case "prop": return PROP_STEPS;
   }
@@ -523,23 +607,37 @@ function labelFor(options: ForgeOption[], key: string): string {
 }
 
 export function composeCharacterPrompt(identity: Record<string, any>): string {
+  // Era prefix (shared between human and non-human)
+  const eraPart = identity.era ? labelFor(ERA_OPTIONS, identity.era) : "";
+
+  // ── Non-human: simple composition from kind + era + description ──
+  if (identity.characterKind || identity.isNonHuman) {
+    const parts: string[] = [];
+    const kind = identity.characterKind || "character";
+    if (eraPart) {
+      parts.push(`A ${eraPart}-era ${kind}`);
+    } else {
+      parts.push(`A ${kind}`);
+    }
+    if (identity.description?.trim()) parts.push(identity.description.trim());
+    return parts.join(". ").replace(/\.\s*$/, "") + ".";
+  }
+
+  // ── Human: full structured composition ──
   const parts: string[] = [];
 
-  // Base: "A [age] [ethnicity] [gender]"
   const agePart = identity.ageRange ? labelFor(AGE_OPTIONS, identity.ageRange).toLowerCase() : "";
   const ethPart = identity.ethnicity ? labelFor(ETHNICITY_OPTIONS, identity.ethnicity) : "";
   const genPart = identity.gender ? labelFor(GENDER_OPTIONS, identity.gender).toLowerCase() : "";
 
-  const baseParts = [agePart, ethPart, genPart].filter(Boolean);
+  const baseParts = [eraPart ? `${eraPart}-era` : "", agePart, ethPart, genPart].filter(Boolean);
   if (baseParts.length > 0) {
     parts.push(`A ${baseParts.join(" ")}`);
   }
 
-  // Physique
   if (identity.build) parts.push(`${labelFor(BUILD_OPTIONS, identity.build).toLowerCase()} build`);
   if (identity.height) parts.push(labelFor(HEIGHT_OPTIONS, identity.height).toLowerCase());
 
-  // Hair
   if (identity.hairColor && identity.hairStyle) {
     parts.push(`${labelFor(HAIR_COLOR_OPTIONS, identity.hairColor).toLowerCase()} ${labelFor(HAIR_STYLE_OPTIONS, identity.hairStyle).toLowerCase()} hair`);
   } else if (identity.hairColor) {
@@ -548,31 +646,23 @@ export function composeCharacterPrompt(identity: Record<string, any>): string {
     parts.push(`${labelFor(HAIR_STYLE_OPTIONS, identity.hairStyle).toLowerCase()} hair`);
   }
 
-  // Eyes
   if (identity.eyeColor) parts.push(`${labelFor(EYE_COLOR_OPTIONS, identity.eyeColor).toLowerCase()} eyes`);
-
-  // Archetype & expression
   if (identity.archetype) parts.push(`${labelFor(ARCHETYPE_OPTIONS, identity.archetype)} archetype`);
   if (identity.expression) parts.push(`${labelFor(EXPRESSION_OPTIONS, identity.expression).toLowerCase()} expression`);
 
-  // Details
   const detailList: string[] = [];
   if (Array.isArray(identity.details)) {
     detailList.push(...identity.details.map((d: string) => labelFor(DETAIL_PRESETS, d).toLowerCase()));
   }
-  if (identity.detailsCustom?.trim()) {
-    detailList.push(identity.detailsCustom.trim());
-  }
+  if (identity.detailsCustom?.trim()) detailList.push(identity.detailsCustom.trim());
   if (detailList.length > 0) parts.push(detailList.join(", "));
 
-  // Outfit
   if (identity.outfitCustom?.trim()) {
     parts.push(`wearing ${identity.outfitCustom.trim()}`);
   } else if (identity.outfit) {
     parts.push(`wearing ${labelFor(OUTFIT_OPTIONS, identity.outfit).toLowerCase()} clothing`);
   }
 
-  // Custom notes
   if (identity.customNotes?.trim()) parts.push(identity.customNotes.trim());
 
   return parts.join(", ").replace(/,\s*$/, "") + ".";

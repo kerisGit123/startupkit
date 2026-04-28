@@ -1894,6 +1894,10 @@ export default defineSchema({
     isFavorite: v.optional(v.boolean()), // per-frame favorite
     generationStatus: v.string(), // none | pending | generating | completed | failed
     
+    // Default model references (for AI agent, not auto-generation)
+    defaultImageModel: v.optional(v.string()), // e.g. "gpt-image-2-image-to-image"
+    defaultVideoModel: v.optional(v.string()), // e.g. "bytedance/seedance-2-fast"
+
     // NEW: Frame status and notes (safe additive fields)
     frameStatus: v.optional(v.string()), // 'draft' | 'in-progress' | 'completed'
     notes: v.optional(v.string()), // Frame notes and annotations

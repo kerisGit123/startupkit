@@ -112,31 +112,35 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
     });
   }, [displaySize]);
 
-  // Save: draw cropped region to canvas → export as blob
+  // Save: fetch image as blob (avoids CORS taint), draw cropped region to canvas
   const handleSave = useCallback(async () => {
-    const img = imgRef.current;
-    if (!img) return;
+    try {
+      const scale = imgNatural.w / displaySize.w;
+      const sx = crop.x * scale;
+      const sy = crop.y * scale;
+      const sw = crop.size * scale;
+      const sh = crop.size * scale;
 
-    // Convert display coords to natural coords
-    const scale = imgNatural.w / displaySize.w;
-    const sx = crop.x * scale;
-    const sy = crop.y * scale;
-    const sw = crop.size * scale;
-    const sh = crop.size * scale;
+      // Fetch image as blob to avoid canvas taint from cross-origin
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const bitmap = await createImageBitmap(blob, Math.round(sx), Math.round(sy), Math.round(sw), Math.round(sh));
 
-    const canvas = document.createElement("canvas");
-    const outputSize = 256; // Thumbnail output size
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+      const canvas = document.createElement("canvas");
+      const outputSize = 256;
+      canvas.width = outputSize;
+      canvas.height = outputSize;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
 
-    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputSize, outputSize);
+      ctx.drawImage(bitmap, 0, 0, outputSize, outputSize);
+      bitmap.close();
 
-    canvas.toBlob((blob) => {
-      if (blob) onSave(blob);
-    }, "image/jpeg", 0.9);
-  }, [crop, imgNatural, displaySize, onSave]);
+      canvas.toBlob((b) => { if (b) onSave(b); }, "image/jpeg", 0.9);
+    } catch (err) {
+      console.error("[ThumbnailCropper] Save failed:", err);
+    }
+  }, [crop, imgNatural, displaySize, imageUrl, onSave]);
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
@@ -172,10 +176,10 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
               src={imageUrl}
               alt="Crop source"
               onLoad={handleImageLoad}
+              onError={() => console.error("[ThumbnailCropper] Failed to load image:", imageUrl)}
               className="block select-none"
               style={{ width: displaySize.w, height: displaySize.h, opacity: 0.35 }}
               draggable={false}
-              crossOrigin="anonymous"
             />
 
             {imgLoaded && (

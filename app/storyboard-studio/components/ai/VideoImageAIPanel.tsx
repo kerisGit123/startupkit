@@ -5553,7 +5553,26 @@ export function ImageAIPanel({
           userId={userId}
           user={user}
           onClose={() => setShowElementLibrary(false)}
-          imageSelectionMode={true} // Enable image selection mode
+          imageSelectionMode={true}
+          onSendToStudio={(prompt, refUrls) => {
+            // Inject prompt into the prompt editor
+            const el = editorRef.current;
+            if (el) {
+              el.textContent = prompt;
+              setCurrentPrompt(prompt);
+              setEditorIsEmpty(false);
+              onUserPromptChange?.(prompt);
+            }
+            // Add reference images
+            if (refUrls && refUrls.length > 0) {
+              refUrls.forEach(url => handleImageSelect('element', {
+                url,
+                name: 'forge-reference',
+                metadata: { source: 'element-forge', selectedAt: Date.now() }
+              }));
+            }
+            setShowElementLibrary(false);
+          }}
           onSelectImage={(imageUrl, elementName, element) => {
             // Handle single image selection
             handleImageSelect('element', {

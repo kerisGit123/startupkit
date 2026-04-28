@@ -74,6 +74,8 @@ interface ElementLibraryProps {
   // New props for image selection
   imageSelectionMode?: boolean;
   onSelectImage?: (imageUrl: string, elementName: string, element: Element) => void;
+  // Element Forge → Send to Studio (only when opened from VideoImageAIPanel)
+  onSendToStudio?: (prompt: string, referenceUrls: string[]) => void;
 }
 
 const ELEMENT_TYPES = [
@@ -234,16 +236,17 @@ const ImageCard = memo(({
   );
 });
 
-export function ElementLibrary({ 
-  projectId, 
-  userId, 
-  user, 
-  onClose, 
-  onSelectElement, 
-  initialCreateDraft, 
+export function ElementLibrary({
+  projectId,
+  userId,
+  user,
+  onClose,
+  onSelectElement,
+  initialCreateDraft,
   selectedItemId,
   imageSelectionMode = false,
-  onSelectImage 
+  onSelectImage,
+  onSendToStudio,
 }: ElementLibraryProps) {
   // Image selection state management
   const [imageSelectionState, dispatch] = useReducer(imageSelectionReducer, {
@@ -1807,11 +1810,19 @@ export function ElementLibrary({
           type={forgeState.type}
           projectId={projectId}
           userId={userId}
+          companyId={projectCompanyId || undefined}
           element={forgeState.element}
+          showSendToStudio={!!onSendToStudio}
           onSave={() => {
             setForgeState(null);
           }}
           onClose={() => setForgeState(null)}
+          onSendToStudio={onSendToStudio ? (prompt, refUrls) => {
+            setForgeState(null);
+            onClose();
+            onSendToStudio(prompt, refUrls);
+          } : undefined}
+          onOpenFileBrowser={() => setShowRefFileBrowser(true)}
         />
       )}
     </div>
