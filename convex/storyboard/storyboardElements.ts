@@ -167,6 +167,13 @@ export const update = mutation({
     sharedWith: v.optional(v.array(v.id("storyboard_projects"))),
     status: v.optional(v.string()),
     identity: v.optional(v.any()),
+    referencePhotos: v.optional(v.object({
+      face: v.optional(v.string()),
+      outfit: v.optional(v.string()),
+      fullBody: v.optional(v.string()),
+      head: v.optional(v.string()),
+      body: v.optional(v.string()),
+    })),
   },
   handler: async (ctx, { id, ...fields }) => {
     const element = await ctx.db.get(id);
@@ -234,32 +241,93 @@ export const incrementUsage = mutation({
 });
 
 // Called from kie-callback when an element image generation completes.
-// Appends the image URL to referenceUrls and sets thumbnailUrl if currently empty.
+// Appends the image URL to referenceUrls, adds variant metadata, and sets primary if first.
 export const appendReferenceImage = mutation({
   args: {
     id: v.id("storyboard_elements"),
     imageUrl: v.string(),
+    variantLabel: v.optional(v.string()),
+    variantModel: v.optional(v.string()),
   },
-  handler: async (ctx, { id, imageUrl }) => {
+  handler: async (ctx, { id, imageUrl, variantLabel, variantModel }) => {
     const el = await ctx.db.get(id);
     if (!el) {
       console.log(`[appendReferenceImage] Element ${id} not found, skipping`);
       return;
     }
     const refs = el.referenceUrls || [];
+    const variants = el.variants || [];
+    const isFirst = refs.length === 0;
+
     if (!refs.includes(imageUrl)) {
       refs.push(imageUrl);
+      variants.push({
+        label: variantLabel || `Variant ${refs.length}`,
+        model: variantModel || "gpt-image-2",
+        createdAt: Date.now(),
+      });
     }
+
     const patch: Record<string, any> = {
       referenceUrls: refs,
+      variants,
       updatedAt: Date.now(),
     };
-    // Auto-set thumbnail if empty
-    if (!el.thumbnailUrl) {
+
+    // Auto-set primary + thumbnail on first generation
+    if (isFirst || !el.thumbnailUrl) {
+      patch.primaryIndex = 0;
       patch.thumbnailUrl = imageUrl;
     }
     await ctx.db.patch(id, patch);
-    console.log(`[appendReferenceImage] Updated element ${id} — refs: ${refs.length}, thumbnail: ${patch.thumbnailUrl ? 'set' : 'unchanged'}`);
+    console.log(`[appendReferenceImage] Updated element ${id} — refs: ${refs.length}, primary: ${patch.primaryIndex ?? el.primaryIndex ?? 0}`);
+  },
+});
+
+// Set which variant is the primary identity sheet
+export const setPrimaryVariant = mutation({
+  args: {
+    id: v.id("storyboard_elements"),
+    index: v.number(),
+  },
+  handler: async (ctx, { id, index }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+
+    const el = await ctx.db.get(id);
+    if (!el) throw new Error("Element not found");
+
+    const refs = el.referenceUrls || [];
+    if (index < 0 || index >= refs.length) throw new Error("Invalid variant index");
+
+    await ctx.db.patch(id, {
+      primaryIndex: index,
+      thumbnailUrl: refs[index],
+      updatedAt: Date.now(),
+    });
+    console.log(`[setPrimaryVariant] Element ${id} primary set to index ${index}`);
+  },
+});
+
+// Update variant label
+export const updateVariantLabel = mutation({
+  args: {
+    id: v.id("storyboard_elements"),
+    index: v.number(),
+    label: v.string(),
+  },
+  handler: async (ctx, { id, index, label }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+
+    const el = await ctx.db.get(id);
+    if (!el) throw new Error("Element not found");
+
+    const variants = el.variants || [];
+    if (index < 0 || index >= variants.length) throw new Error("Invalid variant index");
+
+    variants[index] = { ...variants[index], label };
+    await ctx.db.patch(id, { variants, updatedAt: Date.now() });
   },
 });
 

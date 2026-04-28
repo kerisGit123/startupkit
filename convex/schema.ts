@@ -2066,6 +2066,25 @@ export default defineSchema({
     // Structured identity from Element Forge wizard (character/environment/prop)
     identity: v.optional(v.any()),
 
+    // User-uploaded reference photos (face, outfit, fullBody for humans; head, body, fullBody for non-human)
+    referencePhotos: v.optional(v.object({
+      face: v.optional(v.string()),
+      outfit: v.optional(v.string()),
+      fullBody: v.optional(v.string()),
+      head: v.optional(v.string()),
+      body: v.optional(v.string()),
+    })),
+
+    // Variant metadata (parallels referenceUrls[] by index)
+    variants: v.optional(v.array(v.object({
+      label: v.string(),
+      model: v.string(),
+      createdAt: v.number(),
+    }))),
+
+    // Which referenceUrls[] entry is the primary identity sheet
+    primaryIndex: v.optional(v.number()),
+
     // Cleanup tracking
     isOrphaned: v.optional(v.boolean()),
     orphanedAt: v.optional(v.number()),

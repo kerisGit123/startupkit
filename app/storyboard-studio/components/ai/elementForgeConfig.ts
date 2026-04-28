@@ -25,7 +25,7 @@ export interface ForgeStep {
 export interface ForgeField {
   key: string;
   label: string;
-  type: "button-group" | "visual-grid" | "color-dots" | "multi-select" | "text" | "textarea" | "dropdown" | "two-level" | "era-slider" | "combobox" | "carousel" | "multi-carousel";
+  type: "button-group" | "visual-grid" | "color-dots" | "multi-select" | "text" | "textarea" | "dropdown" | "two-level" | "era-slider" | "combobox" | "carousel" | "multi-carousel" | "image-upload";
   options?: ForgeOption[];
   subOptions?: Record<string, ForgeOption[]>; // For two-level fields
   placeholder?: string;
@@ -536,6 +536,15 @@ const HUMAN_CHARACTER_STEPS: ForgeStep[] = [
       { key: "outfitCustom", label: "Custom", type: "text", placeholder: "e.g. black leather jacket, dark pants" },
     ],
   },
+  {
+    key: "references",
+    label: "References",
+    fields: [
+      { key: "ref_face", label: "Face", type: "image-upload", placeholder: "Upload a face / headshot reference" },
+      { key: "ref_outfit", label: "Outfit", type: "image-upload", placeholder: "Upload an outfit / clothing reference" },
+      { key: "ref_fullBody", label: "Full Body", type: "image-upload", placeholder: "Upload a full body reference (overrides face+outfit)" },
+    ],
+  },
 ];
 
 // Non-human character steps — simple: type + describe it, upload references, pick prompt template
@@ -554,6 +563,15 @@ const NON_HUMAN_CHARACTER_STEPS: ForgeStep[] = [
     label: "Era",
     fields: [
       { key: "era", label: "What period is your story set in?", type: "era-slider", options: ERA_OPTIONS },
+    ],
+  },
+  {
+    key: "references",
+    label: "References",
+    fields: [
+      { key: "ref_head", label: "Head", type: "image-upload", placeholder: "Upload a head / face reference" },
+      { key: "ref_body", label: "Body", type: "image-upload", placeholder: "Upload a body / torso reference" },
+      { key: "ref_fullBody", label: "Full Body", type: "image-upload", placeholder: "Upload a full body reference (overrides head+body)" },
     ],
   },
 ];
