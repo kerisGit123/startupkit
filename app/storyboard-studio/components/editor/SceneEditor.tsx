@@ -1803,7 +1803,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       }
 
       // Call proxy which handles: base64→URL upload, n8n webhook, KIE polling
-      const proxyRes = await fetch("/api/n8n-image-proxy", {
+      const proxyRes = await fetch("/api/storyboard/image-gen-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(proxyBody),
@@ -2928,8 +2928,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         }
       }
 
-      // 5. Send request to n8n-image-proxy
-      console.log("[rectInpaint] Step 2: Sending to n8n-image-proxy...");
+      // 5. Send request to image-gen-proxy
+      console.log("[rectInpaint] Step 2: Sending to image-gen-proxy...");
       console.log("[rectInpaint] Complete request body:", {
         prompt: `"${requestBody.prompt}"`, // Show prompt in quotes
         promptLength: requestBody.prompt?.length || 0,
@@ -2951,7 +2951,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       console.log("[rectInpaint] PROMPT BEING SENT TO MODEL:", `"${requestBody.prompt}"`);
       console.log("[rectInpaint] PROMPT LENGTH:", requestBody.prompt?.length || 0);
       
-      const response = await fetch("/api/n8n-image-proxy", {
+      const response = await fetch("/api/storyboard/image-gen-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -3600,7 +3600,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         referenceImages: refWebpImages.length > 0 ? refWebpImages : undefined,
       };
 
-      console.log("[brushCharacterEdit] Sending to n8n-image-proxy:", {
+      console.log("[brushCharacterEdit] Sending to image-gen-proxy:", {
         model: 'character-edit',
         prompt: promptToUse,
         hasImage: !!imageWebpBase64,
@@ -3611,7 +3611,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         refImagesCount: refWebpImages.length
       });
 
-      const response = await fetch("/api/n8n-image-proxy", {
+      const response = await fetch("/api/storyboard/image-gen-proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(proxyRequestBody),
@@ -4870,34 +4870,30 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                           toast.error("No image to process. Load an image first.");
                           return;
                         }
-                        console.log('[onGenerate] Post-processing fast-path:', aiModel, promptText.substring(0, 50));
+                        console.log('[onGenerate] Post-processing via generateImageWithCredits:', aiModel, promptText.substring(0, 50));
 
-                        const response = await fetch("/api/inpaint", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            image: sourceImage,
-                            prompt: promptText || "enhance",
-                            model: aiModel,
-                            imageSize: (aiModel === "ideogram/v3-reframe") ? "landscape_16_9" : undefined,
-                            renderingSpeed: (aiModel === "ideogram/v3-reframe") ? "BALANCED" : undefined,
-                          }),
-                        });
+                        const postProcessResult = await generateImageWithCredits(
+                          promptText || "enhance",
+                          "", // style
+                          qualityToUse,
+                          "auto", // aspectRatio
+                          activeShot?.id || "", // itemId
+                          creditsUsed,
+                          aiModel,
+                          sourceImage, // imageUrl - the source image to process
+                          undefined, // referenceImageUrls
+                          undefined, // maskUrl
+                          undefined, // existingFileId
+                          undefined, // cropX
+                          undefined, // cropY
+                          undefined, // cropWidth
+                          undefined, // cropHeight
+                          sourceImage, // originalImageUrl
+                        );
 
-                        if (!response.ok) {
-                          const err = await response.json().catch(() => ({}));
-                          throw new Error(err.error || `Post-processing failed (${response.status})`);
-                        }
-
-                        const result = await response.json();
-                        const resultImage = result.image ?? result.url ?? result.output;
-
-                        if (resultImage) {
-                          setBackgroundImage(resultImage);
-                          setGeneratedImages((prev) => [resultImage, ...prev]);
-                          toast.success(`${aiModel.includes("remove") ? "Background removed" : aiModel.includes("reframe") ? "Image reframed" : "Image enhanced"}! ${creditsUsed} credits used.`);
-                        } else {
-                          throw new Error("No result image returned");
+                        if (postProcessResult) {
+                          const actionLabel = aiModel.includes("remove") ? "Background removal" : aiModel.includes("reframe") ? "Reframe" : aiModel.includes("upscale") ? "Upscale" : "Enhancement";
+                          toast.success(`${actionLabel} started! ${creditsUsed} credits used. Result will appear in your files.`);
                         }
                         return;
                       }

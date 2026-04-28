@@ -1,10 +1,18 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-28 (Session #20 — R2 delete ownership fix + Element Forge)
+> **Last updated:** 2026-04-28 (Session #21 — EditImageAIPanel post-processing → storyboard_files + GPT Image 2 Img2Img)
 
 ---
 
-## Recently Completed (Session #11-20 — 2026-04-26/28)
+## Recently Completed (Session #11-21 — 2026-04-26/28)
+
+### Session #21 — 2026-04-28 (EditImageAIPanel Post-Processing Pipeline + GPT Image 2 Img2Img)
+
+- [x] **Post-processing saves to storyboard_files** — Upscale, Enhance, Relight, BG Remove, Reframe now route through `generateImageWithCredits` → `triggerImageGeneration` (same pipeline as nano-banana-2 / GPT Image 2 in VideoImageAIPanel). Previously these called `/api/inpaint` directly and only stored results in-memory
+- [x] **Added recraft/remove-background + ideogram/v3-reframe to triggerImageGeneration** — New input configs in kieAI.ts so these models work via callback pipeline (was only supported in `/api/inpaint` polling path)
+- [x] **GPT Image 2 added to Img2Img model list** — `gpt-image-2-image-to-image` in EditImageAIPanel image-to-image mode. Supports 1:1 crop → generate → composite back (same crop flow as nano-banana-2). 6 credits fixed, up to 16 refs
+- [x] **Removed nano-banana-pro from EditImageAIPanel** — Too expensive (18 credits at 1K vs nano-banana-2's 8). Kept in pricing config, kieAI.ts, Director, and VideoImageAIPanel
+- [ ] **Future: Consider removing GPT 1.5 Image to Image** — GPT Image 2 is newer, better quality, cheaper (6 vs ~15 credits). Keep for now, evaluate later
 
 ### Session #20 — 2026-04-28 (R2 Delete Ownership Fix + Element Forge)
 
@@ -233,7 +241,8 @@
 - [ ] **KIE callback routes lack signature verification** — public, no HMAC check
 - [ ] **n8n webhook subpath no auth** — `handleN8nWebhook` path has no secret check
 - [x] **R2 delete endpoint ownership verification** — Fixed: 3-layer ownership check (API routes + Convex mutations), orphan key rejection, legacy `uploadedBy` fallback (Session #20)
-- [ ] **File type/size validation on upload routes**
+- [x] **File type/size validation on upload routes** — Shared `validateUpload()` helper (`lib/upload-validation.ts`): MIME allowlist (image/video/audio/PDF) + per-category size limits (image 20MB, video 200MB, audio 50MB, doc 10MB). Applied to 5 upload routes: `storyboard/upload`, `upload-binary`, `r2-upload`, `chat/upload`, `/upload` (Session #21)
+- [x] **Auth added to unprotected routes** — Clerk auth added to `/upload`, `log-upload`, `grok-inpaint`, `crop` (Session #21)
 
 ---
 

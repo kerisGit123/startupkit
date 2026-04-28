@@ -167,7 +167,7 @@ export interface EditImageAIPanelProps {
 // ── Available Models ─────────────────────────────────────────────────
 const MODELS = [
   { id: "nano-banana-2", label: "Nano Banana 2", icon: "G" },
-  { id: "nano-banana-pro", label: "Nano Banana Pro", icon: "G" },
+  { id: "gpt-image-2-image-to-image", label: "GPT Image 2", icon: "" },
   { id: "nano-banana-1", label: "Nano Banana 1", icon: "G" },
   { id: "stable-diffusion", label: "Stable Diffusion", icon: "S" },
   { id: "google/nano-banana-edit", label: "Nano Banana Edit", icon: "" },
@@ -458,7 +458,6 @@ export default function EditImageAIPanel({
   // Model options for describe mode
   const inpaintModelOptions = [
     { value: "nano-banana-2", label: "Nano Banana 2", sub: "General purpose", maxReferenceImages: 7, icon: Zap },
-    { value: "nano-banana-pro", label: "Nano Banana Pro", sub: "Higher quality • Max 8 refs", maxReferenceImages: 8, icon: Camera },
   ];
 
   // Combine all models for the consolidated dropdown
@@ -766,7 +765,7 @@ export default function EditImageAIPanel({
     return activeTool === "text-to-image" ? [
     ] : activeTool === "image-to-image" ? [
       { value: "nano-banana-2", label: "Nano Banana 2", sub: `${selectedQuality} • 7 refs`, credits: getModelCredits("nano-banana-2"), maxReferenceImages: 7 },
-      { value: "nano-banana-pro", label: "Nano Banana Pro", sub: `${selectedQuality} • 7 refs`, credits: getModelCredits("nano-banana-pro"), maxReferenceImages: 7 },
+      { value: "gpt-image-2-image-to-image", label: "GPT Image 2", sub: `${selectedQuality} • 16 refs`, credits: getModelCredits("gpt-image-2-image-to-image"), maxReferenceImages: 16 },
       { value: "google/nano-banana-edit", label: "Nano Banana Edit", sub: "1 ref edit", credits: getModelCredits("google/nano-banana-edit"), maxReferenceImages: 1 },
       { value: "gpt-image/1.5-image-to-image", label: "GPT 1.5 Image to Image", sub: `${gptImageQuality} • 1:1 • 15 refs`, credits: getModelCredits("gpt-image/1.5-image-to-image"), maxReferenceImages: 15 },
     ] : activeTool === "upscale" ? [

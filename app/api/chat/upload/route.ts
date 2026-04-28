@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { fetchMutation } from "convex/nextjs";
+import { validateUpload } from "@/lib/upload-validation";
 
 export async function POST(req: NextRequest) {
   try {
+    // Require authentication
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const sessionId = formData.get("sessionId") as string;
@@ -25,12 +33,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validate file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json(
-        { error: "File size must be less than 10MB" },
-        { status: 400 }
-      );
+    // Validate file type and size
+    const validation = validateUpload(file.type, file.name, file.size);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
     // Get upload URL from Convex

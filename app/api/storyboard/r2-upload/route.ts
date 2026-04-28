@@ -6,6 +6,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { getServerCurrentCompanyId, getServerUser } from "@/lib/auth-utils-server";
 import { logUserInfo } from "@/lib/auth-utils";
+import { validateMimeType } from "@/lib/upload-validation";
 
 const r2 = new S3Client({
   region: "auto",
@@ -59,6 +60,12 @@ export async function POST(req: NextRequest) {
     if (!filename || !actualMimeType) {
       console.log("[r2-upload] Missing required fields:", { filename, mimeType, contentType });
       return NextResponse.json({ error: "Missing filename or mimeType" }, { status: 400 });
+    }
+
+    // Validate MIME type (size checked client-side since this only generates a presigned URL)
+    const validation = validateMimeType(actualMimeType, filename);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
     // Get user and verify organization access

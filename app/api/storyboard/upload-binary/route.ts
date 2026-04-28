@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { uploadToR2 } from '@/lib/r2';
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { validateUpload } from '@/lib/upload-validation';
 
 // Binary upload route — bypasses FormData parsing for large files.
 // Client sends raw file bytes with metadata in headers.
@@ -28,6 +29,13 @@ export async function POST(request: NextRequest) {
 
     // Read the raw body as a buffer
     const arrayBuffer = await request.arrayBuffer();
+
+    // Validate file type and size
+    const validation = validateUpload(contentType, filename, arrayBuffer.byteLength);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
     const blob = new Blob([arrayBuffer], { type: contentType });
     const file = new File([blob], filename, { type: contentType });
 

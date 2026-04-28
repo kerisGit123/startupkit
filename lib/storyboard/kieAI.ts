@@ -315,7 +315,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   // Use the provided model or fall back to STYLE_PRESETS
   const actualModel = params.model || (params.style ? STYLE_PRESETS[params.style]?.model : undefined);
   // Skip style suffix for models that work better with clean prompts
-  const skipSuffix = actualModel === 'ideogram/character-edit' || actualModel === 'topaz/image-upscale' || actualModel === 'recraft/crisp-upscale' || actualModel === 'z-image';
+  const skipSuffix = actualModel === 'ideogram/character-edit' || actualModel === 'topaz/image-upscale' || actualModel === 'recraft/crisp-upscale' || actualModel === 'recraft/remove-background' || actualModel === 'ideogram/v3-reframe' || actualModel === 'z-image';
   const promptSuffix = skipSuffix ? '' : (params.style ? STYLE_PRESETS[params.style]?.promptSuffix || '' : '');
   // Clean up extra whitespace in prompt (e.g. from badge extraction leaving empty spaces)
   const rawPrompt = promptSuffix ? `${params.prompt}, ${promptSuffix}` : params.prompt;
@@ -490,6 +490,14 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     } : actualModel === 'recraft/crisp-upscale' ? {
       prompt: fullPrompt,
       image: encodedOriginalImageUrl || encodedImageUrl
+    } : actualModel === 'recraft/remove-background' ? {
+      image: encodedOriginalImageUrl || encodedImageUrl,
+    } : actualModel === 'ideogram/v3-reframe' ? {
+      image_url: encodedOriginalImageUrl || encodedImageUrl,
+      image_size: "landscape_16_9",
+      rendering_speed: "BALANCED",
+      style: "AUTO",
+      num_images: "1",
     } : actualModel === 'gpt-image' ? {
       prompt: fullPrompt,
       input_urls: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),

@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { uploadToR2, getR2PublicUrl } from '@/lib/r2';
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { validateUpload } from '@/lib/upload-validation';
 
 // Allow large file uploads (videos up to 100MB)
 export const maxDuration = 120;
@@ -90,6 +91,12 @@ export async function POST(request: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ error: 'No file or sourceUrl provided' }, { status: 400 });
+    }
+
+    // Validate file type and size
+    const validation = validateUpload(file.type, file.name, file.size);
+    if (!validation.valid) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
     }
 
     console.log('[Storyboard Upload] Uploading file:', {
