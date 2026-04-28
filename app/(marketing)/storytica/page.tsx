@@ -14,7 +14,7 @@ import { api } from "@/convex/_generated/api";
 import SupportChatWidget from "@/components/support-chat/SupportChatWidget";
 import PricingShowcase, { WhyStorytica } from "@/components/pricing/PricingShowcase";
 
-/* ─── reveal ─────────────────────────────────────────────────────────── */
+/* ─── scroll reveal ──────────────────────────────────────────────────── */
 function useRv(t = 0.1) {
   const ref = useRef<HTMLDivElement>(null);
   const [v, setV] = useState(false);
@@ -30,35 +30,87 @@ function R({ children, className = "", delay = 0 }: { children: React.ReactNode;
   return <div ref={ref} className={`transition-all duration-700 ease-out ${v ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"} ${className}`} style={{ transitionDelay: `${delay}ms` }}>{children}</div>;
 }
 
+/* ─── rotating words (Storyboarder.ai inspired) ─────────────────────── */
+function RotatingWord({ words, className = "" }: { words: string[]; className?: string }) {
+  const [idx, setIdx] = useState(0);
+  const [anim, setAnim] = useState<"in" | "out">("in");
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAnim("out");
+      setTimeout(() => {
+        setIdx(p => (p + 1) % words.length);
+        setAnim("in");
+      }, 400);
+    }, 2800);
+    return () => clearInterval(interval);
+  }, [words.length]);
+  return (
+    <span className={`inline-block relative ${className}`}>
+      <span className={`inline-block transition-all duration-400 ${anim === "in" ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4"}`}>
+        {words[idx]}
+      </span>
+    </span>
+  );
+}
+
+/* ─── animated counter ───────────────────────────────────────────────── */
+function Counter({ target, suffix = "+" }: { target: number; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [val, setVal] = useState(0);
+  const [started, setStarted] = useState(false);
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const o = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setStarted(true); o.disconnect(); } }, { threshold: 0.3 });
+    o.observe(el); return () => o.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!started) return;
+    const duration = 1600;
+    const steps = 40;
+    const inc = target / steps;
+    let current = 0;
+    const timer = setInterval(() => {
+      current += inc;
+      if (current >= target) { setVal(target); clearInterval(timer); }
+      else setVal(Math.floor(current));
+    }, duration / steps);
+    return () => clearInterval(timer);
+  }, [started, target]);
+  return <span ref={ref}>{val.toLocaleString()}{suffix}</span>;
+}
+
 /* ─── faq ─────────────────────────────────────────────────────────────── */
 function Faq({ q, a }: { q: string; a: string }) {
   const [o, setO] = useState(false);
   return (
-    <div className="border-b border-[#3D3D3D]">
+    <div className="border-b border-[#2a2a2a]">
       <button onClick={() => setO(!o)} className="w-full flex items-center justify-between py-5 text-left group">
         <span className="text-[15px] font-medium text-white/90 group-hover:text-teal-400 transition-colors pr-6">{q}</span>
-        <span className={`shrink-0 w-7 h-7 rounded-full border flex items-center justify-center transition-all ${o ? "bg-teal-500/15 border-teal-500/40" : "border-[#4A4A4A]"}`}>
-          {o ? <Minus className="w-3.5 h-3.5 text-teal-400" /> : <Plus className="w-3.5 h-3.5 text-[#6E6E6E]" />}
+        <span className={`shrink-0 w-7 h-7 rounded-full border flex items-center justify-center transition-all ${o ? "bg-teal-500/15 border-teal-500/40" : "border-[#3a3a3a]"}`}>
+          {o ? <Minus className="w-3.5 h-3.5 text-teal-400" /> : <Plus className="w-3.5 h-3.5 text-[#555]" />}
         </span>
       </button>
-      {o && <p className="text-sm text-[#A0A0A0] leading-relaxed pb-5">{a}</p>}
+      <div className={`grid transition-all duration-300 ${o ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+        <div className="overflow-hidden">
+          <p className="text-sm text-[#888] leading-relaxed pb-5">{a}</p>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* ═════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════ */
 export default function StorticaLanding() {
   const { user } = useUser();
   const stats = useQuery(api.landingStats.getPublicStats);
   const [nav, setNav] = useState(false);
   const [ready, setReady] = useState(false);
+  const [modelFilter, setModelFilter] = useState("All");
   useEffect(() => { setTimeout(() => setReady(true), 80); }, []);
 
   const img = "/storytica";
 
-  // AI model data for horizontal scroller
   const models = [
-    // Image
     { name: "Nano Banana 2", sub: "General purpose", type: "Image", icon: Zap },
     { name: "Nano Banana Pro", sub: "Higher quality", type: "Image", icon: Camera },
     { name: "GPT Image 2", sub: "Photorealism", type: "Image", icon: Image },
@@ -68,7 +120,6 @@ export default function StorticaLanding() {
     { name: "Character Edit", sub: "Consistent chars", type: "Image", icon: PenTool },
     { name: "Nano Banana Edit", sub: "Image editing", type: "Image", icon: Brush },
     { name: "Crisp Upscale", sub: "Image upscale", type: "Image", icon: Image },
-    // Video
     { name: "Seedance 1.5 Pro", sub: "Video generation", type: "Video", icon: Video },
     { name: "Seedance 2.0", sub: "Quality 480p/720p", type: "Video", icon: Video },
     { name: "Seedance 2.0 Fast", sub: "Faster rendering", type: "Video", icon: Video },
@@ -77,256 +128,430 @@ export default function StorticaLanding() {
     { name: "Grok Imagine", sub: "Image to Video", type: "Video", icon: Video },
     { name: "Topaz Upscale", sub: "Video upscale", type: "Video", icon: Video },
     { name: "InfiniteTalk", sub: "Lip sync", type: "Video", icon: Video },
-    // Music & Audio
     { name: "AI Music", sub: "Generate music", type: "Music", icon: Music },
     { name: "Cover Song", sub: "Re-sing with persona", type: "Music", icon: Music },
     { name: "Extend Music", sub: "Extend tracks", type: "Music", icon: Music },
     { name: "Create Persona", sub: "Custom voice", type: "Music", icon: Mic },
     { name: "ElevenLabs TTS", sub: "Text-to-speech", type: "Audio", icon: Mic },
-    // Utility
     { name: "AI Analyze", sub: "Image/video/audio", type: "Utility", icon: Sparkles },
     { name: "Prompt Enhance", sub: "Improve prompts", type: "Utility", icon: Zap },
   ];
 
+  const filteredModels = modelFilter === "All" ? models : models.filter(m => m.type === modelFilter);
+
+  const typeColor = (t: string) =>
+    t === "Video" ? "teal" : t === "Music" ? "purple" : t === "Audio" ? "blue" : t === "Utility" ? "amber" : "cyan";
+
+  /* ─── pipeline steps (Zopia-inspired) ─────────────────────────────── */
+  const pipeline = [
+    { icon: FileText, label: "Script", desc: "Write or paste your screenplay" },
+    { icon: Users, label: "Characters", desc: "Build with Element Forge" },
+    { icon: Layers, label: "Storyboard", desc: "AI generates visual frames" },
+    { icon: Film, label: "Timeline", desc: "Compose in video editor" },
+    { icon: Download, label: "Export", desc: "PDF, MP4, or WAV output" },
+  ];
+
+  /* ─── bento features ──────────────────────────────────────────────── */
+  const bentoFeatures = [
+    { icon: Sparkles, title: "AI Storyboarding", desc: "Generate frames from text prompts. Auto scene breakdown with tags, status badges, and camera notes per frame. 9 image models including GPT Image 2 photorealism, Flux 2 Pro, and Character Edit for consistency. Open any frame in Cinema Studio for canvas editing and post-processing.", span: "md:col-span-2", accent: "from-teal-500/20 to-teal-500/5", img: `${img}/storyboardItem.png` },
+    { icon: Video, title: "AI Video Generation", desc: "8 video engines — Seedance 1.5/2.0, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk lip sync. Multi-shot UGC and Showcase modes for product videos.", span: "", accent: "from-cyan-500/20 to-cyan-500/5", img: `${img}/AIModal.png` },
+    { icon: Music, title: "AI Music & Audio", desc: "Generate original music, cover songs with custom personas, extend tracks, and create voiceovers with ElevenLabs TTS. Full audio production pipeline.", span: "", accent: "from-purple-500/20 to-purple-500/5", img: `${img}/elementLibrary.png` },
+    { icon: Camera, title: "Cinema Studio", desc: "Unified canvas editor with brush, inpaint, and area edit. Cinema Grade with 12 film stock presets — Kodak, Fujifilm, CineStill. 10 post-processing tools — upscale, enhance, relight, background removal, reframe, style transfer, and more.", span: "", accent: "from-amber-500/20 to-amber-500/5", img: `${img}/toolbox.png` },
+    { icon: Film, title: "Video Editor", desc: "Multi-layer timeline with video, audio, and subtitle tracks. Overlay system with text, images, video PiP, and shapes. 5 transition types (crossfade, wipe, slide, dissolve, fade). Blend modes, opacity, scrolling text. Export to MP4 or WAV.", span: "md:col-span-2", accent: "from-emerald-500/20 to-emerald-500/5", img: `${img}/fileBrowser.png` },
+    { icon: Zap, title: "AI Director", desc: "AI agent with 22 tools that breaks scripts into shots, generates storyboards, and manages your entire project. Plan approval flow, reference image support, and full project context awareness.", span: "", accent: "from-rose-500/20 to-rose-500/5", img: `${img}/storyboard_home.png` },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#111111] text-white overflow-x-hidden" style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+    <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+        @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @keyframes scroll-up { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+        @keyframes scroll-down { 0% { transform: translateY(-50%); } 100% { transform: translateY(0); } }
+        @keyframes pulse-line { 0%,100% { opacity: 0.3 } 50% { opacity: 1 } }
+        .font-display { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .font-body { font-family: 'DM Sans', sans-serif; }
+      `}</style>
 
       {/* ═══ NAV ═══ */}
-      <nav className="fixed top-0 inset-x-0 z-40 backdrop-blur-2xl bg-[#111111]/90 border-b border-[#222222]">
-        <div className="max-w-[1200px] mx-auto px-6 h-14 flex items-center justify-between">
-          <a href="/storytica" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-teal-400 to-teal-500 flex items-center justify-center"><Film className="w-3.5 h-3.5 text-[#111111]" /></div>
-            <span className="text-[15px] font-extrabold text-teal-400 tracking-tight">STORYTICA</span>
+      <nav className="fixed top-0 inset-x-0 z-40 backdrop-blur-2xl bg-[#09090b]/85 border-b border-white/[0.06]">
+        <div className="max-w-[1280px] mx-auto px-6 h-16 flex items-center justify-between">
+          <a href="/storytica" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-teal-500/20">
+              <Film className="w-4 h-4 text-[#09090b]" />
+            </div>
+            <span className="font-display text-[16px] font-extrabold tracking-tight">
+              <span className="text-teal-400">STORY</span><span className="text-amber-400">TICA</span>
+            </span>
           </a>
-          <div className="hidden md:flex items-center gap-7 text-[13px]">
-            <a href="#features" className="text-[#888] hover:text-white transition-colors">Features</a>
-            <a href="#how-it-works" className="text-[#888] hover:text-white transition-colors">How It Works</a>
-            <a href="#pricing" className="text-[#888] hover:text-white transition-colors">Pricing</a>
-            <a href="/community" className="text-[#888] hover:text-white transition-colors">Community</a>
+          <div className="hidden md:flex items-center gap-8 font-body text-[13px]">
+            <a href="#features" className="text-white/50 hover:text-white transition-colors">Features</a>
+            <a href="#pipeline" className="text-white/50 hover:text-white transition-colors">How It Works</a>
+            <a href="#models" className="text-white/50 hover:text-white transition-colors">AI Models</a>
+            <a href="#pricing" className="text-white/50 hover:text-white transition-colors">Pricing</a>
+            <a href="/community" className="text-white/50 hover:text-white transition-colors">Community</a>
           </div>
           <div className="hidden md:flex items-center gap-3">
-            <a href="/sign-in" className="text-[13px] text-[#888] hover:text-white px-3 py-1.5">Log In</a>
-            <a href="/sign-up" className="text-[13px] font-semibold bg-teal-500 hover:bg-teal-400 text-[#111111] px-5 py-2 rounded-lg transition-all">Start Free</a>
+            <a href="/sign-in" className="font-body text-[13px] text-white/50 hover:text-white px-3 py-1.5 transition-colors">Log In</a>
+            <a href="/sign-up" className="font-body text-[13px] font-semibold bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#09090b] px-5 py-2 rounded-lg transition-all shadow-lg shadow-teal-500/20 hover:shadow-teal-400/30">
+              Start Free
+            </a>
           </div>
-          <button onClick={() => setNav(!nav)} className="md:hidden text-[#888]">{nav ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}</button>
+          <button onClick={() => setNav(!nav)} className="md:hidden text-white/60">{nav ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}</button>
         </div>
         {nav && (
-          <div className="md:hidden bg-[#111111] border-t border-[#222222] px-6 py-5 space-y-3">
-            {["Features", "How It Works", "Pricing"].map(l => <a key={l} href={`#${l.toLowerCase().replace(/ /g, "-")}`} onClick={() => setNav(false)} className="block text-sm text-[#888]">{l}</a>)}
-            <a href="/community" onClick={() => setNav(false)} className="block text-sm text-[#888]">Community</a>
-            <a href="/sign-up" className="block text-sm font-semibold bg-teal-500 text-[#111111] px-4 py-2.5 rounded-lg text-center mt-3">Start Free</a>
+          <div className="md:hidden bg-[#09090b] border-t border-white/[0.06] px-6 py-5 space-y-3 font-body">
+            {[["Features", "#features"], ["How It Works", "#pipeline"], ["AI Models", "#models"], ["Pricing", "#pricing"], ["Community", "/community"]].map(([l, h]) => (
+              <a key={l} href={h} onClick={() => setNav(false)} className="block text-sm text-white/60">{l}</a>
+            ))}
+            <a href="/sign-up" className="block text-sm font-semibold bg-gradient-to-r from-teal-500 to-emerald-500 text-[#09090b] px-4 py-2.5 rounded-lg text-center mt-3">Start Free</a>
           </div>
         )}
       </nav>
 
-      {/* ═══ HERO ═══ */}
-      <section className="pt-28 pb-6 lg:pt-36 lg:pb-10">
-        <div className="max-w-[1200px] mx-auto px-6 text-center">
-          {/* Metrics badge */}
-          <div className={`flex items-center justify-center gap-4 mb-6 transition-all duration-700 ${ready ? "opacity-100" : "opacity-0 translate-y-3"}`}>
-            <div className="flex items-center gap-1.5 text-[12px] text-[#888]">
-              <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-              <span><span className="text-white font-semibold">25+</span> AI models</span>
+      {/* ═══ HERO — split layout (Zopia-inspired) ═══ */}
+      <section className="relative pt-28 pb-10 lg:pt-36 lg:pb-16 overflow-hidden">
+        {/* Ambient glow */}
+        <div className="absolute top-0 left-[30%] -translate-x-1/2 w-[700px] h-[500px] bg-gradient-radial from-teal-500/[0.07] via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-32 right-[10%] w-[400px] h-[400px] bg-gradient-radial from-amber-500/[0.05] via-transparent to-transparent rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-[1280px] mx-auto px-6 relative z-10">
+          <div className="grid lg:grid-cols-[1fr_1.15fr] gap-8 lg:gap-12 items-center">
+
+            {/* ── Left: headline + CTA ── */}
+            <div>
+              {/* Welcome label (Zopia-style) */}
+              <div className={`flex items-center gap-2.5 mb-5 transition-all duration-700 ${ready ? "opacity-100" : "opacity-0 translate-y-3"}`}>
+                <span className="w-6 h-[2px] bg-amber-400/70" />
+                <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400/80">Welcome to Storytica</span>
+              </div>
+
+              {/* Headline with rotating word */}
+              <h1 className={`font-display text-[2.4rem] sm:text-[3rem] lg:text-[3.6rem] font-extrabold leading-[1.08] tracking-[-0.02em] mb-4 text-amber-300 transition-all duration-1000 ${ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`} style={{ transitionDelay: "150ms" }}>
+                From Script to{" "}
+                <span className="text-teal-400">
+                  <RotatingWord words={["Storyboard", "Animatic", "Short Film", "Pitch Deck", "Music Video"]} />
+                </span>
+                <br />
+                in Minutes
+              </h1>
+
+              <p className={`font-body text-[15px] text-white/50 leading-relaxed max-w-lg mb-5 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
+                Turn any script into a visual storyboard with 25+ AI models. Generate images, videos, music, and voiceovers. Let the AI Director manage your project — all in one place.
+              </p>
+
+              {/* Bullets */}
+              <div className={`flex flex-col gap-2 mb-7 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
+                {["25+ AI models (image, video, music, audio, utility)", "AI Director agent with 22 tools", "Video editor with transitions, overlays & layers"].map(b => (
+                  <span key={b} className="flex items-center gap-2.5 font-body text-[13px] text-white/50"><Check className="w-3.5 h-3.5 text-teal-400 shrink-0" />{b}</span>
+                ))}
+              </div>
+
+              {/* CTA row */}
+              <div className={`flex flex-col sm:flex-row items-start gap-4 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "550ms" }}>
+                <a href="/sign-up" className="group inline-flex items-center gap-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#09090b] font-display font-bold text-[15px] px-7 py-3.5 rounded-xl transition-all shadow-xl shadow-teal-500/20 hover:shadow-teal-400/30 hover:scale-[1.02]">
+                  Start Creating Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                </a>
+                <a href="#pipeline" className="group inline-flex items-center gap-2 font-body text-[14px] text-white/50 hover:text-white/80 transition-colors py-3.5">
+                  <span className="w-9 h-9 rounded-full border border-white/[0.12] flex items-center justify-center group-hover:border-white/25 transition-colors">
+                    <ArrowRight className="w-3.5 h-3.5 rotate-90" />
+                  </span>
+                  See How It Works
+                </a>
+              </div>
             </div>
-            <span className="text-[#333]">|</span>
-            <div className="flex items-center gap-1.5 text-[12px] text-[#888]">
-              <Film className="w-3.5 h-3.5 text-teal-400" />
-              <span>Image, video, music & audio</span>
-            </div>
-            <span className="text-[#333]">|</span>
-            <div className="flex items-center gap-1.5 text-[12px] text-[#888]">
-              <Shield className="w-3.5 h-3.5 text-teal-400" />
-              <span>Credits never expire</span>
-            </div>
-          </div>
 
-          {/* Heading */}
-          <h1 className={`text-[2.5rem] sm:text-[3.5rem] lg:text-[4.2rem] font-extrabold leading-[1.05] tracking-tight mb-5 transition-all duration-1000 ${ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`} style={{ transitionDelay: "150ms" }}>
-            Professional Storyboards
-            <br />
-            in <span className="text-teal-400">Minutes, Not Days</span>
-          </h1>
+            {/* ── Right: animated vertical scroll gallery (Zopia-style) ── */}
+            <div className={`relative h-[540px] lg:h-[600px] overflow-hidden transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
+              {/* Fade edges top/bottom */}
+              <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-[#09090b] to-transparent z-10 pointer-events-none" />
+              <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-[#09090b] to-transparent z-10 pointer-events-none" />
 
-          <p className={`text-base lg:text-lg text-[#888] leading-relaxed max-w-2xl mx-auto mb-6 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
-            Turn any script into a visual storyboard with 25+ AI models. Generate images, videos, music, and voiceovers. Let the AI Director manage your project, edit on canvas with Cinema Grade, compose in the multi-layer video editor with transitions — all in one place.
-          </p>
+              <div className="grid grid-cols-2 gap-2.5 h-full">
+                {/* Col 1 — scrolls UP */}
+                <div className="overflow-hidden">
+                  <div className="flex flex-col gap-2.5 animate-[scroll-up_25s_linear_infinite]">
+                    {[...Array(2)].map((_, loop) => (
+                      <div key={`col1-${loop}`} className="flex flex-col gap-2.5">
+                        <div className="rounded-xl overflow-hidden border border-white/[0.08]">
+                          <img src={`${img}/landingpage/ai-generated-1776564835359.png`} alt="Fashion portrait" className="w-full h-auto block" loading="eager" />
+                        </div>
+                        <div className="rounded-xl overflow-hidden border border-white/[0.08]">
+                          <img src={`${img}/landingpage/ai-generated-1776565815642.png`} alt="F1 racing" className="w-full h-auto block" loading="eager" />
+                        </div>
+                        <div className="rounded-xl overflow-hidden border border-white/[0.08]">
+                          <img src={`${img}/landingpage/frame-1777388908053.png`} alt="Mech warrior" className="w-full h-auto block" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-          {/* Bullets */}
-          <div className={`flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 mb-8 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
-            {["25+ AI models (image, video, music, audio, utility)", "AI Director agent with 22 tools", "Video editor with transitions, overlays & layers"].map(b => (
-              <span key={b} className="flex items-center gap-2 text-[13px] text-[#aaa]"><Check className="w-3.5 h-3.5 text-teal-400" />{b}</span>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <div className={`mb-12 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "560ms" }}>
-            <a href="/sign-up" className="group inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#111111] font-bold text-base px-8 py-3.5 rounded-xl transition-all hover:shadow-lg hover:shadow-teal-500/20">
-              Start Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </a>
-            <p className="text-[11px] text-[#555] mt-2.5">No credit card required</p>
-          </div>
-
-          {/* Full-width hero screenshot */}
-          <div className={`transition-all duration-1000 ${ready ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"}`} style={{ transitionDelay: "700ms" }}>
-            <div className="rounded-xl overflow-hidden border border-[#2a2a2a] shadow-2xl shadow-black/60">
-              <img src={`${img}/storyboard_home.png`} alt="Storytica Dashboard" className="w-full h-auto block" loading="eager" />
+                {/* Col 2 — scrolls DOWN (opposite direction) */}
+                <div className="overflow-hidden">
+                  <div className="flex flex-col gap-2.5 animate-[scroll-down_30s_linear_infinite]">
+                    {[...Array(2)].map((_, loop) => (
+                      <div key={`col2-${loop}`} className="flex flex-col gap-2.5">
+                        <div className="rounded-xl overflow-hidden border border-white/[0.08]">
+                          <img src={`${img}/landingpage/ai-generated-1776566652328.png`} alt="Astronaut art" className="w-full h-auto block" loading="eager" />
+                        </div>
+                        <div className="rounded-xl overflow-hidden border border-white/[0.08]">
+                          <img src={`${img}/landingpage/ai-generated-1776566625832.png`} alt="Magazine cover" className="w-full h-auto block" />
+                        </div>
+                        <div className="rounded-xl overflow-hidden border border-white/[0.08]">
+                          <img src={`${img}/landingpage/ai-generated-1776565519417.png`} alt="Cinematic scene" className="w-full h-auto block" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ═══ SOCIAL PROOF BAR ═══ */}
+      {/* ═══ STATS BAR ═══ */}
       {stats && (stats.totalCreators > 0 || stats.totalProjects > 0 || stats.totalGenerations > 0) && (
-        <section className="py-6 border-b border-[#1e1e1e]">
-          <div className="max-w-[1200px] mx-auto px-6 flex flex-wrap items-center justify-center gap-8 sm:gap-12">
-            {[
-              { label: "Creators", value: stats.totalCreators },
-              { label: "Projects created", value: stats.totalProjects },
-              { label: "AI generations", value: stats.totalGenerations },
-            ].map((s) => (
-              <div key={s.label} className="text-center">
-                <div className="text-xl sm:text-2xl font-extrabold text-white">{s.value.toLocaleString()}+</div>
-                <div className="text-[11px] text-[#666] uppercase tracking-wider">{s.label}</div>
-              </div>
-            ))}
+        <section className="py-10 border-y border-white/[0.06]">
+          <div className="max-w-[1280px] mx-auto px-6">
+            <div className="flex flex-wrap items-center justify-center gap-12 sm:gap-20">
+              {[
+                { label: "Creators", value: stats.totalCreators, icon: Users },
+                { label: "Projects Created", value: stats.totalProjects, icon: Layers },
+                { label: "AI Generations", value: stats.totalGenerations, icon: Sparkles },
+              ].map((s) => (
+                <div key={s.label} className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
+                    <s.icon className="w-4 h-4 text-teal-400" />
+                  </div>
+                  <div>
+                    <div className="font-display text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+                      <Counter target={s.value} />
+                    </div>
+                    <div className="font-body text-[11px] text-white/40 uppercase tracking-wider">{s.label}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}
 
-      {/* ═══ AI MODELS — horizontal auto-scroll ═══ */}
-      <section className="py-10 border-y border-[#1e1e1e] overflow-hidden">
+      {/* ═══ AUTO-SCROLLING MODEL TICKER ═══ */}
+      <section className="py-8 overflow-hidden border-b border-white/[0.06]">
         <div className="relative">
-          {/* Fade edges */}
-          <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-[#111111] to-transparent z-10" />
-          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-[#111111] to-transparent z-10" />
-          {/* Scrolling track */}
-          <div className="flex gap-4 animate-[scroll_30s_linear_infinite]" style={{ width: "max-content" }}>
-            {[...models, ...models].map((m, i) => (
-              <div key={`${m.name}-${i}`} className="flex items-center gap-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl px-5 py-3 shrink-0 min-w-[200px]">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                  m.type === "Video" ? "bg-teal-500/10 text-teal-400" :
-                  m.type === "Music" ? "bg-purple-500/10 text-purple-400" :
-                  m.type === "Audio" ? "bg-blue-500/10 text-blue-400" :
-                  m.type === "Utility" ? "bg-amber-500/10 text-amber-400" :
-                  "bg-cyan-500/10 text-cyan-400"
-                }`}>
-                  <m.icon className="w-4 h-4" />
+          <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-[#09090b] to-transparent z-10" />
+          <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-[#09090b] to-transparent z-10" />
+          <div className="flex gap-4 animate-[scroll_35s_linear_infinite]" style={{ width: "max-content" }}>
+            {[...models, ...models].map((m, i) => {
+              const c = typeColor(m.type);
+              return (
+                <div key={`${m.name}-${i}`} className="flex items-center gap-3 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-2.5 shrink-0">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-${c}-500/10`}>
+                    <m.icon className={`w-3.5 h-3.5 text-${c}-400`} />
+                  </div>
+                  <div>
+                    <div className="font-body text-[12px] font-semibold text-white/90">{m.name}</div>
+                    <div className="font-body text-[10px] text-white/35">{m.sub}</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-[13px] font-semibold text-white">{m.name}</div>
-                  <div className="text-[10px] text-[#666]">{m.sub}</div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ PIPELINE (Zopia-inspired) ═══ */}
+      <section id="pipeline" className="py-24 lg:py-32 relative">
+        <div className="max-w-[1280px] mx-auto px-6">
+          <R>
+            <div className="text-center mb-16">
+              <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400/80 mb-3 block">How It Works</span>
+              <h2 className="font-display text-[2rem] lg:text-[3rem] font-extrabold tracking-tight mb-4">
+                Five Steps to <span className="bg-gradient-to-r from-teal-400 to-amber-400 bg-clip-text text-transparent">Production</span>
+              </h2>
+              <p className="font-body text-[15px] text-white/45 max-w-xl mx-auto">From blank page to finished export. The AI Director handles the heavy lifting — you stay in creative control.</p>
+            </div>
+          </R>
+
+          {/* Pipeline flow */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 lg:gap-6">
+            {pipeline.map((step, i) => (
+              <R key={step.label} delay={i * 100}>
+                <div className="relative group">
+                  <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6 text-center hover:bg-white/[0.05] hover:border-white/[0.1] transition-all duration-300 h-full">
+                    {/* Step number */}
+                    <div className="font-display text-[10px] font-bold text-amber-400/60 uppercase tracking-[0.2em] mb-4">Step {i + 1}</div>
+                    {/* Icon */}
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500/15 to-teal-500/5 border border-teal-500/20 flex items-center justify-center mx-auto mb-4 group-hover:shadow-lg group-hover:shadow-teal-500/10 transition-shadow">
+                      <step.icon className="w-5 h-5 text-teal-400" />
+                    </div>
+                    <h3 className="font-display text-[15px] font-bold text-white mb-1.5">{step.label}</h3>
+                    <p className="font-body text-[12px] text-white/40 leading-relaxed">{step.desc}</p>
+                  </div>
+                  {/* Connector arrow (not on last) */}
+                  {i < pipeline.length - 1 && (
+                    <div className="hidden md:block absolute top-1/2 -right-3 lg:-right-4 -translate-y-1/2 z-10">
+                      <ArrowRight className="w-4 h-4 text-white/15" style={{ animation: "pulse-line 2s ease-in-out infinite", animationDelay: `${i * 300}ms` }} />
+                    </div>
+                  )}
                 </div>
-                <span className={`text-[9px] font-bold px-2 py-0.5 rounded ml-auto ${
-                  m.type === "Video" ? "bg-teal-500/15 text-teal-400" :
-                  m.type === "Music" ? "bg-purple-500/15 text-purple-400" :
-                  m.type === "Audio" ? "bg-blue-500/15 text-blue-400" :
-                  m.type === "Utility" ? "bg-amber-500/15 text-amber-400" :
-                  "bg-cyan-500/15 text-cyan-400"
-                }`}>{m.type}</span>
-              </div>
+              </R>
             ))}
           </div>
         </div>
-        <style>{`@keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
       </section>
 
-      {/* ═══ HOW IT WORKS — 3-column cards with visuals ═══ */}
-      <section id="how-it-works" className="py-20 lg:py-28">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <R><div className="text-center mb-14">
-            <h2 className="text-[2rem] lg:text-[2.8rem] font-extrabold uppercase tracking-tight mb-3">
-              From Prompt to <span className="text-teal-400">Storyboard</span>
-            </h2>
-            <p className="text-[15px] text-[#888] max-w-xl mx-auto">Write your script, generate visuals with AI, then edit and export. Three steps to professional storyboards.</p>
-          </div></R>
+      {/* ═══ BENTO FEATURES (Storyboarder.ai-inspired) ═══ */}
+      <section id="features" className="py-24 lg:py-32 bg-[#07070a]">
+        <div className="max-w-[1280px] mx-auto px-6">
+          <R>
+            <div className="text-center mb-16">
+              <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-400/80 mb-3 block">Core Features</span>
+              <h2 className="font-display text-[2rem] lg:text-[3rem] font-extrabold tracking-tight mb-4">
+                Built for Every <span className="bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">Creative Workflow</span>
+              </h2>
+              <p className="font-body text-[15px] text-white/45 max-w-2xl mx-auto">From storyboarding to video generation — full visual and structural control in a single workspace.</p>
+            </div>
+          </R>
 
-          <div className="grid md:grid-cols-3 gap-5">
+          {/* Bento grid */}
+          <div className="grid md:grid-cols-3 gap-4">
+            {bentoFeatures.map((f, i) => (
+              <R key={f.title} delay={i * 80}>
+                <div className={`${f.span} group relative bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden hover:border-white/[0.12] transition-all duration-500`}>
+                  {/* Gradient hover effect */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${f.accent} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                  {/* Image */}
+                  <div className="relative aspect-[2/1] overflow-hidden">
+                    <img src={f.img} alt={f.title} className="w-full h-full object-cover object-top group-hover:scale-[1.03] transition-transform duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#07070a] via-[#07070a]/40 to-transparent" />
+                  </div>
+                  {/* Content */}
+                  <div className="relative p-6 -mt-8">
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center">
+                        <f.icon className="w-4 h-4 text-teal-400" />
+                      </div>
+                      <h3 className="font-display text-[15px] font-bold text-white">{f.title}</h3>
+                    </div>
+                    <p className="font-body text-[13px] text-white/45 leading-relaxed">{f.desc}</p>
+                  </div>
+                </div>
+              </R>
+            ))}
+          </div>
+
+          {/* Compact feature row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
             {[
-              { n: "Step 1", t: "WRITE YOUR SCRIPT", d: "Paste your script or type a prompt. AI converts it into scenes with shot breakdowns, dialogue, and camera directions.", img: `${img}/storyboard_home.png` },
-              { n: "Step 2", t: "GENERATE WITH AI", d: "Choose from 25+ AI models — images, videos, music, voiceovers. Use the element library for consistent characters across every shot.", img: `${img}/storyboardItem.png` },
-              { n: "Step 3", t: "EDIT & COMPOSE", d: "Refine with canvas tools. Compose in the multi-track video editor. Add music and voiceovers. Export as PDF, MP4, or WAV.", img: `${img}/elementLibrary.png` },
+              { icon: Coins, t: "Credit System", d: "See exact cost before generating. Pay per model, not per subscription tier. Credits never expire.", accent: "amber" },
+              { icon: Users, t: "Team Collaboration", d: "Invite members, assign roles. Organization switcher for multi-team workflows.", accent: "blue" },
+              { icon: Layers, t: "Element Forge", d: "Build characters, environments, and props with a structured wizard — gender, build, clothing, mood, and more. Auto-composes prompts. Reference with @mentions for consistency.", accent: "rose" },
+              { icon: Box, t: "Element Library", d: "Save characters, props, styles with reference images. Drag into any frame or @mention for cross-scene consistency.", accent: "violet" },
+            ].map((f, i) => (
+              <R key={f.t} delay={i * 60}>
+                <div className="group bg-white/[0.02] border border-white/[0.06] rounded-xl p-5 h-full hover:bg-white/[0.04] hover:border-white/[0.1] transition-all duration-300">
+                  <f.icon className={`w-4 h-4 text-${f.accent}-400 mb-3`} />
+                  <div className="font-display text-[13px] font-bold text-white mb-1">{f.t}</div>
+                  <div className="font-body text-[11px] text-white/40 leading-relaxed">{f.d}</div>
+                </div>
+              </R>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ AI MODELS SHOWCASE (Higgsfield-inspired) ═══ */}
+      <section id="models" className="py-24 lg:py-32">
+        <div className="max-w-[1280px] mx-auto px-6">
+          <R>
+            <div className="text-center mb-10">
+              <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400/80 mb-3 block">AI Engine</span>
+              <h2 className="font-display text-[2rem] lg:text-[3rem] font-extrabold tracking-tight mb-4">
+                <span className="text-white">25+ Models.</span>{" "}
+                <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">One Studio.</span>
+              </h2>
+              <p className="font-body text-[15px] text-white/45 max-w-xl mx-auto">Image, video, music, audio, and utility models — all accessible from the same workspace.</p>
+            </div>
+          </R>
+
+          {/* Category tabs */}
+          <R>
+            <div className="flex items-center justify-center gap-2 mb-8 flex-wrap">
+              {["All", "Image", "Video", "Music", "Audio", "Utility"].map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setModelFilter(tab)}
+                  className={`font-body text-[12px] font-medium px-4 py-2 rounded-lg transition-all ${
+                    modelFilter === tab
+                      ? "bg-white/[0.1] text-white border border-white/[0.15]"
+                      : "text-white/40 hover:text-white/70 border border-transparent hover:border-white/[0.06]"
+                  }`}
+                >
+                  {tab} {tab !== "All" && <span className="text-white/25 ml-1">{models.filter(m => m.type === tab).length}</span>}
+                </button>
+              ))}
+            </div>
+          </R>
+
+          {/* Model grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {filteredModels.map((m, i) => {
+              const c = typeColor(m.type);
+              return (
+                <R key={m.name} delay={i * 30}>
+                  <div className="group bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 hover:bg-white/[0.05] hover:border-white/[0.12] transition-all duration-300 cursor-default">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-xl bg-${c}-500/10 border border-${c}-500/20 flex items-center justify-center shrink-0 group-hover:shadow-lg group-hover:shadow-${c}-500/10 transition-shadow`}>
+                        <m.icon className={`w-4 h-4 text-${c}-400`} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-body text-[13px] font-semibold text-white/90 truncate">{m.name}</div>
+                        <div className="font-body text-[11px] text-white/35">{m.sub}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className={`font-body text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-${c}-500/10 text-${c}-400`}>{m.type}</span>
+                    </div>
+                  </div>
+                </R>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SHOWCASE SCREENSHOTS ═══ */}
+      <section className="py-24 lg:py-32 bg-[#07070a]">
+        <div className="max-w-[1280px] mx-auto px-6">
+          <R>
+            <div className="text-center mb-16">
+              <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-400/80 mb-3 block">In Action</span>
+              <h2 className="font-display text-[2rem] lg:text-[3rem] font-extrabold tracking-tight">
+                See the <span className="bg-gradient-to-r from-teal-400 to-amber-400 bg-clip-text text-transparent">Studio</span>
+              </h2>
+            </div>
+          </R>
+
+          <div className="grid md:grid-cols-2 gap-5">
+            {[
+              { title: "Storyboard Workspace", desc: "AI-generated frames with scene tags, camera notes, and status badges", img: `${img}/storyboardItem.png` },
+              { title: "AI Generation Panel", desc: "25+ models with real-time cost preview and prompt enhancement", img: `${img}/AIModal.png` },
+              { title: "Cinema Studio Tools", desc: "Inpaint, brush, film stocks, upscale, background removal — all on canvas", img: `${img}/toolbox.png` },
+              { title: "Element Library", desc: "Characters, environments, props with reference images for consistency", img: `${img}/elementLibrary.png` },
             ].map((s, i) => (
-              <R key={s.n} delay={i * 120}>
-                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl overflow-hidden h-full group hover:border-[#3a3a3a] transition-colors">
+              <R key={s.title} delay={i * 80}>
+                <div className="group relative rounded-2xl overflow-hidden border border-white/[0.06] hover:border-white/[0.12] transition-all duration-300">
                   <div className="aspect-[16/10] overflow-hidden">
-                    <img src={s.img} alt={s.t} className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500" />
+                    <img src={s.img} alt={s.title} className="w-full h-full object-cover object-top group-hover:scale-[1.03] transition-transform duration-700" />
                   </div>
-                  <div className="p-6">
-                    <div className="text-[10px] font-bold text-teal-400 uppercase tracking-[0.15em] mb-2">{s.n}</div>
-                    <h3 className="text-base font-extrabold text-white uppercase tracking-wide mb-2">{s.t}</h3>
-                    <p className="text-[13px] text-[#888] leading-relaxed">{s.d}</p>
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#07070a] via-transparent to-transparent opacity-80" />
+                  <div className="absolute bottom-0 left-0 right-0 p-5">
+                    <h3 className="font-display text-[14px] font-bold text-white mb-1">{s.title}</h3>
+                    <p className="font-body text-[12px] text-white/45">{s.desc}</p>
                   </div>
-                </div>
-              </R>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ FEATURES — 3-column cards like reference ═══ */}
-      <section id="features" className="py-20 lg:py-28 bg-[#0e0e0e]">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <R><div className="text-center mb-14">
-            <h2 className="text-[2rem] lg:text-[2.8rem] font-extrabold uppercase tracking-tight mb-3">
-              Built for Every <span className="text-teal-400">Creative Workflow</span>
-            </h2>
-            <p className="text-[15px] text-[#888] max-w-2xl mx-auto">From storyboarding to video generation, Storytica adapts to any creative style — giving you full visual and structural control.</p>
-          </div></R>
-
-          <div className="grid md:grid-cols-3 gap-5">
-            {[
-              { t: "AI STORYBOARDING", d: "Generate frames from text prompts. Auto scene breakdown with tags, status badges, and camera notes per frame. 9 image models including GPT Image 2 photorealism, Flux 2 Pro, and Character Edit for consistency.", img: `${img}/storyboardItem.png` },
-              { t: "AI VIDEO GENERATION", d: "8 video engines — Seedance 1.5/2.0, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk lip sync. Multi-shot UGC and Showcase modes for product videos.", img: `${img}/AIModal.png` },
-              { t: "AI MUSIC & AUDIO", d: "Generate original music, cover songs with custom personas, extend tracks, and create voiceovers with ElevenLabs TTS. Full audio production pipeline.", img: `${img}/elementLibrary.png` },
-            ].map((f, i) => (
-              <R key={f.t} delay={i * 100}>
-                <div className="group">
-                  <div className="aspect-[16/10] rounded-2xl overflow-hidden border border-[#2a2a2a] mb-5">
-                    <img src={f.img} alt={f.t} className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500" />
-                  </div>
-                  <h3 className="text-base font-extrabold text-white uppercase tracking-wide mb-2">{f.t}</h3>
-                  <p className="text-[13px] text-[#888] leading-relaxed">{f.d}</p>
-                </div>
-              </R>
-            ))}
-          </div>
-
-          {/* Second row */}
-          <div className="grid md:grid-cols-3 gap-5 mt-12">
-            {[
-              { t: "CANVAS EDITOR", d: "Brush, inpaint, area edit, text, shapes. AI image-to-image editing. Cinema Grade with 12 film stock presets. Style transfer, background removal, and 11 post-processing tools.", img: `${img}/toolbox.png` },
-              { t: "VIDEO EDITOR", d: "Multi-layer timeline with video, audio, and subtitle tracks. Overlay system with text, images, video PiP, and shapes. 5 transition types (crossfade, wipe, slide, dissolve, fade). Blend modes, opacity, scrolling text. Export to MP4 or WAV.", img: `${img}/fileBrowser.png` },
-              { t: "AI DIRECTOR", d: "AI agent with 22 tools that breaks scripts into shots, generates storyboards, and manages your entire project. Plan approval flow, reference image support, and full project context awareness.", img: `${img}/elementLibrary.png` },
-            ].map((f, i) => (
-              <R key={f.t} delay={i * 100}>
-                <div className="group">
-                  <div className="aspect-[16/10] rounded-2xl overflow-hidden border border-[#2a2a2a] mb-5">
-                    <img src={f.img} alt={f.t} className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-500" />
-                  </div>
-                  <h3 className="text-base font-extrabold text-white uppercase tracking-wide mb-2">{f.t}</h3>
-                  <p className="text-[13px] text-[#888] leading-relaxed">{f.d}</p>
-                </div>
-              </R>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ MORE FEATURES (compact row) ═══ */}
-      <section className="py-14">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { icon: Coins, t: "Credit System", d: "See exact cost before generating. Pay per model, not per subscription tier. Credits never expire." },
-              { icon: Users, t: "Team Collaboration", d: "Invite members, assign roles. Organization switcher for multi-team workflows." },
-              { icon: Camera, t: "Cinema Grade", d: "12 film stock presets — Kodak, Fujifilm, CineStill. Style transfer, background removal, and 11 post-processing tools." },
-              { icon: Layers, t: "Element Library", d: "Save characters, props, and styles as reusable elements. Reference with @mentions in prompts for consistency." },
-            ].map((f, i) => (
-              <R key={f.t} delay={i * 50}>
-                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-5 h-full">
-                  <f.icon className="w-4 h-4 text-teal-400 mb-2.5" />
-                  <div className="text-[13px] font-bold text-white mb-1">{f.t}</div>
-                  <div className="text-[11px] text-[#777] leading-relaxed">{f.d}</div>
                 </div>
               </R>
             ))}
@@ -335,16 +560,21 @@ export default function StorticaLanding() {
       </section>
 
       {/* ═══ WHY STORYTICA ═══ */}
-      <section className="py-20 bg-[#0e0e0e]">
-        <div className="max-w-[1200px] mx-auto px-6">
+      <section className="py-24 lg:py-28">
+        <div className="max-w-[1280px] mx-auto px-6">
           <R><WhyStorytica /></R>
         </div>
       </section>
 
       {/* ═══ TESTIMONIALS ═══ */}
-      <section className="py-20">
-        <div className="max-w-[900px] mx-auto px-6">
-          <R><h2 className="text-[1.8rem] font-extrabold text-center mb-10">What Our Users Say</h2></R>
+      <section className="py-24 bg-[#07070a]">
+        <div className="max-w-[1000px] mx-auto px-6">
+          <R>
+            <div className="text-center mb-12">
+              <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400/80 mb-3 block">Testimonials</span>
+              <h2 className="font-display text-[2rem] lg:text-[2.5rem] font-extrabold tracking-tight">What Creators Say</h2>
+            </div>
+          </R>
           <div className="grid md:grid-cols-2 gap-5">
             {[
               { n: "Jamie T.", r: "Indie Filmmaker", q: "The AI storyboard was so good I turned a quick concept into a short film. What took two days now takes 20 minutes." },
@@ -353,11 +583,18 @@ export default function StorticaLanding() {
               { n: "Sophia W.", r: "Student Filmmaker", q: "The element library keeps my characters consistent across every scene. My thesis storyboard looked professional." },
             ].map((t, i) => (
               <R key={t.n} delay={i * 80}>
-                <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl p-6 h-full">
-                  <div className="flex gap-0.5 mb-3">{[...Array(5)].map((_, j) => <Star key={j} className="w-3 h-3 text-amber-400 fill-amber-400" />)}</div>
-                  <p className="text-[13px] text-[#aaa] leading-relaxed mb-4 italic">&quot;{t.q}&quot;</p>
-                  <div className="text-sm font-semibold text-white">{t.n}</div>
-                  <div className="text-[11px] text-[#555]">{t.r}</div>
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6 h-full hover:border-white/[0.1] transition-colors">
+                  <div className="flex gap-0.5 mb-4">{[...Array(5)].map((_, j) => <Star key={j} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />)}</div>
+                  <p className="font-body text-[14px] text-white/60 leading-relaxed mb-5 italic">&quot;{t.q}&quot;</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500/30 to-emerald-500/30 flex items-center justify-center">
+                      <span className="font-display text-[11px] font-bold text-teal-300">{t.n[0]}</span>
+                    </div>
+                    <div>
+                      <div className="font-body text-[13px] font-semibold text-white">{t.n}</div>
+                      <div className="font-body text-[11px] text-white/35">{t.r}</div>
+                    </div>
+                  </div>
                 </div>
               </R>
             ))}
@@ -365,9 +602,29 @@ export default function StorticaLanding() {
         </div>
       </section>
 
+      {/* ═══ TRUST BAR ═══ */}
+      <section className="py-10 border-y border-white/[0.06]">
+        <div className="max-w-[1280px] mx-auto px-6">
+          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-14">
+            {[
+              { icon: Shield, text: "Content never trains AI" },
+              { icon: Coins, text: "Credits never expire" },
+              { icon: Zap, text: "No watermarks on exports" },
+              { icon: Users, text: "Team & org support" },
+              { icon: Download, text: "PDF, MP4, WAV export" },
+            ].map(t => (
+              <div key={t.text} className="flex items-center gap-2">
+                <t.icon className="w-3.5 h-3.5 text-white/25" />
+                <span className="font-body text-[12px] text-white/40">{t.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ═══ PRICING ═══ */}
-      <section id="pricing" className="py-20">
-        <div className="max-w-[1200px] mx-auto px-6">
+      <section id="pricing" className="py-24">
+        <div className="max-w-[1280px] mx-auto px-6">
           <R>
             <PricingShowcase
               onSelectPlan={() => (window.location.href = "/sign-up")}
@@ -377,23 +634,23 @@ export default function StorticaLanding() {
           </R>
           <R>
             <div className="text-center mt-4">
-              <a
-                href="/pricing"
-                className="inline-flex items-center gap-2 text-teal-400 hover:text-teal-300 text-sm font-medium transition-colors"
-              >
-                View full pricing, features & comparison
-                <ArrowRight className="w-4 h-4" />
+              <a href="/pricing" className="inline-flex items-center gap-2 text-teal-400 hover:text-teal-300 font-body text-sm font-medium transition-colors">
+                View full pricing, features & comparison <ArrowRight className="w-4 h-4" />
               </a>
             </div>
           </R>
-
         </div>
       </section>
 
       {/* ═══ FAQ ═══ */}
-      <section className="py-20 bg-[#0e0e0e]">
-        <div className="max-w-[650px] mx-auto px-6">
-          <R><h2 className="text-[1.8rem] font-extrabold text-center mb-8">Frequently Asked Questions</h2></R>
+      <section className="py-24 bg-[#07070a]">
+        <div className="max-w-[700px] mx-auto px-6">
+          <R>
+            <div className="text-center mb-10">
+              <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-400/80 mb-3 block">FAQ</span>
+              <h2 className="font-display text-[1.8rem] lg:text-[2.2rem] font-extrabold tracking-tight">Frequently Asked Questions</h2>
+            </div>
+          </R>
           <R><div>
             <Faq q="What AI models are available?" a="25+ models across 5 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Flux 2 Flex Image-to-Image, Character Edit, Nano Banana Edit, Crisp Upscale, Topaz Image Upscale. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Video Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS. Utility: AI Analyze (image/video/audio), Prompt Enhance." />
             <Faq q="Can I maintain consistent characters?" a="Yes. The Element Library saves characters, props, and styles with reference images. Drag them into any frame or mention with @Image tags in prompts." />
@@ -405,7 +662,7 @@ export default function StorticaLanding() {
           </div></R>
           <R>
             <div className="mt-8 text-center">
-              <a href="/faq" className="inline-flex items-center gap-2 text-sm text-teal-400 hover:text-teal-300 transition-colors font-medium">
+              <a href="/faq" className="inline-flex items-center gap-2 font-body text-sm text-teal-400 hover:text-teal-300 transition-colors font-medium">
                 View all FAQ <ArrowRight className="w-4 h-4" />
               </a>
             </div>
@@ -413,41 +670,44 @@ export default function StorticaLanding() {
         </div>
       </section>
 
-      {/* ═══ CTA ═══ */}
-      <section className="py-16">
+      {/* ═══ FINAL CTA ═══ */}
+      <section className="py-24 relative overflow-hidden">
+        {/* Background glow */}
+        <div className="absolute inset-0 bg-gradient-to-br from-teal-500/[0.05] via-transparent to-amber-500/[0.03]" />
         <R>
-          <div className="max-w-[1000px] mx-auto px-6">
-            <div className="bg-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-8 lg:p-12 grid lg:grid-cols-2 gap-8 items-center">
-              <div>
-                <h2 className="text-[1.8rem] lg:text-[2rem] font-extrabold leading-tight mb-3">From script to final cut in one place</h2>
-                <p className="text-[14px] text-[#888] mb-6">25+ AI models. AI Director. Multi-layer video editor. Cinema Grade. Music generation. Start free.</p>
-                <a href="/sign-up" className="group inline-flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-[#111111] font-bold text-sm px-7 py-3 rounded-lg transition-all">
-                  Start Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                </a>
-              </div>
-              <div className="rounded-xl overflow-hidden border border-[#2a2a2a]">
-                <img src={`${img}/storyboard_home.png`} alt="Storytica" className="w-full h-auto block" />
-              </div>
-            </div>
+          <div className="max-w-[800px] mx-auto px-6 text-center relative z-10">
+            <h2 className="font-display text-[2rem] lg:text-[3rem] font-extrabold tracking-tight mb-4">
+              Ready to create your{" "}
+              <span className="bg-gradient-to-r from-teal-400 to-amber-400 bg-clip-text text-transparent">next story</span>?
+            </h2>
+            <p className="font-body text-[15px] text-white/45 mb-8 max-w-lg mx-auto">25+ AI models. AI Director. Multi-layer video editor. Cinema Grade. Music generation. Start free — no credit card required.</p>
+            <a href="/sign-up" className="group inline-flex items-center gap-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#09090b] font-display font-bold text-base px-10 py-4 rounded-xl transition-all shadow-xl shadow-teal-500/20 hover:shadow-teal-400/30 hover:scale-[1.02]">
+              Start Creating Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </a>
           </div>
         </R>
       </section>
 
       {/* ═══ FOOTER ═══ */}
-      <footer className="border-t border-[#1e1e1e] py-12">
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+      <footer className="border-t border-white/[0.06] py-14 bg-[#07070a]">
+        <div className="max-w-[1280px] mx-auto px-6">
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-10 mb-10">
             <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded bg-gradient-to-br from-teal-400 to-teal-500 flex items-center justify-center"><Film className="w-3 h-3 text-[#111111]" /></div>
-                <span className="text-sm font-extrabold text-teal-400">STORYTICA</span>
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center">
+                  <Film className="w-3.5 h-3.5 text-[#09090b]" />
+                </div>
+                <span className="font-display text-[14px] font-extrabold">
+                  <span className="text-teal-400">STORY</span><span className="text-amber-400">TICA</span>
+                </span>
               </div>
-              <p className="text-[11px] text-[#555] leading-relaxed">AI-powered storyboard studio for creators and teams.</p>
+              <p className="font-body text-[12px] text-white/35 leading-relaxed">AI-powered storyboard studio for creators, filmmakers, and teams.</p>
             </div>
             {[
               { t: "Product", l: [
                 { label: "Features", href: "#features" },
                 { label: "Pricing", href: "#pricing" },
+                { label: "AI Models", href: "#models" },
                 { label: "Community", href: "/community" },
               ]},
               { t: "Resources", l: [
@@ -463,14 +723,17 @@ export default function StorticaLanding() {
               ]},
             ].map(c => (
               <div key={c.t}>
-                <div className="text-[11px] font-bold text-[#555] uppercase tracking-wider mb-3">{c.t}</div>
-                <ul className="space-y-2">{c.l.map(l => <li key={l.label}><a href={l.href} className="text-[13px] text-[#777] hover:text-white transition-colors">{l.label}</a></li>)}</ul>
+                <div className="font-body text-[11px] font-bold text-white/30 uppercase tracking-wider mb-4">{c.t}</div>
+                <ul className="space-y-2.5">{c.l.map(l => <li key={l.label}><a href={l.href} className="font-body text-[13px] text-white/45 hover:text-white transition-colors">{l.label}</a></li>)}</ul>
               </div>
             ))}
           </div>
-          <div className="border-t border-[#1e1e1e] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <span className="text-[11px] text-[#555]">&copy; {new Date().getFullYear()} Storytica. All rights reserved.</span>
-            <div className="flex items-center gap-1"><Shield className="w-3 h-3 text-[#555]" /><span className="text-[11px] text-[#555]">Content never used to train AI</span></div>
+          <div className="border-t border-white/[0.06] pt-6 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span className="font-body text-[11px] text-white/30">&copy; {new Date().getFullYear()} Storytica. All rights reserved.</span>
+            <div className="flex items-center gap-1.5">
+              <Shield className="w-3 h-3 text-white/25" />
+              <span className="font-body text-[11px] text-white/30">Content never used to train AI</span>
+            </div>
           </div>
         </div>
       </footer>

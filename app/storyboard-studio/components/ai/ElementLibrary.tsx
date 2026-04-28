@@ -9,7 +9,7 @@ import { useCurrentCompanyId, getCurrentCompanyId, logUserInfo } from "@/lib/aut
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { FileBrowser } from "./FileBrowser";
 import { ElementForge } from "./ElementForge";
-import type { ForgeElementType } from "./elementForgeConfig";
+import { composePrompt, type ForgeElementType } from "./elementForgeConfig";
 
 // ─── URL Helper Functions ───────────────────────────────────────────────────────
 const getFileUrl = (r2Key: string): string => {
@@ -27,6 +27,7 @@ interface Element {
   visibility?: "private" | "public" | "shared";
   tags?: string[];
   description?: string;
+  identity?: Record<string, any>;
 }
 
 // Image selection state management
@@ -452,6 +453,9 @@ export function ElementLibrary({
   const [deletingIds, setDeletingIds] = useState<Set<Id<"storyboard_elements">>>(new Set());
   const [recentlyDeleted, setRecentlyDeleted] = useState<Set<Id<"storyboard_elements">>>(new Set());
 
+  // State for tracking element image generation
+  const [generatingIds, setGeneratingIds] = useState<Set<Id<"storyboard_elements">>>(new Set());
+
   // State to track which reference images are being deleted
   const [deletingRefUrls, setDeletingRefUrls] = useState<Set<string>>(new Set());
 
@@ -467,6 +471,92 @@ export function ElementLibrary({
       return false;
     }
   };
+
+  // Reference sheet prompt templates per element type
+  const REFERENCE_SHEET_TEMPLATES: Record<string, string> = {
+    character: `Create a photorealistic character identity sheet. Layout: 2/3 area full-body views (front, left-profile 90°, right-profile 90°, back 180°, 3/4 ~45°), 1/3 area detail panels (eyes, face, skin, hair, clothing). Single character only, all views same scale, studio lighting, ultra-realistic. Character: {description}`,
+    environment: `Cinematic establishing shot of {description}. Photorealistic, high detail, atmospheric lighting, wide-angle composition.`,
+    prop: `Product photography of {description}. Clean dark studio background, studio lighting, high detail, multiple angles showing key features.`,
+  };
+
+  // Generate reference image for an element
+  const handleGenerateElement = useCallback(async (element: Element) => {
+    if (generatingIds.has(element._id)) return;
+    if (!projectCompanyId || !userId) return;
+
+    const forgeTypes: ForgeElementType[] = ["character", "environment", "prop"];
+    const elType = element.type as ForgeElementType;
+
+    // Compose the description from identity or fall back to element.description
+    let description = element.description || element.name;
+    if (forgeTypes.includes(elType) && element.identity) {
+      description = composePrompt(elType, { name: element.name, ...element.identity });
+    }
+
+    // Merge into the reference sheet template
+    const template = REFERENCE_SHEET_TEMPLATES[element.type] || REFERENCE_SHEET_TEMPLATES.prop;
+    const prompt = template.replace(/\{description\}/g, description);
+
+    setGeneratingIds(prev => new Set(prev).add(element._id));
+    setGenRefCounts(prev => new Map(prev).set(element._id as string, element.referenceUrls?.length ?? 0));
+    try {
+      const res = await fetch('/api/storyboard/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sceneContent: prompt,
+          model: 'gpt-image-2-text-to-image',
+          style: 'realistic',
+          quality: JSON.stringify({ type: 'gpt-image-2', mode: 'text-to-image' }),
+          aspectRatio: element.type === 'character' ? '3:4' : '16:9',
+          companyId: projectCompanyId,
+          userId,
+          projectId: projectId as string,
+          elementId: element._id,
+          enhance: false,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Generation failed');
+      }
+      const data = await res.json();
+      console.log('[ElementLibrary] Generation started:', data.taskId);
+      // The kie-callback will auto-update the element's referenceUrls & thumbnailUrl
+      // generatingIds will be cleared when Convex reactivity updates the element
+    } catch (error: any) {
+      console.error('[ElementLibrary] Generation failed:', error);
+      setGeneratingIds(prev => {
+        const next = new Set(prev);
+        next.delete(element._id);
+        return next;
+      });
+      alert(error.message || 'Failed to generate image');
+    }
+  }, [generatingIds, projectCompanyId, userId, projectId]);
+
+  // Track reference counts at generation start to detect changes
+  const [genRefCounts, setGenRefCounts] = useState<Map<string, number>>(new Map());
+
+  // Clear generating state when element's referenceUrls change (via Convex reactivity)
+  useEffect(() => {
+    if (!displayElements) return;
+    setGeneratingIds(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of prev) {
+        const el = displayElements.find(e => e._id === id);
+        if (!el) continue;
+        const currentCount = el.referenceUrls?.length ?? 0;
+        const startCount = genRefCounts.get(id as string) ?? 0;
+        if (currentCount > startCount) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [displayElements, genRefCounts]);
 
   // Function to delete files associated with an element
   const deleteElementFiles = async (elementId: Id<"storyboard_elements">) => {
@@ -1152,6 +1242,13 @@ export function ElementLibrary({
                         className="block w-full text-left cursor-pointer"
                       >
                         <div className="aspect-square overflow-hidden bg-(--bg-primary) relative rounded-2xl">
+                          {/* Generating overlay */}
+                          {generatingIds.has(element._id) && (
+                            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+                              <Loader2 className="h-8 w-8 text-amber-400 animate-spin mb-2" />
+                              <p className="text-xs text-amber-300 font-medium">Generating...</p>
+                            </div>
+                          )}
                           {/* Multi-image badge */}
                           {MultiImageBadge(element)}
                           
@@ -1275,6 +1372,22 @@ export function ElementLibrary({
                           )}
                         </button>
                         <div className="flex items-center gap-2">
+                          {/* Generate reference image button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGenerateElement(element);
+                            }}
+                            disabled={generatingIds.has(element._id)}
+                            className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={generatingIds.has(element._id) ? "Generating..." : `Generate reference image for "${element.name}"`}
+                          >
+                            {generatingIds.has(element._id) ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-4 w-4" />
+                            )}
+                          </button>
                           {/* Add to storyboard item button — only shown when linking elements */}
                           {selectedItemId && (
                             <button

@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
       duration,       // NEW - video duration for Seedance 1.5 Pro
       audioEnabled,   // NEW - audio enabled for Seedance 1.5 Pro
       cinemaMetadata, // Cinema Studio metadata (camera, lens, focal, aperture, etc.)
+      elementId,      // Element ID — when present, file is categorized as "elements"
     } = await req.json();
 
     console.log('[generate-image] API route received parameters:', {
@@ -126,10 +127,11 @@ export async function POST(req: NextRequest) {
         style: (style ?? "realistic") as ImageStyle,
         aspectRatio: aspectRatio ?? "9:16",
         quality: (quality ?? "standard") as ImageQuality,
-        companyId,    // NEW
-        userId,       // NEW
-        projectId,    // NEW
-        categoryId: itemId, // NEW - link to storyboard item
+        companyId,
+        userId,
+        projectId,
+        categoryId: elementId || itemId, // Link to element or storyboard item
+        category: elementId ? "elements" : "generated",
         creditsUsed,  // NEW - actual credit amount from AI panel
         model, // NEW - pass the actual model from EditImageAIPanel
         imageUrl, // NEW - pass canvas image URL for character-edit models

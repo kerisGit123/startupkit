@@ -663,6 +663,19 @@ export async function POST(request: NextRequest) {
         ...(isAudio && fileRecord?.fileType !== 'audio' ? { fileType: 'audio' } : {}),
       });
 
+      // Auto-update element referenceUrls + thumbnailUrl when this is an element generation
+      if (fileRecord?.category === 'elements' && fileRecord?.categoryId && finalUrl) {
+        try {
+          await convex.mutation(api.storyboard.storyboardElements.appendReferenceImage, {
+            id: fileRecord.categoryId as Id<"storyboard_elements">,
+            imageUrl: finalUrl,
+          });
+          console.log('[kie-callback] Updated element referenceUrls/thumbnail for', fileRecord.categoryId);
+        } catch (elementUpdateError) {
+          console.warn('[kie-callback] Element auto-update failed (non-critical):', elementUpdateError);
+        }
+      }
+
       // Auto-share for free personal users only — orgs are never auto-shared
       try {
         if (

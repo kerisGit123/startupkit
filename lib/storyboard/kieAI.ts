@@ -131,6 +131,7 @@ export interface TriggerImageGenerationParams {
   userId?: string;
   projectId?: string;
   categoryId?: string;
+  category?: string; // "generated" (default) | "elements" | etc.
   creditsUsed?: number;
   model?: string;
   imageUrl?: string;
@@ -395,7 +396,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     defaultAI: kieAiId as Id<"storyboard_kie_ai"> | undefined, // Store which KIE AI key was used
     model: kieModel,   // Store the AI model used for generation
     prompt: fullPrompt, // Store the prompt for traceability
-    category: "generated",
+    category: params.category || "generated",
     status: "generating",
     filename: `ai-generated-${Date.now()}.${params.outputFormat || 'png'}`,
     fileType: "image",
