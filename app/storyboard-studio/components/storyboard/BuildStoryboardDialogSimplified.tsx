@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Play, Sparkles, CheckCircle2 } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -59,80 +58,81 @@ export function BuildStoryboardDialogSimplified({
   const sceneCount = project?.script ?
     project.script.split('SCENE').length - 1 : 0;
 
+  const steps = [
+    "Parse script scenes (structured or freeform)",
+    "Extract characters, environments, and props",
+    "Create storyboard frames with image & video prompts",
+    "Set default generation models per scene",
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="overflow-hidden border border-[#3D3D3D] bg-[#2C2C2C]! p-0 text-[#FFFFFF] shadow-2xl sm:max-w-2xl rounded-2xl">
-        <DialogHeader className="border-b border-[#3D3D3D] px-6 py-4">
-          <DialogTitle className="flex items-center gap-3 text-xl font-semibold text-[#FFFFFF]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#4A90E2] shadow-lg shadow-[#4A90E2]/20">
+      <DialogContent className="overflow-hidden border border-(--border-primary) bg-(--bg-secondary)! p-0 text-(--text-primary) shadow-2xl sm:max-w-lg rounded-2xl">
+        <DialogHeader className="border-b border-(--border-primary) px-6 py-4">
+          <DialogTitle className="flex items-center gap-3 text-[14px] font-semibold text-(--text-primary)">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-(--accent-blue) shadow-lg shadow-(--accent-blue)/20">
               <Play className="h-4 w-4 text-white" />
             </span>
             Build Storyboard from Script
           </DialogTitle>
         </DialogHeader>
 
-        <div className="px-6 py-6 space-y-6">
-          <p className="text-[#A0A0A0] text-center">
+        <div className="px-6 py-5 space-y-5">
+          <p className="text-[13px] text-(--text-secondary) text-center">
             AI will parse your script, extract elements, and create storyboard frames automatically.
           </p>
 
-          {/* What happens */}
-          <div className="rounded-xl border border-[#3D3D3D] bg-[#3D3D3D]/20 p-6">
-            <h3 className="text-base font-medium text-[#FFFFFF] mb-4">What will happen:</h3>
-            <div className="space-y-3">
-              {[
-                "Parse script scenes (structured or freeform)",
-                "Extract characters, environments, and props",
-                "Create storyboard frames with image & video prompts",
-                "Set default generation models per scene",
-              ].map((text) => (
-                <div key={text} className="flex items-center gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0" />
-                  <span className="text-sm text-[#A0A0A0]">{text}</span>
+          {/* Steps */}
+          <div className="rounded-xl border border-(--border-primary) bg-(--bg-primary) p-4">
+            <h3 className="text-[13px] font-semibold text-(--text-primary) mb-3">What will happen:</h3>
+            <div className="space-y-2.5">
+              {steps.map((label) => (
+                <div key={label} className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-md bg-green-500/10">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-400" />
+                  </div>
+                  <span className="text-[12px] text-(--text-secondary)">{label}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div className="rounded-lg border border-[#3D3D3D] bg-[#3D3D3D]/20 p-3">
-              <div className="text-xs text-[#6E6E6E] mb-1">Scenes Detected</div>
-              <div className="text-lg font-medium text-[#FFFFFF]">{sceneCount || "Auto"}</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-(--border-primary) bg-(--bg-primary) p-3 text-center">
+              <div className="text-[10px] text-(--text-tertiary) font-medium uppercase tracking-wider mb-1">Scenes Detected</div>
+              <div className="text-lg font-semibold text-(--text-primary) tabular-nums">{sceneCount || "Auto"}</div>
             </div>
-            <div className="rounded-lg border border-[#3D3D3D] bg-[#3D3D3D]/20 p-3">
-              <div className="text-xs text-[#6E6E6E] mb-1">Build Mode</div>
-              <div className="text-lg font-medium text-[#FFFFFF]">Replace All</div>
+            <div className="rounded-xl border border-(--border-primary) bg-(--bg-primary) p-3 text-center">
+              <div className="text-[10px] text-(--text-tertiary) font-medium uppercase tracking-wider mb-1">Build Mode</div>
+              <div className="text-lg font-semibold text-(--text-primary)">Replace All</div>
             </div>
           </div>
 
           {/* Warning */}
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-            <p className="text-sm text-amber-400">
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+            <p className="text-[12px] text-amber-400/90">
               This will replace all existing frames with new ones from the script.
             </p>
           </div>
         </div>
 
-        <DialogFooter className="border-t border-[#3D3D3D] bg-[#3D3D3D]/20 px-6 py-4">
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-            <Button
-              variant="outline"
+        <DialogFooter className="border-t border-(--border-primary) bg-(--bg-primary)/50 px-6 py-3.5">
+          <div className="flex justify-end gap-2.5 w-full">
+            <button
               onClick={() => onOpenChange(false)}
-              className="border-[#3D3D3D] bg-[#3D3D3D] text-[#A0A0A0] hover:bg-[#3D3D3D]"
+              className="px-4 py-2 rounded-xl text-[13px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 border border-(--border-primary) transition-all"
             >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={handleBuild}
               disabled={isSubmitting || !project?.script}
-              className="bg-[#4A90E2] text-white hover:bg-[#357ABD] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[13px] font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                Build from Script
-              </div>
-            </Button>
+              <Sparkles className="h-3.5 w-3.5" />
+              Build from Script
+            </button>
           </div>
         </DialogFooter>
       </DialogContent>

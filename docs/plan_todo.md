@@ -1,10 +1,36 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-29 (Session #23 — Element Forge Soul Cast redesign)
+> **Last updated:** 2026-04-29 (Session #24 — Script-to-Storyboard Cleanup + Extend Story)
 
 ---
 
-## Recently Completed (Session #11-23 — 2026-04-26/29)
+## Recently Completed (Session #11-24 — 2026-04-26/29)
+
+### Session #24 — 2026-04-29 (Script-to-Storyboard Pipeline Overhaul)
+
+**Phase 0 — Cleanup (~1,200 lines dead code removed):**
+- [x] **Deleted `enhanced-script-extraction/route.ts`** — 740 lines of dead GPT-4o per-scene extraction
+- [x] **Deleted `n8nWebhookCallback.ts`** — dead n8n integration
+- [x] **Removed `createFromN8n`** from storyboardItems + storyboardElements (dead exports)
+- [x] **Removed `buildStoryboard` mutation** — 350 lines, replaced by `build-storyboard` API route
+- [x] **Simplified workspace `handleExecuteBuild`** — 130 lines with two identical branches → 20 lines, one endpoint
+- [x] **Cleaned `BuildStoryboardDialogSimplified`** — removed unused scriptType/language dropdowns
+
+**Phase 1 — New features:**
+- [x] **Default models on frames** — `defaultImageModel` (GPT Image 2) + `defaultVideoModel` (Seedance 2.0 Fast, or 1.5 Pro if script says so) stored on `storyboard_items`
+- [x] **Tighter element extraction** — Characters always, environments/props only if 2+ occurrences. Quality prompt: "Would a production designer need a separate reference image?" No sub-parts, no atmospheric effects
+- [x] **Preamble → project description** — Text before first ACT/SCENE saved to project description
+- [x] **One-step frame creation** — Prompts + models + linked elements saved in same `create` call (no separate update step, no empty-prompt ghost state)
+- [x] **Fire-and-forget build UX** — Dialog closes immediately, frames appear live via Convex reactivity
+- [x] **Extend Story route** — `/api/storyboard/extend-script` reads existing frames as context, AI generates continuation scenes
+- [x] **Extend Story UI** — Purple button on storyboard tab + dialog with optional prompt and scene count (2/4/6/8)
+- [x] **Scene parser fix** — `sceneParser.ts` now handles `SCENE 1A`/`SCENE 1B` format (was treating 1A and 1B as duplicates)
+- [x] **JSON fence stripping** — Haiku sometimes wraps JSON in markdown code fences; parser now strips them
+- [x] **ConvexHttpClient auth** — `build-storyboard` + `extend-script` routes now pass Clerk token to Convex
+- [x] **`build.updateProjectDescription` mutation** — Auth-free mutation for saving preamble during build (projects.update requires workspace auth)
+
+**Bonus fix:**
+- [x] **`log-upload/route.ts` double `userId` declaration** — pre-existing bug, fixed
 
 ### Session #23 — 2026-04-29 (Element Forge Soul Cast Redesign)
 
@@ -381,7 +407,14 @@
 - [x] ~~Subtitle enhancements~~ — deferred, text overlays cover this use case
 - [x] ~~Audio mixing~~ — deferred, basic volume mixing works in export
 
+#### Script-to-Storyboard — Remaining
+
+- [ ] **Test Extend Story** — Try the purple "Extend Story" button with the Bloop script (built Session #24, untested)
+- [ ] **Generate Script upgrade** — Current `generate-script/route.ts` creates scripts in old `SCENE N: Title` format. Upgrade to generate rich format with image/video prompts, model hints, act structure (like the Bloop script)
+- [ ] **Batch Generate All with defaultImageModel** — "Generate All" button should auto-use each frame's `defaultImageModel` instead of a single global model picker
+
 #### Auto-Sequence Video
+
 - [ ] Chain frames via Seedance `first-last-frame` mode for continuity-chained video
 
 ### Shot Planner / Contact Sheet (LOW PRIORITY — Exploration tool)

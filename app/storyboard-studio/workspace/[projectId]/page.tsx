@@ -1037,31 +1037,46 @@ export default function StoryboardWorkspacePage() {
 
       {/* AI Prompt Bar */}
       {tab === "script" && showAiInput && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-[#4A90E2]/20 border-b border-[#4A90E2]/30 shrink-0">
-          <Sparkles className="w-4 h-4 text-[#4A90E2] shrink-0" />
-          <input
-            value={aiPrompt}
-            onChange={(e) => setAiPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleGenerateScript()}
-            placeholder="Describe your story idea… e.g. 'A thriller about a hacker who discovers government secrets'"
-            className="flex-1 bg-transparent text-sm text-(--text-primary) placeholder-(--text-tertiary) outline-none"
-          />
-          <div className="flex items-center gap-2 shrink-0">
-            <select value={genre} onChange={(e) => setGenre(e.target.value)}
-              className="bg-(--bg-primary) border border-(--border-primary) rounded-xl text-xs text-(--text-secondary) px-2 py-1.5 outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200">
-              {["drama", "comedy", "thriller", "horror", "romance", "action", "documentary"].map((g) => (
-                <option key={g} value={g}>{g.charAt(0).toUpperCase() + g.slice(1)}</option>
+        <div className="flex items-center gap-3 px-5 py-2.5 bg-(--bg-secondary) border-b border-(--border-primary) shrink-0">
+          <div className="flex items-center gap-2 flex-1 bg-(--bg-primary) border border-(--border-primary) rounded-xl px-3 py-2 focus-within:border-(--accent-blue)/40 transition-colors">
+            <Sparkles className="w-4 h-4 text-(--accent-blue) shrink-0" />
+            <input
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerateScript()}
+              placeholder="Describe your story idea... e.g. 'A deep-sea expedition encounters an ancient creature'"
+              className="flex-1 bg-transparent text-[13px] text-(--text-primary) placeholder:text-(--text-tertiary) outline-none"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Genre pills */}
+            <div className="flex items-center bg-(--bg-primary) border border-(--border-primary) rounded-xl p-0.5">
+              {["drama", "comedy", "thriller", "horror", "action", "documentary"].map((g) => (
+                <button key={g} onClick={() => setGenre(g)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                    genre === g
+                      ? "bg-white/10 text-(--text-primary)"
+                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                  }`}>
+                  {g.charAt(0).toUpperCase() + g.slice(1)}
+                </button>
               ))}
-            </select>
-            <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}
-              className="bg-(--bg-primary) border border-(--border-primary) rounded-xl text-xs text-(--text-secondary) px-2 py-1.5 outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200">
-              <option value={15}>15s</option>
-              <option value={30}>30s</option>
-              <option value={60}>60s</option>
-              <option value={90}>90s</option>
-            </select>
+            </div>
+            {/* Duration pills */}
+            <div className="flex items-center bg-(--bg-primary) border border-(--border-primary) rounded-xl p-0.5">
+              {[15, 30, 60, 90].map((d) => (
+                <button key={d} onClick={() => setDuration(d)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-medium tabular-nums transition-all ${
+                    duration === d
+                      ? "bg-white/10 text-(--text-primary)"
+                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                  }`}>
+                  {d}s
+                </button>
+              ))}
+            </div>
             <button onClick={handleGenerateScript} disabled={isGenerating || !aiPrompt.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-[#4A90E2] to-[#4A9E8E] hover:from-[#357ABD] hover:to-[#378B7C] text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed">
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[13px] font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
               {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
               Generate
             </button>
@@ -1072,33 +1087,122 @@ export default function StoryboardWorkspacePage() {
       {/* Content */}
       <div className="flex-1 overflow-hidden">
         {/* ── Script Tab ── */}
-        {tab === "script" && (
+        {tab === "script" && (() => {
+          const parsedScenes = parseScriptScenes(displayScript);
+          const scriptLines = displayScript.split("\n");
+          return (
           <div className="flex h-full">
-            <textarea
-              value={displayScript}
-              onChange={(e) => handleScriptChange(e.target.value)}
-              placeholder={`Write your script here...\n\nTip: Format scenes as:\nSCENE 1: Title - Location\n[Scene description]\n\nOr use AI to generate a script automatically.`}
-              className="flex-1 bg-transparent text-sm text-[#A0A0A0] placeholder-[#6E6E6E] p-6 outline-none resize-none font-mono leading-relaxed"
-            />
-            {/* Scene preview panel */}
-            {parseScriptScenes(displayScript).scenes.length > 0 && (
-              <div className="w-64 border-l border-[#3D3D3D] overflow-y-auto p-3 shrink-0">
-                <p className="text-[11px] text-[#6E6E6E] font-medium uppercase tracking-wider mb-3">
-                  {parseScriptScenes(displayScript).scenes.length} Scenes
-                </p>
-                {parseScriptScenes(displayScript).scenes.map((s, i) => (
-                  <div key={`${s.id}-${i}`} className="mb-2 p-2.5 rounded-lg bg-[#3D3D3D]/20 border border-[#3D3D3D]">
-                    <p className="text-[11px] text-[#A0A0A0] mb-0.5">Scene {i + 1}</p>
-                    <p className="text-xs text-[#FFFFFF] font-medium truncate">{s.title}</p>
-                    {s.characters.length > 0 && (
-                      <p className="text-[10px] text-[#6E6E6E] mt-0.5 truncate">{s.characters.slice(0, 3).join(", ")}</p>
-                    )}
+            {/* Script editor with line numbers */}
+            <div className="flex-1 relative overflow-hidden">
+              <div className="absolute inset-0 flex">
+                {/* Line numbers gutter */}
+                <div
+                  ref={(el) => {
+                    if (!el) return;
+                    const ta = el.nextElementSibling?.nextElementSibling as HTMLTextAreaElement | null;
+                    if (!ta) return;
+                    const sync = () => { el.scrollTop = ta.scrollTop; };
+                    ta.addEventListener("scroll", sync);
+                  }}
+                  className="shrink-0 w-[52px] pt-6 pb-6 select-none overflow-hidden" aria-hidden
+                >
+                  <div className="flex flex-col">
+                    {scriptLines.map((line, i) => {
+                      const isSceneHeader = /^SCENE\s+\d+/i.test(line.trim());
+                      return (
+                        <span key={i} className={`text-[12px] font-mono leading-relaxed text-right pr-3 block ${
+                          isSceneHeader ? "text-(--accent-blue)" : "text-(--text-tertiary)"
+                        }`}>
+                          {i + 1}
+                        </span>
+                      );
+                    })}
                   </div>
-                ))}
+                </div>
+                {/* Divider */}
+                <div className="w-px bg-(--border-primary) shrink-0" />
+                {/* Textarea */}
+                <textarea
+                  value={displayScript}
+                  onChange={(e) => handleScriptChange(e.target.value)}
+                  placeholder={`Write your script here...\n\nFormat scenes as:\nSCENE 1: Title — Location\n[Scene description]\n\nOr use AI to generate a script automatically.`}
+                  className="flex-1 bg-transparent text-[13px] text-(--text-secondary) placeholder:text-(--text-tertiary) px-4 py-6 outline-none resize-none font-mono leading-relaxed"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+
+            {/* Scene navigator sidebar */}
+            {parsedScenes.scenes.length > 0 && (
+              <div className="w-72 border-l border-(--border-primary) bg-(--bg-secondary)/30 overflow-y-auto shrink-0">
+                {/* Header */}
+                <div className="px-4 py-3 border-b border-(--border-primary) flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Film className="w-3.5 h-3.5 text-(--text-secondary)" strokeWidth={1.75} />
+                    <span className="text-[12px] font-semibold text-(--text-primary) uppercase tracking-wider">Scenes</span>
+                  </div>
+                  <span className="text-[11px] text-(--text-tertiary) tabular-nums font-medium">{parsedScenes.scenes.length}</span>
+                </div>
+                {/* Scene cards */}
+                <div className="p-2 space-y-1.5">
+                  {parsedScenes.scenes.map((s, i) => (
+                    <div key={`${s.id}-${i}`}
+                      className="group p-3 rounded-xl bg-(--bg-secondary) border border-(--border-primary) hover:border-(--border-secondary) hover:bg-(--bg-tertiary)/60 transition-all cursor-default">
+                      {/* Scene number + title */}
+                      <div className="flex items-start gap-2 mb-1.5">
+                        <span className="shrink-0 text-[10px] font-semibold text-(--accent-blue) bg-(--accent-blue)/10 px-1.5 py-0.5 rounded-md tabular-nums">
+                          {s.id}
+                        </span>
+                        <p className="text-[12px] text-(--text-primary) font-medium leading-tight line-clamp-2">{s.title}</p>
+                      </div>
+                      {/* Metadata row */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Duration */}
+                        {s.duration && (
+                          <span className="flex items-center gap-1 text-[10px] text-(--text-tertiary) bg-white/4 px-1.5 py-0.5 rounded-md">
+                            <Clock className="w-2.5 h-2.5" strokeWidth={1.75} />
+                            {s.duration}s
+                          </span>
+                        )}
+                        {/* Location badges */}
+                        {s.locations.slice(0, 1).map((loc, li) => (
+                          <span key={li} className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded-md truncate max-w-[120px]">
+                            {loc}
+                          </span>
+                        ))}
+                      </div>
+                      {/* Characters */}
+                      {s.characters.length > 0 && (
+                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                          {s.characters.slice(0, 3).map((c, ci) => (
+                            <span key={ci} className="text-[9px] font-medium text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded-md uppercase tracking-wide truncate max-w-[80px]">
+                              {c}
+                            </span>
+                          ))}
+                          {s.characters.length > 3 && (
+                            <span className="text-[9px] text-(--text-tertiary)">+{s.characters.length - 3}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Warnings */}
+                {parsedScenes.warnings.length > 0 && (
+                  <div className="px-3 pb-3">
+                    {parsedScenes.warnings.map((w, wi) => (
+                      <div key={wi} className="flex items-center gap-2 text-[10px] text-amber-400/80 px-2 py-1.5 rounded-lg bg-amber-500/5">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        <span>{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Storyboard Tab ── */}
         {tab === "storyboard" && (

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const {
       orgId,
-      userId,
+      userId: bodyUserId,
       projectId,
       r2Key,
       filename,
@@ -25,10 +25,10 @@ export async function POST(req: NextRequest) {
       uploadedBy,
     } = body;
 
-    // Log the upload in Convex with new schema
+    // Log the upload in Convex with new schema (use auth userId, not body)
     const result = await convex.mutation(api.storyboard.storyboardFiles.logUpload, {
       orgId,
-      userId,
+      userId: bodyUserId || userId,
       projectId,
       r2Key,
       filename,
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       status: status || "ready",
     });
 
-    console.log(`[log-upload] Logged file: ${filename} for org: ${orgId}, user: ${userId}`);
+    console.log(`[log-upload] Logged file: ${filename} for org: ${orgId}, user: ${bodyUserId || userId}`);
     
     return NextResponse.json({ success: true, fileId: result });
   } catch (error) {

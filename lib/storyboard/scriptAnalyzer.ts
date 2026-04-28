@@ -334,20 +334,29 @@ async function extractElements(
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 4096,
-    system: `You extract ONLY high-confidence elements from scripts for storyboard production. Keep it simple.
+    system: `You extract reusable visual elements from scripts for storyboard production. Quality over quantity.
 
-CHARACTERS: Extract if named/described OR is focal subject. Skip unnamed extras ("crew", "crowd", "people").
-ENVIRONMENTS: Extract ONLY if appears in 2+ scenes. Skip one-off locations.
-PROPS: Extract ONLY if appears in 2+ scenes OR is a key story object. Skip background items.
+CHARACTERS: Named/described individuals only. Skip unnamed extras ("crew", "crowd", "people", "figures").
+ENVIRONMENTS: Major distinct locations that appear in 2+ scenes. Skip sub-locations (a room INSIDE a location already extracted).
+PROPS: Standalone key story objects that appear in 2+ scenes AND could be generated as their own reference image.
 
-Descriptions must be 30+ characters describing VISUAL appearance.
-importance: "primary" = main character/location/focal prop, "secondary" = recurring support.
-occurrenceCount must reflect actual count in the script.
+SKIP — these are NOT standalone elements:
+- Components/parts of a vehicle, building, or vessel (porthole, instrument panel, dashboard, steering wheel, headlights, spotlights, engine, door, window = part of the parent object)
+- Atmospheric/environmental effects (snow, fog, mist, rain, light beams, shadows, particles, dust, bubbles)
+- Generic materials or substances (water, glass, metal, darkness, ice, frost)
+- Camera/filmmaking terms (close-up, wide shot, macro)
+
+EXAMPLE — submarine script:
+YES: "Research Submarine" (standalone prop), "Lead Pilot" (character), "Deep Ocean Trench" (environment), "Giant Creature" (character)
+NO: "Submarine Porthole" (part of submarine), "Instrument Panel" (part of submarine), "Halogen Spotlights" (part of submarine), "Marine Snow" (atmospheric), "Sonar Screen" (part of submarine)
+
+occurrenceCount = number of distinct scenes where this element is visually prominent.
+Descriptions must be 30+ chars describing VISUAL appearance for AI image generation.
 
 SCENES: ${sceneList}
 
-RETURN ONLY valid JSON:
-{"elements":[{"name":"...","type":"character","description":"...","sceneIds":["scene_1"],"occurrenceCount":1,"importance":"primary","tags":["human"]}]}`,
+RETURN ONLY valid JSON (no markdown, no code fences):
+{"elements":[{"name":"...","type":"character","description":"...","sceneIds":["scene_1a"],"occurrenceCount":2,"importance":"primary","tags":["human"]}]}`,
     messages: [
       { role: "user", content: `Extract high-value elements:\n\n${scriptContent}` },
     ],

@@ -233,6 +233,36 @@ export const incrementUsage = mutation({
   },
 });
 
+// Called from kie-callback when an element image generation completes.
+// Appends the image URL to referenceUrls and sets thumbnailUrl if currently empty.
+export const appendReferenceImage = mutation({
+  args: {
+    id: v.id("storyboard_elements"),
+    imageUrl: v.string(),
+  },
+  handler: async (ctx, { id, imageUrl }) => {
+    const el = await ctx.db.get(id);
+    if (!el) {
+      console.log(`[appendReferenceImage] Element ${id} not found, skipping`);
+      return;
+    }
+    const refs = el.referenceUrls || [];
+    if (!refs.includes(imageUrl)) {
+      refs.push(imageUrl);
+    }
+    const patch: Record<string, any> = {
+      referenceUrls: refs,
+      updatedAt: Date.now(),
+    };
+    // Auto-set thumbnail if empty
+    if (!el.thumbnailUrl) {
+      patch.thumbnailUrl = imageUrl;
+    }
+    await ctx.db.patch(id, patch);
+    console.log(`[appendReferenceImage] Updated element ${id} — refs: ${refs.length}, thumbnail: ${patch.thumbnailUrl ? 'set' : 'unchanged'}`);
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("storyboard_elements") },
   handler: async (ctx, { id }) => {
