@@ -463,50 +463,35 @@ export default function PricingManagementDark() {
   }
 
   return (
-    <div className="min-h-screen bg-(--bg-primary) p-8">
+    <div className="min-h-screen bg-(--bg-primary) p-6">
 
-      {/* Header with Add Button and View Toggle */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-xl font-semibold text-(--text-primary)">Pricing Models</h2>
-          <p className="text-(--text-tertiary) text-sm">Configure pricing for different AI models</p>
+          <h2 className="text-[15px] font-semibold text-(--text-primary)">Pricing Models</h2>
+          <p className="text-[11px] text-(--text-tertiary) mt-0.5">Configure pricing for different AI models</p>
         </div>
-        <div className="flex items-center gap-3">
-          {/* View Toggle */}
-          <div className="flex items-center bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-1">
-            <button
-              onClick={() => setViewMode('table')}
-              className={`p-2 rounded-xl transition-all duration-200 ${
-                viewMode === 'table' 
-                  ? 'bg-(--accent-blue) text-(--text-primary)' 
-                  : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
-              }`}
-              title="Table View"
-            >
-              <Table2 className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-xl transition-all duration-200 ${
-                viewMode === 'grid' 
-                  ? 'bg-(--accent-blue) text-(--text-primary)' 
-                  : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
-              }`}
-              title="Grid View"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('card')}
-              className={`p-2 rounded transition-colors ${
-                viewMode === 'card' 
-                  ? 'bg-[#4A90E2] text-white' 
-                  : 'text-gray-400 hover:text-white hover:bg-[#2C2C2C]'
-              }`}
-              title="Card View"
-            >
-              <List className="w-4 h-4" />
-            </button>
+        <div className="flex items-center gap-2">
+          {/* View toggle — pill style */}
+          <div className="flex items-center rounded-xl border border-white/8 overflow-hidden">
+            {([
+              { mode: 'table' as const, Icon: Table2, title: "Table" },
+              { mode: 'grid' as const, Icon: LayoutGrid, title: "Grid" },
+              { mode: 'card' as const, Icon: List, title: "Card" },
+            ]).map(({ mode, Icon, title }) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`p-1.5 transition-all ${
+                  viewMode === mode
+                    ? "bg-white/12 text-(--text-primary)"
+                    : "text-(--text-tertiary) hover:text-(--text-secondary)"
+                }`}
+                title={title}
+              >
+                <Icon className="w-3.5 h-3.5" />
+              </button>
+            ))}
           </div>
           <button
             onClick={() => {
@@ -515,93 +500,68 @@ export default function PricingManagementDark() {
               }
             }}
             disabled={isResetting}
-            className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--text-secondary) font-medium py-3 px-4 rounded-xl flex items-center gap-2 transition-all duration-200 border border-(--accent-orange)/30"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
             title="Reset all pricing models to factory defaults"
           >
-            <RotateCcw className="w-4 h-4" />
-            {isResetting ? 'Resetting...' : 'Reset to Default'}
+            <RotateCcw className="w-3.5 h-3.5" strokeWidth={1.75} />
+            {isResetting ? 'Resetting...' : 'Reset'}
           </button>
-          <button 
+          <button
             onClick={() => {
               setSelectedModel(null);
               setFormData({});
               setIsEditing(true);
             }}
-            className="bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-(--text-primary) font-semibold py-3 px-6 rounded-xl flex items-center gap-2 transition-all duration-200 shadow-lg"
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-[12px] font-medium bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white transition-colors"
           >
-            <Plus className="w-5 h-5" />
-            Add New Model
+            <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
+            Add Model
           </button>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex items-center bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-1 mb-6">
-        <button
-          onClick={() => setActiveTab('models')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
-            activeTab === 'models' 
-              ? 'bg-(--accent-blue) text-(--text-primary)' 
-              : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
-          }`}
-        >
-          <DollarSign className="w-4 h-4" />
-          Models
-        </button>
-        <button
-          onClick={() => setActiveTab('testing')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
-            activeTab === 'testing' 
-              ? 'bg-(--accent-purple) text-(--text-primary)' 
-              : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
-          }`}
-        >
-          <Calculator className="w-4 h-4" />
-          Testing
-        </button>
-        <button
-          onClick={() => setActiveTab('strategy')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
-            activeTab === 'strategy'
-              ? 'bg-amber-600 text-(--text-primary)'
-              : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
-          }`}
-        >
-          <Star className="w-4 h-4" />
-          Strategy
-        </button>
-        <button
-          onClick={() => { setActiveTab('kie'); fetchKieKeys(); }}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-200 ${
-            activeTab === 'kie'
-              ? 'bg-emerald-600 text-(--text-primary)'
-              : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)'
-          }`}
-        >
-          <Key className="w-4 h-4" />
-          KIE AI
-        </button>
+      {/* Tab Navigation — pill toggle style */}
+      <div className="flex items-center rounded-xl border border-white/8 overflow-hidden mb-5 w-fit">
+        {([
+          { key: 'models' as const, label: 'Models', Icon: DollarSign, onClick: () => setActiveTab('models') },
+          { key: 'testing' as const, label: 'Testing', Icon: Calculator, onClick: () => setActiveTab('testing') },
+          { key: 'strategy' as const, label: 'Strategy', Icon: Star, onClick: () => setActiveTab('strategy') },
+          { key: 'kie' as const, label: 'KIE AI', Icon: Key, onClick: () => { setActiveTab('kie'); fetchKieKeys(); } },
+        ]).map(({ key, label, Icon, onClick }) => (
+          <button
+            key={key}
+            onClick={onClick}
+            className={`flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium transition-all ${
+              activeTab === key
+                ? "bg-white/12 text-(--text-primary)"
+                : "text-(--text-tertiary) hover:text-(--text-secondary)"
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Content */}
       {activeTab === 'models' && (
         <>
-          {/* Search + Filters + Category Tabs — Single Row */}
-          <div className="flex items-center gap-3 mb-4">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-(--text-tertiary)" />
+          {/* Search + Category + Filters — compact row */}
+          <div className="flex items-center gap-2 mb-4">
+            {/* Search — compact inline */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-(--border-primary) hover:border-(--border-secondary) transition-colors flex-1 max-w-[260px]">
+              <Search className="w-3.5 h-3.5 text-(--text-tertiary) shrink-0" strokeWidth={1.75} />
               <input
                 type="text"
                 placeholder="Search models..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-(--bg-secondary) border border-(--border-primary) rounded-xl pl-10 pr-4 py-2.5 text-sm text-(--text-primary) placeholder-(--text-tertiary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent"
+                className="bg-transparent text-[12px] text-(--text-primary) placeholder:text-(--text-tertiary) outline-none w-full"
               />
             </div>
 
-            {/* Category Tabs */}
-            <div className="flex gap-1 bg-(--bg-secondary) border border-(--border-primary) rounded-xl p-1 shrink-0">
+            {/* Category Tabs — pill toggle */}
+            <div className="flex items-center rounded-xl border border-white/8 overflow-hidden shrink-0">
               {([
                 { key: 'all' as const, label: 'All', icon: undefined },
                 { key: 'image' as const, label: 'Image', icon: Image },
@@ -611,67 +571,83 @@ export default function PricingManagementDark() {
                 <button
                   key={key}
                   onClick={() => setModelCategoryTab(key)}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1 px-3 py-1.5 text-[12px] font-medium transition-all ${
                     modelCategoryTab === key
-                      ? 'bg-(--accent-blue) text-(--text-primary)'
-                      : 'text-(--text-tertiary) hover:text-(--text-secondary) hover:bg-(--bg-tertiary)'
+                      ? 'bg-white/12 text-(--text-primary)'
+                      : 'text-(--text-tertiary) hover:text-(--text-secondary)'
                   }`}
                 >
-                  {Icon && <Icon className="w-3 h-3" />}
+                  {Icon && <Icon className="w-3 h-3" strokeWidth={1.75} />}
                   {label}
-                  <span className="opacity-60 ml-0.5">
+                  <span className="opacity-50 ml-0.5 tabular-nums">
                     ({models?.filter(m => key === 'all' ? true : key === 'audio' ? (m.modelType === 'audio' || (m.modelType as string) === 'music') : m.modelType === key).length || 0})
                   </span>
                 </button>
               ))}
             </div>
 
-            {/* Filter Button */}
+            {/* Filter Button — ghost style */}
             <div className="relative shrink-0">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="bg-(--bg-tertiary) hover:bg-(--bg-primary) text-(--text-secondary) font-medium py-2.5 px-3 rounded-xl transition-all flex items-center text-sm"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                  showFilters || filters.pricingType !== 'all' || filters.status !== 'all' || filters.favorite
+                    ? 'text-(--text-primary) bg-white/10'
+                    : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5'
+                }`}
               >
-                <Filter className="w-4 h-4 mr-1.5" />
+                <Filter className="w-3.5 h-3.5" strokeWidth={1.75} />
                 Filters
               </button>
 
               {showFilters && (
-                <div className="absolute top-full mt-2 right-0 w-72 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-lg z-50">
-                  <div className="p-4 space-y-4">
+                <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowFilters(false)} />
+                <div className="absolute top-full mt-1 right-0 w-[240px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50 py-1.5">
+                  <div className="px-3 pt-2 pb-1.5">
+                    <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-tertiary)">Filters</span>
+                  </div>
+                  <div className="h-px bg-(--border-primary) mx-2 my-1" />
+                  <div className="px-3 py-2 space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-(--text-secondary) mb-2">Pricing Type</label>
+                      <label className="text-[10px] font-semibold tracking-wider uppercase text-(--text-tertiary) mb-1.5 block">Pricing Type</label>
                       <select value={filters.pricingType} onChange={(e) => setFilters({...filters, pricingType: e.target.value})}
-                        className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent">
+                        className="w-full bg-(--bg-primary) border border-(--border-primary) rounded-md px-2.5 py-1.5 text-[12px] text-(--text-primary) focus:outline-none focus:border-(--accent-blue)/40">
                         <option value="all">All Types</option>
                         <option value="fixed">Fixed Price</option>
                         <option value="formula">Formula Based</option>
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-(--text-secondary) mb-2">Status</label>
+                      <label className="text-[10px] font-semibold tracking-wider uppercase text-(--text-tertiary) mb-1.5 block">Status</label>
                       <select value={filters.status} onChange={(e) => setFilters({...filters, status: e.target.value})}
-                        className="w-full bg-(--bg-tertiary) border border-(--border-primary) rounded-xl px-3 py-2 text-(--text-primary) focus:outline-none focus:ring-2 focus:ring-(--accent-blue)/50 focus:border-transparent">
+                        className="w-full bg-(--bg-primary) border border-(--border-primary) rounded-md px-2.5 py-1.5 text-[12px] text-(--text-primary) focus:outline-none focus:border-(--accent-blue)/40">
                         <option value="all">All Status</option>
                         <option value="active">Active</option>
                         <option value="inactive">Inactive</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="flex items-center gap-2 text-sm font-medium text-(--text-secondary) cursor-pointer">
-                        <input type="checkbox" checked={filters.favorite} onChange={(e) => setFilters({...filters, favorite: e.target.checked})}
-                          className="w-4 h-4 bg-(--bg-tertiary) border border-(--border-primary) rounded" />
-                        Show only favorites
-                      </label>
-                    </div>
-                    <div className="pt-2 border-t border-(--border-primary)">
-                      <button onClick={() => setFilters({ pricingType: 'all', status: 'all', modelType: 'all', favorite: false })}
-                        className="w-full bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-(--text-primary) font-medium py-2 px-4 rounded-xl transition-all">
-                        Clear Filters
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => {
+                        setFilters({...filters, favorite: !filters.favorite});
+                      }}
+                      className={`w-full flex items-center gap-2 px-2 py-2 rounded-md text-[13px] font-medium transition-colors ${
+                        filters.favorite ? 'bg-white/8 text-(--text-primary)' : 'text-(--text-secondary) hover:bg-white/5'
+                      }`}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${filters.favorite ? 'text-amber-400 fill-amber-400' : 'text-(--text-tertiary)'}`} strokeWidth={1.75} />
+                      Favorites only
+                    </button>
+                  </div>
+                  <div className="h-px bg-(--border-primary) mx-2 my-1" />
+                  <div className="px-3 py-1.5">
+                    <button onClick={() => setFilters({ pricingType: 'all', status: 'all', modelType: 'all', favorite: false })}
+                      className="text-[11px] text-(--accent-blue) hover:text-(--text-primary) font-medium transition-colors">
+                      Clear all
+                    </button>
                   </div>
                 </div>
+                </>
               )}
             </div>
           </div>
