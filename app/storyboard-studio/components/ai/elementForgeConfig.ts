@@ -140,7 +140,7 @@ const HAIR_COLOR_OPTIONS: ForgeOption[] = [
   { key: "brown", label: "Brown", color: "#5c3317" },
   { key: "blonde", label: "Blonde", color: "#d4a853" },
   { key: "red", label: "Red", color: "#a0522d" },
-  { key: "white", label: "White/Gray", color: "#c0c0c0" },
+  { key: "white", label: "Silver White", color: "#c0c0c0" },
   { key: "blue", label: "Blue", color: "#4a90e2" },
   { key: "pink", label: "Pink", color: "#e27a9e" },
   { key: "green", label: "Green", color: "#4a9e6e" },
@@ -524,7 +524,7 @@ const HUMAN_CHARACTER_STEPS: ForgeStep[] = [
     hasSubTabs: true,
     fields: [
       { key: "details", label: "Features", type: "multi-carousel", options: DETAIL_PRESETS },
-      { key: "detailsCustom", label: "Custom", type: "text", placeholder: "e.g. a slight scar on her cheek" },
+      { key: "detailsCustom", label: "Custom", type: "textarea", placeholder: "e.g. a slight scar on her cheek, tattoo of a dragon on left forearm, birthmark near the jawline..." },
     ],
   },
   {
@@ -533,12 +533,12 @@ const HUMAN_CHARACTER_STEPS: ForgeStep[] = [
     hasSubTabs: true,
     fields: [
       { key: "outfit", label: "Style", type: "carousel", options: OUTFIT_OPTIONS },
-      { key: "outfitCustom", label: "Custom", type: "text", placeholder: "e.g. black leather jacket, dark pants" },
+      { key: "outfitCustom", label: "Custom", type: "textarea", placeholder: "e.g. black leather jacket with silver zippers, dark slim-fit pants, combat boots, fingerless gloves, silver chain necklace..." },
     ],
   },
   {
     key: "references",
-    label: "References",
+    label: "Generate",
     fields: [
       { key: "ref_face", label: "Face", type: "image-upload", placeholder: "Upload a face / headshot reference" },
       { key: "ref_outfit", label: "Outfit", type: "image-upload", placeholder: "Upload an outfit / clothing reference" },
@@ -567,7 +567,7 @@ const NON_HUMAN_CHARACTER_STEPS: ForgeStep[] = [
   },
   {
     key: "references",
-    label: "References",
+    label: "Generate",
     fields: [
       { key: "ref_head", label: "Head", type: "image-upload", placeholder: "Upload a head / face reference" },
       { key: "ref_body", label: "Body", type: "image-upload", placeholder: "Upload a body / torso reference" },
@@ -638,14 +638,31 @@ export const PROP_STEPS: ForgeStep[] = [
   },
 ];
 
-export function getStepsForType(type: ForgeElementType, characterType?: string): ForgeStep[] {
+/** Simple mode: only identity + generate (prompt tab added separately in ElementForge) */
+const SIMPLE_TABS: Record<string, string[]> = {
+  character: ["identity"],
+  environment: ["setting"],
+  prop: ["basics"],
+};
+
+export function getStepsForType(type: ForgeElementType, characterType?: string, isSimple?: boolean): ForgeStep[] {
+  let steps: ForgeStep[];
   switch (type) {
     case "character":
-      if (characterType && characterType !== "human") return NON_HUMAN_CHARACTER_STEPS;
-      return HUMAN_CHARACTER_STEPS;
-    case "environment": return ENVIRONMENT_STEPS;
-    case "prop": return PROP_STEPS;
+      steps = (characterType && characterType !== "human") ? NON_HUMAN_CHARACTER_STEPS : HUMAN_CHARACTER_STEPS;
+      break;
+    case "environment":
+      steps = ENVIRONMENT_STEPS;
+      break;
+    case "prop":
+      steps = PROP_STEPS;
+      break;
   }
+  if (isSimple) {
+    const allowedKeys = SIMPLE_TABS[type] || ["identity", "references"];
+    return steps.filter(s => allowedKeys.includes(s.key));
+  }
+  return steps;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -783,6 +800,31 @@ export function composePrompt(type: ForgeElementType, identity: Record<string, a
   }
 }
 
+/**
+ * Build override instructions for image-to-image models.
+ * When reference photos are provided, the model tends to copy visual features
+ * (hair color, eye color, etc.) from the image instead of following the prompt.
+ * This returns explicit override text to append to the prompt.
+ */
+export function composeImageOverrides(identity: Record<string, any>): string {
+  const overrides: string[] = [];
+
+  if (identity.hairColor) {
+    const color = labelFor(HAIR_COLOR_OPTIONS, identity.hairColor).toLowerCase();
+    overrides.push(`hair color must be ${color}`);
+  }
+  if (identity.eyeColor) {
+    const color = labelFor(EYE_COLOR_OPTIONS, identity.eyeColor).toLowerCase();
+    overrides.push(`eye color must be ${color}`);
+  }
+  if (identity.ethnicity) {
+    overrides.push(`${labelFor(ETHNICITY_OPTIONS, identity.ethnicity)} ethnicity`);
+  }
+
+  if (overrides.length === 0) return "";
+  return `\n\nIMPORTANT — override the reference image for these attributes: ${overrides.join(", ")}. Follow the text description, not the reference photo, for these features.`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // BADGE HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -795,7 +837,7 @@ export function getIdentityBadges(type: ForgeElementType, identity: Record<strin
   for (const step of steps) {
     for (const field of step.fields) {
       const val = identity[field.key];
-      if (!val || field.key === "name") continue;
+      if (!val || field.key === "name" || field.type === "image-upload") continue;
 
       if (field.type === "multi-select" && Array.isArray(val)) {
         for (const v of val) {

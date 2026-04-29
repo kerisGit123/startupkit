@@ -147,6 +147,8 @@ export interface TriggerImageGenerationParams {
   callbackUrl?: string;
   convexToken?: string;
   cinemaMetadata?: Record<string, any>;
+  variantLabel?: string;
+  variantModel?: string;
 }
 
 // Video generation interface for Seedance 1.5 Pro
@@ -419,6 +421,9 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
       cropY: params.cropY,
       cropWidth: params.cropWidth,
       cropHeight: params.cropHeight,
+      // Element variant metadata (for appendReferenceImage)
+      variantLabel: params.variantLabel,
+      variantModel: params.variantModel,
     },
   });
   

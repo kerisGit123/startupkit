@@ -187,10 +187,21 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
 
             {imgLoaded && (
               <>
-                {/* Dim overlay outside crop */}
-                {/* Bright crop region */}
+                {/* Bright crop region — uses clip-path on a full-size image for accurate clipping */}
+                <img
+                  src={imageUrl}
+                  alt=""
+                  className="absolute top-0 left-0 select-none pointer-events-none"
+                  style={{
+                    width: displaySize.w,
+                    height: displaySize.h,
+                    clipPath: `inset(${crop.y}px ${displaySize.w - crop.x - crop.size}px ${displaySize.h - crop.y - crop.size}px ${crop.x}px round 8px)`,
+                  }}
+                  draggable={false}
+                />
+                {/* Crop border + drag handle */}
                 <div
-                  className="absolute overflow-hidden cursor-move"
+                  className="absolute cursor-move"
                   style={{
                     left: crop.x,
                     top: crop.y,
@@ -201,19 +212,7 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
                     borderRadius: 8,
                   }}
                   onMouseDown={(e) => handleMouseDown(e, "move")}
-                >
-                  <img
-                    src={imageUrl}
-                    alt=""
-                    className="block select-none pointer-events-none"
-                    style={{
-                      width: displaySize.w,
-                      height: displaySize.h,
-                      transform: `translate(${-crop.x}px, ${-crop.y}px)`,
-                    }}
-                    draggable={false}
-                  />
-                </div>
+                />
 
                 {/* Resize handle (bottom-right) */}
                 <div

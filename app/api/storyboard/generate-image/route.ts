@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
       audioEnabled,   // NEW - audio enabled for Seedance 1.5 Pro
       cinemaMetadata, // Cinema Studio metadata (camera, lens, focal, aperture, etc.)
       elementId,      // Element ID — when present, file is categorized as "elements"
+      variantLabel,   // Element variant label (for character variants)
+      variantModel,   // Element variant model used
     } = await req.json();
 
     console.log('[generate-image] API route received parameters:', {
@@ -146,6 +148,8 @@ export async function POST(req: NextRequest) {
         outputFormat,    // NEW - pass output format from VideoImageAIPanel
         convexToken: convexToken ?? undefined,
         cinemaMetadata, // Cinema Studio metadata
+        variantLabel,
+        variantModel,
       });
     }
 

@@ -7,7 +7,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import {
   X, Shuffle, ChevronDown, ChevronRight, ChevronLeft, Sparkles, Check, User, Trees, Package,
   ImagePlus, Send, FileText, Crop, Upload, Trash2, Star, Coins, Monitor, RectangleHorizontal, Zap, Camera, FolderOpen,
-  RefreshCw, Copy, AlertCircle,
+  RefreshCw, Copy, AlertCircle, Expand,
 } from "lucide-react";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { usePricingData } from "../shared/usePricingData";
@@ -19,6 +19,7 @@ import {
   type ForgeOption,
   getStepsForType,
   composePrompt,
+  composeImageOverrides,
   getIdentityBadges,
   randomizeIdentity,
 } from "./elementForgeConfig";
@@ -275,17 +276,24 @@ function FieldEraSlider({ field, value, onChange }: { field: ForgeField; value: 
 }
 
 function FieldImageUpload({
-  field, value, onChange, onBrowse,
+  field, value, onChange, onBrowse, onPreview,
 }: {
   field: ForgeField; value: string; onChange: (v: string) => void;
-  onBrowse: () => void;
+  onBrowse: () => void; onPreview?: (url: string) => void;
 }) {
   if (value) {
     return (
       <div className="relative group w-full h-36 rounded-xl overflow-hidden border border-(--border-primary)">
-        <img src={value} alt={field.label} className="w-full h-full object-cover" />
+        <img src={value} alt={field.label} className="w-full h-full object-cover cursor-pointer" onDoubleClick={() => onPreview?.(value)} />
         {/* Hover overlay with actions */}
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">
+          <button
+            onClick={() => onPreview?.(value)}
+            className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all backdrop-blur-sm"
+            title="Preview full size"
+          >
+            <ImagePlus size={14} />
+          </button>
           <button
             onClick={onBrowse}
             className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all backdrop-blur-sm"
@@ -758,6 +766,16 @@ export function ElementForge({
   const [thumbnailUrl, setThumbnailUrl] = useState<string>(element?.thumbnailUrl || "");
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
 
+  // Live element data from Convex (auto-updates when callback adds variants)
+  const liveElement = useQuery(
+    api.storyboard.storyboardElements.getById,
+    element?._id ? { id: element._id } : "skip"
+  );
+  // Use live data for variants/refs, fall back to prop
+  const liveReferenceUrls = liveElement?.referenceUrls ?? referenceUrls;
+  const liveVariants = liveElement?.variants ?? element?.variants;
+  const livePrimaryIndex = liveElement?.primaryIndex ?? element?.primaryIndex ?? 0;
+
   const createElement = useMutation(api.storyboard.storyboardElements.create);
   const updateElement = useMutation(api.storyboard.storyboardElements.update);
 
@@ -826,9 +844,9 @@ export function ElementForge({
         : undefined;
 
       if (mode === "edit" && element?._id) {
+        // Don't overwrite referenceUrls — managed by generation callbacks
         await updateElement({
           id: element._id, name: name.trim(), description, identity: identityData,
-          referenceUrls: referenceUrls.length > 0 ? referenceUrls : undefined,
           thumbnailUrl: thumbnailUrl || undefined,
           referencePhotos,
         });
@@ -880,13 +898,24 @@ export function ElementForge({
       if (rp.ref_body) refImageUrls.push(rp.ref_body);
     }
 
-    const hasRefs = refImageUrls.length > 0;
+    // Z-Image is text-only — never send reference images
+    const isTextOnly = genModel === "z-image";
+    const hasRefs = !isTextOnly && refImageUrls.length > 0;
     const model = hasRefs && genModel === "gpt-image-2-text-to-image"
       ? "gpt-image-2-image-to-image" : genModel;
     const modelMode = hasRefs ? "image-to-image" : "text-to-image";
 
-    // Use the full referencePrompt (identity + selected template)
-    const prompt = referencePrompt;
+    // Build prompt based on model capabilities
+    // Z-Image: short prompt only (composedPrompt), no template wrapping
+    // Others: full referencePrompt (template + identity), with img2img overrides if refs present
+    let prompt: string;
+    if (isTextOnly) {
+      prompt = composedPrompt;
+    } else if (hasRefs) {
+      prompt = referencePrompt + composeImageOverrides(identity);
+    } else {
+      prompt = referencePrompt;
+    }
 
     const baseName = identity.name?.trim() || "Variant";
     const label = genVariantLabel.trim() || `${baseName} ${(referenceUrls.length) + 1}`;
@@ -942,6 +971,8 @@ export function ElementForge({
 
   const setPrimaryVariant = useMutation(api.storyboard.storyboardElements.setPrimaryVariant);
   const updateVariantLabelMut = useMutation(api.storyboard.storyboardElements.updateVariantLabel);
+  const removeVariantMut = useMutation(api.storyboard.storyboardElements.removeVariant);
+  const deleteFileMut = useMutation(api.storyboard.storyboardFiles.remove);
 
   // Query files linked to this element to show generating/failed states
   const elementFiles = useQuery(
@@ -951,7 +982,35 @@ export function ElementForge({
   const pendingFiles = useMemo(() =>
     (elementFiles || []).filter(f => f.status === "generating" || f.status === "processing" || f.status === "failed" || f.status === "error"),
   [elementFiles]);
-  const deleteFileMut = useMutation(api.storyboard.storyboardFiles.remove);
+
+  const handleDeleteVariant = useCallback(async (idx: number) => {
+    if (!element?._id) return;
+    const url = liveReferenceUrls[idx];
+    if (!window.confirm(`Delete "${liveVariants?.[idx]?.label || `Variant ${idx + 1}`}"? This will remove the image from R2.`)) return;
+
+    try {
+      // 1. Remove from element's referenceUrls/variants
+      const result = await removeVariantMut({ id: element._id, index: idx });
+
+      // 2. Find and soft-delete the storyboard_files record + R2 file
+      if (url) {
+        const matchingFile = elementFiles?.find(f => f.sourceUrl === url || (f.r2Key && url.includes(f.r2Key)));
+        if (matchingFile) {
+          if (matchingFile.r2Key) {
+            await fetch("/api/storyboard/delete-file", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ r2Key: matchingFile.r2Key }),
+            });
+          }
+          await deleteFileMut({ id: matchingFile._id });
+        }
+      }
+    } catch (e) {
+      console.error("[ElementForge] Failed to delete variant:", e);
+    }
+  }, [element, liveReferenceUrls, liveVariants, elementFiles, removeVariantMut, deleteFileMut]);
+
   const [pullingFileId, setPullingFileId] = useState<string | null>(null);
 
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -1033,7 +1092,7 @@ export function ElementForge({
       case "era-slider": return <FieldEraSlider field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
       case "carousel": return <FieldCarousel field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
       case "combobox": return <FieldCombobox field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} />;
-      case "image-upload": return <FieldImageUpload field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} onBrowse={() => setRefBrowseField(field.key)} />;
+      case "image-upload": return <FieldImageUpload field={field} value={val || ""} onChange={(v) => updateField(field.key, v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField(field.key)} />;
       default: return null;
     }
   };
@@ -1091,7 +1150,7 @@ export function ElementForge({
                   <img src={thumbnailUrl} alt="Thumbnail"
                     className="w-9 h-9 rounded-lg object-cover border-2 border-(--accent-blue) cursor-pointer hover:border-(--accent-blue-hover) transition-colors"
                     title="Current thumbnail"
-                    onClick={() => referenceUrls.length > 0 && setCropImageUrl(referenceUrls[element?.primaryIndex ?? 0] || referenceUrls[0])}
+                    onClick={() => liveReferenceUrls.length > 0 && setCropImageUrl(liveReferenceUrls[livePrimaryIndex] || liveReferenceUrls[0])}
                   />
                 )}
                 <div className="w-px h-5 bg-white/8" />
@@ -1099,23 +1158,23 @@ export function ElementForge({
             )}
 
             {/* Generated variant avatars */}
-            {referenceUrls.length > 0 && (
+            {liveReferenceUrls.length > 0 && (
               <div className="flex items-center gap-0.5">
-                {referenceUrls.slice(0, 4).map((url, i) => {
-                  const isPrimary = i === (element?.primaryIndex ?? 0);
+                {liveReferenceUrls.slice(0, 4).map((url, i) => {
+                  const isPrimary = i === livePrimaryIndex;
                   return (
                     <img key={i} src={url} alt={`Variant ${i + 1}`}
-                      onClick={() => setCropImageUrl(url)}
+                      onClick={() => setPreviewUrl(url)}
                       className={`w-8 h-8 rounded-full object-cover border-2 cursor-pointer hover:border-white/40 transition-colors ${
                         isPrimary ? "border-amber-400" : "border-white/15"
                       } ${i > 0 ? "-ml-1.5" : ""}`}
-                      title="Click to crop as thumbnail"
+                      title="Click to preview"
                     />
                   );
                 })}
-                {referenceUrls.length > 4 && (
+                {liveReferenceUrls.length > 4 && (
                   <span className="w-8 h-8 rounded-full bg-white/10 border-2 border-white/15 -ml-1.5 flex items-center justify-center text-[10px] font-bold text-white/60">
-                    +{referenceUrls.length - 4}
+                    +{liveReferenceUrls.length - 4}
                   </span>
                 )}
               </div>
@@ -1227,21 +1286,23 @@ export function ElementForge({
           {currentTab.key === "generate" && (
             <div className="flex flex-col h-full gap-4">
               {/* Reference Photos row */}
-              <div>
+              <div className={genModel === "z-image" ? "opacity-40 pointer-events-none" : ""}>
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">
-                  Reference Photos <span className="font-normal normal-case opacity-60">(optional)</span>
+                  Reference Photos <span className="font-normal normal-case opacity-60">
+                    {genModel === "z-image" ? "(not supported by Z-Image)" : "(optional)"}
+                  </span>
                 </label>
                 <div className="flex items-stretch gap-2">
                   <div className={`flex-[2] flex gap-2 ${identity.ref_fullBody ? "opacity-30 pointer-events-none" : ""}`}>
                     {isNonHuman ? (
                       <>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_head", label: "Head", type: "image-upload", placeholder: "Head" }} value={identity.ref_head || ""} onChange={(v) => updateField("ref_head", v)} onBrowse={() => setRefBrowseField("ref_head")} /></div>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_body", label: "Body", type: "image-upload", placeholder: "Body" }} value={identity.ref_body || ""} onChange={(v) => updateField("ref_body", v)} onBrowse={() => setRefBrowseField("ref_body")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_head", label: "Head", type: "image-upload", placeholder: "Head" }} value={identity.ref_head || ""} onChange={(v) => updateField("ref_head", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_head")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_body", label: "Body", type: "image-upload", placeholder: "Body" }} value={identity.ref_body || ""} onChange={(v) => updateField("ref_body", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_body")} /></div>
                       </>
                     ) : (
                       <>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Face", type: "image-upload", placeholder: "Face" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onBrowse={() => setRefBrowseField("ref_face")} /></div>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Outfit", type: "image-upload", placeholder: "Outfit" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onBrowse={() => setRefBrowseField("ref_outfit")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Face", type: "image-upload", placeholder: "Face" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Outfit", type: "image-upload", placeholder: "Outfit" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} /></div>
                       </>
                     )}
                   </div>
@@ -1251,7 +1312,7 @@ export function ElementForge({
                     <div className="w-px flex-1 bg-white/10" />
                   </div>
                   <div className={`flex-1 ${(identity.ref_face || identity.ref_outfit || identity.ref_head || identity.ref_body) ? "opacity-30 pointer-events-none" : ""}`}>
-                    <FieldImageUpload field={{ key: "ref_fullBody", label: "Full Body", type: "image-upload", placeholder: "Full body" }} value={identity.ref_fullBody || ""} onChange={(v) => updateField("ref_fullBody", v)} onBrowse={() => setRefBrowseField("ref_fullBody")} />
+                    <FieldImageUpload field={{ key: "ref_fullBody", label: "Full Body", type: "image-upload", placeholder: "Full body" }} value={identity.ref_fullBody || ""} onChange={(v) => updateField("ref_fullBody", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_fullBody")} />
                   </div>
                 </div>
               </div>
@@ -1391,11 +1452,11 @@ export function ElementForge({
               {/* Generated Variants — takes remaining space */}
               <div className="flex-1 min-h-0">
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">
-                  Generated Variants {(referenceUrls.length > 0 || pendingFiles.length > 0) && (
-                    <span className="text-(--text-secondary) font-normal">({referenceUrls.length}{pendingFiles.length > 0 ? ` + ${pendingFiles.length} processing` : ""})</span>
+                  Generated Variants {(liveReferenceUrls.length > 0 || pendingFiles.length > 0) && (
+                    <span className="text-(--text-secondary) font-normal">({liveReferenceUrls.length}{pendingFiles.length > 0 ? ` + ${pendingFiles.length} processing` : ""})</span>
                   )}
                 </label>
-                {referenceUrls.length === 0 && pendingFiles.length === 0 ? (
+                {liveReferenceUrls.length === 0 && pendingFiles.length === 0 ? (
                   <div className="flex items-center justify-center h-24 rounded-xl border border-dashed border-(--border-primary) text-[12px] text-(--text-tertiary)">
                     No variants yet — generate your first image above
                   </div>
@@ -1502,9 +1563,9 @@ export function ElementForge({
                     })}
 
                     {/* Completed variant cards */}
-                    {referenceUrls.map((url, idx) => {
-                      const isPrimary = idx === (element?.primaryIndex ?? 0);
-                      const variant = element?.variants?.[idx];
+                    {liveReferenceUrls.map((url, idx) => {
+                      const isPrimary = idx === livePrimaryIndex;
+                      const variant = liveVariants?.[idx];
                       const isEditing = editingVariantIdx === idx;
                       return (
                         <div key={idx} className={`group relative shrink-0 w-[180px] rounded-xl overflow-hidden border-2 transition-all ${
@@ -1513,26 +1574,39 @@ export function ElementForge({
                           <img
                             src={url}
                             alt={variant?.label || `${identity.name || "Variant"} ${idx + 1}`}
-                            className="w-full aspect-[4/3] object-cover cursor-pointer"
-                            onClick={() => setCropImageUrl(url)}
-                            onDoubleClick={(e) => { e.stopPropagation(); setPreviewUrl(url); }}
-                            title="Click to crop · Double-click to preview"
+                            className="w-full aspect-[4/3] object-cover"
                             draggable={false}
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1 text-[10px] text-white/70">
-                              <Crop size={10} /> Crop
-                            </div>
-                          </div>
-                          <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPreviewUrl(url); }}
+                              className="p-2 rounded-lg bg-white/15 hover:bg-white/30 text-white transition-colors"
+                              title="Preview"
+                            >
+                              <Expand size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setCropImageUrl(url); }}
+                              className="p-2 rounded-lg bg-white/15 hover:bg-white/30 text-white transition-colors"
+                              title="Crop as thumbnail"
+                            >
+                              <Crop size={16} />
+                            </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); setPrimaryVariant({ id: element!._id, index: idx }); }}
-                              className={`absolute top-2 right-2 p-1 rounded-md transition-colors ${
-                                isPrimary ? "text-amber-400" : "text-white/60 hover:text-amber-400"
+                              className={`p-2 rounded-lg transition-colors ${
+                                isPrimary ? "bg-amber-400/30 text-amber-400" : "bg-white/15 hover:bg-white/30 text-white"
                               }`}
                               title={isPrimary ? "Primary identity sheet" : "Set as primary"}
                             >
-                              <Star size={14} className={isPrimary ? "fill-amber-400" : ""} />
+                              <Star size={16} className={isPrimary ? "fill-amber-400" : ""} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteVariant(idx); }}
+                              className="p-2 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-white transition-colors"
+                              title="Delete variant"
+                            >
+                              <Trash2 size={16} />
                             </button>
                           </div>
                           {isPrimary && (
@@ -1608,8 +1682,8 @@ export function ElementForge({
                   <ImagePlus className="w-3.5 h-3.5" strokeWidth={1.75} /> References
                 </button>
               )}
-              {referenceUrls.length > 0 && (
-                <button onClick={() => setCropImageUrl(referenceUrls[element?.primaryIndex ?? 0] || referenceUrls[0])} disabled={uploadingThumbnail}
+              {liveReferenceUrls.length > 0 && (
+                <button onClick={() => setCropImageUrl(liveReferenceUrls[livePrimaryIndex] || liveReferenceUrls[0])} disabled={uploadingThumbnail}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 disabled:opacity-40 transition-colors">
                   <Crop className={`w-3.5 h-3.5 ${uploadingThumbnail ? "animate-spin" : ""}`} strokeWidth={1.75} /> {uploadingThumbnail ? "Uploading..." : "Thumbnail"}
                 </button>
@@ -1658,6 +1732,33 @@ export function ElementForge({
             >
               <X size={18} />
             </button>
+
+            {/* Prev / Next navigation */}
+            {liveReferenceUrls.length > 1 && (() => {
+              const curIdx = liveReferenceUrls.indexOf(previewUrl);
+              return (
+                <>
+                  {curIdx > 0 && (
+                    <button onClick={() => setPreviewUrl(liveReferenceUrls[curIdx - 1])}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors">
+                      <ChevronLeft size={20} />
+                    </button>
+                  )}
+                  {curIdx < liveReferenceUrls.length - 1 && (
+                    <button onClick={() => setPreviewUrl(liveReferenceUrls[curIdx + 1])}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl bg-black/60 hover:bg-black/80 text-white/80 hover:text-white transition-colors">
+                      <ChevronRight size={20} />
+                    </button>
+                  )}
+                  {curIdx >= 0 && (
+                    <div className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-black/60 text-[12px] text-white/70">
+                      {curIdx + 1} / {liveReferenceUrls.length}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2">
               <button
                 onClick={() => { setPreviewUrl(null); setCropImageUrl(previewUrl); }}

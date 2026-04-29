@@ -666,9 +666,12 @@ export async function POST(request: NextRequest) {
       // Auto-update element referenceUrls + thumbnailUrl when this is an element generation
       if (fileRecord?.category === 'elements' && fileRecord?.categoryId && finalUrl) {
         try {
+          const meta = fileRecord.metadata as Record<string, any> | undefined;
           await convex.mutation(api.storyboard.storyboardElements.appendReferenceImage, {
             id: fileRecord.categoryId as Id<"storyboard_elements">,
             imageUrl: finalUrl,
+            variantLabel: meta?.variantLabel || undefined,
+            variantModel: meta?.variantModel || undefined,
           });
           console.log('[kie-callback] Updated element referenceUrls/thumbnail for', fileRecord.categoryId);
         } catch (elementUpdateError) {

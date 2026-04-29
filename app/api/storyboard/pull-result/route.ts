@@ -15,10 +15,11 @@ export async function POST(req: NextRequest) {
 
     const { apiKey } = await resolveKieApiKey(companyId);
 
-    // Try generate/record-info (music/cover) first, then fallback to other endpoints
+    // Try multiple record-info endpoints — different KIE AI services use different paths
     const endpoints = [
-      `https://api.kie.ai/api/v1/generate/record-info?taskId=${taskId}`,
-      `https://api.kie.ai/api/v1/veo/record-info?taskId=${taskId}`,
+      `https://api.kie.ai/api/v1/jobs/record-info?taskId=${taskId}`,      // Image generation (GPT Image 2, Nano Banana, etc.)
+      `https://api.kie.ai/api/v1/generate/record-info?taskId=${taskId}`,  // Music/cover generation
+      `https://api.kie.ai/api/v1/veo/record-info?taskId=${taskId}`,       // Veo video generation
     ];
 
     let resultData: any = null;
@@ -29,21 +30,20 @@ export async function POST(req: NextRequest) {
           method: 'GET',
           headers: { Authorization: `Bearer ${apiKey}` },
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.code === 200 && data?.data) {
-            resultData = data;
-            console.log('[pull-result] Found result from:', endpoint);
-            break;
-          }
+        const data = await res.json().catch(() => null);
+        console.log(`[pull-result] ${endpoint.split('/api/v1/')[1]} → status=${res.status}, code=${data?.code}, taskStatus=${data?.data?.status || 'N/A'}`);
+        if (res.ok && data?.code === 200 && data?.data) {
+          resultData = data;
+          console.log('[pull-result] Found result from:', endpoint);
+          break;
         }
-      } catch {
-        // try next endpoint
+      } catch (e) {
+        console.log(`[pull-result] ${endpoint.split('/api/v1/')[1]} → error:`, e);
       }
     }
 
     if (!resultData) {
-      return NextResponse.json({ error: 'Task not found or still processing' }, { status: 404 });
+      return NextResponse.json({ error: 'Task not found or still processing', status: 'unknown' }, { status: 404 });
     }
 
     const status = resultData.data?.status;

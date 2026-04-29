@@ -13,6 +13,13 @@ export const create = mutation({
     createdBy: v.string(),
     visibility: v.optional(v.union(v.literal("private"), v.literal("public"), v.literal("shared"))),
     identity: v.optional(v.any()),
+    referencePhotos: v.optional(v.object({
+      face: v.optional(v.string()),
+      outfit: v.optional(v.string()),
+      fullBody: v.optional(v.string()),
+      head: v.optional(v.string()),
+      body: v.optional(v.string()),
+    })),
   },
   handler: async (ctx, args) => {
     // Get user from auth context
@@ -46,9 +53,17 @@ export const create = mutation({
       visibility: args.visibility ?? "private",
       status: "ready",
       identity: args.identity,
+      referencePhotos: args.referencePhotos,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
+  },
+});
+
+export const getById = query({
+  args: { id: v.id("storyboard_elements") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id);
   },
 });
 
@@ -331,33 +346,99 @@ export const updateVariantLabel = mutation({
   },
 });
 
+// Remove a variant by index (deletes from referenceUrls + variants arrays, adjusts primaryIndex)
+export const removeVariant = mutation({
+  args: {
+    id: v.id("storyboard_elements"),
+    index: v.number(),
+  },
+  handler: async (ctx, { id, index }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+
+    const el = await ctx.db.get(id);
+    if (!el) throw new Error("Element not found");
+
+    const refs = [...(el.referenceUrls || [])];
+    const variants = [...(el.variants || [])];
+    if (index < 0 || index >= refs.length) throw new Error("Invalid variant index");
+
+    const removedUrl = refs[index];
+    refs.splice(index, 1);
+    if (index < variants.length) variants.splice(index, 1);
+
+    // Adjust primaryIndex
+    let primaryIndex = el.primaryIndex ?? 0;
+    if (refs.length === 0) {
+      primaryIndex = 0;
+    } else if (index < primaryIndex) {
+      primaryIndex = primaryIndex - 1;
+    } else if (index === primaryIndex) {
+      primaryIndex = 0; // reset to first
+    }
+
+    const thumbnailUrl = refs.length > 0 ? refs[primaryIndex] : "";
+
+    await ctx.db.patch(id, {
+      referenceUrls: refs,
+      variants,
+      primaryIndex,
+      thumbnailUrl,
+      updatedAt: Date.now(),
+    });
+
+    console.log(`[removeVariant] Element ${id}: removed index ${index}, refs: ${refs.length}, primary: ${primaryIndex}`);
+    return { removedUrl };
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("storyboard_elements") },
   handler: async (ctx, { id }) => {
     const element = await ctx.db.get(id);
     if (!element) {
       console.log(`[Element Remove] Element ${id} not found, skipping deletion`);
-      return; // Gracefully handle missing elements
+      return { r2Keys: [] };
     }
-    
+
     // Get user from auth context
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("User not authenticated");
     }
-    
+
     // Get user's organization from auth context
     const userOrganizationId = identity.orgId;
     const userId = identity.subject;
     const currentUserCompanyId = userOrganizationId || userId;
-    
+
     // Check if user can delete this element (same companyId)
     if (element.companyId !== currentUserCompanyId) {
       throw new Error("Access denied: You can only delete elements from your organization");
     }
-    
+
+    // Collect all R2 URLs from the element for client-side R2 cleanup
+    const r2Keys: string[] = [];
+
+    // Collect r2Keys from storyboard_files linked to this element (by categoryId)
+    const linkedFiles = await ctx.db
+      .query("storyboard_files")
+      .withIndex("by_categoryId", (q) => q.eq("categoryId", id))
+      .collect();
+    for (const file of linkedFiles) {
+      if (file.r2Key) r2Keys.push(file.r2Key);
+      await ctx.db.delete(file._id);
+    }
+
+    // Also collect URLs stored directly on the element (thumbnailUrl, referenceUrls)
+    // so the client can clean up R2 files that may not be linked via categoryId
+    const urlsToClean: string[] = [];
+    if (element.thumbnailUrl) urlsToClean.push(element.thumbnailUrl);
+    if (element.referenceUrls) urlsToClean.push(...element.referenceUrls);
+
     await ctx.db.delete(id);
-    console.log(`[Element Remove] Successfully deleted element ${id}`);
+    console.log(`[Element Remove] Deleted element ${id} + ${linkedFiles.length} linked files`);
+    return { r2Keys, urlsToClean };
   },
 });
 

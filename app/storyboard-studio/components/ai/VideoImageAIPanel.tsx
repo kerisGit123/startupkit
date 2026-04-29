@@ -1557,13 +1557,18 @@ export function ImageAIPanel({
   };
 
   const handleElementLibrarySelect = (referenceUrls: string[], name: string, element?: any) => {
-    referenceUrls.forEach(url => {
-      handleImageSelect('element', { 
-        url, 
+    // Use the primary identity sheet if available, otherwise fall back to all referenceUrls
+    const primaryIdx = element?.primaryIndex ?? 0;
+    const primaryUrl = referenceUrls[primaryIdx];
+    const urlsToUse = primaryUrl ? [primaryUrl] : referenceUrls;
+
+    urlsToUse.forEach(url => {
+      handleImageSelect('element', {
+        url,
         name,
-        metadata: { 
+        metadata: {
           elementId: element?._id,
-          type: element?.type 
+          type: element?.type
         }
       });
     });
