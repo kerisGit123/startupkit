@@ -324,37 +324,93 @@ export function ProjectsDashboard({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-(--bg-primary)">
-      {/* Top bar */}
-      <div className="border-b border-(--border-primary) shrink-0 px-3 py-3 md:px-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
+      {/* Top bar — design system */}
+      <div className="border-b border-(--border-primary) shrink-0 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          {/* Left: sidebar toggle + title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={onToggleSidebar}
+              className="p-1.5 rounded-md text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors md:hidden"
+            >
+              {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
+            </button>
+            <span className="text-[13px] font-semibold text-(--text-primary) truncate">Any project</span>
+            <MoreHorizontal className="hidden md:block w-4 h-4 text-(--text-tertiary) hover:text-(--text-primary) cursor-pointer transition-colors shrink-0" />
+          </div>
+
+          {/* Right: controls */}
+          <div className="flex items-center gap-2">
+            <TopNavSearch onSearch={setSearchQuery} />
+            <TopNavFilters
+              onFiltersChange={setFilters as any}
+              projectCount={finalFilteredProjects.length}
+            />
+
+            {/* All Files */}
+            <button
+              onClick={onOpenGlobalFileBrowser}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
+            >
+              <FolderOpen className="w-3.5 h-3.5" strokeWidth={1.75} /> All Files
+            </button>
+
+            {/* View toggle — pill style */}
+            <div className="flex items-center rounded-xl border border-white/8 overflow-hidden">
               <button
-                onClick={onToggleSidebar}
-                className="rounded p-1.5 text-gray-400 transition hover:text-white md:hidden"
+                onClick={() => setDashView("card")}
+                title="Card view"
+                className={`p-1.5 transition-all ${dashView === "card" ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}
               >
-                {sidebarOpen
-                  ? <PanelLeftClose className="w-4 h-4" />
-                  : <PanelLeftOpen className="w-4 h-4" />}
+                <Grid3x3 className="w-3.5 h-3.5" />
               </button>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1 text-[11px] text-gray-500 md:hidden">
-                  <span className="shrink-0">Projects</span>
-                  <span>/</span>
-                  <span className="truncate text-gray-300">Any project</span>
-                </div>
-                <span className="hidden truncate text-sm font-semibold text-white md:block">Any project</span>
-              </div>
-              <MoreHorizontal className="hidden w-4 h-4 shrink-0 cursor-pointer text-gray-500 transition hover:text-white md:block" />
+              <button
+                onClick={() => setDashView("table")}
+                title="Table view"
+                className={`p-1.5 transition-all ${dashView === "table" ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div className="flex items-center md:hidden">
+
+            {/* New button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNewDropdown(v => !v)}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-[12px] font-medium bg-(--accent-teal) hover:opacity-90 text-white transition-colors"
+              >
+                New <ChevronDown className="w-3 h-3" />
+              </button>
+              {showNewDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowNewDropdown(false)} />
+                  <div className="absolute right-0 top-full mt-1 z-50 w-[200px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl py-1.5">
+                    <button
+                      onClick={() => { setShowCreateModal(true); setShowNewDropdown(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-(--text-primary) hover:bg-white/5 transition-colors"
+                    >
+                      <Plus className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} /> New Storyboard
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Separator */}
+            <div className="hidden md:block w-px h-5 bg-(--border-primary)" />
+
+            {/* Right side: credits, org, user */}
+            <div className="hidden md:flex items-center gap-2">
+              <CreditBadge />
               <OrgSwitcher
                 appearance={{
                   elements: {
                     rootBox: "flex items-center",
-                    organizationSwitcherTrigger: "px-2 py-1.5 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-1.5 text-xs",
-                    organizationSwitcherTriggerIcon: "w-3.5 h-3.5",
-                    organizationSwitcherTriggerText: "font-medium text-xs text-white",
+                    organizationSwitcherTrigger: "px-3 py-1.5 rounded-md border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-2 text-[12px]",
+                    organizationSwitcherTriggerIcon: "w-4 h-4",
+                    organizationSwitcherTriggerText: "font-medium text-white",
+                    organizationPreviewText: "text-white",
+                    organizationPreviewMainIdentifier: "text-white",
                   },
                 }}
                 afterSelectOrganizationUrl="/storyboard-studio"
@@ -372,92 +428,6 @@ export function ProjectsDashboard({
                 }}
                 afterSignOutUrl="/"
               />
-            </div>
-          </div>
-          <div className="flex flex-col gap-2 rounded-2xl border border-(--border-primary) bg-(--bg-secondary)/80 p-2.5 md:flex-1 md:min-w-0 md:flex-row md:items-center md:justify-end md:rounded-none md:border-0 md:bg-transparent md:p-0 lg:flex-row lg:items-center lg:justify-end">
-            <div className="flex flex-col gap-2 md:min-w-0 md:flex-1 md:justify-end lg:min-w-0 lg:flex-1 lg:justify-end">
-              <TopNavSearch onSearch={setSearchQuery} />
-            </div>
-            <div className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 md:flex md:flex-wrap md:items-center md:justify-end">
-              <TopNavFilters
-                onFiltersChange={setFilters as any}
-                projectCount={finalFilteredProjects.length}
-              />
-              <button
-                onClick={onOpenGlobalFileBrowser}
-                className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-(--bg-tertiary) border border-(--border-primary) px-3 py-2 text-sm font-medium text-(--text-secondary) transition hover:bg-white/10 hover:text-white md:flex-none md:rounded-lg md:px-4 md:py-2"
-              >
-                <FolderOpen className="w-4 h-4" /> All Files
-              </button>
-              <div className="flex items-center gap-0.5 rounded-xl bg-white/5 p-0.5 md:rounded-lg">
-                <button
-                  onClick={() => setDashView("card")}
-                  title="Card view"
-                  className={`p-2 rounded-lg transition md:p-1.5 md:rounded-md ${dashView === "card" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}
-                >
-                  <Grid3x3 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setDashView("table")}
-                  title="Table view"
-                  className={`p-2 rounded-lg transition md:p-1.5 md:rounded-md ${dashView === "table" ? "bg-white/15 text-white" : "text-gray-500 hover:text-gray-300"}`}
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="relative">
-                <button
-                  onClick={() => setShowNewDropdown(v => !v)}
-                  className="flex items-center justify-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-500 md:rounded-lg md:px-3 md:py-2"
-                >
-                  New <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-                {showNewDropdown && (
-                  <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-(--border-primary) bg-(--bg-secondary) py-2 shadow-2xl">
-                    <button
-                      onClick={() => {
-                        setShowCreateModal(true);
-                        setShowNewDropdown(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-300 transition hover:bg-white/5"
-                    >
-                      <Plus className="w-4 h-4" /> New Storyboard
-                    </button>
-                  </div>
-                )}
-              </div>
-              <button className="hidden p-1.5 text-gray-400 transition hover:text-white lg:inline-flex">
-                <Settings className="w-4 h-4" />
-              </button>
-              <div className="hidden items-center self-end md:flex lg:self-auto gap-2">
-                <CreditBadge />
-                <OrgSwitcher
-                  appearance={{
-                    elements: {
-                      rootBox: "flex items-center",
-                      organizationSwitcherTrigger: "px-3 py-2 rounded-lg border border-(--border-primary) bg-(--bg-secondary) hover:bg-(--bg-tertiary) text-white hover:text-gray-200 flex items-center gap-2 text-sm mr-3",
-                      organizationSwitcherTriggerIcon: "w-4 h-4",
-                      organizationSwitcherTriggerText: "font-medium text-white",
-                      organizationPreviewText: "text-white",
-                      organizationPreviewMainIdentifier: "text-white",
-                    },
-                  }}
-                  afterSelectOrganizationUrl="/storyboard-studio"
-                  afterCreateOrganizationUrl="/storyboard-studio"
-                />
-                <UserButton
-                  appearance={{
-                    elements: {
-                      avatarBox: "w-8 h-8",
-                      userButtonPopoverCard: "bg-[#1a1a1f] border border-white/10 shadow-xl",
-                      userButtonPopoverActionButton: "text-white hover:bg-white/5 hover:text-gray-200",
-                      userButtonPopoverActionButtonText: "text-sm",
-                      userButtonPopoverFooter: "border-t border-white/10",
-                    },
-                  }}
-                  afterSignOutUrl="/"
-                />
-              </div>
             </div>
           </div>
         </div>
