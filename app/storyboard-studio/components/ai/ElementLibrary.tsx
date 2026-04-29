@@ -564,12 +564,12 @@ export function ElementLibrary({
 
       // Step 2: Delete each file from R2 and remove metadata
       const deletePromises = elementFiles.map(async (file: any) => {
+        if (!file.r2Key || !file._id) return;
         try {
-          // Use deleteFromR2 to remove both R2 file and metadata
-          await deleteFromR2({ 
-            r2Key: file.r2Key, 
+          await deleteFromR2({
+            r2Key: file.r2Key,
             fileId: file._id,
-            graceful: true 
+            graceful: true
           });
           
         } catch (error) {
