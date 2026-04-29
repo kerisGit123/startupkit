@@ -65,7 +65,7 @@ const ALL_STORAGE_AGGS = [storageByCompany, storageByCategory, storageByFileType
 // Maintained alongside the storage aggregates via syncFileAggregates.
 
 function isGenerationEligible(f: FileDoc): boolean {
-  return !!f.companyId && f.category === "generated";
+  return !!f.companyId && (f.category === "generated" || f.category === "elements");
 }
 
 function dayKey(ts: number): string {

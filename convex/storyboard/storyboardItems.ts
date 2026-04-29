@@ -223,58 +223,6 @@ export const updateFavorite = mutation({
   },
 });
 
-export const getByTaskId = query({
-  args: { taskId: v.string() },
-  handler: async (ctx, { taskId }) => {
-    const items = await ctx.db.query("storyboard_items").collect();
-    return items.find((i) => i.imageGeneration?.taskId === taskId);
-  },
-});
-
-export const updateByTaskId = mutation({
-  args: {
-    taskId: v.string(),
-    imageUrl: v.optional(v.string()),
-    generationStatus: v.string(),
-  },
-  handler: async (ctx, { taskId, imageUrl, generationStatus }) => {
-    const items = await ctx.db.query("storyboard_items").collect();
-    const item = items.find((i) => i.imageGeneration?.taskId === taskId);
-    if (!item) return;
-
-    await ctx.db.patch(item._id, {
-      generationStatus,
-      imageUrl,
-      ...(item.imageGeneration
-        ? { imageGeneration: { ...item.imageGeneration, status: generationStatus } }
-        : {}),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-export const updateByVideoTaskId = mutation({
-  args: {
-    taskId: v.string(),
-    videoUrl: v.optional(v.string()),
-    generationStatus: v.string(),
-  },
-  handler: async (ctx, { taskId, videoUrl, generationStatus }) => {
-    const items = await ctx.db.query("storyboard_items").collect();
-    const item = items.find((i) => i.videoGeneration?.taskId === taskId);
-    if (!item) return;
-
-    await ctx.db.patch(item._id, {
-      generationStatus,
-      videoUrl,
-      ...(item.videoGeneration
-        ? { videoGeneration: { ...item.videoGeneration, status: generationStatus } }
-        : {}),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
 export const createBatch = mutation({
   args: {
     projectId: v.id("storyboard_projects"),

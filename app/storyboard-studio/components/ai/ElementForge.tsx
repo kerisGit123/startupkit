@@ -924,6 +924,13 @@ export function ElementForge({
     onSendToStudio?.(referencePrompt, referenceUrls);
   }, [canSave, handleSave, onSendToStudio, referencePrompt, referenceUrls]);
 
+  // Credit calculation for Generate tab (must be before handleGenerate so it can reference it)
+  const genCredits = useMemo(() => {
+    if (genModel === "z-image") return 1;
+    if (genModel.startsWith("gpt-image-2")) return getModelCredits(genModel, genResolution);
+    return getModelCredits(genModel, genResolution);
+  }, [genModel, genResolution, getModelCredits]);
+
   // Generate image from the Generate tab
   const handleGenerate = useCallback(async () => {
     if (!canSave || isGenerating || !companyId) return;
@@ -990,6 +997,7 @@ export function ElementForge({
             projectId: projectId as string,
             elementId,
             enhance: false,
+            creditsUsed: genCredits,
             referenceImageUrls: hasRefs ? refImageUrls : undefined,
             variantLabel: variantLbl,
             variantModel: model,
@@ -1010,14 +1018,7 @@ export function ElementForge({
     } finally {
       setIsGenerating(false);
     }
-  }, [canSave, isGenerating, companyId, element, identity, referencePrompt, composedPrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, userId, projectId, handleSave]);
-
-  // Credit calculation for Generate tab
-  const genCredits = useMemo(() => {
-    if (genModel === "z-image") return 1;
-    if (genModel.startsWith("gpt-image-2")) return getModelCredits(genModel, genResolution);
-    return getModelCredits(genModel, genResolution);
-  }, [genModel, genResolution, getModelCredits]);
+  }, [canSave, isGenerating, companyId, element, identity, referencePrompt, composedPrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, userId, projectId, handleSave, genCredits]);
 
   const setPrimaryVariant = useMutation(api.storyboard.storyboardElements.setPrimaryVariant);
   const updateVariantLabelMut = useMutation(api.storyboard.storyboardElements.updateVariantLabel);

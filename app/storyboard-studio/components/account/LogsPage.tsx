@@ -28,6 +28,7 @@ const STATUS_STYLES: Record<string, { dot: string; text: string }> = {
   completed: { dot: "bg-emerald-400", text: "text-emerald-400" },
   ready: { dot: "bg-emerald-400", text: "text-emerald-400" },
   generating: { dot: "bg-amber-400", text: "text-amber-400" },
+  processing: { dot: "bg-sky-400", text: "text-sky-400" },
   uploading: { dot: "bg-blue-400", text: "text-blue-400" },
   failed: { dot: "bg-red-400", text: "text-red-400" },
   error: { dot: "bg-red-400", text: "text-red-400" },
@@ -512,7 +513,12 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
                             <tr key={file._id} className={`border-b border-(--border-primary) last:border-0 hover:bg-(--bg-tertiary)/30 transition-all duration-200 ${index % 2 === 0 ? "" : "bg-(--bg-primary)/20"}`}>
                               <td className="px-5 py-4">
                                 <div className="space-y-1.5">
-                                  <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-(--accent-purple)/20 text-(--accent-purple) border border-(--accent-purple)/30">{model}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-(--accent-purple)/20 text-(--accent-purple) border border-(--accent-purple)/30">{model}</span>
+                                    {file.category === "elements" && (
+                                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">Element</span>
+                                    )}
+                                  </div>
                                   <p className="text-xs text-(--text-secondary)">{formatDate(file.createdAt)}</p>
                                   {file.fileType && <p className="text-xs text-(--text-tertiary)">Type: {file.fileType}</p>}
                                   {file.prompt && (

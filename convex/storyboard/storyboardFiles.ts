@@ -761,8 +761,18 @@ export const listGenerationLogs = query({
     // generated-files history into memory. Status applied as server-side filter.
     const baseQuery = ctx.db
       .query("storyboard_files")
-      .withIndex("by_companyId_category", (q) =>
-        q.eq("companyId", args.companyId).eq("category", "generated")
+      .withIndex("by_companyId", (q) =>
+        q.eq("companyId", args.companyId)
+      )
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("category"), "generated"),
+          // Include element files only if they are AI-generated (have a model set)
+          q.and(
+            q.eq(q.field("category"), "elements"),
+            q.neq(q.field("model"), undefined)
+          )
+        )
       );
 
     const filteredQuery = args.status
