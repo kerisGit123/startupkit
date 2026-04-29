@@ -909,12 +909,14 @@ export default function StoryboardWorkspacePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Tab switcher */}
+          {/* Tab switcher — pill toggle style (matches Element Forge Simple/Advanced) */}
           <div className="flex items-center rounded-xl border border-white/8 overflow-hidden">
             {(["script", "storyboard", "table", "video"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium transition-all ${
-                  tab === t ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary)"
+                className={`flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium transition-all ${
+                  tab === t
+                    ? "bg-white/12 text-(--text-primary)"
+                    : "text-(--text-tertiary) hover:text-(--text-secondary)"
                 }`}>
                 {t === "script" ? <FileText className="w-3.5 h-3.5" strokeWidth={1.75} /> : t === "table" ? <List className="w-3.5 h-3.5" strokeWidth={1.75} /> : t === "video" ? <Film className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Grid3x3 className="w-3.5 h-3.5" strokeWidth={1.75} />}
                 {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -951,9 +953,9 @@ export default function StoryboardWorkspacePage() {
                 <button
                   onClick={() => setShowExtendDialog(true)}
                   disabled={isExtending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[12px] font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" strokeWidth={1.75} />
                   Extend Story
                 </button>
               )}
@@ -972,18 +974,18 @@ export default function StoryboardWorkspacePage() {
               </div>
 
               {/* Zoom Controls */}
-              <div className="flex items-center gap-1 bg-(--bg-tertiary) rounded-xl p-1 border border-(--border-primary)">
+              <div className="flex items-center gap-0.5">
                 <button
                   onClick={handleZoomOut}
                   disabled={!canZoomOut}
-                  className="p-1.5 text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary) rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 rounded-md text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Zoom out (Ctrl+-)"
                 >
-                  <Minus className="w-4 h-4" />
+                  <Minus className="w-3.5 h-3.5" strokeWidth={1.75} />
                 </button>
                 <button
                   onClick={handleZoomReset}
-                  className="px-2 py-1 text-xs text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary) rounded-lg transition-all duration-200 min-w-12 text-center"
+                  className="px-2 py-1 rounded-md text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors min-w-[42px] text-center tabular-nums"
                   title="Reset zoom (Ctrl+0)"
                 >
                   {zoomLevel}%
@@ -991,10 +993,10 @@ export default function StoryboardWorkspacePage() {
                 <button
                   onClick={handleZoomIn}
                   disabled={!canZoomIn}
-                  className="p-1.5 text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary) rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 rounded-md text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                   title="Zoom in (Ctrl+)"
                 >
-                  <ZoomIn className="w-4 h-4" />
+                  <ZoomIn className="w-3.5 h-3.5" strokeWidth={1.75} />
                 </button>
               </div>
             </>
@@ -1256,23 +1258,55 @@ export default function StoryboardWorkspacePage() {
               </div>
             ) : (
               <>
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-sm font-semibold text-[#FFFFFF]">{items.length} Frames</h2>
-                    {/* Style Badge */}
+                    <span className="text-[12px] font-medium text-(--text-secondary) tabular-nums">{items.length} Frames</span>
+                    {/* Style Selector — border color matches the style's theme */}
                     <div className="relative">
-                      <button
-                        onClick={() => setShowStyleDropdown(!showStyleDropdown)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
-                          project?.style && project.style !== 'custom'
-                            ? 'bg-purple-500/15 border-purple-500/30 text-purple-300'
-                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-gray-300'
-                        }`}
-                      >
-                        <Palette className="w-3 h-3" />
-                        {project?.style ? project.style.charAt(0).toUpperCase() + project.style.slice(1) : 'No Style'}
-                        <ChevronDown className="w-2.5 h-2.5" />
-                      </button>
+                      {(() => {
+                        const activeStyle = VISUAL_STYLES.find(s => s.id === project?.style);
+                        // Map gradient start color to a Tailwind-compatible color for border + text
+                        const styleColorMap: Record<string, { border: string; text: string; bg: string }> = {
+                          "cinematic":     { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
+                          "sketch":        { border: "border-gray-400/50",    text: "text-gray-400",    bg: "bg-gray-400/8" },
+                          "dynamic-ink":   { border: "border-gray-500/50",    text: "text-gray-300",    bg: "bg-gray-500/8" },
+                          "vintage-bw":    { border: "border-gray-400/50",    text: "text-gray-400",    bg: "bg-gray-400/8" },
+                          "japanese-ink":  { border: "border-red-500/50",     text: "text-red-400",     bg: "bg-red-500/8" },
+                          "woodblock":     { border: "border-orange-500/50",  text: "text-orange-400",  bg: "bg-orange-500/8" },
+                          "cartoon":       { border: "border-yellow-400/50",  text: "text-yellow-400",  bg: "bg-yellow-400/8" },
+                          "3d-animation":  { border: "border-blue-500/50",    text: "text-blue-400",    bg: "bg-blue-500/8" },
+                          "anime":         { border: "border-pink-500/50",    text: "text-pink-400",    bg: "bg-pink-500/8" },
+                          "pencil":        { border: "border-gray-400/50",    text: "text-gray-400",    bg: "bg-gray-400/8" },
+                          "comic-book":    { border: "border-blue-500/50",    text: "text-blue-400",    bg: "bg-blue-500/8" },
+                          "pixel-art":     { border: "border-green-500/50",   text: "text-green-400",   bg: "bg-green-500/8" },
+                          "watercolor":    { border: "border-cyan-400/50",    text: "text-cyan-400",    bg: "bg-cyan-400/8" },
+                          "oil-painting":  { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
+                          "noir":          { border: "border-gray-500/50",    text: "text-gray-300",    bg: "bg-gray-500/8" },
+                          "pop-art":       { border: "border-yellow-400/50",  text: "text-yellow-400",  bg: "bg-yellow-400/8" },
+                          "vhs-camcorder": { border: "border-yellow-600/50",  text: "text-yellow-500",  bg: "bg-yellow-600/8" },
+                          "smartphone":    { border: "border-blue-500/50",    text: "text-blue-400",    bg: "bg-blue-500/8" },
+                          "webcam":        { border: "border-green-500/50",   text: "text-green-400",   bg: "bg-green-500/8" },
+                          "dslr-handheld": { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
+                          "cctv":          { border: "border-green-600/50",   text: "text-green-400",   bg: "bg-green-600/8" },
+                          "35mm-film":     { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
+                        };
+                        const colors = project?.style ? styleColorMap[project.style] : null;
+                        const hasStyle = activeStyle && project?.style && project.style !== 'custom';
+                        return (
+                          <button
+                            onClick={() => setShowStyleDropdown(!showStyleDropdown)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-medium transition-colors border ${
+                              hasStyle && colors
+                                ? `${colors.border} ${colors.text} ${colors.bg}`
+                                : 'text-(--text-secondary) border-(--border-primary) hover:text-(--text-primary) hover:bg-white/5'
+                            }`}
+                          >
+                            <Palette className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            {project?.style ? (activeStyle?.label || project.style.charAt(0).toUpperCase() + project.style.slice(1)) : 'No Style'}
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        );
+                      })()}
                       {showStyleDropdown && (
                         <>
                           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowStyleDropdown(false)} />
@@ -1496,22 +1530,31 @@ export default function StoryboardWorkspacePage() {
                         </>
                       )}
                     </div>
-                    {/* Format Badge */}
+                    {/* Format Selector — border color matches format's color */}
                     <div className="relative">
-                      <button
-                        onClick={() => setShowFormatDropdown(!showFormatDropdown)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all border ${
-                          project?.formatPreset
-                            ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                            : 'bg-white/5 border-white/10 text-gray-400 hover:text-gray-300'
-                        }`}
-                      >
-                        <Film className="w-3 h-3" />
-                        {project?.formatPreset
-                          ? FORMAT_PRESETS.find(f => f.id === project.formatPreset)?.label || project.formatPreset
-                          : 'No Format'}
-                        <ChevronDown className="w-2.5 h-2.5" />
-                      </button>
+                      {(() => {
+                        const activeFormat = FORMAT_PRESETS.find(f => f.id === project?.formatPreset);
+                        const hasFormat = !!activeFormat;
+                        return (
+                          <button
+                            onClick={() => setShowFormatDropdown(!showFormatDropdown)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-medium transition-colors border ${
+                              !hasFormat
+                                ? 'text-(--text-secondary) border-(--border-primary) hover:text-(--text-primary) hover:bg-white/5'
+                                : ''
+                            }`}
+                            style={hasFormat && activeFormat ? {
+                              borderColor: `${activeFormat.color}80`,
+                              color: activeFormat.color,
+                              backgroundColor: `${activeFormat.color}14`,
+                            } : undefined}
+                          >
+                            <Film className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            {activeFormat?.label || 'No Format'}
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        );
+                      })()}
                       {showFormatDropdown && (
                         <>
                           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowFormatDropdown(false)} />
@@ -1569,51 +1612,71 @@ export default function StoryboardWorkspacePage() {
                       )}
                     </div>
                     {duplicateCount > 0 && (
-                      <div className="flex items-center gap-1 px-2 py-1 bg-[#FAAD14]/20 border border-[#FAAD14]/30 rounded-md">
-                        <AlertTriangle className="w-3 h-3 text-[#FAAD14]" />
-                        <span className="text-xs text-[#FAAD14] font-medium">
-                          {duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''}
-                        </span>
-                      </div>
+                      <div className="w-px h-4 bg-(--border-primary) mx-1" />
+                    )}
+                    {duplicateCount > 0 && (
+                      <button
+                        onClick={handleRemoveDuplicates}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium text-(--color-warning) hover:bg-(--color-warning)/10 transition-colors"
+                        title="Remove duplicate storyboard items"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.75} />
+                        {duplicateCount} duplicate{duplicateCount > 1 ? 's' : ''}
+                      </button>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={handleRemoveDuplicates}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition"
-                      title="Remove duplicate storyboard items">
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Remove Duplicates
-                    </button>
-                    <button onClick={() => hasProFeatures ? setShowBatchGenerate(true) : toast.info("Upgrade to Pro to use Batch Generate")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition ${hasProFeatures ? "bg-blue-500 hover:bg-blue-400 text-white" : "bg-[#3D3D3D] text-[#666] cursor-not-allowed"}`}
-                      title={hasProFeatures ? "Generate images for all frames with prompts" : "Pro feature — Upgrade to unlock"}>
-                      {hasProFeatures ? <Sparkles className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                      Generate All
-                    </button>
+                  <div className="flex items-center gap-1">
+                    {/* Secondary actions — design system ghost buttons */}
                     <button onClick={() => setShowFileBrowser(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition">
-                      <FolderOpen className="w-3.5 h-3.5" />
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
+                      title="Browse project files">
+                      <FolderOpen className="w-3.5 h-3.5" strokeWidth={1.75} />
                       Files
                     </button>
                     <button onClick={() => setShowElementLibrary(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D3D3D] hover:bg-[#2C2C2C] text-xs text-[#A0A0A0] rounded-lg transition">
-                      <Users className="w-3.5 h-3.5" />
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
+                      title="Manage characters, environments, props">
+                      <Users className="w-3.5 h-3.5" strokeWidth={1.75} />
                       Elements
                     </button>
                     <button onClick={() => setShowDirectorChat(!showDirectorChat)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition ${showDirectorChat ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-[#3D3D3D] hover:bg-[#2C2C2C] text-[#A0A0A0]"}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                        showDirectorChat
+                          ? "text-amber-400 bg-amber-500/10"
+                          : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                      }`}
                       title="AI Director — creative assistant">
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
                       Director
                     </button>
                     <button onClick={() => hasProFeatures ? setShowPresetManager(true) : toast.info("Upgrade to Pro to use Presets")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition ${hasProFeatures ? "bg-[#3D3D3D] hover:bg-[#2C2C2C] text-[#A0A0A0]" : "bg-[#3D3D3D] text-[#666] cursor-not-allowed"}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                        hasProFeatures
+                          ? "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                          : "text-(--text-tertiary) cursor-not-allowed"
+                      }`}
                       title={hasProFeatures ? "Manage saved presets" : "Pro feature — Upgrade to unlock"}>
-                      {hasProFeatures ? <Settings className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                      <Settings className="w-3.5 h-3.5" strokeWidth={1.75} />
                       Presets
                     </button>
+
+                    {/* Separator */}
+                    <div className="w-px h-4 bg-(--border-primary) mx-1" />
+
+                    {/* Primary actions */}
+                    <button onClick={() => hasProFeatures ? setShowBatchGenerate(true) : toast.info("Upgrade to Pro to use Batch Generate")}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                        hasProFeatures
+                          ? "bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white"
+                          : "text-(--text-tertiary) border border-(--border-primary) cursor-not-allowed"
+                      }`}
+                      title={hasProFeatures ? "Generate images for all frames with prompts" : "Pro feature — Upgrade to unlock"}>
+                      {hasProFeatures ? <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Lock className="w-3.5 h-3.5" strokeWidth={1.75} />}
+                      Generate All
+                    </button>
                     <button onClick={() => setShowExportModal(true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-xs text-white font-medium rounded-lg transition">
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-[12px] font-medium text-white bg-(--accent-teal) hover:opacity-90 transition-colors">
+                      <Download className="w-3.5 h-3.5" strokeWidth={1.75} />
                       Export
                     </button>
                   </div>
