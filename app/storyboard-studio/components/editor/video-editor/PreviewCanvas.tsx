@@ -34,10 +34,8 @@ export function PreviewCanvas({
   const CW = canvasSize.w, CH = canvasSize.h;
   const activeSub = subtitleClips.find(s => currentTime >= s.startTime && currentTime < s.endTime);
   const activeOverlays = overlayLayers.filter(l => currentTime >= l.startTime && currentTime < l.endTime && (l.visible ?? true) && l.type !== "transition");
-  // Find active transition layer
   const activeTransition = overlayLayers.find(l => l.type === "transition" && currentTime >= l.startTime && currentTime < l.endTime && (l.visible ?? true));
   const transProgress = activeTransition ? (currentTime - activeTransition.startTime) / (activeTransition.endTime - activeTransition.startTime) : 0;
-  // Try overlay layers first, fall back to video track clips
   const transLayers = activeTransition ? getTransitionLayers(overlayLayers, activeTransition.startTime, activeTransition.endTime) : null;
   const transClips = activeTransition && !transLayers?.layerA && !transLayers?.layerB
     ? getTransitionClips(videoClips, activeTransition.startTime, activeTransition.endTime) : null;
@@ -46,7 +44,6 @@ export function PreviewCanvas({
   const [resizing, setResizing] = useState<ResizeState>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
-  // Pre-fetch video/image overlay sources as blob URLs (bypasses CORS)
   const [mediaBlobUrls, setMediaBlobUrls] = useState<Record<string, string>>({});
   const loadingRef = useRef<Set<string>>(new Set());
   const blobUrlsRef = useRef<Record<string, string>>({});
@@ -86,7 +83,6 @@ export function PreviewCanvas({
     return { dx: (dx / el.clientWidth) * CW, dy: (dy / el.clientHeight) * CH };
   };
 
-  // Drag handler
   useEffect(() => {
     if (!dragging) return;
     const onMove = (e: MouseEvent) => {
@@ -94,7 +90,6 @@ export function PreviewCanvas({
       setOverlayLayers(p => p.map(l => {
         if (l.id !== dragging.id) return l;
         const upd: Partial<OverlayLayer> = { x: Math.round(dragging.origX + d.dx), y: Math.round(dragging.origY + d.dy) };
-        // For arrow/line, move endX/endY together with start point
         if ((l.shapeType === "arrow" || l.shapeType === "line") && l.endX != null && l.endY != null) {
           const origEndX = (dragging as any).origEndX ?? l.endX;
           const origEndY = (dragging as any).origEndY ?? l.endY;
@@ -110,7 +105,6 @@ export function PreviewCanvas({
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [dragging, setOverlayLayers]);
 
-  // Resize handler
   useEffect(() => {
     if (!resizing) return;
     const onMove = (e: MouseEvent) => {
@@ -119,7 +113,6 @@ export function PreviewCanvas({
         if (l.id !== resizing.id) return l;
         const hdl = resizing.handle;
 
-        // Endpoint dragging for arrow/line — x,y = start point, endX,endY = end point
         if (hdl === "start" || hdl === "end") {
           if (hdl === "start") {
             return { ...l, x: Math.round(resizing.origX + d.dx), y: Math.round(resizing.origY + d.dy) };
@@ -157,7 +150,6 @@ export function PreviewCanvas({
     setResizing({ id: layer.id, handle, startX: e.clientX, startY: e.clientY, origX: layer.x, origY: layer.y, origW: layer.w, origH: layer.h, origEndX: layer.endX, origEndY: layer.endY });
   };
 
-  // Rotation drag
   const startRotate = (e: React.MouseEvent, layer: OverlayLayer) => {
     e.stopPropagation();
     if (layer.locked) return;
@@ -178,7 +170,6 @@ export function PreviewCanvas({
     window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
   };
 
-  // Handle definitions
   const isLineType = (l: OverlayLayer) => l.type === "shape" && (l.shapeType === "arrow" || l.shapeType === "line");
 
   const rectHandles = [
@@ -236,12 +227,10 @@ export function PreviewCanvas({
       const layerDur = layer.endTime - layer.startTime;
       const elapsed = currentTime - layer.startTime;
       const rawProgress = layerDur > 0 ? Math.max(0, Math.min(1, elapsed / layerDur)) : 0;
-      // Ease-in-out for smooth start/stop (cubic bezier approximation)
       const progress = rawProgress < 0.5
         ? 4 * rawProgress * rawProgress * rawProgress
         : 1 - Math.pow(-2 * rawProgress + 2, 3) / 2;
       const dir = layer.scrollDirection || "up";
-      // At progress=0 text starts below visible area, at progress=1 text has scrolled past top (or reverse for "down")
       const scrollPct = dir === "up" ? (1 - progress) * 200 - 100 : progress * 200 - 100;
       return (
         <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
@@ -273,10 +262,8 @@ export function PreviewCanvas({
           style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: layer.borderRadius || 0, display: "block" }}
           ref={(el) => {
             if (!el) return;
-            // Sync video position to timeline
             if (el.readyState >= 1) {
               const safeTime = Math.max(0, layerTime);
-              // Clamp to last frame instead of looping
               const target = el.duration > 0 ? Math.min(safeTime, el.duration - 0.01) : safeTime;
               if (Math.abs(el.currentTime - target) > 0.15) el.currentTime = target;
             }
@@ -287,7 +274,6 @@ export function PreviewCanvas({
       );
     }
     if (layer.type === "image" && layer.src) {
-      // Try blob URL from background fetch, fall back to direct URL
       const blobUrl = mediaBlobUrls[layer.id];
       return (
         <img src={blobUrl || layer.src} alt=""
@@ -305,14 +291,12 @@ export function PreviewCanvas({
         );
       }
       if (layer.shapeType === "arrow" || layer.shapeType === "line") {
-        // Compute bounding box and local coordinates
         const sx = layer.x, sy = layer.y;
         const ex = layer.endX ?? (layer.x + layer.w), ey = layer.endY ?? layer.y;
         const pad = Math.max(8, (layer.strokeWidth || 2) * 2);
         const bx = Math.min(sx, ex) - pad, by = Math.min(sy, ey) - pad;
         const bw = Math.abs(ex - sx) + pad * 2;
         const bh = Math.max(Math.abs(ey - sy) + pad * 2, pad * 2);
-        // Points relative to bounding box
         const lx1 = sx - bx, ly1 = sy - by, lx2 = ex - bx, ly2 = ey - by;
         return (
           <svg width="100%" height="100%" viewBox={`0 0 ${bw} ${bh}`} style={{ overflow: "visible", position: "absolute", inset: 0, pointerEvents: "none" }} preserveAspectRatio="none">
@@ -341,7 +325,7 @@ export function PreviewCanvas({
       {/* Aspect-ratio locked canvas wrapper */}
       <div className="absolute inset-0 flex items-center justify-center z-10 p-4"
         style={{ containerType: "size" }}>
-      <div ref={areaRef} className="relative rounded-lg shadow-2xl overflow-hidden" style={{
+      <div ref={areaRef} className="relative rounded-xl shadow-2xl overflow-hidden" style={{
         aspectRatio: `${CW} / ${CH}`,
         maxWidth: "100%", height: "100%",
         containerType: "inline-size",
@@ -355,22 +339,22 @@ export function PreviewCanvas({
               style={{ mixBlendMode: (cur.clip.blendMode || "normal") as any, opacity: (cur.clip.opacity ?? 100) / 100 }} />
           ) : cur?.clip.type === "audio" ? (
             <div className="flex flex-col items-center gap-4">
-              <div className="w-24 h-24 rounded-full bg-[#1a1a24] flex items-center justify-center border border-[#2a2a35]">
-                <Music className="w-10 h-10 text-teal-500/60" />
+              <div className="w-24 h-24 rounded-full bg-(--bg-secondary) flex items-center justify-center border border-(--border-primary)">
+                <Music className="w-10 h-10 text-(--accent-teal)/60" />
               </div>
-              <span className="text-sm text-[#6E6E6E]">{cur.clip.name}</span>
+              <span className="text-[13px] text-(--text-tertiary)">{cur.clip.name}</span>
             </div>
           ) : cur?.clip.type === "image" ? (
             <img src={cur.clip.src} className="absolute inset-0 w-full h-full object-cover" alt=""
               style={{ mixBlendMode: (cur.clip.blendMode || "normal") as any, opacity: (cur.clip.opacity ?? 100) / 100 }} />
           ) : (
-            <div className="flex flex-col items-center gap-4 text-[#2a2a35]">
+            <div className="flex flex-col items-center gap-4 text-(--border-primary)">
               <Film className="w-20 h-20" />
-              <p className="text-sm text-[#4A4A4A]">Add media or open <span className="text-teal-500 font-medium">Layers</span> to start</p>
+              <p className="text-[13px] text-(--text-tertiary)">Add media or open <span className="text-(--accent-teal) font-medium">Layers</span> to start</p>
             </div>
           )}
 
-          {/* Transition effects — video track clips only (overlay layer transitions are handled inline in the overlay loop) */}
+          {/* Transition effects */}
           {activeTransition && transClips && (() => {
             const tt = activeTransition.transitionType || "crossfade";
             const p = transProgress;
@@ -415,12 +399,11 @@ export function PreviewCanvas({
           })()}
         </div>
 
-        {/* Overlay layers — draggable & resizable, with inline transition effects */}
+        {/* Overlay layers */}
         {activeOverlays.map(layer => {
           const isSel = layer.id === selectedOverlayId;
           const isLine = isLineType(layer);
 
-          // Compute transition style modifications for layers in active transition
           let transOpacity = 1;
           let transTranslate = "";
           let transClipPath: string | undefined;
@@ -435,7 +418,6 @@ export function PreviewCanvas({
               if (tt === "crossfade" || tt === "cross-dissolve") {
                 transOpacity = isA ? (1 - p) : p;
               } else if (tt === "fade-color") {
-                // A visible in first half, B visible in second half; color overlay is rendered separately
                 transOpacity = isA ? (p < 0.5 ? 1 : 0) : (p >= 0.5 ? 1 : 0);
               } else if (tt === "slide-left") {
                 transTranslate = isA ? `translateX(${-p * 100}%)` : `translateX(${(1 - p) * 100}%)`;
@@ -445,7 +427,6 @@ export function PreviewCanvas({
             }
           }
 
-          // For arrow/line, compute bounding box from start (x,y) and end (endX,endY)
           let bx = layer.x, by = layer.y, bw = layer.w, bh = layer.h;
           if (isLine && layer.endX != null && layer.endY != null) {
             const pad = Math.max(8, (layer.strokeWidth || 2) * 2);
@@ -502,7 +483,6 @@ export function PreviewCanvas({
               overflow: "hidden",
             });
           }
-          // circle, arrow, line — no CSS border, SVG handles rendering
 
           const handlesArr = isLine ? lineHandles : rectHandles;
 
@@ -518,14 +498,12 @@ export function PreviewCanvas({
               {/* Selection ring + resize handles + rotation handle */}
               {isSel && (
                 <>
-                  {!isLine && <div className="absolute inset-0 ring-2 ring-teal-400 rounded pointer-events-none" />}
+                  {!isLine && <div className="absolute inset-0 ring-2 ring-(--accent-teal) rounded pointer-events-none" />}
                   {isLine && layer.endX != null && layer.endY != null ? (
                     <>
-                      {/* Start endpoint handle */}
-                      <div className="absolute w-4 h-4 bg-teal-400 border-2 border-white rounded-full z-10 shadow-md"
+                      <div className="absolute w-4 h-4 bg-(--accent-teal) border-2 border-white rounded-full z-10 shadow-md"
                         style={{ left: `${((layer.x - bx) / bw) * 100}%`, top: `${((layer.y - by) / bh) * 100}%`, transform: "translate(-50%, -50%)", cursor: layer.locked ? "not-allowed" : "move" }}
                         onMouseDown={(e) => startResize(e, layer, "start")} />
-                      {/* End endpoint handle */}
                       <div className="absolute w-4 h-4 bg-rose-400 border-2 border-white rounded-full z-10 shadow-md"
                         style={{ left: `${((layer.endX - bx) / bw) * 100}%`, top: `${((layer.endY - by) / bh) * 100}%`, transform: "translate(-50%, -50%)", cursor: layer.locked ? "not-allowed" : "move" }}
                         onMouseDown={(e) => startResize(e, layer, "end")} />
@@ -534,15 +512,15 @@ export function PreviewCanvas({
                     const big = layer.type === "video" || layer.type === "image";
                     return (
                       <div key={h.key}
-                        className={`absolute ${big ? "w-4 h-4" : "w-2.5 h-2.5"} bg-teal-400 border-2 border-white rounded-full z-10 shadow-md`}
+                        className={`absolute ${big ? "w-4 h-4" : "w-2.5 h-2.5"} bg-(--accent-teal) border-2 border-white rounded-full z-10 shadow-md`}
                         style={{ left: h.x, top: h.y, transform: "translate(-50%, -50%)", cursor: layer.locked ? "not-allowed" : h.cursor }}
                         onMouseDown={(e) => startResize(e, layer, h.key)}
                       />
                     );
                   })}
-                  {/* Rotation handle — circle above top center, connected by line */}
-                  <div className="absolute left-1/2 -translate-x-1/2 w-px h-5 bg-teal-400/60 pointer-events-none" style={{ bottom: "100%" }} />
-                  <div className="absolute left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-teal-400 border-2 border-white z-10 flex items-center justify-center"
+                  {/* Rotation handle */}
+                  <div className="absolute left-1/2 -translate-x-1/2 w-px h-5 bg-(--accent-teal)/60 pointer-events-none" style={{ bottom: "100%" }} />
+                  <div className="absolute left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-(--accent-teal) border-2 border-white z-10 flex items-center justify-center"
                     style={{ bottom: "calc(100% + 18px)", cursor: layer.locked ? "not-allowed" : "grab", transform: "translateX(-50%)" }}
                     onMouseDown={(e) => startRotate(e, layer)}>
                     <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -561,7 +539,6 @@ export function PreviewCanvas({
           const colorOp = p < 0.5 ? p * 2 : (1 - p) * 2;
           const lA = transLayers.layerA;
           const lB = transLayers.layerB;
-          // Union bounds of both layers (fallback to the other layer if one is null)
           const aX = lA?.x ?? lB!.x, aY = lA?.y ?? lB!.y, aR = lA ? lA.x + lA.w : lB!.x + lB!.w, aB = lA ? lA.y + lA.h : lB!.y + lB!.h;
           const bX = lB?.x ?? lA!.x, bY = lB?.y ?? lA!.y, bR = lB ? lB.x + lB.w : lA!.x + lA!.w, bB = lB ? lB.y + lB.h : lA!.y + lA!.h;
           const x1 = Math.min(aX, bX), y1 = Math.min(aY, bY);
@@ -578,7 +555,7 @@ export function PreviewCanvas({
           );
         })()}
 
-        {/* Subtitle overlay (legacy support) */}
+        {/* Subtitle overlay */}
         {activeSub && (
           <div className={`absolute left-0 right-0 pointer-events-none flex justify-center px-4 z-20 ${
             activeSub.position === "top" ? "top-4" :
@@ -596,10 +573,10 @@ export function PreviewCanvas({
       {/* Export overlay */}
       {exporting && (
         <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center gap-4 z-30">
-          <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
-          <p className="text-white font-medium">Exporting... {exportProgress}%</p>
-          <div className="w-56 h-2 bg-[#2a2a35] rounded-full overflow-hidden">
-            <div className="h-full bg-teal-500 transition-all" style={{ width: `${exportProgress}%` }} />
+          <Loader2 className="w-10 h-10 text-(--accent-teal) animate-spin" />
+          <p className="text-(--text-primary) font-medium">Exporting... {exportProgress}%</p>
+          <div className="w-56 h-2 bg-(--border-primary) rounded-full overflow-hidden">
+            <div className="h-full bg-(--accent-teal) transition-all" style={{ width: `${exportProgress}%` }} />
           </div>
         </div>
       )}

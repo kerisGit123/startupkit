@@ -66,7 +66,6 @@ export function TimelineTracks(props: TimelineTracksProps) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggleCollapse = (t: string) => setCollapsed(p => ({ ...p, [t]: !p[t] }));
 
-  // Compact track heights
   const vH = collapsed.video ? 0 : 56;
   const aH = collapsed.audio ? 0 : 36;
   const layerRowH = 24;
@@ -79,9 +78,9 @@ export function TimelineTracks(props: TimelineTracksProps) {
   const overlayTop = audioTop + (collapsed.audio ? labelH : aH);
 
   const trackLabelData = [
-    { key: "video", label: "Background", icon: <Film className="w-2.5 h-2.5" />, h: vH, color: "teal" },
-    { key: "audio", label: "Audio", icon: <Music className="w-2.5 h-2.5" />, h: aH, color: "purple" },
-    { key: "overlay", label: "Layers", icon: <Layers className="w-2.5 h-2.5" />, h: oH, color: "pink" },
+    { key: "video", label: "Background", icon: <Film className="w-2.5 h-2.5" />, h: vH, colorCls: "text-teal-400", bgCls: "bg-teal-500/5" },
+    { key: "audio", label: "Audio", icon: <Music className="w-2.5 h-2.5" />, h: aH, colorCls: "text-purple-400", bgCls: "bg-purple-500/5" },
+    { key: "overlay", label: "Layers", icon: <Layers className="w-2.5 h-2.5" />, h: oH, colorCls: "text-pink-400", bgCls: "bg-pink-500/5" },
   ] as const;
 
   const layerIcon = (layer: OverlayLayer) => {
@@ -104,17 +103,17 @@ export function TimelineTracks(props: TimelineTracksProps) {
       onClick={onTimelineClick}
     >
           {/* Track labels */}
-          <div className="absolute left-0 top-6 bottom-0 w-12 bg-[#111118] border-r border-[#1e1e28] z-20 flex flex-col">
+          <div className="absolute left-0 top-6 bottom-0 w-12 bg-(--bg-secondary) border-r border-(--border-primary) z-20 flex flex-col">
             {trackLabelData.map(track => (
-              <div key={track.key} className="flex items-stretch border-b border-[#1e1e28]"
+              <div key={track.key} className="flex items-stretch border-b border-(--border-primary)"
                 style={{ height: collapsed[track.key] ? labelH : track.h }}>
                 <button onClick={() => toggleCollapse(track.key)}
-                  className="w-2.5 flex items-center justify-center text-[#4A4A4A] hover:text-white transition shrink-0">
+                  className="w-2.5 flex items-center justify-center text-(--text-tertiary) hover:text-(--text-primary) transition shrink-0">
                   {collapsed[track.key] ? <ChevronRight className="w-2 h-2" /> : <ChevronDown className="w-2 h-2" />}
                 </button>
                 <button onClick={() => setSelectedTrack(track.key as any)}
                   className={`flex-1 flex items-center gap-0.5 px-0.5 text-[7px] transition ${
-                    selectedTrack === track.key ? `text-${track.color}-400 bg-${track.color}-500/5` : "text-[#6E6E6E] hover:text-[#A0A0A0]"
+                    selectedTrack === track.key ? `${track.colorCls} ${track.bgCls}` : "text-(--text-tertiary) hover:text-(--text-secondary)"
                   }`}>
                   {track.icon}<span>{track.label}</span>
                 </button>
@@ -123,9 +122,9 @@ export function TimelineTracks(props: TimelineTracksProps) {
           </div>
 
           {/* Ruler */}
-          <div className="sticky top-0 h-6 bg-[#111118] border-b border-[#1e1e28] z-10 pointer-events-none" style={{ width: tlWidth, marginLeft: 48 }}>
+          <div className="sticky top-0 h-6 bg-(--bg-secondary) border-b border-(--border-primary) z-10 pointer-events-none" style={{ width: tlWidth, marginLeft: 48 }}>
             {totalDur > 0 && (
-              <div ref={progressBarRef} className="absolute bottom-0 left-0 h-[2px] bg-teal-500/40" style={{ width: currentTime * pxPerSec }} />
+              <div ref={progressBarRef} className="absolute bottom-0 left-0 h-[2px] bg-(--accent-teal)/40" style={{ width: currentTime * pxPerSec }} />
             )}
             {(() => {
               const tickInterval = pxPerSec >= 60 ? 1 : pxPerSec >= 20 ? 5 : pxPerSec >= 8 ? 10 : pxPerSec >= 4 ? 30 : 60;
@@ -134,8 +133,8 @@ export function TimelineTracks(props: TimelineTracksProps) {
                 const sec = i * tickInterval;
                 return (
                   <div key={sec} className="absolute top-0" style={{ left: sec * pxPerSec }}>
-                    <div className="w-px h-2.5 bg-[#2a2a35]" />
-                    <span className="text-[8px] text-[#4A4A4A] ml-0.5 select-none">{formatTime(sec)}</span>
+                    <div className="w-px h-2.5 bg-(--border-primary)" />
+                    <span className="text-[8px] text-(--text-tertiary) ml-0.5 select-none">{formatTime(sec)}</span>
                   </div>
                 );
               });
@@ -144,7 +143,7 @@ export function TimelineTracks(props: TimelineTracksProps) {
 
           {/* Video Track */}
           {!collapsed.video && (
-            <div className={`absolute left-12 flex items-stretch gap-1 px-2 py-1 border-b border-[#1e1e28] ${selectedTrack === "video" ? "bg-teal-500/[0.02]" : ""}`}
+            <div className={`absolute left-12 flex items-stretch gap-1 px-2 py-1 border-b border-(--border-primary) ${selectedTrack === "video" ? "bg-teal-500/[0.02]" : ""}`}
               style={{ width: tlWidth, top: videoTop, height: vH }}>
               {videoClips.map(clip => {
                 const vd = getVisDur(clip);
@@ -157,13 +156,13 @@ export function TimelineTracks(props: TimelineTracksProps) {
                     onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); }}
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
                     className={`relative shrink-0 rounded-lg overflow-hidden transition cursor-grab active:cursor-grabbing ${
-                      isSel ? "ring-2 ring-teal-400 shadow-lg shadow-teal-500/30" : "ring-1 ring-[#2a2a35] hover:ring-[#4A4A4A]"
+                      isSel ? "ring-2 ring-(--accent-teal) shadow-lg shadow-teal-500/20" : "ring-1 ring-(--border-primary) hover:ring-(--border-secondary)"
                     } ${draggedClipId === clip.id ? "opacity-30" : ""}`}
                     style={{ width: Math.max(w || 30, 30), height: "100%" }}>
                     {clip.type === "video" && <video src={clip.src} className="absolute inset-0 w-full h-full object-cover" muted preload="metadata" onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = clip.trimStart + 0.5; }} />}
                     {clip.type === "image" && <img src={clip.src} className="absolute inset-0 w-full h-full object-cover" alt="" />}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
-                    <span className={`absolute top-1 left-1 text-[7px] font-bold px-1 py-0.5 rounded ${clip.type === "video" ? "bg-emerald-600/90" : "bg-purple-600/90"} text-white`}>
+                    <span className={`absolute top-1 left-1 text-[7px] font-bold px-1 py-0.5 rounded-md ${clip.type === "video" ? "bg-emerald-600/90" : "bg-purple-600/90"} text-white`}>
                       {clip.type === "video" ? "VID" : "IMG"}
                     </span>
                     <div className="absolute bottom-0.5 left-1 right-1 flex items-center justify-between">
@@ -172,10 +171,10 @@ export function TimelineTracks(props: TimelineTracksProps) {
                     </div>
                     {!showRangeCut && (<>
                       <div className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "left")}>
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-teal-400/0 group-hover/t:bg-teal-400 transition rounded-l" />
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover/t:bg-(--accent-teal) transition rounded-l" />
                       </div>
                       <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "right")}>
-                        <div className="absolute right-0 top-0 bottom-0 w-1 bg-teal-400/0 group-hover/t:bg-teal-400 transition rounded-r" />
+                        <div className="absolute right-0 top-0 bottom-0 w-1 bg-transparent group-hover/t:bg-(--accent-teal) transition rounded-r" />
                       </div>
                     </>)}
                   </div>
@@ -186,7 +185,7 @@ export function TimelineTracks(props: TimelineTracksProps) {
 
           {/* Audio Track */}
           {!collapsed.audio && (
-            <div className={`absolute left-12 flex items-stretch gap-1 px-2 py-1 border-b border-[#1e1e28] ${selectedTrack === "audio" ? "bg-purple-500/[0.02]" : ""}`}
+            <div className={`absolute left-12 flex items-stretch gap-1 px-2 py-1 border-b border-(--border-primary) ${selectedTrack === "audio" ? "bg-purple-500/[0.02]" : ""}`}
               style={{ width: tlWidth, top: audioTop, height: aH }}>
               {audioClips.map(clip => {
                 const vd = getVisDur(clip);
@@ -199,20 +198,20 @@ export function TimelineTracks(props: TimelineTracksProps) {
                     onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); }}
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
                     className={`relative shrink-0 rounded-lg overflow-hidden transition cursor-grab ${
-                      isSel ? "ring-2 ring-purple-400" : "ring-1 ring-[#2a2a35] hover:ring-[#4A4A4A]"
+                      isSel ? "ring-2 ring-purple-400" : "ring-1 ring-(--border-primary) hover:ring-(--border-secondary)"
                     } ${draggedClipId === clip.id ? "opacity-30" : ""}`}
                     style={{ width: Math.max(w || 30, 30), height: "100%" }}>
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#0f1a2a] to-[#1a1a30] flex items-center px-1.5 gap-1">
+                    <div className="absolute inset-0 bg-gradient-to-r from-purple-950/40 to-purple-900/20 flex items-center px-1.5 gap-1">
                       <Music className="w-3 h-3 text-purple-500/40 shrink-0" />
                       <span className="text-[8px] text-white/70 truncate">{clip.name}</span>
                       <span className="text-[7px] text-white/40 shrink-0 ml-auto">{formatTime(vd)}</span>
                     </div>
                     {!showRangeCut && (<>
                       <div className="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "left")}>
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-400/0 group-hover/t:bg-purple-400 transition rounded-l" />
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover/t:bg-purple-400 transition rounded-l" />
                       </div>
                       <div className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 group/t" onMouseDown={(e) => onTrimDown(e, clip.id, "right")}>
-                        <div className="absolute right-0 top-0 bottom-0 w-1 bg-purple-400/0 group-hover/t:bg-purple-400 transition rounded-r" />
+                        <div className="absolute right-0 top-0 bottom-0 w-1 bg-transparent group-hover/t:bg-purple-400 transition rounded-r" />
                       </div>
                     </>)}
                   </div>
@@ -221,9 +220,9 @@ export function TimelineTracks(props: TimelineTracksProps) {
             </div>
           )}
 
-          {/* Overlay/Layers Track — each layer gets its own row, draggable + resizable */}
+          {/* Overlay/Layers Track */}
           {!collapsed.overlay && (
-            <div className={`absolute left-12 border-b border-[#1e1e28] ${selectedTrack === "overlay" ? "bg-teal-500/2" : ""}`}
+            <div className={`absolute left-12 border-b border-(--border-primary) ${selectedTrack === "overlay" ? "bg-teal-500/2" : ""}`}
               style={{ width: tlWidth, top: overlayTop, height: oH }}>
               {overlayLayers.map((layer, li) => {
                 const x = (layer.startTime || 0) * pxPerSec;
@@ -236,7 +235,6 @@ export function TimelineTracks(props: TimelineTracksProps) {
                   layer.shapeType || "Shape";
                 const rowY = li * layerRowH;
 
-                // Drag layer to move on timeline
                 const onLayerDrag = (e: React.MouseEvent) => {
                   e.stopPropagation();
                   props.onBeforeLayerChange?.();
@@ -253,7 +251,6 @@ export function TimelineTracks(props: TimelineTracksProps) {
                   window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
                 };
 
-                // Resize left edge (change startTime)
                 const onTrimLeft = (e: React.MouseEvent) => {
                   e.stopPropagation();
                   props.onBeforeLayerChange?.();
@@ -268,7 +265,6 @@ export function TimelineTracks(props: TimelineTracksProps) {
                   window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
                 };
 
-                // Resize right edge (change endTime)
                 const onTrimRight = (e: React.MouseEvent) => {
                   e.stopPropagation();
                   props.onBeforeLayerChange?.();
@@ -286,7 +282,7 @@ export function TimelineTracks(props: TimelineTracksProps) {
                 return (
                   <div key={layer.id}
                     className={`absolute rounded cursor-grab active:cursor-grabbing transition ${
-                      isSel ? "ring-1 ring-teal-400 shadow-md shadow-teal-500/20" : "ring-1 ring-[#2a2a35] hover:ring-[#4A4A4A]"
+                      isSel ? "ring-1 ring-(--accent-teal) shadow-md shadow-teal-500/20" : "ring-1 ring-(--border-primary) hover:ring-(--border-secondary)"
                     } ${!(layer.visible ?? true) ? "opacity-30" : ""}`}
                     style={{ left: x + 8, width: Math.max(w, 24), top: rowY + 2, height: layerRowH - 4 }}
                     onMouseDown={onLayerDrag}
@@ -303,21 +299,19 @@ export function TimelineTracks(props: TimelineTracksProps) {
                       {layerIcon(layer)}
                       <span className="text-[7px] text-white/60 truncate">{label}</span>
                     </div>
-                    {/* Left trim handle */}
                     <div className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 group/tl"
                       onMouseDown={onTrimLeft}>
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-teal-400/0 group-hover/tl:bg-teal-400 transition rounded-l-lg" />
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover/tl:bg-(--accent-teal) transition rounded-l-lg" />
                     </div>
-                    {/* Right trim handle */}
                     <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 group/tr"
                       onMouseDown={onTrimRight}>
-                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-teal-400/0 group-hover/tr:bg-teal-400 transition rounded-r-lg" />
+                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-transparent group-hover/tr:bg-(--accent-teal) transition rounded-r-lg" />
                     </div>
                   </div>
                 );
               })}
               {selectedTrack === "overlay" && overlayLayers.length === 0 && (
-                <div className="flex items-center justify-center h-full text-[9px] text-[#2a2a35]">
+                <div className="flex items-center justify-center h-full text-[9px] text-(--text-tertiary)">
                   Use layer panel to add overlays
                 </div>
               )}
@@ -388,7 +382,7 @@ export function TimelineTracks(props: TimelineTracksProps) {
             </div>
             <div className="absolute z-30 flex items-center justify-center pointer-events-none" style={{ left: rcStartX, width: rcEndX - rcStartX, top: "50%", transform: "translateY(-50%)" }}>
               <button onClick={(e) => { e.stopPropagation(); applyRangeCut(); }}
-                className="pointer-events-auto px-4 py-1.5 bg-red-500/90 hover:bg-red-500 text-white text-[10px] font-bold rounded-full shadow-lg transition">
+                className="pointer-events-auto px-4 py-1.5 bg-red-500/90 hover:bg-red-500 text-white text-[11px] font-bold rounded-md shadow-lg transition">
                 CUT
               </button>
             </div>

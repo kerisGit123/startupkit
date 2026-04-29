@@ -118,13 +118,10 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const totalDur = Math.max(videoDur, audioDur, overlayMaxEnd) || 0;
 
   // ── Undo / Redo ─────────────────────────────────────────────────────────
-  // Uses refs to avoid stale closure issues with React state batching.
-  // pushHistory snapshots current state BEFORE a change happens.
 
   const pushHistory = useCallback(() => {
     if (isUndoRedoing.current) return;
     const snap = [videoClips, audioClips, overlayLayers];
-    // Trim future entries (discard redo stack on new action)
     const trimmed = historyRef.current.slice(0, historyIndexRef.current + 1);
     const limited = trimmed.length >= 50 ? trimmed.slice(1) : trimmed;
     historyRef.current = [...limited, snap];
@@ -137,7 +134,6 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     if (idx < 0 || h.length === 0) return;
     const entry = h[idx];
     if (!entry || !Array.isArray(entry)) return;
-    // Save current state for redo if at the top
     if (idx >= h.length - 1) {
       historyRef.current = [...h, [videoClips, audioClips, overlayLayers]];
     }
@@ -246,7 +242,6 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       const srcChanged = !vid.src || !vid.src.includes(vr.clip.src.split("/").pop()!.split("?")[0]);
       if (srcChanged) { vid.src = vr.clip.src; vid.load(); }
       vid.currentTime = vr.offset;
-      // Try play immediately (within user gesture), retry on canplay if needed
       vid.play().catch((err) => {
         console.warn("[VideoEditor] play() failed, retrying on canplay:", err.message);
         vid.oncanplay = () => { vid.oncanplay = null; vid.play().catch(() => {}); };
@@ -549,7 +544,6 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       const dt = (e.clientX - trimming.startX) / pxPerSec;
       const trimMapper = (c: TimelineClip) => {
         if (c.id !== trimming.clipId) return c;
-        // Images: right edge extends/shrinks duration freely (no original media to constrain)
         if (c.type === "image" && trimming.side === "right") {
           const newDur = Math.max(0.5, trimming.origDur + dt);
           return { ...c, duration: newDur, originalDuration: newDur };
@@ -635,7 +629,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     }
   }, [videoClips, currentTime]);
 
-  // Clamp currentTime when totalDur shrinks (e.g. after removing clips)
+  // Clamp currentTime when totalDur shrinks
   useEffect(() => {
     if (totalDur > 0 && currentTime > totalDur) setCurrentTime(totalDur);
   }, [totalDur, currentTime]);
@@ -688,29 +682,33 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const sel = videoClips.find(c => c.id === selectedClipId) || audioClips.find(c => c.id === selectedClipId);
 
   return (
-    <div className="flex flex-col h-screen bg-[#0a0a0f] text-white select-none overflow-hidden relative">
+    <div className="flex flex-col h-screen bg-(--bg-primary) text-(--text-primary) select-none overflow-hidden relative">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-11 border-b border-[#1e1e28] shrink-0 bg-[#0f0f17]">
+      <div className="flex items-center justify-between px-4 h-11 border-b border-(--border-primary) shrink-0 bg-(--bg-secondary)">
         <div className="flex items-center gap-3">
-          {onClose && <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#1a1a24] transition text-[#6E6E6E] hover:text-white"><X className="w-4 h-4" /></button>}
+          {onClose && (
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 transition text-(--text-tertiary) hover:text-(--text-primary)">
+              <X className="w-4 h-4" />
+            </button>
+          )}
           <div className="flex items-center gap-2">
-            <Film className="w-4 h-4 text-teal-500" />
-            <span className="text-sm font-semibold text-white">Video Editor</span>
-            {projectName && <span className="text-xs text-[#4A4A4A]">— {projectName}</span>}
+            <Film className="w-4 h-4 text-(--accent-teal)" />
+            <span className="text-[13px] font-semibold text-(--text-primary)">Video Editor</span>
+            {projectName && <span className="text-[11px] text-(--text-tertiary)">— {projectName}</span>}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <select
             value={project?.aspectRatio || "16:9"}
             onChange={(e) => updateProject({ id: projectId, aspectRatio: e.target.value })}
-            className="px-2 py-1 text-[10px] bg-[#1a1a24] border border-[#2a2a35] rounded text-[#A0A0A0] outline-none cursor-pointer"
+            className="px-2.5 py-1 text-[11px] bg-(--bg-primary) border border-(--border-primary) rounded-lg text-(--text-secondary) outline-none cursor-pointer hover:border-(--border-secondary)"
             title="Canvas aspect ratio"
           >
             {ASPECT_RATIOS.map(r => <option key={r.key} value={r.key}>{r.label} ({r.w}×{r.h})</option>)}
           </select>
           <button onClick={handleExport} disabled={exporting || (selectedTrack === "audio" ? audioClips.length === 0 : (videoClips.length === 0 && overlayLayers.length === 0))}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-teal-600 hover:bg-teal-500 disabled:opacity-30 text-white text-xs font-semibold rounded-lg transition">
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-(--accent-teal) hover:bg-(--accent-teal)/80 disabled:opacity-30 text-white text-[12px] font-medium rounded-lg transition">
             {exporting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {exportProgress}%</> : <><Download className="w-3.5 h-3.5" /> Export {selectedTrack === "audio" ? "WAV" : "MP4"}</>}
           </button>
         </div>
@@ -731,7 +729,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         {curVideo && (curVideo.clip.type === "video" || curVideo.clip.type === "image") && (
           <div className="absolute top-3 right-3 z-10">
             <button onClick={handleSnapshot}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition shadow-lg bg-[#1a1a24]/90 backdrop-blur text-[#c0c0c0] hover:text-white border border-[#2a2a35]"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium transition shadow-lg bg-(--bg-secondary)/90 backdrop-blur text-(--text-secondary) hover:text-(--text-primary) border border-(--border-primary)"
               title="Capture current frame as image">
               <Camera className="w-3.5 h-3.5" /> Snapshot
             </button>
@@ -740,54 +738,54 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
 
         <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
           <button onClick={() => setShowMedia(!showMedia)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition shadow-lg ${showMedia ? "bg-teal-600 text-white" : "bg-[#1a1a24]/90 backdrop-blur text-[#c0c0c0] hover:text-white border border-[#2a2a35]"}`}>
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium transition shadow-lg ${showMedia ? "bg-(--accent-teal) text-white" : "bg-(--bg-secondary)/90 backdrop-blur text-(--text-secondary) hover:text-(--text-primary) border border-(--border-primary)"}`}>
             {showMedia ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             {showMedia ? "Close" : "Add Media"}
           </button>
           <button onClick={() => { setShowFileBrowser(true); setShowMedia(false); }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition shadow-lg bg-[#1a1a24]/90 backdrop-blur text-[#c0c0c0] hover:text-white border border-[#2a2a35]">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium transition shadow-lg bg-(--bg-secondary)/90 backdrop-blur text-(--text-secondary) hover:text-(--text-primary) border border-(--border-primary)">
             <FolderOpen className="w-3.5 h-3.5" /> Browse Files
           </button>
           {showMedia && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#1a1a24]/90 backdrop-blur rounded-lg border border-[#2a2a35] text-[10px] font-medium text-[#A0A0A0]">
-              {selectedTrack === "video" ? <Film className="w-3 h-3 text-teal-500" /> : <Music className="w-3 h-3 text-purple-500" />}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-(--bg-secondary)/90 backdrop-blur rounded-lg border border-(--border-primary) text-[11px] font-medium text-(--text-secondary)">
+              {selectedTrack === "video" ? <Film className="w-3 h-3 text-(--accent-teal)" /> : <Music className="w-3 h-3 text-purple-400" />}
               {selectedTrack === "video" ? "Video Track" : "Audio Track"}
             </div>
           )}
         </div>
 
         {showMedia && (
-          <div className="absolute top-12 left-3 bottom-16 w-52 bg-[#0f0f17]/95 backdrop-blur-md border border-[#2a2a35] rounded-xl overflow-hidden z-20 shadow-2xl flex flex-col">
+          <div className="absolute top-12 left-3 bottom-16 w-56 bg-(--bg-secondary)/95 backdrop-blur-md border border-(--border-primary) rounded-xl overflow-hidden z-20 shadow-2xl flex flex-col">
             <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {!projectFiles ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 text-[#3D3D3D] animate-spin" /></div>
+                <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 text-(--border-primary) animate-spin" /></div>
               ) : mediaFiles.length === 0 ? (
-                <div className="text-center py-12 text-[11px] text-[#4A4A4A]">No media files in this project</div>
+                <div className="text-center py-12 text-[11px] text-(--text-tertiary)">No media files in this project</div>
               ) : (
                 mediaFiles.map(file => {
                   const src = file.r2Key ? `${R2_PUBLIC_URL}/${file.r2Key}` : file.sourceUrl || "";
                   return (
                     <button key={file._id} onClick={() => addClip(file)}
-                      className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-[#1a1a24] transition text-left group">
+                      className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5 transition text-left group">
                       {file.fileType === "video" ? (
-                        <div className="w-16 h-10 rounded-md bg-black overflow-hidden shrink-0 border border-[#2a2a35]">
+                        <div className="w-16 h-10 rounded-md bg-black overflow-hidden shrink-0 border border-(--border-primary)">
                           <video src={src} className="w-full h-full object-cover" muted preload="metadata"
                             onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 1; }} />
                         </div>
                       ) : file.fileType === "image" ? (
-                        <div className="w-16 h-10 rounded-md bg-black overflow-hidden shrink-0 border border-[#2a2a35]">
+                        <div className="w-16 h-10 rounded-md bg-black overflow-hidden shrink-0 border border-(--border-primary)">
                           <img src={src} className="w-full h-full object-cover" alt="" />
                         </div>
                       ) : (
-                        <div className="w-16 h-10 rounded-md bg-[#1a1a24] flex items-center justify-center shrink-0 border border-[#2a2a35]">
-                          <Music className="w-5 h-5 text-teal-500/60" />
+                        <div className="w-16 h-10 rounded-md bg-(--bg-primary) flex items-center justify-center shrink-0 border border-(--border-primary)">
+                          <Music className="w-5 h-5 text-(--accent-teal)/60" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[10px] text-[#c0c0c0] truncate">{file.filename || file.model || "Untitled"}</p>
-                        <p className="text-[8px] text-[#4A4A4A] capitalize">{file.fileType}</p>
+                        <p className="text-[11px] text-(--text-secondary) truncate">{file.filename || file.model || "Untitled"}</p>
+                        <p className="text-[9px] text-(--text-tertiary) capitalize">{file.fileType}</p>
                       </div>
-                      <Plus className="w-3.5 h-3.5 text-[#4A4A4A] opacity-0 group-hover:opacity-100 transition shrink-0" />
+                      <Plus className="w-3.5 h-3.5 text-(--text-tertiary) opacity-0 group-hover:opacity-100 transition shrink-0" />
                     </button>
                   );
                 })
@@ -811,7 +809,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       </div>
 
       {/* Bottom Panel */}
-      <div className="shrink-0 bg-[#111118] border-t border-[#1e1e28] flex flex-col">
+      <div className="shrink-0 bg-(--bg-secondary) border-t border-(--border-primary) flex flex-col">
         <ControlBar
           sel={sel} selectedTrack={selectedTrack}
           splitClip={splitClip} removeClip={removeClip}
@@ -857,29 +855,29 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         if (!ctxClip) return null;
         return (
           <div
-            className="fixed bg-[#1e1e28] border border-[#3D3D3D] rounded-xl shadow-2xl shadow-black/60 overflow-hidden py-1 min-w-[180px]"
+            className="fixed bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl overflow-hidden py-1.5 min-w-[180px]"
             style={{ left: clipContextMenu.x, top: clipContextMenu.y, zIndex: 99999 }}
             onClick={() => setClipContextMenu(null)}
           >
             <button onClick={() => saveClipToUploads(ctxClip)} disabled={saving}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-teal-400 hover:bg-[#2a2a35] transition-colors disabled:opacity-50">
-              <Save className="w-3.5 h-3.5" /> {saving ? "Saving..." : "Save to Uploads"}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-(--accent-teal) hover:bg-white/5 transition-colors disabled:opacity-50">
+              <Save className="w-4 h-4" /> {saving ? "Saving..." : "Save to Uploads"}
             </button>
             <button
               onClick={() => { const link = document.createElement("a"); link.href = ctxClip.src; link.download = ctxClip.name; link.click(); setClipContextMenu(null); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:bg-[#2a2a35] hover:text-white transition-colors">
-              <Download className="w-3.5 h-3.5" /> Download
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-(--text-primary) hover:bg-white/5 transition-colors">
+              <Download className="w-4 h-4 text-(--text-secondary)" /> Download
             </button>
             {ctxClip.type === "video" && (
               <button onClick={() => { extractAudioFromVideo(ctxClip); setClipContextMenu(null); }} disabled={extracting}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#A0A0A0] hover:bg-[#2a2a35] hover:text-white transition-colors disabled:opacity-50">
-                <Music className="w-3.5 h-3.5" /> {extracting ? "Extracting..." : "Extract Audio"}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-(--text-primary) hover:bg-white/5 transition-colors disabled:opacity-50">
+                <Music className="w-4 h-4 text-(--text-secondary)" /> {extracting ? "Extracting..." : "Extract Audio"}
               </button>
             )}
-            <div className="mx-2 my-1 border-t border-[#3D3D3D]" />
+            <div className="h-px bg-(--border-primary) mx-2 my-1" />
             <button onClick={() => { removeClip(ctxClip.id); setClipContextMenu(null); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:bg-[#2a2a35] transition-colors">
-              <Trash2 className="w-3.5 h-3.5" /> Delete
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-red-500/10 transition-colors">
+              <Trash2 className="w-4 h-4" /> Delete
             </button>
           </div>
         );
