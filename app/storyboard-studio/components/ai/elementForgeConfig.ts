@@ -821,8 +821,12 @@ export function composeImageOverrides(identity: Record<string, any>): string {
     overrides.push(`${labelFor(ETHNICITY_OPTIONS, identity.ethnicity)} ethnicity`);
   }
 
+  if (identity.ref_outfit) {
+    overrides.push(`the character MUST wear the exact outfit shown in the second reference image (@Image2) — preserve its design, colors, materials, and silhouette faithfully`);
+  }
+
   if (overrides.length === 0) return "";
-  return `\n\nIMPORTANT — override the reference image for these attributes: ${overrides.join(", ")}. Follow the text description, not the reference photo, for these features.`;
+  return `\n\nIMPORTANT — override the reference image for these attributes: ${overrides.join(". ")}. Follow the text description, not the reference photo, for these features.`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

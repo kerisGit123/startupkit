@@ -825,14 +825,14 @@ export function ElementForge({
     setIdentity({ ...randomizeIdentity(type), name });
   }, [type, identity.name]);
 
-  const handleSave = useCallback(async () => {
-    if (!canSave || saving) return;
+  // Returns the element ID (existing or newly created)
+  const handleSave = useCallback(async (): Promise<string | null> => {
+    if (!canSave || saving) return element?._id ?? null;
     setSaving(true);
     try {
       const { name, ref_face, ref_outfit, ref_fullBody, ref_head, ref_body, ...identityData } = identity;
       const description = composePrompt(type, identity);
 
-      // Build referencePhotos from ref_* fields
       const referencePhotos = (ref_face || ref_outfit || ref_fullBody || ref_head || ref_body)
         ? {
             ...(ref_face ? { face: ref_face } : {}),
@@ -843,24 +843,27 @@ export function ElementForge({
           }
         : undefined;
 
+      let savedId: string | null = element?._id ?? null;
+
       if (mode === "edit" && element?._id) {
-        // Don't overwrite referenceUrls — managed by generation callbacks
         await updateElement({
           id: element._id, name: name.trim(), description, identity: identityData,
           thumbnailUrl: thumbnailUrl || undefined,
           referencePhotos,
         });
       } else {
-        await createElement({
+        savedId = await createElement({
           projectId, name: name.trim(), type, description,
           thumbnailUrl: thumbnailUrl || "", referenceUrls, tags: [],
           createdBy: userId, visibility: "private", identity: identityData,
           referencePhotos,
-        });
+        }) as unknown as string;
       }
       onSave({ name: name.trim(), type, description, identity: identityData });
+      return savedId;
     } catch (error) {
       console.error("[ElementForge] Save failed:", error);
+      return null;
     } finally {
       setSaving(false);
     }
@@ -876,13 +879,10 @@ export function ElementForge({
   const handleGenerate = useCallback(async () => {
     if (!canSave || isGenerating || !companyId) return;
 
-    // Save element first (creates or updates)
-    await handleSave();
-
-    // Need the element ID — if creating, we need to get it from the saved element
-    const elementId = element?._id;
+    // Auto-save element first (creates if new, updates if existing)
+    const elementId = await handleSave();
     if (!elementId) {
-      alert("Please save the element first, then generate.");
+      alert("Failed to save element. Please try again.");
       return;
     }
 
@@ -922,9 +922,10 @@ export function ElementForge({
     const totalGenerations = genGridSize * genGridSize; // 1x1=1, 2x2=4
 
     setIsGenerating(true);
-    onGenerating?.(elementId);
+    onGenerating?.(elementId as Id<"storyboard_elements">);
     try {
-      for (let i = 0; i < totalGenerations; i++) {
+      // Fire all generations in parallel
+      await Promise.all(Array.from({ length: totalGenerations }, async (_, i) => {
         const variantLbl = totalGenerations > 1 ? `${label} (${i + 1})` : label;
         const res = await fetch('/api/storyboard/generate-image', {
           method: 'POST',
@@ -952,7 +953,7 @@ export function ElementForge({
         }
         const data = await res.json();
         console.log(`[ElementForge] Generation ${i + 1}/${totalGenerations} started:`, data.taskId);
-      }
+      }));
       setGenVariantLabel("");
     } catch (error: any) {
       console.error('[ElementForge] Generation failed:', error);
@@ -1427,7 +1428,7 @@ export function ElementForge({
                 {/* Generate button */}
                 <button
                   onClick={handleGenerate}
-                  disabled={!canSave || isGenerating || !element?._id}
+                  disabled={!canSave || isGenerating}
                   className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-semibold bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   {isGenerating ? (
@@ -1444,10 +1445,6 @@ export function ElementForge({
                   )}
                 </button>
               </div>
-
-              {!element?._id && (
-                <p className="text-[10px] text-amber-400/80 px-1">Save the element first before generating.</p>
-              )}
 
               {/* Generated Variants — takes remaining space */}
               <div className="flex-1 min-h-0">
