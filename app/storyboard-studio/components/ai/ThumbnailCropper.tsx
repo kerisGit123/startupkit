@@ -75,19 +75,17 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
     const handleMouseMove = (e: MouseEvent) => {
       const dx = e.clientX - dragStart.current.mx;
       const dy = e.clientY - dragStart.current.my;
+      const { cx, cy, cs } = dragStart.current;
 
       if (dragging === "move") {
-        const newX = Math.max(0, Math.min(displaySize.w - crop.size, dragStart.current.cx + dx));
-        const newY = Math.max(0, Math.min(displaySize.h - crop.size, dragStart.current.cy + dy));
+        const newX = Math.max(0, Math.min(displaySize.w - cs, cx + dx));
+        const newY = Math.max(0, Math.min(displaySize.h - cs, cy + dy));
         setCrop(prev => ({ ...prev, x: newX, y: newY }));
       } else if (dragging === "resize") {
         const delta = Math.max(dx, dy);
         const minSize = 40;
-        const maxSize = Math.min(
-          displaySize.w - dragStart.current.cx,
-          displaySize.h - dragStart.current.cy,
-        );
-        const newSize = Math.max(minSize, Math.min(maxSize, dragStart.current.cs + delta));
+        const maxSize = Math.min(displaySize.w - cx, displaySize.h - cy);
+        const newSize = Math.max(minSize, Math.min(maxSize, cs + delta));
         setCrop(prev => ({ ...prev, size: newSize }));
       }
     };
@@ -100,7 +98,7 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragging, displaySize, crop.size]);
+  }, [dragging, displaySize]);
 
   // Reset crop to center
   const handleReset = useCallback(() => {
@@ -121,13 +119,13 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
       const sw = crop.size * scale;
       const sh = crop.size * scale;
 
-      // Load image via <img> with crossOrigin to handle both blob URLs and cross-origin R2 URLs
+      // Load image via proxy to avoid CORS issues with external CDN URLs
       const img = new Image();
-      img.crossOrigin = "anonymous";
+      const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(imageUrl)}`;
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
         img.onerror = () => reject(new Error("Failed to load image"));
-        img.src = imageUrl;
+        img.src = proxyUrl;
       });
       const bitmap = await createImageBitmap(img, Math.round(sx), Math.round(sy), Math.round(sw), Math.round(sh));
 
@@ -198,7 +196,8 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
                     top: crop.y,
                     width: crop.size,
                     height: crop.size,
-                    border: "2px solid rgba(74, 144, 226, 0.8)",
+                    outline: "2px solid rgba(74, 144, 226, 0.8)",
+                    outlineOffset: -2,
                     borderRadius: 8,
                   }}
                   onMouseDown={(e) => handleMouseDown(e, "move")}
@@ -210,8 +209,7 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
                     style={{
                       width: displaySize.w,
                       height: displaySize.h,
-                      marginLeft: -crop.x,
-                      marginTop: -crop.y,
+                      transform: `translate(${-crop.x}px, ${-crop.y}px)`,
                     }}
                     draggable={false}
                   />

@@ -910,12 +910,13 @@ export default function StoryboardWorkspacePage() {
 
         <div className="flex items-center gap-2">
           {/* Tab switcher */}
-          <div className="flex bg-(--bg-tertiary) rounded-xl p-0.5 gap-0.5 border border-(--border-primary)">
+          <div className="flex items-center rounded-xl border border-white/8 overflow-hidden">
             {(["script", "storyboard", "table", "video"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
-                  ${tab === t ? "bg-teal-600 text-white shadow-lg" : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-primary)"}`}>
-                {t === "script" ? <FileText className="w-3.5 h-3.5" /> : t === "table" ? <List className="w-3.5 h-3.5" /> : t === "video" ? <Film className="w-3.5 h-3.5" /> : <Grid3x3 className="w-3.5 h-3.5" />}
+                className={`flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium transition-all ${
+                  tab === t ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary)"
+                }`}>
+                {t === "script" ? <FileText className="w-3.5 h-3.5" strokeWidth={1.75} /> : t === "table" ? <List className="w-3.5 h-3.5" strokeWidth={1.75} /> : t === "video" ? <Film className="w-3.5 h-3.5" strokeWidth={1.75} /> : <Grid3x3 className="w-3.5 h-3.5" strokeWidth={1.75} />}
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
@@ -925,9 +926,9 @@ export default function StoryboardWorkspacePage() {
           {tab === "script" && (
             <button
               onClick={handleSaveScript}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-(--accent-teal) to-(--accent-teal-hover) hover:from-(--accent-teal-hover) hover:to-(--accent-teal) text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 border border-white/8 rounded-xl transition-all"
             >
-              <Save className="w-3.5 h-3.5" />
+              <Save className="w-3.5 h-3.5" strokeWidth={1.75} />
               Save Script
             </button>
           )}
@@ -936,10 +937,9 @@ export default function StoryboardWorkspacePage() {
             <button
               onClick={() => setShowBuildDialog(true)}
               disabled={isBuilding}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) text-white text-xs font-medium rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Build storyboard with options for normal or enhanced mode"
+              className="flex items-center gap-1.5 px-4 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[12px] font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
               Build Storyboard
             </button>
           )}
@@ -1035,54 +1035,7 @@ export default function StoryboardWorkspacePage() {
         </div>
       </div>
 
-      {/* AI Prompt Bar */}
-      {tab === "script" && showAiInput && (
-        <div className="flex items-center gap-3 px-5 py-2.5 bg-(--bg-secondary) border-b border-(--border-primary) shrink-0">
-          <div className="flex items-center gap-2 flex-1 bg-(--bg-primary) border border-(--border-primary) rounded-xl px-3 py-2 focus-within:border-(--accent-blue)/40 transition-colors">
-            <Sparkles className="w-4 h-4 text-(--accent-blue) shrink-0" />
-            <input
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleGenerateScript()}
-              placeholder="Describe your story idea... e.g. 'A deep-sea expedition encounters an ancient creature'"
-              className="flex-1 bg-transparent text-[13px] text-(--text-primary) placeholder:text-(--text-tertiary) outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Genre pills */}
-            <div className="flex items-center bg-(--bg-primary) border border-(--border-primary) rounded-xl p-0.5">
-              {["drama", "comedy", "thriller", "horror", "action", "documentary"].map((g) => (
-                <button key={g} onClick={() => setGenre(g)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                    genre === g
-                      ? "bg-white/10 text-(--text-primary)"
-                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
-                  }`}>
-                  {g.charAt(0).toUpperCase() + g.slice(1)}
-                </button>
-              ))}
-            </div>
-            {/* Duration pills */}
-            <div className="flex items-center bg-(--bg-primary) border border-(--border-primary) rounded-xl p-0.5">
-              {[15, 30, 60, 90].map((d) => (
-                <button key={d} onClick={() => setDuration(d)}
-                  className={`px-2 py-1 rounded-lg text-[11px] font-medium tabular-nums transition-all ${
-                    duration === d
-                      ? "bg-white/10 text-(--text-primary)"
-                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
-                  }`}>
-                  {d}s
-                </button>
-              ))}
-            </div>
-            <button onClick={handleGenerateScript} disabled={isGenerating || !aiPrompt.trim()}
-              className="flex items-center gap-1.5 px-4 py-1.5 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[13px] font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-              {isGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              Generate
-            </button>
-          </div>
-        </div>
-      )}
+      {/* AI Prompt Bar — removed from here, now floating inside Script tab */}
 
       {/* Content */}
       <div className="flex-1 overflow-hidden">
@@ -1104,7 +1057,7 @@ export default function StoryboardWorkspacePage() {
                     const sync = () => { el.scrollTop = ta.scrollTop; };
                     ta.addEventListener("scroll", sync);
                   }}
-                  className="shrink-0 w-[52px] pt-6 pb-6 select-none overflow-hidden" aria-hidden
+                  className="shrink-0 w-[52px] pt-6 pb-24 select-none overflow-hidden" aria-hidden
                 >
                   <div className="flex flex-col">
                     {scriptLines.map((line, i) => {
@@ -1126,9 +1079,68 @@ export default function StoryboardWorkspacePage() {
                   value={displayScript}
                   onChange={(e) => handleScriptChange(e.target.value)}
                   placeholder={`Write your script here...\n\nFormat scenes as:\nSCENE 1: Title — Location\n[Scene description]\n\nOr use AI to generate a script automatically.`}
-                  className="flex-1 bg-transparent text-[13px] text-(--text-secondary) placeholder:text-(--text-tertiary) px-4 py-6 outline-none resize-none font-mono leading-relaxed"
+                  className="flex-1 bg-transparent text-[13px] text-(--text-secondary) placeholder:text-(--text-tertiary) px-4 py-6 pb-24 outline-none resize-none font-mono leading-relaxed"
                   spellCheck={false}
                 />
+              </div>
+
+              {/* Floating AI Script Generator — VideoImageAIPanel style */}
+              <div className="absolute bottom-0 left-0 right-0 mx-5 mb-5 z-20">
+                <div className="bg-(--bg-secondary)/95 backdrop-blur-md rounded-2xl shadow-2xl">
+                  {/* Prompt input */}
+                  <div className="px-3 pt-3 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-(--accent-blue) shrink-0" strokeWidth={1.75} />
+                      <input
+                        value={aiPrompt}
+                        onChange={(e) => setAiPrompt(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleGenerateScript()}
+                        placeholder="Describe your story idea... e.g. 'A deep-sea expedition encounters an ancient creature'"
+                        className="flex-1 bg-transparent text-[14px] text-(--text-primary) placeholder:text-(--text-tertiary) outline-none leading-5"
+                      />
+                    </div>
+                  </div>
+                  {/* Toolbar */}
+                  <div className="relative z-50 flex items-center gap-1 px-3 py-2 border-t border-white/5">
+                    {/* Genre tabs */}
+                    {["drama", "comedy", "thriller", "horror", "action", "documentary"].map((g) => (
+                      <button key={g} onClick={() => setGenre(g)}
+                        className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                          genre === g
+                            ? "bg-white/10 text-(--text-primary)"
+                            : "text-[#8A8A8A] hover:text-(--text-primary) hover:bg-white/5"
+                        }`}>
+                        {g.charAt(0).toUpperCase() + g.slice(1)}
+                      </button>
+                    ))}
+
+                    {/* Separator */}
+                    <div className="w-px h-4 bg-[#32363E] mx-1" />
+
+                    {/* Duration */}
+                    {[15, 30, 60, 90].map((d) => (
+                      <button key={d} onClick={() => setDuration(d)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[12px] font-medium tabular-nums transition-colors ${
+                          duration === d
+                            ? "bg-white/10 text-(--text-primary)"
+                            : "text-[#8A8A8A] hover:text-(--text-primary) hover:bg-white/5"
+                        }`}>
+                        <Clock className="w-3 h-3" strokeWidth={1.75} />
+                        {d}s
+                      </button>
+                    ))}
+
+                    {/* Spacer */}
+                    <div className="flex-1" />
+
+                    {/* Generate */}
+                    <button onClick={handleGenerateScript} disabled={isGenerating || !aiPrompt.trim()}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[13px] font-medium rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                      {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" strokeWidth={1.75} />}
+                      Generate
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 

@@ -46,6 +46,7 @@ interface FileBrowserProps {
   onSelectImage?: (imageUrl: string, filename: string, file: any) => void;
   imageSelectionMode?: boolean;
   defaultFileType?: FileType;
+  defaultCategory?: CategoryFilter;
 }
 
 type FileType = "all" | "image" | "video" | "audio" | "file";
@@ -154,10 +155,11 @@ export function FileBrowser({
   onSelectImage,
   imageSelectionMode = false,
   defaultFileType,
+  defaultCategory,
 }: FileBrowserProps) {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]           = useState("");
-  const [selectedFilter, setSelectedFilter]   = useState<CategoryFilter>("all");
+  const [selectedFilter, setSelectedFilter]   = useState<CategoryFilter>(defaultCategory || "all");
   const [selectedType, setSelectedType]       = useState<FileType>(defaultFileType || "all");
   const [selectedElementCategory, setSelectedElementCategory] = useState<string>("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);

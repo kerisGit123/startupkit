@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useReducer, useCallback, memo, type Chang
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Check, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload } from "lucide-react";
+import { Check, ChevronDown, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload, Star } from "lucide-react";
 import { useCurrentCompanyId, getCurrentCompanyId, logUserInfo } from "@/lib/auth-utils";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { FileBrowser } from "./FileBrowser";
@@ -28,6 +28,15 @@ interface Element {
   tags?: string[];
   description?: string;
   identity?: Record<string, any>;
+  referencePhotos?: {
+    face?: string;
+    outfit?: string;
+    fullBody?: string;
+    head?: string;
+    body?: string;
+  };
+  variants?: { label: string; model: string; createdAt: number }[];
+  primaryIndex?: number;
 }
 
 // Image selection state management
@@ -273,6 +282,7 @@ export function ElementLibrary({
   const [showRefFileBrowser, setShowRefFileBrowser] = useState(false);
   const [forgeState, setForgeState] = useState<{ open: boolean; mode: "create" | "edit"; type: ForgeElementType; element?: any } | null>(null);
   const [visibility, setVisibility] = useState<"private" | "public" | "shared">("private");
+  const [visibilityDropdownId, setVisibilityDropdownId] = useState<Id<"storyboard_elements"> | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]); // For filtering
@@ -415,6 +425,8 @@ export function ElementLibrary({
   const createElement = useMutation(api.storyboard.storyboardElements.create);
   const updateElement = useMutation(api.storyboard.storyboardElements.update);
   const removeElement = useMutation(api.storyboard.storyboardElements.remove);
+  const setPrimaryVariant = useMutation(api.storyboard.storyboardElements.setPrimaryVariant);
+  const updateVariantLabel = useMutation(api.storyboard.storyboardElements.updateVariantLabel);
   
   // Toggle element visibility
   const toggleElementVisibility = async (elementId: Id<"storyboard_elements">, currentVisibility: "private" | "public") => {
@@ -480,7 +492,7 @@ export function ElementLibrary({
   };
 
   // Generate reference image for an element
-  const handleGenerateElement = useCallback(async (element: Element) => {
+  const handleGenerateElement = useCallback(async (element: Element, variantLabel?: string) => {
     if (generatingIds.has(element._id)) return;
     if (!projectCompanyId || !userId) return;
 
@@ -497,6 +509,31 @@ export function ElementLibrary({
     const template = REFERENCE_SHEET_TEMPLATES[element.type] || REFERENCE_SHEET_TEMPLATES.prop;
     const prompt = template.replace(/\{description\}/g, description);
 
+    // Determine reference images from referencePhotos
+    const rp = element.referencePhotos;
+    const referenceImageUrls: string[] = [];
+    if (rp) {
+      if (rp.fullBody) {
+        // Full body takes priority
+        referenceImageUrls.push(rp.fullBody);
+      } else {
+        // Human: face + outfit, Non-human: head + body
+        if (rp.face) referenceImageUrls.push(rp.face);
+        if (rp.outfit) referenceImageUrls.push(rp.outfit);
+        if (rp.head) referenceImageUrls.push(rp.head);
+        if (rp.body) referenceImageUrls.push(rp.body);
+      }
+    }
+
+    const hasRefs = referenceImageUrls.length > 0;
+    const isNonHuman = element.identity?.isNonHuman;
+
+    // Smart model selection: GPT Image 2 (default), Nana Banana 2 for stylized/non-human
+    const model = hasRefs
+      ? 'gpt-image-2-image-to-image'
+      : 'gpt-image-2-text-to-image';
+    const mode = hasRefs ? 'image-to-image' : 'text-to-image';
+
     setGeneratingIds(prev => new Set(prev).add(element._id));
     setGenRefCounts(prev => new Map(prev).set(element._id as string, element.referenceUrls?.length ?? 0));
     try {
@@ -505,15 +542,18 @@ export function ElementLibrary({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sceneContent: prompt,
-          model: 'gpt-image-2-text-to-image',
+          model,
           style: 'realistic',
-          quality: JSON.stringify({ type: 'gpt-image-2', mode: 'text-to-image' }),
+          quality: JSON.stringify({ type: 'gpt-image-2', mode }),
           aspectRatio: element.type === 'character' ? '3:4' : '16:9',
           companyId: projectCompanyId,
           userId,
           projectId: projectId as string,
           elementId: element._id,
           enhance: false,
+          referenceImageUrls: hasRefs ? referenceImageUrls : undefined,
+          variantLabel: variantLabel || `Variant ${(element.referenceUrls?.length ?? 0) + 1}`,
+          variantModel: model,
         }),
       });
       if (!res.ok) {
@@ -521,9 +561,7 @@ export function ElementLibrary({
         throw new Error(err.error || 'Generation failed');
       }
       const data = await res.json();
-      console.log('[ElementLibrary] Generation started:', data.taskId);
-      // The kie-callback will auto-update the element's referenceUrls & thumbnailUrl
-      // generatingIds will be cleared when Convex reactivity updates the element
+      console.log('[ElementLibrary] Generation started:', data.taskId, hasRefs ? '(img2img)' : '(txt2img)');
     } catch (error: any) {
       console.error('[ElementLibrary] Generation failed:', error);
       setGeneratingIds(prev => {
@@ -651,10 +689,30 @@ export function ElementLibrary({
       console.log(`[ElementLibrary] Step 1: Deleting files and metadata...`);
       await deleteElementFiles(elementId);
 
-      // Step 2: Delete the element itself
+      // Step 2: Delete the element itself (also cleans up linked storyboard_files metadata)
       console.log(`[ElementLibrary] Step 2: Deleting element record...`);
-      await removeElement({ id: elementId });
-      
+      const result = await removeElement({ id: elementId });
+
+      // Step 2b: Clean up R2 files from URLs stored directly on the element
+      // (thumbnailUrl, referenceUrls that may not have been linked via categoryId)
+      if (result?.urlsToClean?.length) {
+        const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+        if (r2Base) {
+          const cleanups = result.urlsToClean
+            .filter((url: string) => url.startsWith(r2Base))
+            .map((url: string) => {
+              const r2Key = url.slice(r2Base.length + 1);
+              return fetch("/api/storyboard/delete-file", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ r2Key }),
+              }).catch(() => {}); // Non-blocking
+            });
+          await Promise.allSettled(cleanups);
+          console.log(`[ElementLibrary] Cleaned up ${cleanups.length} R2 files from element URLs`);
+        }
+      }
+
       console.log(`[ElementLibrary] Successfully deleted element: ${elementName}`);
       
       // Step 3: Clean up UI state immediately
@@ -1259,32 +1317,58 @@ export function ElementLibrary({
                             </span>
                           </div>
                           
-                          {/* Public/Private Badges in Top-Right Corner */}
+                          {/* Public/Private Badge with dropdown selector */}
                           <div className="absolute top-2 right-2 z-10">
-                            {element.visibility === "public" && (
+                            <div className="relative">
                               <button
                                 onClick={(e) => {
-                                  e.stopPropagation(); // Prevent redirect to storyboard item page
-                                  toggleElementVisibility(element._id, element.visibility || "private");
+                                  e.stopPropagation();
+                                  setVisibilityDropdownId(visibilityDropdownId === element._id ? null : element._id);
                                 }}
-                                className="flex items-center gap-1 text-[10px] bg-green-500/80 text-white rounded px-1.5 py-0.5 hover:bg-green-500/90 transition-colors cursor-pointer backdrop-blur-sm"
-                                title="Click to make private"
+                                className={`flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5 transition-colors cursor-pointer backdrop-blur-sm ${
+                                  element.visibility === "public"
+                                    ? "bg-green-500/80 text-white hover:bg-green-500/90"
+                                    : "bg-gray-500/80 text-white hover:bg-gray-500/90"
+                                }`}
                               >
-                                <Globe className="w-2.5 h-2.5" />Public
+                                {element.visibility === "public" ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                                {element.visibility === "public" ? "Public" : "Private"}
+                                <ChevronDown className="w-2.5 h-2.5" />
                               </button>
-                            )}
-                            {element.visibility === "private" && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation(); // Prevent redirect to storyboard item page
-                                  toggleElementVisibility(element._id, element.visibility || "private");
-                                }}
-                                className="flex items-center gap-1 text-[10px] bg-gray-500/80 text-white rounded px-1.5 py-0.5 hover:bg-gray-500/90 transition-colors cursor-pointer backdrop-blur-sm"
-                                title="Click to make public"
-                              >
-                                <Lock className="w-2.5 h-2.5" />Private
-                              </button>
-                            )}
+                              {visibilityDropdownId === element._id && (
+                                <>
+                                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setVisibilityDropdownId(null); }} />
+                                  <div className="absolute top-full right-0 mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl py-1 w-[130px]">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (element.visibility !== "private") toggleElementVisibility(element._id, element.visibility || "private");
+                                        setVisibilityDropdownId(null);
+                                      }}
+                                      className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${
+                                        element.visibility === "private" ? "text-(--text-primary) bg-white/8" : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                                      }`}
+                                    >
+                                      <Lock className="w-3 h-3" strokeWidth={1.75} />
+                                      Private
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (element.visibility !== "public") toggleElementVisibility(element._id, element.visibility || "private");
+                                        setVisibilityDropdownId(null);
+                                      }}
+                                      className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${
+                                        element.visibility === "public" ? "text-(--text-primary) bg-white/8" : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                                      }`}
+                                    >
+                                      <Globe className="w-3 h-3" strokeWidth={1.75} />
+                                      Public
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                           
                           {/* Tag Area Above Black Layer */}
@@ -1358,6 +1442,16 @@ export function ElementLibrary({
                             </p>
                           )}
                         </div>
+
+                        {/* Variant badge */}
+                        {(element.referenceUrls?.length ?? 0) > 1 && (
+                          <div className="px-3 pb-2">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/10 text-[10px] font-medium text-amber-300">
+                              <Star size={9} className="fill-amber-400 text-amber-400" />
+                              {element.referenceUrls!.length} variants
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center justify-between border-t border-neutral-800/50 px-3 sm:px-4 py-2 sm:py-3 bg-neutral-900">
                         <button
@@ -1372,22 +1466,6 @@ export function ElementLibrary({
                           )}
                         </button>
                         <div className="flex items-center gap-2">
-                          {/* Generate reference image button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleGenerateElement(element);
-                            }}
-                            disabled={generatingIds.has(element._id)}
-                            className="flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={generatingIds.has(element._id) ? "Generating..." : `Generate reference image for "${element.name}"`}
-                          >
-                            {generatingIds.has(element._id) ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Sparkles className="h-4 w-4" />
-                            )}
-                          </button>
                           {/* Add to storyboard item button — only shown when linking elements */}
                           {selectedItemId && (
                             <button
@@ -1927,7 +2005,7 @@ export function ElementLibrary({
           element={forgeState.element}
           showSendToStudio={!!onSendToStudio}
           onSave={() => {
-            setForgeState(null);
+            // Don't auto-close — user may want to generate after saving
           }}
           onClose={() => setForgeState(null)}
           onSendToStudio={onSendToStudio ? (prompt, refUrls) => {
@@ -1936,6 +2014,11 @@ export function ElementLibrary({
             onSendToStudio(prompt, refUrls);
           } : undefined}
           onOpenFileBrowser={() => setShowRefFileBrowser(true)}
+          onGenerating={(elementId) => {
+            const el = displayElements?.find(e => e._id === elementId);
+            setGeneratingIds(prev => new Set(prev).add(elementId));
+            setGenRefCounts(prev => new Map(prev).set(elementId as string, el?.referenceUrls?.length ?? 0));
+          }}
         />
       )}
     </div>
