@@ -515,8 +515,10 @@ export default function LogsPage({ sidebarOpen, onToggleSidebar }: LogsPageProps
                                 <div className="space-y-1.5">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-(--accent-purple)/20 text-(--accent-purple) border border-(--accent-purple)/30">{model}</span>
-                                    {file.category === "elements" && (
-                                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">Element</span>
+                                    {file.category === "elements" ? (
+                                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">Elements</span>
+                                    ) : (
+                                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/25">Generated</span>
                                     )}
                                   </div>
                                   <p className="text-xs text-(--text-secondary)">{formatDate(file.createdAt)}</p>

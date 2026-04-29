@@ -765,13 +765,12 @@ export const listGenerationLogs = query({
         q.eq("companyId", args.companyId)
       )
       .filter((q) =>
-        q.or(
-          q.eq(q.field("category"), "generated"),
-          // Include element files only if they are AI-generated (have a model set)
-          q.and(
-            q.eq(q.field("category"), "elements"),
-            q.neq(q.field("model"), undefined)
-          )
+        q.and(
+          q.or(
+            q.eq(q.field("category"), "generated"),
+            q.eq(q.field("category"), "elements")
+          ),
+          q.neq(q.field("status"), "deleted")
         )
       );
 
@@ -781,9 +780,14 @@ export const listGenerationLogs = query({
 
     const results = await filteredQuery.order("desc").paginate(args.paginationOpts);
 
+    // Filter out crop thumbnails (element uploads tagged "thumbnail")
+    const filtered = results.page.filter(
+      (file) => !(file.category === "elements" && file.tags?.includes("thumbnail"))
+    );
+
     // Resolve defaultAI references to get key names (only for this page)
     const enriched = await Promise.all(
-      results.page.map(async (file) => {
+      filtered.map(async (file) => {
         let aiKeyName: string | null = null;
         if (file.defaultAI) {
           const aiKey = await ctx.db.get(file.defaultAI);

@@ -1,5 +1,6 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
+import { syncFileAggregates } from "./aggregates";
 
 export const create = mutation({
   args: {
@@ -427,7 +428,20 @@ export const remove = mutation({
       .collect();
     for (const file of linkedFiles) {
       if (file.r2Key) r2Keys.push(file.r2Key);
-      await ctx.db.delete(file._id);
+      // Soft-delete: same pattern as storyboardFiles.remove — keep record for credit audit trail
+      const before = { ...file };
+      await ctx.db.patch(file._id, {
+        r2Key: "",
+        sourceUrl: "",
+        status: "deleted",
+        deletedAt: Date.now(),
+        size: 0,
+        isShared: false,
+        tags: [],
+        isFavorite: false,
+      });
+      const after = await ctx.db.get(file._id);
+      await syncFileAggregates(ctx, before, after);
     }
 
     // Also collect URLs stored directly on the element (thumbnailUrl, referenceUrls)
