@@ -3145,6 +3145,124 @@ Lock geometry, material, and branding exactly."
   // STYLE PROMPTS — Moved to constants.ts STYLE_PROMPTS map
   // S01-S22 removed — now managed as fixed Art Styles in VISUAL_STYLES + STYLE_PROMPTS
   // ══════════════════════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════════════════════
+  // ENVIRONMENT PROMPTS
+  // ══════════════════════════════════════════════════════════════
+  {
+    name: 'E01 - Cinematic Establishing Shot',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['cinematic', 'establishing', 'wide-angle'],
+    isPublic: false,
+    notes: 'Wide-angle cinematic establishing shot. Best for scene backgrounds, location reveals, and storyboard environments. Use @Image1 as mood/style reference (optional).',
+    prompt: `Create a cinematic wide-angle establishing shot of {description}. The image should feel like a single frame from a high-budget film — composed with clear foreground, midground, and background layers that create depth. Photorealistic rendering with atmospheric perspective — distant elements slightly hazed, close elements sharp and detailed. Cinematic lighting appropriate to the time of day and mood specified. Include environmental storytelling details: wear on surfaces, lived-in textures, ambient elements like dust particles, fog, or light rays. The composition should use leading lines to draw the eye through the scene. Shot on ARRI Alexa look — natural color science, subtle lens characteristics. No characters or people in the frame. The environment should feel real, grounded, and production-ready as a storyboard background plate.`,
+  },
+  {
+    name: 'E02 - Environment Concept Sheet',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['concept-sheet', 'multi-view', 'reference'],
+    isPublic: false,
+    notes: 'Multi-view environment concept sheet showing the location from different angles and times of day. Use @Image1 for style/mood reference.',
+    prompt: `Create a professional environment concept art sheet for {description}. Layout on a clean dark background with clear panel separation.
+
+Top row — 3 wide panels showing the same location from different camera angles:
+1. Wide establishing shot (eye level, showing full scope)
+2. Medium shot (closer, showing architectural or natural detail)
+3. Low angle or aerial view (showing scale and context)
+
+Bottom row — 3 mood/lighting variations of the hero angle:
+1. Day version (bright, clear, full detail visible)
+2. Golden hour / sunset (warm dramatic lighting, long shadows)
+3. Night version (moonlight, artificial lights, atmospheric)
+
+Each panel must depict the exact same location with consistent architecture, layout, and spatial relationships. Only lighting, weather, and time of day should change between the bottom panels. Photorealistic, cinematic quality, production-ready concept art. Small clean labels under each panel indicating the view or time.`,
+  },
+  {
+    name: 'E03 - Detailed Interior',
+    type: 'environment' as const,
+    isSystem: true,
+    tags: ['interior', 'detailed', 'production-design'],
+    isPublic: false,
+    notes: 'Detailed interior environment with emphasis on production design — materials, lighting, atmosphere. Use @Image1 as reference for style or layout.',
+    prompt: `Create a detailed interior environment shot of {description}. The image should feel like a production design photograph — every surface, material, and object deliberately chosen to tell a story about this space and who inhabits it.
+
+Key requirements:
+- Photorealistic materials: wood grain, fabric weave, metal patina, stone texture all clearly rendered
+- Practical lighting sources visible in frame (lamps, windows, candles, screens) creating natural, motivated illumination
+- Atmospheric depth: subtle dust in light beams, warm air haze, or cool shadows in corners
+- Environmental storytelling: objects that imply recent use, wear patterns that suggest history
+- Architectural accuracy: correct proportions, structural logic, period-appropriate details
+- Color palette coherent with the mood — warm tones for intimate spaces, cool for clinical or vast spaces
+
+Composition uses one-point or two-point perspective with clean sight lines. No people. The space should feel like someone just left the room — lived-in but unoccupied. Production-ready as a storyboard interior background.`,
+  },
+
+  // ══════════════════════════════════════════════════════════════
+  // PROP PROMPTS
+  // ══════════════════════════════════════════════════════════════
+  {
+    name: 'P01 - Product Photography',
+    type: 'prop' as const,
+    isSystem: true,
+    tags: ['product', 'studio', 'clean'],
+    isPublic: false,
+    notes: 'Clean studio product photography. Best for hero shots of weapons, vehicles, tech, accessories. Use @Image1 as reference photo of the real object (optional).',
+    prompt: `Create a premium product photography shot of {description}. The object is the sole focus — centered on a clean, minimal background (dark gradient or pure white depending on the object's tone).
+
+Studio lighting setup:
+- Key light creating clean specular highlights on reflective surfaces
+- Soft fill preventing harsh shadows
+- Rim/edge light separating the object from the background
+- Subtle reflection on the surface below (glossy or matte depending on context)
+
+The object should be rendered with extreme material accuracy: metal shows realistic reflections and wear, wood shows grain and finish, fabric shows weave and drape, glass shows refraction and transparency. Slight depth of field — the hero angle sharp, edges gently softening.
+
+Camera angle: three-quarter front view at slight elevation, the most flattering angle for showing form and detail. The image should feel like it belongs in a premium catalog, product launch, or museum exhibit. No text, no hands, no context — just the object presented at its best.`,
+  },
+  {
+    name: 'P02 - Prop Concept Sheet',
+    type: 'prop' as const,
+    isSystem: true,
+    tags: ['concept-sheet', 'turnaround', 'reference'],
+    isPublic: false,
+    notes: 'Multi-angle prop concept sheet with turnaround views and detail callouts. Use @Image1 as reference sketch or photo.',
+    prompt: `Create a professional prop concept art sheet for {description}. Clean dark background with organized panel layout.
+
+Main section (2/3 area) — Turnaround views of the object:
+1. Front view (straight-on, full object visible)
+2. Side profile (90° rotation)
+3. Back view (180° rotation)
+4. Three-quarter view (hero angle, slightly elevated)
+
+All views must show the exact same object at the same scale, with consistent materials, colors, and proportions.
+
+Detail section (1/3 area) — Close-up panels:
+- Material/texture detail (surface finish, grain, patina)
+- Key feature detail (blade edge, button layout, engine, ornament)
+- Scale reference (silhouette next to human hand or figure outline)
+- Cross-section or mechanical detail (if applicable)
+
+Photorealistic rendering with accurate material behavior — metal reflections, wood grain, leather texture, glass refraction. Clean studio lighting consistent across all panels. Small labels under each panel. The sheet should function as a production reference for 3D modelers or set builders.`,
+  },
+  {
+    name: 'P03 - Object in Context',
+    type: 'prop' as const,
+    isSystem: true,
+    tags: ['contextual', 'in-use', 'atmospheric'],
+    isPublic: false,
+    notes: 'The prop shown in its natural context/environment — being used or displayed in a scene. Useful for storyboard frames featuring key props.',
+    prompt: `Create a cinematic shot featuring {description} as the hero object within an appropriate environment. The prop should be the clear focal point — sharp, well-lit, and positioned using rule-of-thirds composition — while the surrounding environment provides context and atmosphere.
+
+The object should feel real and present in the scene:
+- Correct scale relative to the environment
+- Natural interaction with surfaces (casting shadows, reflecting light, resting with gravity)
+- Environmental lighting affecting the object naturally (warm interior glow, cool outdoor light, dramatic side-lighting)
+- Signs of use or context (a weapon on a table beside a map, a vehicle on a dusty road, a tool mid-task)
+
+Shallow depth of field — the object razor-sharp, background softly blurred but recognizable. Cinematic color grading appropriate to the mood. The image should tell a micro-story: this object matters, it belongs here, something is about to happen with it. Photorealistic, film-quality single frame. No people visible, but their presence should be implied.`,
+  },
 ];
 
 const PromptLibrary = ({ onSelectPrompt, isOpen, onClose, userCompanyId }: PromptLibraryProps) => {

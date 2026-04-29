@@ -7,7 +7,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import {
   X, Shuffle, ChevronDown, ChevronRight, ChevronLeft, Sparkles, Check, User, Trees, Package,
   ImagePlus, Send, FileText, Crop, Upload, Trash2, Star, Coins, Monitor, RectangleHorizontal, Zap, Camera, FolderOpen,
-  RefreshCw, Copy, AlertCircle, Expand,
+  RefreshCw, Copy, AlertCircle, Expand, Plus, Pencil, RotateCcw, Save,
 } from "lucide-react";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { usePricingData } from "../shared/usePricingData";
@@ -566,19 +566,29 @@ function FieldTwoLevelCarousel({ field, value, parentValue, onChange }: {
   return <FieldCarousel field={fakeField} value={value} onChange={onChange} />;
 }
 
-function TemplateDropdown({ templates, selected, onSelect }: {
-  templates: { name: string; prompt: string }[];
+function TemplateDropdown({ templates, selected, onSelect, onNew, onDuplicate, onEdit, onDelete }: {
+  templates: { _id?: string; name: string; prompt: string; isSystem?: boolean }[];
   selected: number;
   onSelect: (i: number) => void;
+  onNew: () => void;
+  onDuplicate: (index: number) => void;
+  onEdit: (index: number) => void;
+  onDelete: (index: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const current = templates[selected];
 
   return (
     <div>
-      <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
-        <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
-        Reference Prompt Template
+      <label className="flex items-center justify-between text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
+        <span className="flex items-center gap-2">
+          <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
+          Reference Prompt Template
+        </span>
+        <button onClick={onNew} title="New template"
+          className="p-1 rounded-md hover:bg-white/8 transition-colors text-(--text-tertiary) hover:text-(--accent-blue)">
+          <Plus className="w-3.5 h-3.5" strokeWidth={2} />
+        </button>
       </label>
       <div className="relative">
         <button onClick={() => setOpen(!open)}
@@ -595,19 +605,42 @@ function TemplateDropdown({ templates, selected, onSelect }: {
         {open && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl max-h-[240px] overflow-y-auto py-1">
+            <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl max-h-[280px] overflow-y-auto py-1">
               {templates.map((t, i) => (
-                <button key={i} onClick={() => { onSelect(i); setOpen(false); }}
-                  className={`w-full text-left px-4 py-2.5 transition-colors ${
-                    i === selected
-                      ? "bg-(--accent-blue)/10 text-(--text-primary)"
-                      : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
-                  }`}>
-                  <div className="text-[13px] font-medium truncate">{t.name}</div>
-                  <div className="text-[10px] text-(--text-tertiary) truncate mt-0.5">
-                    {t.prompt.replace(/\{description\}/g, "...").slice(0, 100)}
+                <div key={i} className={`group flex items-center transition-colors ${
+                  i === selected
+                    ? "bg-(--accent-blue)/10 text-(--text-primary)"
+                    : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
+                }`}>
+                  <button onClick={() => { onSelect(i); setOpen(false); }}
+                    className="flex-1 text-left px-4 py-2.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium truncate flex-1">{t.name}</span>
+                      {t.isSystem && <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-(--text-tertiary) shrink-0">system</span>}
+                    </div>
+                    <div className="text-[10px] text-(--text-tertiary) truncate mt-0.5">
+                      {t.prompt.replace(/\{description\}/g, "...").slice(0, 100)}
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button onClick={(e) => { e.stopPropagation(); onDuplicate(i); setOpen(false); }} title="Duplicate"
+                      className="p-1 rounded hover:bg-white/10 text-(--text-tertiary) hover:text-(--accent-blue) transition-colors">
+                      <Copy className="w-3.5 h-3.5" strokeWidth={2} />
+                    </button>
+                    {!t.isSystem && t._id && (
+                      <>
+                        <button onClick={(e) => { e.stopPropagation(); onEdit(i); setOpen(false); }} title="Edit"
+                          className="p-1 rounded hover:bg-white/10 text-(--text-tertiary) hover:text-(--accent-blue) transition-colors">
+                          <Pencil className="w-3.5 h-3.5" strokeWidth={2} />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete(i); setOpen(false); }} title="Delete"
+                          className="p-1 rounded hover:bg-white/10 text-(--text-tertiary) hover:text-red-400 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" strokeWidth={2} />
+                        </button>
+                      </>
+                    )}
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           </>
@@ -785,13 +818,29 @@ export function ElementForge({
     const matching = (libraryTemplates || [])
       .filter((t: any) => t.type === type)
       .map((t: any) => ({
+        _id: t._id as string | undefined,
         name: t.name + (t.isSystem ? " (system)" : ""),
         prompt: t.prompt,
+        notes: t.notes as string | undefined,
+        isSystem: !!t.isSystem,
+        rawName: t.name as string,
       }));
     // Fallback if no templates in library
-    if (matching.length === 0) return FALLBACK_TEMPLATES[type] || [];
+    if (matching.length === 0) {
+      return (FALLBACK_TEMPLATES[type] || []).map(t => ({ ...t, _id: undefined, notes: undefined, isSystem: true, rawName: t.name }));
+    }
     return matching;
   }, [libraryTemplates, type]);
+
+  // Prompt template CRUD
+  const createTemplate = useMutation(api.promptTemplates.create);
+  const updateTemplate = useMutation(api.promptTemplates.update);
+  const removeTemplate = useMutation(api.promptTemplates.remove);
+  const [promptEditMode, setPromptEditMode] = useState<"none" | "create" | "edit">("none");
+  const [editTemplateName, setEditTemplateName] = useState("");
+  const [editTemplateNotes, setEditTemplateNotes] = useState("");
+  const [editedFinalPrompt, setEditedFinalPrompt] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const composedPrompt = useMemo(() => composePrompt(type, identity), [type, identity]);
   const badges = useMemo(() => getIdentityBadges(type, identity), [type, identity]);
@@ -1267,35 +1316,173 @@ export function ElementForge({
                   {composedPrompt || "Fill in identity fields to see the composed description..."}
                 </div>
               </div>
-              <TemplateDropdown
-                templates={allTemplates}
-                selected={selectedTemplate}
-                onSelect={setSelectedTemplate}
-              />
-              <div>
-                <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
-                  Final Prompt (sent to Studio)
-                </label>
-                <div className="p-4 rounded-xl bg-(--bg-primary) border border-(--border-primary) text-[13px] text-(--text-primary) leading-relaxed">
-                  {referencePrompt}
+
+              {promptEditMode === "none" && (
+                <>
+                  <TemplateDropdown
+                    templates={allTemplates}
+                    selected={selectedTemplate}
+                    onSelect={setSelectedTemplate}
+                    onNew={() => {
+                      setPromptEditMode("create");
+                      setEditTemplateName("");
+                      setEditTemplateNotes("");
+                      setEditedFinalPrompt(referencePrompt);
+                    }}
+                    onDuplicate={(idx) => {
+                      const tpl = allTemplates[idx];
+                      if (!tpl) return;
+                      setPromptEditMode("create");
+                      setEditTemplateName(`${tpl.rawName} (copy)`);
+                      setEditTemplateNotes(tpl.notes || "");
+                      setEditedFinalPrompt(tpl.prompt);
+                    }}
+                    onEdit={(idx) => {
+                      const tpl = allTemplates[idx];
+                      if (!tpl || tpl.isSystem) return;
+                      setSelectedTemplate(idx);
+                      setPromptEditMode("edit");
+                      setEditTemplateName(tpl.rawName);
+                      setEditTemplateNotes(tpl.notes || "");
+                      setEditedFinalPrompt(tpl.prompt);
+                    }}
+                    onDelete={async (idx) => {
+                      const tpl = allTemplates[idx];
+                      if (!tpl?._id || tpl.isSystem) return;
+                      if (!confirm(`Delete template "${tpl.rawName}"?`)) return;
+                      await removeTemplate({ id: tpl._id as Id<"promptTemplates"> });
+                      setSelectedTemplate(0);
+                    }}
+                  />
+                  <div>
+                    <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
+                      Final Prompt (sent to Studio)
+                    </label>
+                    <div className="p-4 rounded-xl bg-(--bg-primary) border border-(--border-primary) text-[13px] text-(--text-primary) leading-relaxed whitespace-pre-wrap">
+                      {referencePrompt}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {promptEditMode !== "none" && (
+                <div className="space-y-4 p-4 rounded-xl border border-(--accent-blue)/30 bg-(--accent-blue)/5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-semibold uppercase tracking-wider text-(--accent-blue)">
+                      {promptEditMode === "create" ? "New Template" : "Edit Template"}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-1.5 block">Name *</label>
+                    <input
+                      value={editTemplateName}
+                      onChange={e => setEditTemplateName(e.target.value)}
+                      placeholder="e.g. My Custom Character Sheet"
+                      className="w-full px-3 py-2 rounded-lg bg-(--bg-primary) border border-(--border-primary) text-[13px] text-(--text-primary) placeholder:text-(--text-tertiary) focus:outline-none focus:border-(--accent-blue)/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-1.5 block">Notes (optional)</label>
+                    <input
+                      value={editTemplateNotes}
+                      onChange={e => setEditTemplateNotes(e.target.value)}
+                      placeholder="Usage tips, reference image guidance..."
+                      className="w-full px-3 py-2 rounded-lg bg-(--bg-primary) border border-(--border-primary) text-[13px] text-(--text-primary) placeholder:text-(--text-tertiary) focus:outline-none focus:border-(--accent-blue)/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-1.5">
+                      <span>Prompt</span>
+                      <button onClick={() => setEditedFinalPrompt(referencePrompt)}
+                        className="flex items-center gap-1 text-[10px] normal-case font-medium text-(--text-tertiary) hover:text-(--accent-blue) transition-colors">
+                        <RotateCcw className="w-3 h-3" /> Reset to composed
+                      </button>
+                    </label>
+                    <textarea
+                      value={editedFinalPrompt}
+                      onChange={e => setEditedFinalPrompt(e.target.value)}
+                      rows={10}
+                      placeholder="Write your prompt template... Use {description} where you want the identity description injected."
+                      className="w-full px-3 py-2 rounded-lg bg-(--bg-primary) border border-(--border-primary) text-[13px] text-(--text-primary) placeholder:text-(--text-tertiary) focus:outline-none focus:border-(--accent-blue)/50 resize-y leading-relaxed"
+                    />
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] text-(--text-tertiary)">
+                        Use <code className="px-1 py-0.5 rounded bg-white/5 text-(--accent-blue)">{"{description}"}</code> to insert the auto-composed identity
+                      </span>
+                      <span className="text-[10px] text-(--text-tertiary)">{editedFinalPrompt.length} chars</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button onClick={() => setPromptEditMode("none")}
+                      className="px-4 py-2 text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) transition-colors">
+                      Cancel
+                    </button>
+                    <button
+                      disabled={!editTemplateName.trim() || !editedFinalPrompt.trim() || savingTemplate}
+                      onClick={async () => {
+                        if (!editTemplateName.trim() || !editedFinalPrompt.trim() || !companyId) return;
+                        setSavingTemplate(true);
+                        try {
+                          if (promptEditMode === "create") {
+                            await createTemplate({
+                              name: editTemplateName.trim(),
+                              type,
+                              prompt: editedFinalPrompt.trim(),
+                              notes: editTemplateNotes.trim() || undefined,
+                              companyId,
+                              isPublic: false,
+                            });
+                          } else {
+                            const tpl = allTemplates[selectedTemplate];
+                            if (tpl?._id) {
+                              await updateTemplate({
+                                id: tpl._id as Id<"promptTemplates">,
+                                name: editTemplateName.trim(),
+                                prompt: editedFinalPrompt.trim(),
+                                notes: editTemplateNotes.trim() || undefined,
+                              });
+                            }
+                          }
+                          setPromptEditMode("none");
+                        } catch (e: any) {
+                          alert(e.message || "Failed to save template");
+                        } finally {
+                          setSavingTemplate(false);
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-(--accent-blue) text-white text-[12px] font-medium hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                      <Save className="w-3.5 h-3.5" />
+                      {savingTemplate ? "Saving..." : promptEditMode === "create" ? "Save Template" : "Update Template"}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
           {/* ─── Generate tab ─────────────────────────────────────────── */}
           {currentTab.key === "generate" && (
             <div className="flex flex-col h-full gap-4">
-              {/* Reference Photos row */}
+              {/* Reference Photos row — labels adapt per element type */}
               <div className={genModel === "z-image" ? "opacity-40 pointer-events-none" : ""}>
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">
-                  Reference Photos <span className="font-normal normal-case opacity-60">
+                  Reference {type === "environment" ? "Images" : "Photos"} <span className="font-normal normal-case opacity-60">
                     {genModel === "z-image" ? "(not supported by Z-Image)" : "(optional)"}
                   </span>
                 </label>
                 <div className="flex items-stretch gap-2">
                   <div className={`flex-[2] flex gap-2 ${identity.ref_fullBody ? "opacity-30 pointer-events-none" : ""}`}>
-                    {isNonHuman ? (
+                    {type === "environment" ? (
+                      <>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Mood / Style", type: "image-upload", placeholder: "Mood / style ref" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Layout", type: "image-upload", placeholder: "Layout / composition" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} /></div>
+                      </>
+                    ) : type === "prop" ? (
+                      <>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Front View", type: "image-upload", placeholder: "Front / main angle" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Detail", type: "image-upload", placeholder: "Detail / texture" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} /></div>
+                      </>
+                    ) : isNonHuman ? (
                       <>
                         <div className="flex-1"><FieldImageUpload field={{ key: "ref_head", label: "Head", type: "image-upload", placeholder: "Head" }} value={identity.ref_head || ""} onChange={(v) => updateField("ref_head", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_head")} /></div>
                         <div className="flex-1"><FieldImageUpload field={{ key: "ref_body", label: "Body", type: "image-upload", placeholder: "Body" }} value={identity.ref_body || ""} onChange={(v) => updateField("ref_body", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_body")} /></div>
@@ -1313,7 +1500,7 @@ export function ElementForge({
                     <div className="w-px flex-1 bg-white/10" />
                   </div>
                   <div className={`flex-1 ${(identity.ref_face || identity.ref_outfit || identity.ref_head || identity.ref_body) ? "opacity-30 pointer-events-none" : ""}`}>
-                    <FieldImageUpload field={{ key: "ref_fullBody", label: "Full Body", type: "image-upload", placeholder: "Full body" }} value={identity.ref_fullBody || ""} onChange={(v) => updateField("ref_fullBody", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_fullBody")} />
+                    <FieldImageUpload field={{ key: "ref_fullBody", label: type === "environment" ? "Full Scene" : type === "prop" ? "Full Object" : "Full Body", type: "image-upload", placeholder: type === "environment" ? "Full scene reference" : type === "prop" ? "Full object reference" : "Full body" }} value={identity.ref_fullBody || ""} onChange={(v) => updateField("ref_fullBody", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_fullBody")} />
                   </div>
                 </div>
               </div>
