@@ -960,7 +960,7 @@ export function ElementForge({
     } finally {
       setIsGenerating(false);
     }
-  }, [canSave, isGenerating, companyId, element, identity, referencePrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, userId, projectId, handleSave]);
+  }, [canSave, isGenerating, companyId, element, identity, referencePrompt, composedPrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, userId, projectId, handleSave]);
 
   // Credit calculation for Generate tab
   const genCredits = useMemo(() => {
