@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Check, ChevronDown, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload, Star } from "lucide-react";
-import { useCurrentCompanyId, getCurrentCompanyId, logUserInfo } from "@/lib/auth-utils";
+import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { FileBrowser } from "./FileBrowser";
 import { ElementForge } from "./ElementForge";
@@ -103,10 +103,8 @@ function normalizeAssetUrl(url?: string | null) {
   const trimmed = url.trim();
   if (!trimmed) return "";
   
-  console.log(`[normalizeAssetUrl] Processing URL: "${url}" -> trimmed: "${trimmed}"`);
   
   if (trimmed.startsWith("blob:")) {
-    console.log(`[normalizeAssetUrl] Blob URL, returning as-is: ${trimmed}`);
     return trimmed;
   }
   if (trimmed.startsWith("http://https://")) return trimmed.replace("http://https://", "https://");
@@ -114,28 +112,22 @@ function normalizeAssetUrl(url?: string | null) {
   if (trimmed.startsWith("http://http://")) return trimmed.replace("http://http://", "http://");
   if (trimmed.startsWith("https://http://")) return trimmed.replace("https://http://", "http://");
   if (/^https?:\/\//i.test(trimmed)) {
-    console.log(`[normalizeAssetUrl] Full URL, returning as-is: ${trimmed}`);
     return trimmed;
   }
  
   // For R2 keys (like "user_.../elements/..."), use getFileUrl logic
   if (trimmed.includes("/")) {
-    console.log(`[normalizeAssetUrl] R2 key detected, using getFileUrl logic: ${trimmed}`);
     const finalUrl = getFileUrl(trimmed);
-    console.log(`[normalizeAssetUrl] getFileUrl result: ${finalUrl}`);
     return finalUrl;
   }
  
   const publicBase = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").trim().replace(/\/$/, "");
-  console.log(`[normalizeAssetUrl] Constructing URL with base: "${publicBase}" + "${trimmed}"`);
   
   if (!publicBase) {
-    console.log(`[normalizeAssetUrl] No public base found, returning trimmed: ${trimmed}`);
     return trimmed;
   }
   
   const finalUrl = `${publicBase}/${trimmed.replace(/^\/+/, "")}`;
-  console.log(`[normalizeAssetUrl] Final URL: ${finalUrl}`);
   
   return finalUrl;
 }
@@ -161,52 +153,26 @@ const ImageCard = memo(({
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    console.error(`[ImageCard] Failed to load image:`, {
-      url,
-      elementName,
-      index: index + 1,
-      error: e.currentTarget.naturalWidth === 0 ? 'Failed to load' : 'Loaded with error'
-    });
-    setImageError(true);
-  };
-
-  const handleImageLoad = () => {
-    console.log(`[ImageCard] Successfully loaded image:`, {
-      url,
-      elementName,
-      index: index + 1
-    });
-    setImageLoaded(true);
-    setImageError(false);
-  };
+  const handleImageError = () => { setImageError(true); };
+  const handleImageLoad = () => { setImageLoaded(true); setImageError(false); };
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-neutral-800/50 bg-neutral-900">
+    <div className="group relative overflow-hidden rounded-lg border border-(--border-primary) bg-(--bg-primary)">
       {!imageLoaded && !imageError && (
-        <div className="aspect-square w-full flex items-center justify-center bg-neutral-800">
-          <div className="text-center">
-            <Loader2 className="w-6 h-6 text-neutral-400 animate-spin mx-auto mb-2" />
-            <p className="text-xs text-neutral-500">Loading...</p>
-          </div>
+        <div className="aspect-square w-full flex items-center justify-center bg-(--bg-tertiary)">
+          <Loader2 className="w-4 h-4 text-(--text-tertiary) animate-spin" />
         </div>
       )}
-      
+
       {imageError && (
-        <div className="aspect-square w-full flex items-center justify-center bg-neutral-800">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
-              <X className="w-6 h-6 text-red-400" />
-            </div>
-            <p className="text-xs text-red-400">Failed to load</p>
-            <p className="text-xs text-neutral-500 mt-1">Image {index + 1}</p>
-          </div>
+        <div className="aspect-square w-full flex items-center justify-center bg-(--bg-tertiary)">
+          <X className="w-4 h-4 text-red-400" />
         </div>
       )}
-      
-      <img 
-        src={url} 
-        alt={`${elementName} - Image ${index + 1}`} 
+
+      <img
+        src={url}
+        alt={`${elementName} - Image ${index + 1}`}
         className={`aspect-square w-full object-cover transition-opacity duration-300 ${
           imageLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
         }`}
@@ -215,31 +181,20 @@ const ImageCard = memo(({
         onError={handleImageError}
         style={{ display: imageError ? 'none' : 'block' }}
       />
-      
+
       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
         <button
           onClick={() => {
-            console.log('🔥 PLUS BUTTON CLICKED in ElementLibrary! 🔥');
-            console.log('🔥 URL:', url);
-            console.log('🔥 Index:', index);
-            console.log('🔥 ElementName:', elementName);
-            
-            // Use the onAddAsReference callback if available
             if (onAddAsReference) {
-              console.log('🎯 Calling onAddAsReference with:', url, index, elementName);
               onAddAsReference(url, index, elementName);
             } else if (onSelect) {
-              console.log('🎯 Using fallback onSelect');
-              onSelect?.(url, index);
-            } else {
-              console.log('❌ No callback available');
+              onSelect(url, index);
             }
           }}
-          className="rounded-full bg-indigo-500 p-2 text-white hover:bg-indigo-600 transition-colors"
+          className="p-2 rounded-lg bg-white/15 hover:bg-white/25 text-white transition-colors"
           title="Add this image to references"
-          aria-label={`Add image ${index + 1} to references`}
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4" strokeWidth={1.75} />
         </button>
       </div>
     </div>
@@ -395,20 +350,11 @@ export function ElementLibrary({
 
   const project = useQuery(api.storyboard.projects.get, { id: projectId });
   const projectCompanyId = useCurrentCompanyId(); // ✅ Use hook for active organization detection
-  console.log(`[ElementLibrary] Project companyId from useCurrentCompanyId hook: ${projectCompanyId}`);
-  console.log(`[ElementLibrary] Project object:`, project);
-  console.log(`[ElementLibrary] Project.companyId:`, project?.companyId);
   
-  // ✅ Use hook for active organization detection
   const queryCompanyId = projectCompanyId;
-  console.log(`[ElementLibrary] Using queryCompanyId: ${queryCompanyId} (active organization or user ID)`);
-  
-  // Log user info for debugging
-  logUserInfo(user, "ElementLibrary", projectCompanyId);
-  
-  // ✅ AUTHENTICATION GUARD: Only make queries if we have a valid companyId
+
+  // Authentication guard
   const isAuth = projectCompanyId && projectCompanyId !== 'undefined' && projectCompanyId !== 'null';
-  console.log(`[ElementLibrary] Authentication check: isAuth=${isAuth}, projectCompanyId=${projectCompanyId}`);
   
   // Query elements for this project (includes public/shared from other projects in same company)
   const elements = useQuery(isAuth ? api.storyboard.storyboardElements.listByProject : ("skip" as any), {
@@ -418,10 +364,6 @@ export function ElementLibrary({
   } as any);
 
   const displayElements = elements;
-  console.log(`[ElementLibrary] Displaying elements (manual filter):`, displayElements?.length || 0);
-  if (displayElements && displayElements.length > 0) {
-    console.log(`[ElementLibrary] Element companyIds:`, displayElements.map(el => ({ name: el.name, companyId: el.companyId })));
-  }
   const createElement = useMutation(api.storyboard.storyboardElements.create);
   const updateElement = useMutation(api.storyboard.storyboardElements.update);
   const removeElement = useMutation(api.storyboard.storyboardElements.remove);
@@ -436,7 +378,6 @@ export function ElementLibrary({
         id: elementId,
         visibility: newVisibility,
       });
-      console.log(`[ElementLibrary] Toggled element ${elementId} visibility to ${newVisibility}`);
     } catch (error) {
       console.error("[ElementLibrary] Failed to toggle visibility:", error);
     }
@@ -448,16 +389,13 @@ export function ElementLibrary({
     companyId: projectCompanyId || "" 
   });
   
-  console.log(`[ElementLibrary] Loaded ${allStoryFiles?.length || 0} story files for companyId: ${projectCompanyId}`);
   
   const fileIdMap = useMemo(() => {
     const map = new Map<string, Id<"storyboard_files">>();
     allStoryFiles?.forEach(f => {
       if (!f.r2Key) return;
       map.set(f.r2Key, f._id);
-      console.log(`[ElementLibrary] fileIdMap mapping: ${f.r2Key} -> ${f._id}`);
     });
-    console.log(`[ElementLibrary] fileIdMap created with ${map.size} entries`);
     return map;
   }, [allStoryFiles]);
 
@@ -561,7 +499,6 @@ export function ElementLibrary({
         throw new Error(err.error || 'Generation failed');
       }
       const data = await res.json();
-      console.log('[ElementLibrary] Generation started:', data.taskId, hasRefs ? '(img2img)' : '(txt2img)');
     } catch (error: any) {
       console.error('[ElementLibrary] Generation failed:', error);
       setGeneratingIds(prev => {
@@ -603,12 +540,8 @@ export function ElementLibrary({
       console.error(`[ElementLibrary] Element not found for deletion: ${elementId}`);
       return;
     }
-
-    console.log(`[ElementLibrary] Deleting files for element: ${element.name} (${elementId})`);
-
     // Step 1: Query files by categoryId (much more efficient!)
     try {
-      console.log(`[ElementLibrary] Querying files by categoryId: ${elementId}`);
       
       const filesResponse = await fetch('/api/storyboard/files-by-category', {
         method: 'POST',
@@ -625,31 +558,13 @@ export function ElementLibrary({
       }
 
       const { files } = await filesResponse.json();
-      console.log(`[ElementLibrary] Found ${files.length} files directly linked to element: ${elementId}`);
-
-      // Log all files found for debugging
-      console.log(`[ElementLibrary] All found files:`, files.map(f => ({
-        filename: f.filename,
-        category: f.category,
-        categoryId: f.categoryId,
-        r2Key: f.r2Key
-      })));
 
       // Filter to only element files with correct categoryId
       const elementFiles = files.filter(file => file.category === 'elements' && file.categoryId === elementId);
-      console.log(`[ElementLibrary] Filtered to ${elementFiles.length} element files for deletion`);
 
       // Step 2: Delete each file from R2 and remove metadata
       const deletePromises = elementFiles.map(async (file: any) => {
         try {
-          console.log(`[ElementLibrary] Deleting element file:`, { 
-            fileId: file._id, 
-            r2Key: file.r2Key,
-            filename: file.filename,
-            category: file.category,
-            categoryId: file.categoryId
-          });
-
           // Use deleteFromR2 to remove both R2 file and metadata
           await deleteFromR2({ 
             r2Key: file.r2Key, 
@@ -657,14 +572,12 @@ export function ElementLibrary({
             graceful: true 
           });
           
-          console.log(`[ElementLibrary] Successfully deleted element file: ${file.filename}`);
         } catch (error) {
           console.error(`[ElementLibrary] Failed to delete file ${file.filename}:`, error);
         }
       });
 
       await Promise.allSettled(deletePromises);
-      console.log(`[ElementLibrary] Completed file deletion for element: ${element.name}`);
 
     } catch (error) {
       console.error(`[ElementLibrary] Error in file deletion process:`, error);
@@ -675,7 +588,6 @@ export function ElementLibrary({
   const handleDeleteElement = async (elementId: Id<"storyboard_elements">, elementName: string) => {
     // Prevent duplicate deletions
     if (deletingIds.has(elementId) || recentlyDeleted.has(elementId)) {
-      console.log(`[ElementLibrary] Deletion already in progress or recently completed for: ${elementName}`);
       return;
     }
 
@@ -683,14 +595,11 @@ export function ElementLibrary({
     setDeletingIds(prev => new Set(prev).add(elementId));
 
     try {
-      console.log(`[ElementLibrary] Starting deletion process for element: ${elementName}`);
 
       // Step 1: Delete associated files from R2 and metadata
-      console.log(`[ElementLibrary] Step 1: Deleting files and metadata...`);
       await deleteElementFiles(elementId);
 
       // Step 2: Delete the element itself (also cleans up linked storyboard_files metadata)
-      console.log(`[ElementLibrary] Step 2: Deleting element record...`);
       const result = await removeElement({ id: elementId });
 
       // Step 2b: Clean up R2 files from URLs stored directly on the element
@@ -709,18 +618,15 @@ export function ElementLibrary({
               }).catch(() => {}); // Non-blocking
             });
           await Promise.allSettled(cleanups);
-          console.log(`[ElementLibrary] Cleaned up ${cleanups.length} R2 files from element URLs`);
         }
       }
 
-      console.log(`[ElementLibrary] Successfully deleted element: ${elementName}`);
       
       // Step 3: Clean up UI state immediately
       setRecentlyDeleted(prev => new Set(prev).add(elementId));
       
       // Step 4: Close edit/create panel if the deleted element was being edited
       if (editingId === elementId) {
-        console.log(`[ElementLibrary] Closing edit panel - deleted element was being edited: ${elementName}`);
         resetForm(); // This will close the create/edit panel
       }
       
@@ -807,7 +713,6 @@ export function ElementLibrary({
       setTagInput("");
       setThumbnailIndex(0);
       setActiveTab("basic");
-      console.log("[ElementLibrary] Switched to Create mode - form cleared");
     }
   }, [editingId, showCreate, initialType]);
 
@@ -817,7 +722,6 @@ export function ElementLibrary({
       const validationPromises = referencePreviewItems.map(async ({ displayUrl, rawUrl }) => {
         // Skip validation if this element is being deleted
         if (deletingIds.has(editingElement?._id || '')) {
-          console.log("[ElementLibrary] Skipping image validation - element is being deleted");
           return;
         }
 
@@ -828,7 +732,6 @@ export function ElementLibrary({
 
         // Skip validation - let the ImageCard component handle image loading
         // This prevents unnecessary network requests and CORS issues
-        console.log("[ElementLibrary] Skipping validation for URL (letting ImageCard handle it):", displayUrl);
         return;
       });
       
@@ -847,20 +750,12 @@ export function ElementLibrary({
     
     // Normalize the URL for consistency
     const normalizedThumbnailUrl = normalizeAssetUrl(thumbnailUrl);
-    
-    console.log(`[ElementLibrary] Setting thumbnail:`, {
-      originalIndex,
-      thumbnailUrl,
-      normalizedThumbnailUrl,
-      editingId
-    });
-    
+
     try {
       await updateElement({
         id: editingId,
         thumbnailUrl: normalizedThumbnailUrl,
       });
-      console.log(`[ElementLibrary] Successfully updated thumbnail to: ${normalizedThumbnailUrl}`);
       
       // Update local state immediately for visual feedback
       setThumbnailIndex(originalIndex);
@@ -894,17 +789,7 @@ export function ElementLibrary({
   };
 
   const uploadFile = async (file: File, filename?: string) => {
-    console.log("[ElementLibrary] uploadFile called", { 
-      filename: file.name, 
-      fileSize: file.size,
-      fileType: file.type,
-      companyId: projectCompanyId,
-      userId,
-      projectId 
-    });
-    
     try {
-      console.log("[ElementLibrary] Calling uploadToR2 with category: elements");
       const result = await uploadToR2({
         file,
         category: 'elements',
@@ -912,14 +797,7 @@ export function ElementLibrary({
         companyId: projectCompanyId || '',
         projectId: projectId as string,
       });
-      
-      console.log("[ElementLibrary] Upload successful:", {
-        r2Key: result.r2Key,
-        publicUrl: result.publicUrl,
-        category: result.category,
-        filename: result.filename
-      });
-      
+
       // Log upload to Convex database (matching FileBrowser pattern)
       await logUpload({
         filename: result.filename,
@@ -936,7 +814,6 @@ export function ElementLibrary({
       });
       
       const normalizedUrl = normalizeAssetUrl(result.publicUrl);
-      console.log("[ElementLibrary] Normalized URL:", normalizedUrl);
       
       return normalizedUrl;
     } catch (error) {
@@ -949,34 +826,20 @@ export function ElementLibrary({
     if (!newName.trim() || saving) return;
 
     setSaving(true);
-    console.log("[ElementLibrary] handleCreateOrUpdate started", {
-      elementName: newName,
-      isEditing: !!editingId,
-      referenceFilesCount: referenceFiles.length,
-      referenceUrlsCount: referenceUrls.length
-    });
-    
     try {
       if (editingId) {
         // EDIT FLOW: Upload files with existing element ID
         const uploadedUrls: string[] = [];
 
-        console.log("[ElementLibrary] Starting upload of", referenceFiles.length, "files for editing");
         for (const file of referenceFiles) {
-          console.log("[ElementLibrary] Uploading file:", file.name);
           const uploadedUrl = await uploadFile(file);
           uploadedUrls.push(uploadedUrl);
-          console.log("[ElementLibrary] File uploaded, URL added to array:", uploadedUrl);
         }
-
-        console.log("[ElementLibrary] All uploads complete. Total uploaded:", uploadedUrls.length);
-
         const existingPersistedUrls = referenceUrls
           .filter((url): url is string => typeof url === "string" && url.trim().length > 0 && !url.startsWith("blob:"))
           .map((url) => normalizeAssetUrl(url))
           .filter((url): url is string => url.length > 0);
         
-        console.log("[ElementLibrary] Existing persisted URLs:", existingPersistedUrls.length);
 
         const allReferenceUrls = Array.from(new Set([...existingPersistedUrls, ...uploadedUrls]));
 
@@ -996,7 +859,6 @@ export function ElementLibrary({
           thumbnailUrl: nextThumbnailUrl,
           visibility,
         });
-        console.log(`[ElementLibrary] Updated element: ${newName}`);
       } else {
         if (activeType === 'environment') {
           alert("Environment elements are generated from Build Storyboard. Use Enhanced Build with Regenerate Elements to create smart environments.");
@@ -1005,7 +867,6 @@ export function ElementLibrary({
         }
         
         // Create element FIRST, then upload files with correct categoryId
-        console.log(`[ElementLibrary] Creating element first: ${newName}`);
         const newElement = await createElement({
           projectId,
           name: newName.trim(),
@@ -1017,20 +878,12 @@ export function ElementLibrary({
           visibility,
           createdBy: "user", // Required field
         });
-        console.log(`[ElementLibrary] Created element: ${newName} with ID: ${newElement}`);
 
         // Now upload all files with the correct categoryId
-        console.log(`[ElementLibrary] Uploading ${referenceFiles.length} files with categoryId: ${newElement}`);
         const uploadedUrls: string[] = [];
         
         for (const file of referenceFiles) {
           try {
-            console.log("[ElementLibrary] Starting upload of file:", {
-              fileName: file.name,
-              fileSize: file.size,
-              categoryId: newElement
-            });
-
             const result = await uploadToR2({
               file,
               category: 'elements',
@@ -1038,14 +891,7 @@ export function ElementLibrary({
               companyId: projectCompanyId || '',
               projectId: projectId as string,
             });
-            
-            console.log("[ElementLibrary] Upload successful:", {
-              r2Key: result.r2Key,
-              publicUrl: result.publicUrl,
-              category: result.category,
-              filename: result.filename
-            });
-            
+
             // Log upload to Convex database WITH the correct categoryId
             await logUpload({
               filename: result.filename,
@@ -1062,7 +908,6 @@ export function ElementLibrary({
             });
             
             const normalizedUrl = normalizeAssetUrl(result.publicUrl);
-            console.log("[ElementLibrary] Normalized URL:", normalizedUrl);
             uploadedUrls.push(normalizedUrl);
             
           } catch (error) {
@@ -1092,7 +937,6 @@ export function ElementLibrary({
           visibility,
         });
         
-        console.log(`[ElementLibrary] Updated element with ${uploadedUrls.length} new files: ${newName}`);
       }
       
       resetForm();
@@ -1126,9 +970,6 @@ export function ElementLibrary({
     }
     
     // Check for duplicates by comparing file names only
-    console.log("[ElementLibrary] Checking for duplicates...");
-    console.log("[ElementLibrary] Current referenceFiles:", referenceFiles.map(f => f.name));
-    console.log("[ElementLibrary] Files to add:", filesToAdd.map(f => f.name));
     
     const duplicateFiles: string[] = [];
     const uniqueFilesToAdd: File[] = [];
@@ -1136,13 +977,11 @@ export function ElementLibrary({
     // Get existing file names from referenceFiles
     const existingFileNames = new Set(referenceFiles.map(f => f.name));
     
-    console.log("[ElementLibrary] Existing file names:", Array.from(existingFileNames));
     
     for (const file of filesToAdd) {
       // Check if filename already exists
       const isDuplicate = existingFileNames.has(file.name);
       
-      console.log(`[ElementLibrary] Checking file: ${file.name} - isDuplicate: ${isDuplicate}`);
       
       if (isDuplicate) {
         duplicateFiles.push(file.name);
@@ -1178,45 +1017,30 @@ export function ElementLibrary({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-6xl bg-(--bg-secondary) rounded-2xl border border-(--border-primary) shadow-2xl max-h-[95vh] overflow-hidden flex flex-col">
-        {/* Header - LTX Design Style */}
-        <div className="bg-(--bg-secondary) p-4 rounded-t-2xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-(--accent-blue) to-(--accent-teal) rounded-xl flex items-center justify-center">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-(--text-primary)">Element Library</h2>
-                <p className="text-sm text-(--text-tertiary)">Create and manage reusable visual elements</p>
-              </div>
-            </div>
-            <button 
-              onClick={onClose} 
-              className="p-2.5 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200 hover:scale-105"
-            >
-              <X className="w-5 h-5 text-(--text-secondary)" />
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-6xl bg-(--bg-secondary)/98 backdrop-blur-xl rounded-2xl border border-(--border-primary) shadow-2xl max-h-[95vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="px-6 pt-5 pb-0">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[15px] font-semibold text-(--text-primary)">Element Library</h2>
+            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
+              <X className="w-5 h-5 text-(--text-secondary)" strokeWidth={1.75} />
             </button>
           </div>
-        </div>
-        
-        {/* Subtle divider */}
-        <div className="h-px bg-(--border-primary)" />
 
-        <div className="p-4">
-          <div className="flex gap-2 flex-wrap overflow-x-auto">
-            {ELEMENT_TYPES.map(({ key, label, Icon, color }) => (
+          {/* Category tabs — underline style */}
+          <div className="flex items-center gap-1 border-b border-white/6">
+            {ELEMENT_TYPES.map(({ key, label, Icon }) => (
               <button
                 key={key}
                 onClick={() => setActiveType(key)}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-medium transition-all duration-200 border-b-2 -mb-px ${
                   activeType === key
-                    ? "bg-(--accent-blue) text-white shadow-lg hover:shadow-xl"
-                    : "bg-(--bg-primary) border border-(--border-primary) text-(--text-secondary) hover:border-(--accent-blue) hover:text-(--text-primary)"
+                    ? "text-(--text-primary) border-white"
+                    : "text-(--text-tertiary) hover:text-(--text-secondary) border-transparent"
                 }`}
               >
-                <Icon className={`w-4 h-4 ${activeType === key ? "text-white" : "text-(--text-secondary)"}`} />
+                <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
                 <span>{label}</span>
               </button>
             ))}
@@ -1224,18 +1048,16 @@ export function ElementLibrary({
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             {!elements ? (
               <div className="flex h-40 items-center justify-center">
-                <Loader2 className="h-6 w-6 animate-spin text-(--accent-blue)" />
+                <Loader2 className="h-5 w-5 animate-spin text-(--accent-blue)" />
               </div>
             ) : (displayElements?.length ?? 0) === 0 ? (
-              <div className="flex h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-(--border-primary) bg-(--bg-primary) text-center px-6">
-                <div className="w-16 h-16 bg-linear-to-br from-(--accent-blue)/20 to-(--accent-teal)/20 rounded-2xl flex items-center justify-center mb-4">
-                  <Sparkles className="h-8 w-8 text-(--accent-blue)" />
-                </div>
-                <p className="text-base font-medium text-(--text-secondary)">No {activeType} elements yet</p>
-                <p className="mt-2 text-sm text-(--text-tertiary)">Create your first element to get started</p>
+              <div className="flex h-48 flex-col items-center justify-center text-center">
+                <Sparkles className="h-6 w-6 text-(--text-tertiary) mb-3" strokeWidth={1.75} />
+                <p className="text-[13px] font-medium text-(--text-secondary)">No {activeType} elements yet</p>
+                <p className="mt-1 text-[12px] text-(--text-tertiary)">Create your first element to get started</p>
                 <button
                   onClick={() => {
                     const forgeTypes = ["character", "prop", "environment"];
@@ -1246,16 +1068,18 @@ export function ElementLibrary({
                       setEditingId(null);
                     }
                   }}
-                  className="mt-4 px-6 py-3 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) text-white rounded-xl font-medium hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) transition-all duration-200 shadow-lg hover:shadow-xl"
+                  className="mt-4 flex items-center gap-2 px-5 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white rounded-lg text-[13px] font-medium transition-colors"
                 >
+                  <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
                   Create Element
                 </button>
               </div>
             ) : (
               <>
-                <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <p className="text-sm text-(--text-secondary)">{displayElements?.length ?? 0} {activeType} elements</p>
-                  <div className="flex gap-3">
+                {/* Action bar */}
+                <div className="mb-4 flex items-center justify-between">
+                  <p className="text-[12px] text-(--text-tertiary)">{displayElements?.length ?? 0} {activeType} elements</p>
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={async () => {
                         if (confirm('Remove all private unused element references from storyboard items?')) {
@@ -1263,7 +1087,7 @@ export function ElementLibrary({
                           alert(result.message);
                         }
                       }}
-                      className="px-4 py-2 bg-(--color-error)/20 border border-(--color-error)/30 text-(--color-error) rounded-xl font-medium hover:bg-(--color-error)/30 transition-all duration-200 text-sm"
+                      className="px-3 py-1.5 text-[12px] font-medium text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                       title="Clean up private unused element references from storyboard items"
                     >
                       Remove Unused
@@ -1278,270 +1102,214 @@ export function ElementLibrary({
                           setEditingId(null);
                         }
                       }}
-                      className="px-4 py-2 bg-linear-to-r from-(--accent-blue) to-(--accent-teal) text-white rounded-xl font-medium hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) transition-all duration-200 shadow-lg hover:shadow-xl text-sm"
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white rounded-lg text-[12px] font-medium transition-colors"
                     >
+                      <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
                       Create Element
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                  {displayElements?.map((element) => {
-                    console.log(`[ElementLibrary] Rendering element card:`, {
-                      name: element.name,
-                      _id: element._id,
-                      thumbnailUrl: element.thumbnailUrl,
-                      referenceUrls: element.referenceUrls,
-                      referenceUrlsLength: element.referenceUrls?.length || 0
-                    });
-                    return (
-                    <div key={element._id} className="group overflow-hidden rounded-2xl border border-(--border-primary) bg-(--bg-secondary) hover:border-(--accent-blue) transition-all duration-300 hover:shadow-xl hover:shadow-(--accent-blue)/20">
+
+                {/* Element grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {displayElements?.map((element) => (
+                    <div key={element._id} className="group relative rounded-xl border border-(--border-primary) bg-(--bg-primary) overflow-hidden hover:border-(--border-secondary) transition-all duration-200">
                       <div
                         onClick={() => handleElementClick(element)}
                         className="block w-full text-left cursor-pointer"
                       >
-                        <div className="aspect-square overflow-hidden bg-(--bg-primary) relative rounded-2xl">
+                        {/* Image area */}
+                        <div className="aspect-[4/3] overflow-hidden bg-(--bg-primary) relative">
                           {/* Generating overlay */}
                           {generatingIds.has(element._id) && (
                             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-                              <Loader2 className="h-8 w-8 text-amber-400 animate-spin mb-2" />
-                              <p className="text-xs text-amber-300 font-medium">Generating...</p>
+                              <Loader2 className="h-6 w-6 text-amber-400 animate-spin mb-1.5" />
+                              <p className="text-[10px] text-amber-300 font-medium">Generating...</p>
                             </div>
                           )}
-                          {/* Multi-image badge */}
-                          {MultiImageBadge(element)}
-                          
-                          {/* Type Badge in Top-Left Corner */}
-                          <div className="absolute top-3 left-3 z-10">
-                            <span className="text-xs bg-(--accent-blue)/80 text-white rounded-xl px-3 py-1.5 font-medium backdrop-blur-sm">
-                              {element.type === 'IMG' ? 'Image' : element.type}
-                            </span>
-                          </div>
-                          
-                          {/* Public/Private Badge with dropdown selector */}
-                          <div className="absolute top-2 right-2 z-10">
-                            <div className="relative">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setVisibilityDropdownId(visibilityDropdownId === element._id ? null : element._id);
-                                }}
-                                className={`flex items-center gap-1 text-[10px] rounded px-1.5 py-0.5 transition-colors cursor-pointer backdrop-blur-sm ${
-                                  element.visibility === "public"
-                                    ? "bg-green-500/80 text-white hover:bg-green-500/90"
-                                    : "bg-gray-500/80 text-white hover:bg-gray-500/90"
-                                }`}
-                              >
-                                {element.visibility === "public" ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
-                                {element.visibility === "public" ? "Public" : "Private"}
-                                <ChevronDown className="w-2.5 h-2.5" />
-                              </button>
-                              {visibilityDropdownId === element._id && (
-                                <>
-                                  <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setVisibilityDropdownId(null); }} />
-                                  <div className="absolute top-full right-0 mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl py-1 w-[130px]">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (element.visibility !== "private") toggleElementVisibility(element._id, element.visibility || "private");
-                                        setVisibilityDropdownId(null);
-                                      }}
-                                      className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${
-                                        element.visibility === "private" ? "text-(--text-primary) bg-white/8" : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
-                                      }`}
-                                    >
-                                      <Lock className="w-3 h-3" strokeWidth={1.75} />
-                                      Private
-                                    </button>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (element.visibility !== "public") toggleElementVisibility(element._id, element.visibility || "private");
-                                        setVisibilityDropdownId(null);
-                                      }}
-                                      className={`w-full flex items-center gap-2 px-3 py-2 text-[12px] transition-colors ${
-                                        element.visibility === "public" ? "text-(--text-primary) bg-white/8" : "text-(--text-secondary) hover:bg-white/5 hover:text-(--text-primary)"
-                                      }`}
-                                    >
-                                      <Globe className="w-3 h-3" strokeWidth={1.75} />
-                                      Public
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {/* Tag Area Above Black Layer */}
-                          {element.tags && element.tags.length > 0 && (
-                            <div className="absolute bottom-0 left-0 right-0 z-10 p-2 bg-gradient-to-t from-black/80 to-transparent">
-                              <div className="flex flex-wrap gap-1">
-                                {element.tags.slice(0, 3).map((tag, index) => (
-                                  <span key={index} className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs flex items-center gap-1">
-                                    <Hash className="w-3 h-3" />
-                                    {tag}
-                                  </span>
-                                ))}
-                                {element.tags.length > 3 && (
-                                  <span className="text-xs bg-purple-500/80 text-white rounded px-1.5 py-0.5 backdrop-blur-sm">
-                                    +{element.tags.length - 3}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {(() => {
-                            const thumbnailUrl = normalizeAssetUrl(element.thumbnailUrl);
-                            const firstReferenceUrl = element.referenceUrls && element.referenceUrls.length > 0 
-                              ? normalizeAssetUrl(element.referenceUrls[0]) 
-                              : null;
-                            const finalThumbnailUrl = thumbnailUrl || firstReferenceUrl;
-                            
-                            console.log(`[ElementLibrary] Rendering element ${element.name} thumbnail:`, {
-                              originalThumbnailUrl: element.thumbnailUrl,
-                              normalizedThumbnailUrl: thumbnailUrl,
-                              firstReferenceUrl,
-                              finalThumbnailUrl,
-                              hasThumbnail: !!finalThumbnailUrl,
-                              referenceUrlsCount: element.referenceUrls?.length || 0
-                            });
-                            return finalThumbnailUrl ? (
-                              <img 
-                                src={finalThumbnailUrl} 
-                                alt={element.name} 
-                                className="h-full w-full object-cover transition-transform group-hover:scale-105" 
-                                onError={(e) => {
-                                  console.error(`[ElementLibrary] Failed to load thumbnail for ${element.name}:`, finalThumbnailUrl);
-                                  // Hide image on error to prevent empty string issues
-                                  e.currentTarget.style.display = 'none';
-                                  // Show fallback
-                                  const parent = e.currentTarget.parentElement;
-                                  if (parent) {
-                                    const fallback = document.createElement('div');
-                                    fallback.className = 'h-full w-full flex items-center justify-center bg-gradient-to-br from-indigo-500/20 to-purple-600/20';
-                                    fallback.innerHTML = '<svg class="h-8 w-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>';
-                                    parent.appendChild(fallback);
-                                  }
-                                }}
-                                onLoad={() => {
-                                  console.log(`[ElementLibrary] Successfully loaded thumbnail for ${element.name}:`, finalThumbnailUrl);
-                                }}
-                              />
-                            ) : (
-                              <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-indigo-500/20 to-purple-600/20">
-                                <Image className="h-8 w-8 text-indigo-400" />
-                              </div>
-                            );
-                          })()}
-                        </div>
-                        <div className="p-3 sm:p-4">
-                          <p className="truncate text-sm sm:text-base font-semibold text-white leading-tight">{element.name}</p>
-                          {element.description && (
-                            <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">
-                              {element.description}
-                            </p>
-                          )}
-                        </div>
 
-                        {/* Variant badge */}
-                        {(element.referenceUrls?.length ?? 0) > 1 && (
-                          <div className="px-3 pb-2">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/10 text-[10px] font-medium text-amber-300">
-                              <Star size={9} className="fill-amber-400 text-amber-400" />
-                              {element.referenceUrls!.length} variants
+                          {/* Type badge — top left */}
+                          <div className="absolute top-2 left-2 z-10">
+                            <span className="text-[9px] font-semibold uppercase tracking-wide bg-black/50 text-white/90 rounded-md px-1.5 py-0.5 backdrop-blur-sm">
+                              {element.type}
                             </span>
                           </div>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between border-t border-neutral-800/50 px-3 sm:px-4 py-2 sm:py-3 bg-neutral-900">
-                        <button
-                          onClick={() => handleDeleteElement(element._id, element.name)}
-                          className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 transition-colors"
-                          title="Delete element"
-                        >
-                          {deletingIds.has(element._id) ? (
-                            <div className="animate-spin h-4 w-4 border-2 border-gray-500 border-t-transparent rounded-full"></div>
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </button>
-                        <div className="flex items-center gap-2">
-                          {/* Add to storyboard item button — only shown when linking elements */}
-                          {selectedItemId && (
+
+                          {/* Visibility badge — top right */}
+                          <div className="absolute top-2 right-2 z-10">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleElementClick(element);
+                                setVisibilityDropdownId(visibilityDropdownId === element._id ? null : element._id);
                               }}
-                              className="flex items-center gap-1.5 text-xs bg-emerald-600/80 hover:bg-emerald-600 text-white px-2.5 py-1 rounded-lg transition-colors"
-                              title={`Add "${element.name}" to frame`}
+                              className={`flex items-center gap-0.5 text-[9px] rounded-md px-1.5 py-0.5 transition-colors cursor-pointer backdrop-blur-sm ${
+                                element.visibility === "public"
+                                  ? "bg-emerald-500/70 text-white"
+                                  : "bg-black/50 text-white/70"
+                              }`}
                             >
-                              <Plus className="w-3 h-3" />
-                              Add
+                              {element.visibility === "public" ? <Globe className="w-2.5 h-2.5" /> : <Lock className="w-2.5 h-2.5" />}
+                              {element.visibility === "public" ? "Public" : "Private"}
+                              <ChevronDown className="w-2 h-2" />
                             </button>
+                            {visibilityDropdownId === element._id && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setVisibilityDropdownId(null); }} />
+                                <div className="absolute top-full right-0 mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl py-1 w-[120px]">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (element.visibility !== "private") toggleElementVisibility(element._id, element.visibility || "private");
+                                      setVisibilityDropdownId(null);
+                                    }}
+                                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-[11px] transition-colors ${
+                                      element.visibility === "private" ? "text-(--text-primary) bg-white/8" : "text-(--text-secondary) hover:bg-white/5"
+                                    }`}
+                                  >
+                                    <Lock className="w-3 h-3" strokeWidth={1.75} /> Private
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (element.visibility !== "public") toggleElementVisibility(element._id, element.visibility || "private");
+                                      setVisibilityDropdownId(null);
+                                    }}
+                                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-[11px] transition-colors ${
+                                      element.visibility === "public" ? "text-(--text-primary) bg-white/8" : "text-(--text-secondary) hover:bg-white/5"
+                                    }`}
+                                  >
+                                    <Globe className="w-3 h-3" strokeWidth={1.75} /> Public
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Multi-image badge */}
+                          {MultiImageBadge(element)}
+
+                          {(() => {
+                            const thumbnailUrl = normalizeAssetUrl(element.thumbnailUrl);
+                            const firstReferenceUrl = element.referenceUrls && element.referenceUrls.length > 0
+                              ? normalizeAssetUrl(element.referenceUrls[0])
+                              : null;
+                            const finalThumbnailUrl = thumbnailUrl || firstReferenceUrl;
+
+                            return finalThumbnailUrl ? (
+                              <img
+                                src={finalThumbnailUrl}
+                                alt={element.name}
+                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const parent = e.currentTarget.parentElement;
+                                  if (parent) {
+                                    const fallback = document.createElement('div');
+                                    fallback.className = 'h-full w-full flex items-center justify-center';
+                                    fallback.style.background = 'var(--bg-tertiary)';
+                                    fallback.innerHTML = '<svg class="h-6 w-6" style="color:var(--text-tertiary)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>';
+                                    parent.appendChild(fallback);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center bg-(--bg-tertiary)">
+                                <Image className="h-6 w-6 text-(--text-tertiary)" strokeWidth={1.75} />
+                              </div>
+                            );
+                          })()}
+
+                          {/* Hover overlay with actions */}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 z-10">
+                            {selectedItemId && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleElementClick(element); }}
+                                className="p-2 bg-emerald-500/80 rounded-lg hover:bg-emerald-500 text-white transition-colors"
+                                title={`Add "${element.name}" to frame`}
+                              >
+                                <Plus className="w-4 h-4" strokeWidth={2} />
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const forgeTypes = ["character", "prop", "environment"];
+                                if (forgeTypes.includes(element.type)) {
+                                  setForgeState({ open: true, mode: "edit", type: element.type as ForgeElementType, element });
+                                } else {
+                                  setEditingId(element._id);
+                                  setShowCreate(true);
+                                }
+                              }}
+                              className="p-2 bg-white/15 rounded-lg hover:bg-white/25 text-white transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteElement(element._id, element.name); }}
+                              className="p-2 bg-red-500/20 rounded-lg hover:bg-red-500/40 text-white transition-colors"
+                              title="Delete"
+                            >
+                              {deletingIds.has(element._id) ? (
+                                <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Card info */}
+                        <div className="px-3 py-2.5">
+                          <p className="truncate text-[13px] font-medium text-(--text-primary) leading-tight">{element.name}</p>
+                          {element.description && (
+                            <p className="text-[11px] text-(--text-tertiary) mt-0.5 line-clamp-1">{element.description}</p>
                           )}
-                          <button
-                            onClick={() => {
-                              const forgeTypes = ["character", "prop", "environment"];
-                              if (forgeTypes.includes(element.type)) {
-                                setForgeState({
-                                  open: true,
-                                  mode: "edit",
-                                  type: element.type as ForgeElementType,
-                                  element,
-                                });
-                              } else {
-                                setEditingId(element._id);
-                                setShowCreate(true);
-                              }
-                            }}
-                            className="flex items-center gap-2 text-xs text-(--accent-blue) hover:text-(--accent-blue-hover) transition-colors"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
+                          {/* Variant badge */}
+                          {(element.referenceUrls?.length ?? 0) > 1 && (
+                            <span className="inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded-md bg-amber-400/10 text-[9px] font-semibold text-amber-300">
+                              <Star size={8} className="fill-amber-400 text-amber-400" />
+                              {element.referenceUrls!.length} variants
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
-                    );
-                  })}
+                  ))}
                </div>
              </>
            )}
          </div>
 
           {showCreate && (
-            <div className="w-full max-w-md border-l border-(--border-primary) bg-(--bg-secondary) p-6">
-              <div className="mb-6 flex items-center justify-between">
-                <div>
-                  <p className="text-lg font-bold text-(--text-primary)">{editingId ? "Edit Element" : "Create Element"}</p>
-                  <p className="text-sm text-(--text-tertiary) mt-1">Reference images are saved when you confirm this form.</p>
-                </div>
-                <button 
-                  onClick={resetForm} 
-                  className="p-2.5 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200 hover:scale-105"
-                >
-                  <X className="w-4 h-4 text-(--text-secondary)" />
+            <div className="w-full max-w-sm border-l border-(--border-primary) bg-(--bg-secondary) overflow-y-auto">
+              {/* Side panel header */}
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/6">
+                <p className="text-[13px] font-semibold text-(--text-primary)">{editingId ? "Edit Element" : "Create Element"}</p>
+                <button onClick={resetForm} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
+                  <X className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} />
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex border border-(--border-primary) rounded-xl p-1 bg-(--bg-primary)">
+              <div className="px-5 py-4 space-y-4">
+                {/* Tabs */}
+                <div className="flex items-center gap-1 border-b border-white/6">
                   {[
-                    { id: "basic", label: "Basic", Icon: Package },
-                    { id: "details", label: "Details", Icon: FileText },
-                    { id: "visibility", label: "Visibility", Icon: Globe },
-                  ].map(({ id, label, Icon }) => (
+                    { id: "basic", label: "Basic" },
+                    { id: "details", label: "Details" },
+                    { id: "visibility", label: "Visibility" },
+                  ].map(({ id, label }) => (
                     <button
                       key={id}
                       type="button"
                       onClick={() => setActiveTab(id as "basic" | "visibility" | "details")}
-                      className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 ${
+                      className={`px-3 py-2 text-[12px] font-medium transition-all border-b-2 -mb-px ${
                         activeTab === id
-                          ? "bg-(--accent-blue) text-white shadow-lg"
-                          : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-tertiary)"
+                          ? "text-(--text-primary) border-white"
+                          : "text-(--text-tertiary) hover:text-(--text-secondary) border-transparent"
                       }`}
                     >
-                      <Icon className="w-4 h-4" />
                       {label}
                     </button>
                   ))}
@@ -1550,78 +1318,57 @@ export function ElementLibrary({
                 {activeTab === "basic" && (
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-(--text-secondary) mb-2">Element Name</label>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Name</label>
                       <input
                         value={newName}
                         onChange={(event) => setNewName(event.target.value)}
                         placeholder="Enter element name..."
-                        className="w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3 text-sm text-(--text-primary) outline-none placeholder-(--text-tertiary) focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200"
+                        className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-(--text-secondary) mb-2">Element Type</label>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Type</label>
                       <select
                         value={activeType}
                         onChange={(event) => setActiveType(event.target.value)}
-                        className="w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3 text-sm text-(--text-primary) outline-none focus:border-(--accent-blue) focus:ring-2 focus:ring-(--accent-blue)/20 transition-all duration-200"
+                        className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none focus:border-(--accent-blue)/40 transition-colors"
                       >
                         {ELEMENT_TYPES.map((type) => (
-                          <option key={type.key} value={type.key}>
-                            {type.label}
-                          </option>
+                          <option key={type.key} value={type.key}>{type.label}</option>
                         ))}
                       </select>
                     </div>
 
                     <div className="flex gap-2">
-                      <label className="flex-1 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-primary) px-4 py-4 text-sm text-(--text-secondary) transition-all duration-200 hover:bg-(--bg-tertiary) hover:border-(--accent-blue)">
-                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                        <span className="text-sm">Upload</span>
+                      <label className="flex-1 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-(--border-primary) bg-(--bg-primary) px-3 py-3 text-[12px] text-(--text-secondary) transition-colors hover:bg-white/3 hover:border-white/15">
+                        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                        Upload
                         <input className="hidden" type="file" accept="image/*" multiple onChange={handleUploadDraftRefs} />
                       </label>
                       <button
                         type="button"
                         onClick={() => setShowRefFileBrowser(true)}
-                        className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-dashed border-(--border-primary) bg-(--bg-primary) px-4 py-4 text-sm text-(--text-secondary) transition-all duration-200 hover:bg-(--bg-tertiary) hover:border-blue-500"
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-(--border-primary) bg-(--bg-primary) px-3 py-3 text-[12px] text-(--text-secondary) transition-colors hover:bg-white/3 hover:border-white/15"
                       >
-                        <FolderOpen className="h-4 w-4 text-blue-400" />
-                        <span className="text-sm">R2 Browser</span>
+                        <FolderOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        Browse
                       </button>
                     </div>
 
                     {referencePreviewItems.length > 0 && (
                       <div>
-                        <div className="flex items-center justify-between mb-3">
-                          <label className="block text-sm font-medium text-(--text-secondary)">Reference Images</label>
-                          <span className={`text-sm ${referencePreviewItems.length >= 14 ? 'text-(--color-error)' : 'text-(--text-tertiary)'}`}>
-                            {referencePreviewItems.length}/14 images
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary)">References</label>
+                          <span className={`text-[11px] ${referencePreviewItems.length >= 14 ? 'text-red-400' : 'text-(--text-tertiary)'}`}>
+                            {referencePreviewItems.length}/14
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-3">
                           {referencePreviewItems.map(({ rawUrl, displayUrl, originalIndex }, index) => {
                             const isBroken = brokenImages.has(rawUrl);
                             const isThumbnail = originalIndex === thumbnailIndex;
-                            
-                            // Debug logging for thumbnail selection
-                            if (editingElement) {
-                              const normalizedThumbnail = normalizeAssetUrl(editingElement.thumbnailUrl);
-                              const normalizedDisplayUrl = normalizeAssetUrl(displayUrl);
-                              const matchesByIndex = originalIndex === thumbnailIndex;
-                              const matchesByUrl = normalizedThumbnail === normalizedDisplayUrl;
-                              
-                              if (matchesByUrl && !matchesByIndex) {
-                                console.log(`[ElementLibrary] Thumbnail mismatch detected:`, {
-                                  originalIndex,
-                                  thumbnailIndex,
-                                  matchesByIndex,
-                                  matchesByUrl,
-                                  normalizedThumbnail,
-                                  normalizedDisplayUrl
-                                });
-                              }
-                            }
-                            
+
                             return (
                             <div key={`ref-${originalIndex}-${rawUrl}`} className={`group relative overflow-hidden rounded-xl border ${isThumbnail || (editingElement && normalizeAssetUrl(editingElement.thumbnailUrl) === normalizeAssetUrl(displayUrl)) ? "border-(--accent-blue) ring-2 ring-(--accent-blue)/50" : isBroken ? "border-red-500/50 bg-red-950/20" : "border-(--border-primary)"} bg-(--bg-primary) shrink-0`} style={{ width: "100px", height: "100px" }}>
                               {/* Use the same ImageCard component that works in Select Images */}
@@ -1631,7 +1378,6 @@ export function ElementLibrary({
                                 elementName={editingElement?.name || 'Element'}
                                 onSelect={() => {}} // No select action in reference images
                                 onAddAsReference={(url, index, elementName) => {
-                                  console.log('🎯 Adding image as reference:', { url, index, elementName });
                                   if (onSelectImage) {
                                     const mockElement = {
                                       _id: `image-${Date.now()}`,
@@ -1641,11 +1387,6 @@ export function ElementLibrary({
                                       referenceUrls: [url]
                                     };
                                     onSelectImage(url, `${elementName} - Image ${index + 1}`, mockElement as any);
-                                    
-                                    // Show success notification to user
-                                    setTimeout(() => {
-                                      alert(`✅ "${elementName} - Image ${index + 1}" has been added to reference images!`);
-                                    }, 100);
                                   }
                                 }}
                               />
@@ -1696,7 +1437,6 @@ export function ElementLibrary({
                                             ? (newReferenceUrls[0] || "")
                                             : normalizeAssetUrl(editingElement?.thumbnailUrl || "")
                                         });
-                                        console.log(`[ElementLibrary] Updated element referenceUrls after removing draft image`);
                                       } catch (updateError) {
                                         console.error("[ElementLibrary] Failed to update element after draft image removal:", updateError);
                                       }
@@ -1720,11 +1460,9 @@ export function ElementLibrary({
                                         // ⚡ CANONICAL DELETE using the new utility with graceful mode
                                         try {
                                           await deleteFromR2({ r2Key, fileId, graceful: true });
-                                          console.log(`[ElementLibrary] Deleted R2 file and metadata: ${r2Key}`);
                                         } catch (deleteError) {
                                           console.error(`[ElementLibrary] Metadata deletion failed for ${r2Key}, but R2 file was deleted:`, deleteError);
                                           // Continue anyway - the R2 file is deleted, just log the metadata issue
-                                          console.log(`[ElementLibrary] Continuing with reference URL removal despite metadata failure`);
                                         }
                                       } else {
                                         // Fallback if no metadata row found: just delete file from R2
@@ -1734,7 +1472,6 @@ export function ElementLibrary({
                                           body: JSON.stringify({ r2Key }),
                                         });
                                         if (!r2Res.ok) throw new Error('R2 deletion failed');
-                                        console.log(`[ElementLibrary] Deleted R2 file (no metadata): ${r2Key}`);
                                       }
 
                                       // Remove from local UI state
@@ -1752,7 +1489,6 @@ export function ElementLibrary({
                                               ? (newReferenceUrls[0] || "")
                                               : normalizeAssetUrl(editingElement?.thumbnailUrl || "")
                                           });
-                                          console.log(`[ElementLibrary] Updated element referenceUrls after deletion`);
                                         } catch (updateError) {
                                           console.error("[ElementLibrary] Failed to update element after image deletion:", updateError);
                                         }
@@ -1789,30 +1525,30 @@ export function ElementLibrary({
                 )}
 
                 {activeTab === "visibility" && (
-                  <div className="space-y-3 sm:space-y-4">
+                  <div className="space-y-3">
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-neutral-300 mb-1.5 sm:mb-2">Visibility</label>
-                      <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Visibility</label>
+                      <div className="grid grid-cols-2 gap-2">
                         {[
-                          { value: "private", label: "Private", Icon: Lock, color: "text-neutral-400", active: "bg-neutral-700 border-neutral-600 text-white" },
-                          { value: "public", label: "Public", Icon: Globe, color: "text-emerald-400", active: "bg-emerald-600/20 border-emerald-500 text-emerald-300" },
-                        ].map(({ value, label, Icon, color, active }) => (
+                          { value: "private", label: "Private", Icon: Lock },
+                          { value: "public", label: "Public", Icon: Globe },
+                        ].map(({ value, label, Icon }) => (
                           <button
                             key={value}
                             type="button"
                             onClick={() => setVisibility(value as "private" | "public" | "shared")}
-                            className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 sm:py-2.5 text-xs font-medium transition-all ${
+                            className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-medium transition-all ${
                               visibility === value
-                                ? active
-                                : "border-neutral-800/50 bg-neutral-900 text-neutral-500 hover:border-neutral-700 hover:text-neutral-300"
+                                ? "bg-white/10 border-white/15 text-(--text-primary)"
+                                : "border-(--border-primary) text-(--text-tertiary) hover:bg-white/5 hover:text-(--text-secondary)"
                             }`}
                           >
-                            <Icon className={`w-3.5 h-3.5 ${visibility === value ? color : ""}`} />
+                            <Icon className="w-3.5 h-3.5" strokeWidth={1.75} />
                             {label}
                           </button>
                         ))}
                       </div>
-                      <p className="mt-1.5 text-[10px] text-neutral-500">
+                      <p className="mt-1.5 text-[10px] text-(--text-tertiary)">
                         {visibility === "private" && "Only visible within this project"}
                         {visibility === "public" && "Visible to everyone (public access)"}
                       </p>
@@ -1821,38 +1557,35 @@ export function ElementLibrary({
                 )}
 
                 {activeTab === "details" && (
-                  <div className="space-y-4 sm:space-y-6">
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-neutral-300 mb-1.5 sm:mb-2">Description</label>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Description</label>
                       <textarea
                         value={description}
                         onChange={(event) => setDescription(event.target.value)}
-                        placeholder="Describe the element's appearance, characteristics, and usage..."
+                        placeholder="Describe the element..."
                         rows={4}
-                        className="w-full rounded-lg border border-neutral-800/50 bg-neutral-900 px-2.5 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-white outline-none placeholder:text-neutral-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors resize-none"
+                        className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors resize-none leading-relaxed"
                       />
-                      <p className="mt-1.5 text-[10px] text-neutral-500">
-                        Detailed descriptions help with AI generation and visual consistency
-                      </p>
                     </div>
 
                     <div>
-                      <label className="block text-xs sm:text-sm font-medium text-neutral-300 mb-1.5 sm:mb-2">Tags</label>
-                      <div className="flex flex-wrap gap-1 mb-4">
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Tags</label>
+                      <div className="flex flex-wrap gap-1 mb-3">
                         {tags.map((tag, index) => (
-                          <span key={index} className="flex items-center gap-1 text-xs bg-indigo-500/20 text-indigo-400 rounded px-2 py-1.5 h-6">
+                          <span key={index} className="flex items-center gap-1 text-[10px] font-medium bg-white/6 text-(--text-secondary) rounded-md px-2 py-0.5 border border-white/4">
                             {tag}
                             <button
                               type="button"
                               onClick={() => setTags(tags.filter((_, i) => i !== index))}
-                              className="ml-1 text-indigo-300 hover:text-indigo-200"
+                              className="text-(--text-tertiary) hover:text-(--text-primary) transition-colors"
                             >
                               <X className="w-3 h-3" />
                             </button>
                           </span>
                         ))}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5">
                         <input
                           type="text"
                           value={tagInput}
@@ -1867,7 +1600,7 @@ export function ElementLibrary({
                             }
                           }}
                           placeholder="Add tags..."
-                          className="flex-1 rounded-lg border border-neutral-800/50 bg-neutral-900 px-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors h-8"
+                          className="flex-1 rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2 text-[12px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
                         />
                         <button
                           type="button"
@@ -1878,7 +1611,7 @@ export function ElementLibrary({
                             }
                           }}
                           disabled={!tagInput.trim()}
-                          className="rounded-lg border border-indigo-500/50 bg-indigo-500/20 px-3 py-2 text-xs text-indigo-400 transition hover:bg-indigo-500/30 disabled:opacity-50 disabled:cursor-not-allowed h-8"
+                          className="px-3 py-2 rounded-lg text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                         >
                           Add
                         </button>
@@ -1888,13 +1621,13 @@ export function ElementLibrary({
                 )}
               </div>
 
-              <div className="mt-6">
+              <div className="mt-5 pt-4 border-t border-white/6">
                 <button
                   onClick={handleCreateOrUpdate}
                   disabled={saving || !newName.trim()}
-                  className="flex w-full items-center justify-center gap-3 rounded-xl bg-linear-to-r from-(--accent-blue) to-(--accent-teal) py-3 text-sm font-semibold text-white transition-all duration-200 hover:from-(--accent-blue-hover) hover:to-(--accent-teal-hover) disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-(--accent-blue) hover:bg-(--accent-blue-hover) py-2.5 text-[13px] font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" strokeWidth={2} />}
                   {editingId ? "Save Changes" : "Create Element"}
                 </button>
               </div>
@@ -1908,62 +1641,34 @@ export function ElementLibrary({
 
           return (
             <>
-              {/* Overlay sidebar - doesn't block the main content */}
-              <div className="fixed top-0 right-0 w-80 h-full bg-(--bg-secondary) border-l border-(--border-primary) z-50 overflow-y-auto">
-                <div className="p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-(--text-primary)">
-                      Select Images
-                    </h3>
-                    <button 
-                      onClick={() => {
-                        dispatch({ type: 'END_SELECTION' });
-                        setEditingId(null);
-                      }} 
-                      className="p-2.5 hover:bg-(--bg-tertiary) rounded-xl transition-all duration-200 hover:scale-105"
-                    >
-                      <X className="w-4 h-4 text-(--text-secondary)" />
-                    </button>
+              <div className="fixed top-0 right-0 w-72 h-full bg-(--bg-secondary) border-l border-(--border-primary) z-50 overflow-y-auto">
+                <div className="px-4 py-3.5 border-b border-white/6 flex items-center justify-between">
+                  <p className="text-[13px] font-semibold text-(--text-primary)">Select Image</p>
+                  <button
+                    onClick={() => { dispatch({ type: 'END_SELECTION' }); setEditingId(null); }}
+                    className="p-1.5 hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} />
+                  </button>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="rounded-lg bg-(--bg-primary) border border-(--border-primary) px-3 py-2.5">
+                    <p className="text-[12px] font-medium text-(--text-primary)">{selectedElement.name}</p>
+                    <p className="text-[10px] text-(--text-tertiary) mt-0.5">Click an image to add as reference</p>
                   </div>
-                  
-                  <div className="bg-(--bg-primary) rounded-xl p-4 border border-(--border-primary)">
-                    <p className="text-sm font-medium text-(--text-primary) mb-1">{selectedElement.name}</p>
-                    <p className="text-xs text-(--text-tertiary)">Click images below to select</p>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    {selectedElement.referenceUrls?.map((url, index) => {
-                      console.log(`[SelectImages] Using URL: "${url}" for image ${index + 1}`);
-                      return (
-                        <ImageCard
-                          key={`${selectedElement._id}-${index}`}
-                          url={url}
-                          index={index}
-                          elementName={selectedElement.name}
-                          onSelect={() => handleImageSelect(url, index)}
-                        />
-                      );
-                    })}
-                  </div>
-                  
-                  {/* Instructions */}
-                  <div className="text-center text-xs text-(--text-tertiary)">
-                    Click on any image to add it as a reference
-                  </div>
-                  
-                  <div className="bg-(--bg-tertiary) rounded-xl p-4 border border-(--border-primary)">
-                    <div className="text-center text-xs text-(--text-secondary)">
-                      <div className="font-medium mb-1">💡 Want to switch elements?</div>
-                      <div>Click any element in the main area</div>
-                      <div className="text-(--text-tertiary) mt-1">Library closes when image is added</div>
-                    </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {selectedElement.referenceUrls?.map((url, index) => (
+                      <ImageCard
+                        key={`${selectedElement._id}-${index}`}
+                        url={url}
+                        index={index}
+                        elementName={selectedElement.name}
+                        onSelect={() => handleImageSelect(url, index)}
+                      />
+                    ))}
                   </div>
                 </div>
-              </div>
-              
-              {/* Subtle hint overlay */}
-              <div className="fixed top-4 left-4 bg-(--bg-tertiary)/90 rounded-xl px-3 py-2 text-xs text-(--text-secondary) z-40 pointer-events-none border border-(--border-primary)">
-                👆 Click any element to switch
               </div>
             </>
           );
