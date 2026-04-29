@@ -1233,19 +1233,26 @@ export function ElementLibrary({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const forgeTypes = ["character", "prop", "environment"];
-                                if (forgeTypes.includes(element.type)) {
-                                  setForgeState({ open: true, mode: "edit", type: element.type as ForgeElementType, element });
-                                } else {
-                                  setEditingId(element._id);
-                                  setShowCreate(true);
-                                }
+                                setEditingId(element._id);
+                                setShowCreate(true);
                               }}
                               className="p-2 bg-white/15 rounded-lg hover:bg-white/25 text-white transition-colors"
                               title="Edit"
                             >
                               <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
                             </button>
+                            {["character", "prop", "environment"].includes(element.type) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setForgeState({ open: true, mode: "edit", type: element.type as ForgeElementType, element });
+                                }}
+                                className="p-2 bg-purple-500/30 rounded-lg hover:bg-purple-500/50 text-white transition-colors"
+                                title="Open in Element Forge"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
+                              </button>
+                            )}
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDeleteElement(element._id, element.name); }}
                               className="p-2 bg-red-500/20 rounded-lg hover:bg-red-500/40 text-white transition-colors"
