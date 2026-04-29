@@ -830,3 +830,554 @@ Categories: Gender (4), Age (6), Build (5), Hair Style (10), Hair Texture (4), F
 | `GeneratedImagesPanel/EditPersonaDialog.tsx` | Colors updated |
 | `GeneratedImagesPanel/CreatePersonaDialog.tsx` | Colors updated |
 | `lib/storyboard/snapshotUtils.ts` | **NEW** — shared captureVideoFrame/captureImageFrame utilities |
+
+---
+
+## 18. Workspace Redesign — Element Library / Character Builder Design Language
+
+### Design Philosophy
+
+The current workspace is **feature-dense and overlay-heavy** — every frame card has gradient vignettes, 6+ hover-activated circular action buttons, status dropdowns, tag editors, element badges, and duration badges all stacked on top of each other. The toolbar crams 8 buttons into a single row.
+
+The Element Library and Character Builder (Element Forge) follow a different philosophy:
+- **One thing at a time** — sub-tabs isolate fields, carousels show one row of options
+- **Clean separation** — content area vs. edit panel, never overlapping
+- **Underline navigation** — lightweight tabs, not pill-button clusters
+- **Cards are cards** — image + label + subtle metadata, not dashboards
+- **Actions live in context** — right panel or bottom bar, not floating over content
+
+Apply that philosophy to the workspace.
+
+---
+
+### 18.1 Layout — Three-Zone Split
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  HEADER BAR                                                         │
+│  [<] Project Name  ·  Draft · 16:9    ___Script___Storyboard___Table___Video___    [Search] [Filters] [Zoom] [Credits] [Org] [Avatar] │
+├─────────────────────────────────────────────────────────────────────┤
+│                              │                                      │
+│     FRAME GRID               │     DETAIL PANEL (conditional)       │
+│     (flex-1, scrollable)     │     (w-[380px], right side)          │
+│                              │                                      │
+│     ┌────┐ ┌────┐ ┌────┐    │     Shows when a frame is selected   │
+│     │ 01 │ │ 02 │ │ 03 │    │     - Tabbed editor (like Forge)     │
+│     └────┘ └────┘ └────┘    │     - Info / Prompts / Elements      │
+│     ┌────┐ ┌────┐ ┌────┐    │     - Notes / Tags                   │
+│     │ 04 │ │ 05 │ │ 06 │    │     - Actions at bottom              │
+│     └────┘ └────┘ └────┘    │                                      │
+│     ┌────┐ ┌──────────┐     │                                      │
+│     │ 07 │ │  + Add   │     │                                      │
+│     └────┘ └──────────┘     │                                      │
+│                              │                                      │
+├──────────────────────────────┴──────────────────────────────────────┤
+│  ACTION BAR (bottom, always visible)                                │
+│  [Style ▾] [Format ▾]  ···spacer···  [Files] [Elements] [Director] [Generate All] [Export] │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key changes from current:**
+- **Detail Panel** replaces all the in-card dialogs (edit, prompts, notes, tags). Click a frame → panel slides in. Like Element Library's right create/edit panel.
+- **Action Bar** moves toolbar buttons from above the grid to a persistent bottom bar. Matches the Element Forge action bar pattern.
+- **Grid gets simpler** — cards are just image + number + minimal indicators. All editing happens in the Detail Panel.
+
+---
+
+### 18.2 Header Bar (Simplified)
+
+```
+Container: flex items-center justify-between px-4 py-3 border-b border-(--border-primary) bg-(--bg-primary)
+
+LEFT:
+  Back arrow → project name (text-sm font-bold) → status pill (text-[11px])
+
+CENTER:
+  Tab switcher — UNDERLINE style (not pill/bordered box)
+  ┌─────────────────────────────────────────────┐
+  │  Script    Storyboard    Table    Video      │
+  │             ─────────                        │  ← 2px white underline on active
+  └─────────────────────────────────────────────┘
+
+  Tab button:
+    Active:   text-(--text-primary) border-b-2 border-white -mb-px
+    Inactive: text-(--text-tertiary) hover:text-(--text-secondary) border-transparent
+    Style:    px-4 py-3 text-[12px] font-medium flex items-center gap-1.5
+    Icon:     w-3.5 h-3.5 strokeWidth={1.75}
+
+RIGHT:
+  Search icon (expandable) + Filters + Zoom + CreditBadge + OrgSwitcher + UserButton
+  (same as current but without Extend Story / Build Storyboard buttons — those move to Action Bar)
+```
+
+**Why underline tabs?** Element Library and Forge both use underline-active tabs. It's lighter, takes less vertical space, and creates a clear visual hierarchy without enclosing boxes.
+
+---
+
+### 18.3 Frame Cards (Minimal)
+
+**Current problem:** Each card is a mini-dashboard with 15+ interactive elements layered on top of the image. Gradient overlays obscure the artwork.
+
+**New card:** Image-forward. Metadata below. Clean.
+
+```
+┌──────────────────────────┐
+│                          │
+│        IMAGE AREA        │   ← No gradient overlay, no vignette
+│     (aspect-ratio)       │   ← Clean rounded-2xl corners
+│                          │
+│  [01]              [5s]  │   ← Frame # (bottom-left), duration (bottom-right)
+│                          │   ← Small pills, only on hover OR always-on subtle
+├──────────────────────────┤
+│  Frame Title             │   ← text-[13px] font-medium, single line truncate
+│  Short description...    │   ← text-[11px] text-(--text-secondary), 1-line
+│  [character] [env]       │   ← Element badges inline (compact pills)
+└──────────────────────────┘
+```
+
+**Card component spec:**
+
+```
+Container:
+  rounded-2xl border border-(--border-primary) overflow-hidden
+  bg-(--bg-secondary) cursor-pointer transition-all duration-200
+  hover:border-(--accent-blue)/40 hover:shadow-lg hover:shadow-(--accent-blue)/5
+
+  Selected state:
+    border-(--accent-blue) ring-2 ring-(--accent-blue)/20
+
+Image Area:
+  bg-(--bg-primary) overflow-hidden
+  aspect-ratio: inherited from project settings (16/9, 9/16, 1/1)
+
+  No media state:
+    flex items-center justify-center
+    Icon: ImageIcon w-8 h-8 text-(--text-tertiary)
+    (no "Browse Files" button — that's in Detail Panel)
+
+Frame Number Badge:
+  absolute bottom-2 left-2
+  bg-black/50 backdrop-blur-sm rounded-md px-2 py-0.5
+  text-[10px] font-semibold text-white tabular-nums
+  Always visible (not hover-dependent)
+
+Duration Badge:
+  absolute bottom-2 right-2
+  bg-black/50 backdrop-blur-sm rounded-md px-2 py-0.5
+  text-[10px] text-white/80 tabular-nums flex items-center gap-1
+  Clock icon w-2.5 h-2.5
+  Only shown if duration > 0
+
+Status Dot (replaces full status badge):
+  absolute top-2 right-2
+  w-2.5 h-2.5 rounded-full
+  draft: bg-(--border-primary)
+  in-progress: bg-(--color-warning)
+  completed: bg-(--color-success)
+  No label, no dropdown — status editing happens in Detail Panel
+
+Info Section:
+  px-3 py-2.5
+  Title: text-[13px] font-medium text-(--text-primary) truncate
+  Description: text-[11px] text-(--text-secondary) line-clamp-1 mt-0.5
+
+  Element Badges Row (if elements assigned):
+    flex items-center gap-1 mt-1.5 flex-wrap
+    Badge: px-1.5 py-0.5 rounded-md text-[9px] font-semibold uppercase tracking-wide
+    Character: bg-purple-500/15 text-purple-400
+    Environment: bg-emerald-500/15 text-emerald-400
+    Prop: bg-blue-500/15 text-blue-400
+
+  Bottom indicators (inline):
+    flex items-center gap-2 mt-1.5
+    Image prompt dot: w-1.5 h-1.5 rounded-full bg-(--accent-blue) (if imagePrompt exists)
+    Video prompt dot: w-1.5 h-1.5 rounded-full bg-emerald-400 (if videoPrompt exists)
+    Favorite star: Star w-3 h-3 text-amber-400 fill-amber-400 (if isFavorite)
+    Notes icon: MessageSquare w-3 h-3 text-amber-400/60 (if notes exist)
+```
+
+**What's removed from cards:**
+- Gradient overlays / vignettes
+- Status dropdown (moved to Detail Panel)
+- Tag editor dropdown (moved to Detail Panel)
+- 6 hover action buttons (Edit, Prompts, Elements, Duplicate, Delete, Director Review)
+- Move up/down arrows (drag-and-drop is sufficient)
+- "Browse Files" button in empty state
+- Set as Storyboard URL button
+- Generation status overlay stays (it's important feedback)
+
+**What's kept:**
+- Frame number, duration (subtle)
+- Status dot (glanceable, not interactive)
+- Element badges (read-only, compact)
+- Favorite/notes/prompt indicators (dots, not buttons)
+- Drag-and-drop
+- Double-click to open SceneEditor
+- Single-click to select → opens Detail Panel
+
+---
+
+### 18.4 Detail Panel (Right Side — Element Library Pattern)
+
+When a frame is selected, a right panel slides in — exactly like Element Library's create/edit panel.
+
+```
+Container:
+  w-[380px] border-l border-(--border-primary) bg-(--bg-secondary)
+  flex flex-col overflow-hidden shrink-0
+  transition: slide-in from right (translate-x animation)
+
+Header:
+  px-5 py-3.5 border-b border-(--border-primary)
+  flex items-center justify-between
+
+  Left: Frame badge + title
+    Frame badge: px-2.5 py-1 rounded-md bg-white/4
+      text-[13px] font-semibold tabular-nums text-(--accent-blue)
+      "#04"
+    Title: text-[13px] font-semibold text-(--text-primary) ml-2 truncate
+
+  Right: Action icons
+    Prev/Next frame arrows: w-7 h-7 rounded-md hover:bg-white/5
+    Close X: w-7 h-7 rounded-md text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5
+
+Tab Bar (Underline style — matches Element Forge):
+  px-5 border-b border-(--border-primary)
+  flex items-center gap-0
+
+  Tabs: Info | Prompts | Elements | Notes
+
+  Tab button:
+    px-3 py-3 text-[12px] font-medium border-b-2 -mb-px transition-colors
+    Active: text-(--text-primary) border-white
+    Inactive: text-(--text-tertiary) hover:text-(--text-secondary) border-transparent
+    Icon: w-3.5 h-3.5 strokeWidth={1.75} mr-1.5
+
+Content Area:
+  flex-1 overflow-y-auto px-5 py-4 space-y-4
+```
+
+#### Tab: Info
+```
+Fields (stacked, full-width):
+
+Title Input:
+  Label: text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-1.5
+  Input: w-full rounded-xl border border-(--border-primary) bg-(--bg-primary) px-4 py-3
+         text-[13px] text-(--text-primary) outline-none
+         placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40
+
+Description Textarea:
+  Same label style
+  Textarea: same input style, resize-y, min-h-[80px] leading-relaxed
+
+Status Selector:
+  Label: "STATUS"
+  Button group (3 options, flex row):
+    Each: px-4 py-2 rounded-xl text-[12px] font-medium border transition
+    Active:   bg-(--accent-blue)/12 text-(--text-primary) border-(--accent-blue)/40
+    Inactive: text-(--text-secondary) border-transparent hover:bg-white/5
+
+    Options: Draft | In Progress | Completed
+    Each with colored dot: w-2 h-2 rounded-full mr-1.5
+
+Duration:
+  Label: "DURATION"
+  Inline number input or button-group: 3s / 5s / 10s / Custom
+
+Tags:
+  Label: "TAGS"
+  Tag input (combobox style) + selected tag pills
+  Same pattern as Element Forge badges row
+
+Favorite Toggle:
+  Inline row: Star icon + "Mark as favorite" text
+  Toggle switch (mini toggle from design system)
+
+Media:
+  Label: "MEDIA"
+  If has image: thumbnail preview (rounded-xl, aspect-video, max-h-[160px])
+    Below: [Upload New] [Browse Files] [Remove] buttons
+  If no image: upload drop zone
+    border-2 border-dashed border-(--border-primary) hover:border-(--accent-blue)/40
+    rounded-xl h-[120px] flex items-center justify-center
+    "Drop image or click to upload" text
+```
+
+#### Tab: Prompts
+```
+Sub-tabs (underline, secondary level):
+  Image Prompt | Video Prompt
+
+Textarea:
+  Same input style as Element Forge
+  w-full rounded-xl border border-(--border-primary) bg-(--bg-primary)
+  px-4 py-3 text-[13px] min-h-[160px] resize-y leading-relaxed
+
+Quick Actions Row (below textarea):
+  flex items-center gap-2
+  [Load from Description] [Clear] [Copy]
+  Button style: px-3 py-1.5 rounded-lg text-[11px] font-medium
+    text-(--text-secondary) hover:text-(--text-primary) bg-white/5 hover:bg-white/8
+
+Prompt Templates Dropdown (TemplateDropdown pattern from Forge):
+  Trigger: shows selected template name + preview snippet
+  Panel: bg-(--bg-secondary) rounded-xl max-h-[240px] overflow-y-auto
+```
+
+#### Tab: Elements
+```
+Assigned Elements:
+  List of element cards (compact):
+    flex items-center gap-3 px-3 py-2.5 rounded-xl bg-(--bg-primary) border border-(--border-primary)
+    Thumbnail: w-10 h-10 rounded-lg object-cover
+    Name: text-[13px] font-medium
+    Type badge: text-[9px] uppercase tracking-wide
+    Remove X: w-6 h-6 rounded-md hover:bg-red-500/10 text-(--text-tertiary) hover:text-red-400
+
+  If no elements: empty state with dashed border
+
+[+ Add Element] button:
+  w-full py-2.5 rounded-xl border border-dashed border-(--border-primary)
+  hover:border-(--accent-blue)/40 hover:bg-(--accent-blue)/5
+  text-[12px] text-(--text-secondary) hover:text-(--accent-blue)
+  Opens ElementLibrary in picker mode
+```
+
+#### Tab: Notes
+```
+Textarea:
+  Full-width, same input style
+  min-h-[200px]
+  placeholder: "Add production notes, director feedback, revision history..."
+```
+
+#### Panel Bottom Bar
+```
+Container:
+  px-5 py-3 border-t border-(--border-primary)
+  flex items-center gap-2
+
+Left:
+  [Duplicate] [Delete] — secondary actions
+  Button: px-3 py-2 rounded-xl text-[12px] font-medium
+  Duplicate: text-(--text-secondary) hover:bg-white/5
+  Delete: text-red-400 hover:bg-red-500/10
+
+Right (ml-auto):
+  [Open in Editor] — primary CTA
+  Button: px-4 py-2 rounded-xl text-[12px] font-medium
+  bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white
+  Sparkles icon + "Open Editor"
+```
+
+---
+
+### 18.5 Action Bar (Bottom — Element Forge Pattern)
+
+Replaces the current secondary toolbar above the grid. Persistent at the bottom of the workspace, always visible.
+
+```
+Container:
+  px-5 py-3 border-t border-(--border-primary) bg-(--bg-secondary)/95 backdrop-blur-md
+  flex items-center gap-3 shrink-0
+
+Left Group:
+  Frame count: text-[12px] font-medium text-(--text-secondary) tabular-nums
+    "24 frames"
+
+  Style Selector (compact):
+    Trigger: flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-medium
+      border border-(--border-primary) hover:border-(--border-secondary)
+      Palette icon w-3.5 h-3.5
+      Active: text-purple-400 border-purple-500/30 bg-purple-500/8
+      Inactive: text-(--text-secondary)
+
+  Format Selector (compact):
+    Same trigger style as Style
+    Layers icon
+
+  Separator: w-px h-5 bg-(--border-primary) mx-1
+
+  Duplicate warning (conditional):
+    AlertTriangle icon + count
+    text-[11px] text-(--color-warning)
+
+Spacer: flex-1
+
+Right Group:
+  Secondary buttons:
+    [Files] [Elements] [Director] [Presets]
+    Style: px-3 py-1.5 rounded-xl text-[12px] font-medium
+      text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5
+      Icon: w-3.5 h-3.5 mr-1.5
+
+  Director (active state):
+    text-amber-400 bg-amber-500/10 border border-amber-500/20
+
+  Separator: w-px h-5 bg-(--border-primary) mx-1
+
+  Primary buttons:
+    [Generate All]:
+      px-4 py-1.5 rounded-xl text-[12px] font-medium
+      bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white
+      Sparkles icon w-3.5 h-3.5
+
+    [Export]:
+      px-4 py-1.5 rounded-xl text-[12px] font-medium
+      bg-(--accent-teal) hover:bg-(--accent-teal)/80 text-white
+
+  Remove Duplicates — ONLY shown when duplicateCount > 0, not always.
+    text-red-400 hover:bg-red-500/10 rounded-xl px-3 py-1.5
+```
+
+---
+
+### 18.6 Empty State (No Frames)
+
+Matches Element Library empty state pattern:
+
+```
+Container:
+  flex-1 flex flex-col items-center justify-center text-center
+
+Icon:
+  w-16 h-16 rounded-2xl bg-white/4 flex items-center justify-center mb-5
+  Grid3x3 icon w-8 h-8 text-(--text-tertiary)
+
+Title: text-[15px] font-medium text-(--text-primary) mb-1
+  "No frames yet"
+
+Subtitle: text-[13px] text-(--text-secondary) mb-6 max-w-sm
+  "Write a script and build your storyboard, or create frames manually."
+
+Buttons (flex items-center gap-3):
+  Primary: [Go to Script] — same blue CTA style
+  Secondary: [Create Frame] — border border-(--border-primary) hover style
+```
+
+---
+
+### 18.7 Grid Responsive Columns
+
+```
+Standard (16:9 frames):
+  grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5
+
+Portrait (9:16 frames):
+  grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7
+
+Square (1:1 frames):
+  grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6
+
+When Detail Panel is open (grid shrinks):
+  Standard: grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4
+  (subtract ~1 column since panel takes 380px)
+
+Gap: gap-4
+Padding: p-6
+```
+
+---
+
+### 18.8 Keyboard Shortcuts
+
+```
+Ctrl+- / Ctrl+=     Zoom out / in
+Ctrl+0              Reset zoom to 100%
+Escape              Deselect frame / close Detail Panel
+Arrow Left/Right    Navigate between frames
+Arrow Up/Down       Navigate grid rows
+Delete / Backspace  Delete selected frame (with confirmation)
+Enter               Open selected frame in SceneEditor
+D                   Duplicate selected frame
+F                   Toggle favorite
+N                   Open notes tab in Detail Panel
+P                   Open prompts tab in Detail Panel
+```
+
+---
+
+### 18.9 Drag & Drop (Simplified)
+
+```
+Drag handle: NOT shown. Entire card is draggable.
+  cursor-grab on hover, cursor-grabbing while dragging
+
+Dragging state:
+  opacity-40 on source card
+  ring-2 ring-(--accent-blue)/40 on drop target
+  Blue insertion line indicator between cards
+
+Drop feedback:
+  Smooth reorder animation (200ms ease)
+```
+
+---
+
+### 18.10 Context Menu (Right-Click)
+
+Instead of hover action buttons on each card, use a right-click context menu (matches StoryboardStrip pattern from Section 11):
+
+```
+Container:
+  bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl
+  py-1.5 w-[200px] z-[9999]
+  Portal to document.body
+
+Items:
+  px-3 py-2 text-[13px] text-(--text-primary) hover:bg-white/5
+  Icon: w-4 h-4 text-(--text-secondary) strokeWidth={1.75}
+  gap-2.5
+
+Menu structure:
+  Edit Title & Description     (Pencil icon)
+  Edit Prompts                 (Sparkles icon)
+  ─────────────
+  Open in Editor               (Maximize icon)
+  Review with Director         (Sparkles amber icon)
+  ─────────────
+  Add Element                  (Plus icon)
+  Upload Image                 (Upload icon)
+  Browse Files                 (FolderOpen icon)
+  Set as Cover                 (Image icon)
+  ─────────────
+  Duplicate                    (Copy icon)
+  Move to...                   (ArrowRight icon) → submenu with position
+  ─────────────
+  Delete                       (Trash2 icon, text-red-400 hover:bg-red-500/10)
+
+Divider: h-px bg-(--border-primary) mx-2 my-1
+```
+
+---
+
+### 18.11 Summary of Changes
+
+| Area | Before | After |
+|------|--------|-------|
+| **Tab navigation** | Pill-style bordered box | Underline tabs (matches Forge) |
+| **Frame card** | 15+ overlays, gradients, hover buttons | Image + number + title + element badges |
+| **Editing** | In-card dropdowns & dialogs | Right Detail Panel (like Element Library) |
+| **Toolbar** | 8 buttons crammed above grid | Bottom Action Bar (like Forge) |
+| **Status editing** | Dropdown on card | Button group in Detail Panel |
+| **Tag editing** | Dropdown on card | Input field in Detail Panel |
+| **Notes** | Modal dialog | Tab in Detail Panel |
+| **Prompts** | Modal dialog | Tab in Detail Panel |
+| **Frame actions** | 6 hover circles on image | Right-click context menu |
+| **Style/Format** | Above grid dropdowns | Bottom Action Bar selectors |
+| **Move up/down** | Hover arrows on card | Drag-and-drop only |
+| **Remove Duplicates** | Always-visible orange button | Conditional, bottom bar |
+| **Empty card** | "No media" + Browse Files | Simple icon placeholder |
+| **Extend Story** | Button in header | Move to Action Bar or Script tab |
+
+### 18.12 Files to Modify
+
+| File | Changes |
+|------|---------|
+| `workspace/[projectId]/page.tsx` | Header underline tabs, grid simplification, Detail Panel, Action Bar, remove secondary toolbar |
+| `workspace/[projectId]/page.tsx` (FrameCard) | Strip to minimal card — image + number + title + badges |
+| `workspace/[projectId]/page.tsx` (FrameCard) | Extract to own file: `components/workspace/FrameCard.tsx` |
+| **NEW** `components/workspace/DetailPanel.tsx` | Right-side edit panel with tabbed interface |
+| **NEW** `components/workspace/ActionBar.tsx` | Bottom persistent toolbar |
+| **NEW** `components/workspace/FrameContextMenu.tsx` | Right-click menu component |
