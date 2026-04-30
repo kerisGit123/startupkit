@@ -114,36 +114,26 @@ const PRESETS: Preset[] = [
 
 // ── Wireframe Globe Canvas (Higgsfield-style) ────────────────────────────
 
-// ── 3D Projection Helpers ────────────────────────────────────────────────
-// View the sphere from above at ~25° so top/bottom/front/back are obvious
-
-const VIEW_ELEV = 25; // degrees — how far above we look at the sphere
-const VIEW_ELEV_RAD = (VIEW_ELEV * Math.PI) / 180;
-const COS_VIEW = Math.cos(VIEW_ELEV_RAD);
-const SIN_VIEW = Math.sin(VIEW_ELEV_RAD);
-
-/** Project a 3D point on a unit sphere to 2D canvas coords */
+/** Project a 3D point on a unit sphere to 2D canvas coords with dynamic view */
 function project3D(
   azDeg: number,
   elDeg: number,
   cx: number,
   cy: number,
-  r: number
+  r: number,
+  viewAzDeg: number = 0,
+  viewElDeg: number = 25
 ): { x: number; y: number; z: number } {
-  const az = (azDeg * Math.PI) / 180;
+  const az = ((azDeg - viewAzDeg) * Math.PI) / 180;
   const el = (elDeg * Math.PI) / 180;
-  // 3D position on unit sphere
+  const cosVE = Math.cos((viewElDeg * Math.PI) / 180);
+  const sinVE = Math.sin((viewElDeg * Math.PI) / 180);
   const x3 = Math.sin(az) * Math.cos(el);
   const y3 = Math.sin(el);
   const z3 = Math.cos(az) * Math.cos(el);
-  // Rotate around X axis by -VIEW_ELEV (look from above)
-  const y3r = y3 * COS_VIEW - z3 * SIN_VIEW;
-  const z3r = y3 * SIN_VIEW + z3 * COS_VIEW;
-  return {
-    x: cx + x3 * r,
-    y: cy - y3r * r,
-    z: z3r, // positive = facing viewer, negative = behind
-  };
+  const y3r = y3 * cosVE - z3 * sinVE;
+  const z3r = y3 * sinVE + z3 * cosVE;
+  return { x: cx + x3 * r, y: cy - y3r * r, z: z3r };
 }
 
 function WireframeGlobe({
@@ -161,8 +151,7 @@ function WireframeGlobe({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const draggingRef = useRef(false);
-  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
-  const sizeRef = useRef({ w: 0, h: 0, cx: 0, cy: 0, r: 0 });
+  const sizeRef = useRef({ cx: 0, cy: 0, r: 0 });
   const imgRef = useRef<HTMLImageElement | null>(null);
   const imgLoadedRef = useRef(false);
 
@@ -192,242 +181,218 @@ function WireframeGlobe({
     const dpr = window.devicePixelRatio || 1;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    ctx.scale(dpr, dpr);
+    const bw = Math.round(w * dpr);
+    const bh = Math.round(h * dpr);
+    // Only resize buffer when dimensions actually change (avoids flash/flicker)
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const cx = w / 2;
     const cy = h / 2;
-    const r = Math.min(w, h) / 2 - 20;
-    sizeRef.current = { w, h, cx, cy, r };
+    const r = Math.min(w, h) / 2 - 16;
+    sizeRef.current = { cx, cy, r };
 
     ctx.clearRect(0, 0, w, h);
 
-    // ── Helper: draw a 3D circle (latitude or longitude) as polyline ──
-    function drawWireCircle(
+    // View follows tilt so you can see top/bottom of sphere, but NO horizontal
+    // rotation follow (rotation has a 0/360 wrap that causes jumps if we follow it)
+    const viewAz = 0;
+    const viewEl = 25 + tilt * 0.3;
+    const proj = (az: number, el: number, radius = r) =>
+      project3D(az, el, cx, cy, radius, viewAz, viewEl);
+
+    // Helper: draw 3D polyline with depth-based opacity
+    function drawWireLine(
       points: { x: number; y: number; z: number }[],
       frontAlpha: number,
       backAlpha: number
     ) {
-      // Split into front/back segments for depth-based opacity
       for (let i = 0; i < points.length - 1; i++) {
         const p0 = points[i];
         const p1 = points[i + 1];
         const avgZ = (p0.z + p1.z) / 2;
-        const alpha = avgZ >= 0
-          ? frontAlpha
-          : backAlpha;
+        const alpha = avgZ >= 0 ? frontAlpha : backAlpha;
         ctx!.beginPath();
         ctx!.moveTo(p0.x, p0.y);
         ctx!.lineTo(p1.x, p1.y);
         ctx!.strokeStyle = `rgba(255,255,255,${alpha})`;
-        ctx!.lineWidth = avgZ >= 0 ? 0.7 : 0.4;
+        ctx!.lineWidth = avgZ >= 0 ? 0.8 : 0.35;
         ctx!.stroke();
       }
     }
 
-    // ── Wireframe: Latitude rings ──
-    for (const lat of [-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75]) {
+    // Latitude rings
+    for (const lat of [-60, -30, 0, 30, 60]) {
       const pts: { x: number; y: number; z: number }[] = [];
-      for (let a = 0; a <= 360; a += 5) {
-        pts.push(project3D(a, lat, cx, cy, r));
-      }
-      drawWireCircle(pts, 0.1, 0.04);
+      for (let a = 0; a <= 360; a += 5) pts.push(proj(a, lat));
+      drawWireLine(pts, 0.12, 0.04);
     }
 
-    // ── Wireframe: Longitude meridians ──
-    for (let lon = 0; lon < 180; lon += 15) {
+    // Longitude meridians
+    for (let lon = 0; lon < 360; lon += 30) {
       const pts: { x: number; y: number; z: number }[] = [];
-      for (let el = -90; el <= 90; el += 5) {
-        pts.push(project3D(lon, el, cx, cy, r));
-      }
-      drawWireCircle(pts, 0.1, 0.04);
-      // Opposite side
-      const pts2: { x: number; y: number; z: number }[] = [];
-      for (let el = -90; el <= 90; el += 5) {
-        pts2.push(project3D(lon + 180, el, cx, cy, r));
-      }
-      drawWireCircle(pts2, 0.1, 0.04);
+      for (let el = -90; el <= 90; el += 5) pts.push(proj(lon, el));
+      drawWireLine(pts, 0.12, 0.04);
     }
 
-    // ── Outer silhouette circle (always visible) ──
+    // Outer silhouette circle
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // ── Subject thumbnail in center ──
+    // Subject thumbnail in center
     if (imgRef.current && imgLoadedRef.current) {
       const img = imgRef.current;
-      const thumbSize = r * 0.5;
+      const thumbSize = r * 0.45;
       const aspect = img.width / img.height;
       let tw: number, th: number;
-      if (aspect > 1) {
-        tw = thumbSize;
-        th = thumbSize / aspect;
-      } else {
-        th = thumbSize;
-        tw = thumbSize * aspect;
-      }
-      // Shift thumbnail slightly up (since we view from above)
-      const thumbOffY = -r * 0.04;
-      ctx.save();
+      if (aspect > 1) { tw = thumbSize; th = thumbSize / aspect; }
+      else { th = thumbSize; tw = thumbSize * aspect; }
       const rx = cx - tw / 2;
-      const ry = cy - th / 2 + thumbOffY;
-      const br = 6;
+      const ry = cy - th / 2;
+      ctx.save();
       ctx.beginPath();
-      ctx.roundRect(rx, ry, tw, th, br);
+      ctx.roundRect(rx, ry, tw, th, 6);
       ctx.clip();
-      ctx.globalAlpha = 0.85;
+      ctx.globalAlpha = 0.7;
       ctx.drawImage(img, rx, ry, tw, th);
       ctx.restore();
       ctx.beginPath();
-      ctx.roundRect(rx, ry, tw, th, br);
-      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.roundRect(rx, ry, tw, th, 6);
+      ctx.strokeStyle = "rgba(255,255,255,0.1)";
       ctx.lineWidth = 1;
       ctx.stroke();
     } else {
-      // Placeholder subject indicator
-      const cp = project3D(0, 0, cx, cy, r * 0.01);
       ctx.beginPath();
-      ctx.arc(cx, cy - r * 0.04, 4, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 3, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(255,255,255,0.15)";
       ctx.fill();
     }
 
-    // ── Camera position dot (projected in 3D, scaled by zoom) ──
-    // zoom: -100 (far/wide) → dot at 1.3x sphere radius (outside)
-    //        0 (neutral)    → dot on sphere surface (1.0x)
-    //        100 (close-up) → dot at 0.3x sphere radius (near center)
-    const zoomScale = 1 - (zoom / 100) * 0.7; // maps -100..100 → 1.7..0.3
-    const cam = project3D(rotation, tilt, cx, cy, r * zoomScale);
-    const camOnSphere = project3D(rotation, tilt, cx, cy, r);
-    const isFront = camOnSphere.z >= 0;
+    // ── Camera position ──
+    const zoomScale = 1 - (zoom / 100) * 0.7;
+    const cam = proj(rotation, tilt, r * zoomScale);
+    const isFront = cam.z >= 0;
 
-    // Zoom orbit ring — shows the zoom radius as a faint ellipse at the equator
-    if (zoom !== 0) {
-      ctx.save();
-      ctx.strokeStyle = "rgba(59, 130, 246, 0.12)";
-      ctx.lineWidth = 0.7;
-      ctx.setLineDash([2, 3]);
-      const zoomR = r * zoomScale;
-      // Draw zoom orbit as projected equator ring at the zoom radius
-      const zoomPts: { x: number; y: number; z: number }[] = [];
-      for (let a = 0; a <= 360; a += 5) {
-        zoomPts.push(project3D(a, 0, cx, cy, zoomR));
-      }
-      ctx.beginPath();
-      ctx.moveTo(zoomPts[0].x, zoomPts[0].y);
-      for (let i = 1; i < zoomPts.length; i++) {
-        ctx.lineTo(zoomPts[i].x, zoomPts[i].y);
-      }
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // Sightline from center to camera dot (dashed)
-    ctx.save();
-    ctx.setLineDash([3, 3]);
+    // Sightline from subject to camera (solid)
     ctx.beginPath();
-    ctx.moveTo(cx, cy - r * 0.04);
+    ctx.moveTo(cx, cy);
     ctx.lineTo(cam.x, cam.y);
     ctx.strokeStyle = isFront
-      ? "rgba(59, 130, 246, 0.4)"
-      : "rgba(59, 130, 246, 0.15)";
+      ? "rgba(255,255,255,0.35)"
+      : "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 3D camera box — wireframe cube at camera position
+    const bs = 4; // angular half-size in degrees
+    const depthOff = r * 0.07;
+    const zr = r * zoomScale;
+    const ff = [
+      proj(rotation - bs, tilt - bs, zr),
+      proj(rotation + bs, tilt - bs, zr),
+      proj(rotation + bs, tilt + bs, zr),
+      proj(rotation - bs, tilt + bs, zr),
+    ];
+    const bf = [
+      proj(rotation - bs, tilt - bs, zr + depthOff),
+      proj(rotation + bs, tilt - bs, zr + depthOff),
+      proj(rotation + bs, tilt + bs, zr + depthOff),
+      proj(rotation - bs, tilt + bs, zr + depthOff),
+    ];
+
+    const boxAlpha = isFront ? 0.85 : 0.35;
+    ctx.strokeStyle = `rgba(255,255,255,${boxAlpha})`;
+    ctx.lineWidth = 1.5;
+
+    // Front face
+    ctx.beginPath();
+    ctx.moveTo(ff[0].x, ff[0].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(ff[i].x, ff[i].y);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(255,255,255,${isFront ? 0.06 : 0.02})`;
+    ctx.fill();
+    ctx.stroke();
+
+    // Back face
+    ctx.beginPath();
+    ctx.moveTo(bf[0].x, bf[0].y);
+    for (let i = 1; i < 4; i++) ctx.lineTo(bf[i].x, bf[i].y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Connecting edges
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(ff[i].x, ff[i].y);
+      ctx.lineTo(bf[i].x, bf[i].y);
+      ctx.stroke();
+    }
+
+    // Lens circle on front face
+    const lx = (ff[0].x + ff[1].x + ff[2].x + ff[3].x) / 4;
+    const ly = (ff[0].y + ff[1].y + ff[2].y + ff[3].y) / 4;
+    ctx.beginPath();
+    ctx.arc(lx, ly, 2.5, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,255,255,${boxAlpha * 0.7})`;
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.restore();
 
-    // Glow
-    const glowAlpha = isFront ? 0.35 : 0.12;
-    const glow = ctx.createRadialGradient(cam.x, cam.y, 0, cam.x, cam.y, 18);
-    glow.addColorStop(0, `rgba(59, 130, 246, ${glowAlpha})`);
-    glow.addColorStop(1, "rgba(59, 130, 246, 0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(cam.x, cam.y, 18, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Outer ring
-    ctx.beginPath();
-    ctx.arc(cam.x, cam.y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = isFront
-      ? "rgba(59, 130, 246, 0.15)"
-      : "rgba(59, 130, 246, 0.06)";
-    ctx.fill();
-    ctx.strokeStyle = isFront
-      ? "rgba(59, 130, 246, 0.7)"
-      : "rgba(59, 130, 246, 0.3)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Inner dot
-    ctx.beginPath();
-    ctx.arc(cam.x, cam.y, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = isFront ? "#3b82f6" : "rgba(59, 130, 246, 0.5)";
-    ctx.fill();
-    ctx.strokeStyle = isFront ? "#fff" : "rgba(255,255,255,0.5)";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // ── Direction labels (projected) — larger, color-coded ──
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "center";
-
-    // Determine which quadrant the camera is in for highlighting
+    // ── Direction labels (fixed compass points) ──
     const rNorm = ((rotation % 360) + 360) % 360;
     const isFrontView = rNorm <= 45 || rNorm >= 315;
     const isBackView = rNorm >= 135 && rNorm <= 225;
     const isLeftView = rNorm > 45 && rNorm < 135;
     const isRightView = rNorm > 225 && rNorm < 315;
 
-    // Front label
-    const frontP = project3D(0, 0, cx, cy, r);
+    // Labels use fixed viewEl=25 so they don't shift with tilt
+    const lbl = (az: number, el: number) => project3D(az, el, cx, cy, r, 0, 25);
+
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+
+    // Front
+    const frontP = lbl(0, 0);
     ctx.font = `bold ${isFrontView ? 10 : 9}px system-ui, -apple-system, sans-serif`;
-    ctx.fillStyle = isFrontView ? "rgba(59, 130, 246, 0.8)" : "rgba(255,255,255,0.3)";
+    ctx.fillStyle = isFrontView ? "rgba(59,130,246,0.8)" : "rgba(255,255,255,0.3)";
     ctx.fillText("FRONT", frontP.x, frontP.y + 14);
 
-    // Back label — more visible, highlighted when camera faces back
-    const backP = project3D(180, 0, cx, cy, r);
+    // Back
+    const backP = lbl(180, 0);
     ctx.font = `bold ${isBackView ? 10 : 9}px system-ui, -apple-system, sans-serif`;
-    ctx.fillStyle = isBackView ? "rgba(239, 68, 68, 0.8)" : "rgba(255,255,255,0.25)";
+    ctx.fillStyle = isBackView ? "rgba(239,68,68,0.8)" : "rgba(255,255,255,0.2)";
     ctx.fillText("BACK", backP.x, backP.y - 10);
 
     // Left
-    const leftP = project3D(90, 0, cx, cy, r);
-    ctx.font = `bold 9px system-ui, -apple-system, sans-serif`;
+    const leftP = lbl(90, 0);
+    ctx.font = "bold 9px system-ui, -apple-system, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillStyle = isLeftView ? "rgba(168, 85, 247, 0.7)" : "rgba(255,255,255,0.2)";
+    ctx.fillStyle = isLeftView ? "rgba(168,85,247,0.7)" : "rgba(255,255,255,0.2)";
     ctx.fillText("L", leftP.x + 6, leftP.y);
 
     // Right
-    const rightP = project3D(-90, 0, cx, cy, r);
+    const rightP = lbl(-90, 0);
     ctx.textAlign = "right";
-    ctx.fillStyle = isRightView ? "rgba(168, 85, 247, 0.7)" : "rgba(255,255,255,0.2)";
+    ctx.fillStyle = isRightView ? "rgba(168,85,247,0.7)" : "rgba(255,255,255,0.2)";
     ctx.fillText("R", rightP.x - 6, rightP.y);
 
-    // Top indicator
-    const topP = project3D(0, 90, cx, cy, r);
+    // Top
+    const topP = lbl(0, 90);
     ctx.textAlign = "center";
     ctx.font = "bold 8px system-ui, -apple-system, sans-serif";
-    ctx.fillStyle = tilt >= 50 ? "rgba(34, 197, 94, 0.7)" : "rgba(255,255,255,0.12)";
+    ctx.fillStyle = tilt >= 50 ? "rgba(34,197,94,0.7)" : "rgba(255,255,255,0.12)";
     ctx.fillText("TOP", topP.x, topP.y - 8);
 
-    // ── Active direction badge (bottom of globe) ──
-    const dirLabel = isBackView ? "BACK" : isLeftView ? "LEFT" : isRightView ? "RIGHT" : isFrontView ? "FRONT" : "";
-    if (dirLabel && !isFrontView) {
-      const badgeColor = isBackView ? "rgba(239, 68, 68, 0.15)" : "rgba(168, 85, 247, 0.12)";
-      const textColor = isBackView ? "rgba(239, 68, 68, 0.9)" : "rgba(168, 85, 247, 0.8)";
-      const badgeW = ctx.measureText(dirLabel).width + 12;
-      ctx.fillStyle = badgeColor;
-      ctx.beginPath();
-      ctx.roundRect(cx - badgeW / 2, cy + r + 4, badgeW, 16, 4);
-      ctx.fill();
-      ctx.fillStyle = textColor;
-      ctx.font = "bold 8px system-ui, -apple-system, sans-serif";
-      ctx.fillText(dirLabel, cx, cy + r + 12);
-    }
+    // Bottom
+    const bottomP = lbl(0, -90);
+    ctx.font = "bold 8px system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = tilt <= -50 ? "rgba(34,197,94,0.7)" : "rgba(255,255,255,0.12)";
+    ctx.fillText("BTM", bottomP.x, bottomP.y + 10);
   }, [rotation, tilt, zoom]);
 
   useEffect(() => {
@@ -443,12 +408,17 @@ function WireframeGlobe({
     return () => obs.disconnect();
   }, [draw]);
 
-  // ── Pointer → angle mapping (inverse of 3D projection) ──
+  // Absolute position mapping — click/drag where you want the camera
+  const VE_RAD = (25 * Math.PI) / 180;
+  const COS_VE = Math.cos(VE_RAD);
+  const SIN_VE = Math.sin(VE_RAD);
+
   const getAnglesFromPos = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
-    if (!canvas) return { rotation: 0, tilt: 0 };
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     const { cx, cy, r } = sizeRef.current;
+    if (r === 0) return null;
     const sx = (clientX - rect.left - cx) / r;
     const sy = -(clientY - rect.top - cy) / r;
     const len = Math.sqrt(sx * sx + sy * sy);
@@ -456,9 +426,9 @@ function WireframeGlobe({
     const nx = sx * scale;
     const ny = sy * scale;
     const z3r = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny));
-    const y3 = ny * COS_VIEW + z3r * SIN_VIEW;
+    const y3 = ny * COS_VE + z3r * SIN_VE;
     const x3 = nx;
-    const z3 = -ny * SIN_VIEW + z3r * COS_VIEW;
+    const z3 = -ny * SIN_VE + z3r * COS_VE;
     let newRotation = Math.round((Math.atan2(x3, z3) * 180) / Math.PI);
     newRotation = ((newRotation % 360) + 360) % 360;
     const newTilt = Math.round((Math.asin(Math.max(-1, Math.min(1, y3))) * 180) / Math.PI);
@@ -472,13 +442,13 @@ function WireframeGlobe({
     draggingRef.current = true;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const angles = getAnglesFromPos(e.clientX, e.clientY);
-    onChange(angles.rotation, angles.tilt);
+    if (angles) onChange(angles.rotation, angles.tilt);
   }, [getAnglesFromPos, onChange]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!draggingRef.current) return;
     const angles = getAnglesFromPos(e.clientX, e.clientY);
-    onChange(angles.rotation, angles.tilt);
+    if (angles) onChange(angles.rotation, angles.tilt);
   }, [getAnglesFromPos, onChange]);
 
   const handlePointerUp = useCallback(() => {
@@ -488,7 +458,7 @@ function WireframeGlobe({
   return (
     <canvas
       ref={canvasRef}
-      className="w-full h-full cursor-crosshair touch-none select-none"
+      className="w-full h-full cursor-grab active:cursor-grabbing touch-none select-none"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
