@@ -147,9 +147,11 @@ interface TtsVoiceSelectorProps {
   onChange: (voiceId: string) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Compact inline mode for toolbar bars — no label, minimal styling */
+  inline?: boolean;
 }
 
-export function TtsVoiceSelector({ value, onChange, open, onOpenChange }: TtsVoiceSelectorProps) {
+export function TtsVoiceSelector({ value, onChange, open, onOpenChange, inline }: TtsVoiceSelectorProps) {
   const [search, setSearch] = useState("");
   const [previewPlaying, setPreviewPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -157,25 +159,29 @@ export function TtsVoiceSelector({ value, onChange, open, onOpenChange }: TtsVoi
   const q = search.toLowerCase();
 
   return (
-    <div>
-      <label className="text-[10px] text-gray-500 mb-1 block">Voice</label>
+    <div className={inline ? "relative" : ""}>
+      {!inline && <label className="text-[10px] text-gray-500 mb-1 block">Voice</label>}
       <audio ref={audioRef} style={{ display: "none" }} preload="none" onEnded={() => setPreviewPlaying(null)} />
       <div className="relative">
         {/* Selected voice button */}
         <button
           onClick={() => { onOpenChange(!open); setSearch(""); }}
-          className="w-full px-2.5 py-1.5 bg-[#0A0A0F] border border-[#2A2A32] rounded-md text-[12px] text-[#EAEAEA] flex items-center justify-between cursor-pointer hover:border-[#4A4A4A] transition"
+          className={inline
+            ? "flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer max-w-[220px]"
+            : "w-full px-2.5 py-1.5 bg-[#0A0A0F] border border-[#2A2A32] rounded-md text-[12px] text-[#EAEAEA] flex items-center justify-between cursor-pointer hover:border-[#4A4A4A] transition"
+          }
         >
           <div className="flex items-center gap-1.5 truncate">
             <Mic className="w-3 h-3 text-blue-400 flex-shrink-0" />
-            <span className="truncate">{getTtsVoiceLabel(value)}</span>
+            <span className="truncate">{inline ? getTtsVoiceLabel(value) : getTtsVoiceLabel(value)}</span>
           </div>
-          <ChevronDown className="w-3 h-3 text-gray-500 flex-shrink-0" />
+          <ChevronDown className="w-3 h-3 text-gray-500 flex-shrink-0 ml-1" />
         </button>
 
         {/* Dropdown */}
+        {open && inline && <div className="fixed inset-0 z-40" onClick={() => onOpenChange(false)} />}
         {open && (
-          <div className="absolute top-full left-0 mt-1 w-[280px] bg-[#0A0A0F] border border-[#2A2A32] rounded-lg shadow-xl z-50 max-h-[320px] overflow-hidden flex flex-col">
+          <div className={`absolute ${inline ? "bottom-full left-0 mb-2" : "top-full left-0 mt-1"} w-[280px] bg-[#0A0A0F] border border-[#2A2A32] rounded-lg shadow-xl z-50 max-h-[320px] overflow-hidden flex flex-col`}>
             {/* Search */}
             <div className="p-1.5 border-b border-[#2A2A32]">
               <div className="flex items-center gap-1.5 px-2 py-1.5 bg-[#141418] rounded-md">
