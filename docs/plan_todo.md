@@ -1,10 +1,200 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-29 (Session #24 — Script-to-Storyboard Cleanup + Extend Story)
+> **Last updated:** 2026-04-30 (Session #29 — Character Thumbnails + Custom Elements)
 
 ---
 
-## Recently Completed (Session #11-24 — 2026-04-26/29)
+## Recently Completed (Session #11-29 — 2026-04-26/30)
+
+### Session #29 — 2026-04-30 (Character Thumbnail Regeneration + Custom Element Builder)
+
+**Character Thumbnail Regeneration:**
+- [x] Regenerated all character thumbnails — ultra realistic 4K, front-facing, dark steel-blue navy (#2c3e5a) background
+- [x] Fixed 5×2 grid system — all grids use consistent layout, empty cells filled with background color
+- [x] Crop script upgraded — `make_measured_grid()` auto-measures gap positions from actual image, `None` skip for empty cells
+- [x] Per-grid measured values in `FORCE_EVEN_GRID` for pixel-accurate cropping
+- [x] All thumbs output at 240×320px (optimized for 120×135 display at 2x retina)
+- [x] Added villain + lover archetypes (10 total, up from 8)
+- [x] Ethnicity regenerated with model-quality faces
+- [x] Removed old orphaned grid files (eyes, hair-facial, hair-color, ethnicity)
+- [x] Grid prompts documented in `docs/character-grid-prompts.md`
+
+**Custom Element Builder (Logo/Style/Other):**
+- [x] Removed Font type (AI unreliable for exact font reproduction)
+- [x] Added `CUSTOM_ELEMENT_TYPES` set + `CUSTOM_TYPE_CONFIG` with per-type help text, image limits, placeholders
+- [x] Clean single-form create panel for Logo/Style/Other (no tabs — Name, Help, Description, Browse, Images, Visibility toggle)
+- [x] Character/Prop/Environment "Create Element" → opens Element Forge wizard (not generic form)
+- [x] Tab switching auto-closes create panel when moving to wizard-based types
+- [x] Create panel stays on correct tab (fixed `activeType` reset bug)
+- [x] Type-specific button labels ("Create Logo", "Create Style", "Create Other")
+- [x] `composeCustomElementPrompt()` — generates context for logo/style/other during generation
+- [x] Prompt injection in VideoImageAIPanel — custom element @mentions append AI context (e.g., "Incorporate the Tigers logo as shown in reference image")
+- [x] @mention autocomplete already works for all element types (no changes needed)
+
+**Testing Plan — Character Thumbnails:**
+- [ ] Verify all character builder carousels show correct thumbnails (no blank/broken images)
+- [ ] Check Gender tab: Male, Female, Non-binary, Other — correct faces, no black edges
+- [ ] Check Age tab: Child through Elderly — correct progression, no squeezing
+- [ ] Check Build tab: Slim through Stocky — clear size difference, Stocky widest
+- [ ] Check Archetype tab: all 10 (Hero through Lover) — distinct character costumes
+- [ ] Check Expression tab: all 8 — clearly different facial expressions
+- [ ] Check Hair Style tab: all 10 — scroll carousel, each style distinct
+- [ ] Check Hair Texture tab: Straight, Wavy, Curly, Coily — no blank cards
+- [ ] Check Eye Color tab: all 6 — iris colors clearly visible at thumbnail size
+- [ ] Check Facial Hair tab: all 7 — guy model, styles distinguishable
+- [ ] Check Outfit tab: all 10 — clothing visible, no black edges
+- [ ] Check Details tab: all 8 — distinguishing feature visible (scar, glasses, etc.)
+- [ ] Check Ethnicity tab: all 9 — model-quality faces, correct ethnic features
+- [ ] Check Hair Color tab: all 8 — still old gray style (acceptable, not regenerated)
+
+**Testing Plan — Custom Element Builder:**
+- [ ] Navigate to Logos tab → click "Create Logo" → form opens with correct type badge, help text, placeholder
+- [ ] Navigate to Styles tab → click "Create Style" → form opens correctly
+- [ ] Navigate to Other tab → click "Create Other" → form opens with Description required
+- [ ] Switch to Characters tab → create panel auto-closes
+- [ ] Switch to Characters tab → click "Create Element" → opens Element Forge wizard (not form)
+- [ ] Create a Logo: name + description + upload images via Browse → save → appears in Logos grid
+- [ ] Create a Style: name + upload style reference images → save → appears in Styles grid
+- [ ] Create Other: name + description (required) + images → save → appears in Other grid
+- [ ] Try saving Other without description → should show validation alert
+- [ ] Edit an existing custom element → side panel shows with type dropdown
+- [ ] Delete a custom element → removed from grid
+- [ ] Visibility toggle: Private ↔ Public works
+- [ ] Image limit enforced: Logo max 5, Style max 10, Other max 10
+- [ ] @mention in prompt: type `@` → custom elements appear in autocomplete dropdown
+- [ ] @mention badge inserted → shows element name with thumbnail
+- [ ] Generate with @mentioned logo → prompt includes "Incorporate the X logo as shown in reference image"
+- [ ] Generate with @mentioned style → prompt includes "Apply the X artistic style"
+- [ ] Reference images auto-attached during generation (check console logs)
+
+### Session #28 — 2026-04-30 (Convex Resource Optimization)
+
+**Problem:** Convex dashboard showed 2.38 GB database bandwidth on startupkit + 84K function calls + high action compute on my-app (tracker-app2).
+
+**my-app (tracker-app2) — Function Calls + Action Compute:**
+- [x] **Cron interval 1min → 5min** — `processBlastQueue` was running every minute (42K calls/month), now every 5 minutes with larger batch (50). ~80% reduction in function calls
+- [x] **Early return on empty queue** — `processBlastQueue` now returns immediately when no pending messages, avoiding wasted action compute (was 0.014 GB-h, now near-zero when idle)
+
+**startupkit — Database Bandwidth (2.38 GB → est. ~1.0-1.2 GB):**
+
+| Query | Bandwidth | Problem | Fix | Status |
+|-------|-----------|---------|-----|--------|
+| `listByProject` | 431 MB | Returns soft-deleted files | Added `status != deleted` filter | DONE |
+| `listAudioFiles` | 284 MB | Fetches ALL company files, filters audio in JS | Added server-side `fileType=audio` + `status=completed` filter | DONE |
+| `listSharedFiles` (x2 pages) | 233 MB x2 | Returns full documents with `metadata` blob (200 records) | Now projects only 12 needed fields (drops metadata, creditsUsed, etc.) | DONE |
+| `getStorageUsage` | 240 MB | Already uses aggregates (O(log n)), just called often | No change needed — efficient | OK |
+| `listByCompany` | 81 MB | Returns soft-deleted files | Added `status != deleted` filter | DONE |
+| `listByCategory` | — | Used `by_companyId` index (too broad) | Switched to `by_companyId_category` compound index | DONE |
+| `listByCategories` | — | Returns soft-deleted files | Added `status != deleted` filter | DONE |
+| `getPublicStats` | 45 MB | Scans 3 entire tables (`users`, `projects`, `files`) just for `.length` | Cached in `landing_stats` table, refreshed hourly by cron | DONE |
+
+**New infrastructure:**
+- [x] `landing_stats` table in schema — single row with `totalCreators`, `totalProjects`, `totalGenerations`
+- [x] `refreshLandingStats` internal mutation — updates cached stats from table scans
+- [x] Hourly cron `refresh-landing-stats` — keeps landing stats fresh without per-visitor table scans
+
+**Future optimizations (not yet done):**
+- [ ] **Static landing page** — Convert `/storytica` to ISR with `revalidate = 3600`. Would eliminate even the single-row Convex read per visitor
+- [ ] **Gallery pagination** — Both `/community` and in-studio gallery fetch 200 items. Could use cursor-based pagination to load in chunks
+- [ ] **Monitor post-deploy** — Check Convex dashboard after deploying to verify bandwidth reduction
+
+### Session #27 — 2026-04-30 (Script Builder Redesign + Element @Mention + Smart Build)
+
+**Script Tab Redesign:**
+- [x] **Line numbers** with scene header highlighting (blue for SCENE lines)
+- [x] **Floating AI prompt panel** — VideoImageAIPanel-style bottom panel (backdrop-blur, rounded-2xl, border-t hairline)
+- [x] **Rich scene sidebar** — Cards with scene ID badge, duration, cyan location badges, amber character badges
+- [x] **Tab switcher** — Element Forge toggle style (border-white/8, bg-white/12 active)
+- [x] **Build dialog CSS vars** — Migrated from hardcoded hex to design system variables
+
+**Build Storyboard — Smart Modes:**
+- [x] **Update & Add mode** — Reparses script, updates prompts on existing scenes (by sceneId match), adds new scenes, reuses elements by name+type. Nothing deleted
+- [x] **Rebuild From Scratch mode** — Deletes all frames + elements, rebuilds everything
+- [x] **replace_section API support** — `clearItemsBySceneIds` mutation for future selective rebuild
+- [x] **Element deduplication** — Match by `name::type` key, skip existing elements
+- [x] **Convex queries** — `listElementsForBuild`, `listItemsForBuild`, `clearItemsBySceneIds`
+
+**Element Extraction Improvements:**
+- [x] **Tighter AI prompt** — Aim for 3-6 elements, strict dedup rules, no parent+child
+- [x] **Post-filter blocklist** — Parts (porthole, panel, cabin, interior, dashboard), groups (crew, crowd, team)
+- [x] **Parent-child dedup** — If "Submarine" exists, skip "Submarine Porthole"
+
+**Element @Mention System (full pipeline):**
+- [x] **`element` badge type** — Orange color, `@LeadPilot` label with thumbnail in prompt editor
+- [x] **@ autocomplete dropdown** — Type `@` in prompt → dropdown shows project elements with thumbnails, keyboard nav (arrows/enter/esc)
+- [x] **Auto-insert badges** — Loading a frame's prompt auto-inserts element badges from `linkedElements`
+- [x] **Generation-time conversion** — `@LeadPilot` -> `@Image{N}` in prompt text, numbered after manual refs
+- [x] **Auto-attach reference images** — SceneEditor auto-adds element `referenceUrls` to `processedReferenceImages`
+- [x] **Data flow** — `linkedElements` on Shot type -> SceneEditor -> VideoImageAIPanel -> API
+
+**Other Fixes:**
+- [x] **Element visibility dropdown** — Dropdown selector instead of instant toggle (prevents element disappearing)
+- [x] **Element Forge browse button** — Reference photos show browse (folder) + delete on hover for easy swap
+- [x] **FileBrowser defaultCategory** — Opens to Elements when launched from Element Forge
+- [x] **ThumbnailCropper fix** — border->outline, margin->transform, stale closure fix
+
+### Session #26 — 2026-04-29 (Logs Element/Generated Badges + Soft-Delete)
+
+- [x] **Elements/Generated badges** — Log history shows amber "Elements" or sky blue "Generated" badge per entry
+- [x] **Soft-delete element files** — Element deletion now soft-deletes linked `storyboard_files` (same pattern as `storyboardFiles.remove`: `status: "deleted"`, clears R2 key, preserves `creditsUsed` audit trail, calls `syncFileAggregates`)
+- [x] **Crop thumbnails excluded from logs** — Element crop thumbnails (`tags: ["thumbnail"]`) filtered out post-query
+- [x] **Deleted files hidden from logs** — `status: "deleted"` files excluded from log history query
+- [x] **Element log filtering** — Shows all element files except crop thumbnails (manual uploads + AI-generated both visible)
+
+### Session #25 — 2026-04-29 (Element Forge Character Builder + Image Generation)
+
+**Simple/Advanced Mode:**
+- [x] **Simple mode** — 3 tabs: Identity, Prompt, Generate. Casual users fill name + 3 picks → generate in 20 seconds
+- [x] **Advanced mode** — 8 tabs: Identity, Era, Physical Appearance, Personality, Details, Outfit, Prompt, Generate. Full power
+- [x] **Toggle persisted** in localStorage, independent from Human/Non-Human toggle
+- [x] **Details/Outfit Custom** fields changed from text to textarea for longer descriptions
+
+**Reference Photos (Face+Outfit OR Full Body):**
+- [x] **(Face + Outfit) OR Full Body** layout with visual "OR" divider. Opposite side dims when one is filled
+- [x] **Non-human**: Head + Body OR Full Body
+- [x] **FileBrowser integration** — clicking slots opens R2 FileBrowser to pick/upload images (not direct upload)
+- [x] **Preview on hover** — expand (full preview), browse (change), delete actions
+- [x] **Double-click** any reference photo for large preview modal
+- [x] **Files stay as `uploads`** — URL stored on element is the relationship, no special category
+
+**Generate Tab (last tab):**
+- [x] **Model selector** — styled dropdown (GPT Image 2 default, Nano Banana 2, Z-Image) with descriptions
+- [x] **Settings popup** — VideoImageAIPanel-style grid: aspect ratio (16:9/1:1/9:16), resolution (1K/2K/4K), format (PNG/JPG), grid (1x1/2x2)
+- [x] **Credit display** via `usePricingData` hook, shows per-generation cost
+- [x] **Z-Image handling** — text-only mode, skips reference images, dims ref photos area, uses short `composedPrompt`
+- [x] **Auto-save on Generate** — creates element if new, then generates. No "save first" friction
+- [x] **Parallel 2x2 generation** — `Promise.all` fires all 4 API calls simultaneously
+- [x] **Image overrides** — `composeImageOverrides()` appends explicit hair color/eye color/ethnicity instructions for img2img consistency
+
+**Variant System:**
+- [x] **Schema**: `referencePhotos`, `variants[]`, `primaryIndex` on `storyboard_elements`
+- [x] **Live variant gallery** — Convex reactive via `getById` query, auto-updates when callback adds images
+- [x] **Processing/failed cards** — shows spinner + file ID for generating, error + delete for failed. Hover: pull result, copy ID, delete
+- [x] **Star to set primary** — primary variant = identity sheet sent to VideoImageAIPanel
+- [x] **Double-click rename** — editable variant labels, defaults to `{element name} {N}`
+- [x] **Double-click preview** — large photo overlay with "Crop as Thumbnail" button
+- [x] **Delete variant** — removes from element arrays + soft-deletes R2 file + storyboard_files record
+- [x] **Drag-to-scroll** gallery (era-slider style)
+- [x] **Header avatars** — shows variant circles with amber border on primary
+
+**Mutations Added:**
+- [x] `getById` — live element query for reactive updates
+- [x] `appendReferenceImage` — accepts `variantLabel` + `variantModel`, creates variant metadata
+- [x] `setPrimaryVariant` — sets primaryIndex + updates thumbnailUrl
+- [x] `updateVariantLabel` — rename variants
+- [x] `removeVariant` — removes from arrays, adjusts primaryIndex, returns removed URL for R2 cleanup
+
+**Pipeline Integration:**
+- [x] **generate-image route** — passes `variantLabel`/`variantModel` through to kieAI metadata
+- [x] **kie-callback** — reads variant metadata from file, passes to `appendReferenceImage`
+- [x] **VideoImageAIPanel** — uses `referenceUrls[primaryIndex]` as identity sheet
+- [x] **pull-result route** — added `/api/v1/jobs/record-info` endpoint for image generation tasks + diagnostic logging
+
+**Bug Fixes:**
+- [x] **ThumbnailCropper CORS** — uses `/api/proxy/image` to fetch external CDN images
+- [x] **ThumbnailCropper clip-path** — replaced overflow-hidden+translate with `clip-path: inset()` for accurate cropping at all positions
+- [x] **Save no longer overwrites referenceUrls** — edit mode skips referenceUrls (managed by callbacks only)
+- [x] **Element card** — removed sparkles generate button, added "⭐ N variants" badge, progress overlay via `onGenerating` callback
 
 ### Session #24 — 2026-04-29 (Script-to-Storyboard Pipeline Overhaul)
 
@@ -295,82 +485,22 @@
 
 **Philosophy: Stop chasing score. Start chasing user experience.** The engine is built. Make it feel good to drive.
 
-### Element Builder Upgrade — Soul Cast-style (HIGH PRIORITY — UX)
+### Element Forge Character Builder — COMPLETE (Sessions #20-25)
 
-**Why:** Current element creation is a blank text field. Users type free-text descriptions and manually upload references. Higgsfield's Soul Cast gives structured dropdowns — easier, faster, more consistent results. This doesn't increase score but dramatically improves the creative experience.
+**Status: SHIPPED.** Simple/Advanced mode, reference photos, multi-model generation, variant system.
 
-**Current state:** `CreateElement.tsx` — name field, type dropdown (7 types), that's it. No structured fields, no guided creation, no auto-generation.
-
-**Upgrade plan — structured element builders per type:**
-
-**Build order:** Character first (most used, 4-angle sheet is unique) → Environment → Prop
-
-#### Character Builder
-
-| Field | UI | Maps to prompt |
-|-------|-----|---------------|
-| Gender | Dropdown: Male, Female, Non-binary, Other | "a [gender]" |
-| Age range | Dropdown: Child, Teen, Young Adult, Adult, Middle-aged, Elderly | "[age] year old" |
-| Ethnicity/Skin tone | Dropdown or color picker | "[ethnicity]" |
-| Build | Dropdown: Slim, Athletic, Average, Muscular, Heavy | "[build] build" |
-| Hair | Color picker + style dropdown (Short, Long, Curly, Straight, Bald, Braids) | "[color] [style] hair" |
-| Clothing | Text field + style hint dropdown (Casual, Formal, Streetwear, Fantasy, Sci-fi, Historical) | "wearing [clothing]" |
-| Expression | Dropdown: Neutral, Happy, Serious, Angry, Sad, Confident | "[expression] expression" |
-| Distinguishing features | Text field (optional) | "[features]" |
-
-- [x] Character builder with structured fields → auto-compose prompt description (Session #20 — ElementForge.tsx, Session #23 — Soul Cast redesign with carousels + sub-tabs)
-- [ ] "Generate Reference Sheet" button — 1 click → generates 4 angles (front/side/back/3-quarter) using composed prompt, saves as referenceUrls. **Unique feature — nobody has this, not even Higgsfield's Soul Cast (generates 1 image only)**
-- [x] Live prompt preview showing what will be sent to AI (Session #20)
-
-#### Environment/Location Builder
-
-| Field | UI | Maps to prompt |
-|-------|-----|---------------|
-| Setting type | Dropdown: Interior, Exterior, Urban, Rural, Fantasy, Sci-fi, Underwater, Space | "[setting]" |
-| Time of day | Dropdown: Dawn, Morning, Noon, Afternoon, Golden Hour, Sunset, Dusk, Night, Midnight | "[time] lighting" |
-| Weather/Atmosphere | Dropdown: Clear, Cloudy, Rainy, Foggy, Snowy, Stormy, Dusty, Misty | "[weather]" |
-| Architecture style | Dropdown: Modern, Victorian, Brutalist, Japanese, Gothic, Futuristic, Rustic, Industrial | "[style] architecture" |
-| Key features | Text field (e.g., "large windows, wooden floor, fireplace") | "with [features]" |
-| Mood | Dropdown: Cozy, Eerie, Grand, Intimate, Vast, Claustrophobic, Serene, Chaotic | "[mood] atmosphere" |
-
-- [x] Environment builder with structured fields → auto-compose prompt (Session #20 — 16 settings with 2-level sub-settings)
-- [ ] "Generate Reference" button — 1 click → generates environment image
-- [ ] Time-of-day slider with visual preview (dawn→night gradient)
-
-#### Prop Builder
-
-| Field | UI | Maps to prompt |
-|-------|-----|---------------|
-| Category | Dropdown: Vehicle, Weapon, Tool, Furniture, Food, Technology, Clothing, Natural, Misc | "[category]" |
-| Material | Dropdown: Metal, Wood, Plastic, Glass, Leather, Stone, Fabric, Crystal | "[material]" |
-| Era/Style | Dropdown: Modern, Vintage, Futuristic, Medieval, Steampunk, Minimalist | "[era]" |
-| Size | Dropdown: Tiny, Small, Medium, Large, Massive | "[size]" |
-| Condition | Dropdown: New, Worn, Damaged, Ancient, Pristine, Weathered | "[condition]" |
-| Details | Text field | "[details]" |
-
-- [x] Prop builder with structured fields → auto-compose prompt (Session #20 — 3-step wizard)
-- [ ] "Generate Reference" button — 1 click → generates prop reference image
-
-#### Shared Features (all element types)
-
-- [x] **Auto-compose prompt** — structured fields → readable prompt description (live preview) (Session #20)
-- [ ] **One-click reference generation** — "Generate" button creates reference image(s) from composed prompt
-- [ ] **Character: 4-angle reference sheet** — front/side/back/3-quarter in one generation (unique feature — beats Higgsfield's Soul Cast which only generates 1 image)
+- [x] Character/Environment/Prop structured wizards with carousels, sub-tabs, era slider (Sessions #20-23)
+- [x] Simple mode (3 tabs) + Advanced mode (8 tabs) with localStorage persistence (Session #25)
+- [x] Generate tab with model selector (GPT Image 2/Nano Banana 2/Z-Image), settings, credits (Session #25)
+- [x] Reference photos: (Face+Outfit) OR Full Body via FileBrowser, img2img with overrides (Session #25)
+- [x] Variant system: multiple named generations, star primary, rename, delete, preview (Session #25)
+- [x] Live Convex-reactive variant gallery with processing/failed cards (Session #25)
+- [x] Auto-save on Generate click, parallel 2x2 generation (Session #25)
+- [x] VideoImageAIPanel uses primary variant as identity sheet (Session #25)
+- [x] **Element Library redesign** — Matched Character Builder design system: underline tabs, hover-overlay cards, compact header, cleaned 96 console.logs (Session #26)
+- [ ] **Unified create panel** — Remove side panel for non-forge types (Logos/Fonts/Styles/Other), make all types use ElementForge wizard or a shared lightweight wizard
 - [ ] **@mention preview** — show what `@ElementName` will expand to in generation prompts
 - [ ] **Smart defaults** — pick "Sci-fi" setting → auto-suggest Futuristic architecture, neon lighting
-- [x] **Still allow free-text** — advanced users can type directly, structured fields are optional helpers (Session #20 — custom text fields + old CreateElement still works for logo/font/style/other)
-
-#### Why this beats Higgsfield's Soul Cast
-
-| | Higgsfield Soul Cast | Our Element Builder |
-|---|---|---|
-| Character fields | Genre, era, physique, personality, 14 genre templates | Gender, age, ethnicity, build, hair, clothing, expression, features |
-| Environment builder | No | **YES** — setting, time-of-day, weather, architecture, mood |
-| Prop builder | No | **YES** — category, material, era, size, condition |
-| Reference generation | 1 image | **4-angle sheet** (front/side/back/3-quarter) — 4x more reference data |
-| Prompt preview | No | Live preview of composed prompt |
-| Free-text fallback | No | Advanced users can type directly |
-| @mention expansion | No | Shows what @mention will add to generation prompts |
 
 ### Onboarding & First-Time Experience
 
@@ -409,9 +539,118 @@
 
 #### Script-to-Storyboard — Remaining
 
-- [ ] **Test Extend Story** — Try the purple "Extend Story" button with the Bloop script (built Session #24, untested)
+- [ ] **Test full pipeline** — See test plan below
 - [ ] **Generate Script upgrade** — Current `generate-script/route.ts` creates scripts in old `SCENE N: Title` format. Upgrade to generate rich format with image/video prompts, model hints, act structure (like the Bloop script)
 - [ ] **Batch Generate All with defaultImageModel** — "Generate All" button should auto-use each frame's `defaultImageModel` instead of a single global model picker
+
+---
+
+## Script Builder Test Plan (Session #27)
+
+### Test 1: Script Tab UI
+
+1. Open a project -> click Script tab
+2. Verify: line numbers visible on left, divider line, monospace textarea
+3. Type a script with `SCENE 1A`, `SCENE 1B`, `SCENE 2` — verify scene header line numbers turn blue
+4. Verify: scene sidebar appears on the right with scene cards (ID badge, title, duration, location, characters)
+5. Scroll the textarea — verify line numbers scroll in sync
+6. Verify: floating AI prompt panel at the bottom with genre pills, duration pills, Generate button
+
+### Test 2: Build Storyboard — Rebuild From Scratch
+
+1. Write a script with 3-4 scenes, save it
+2. Click "Build Storyboard" -> select "Rebuild From Scratch"
+3. Verify: warning shows existing frame count
+4. Click Build -> verify frames appear in real-time on Storyboard tab
+5. Check: each frame has title, description, image prompt, video prompt, duration
+6. Check: Elements panel shows extracted elements (characters, environments, props)
+7. Verify: element count is 3-6 (not 9+ with parts like porthole/panel)
+
+### Test 3: Build Storyboard — Update & Add
+
+1. With existing frames from Test 2, go to Script tab
+2. Add 2 new scenes (SCENE 5, SCENE 6) to the script, save
+3. Click "Build Storyboard" -> select "Update & Add" (default)
+4. Verify: existing frames stay (images/prompts preserved)
+5. Verify: new scenes 5-6 are appended
+6. Verify: existing elements are reused (status message says "N elements reused")
+7. Edit an existing scene's description in the script, rebuild with Update & Add
+8. Verify: that scene's prompts get updated
+
+### Test 4: Element Extraction Quality
+
+1. Use the Bloop submarine script (7 scenes)
+2. Build storyboard
+3. Check Elements panel — should have ~5 elements:
+   - Lead Pilot (character)
+   - Co-Pilot (character)
+   - Deep-Sea Creature (character)
+   - Research Submarine (prop)
+   - Abyssal Ocean Environment (environment)
+4. Should NOT have: Submarine Porthole, Instrument Panel, Cabin Interior, Deck Crew
+
+### Test 5: Element @Mention in Prompt
+
+1. Open a frame in Cinema Studio (double-click)
+2. In the prompt textarea, type `@` — verify autocomplete dropdown appears
+3. Dropdown shows project elements with thumbnails, names, types
+4. Arrow keys navigate, Enter selects — verify orange badge inserted (e.g. `@LeadPilot`)
+5. Type `@Le` — verify filtered to "Lead Pilot"
+6. Press Escape — dropdown closes
+
+### Test 6: Auto-Insert Element Badges on Prompt Load
+
+1. Open a frame that has linkedElements (from build)
+2. Click Actions -> Load Image Prompt
+3. Verify: element badges auto-inserted at cursor for each linked element
+4. Badges show thumbnail + `@ElementName` in orange
+
+### Test 7: Element Reference Images at Generation Time
+
+1. Open Element Forge for "Lead Pilot" -> generate a reference sheet
+2. Wait for generation to complete (variant appears in gallery)
+3. Go to a frame with Lead Pilot linked, open Cinema Studio
+4. Load Image Prompt -> verify `@LeadPilot` badge appears
+5. Click Generate
+6. Check console logs: `@LeadPilot -> @Image{N}` conversion logged
+7. Check console logs: `Auto-attached element ref: Lead Pilot -> ...` logged
+8. Verify: generated image shows Lead Pilot consistent with reference sheet
+
+### Test 8: Extend Story
+
+1. With a project that has 5+ frames
+2. Click "Extend Story" button on Storyboard tab
+3. Optionally type a direction (e.g. "The creature retreats")
+4. Pick 4 scenes, click Extend
+5. Verify: 4 new frames appear appended after existing ones
+6. Verify: new frames have titles, descriptions, prompts
+
+### Test 9: Element Visibility Dropdown
+
+1. Open Elements panel, find an element with "Private" badge
+2. Click the badge — verify dropdown appears (Private / Public options)
+3. Click outside — dropdown closes without changing visibility
+4. Select "Public" — verify badge updates
+5. Select "Private" — verify it switches back
+
+### Test 10: FileBrowser from Element Forge
+
+1. Open Element Forge for a character
+2. Click a reference photo slot (Face/Outfit/Full Body)
+3. Verify: FileBrowser opens defaulted to "Elements" filter
+4. Upload a file — verify it saves to `elements` category (not `uploads`)
+5. Select a file — verify it fills the reference photo slot
+6. Hover the filled slot — verify browse (folder) and delete (trash) buttons appear
+7. Click browse — verify FileBrowser opens to swap the image
+
+### Test 11: ThumbnailCropper
+
+1. Open Element Forge, click a generated variant to crop
+2. Drag the crop frame around — verify image inside stays aligned with background
+3. Drag to far left/right edges — verify no visual glitch
+4. Resize via corner handle — verify crop region resizes correctly
+5. Click Reset — verify crop returns to center
+6. Click Save Thumbnail — verify thumbnail updates on element card
 
 #### Auto-Sequence Video
 
@@ -493,10 +732,11 @@
 
 ---
 
-## Competitive Gap Summary (updated 2026-04-28 — LEADING Higgsfield 90 vs 88)
+## Competitive Gap Summary (updated 2026-04-29 — LEADING Higgsfield 92 vs 88)
 
 | Competitor Feature | Status |
 |-------------------|--------|
+| Soul Cast (Character Builder) | **SURPASSED** — Element Forge: Simple/Advanced modes, ref photos, multi-model, variant system, faster than Soul Cast |
 | Soul Cinema quality | **CLOSED** — Cinema Grade (12 film stocks) + post-processing pipeline |
 | Upscale/Enhance/Relight/Inpaint/Angles | **CLOSED** — 10 tools vs their 5 |
 | Color Grading presets | **CLOSED** — 12 film stock presets + 11 color grade presets |
@@ -511,16 +751,16 @@
 | Marketing Studio (URL→ad) | **PLANNED** — TikTok/Social Ads Builder (in-editor, better UX). Infrastructure now exists |
 | Higgsfield social network | **SKIP** — not relevant to B2B/agency target |
 
-### Honest scorecard (post Session #19 Video Editor complete + Ads reassessment)
+### Honest scorecard (post Session #27 Script Builder + @Mention System)
 
-| Platform | Score | After Ad Templates |
-|----------|:-----:|:-----------------:|
-| **Us (Storytica)** | **90** | **91-92** |
-| Higgsfield 3.5 | **88** | 88 |
-| LTX Studio | 72 | 72 |
-| Zopia AI | 70 | 70 |
+| Platform | Score |
+|----------|:-----:|
+| **Us (Storytica)** | **93** |
+| Higgsfield 3.5 | **88** |
+| LTX Studio | 72 |
+| Zopia AI | 70 |
 
-**We now lead Higgsfield 90 vs 88.** Video editor already functions as ads builder (text overlays+BG=CTA, image overlays=logos, aspect ratios=formats, transitions+music=polish). Ad templates (preset layer arrangements) push to 91-92.
+**Session #27 pushes us to 93.** Element @mention system with autocomplete + auto-reference-image injection gives character consistency across frames — matching LTX Studio's element tagging pattern but integrated deeper (auto-attach reference images at generation time, not just prompt text). Smart Build modes (Update & Add / Rebuild) reduce iteration friction. Script tab redesign (line numbers, floating AI panel, scene sidebar) matches professional NLE feel. Only remaining Higgsfield advantage: proprietary Soul 2.0 face-lock model.
 
 ---
 

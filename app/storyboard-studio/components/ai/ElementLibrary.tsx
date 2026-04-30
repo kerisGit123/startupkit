@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useReducer, useCallback, memo, type Chang
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Check, ChevronDown, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Type, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload, Star } from "lucide-react";
+import { Check, ChevronDown, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload, Star } from "lucide-react";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { FileBrowser } from "./FileBrowser";
@@ -93,10 +93,43 @@ const ELEMENT_TYPES = [
   { key: "prop", label: "Props", Icon: Package, color: "text-blue-400" },
   { key: "environment", label: "Environment", Icon: Trees, color: "text-emerald-400" },
   { key: "logo", label: "Logos", Icon: Shapes, color: "text-pink-400" },
-  { key: "font", label: "Fonts", Icon: Type, color: "text-yellow-400" },
   { key: "style", label: "Styles", Icon: Palette, color: "text-orange-400" },
   { key: "other", label: "Other", Icon: Sparkles, color: "text-gray-300" },
 ] as const;
+
+// Custom element types (simple upload-based, no wizard)
+const CUSTOM_ELEMENT_TYPES = new Set(["logo", "style", "other"]);
+
+// Per-type config for custom elements
+const CUSTOM_TYPE_CONFIG: Record<string, {
+  maxImages: number;
+  descriptionRequired: boolean;
+  descriptionPlaceholder: string;
+  helpText: string;
+  namePlaceholder: string;
+}> = {
+  logo: {
+    maxImages: 5,
+    descriptionRequired: false,
+    descriptionPlaceholder: "Brand logo details, color scheme, usage context...",
+    helpText: "Upload logo in different sizes and variations for consistent brand placement",
+    namePlaceholder: "e.g. Tigers logo",
+  },
+  style: {
+    maxImages: 10,
+    descriptionRequired: false,
+    descriptionPlaceholder: "Art style characteristics, medium, influences...",
+    helpText: "Use diverse examples that share the same style. Avoid repeating attributes",
+    namePlaceholder: "e.g. Oil painting",
+  },
+  other: {
+    maxImages: 10,
+    descriptionRequired: true,
+    descriptionPlaceholder: "Describe this element and how it should be used...",
+    helpText: "Upload reference images for anything: color palettes, textures, patterns, props",
+    namePlaceholder: "e.g. Color palette",
+  },
+};
 
 function normalizeAssetUrl(url?: string | null) {
   if (!url) return "";
@@ -702,11 +735,10 @@ export function ElementLibrary({
   // Clear form data when switching to Create mode (editingId becomes null)
   useEffect(() => {
     if (editingId === null && showCreate) {
-      // We're in Create mode, clear the form
+      // We're in Create mode, clear the form but keep activeType (user's current tab)
       setNewName("");
       setReferenceUrls([]);
       setReferenceFiles([]);
-      setActiveType(initialType || "character");
       setVisibility("private");
       setDescription("");
       setTags([]);
@@ -714,7 +746,7 @@ export function ElementLibrary({
       setThumbnailIndex(0);
       setActiveTab("basic");
     }
-  }, [editingId, showCreate, initialType]);
+  }, [editingId, showCreate]);
 
   // Validate images when reference preview items change
   useEffect(() => {
@@ -824,6 +856,11 @@ export function ElementLibrary({
 
   const handleCreateOrUpdate = async () => {
     if (!newName.trim() || saving) return;
+    // Custom type validation: require description for "other"
+    if (CUSTOM_TYPE_CONFIG[activeType]?.descriptionRequired && !description.trim()) {
+      alert("Please add a description for this element.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -1033,7 +1070,13 @@ export function ElementLibrary({
             {ELEMENT_TYPES.map(({ key, label, Icon }) => (
               <button
                 key={key}
-                onClick={() => setActiveType(key)}
+                onClick={() => {
+                  setActiveType(key);
+                  // Close create panel when switching to wizard-based types
+                  if (!CUSTOM_ELEMENT_TYPES.has(key) && showCreate && !editingId) {
+                    setShowCreate(false);
+                  }
+                }}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-medium transition-all duration-200 border-b-2 -mb-px ${
                   activeType === key
                     ? "text-(--text-primary) border-white"
@@ -1064,6 +1107,7 @@ export function ElementLibrary({
                     if (forgeTypes.includes(activeType)) {
                       setForgeState({ open: true, mode: "create", type: activeType as ForgeElementType });
                     } else {
+                      setActiveType(activeType);
                       setShowCreate(true);
                       setEditingId(null);
                     }
@@ -1071,7 +1115,9 @@ export function ElementLibrary({
                   className="mt-4 flex items-center gap-2 px-5 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white rounded-lg text-[13px] font-medium transition-colors"
                 >
                   <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  Create Element
+                  {CUSTOM_ELEMENT_TYPES.has(activeType)
+                    ? `Create ${ELEMENT_TYPES.find(t => t.key === activeType)?.label.replace(/s$/, '') || "Element"}`
+                    : "Create Element"}
                 </button>
               </div>
             ) : (
@@ -1098,6 +1144,7 @@ export function ElementLibrary({
                         if (forgeTypes.includes(activeType)) {
                           setForgeState({ open: true, mode: "create", type: activeType as ForgeElementType });
                         } else {
+                          setActiveType(activeType);
                           setShowCreate(true);
                           setEditingId(null);
                         }
@@ -1105,7 +1152,9 @@ export function ElementLibrary({
                       className="flex items-center gap-1.5 px-4 py-1.5 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white rounded-lg text-[12px] font-medium transition-colors"
                     >
                       <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
-                      Create Element
+                      {CUSTOM_ELEMENT_TYPES.has(activeType)
+                        ? `Create ${ELEMENT_TYPES.find(t => t.key === activeType)?.label.replace(/s$/, '') || "Element"}`
+                        : "Create Element"}
                     </button>
                   </div>
                 </div>
@@ -1293,73 +1342,80 @@ export function ElementLibrary({
             <div className="w-full max-w-sm border-l border-(--border-primary) bg-(--bg-secondary) overflow-y-auto">
               {/* Side panel header */}
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/6">
-                <p className="text-[13px] font-semibold text-(--text-primary)">{editingId ? "Edit Element" : "Create Element"}</p>
+                <p className="text-[13px] font-semibold text-(--text-primary)">
+                  {editingId ? "Edit" : "Create"} {CUSTOM_ELEMENT_TYPES.has(activeType)
+                    ? ELEMENT_TYPES.find(t => t.key === activeType)?.label.replace(/s$/, '') || "Element"
+                    : "Element"}
+                </p>
                 <button onClick={resetForm} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors">
                   <X className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} />
                 </button>
               </div>
 
               <div className="px-5 py-4 space-y-4">
-                {/* Tabs */}
-                <div className="flex items-center gap-1 border-b border-white/6">
-                  {[
-                    { id: "basic", label: "Basic" },
-                    { id: "details", label: "Details" },
-                    { id: "visibility", label: "Visibility" },
-                  ].map(({ id, label }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setActiveTab(id as "basic" | "visibility" | "details")}
-                      className={`px-3 py-2 text-[12px] font-medium transition-all border-b-2 -mb-px ${
-                        activeTab === id
-                          ? "text-(--text-primary) border-white"
-                          : "text-(--text-tertiary) hover:text-(--text-secondary) border-transparent"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                {/* Tabs — only show for non-custom types (character/prop/env editing) */}
+                {!CUSTOM_ELEMENT_TYPES.has(activeType) && (
+                  <div className="flex items-center gap-1 border-b border-white/6">
+                    {[
+                      { id: "basic", label: "Basic" },
+                      { id: "details", label: "Details" },
+                      { id: "visibility", label: "Visibility" },
+                    ].map(({ id, label }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setActiveTab(id as "basic" | "visibility" | "details")}
+                        className={`px-3 py-2 text-[12px] font-medium transition-all border-b-2 -mb-px ${
+                          activeTab === id
+                            ? "text-(--text-primary) border-white"
+                            : "text-(--text-tertiary) hover:text-(--text-secondary) border-transparent"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-                {activeTab === "basic" && (
+                {/* ── Custom element form (logo/style/other) — single clean form, no tabs ── */}
+                {CUSTOM_ELEMENT_TYPES.has(activeType) ? (
                   <div className="space-y-4">
                     <div>
-                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Name</label>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Name *</label>
                       <input
                         value={newName}
                         onChange={(event) => setNewName(event.target.value)}
-                        placeholder="Enter element name..."
+                        placeholder={CUSTOM_TYPE_CONFIG[activeType]?.namePlaceholder || "Enter element name..."}
                         className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
                       />
                     </div>
 
+                    <p className="text-[11px] text-(--text-tertiary) leading-relaxed bg-white/3 rounded-lg px-3 py-2">
+                      {CUSTOM_TYPE_CONFIG[activeType]?.helpText}
+                    </p>
+
                     <div>
-                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Type</label>
-                      <select
-                        value={activeType}
-                        onChange={(event) => setActiveType(event.target.value)}
-                        className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none focus:border-(--accent-blue)/40 transition-colors"
-                      >
-                        {ELEMENT_TYPES.map((type) => (
-                          <option key={type.key} value={type.key}>{type.label}</option>
-                        ))}
-                      </select>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">
+                        Description{CUSTOM_TYPE_CONFIG[activeType]?.descriptionRequired ? " *" : ""}
+                      </label>
+                      <textarea
+                        value={description}
+                        onChange={(event) => setDescription(event.target.value)}
+                        placeholder={CUSTOM_TYPE_CONFIG[activeType]?.descriptionPlaceholder || "Describe this element..."}
+                        rows={2}
+                        className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors resize-none"
+                      />
                     </div>
 
-                    <div className="flex gap-2">
-                      <label className="flex-1 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-(--border-primary) bg-(--bg-primary) px-3 py-3 text-[12px] text-(--text-secondary) transition-colors hover:bg-white/3 hover:border-white/15">
-                        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />}
-                        Upload
-                        <input className="hidden" type="file" accept="image/*" multiple onChange={handleUploadDraftRefs} />
-                      </label>
+                    <div>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Source Images</label>
                       <button
                         type="button"
                         onClick={() => setShowRefFileBrowser(true)}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-(--border-primary) bg-(--bg-primary) px-3 py-3 text-[12px] text-(--text-secondary) transition-colors hover:bg-white/3 hover:border-white/15"
+                        className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-(--border-primary) bg-(--bg-primary) px-3 py-3 text-[12px] text-(--text-secondary) transition-colors hover:bg-white/3 hover:border-white/15"
                       >
                         <FolderOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
-                        Browse
+                        Browse & Upload Images
                       </button>
                     </div>
 
@@ -1367,8 +1423,8 @@ export function ElementLibrary({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary)">References</label>
-                          <span className={`text-[11px] ${referencePreviewItems.length >= 14 ? 'text-red-400' : 'text-(--text-tertiary)'}`}>
-                            {referencePreviewItems.length}/14
+                          <span className={`text-[11px] ${referencePreviewItems.length >= (CUSTOM_TYPE_CONFIG[activeType]?.maxImages || 14) ? 'text-red-400' : 'text-(--text-tertiary)'}`}>
+                            {referencePreviewItems.length}/{CUSTOM_TYPE_CONFIG[activeType]?.maxImages || 14}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-3">
@@ -1528,6 +1584,74 @@ export function ElementLibrary({
                         </div>
                       </div>
                     )}
+                    {/* Visibility toggle — inline for custom types */}
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary)">Visibility</span>
+                      <button
+                        type="button"
+                        onClick={() => setVisibility(visibility === "private" ? "public" : "private")}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-white/5 text-(--text-secondary) hover:bg-white/8 transition-colors"
+                      >
+                        {visibility === "private" ? <Lock className="w-3 h-3" strokeWidth={1.75} /> : <Globe className="w-3 h-3" strokeWidth={1.75} />}
+                        {visibility === "private" ? "Private" : "Public"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── Standard element form (character/prop/env) — tabbed ── */
+                  <>
+
+                {activeTab === "basic" && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Name</label>
+                      <input
+                        value={newName}
+                        onChange={(event) => setNewName(event.target.value)}
+                        placeholder="Enter element name..."
+                        className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">Type</label>
+                      <select
+                        value={activeType}
+                        onChange={(event) => setActiveType(event.target.value)}
+                        className="w-full rounded-lg border border-(--border-primary) bg-(--bg-primary) px-3 py-2.5 text-[13px] text-(--text-primary) outline-none focus:border-(--accent-blue)/40 transition-colors"
+                      >
+                        {ELEMENT_TYPES.map((type) => (
+                          <option key={type.key} value={type.key}>{type.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <label className="flex-1 flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-(--border-primary) bg-(--bg-primary) px-3 py-3 text-[12px] text-(--text-secondary) transition-colors hover:bg-white/3 hover:border-white/15">
+                        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" strokeWidth={1.75} />}
+                        Upload
+                        <input className="hidden" type="file" accept="image/*" multiple onChange={handleUploadDraftRefs} />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowRefFileBrowser(true)}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-(--border-primary) bg-(--bg-primary) px-3 py-3 text-[12px] text-(--text-secondary) transition-colors hover:bg-white/3 hover:border-white/15"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        Browse
+                      </button>
+                    </div>
+
+                    {referencePreviewItems.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary)">References</label>
+                          <span className={`text-[11px] ${referencePreviewItems.length >= 14 ? 'text-red-400' : 'text-(--text-tertiary)'}`}>
+                            {referencePreviewItems.length}/14
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1626,16 +1750,20 @@ export function ElementLibrary({
                     </div>
                   </div>
                 )}
+                  </>
+                )}
               </div>
 
-              <div className="mt-5 pt-4 border-t border-white/6">
+              <div className="mt-5 pt-4 border-t border-white/6 px-5 pb-4">
                 <button
                   onClick={handleCreateOrUpdate}
                   disabled={saving || !newName.trim()}
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-(--accent-blue) hover:bg-(--accent-blue-hover) py-2.5 text-[13px] font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" strokeWidth={2} />}
-                  {editingId ? "Save Changes" : "Create Element"}
+                  {editingId ? "Save Changes" : CUSTOM_ELEMENT_TYPES.has(activeType)
+                    ? `Create ${ELEMENT_TYPES.find(t => t.key === activeType)?.label.replace(/s$/, '') || "Element"}`
+                    : "Create Element"}
                 </button>
               </div>
             </div>

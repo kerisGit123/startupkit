@@ -17,6 +17,7 @@ import { AddImageMenu } from "../shared/AddImageMenu";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { usePromptEditor } from "../shared/usePromptEditor";
 import { PromptTextarea } from "../shared/PromptTextarea";
+import { composeCustomElementPrompt } from "./elementForgeConfig";
 import { ConvexHttpClient } from "convex/browser";
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { usePricingData } from "@/app/storyboard-studio/components/shared/usePricingData";
@@ -1934,20 +1935,31 @@ export function ImageAIPanel({
 
         // Resolve @ElementName badges → @Image{N}
         // Reference images are auto-attached by SceneEditor from linkedElements.
-        // Here we just convert @LeadPilot → @Image{N} so the model knows which ref is which.
+        // Here we convert @LeadPilot → @Image{N} and inject context for custom elements.
         {
           const elementBadges = Array.from(editorRef.current?.querySelectorAll('[data-element-name]') || []);
           if (elementBadges.length > 0) {
-            // Manual refs are @Image1..N, element refs start after
+            const customContextParts: string[] = [];
             let nextIdx = (referenceImages?.length || 0) + 1;
             for (const badge of elementBadges) {
               const elName = (badge as HTMLElement).dataset.elementName || "";
+              const elId = (badge as HTMLElement).dataset.elementId || "";
               const mentionText = `@${elName.replace(/\s+/g, "")}`;
               if (finalPrompt.includes(mentionText)) {
                 finalPrompt = finalPrompt.replace(mentionText, `@Image${nextIdx}`);
                 console.log(`[VideoImageAIPanel] ${mentionText} → @Image${nextIdx}`);
+                // For custom element types (logo/style/other), inject prompt context
+                const el = projectElements?.find((e: any) => e._id === elId);
+                if (el && ["logo", "style", "other"].includes(el.type)) {
+                  const context = composeCustomElementPrompt(el.type, el.name, el.description);
+                  if (context) customContextParts.push(context);
+                }
                 nextIdx++;
               }
+            }
+            // Append custom element context to prompt
+            if (customContextParts.length > 0) {
+              finalPrompt = finalPrompt.trimEnd() + ". " + customContextParts.join(". ");
             }
           }
         }

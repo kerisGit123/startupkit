@@ -799,6 +799,24 @@ export function composePrompt(type: ForgeElementType, identity: Record<string, a
 }
 
 /**
+ * Build prompt context for custom element types (logo, style, other).
+ * Injected during generation when these elements are @mentioned or linked.
+ */
+export function composeCustomElementPrompt(type: string, name: string, description?: string): string {
+  const desc = description?.trim() ? `. ${description.trim()}` : "";
+  switch (type) {
+    case "logo":
+      return `Incorporate the ${name} logo exactly as shown in the reference image${desc}`;
+    case "style":
+      return `Apply the ${name} artistic style as shown in the reference images${desc}`;
+    case "other":
+      return `Reference the ${name} element as shown in the reference images${desc}`;
+    default:
+      return "";
+  }
+}
+
+/**
  * Build override instructions for image-to-image models.
  * When reference photos are provided, the model tends to copy visual features
  * (hair color, eye color, etc.) from the image instead of following the prompt.
