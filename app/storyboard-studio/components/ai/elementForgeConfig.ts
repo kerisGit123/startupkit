@@ -197,6 +197,8 @@ const ARCHETYPE_OPTIONS: ForgeOption[] = [
   { key: "caregiver", label: "Caregiver", icon: T + "archetype-caregiver.jpg" },
   { key: "trickster", label: "Trickster", icon: T + "archetype-trickster.jpg" },
   { key: "sage", label: "Sage", icon: T + "archetype-sage.jpg" },
+  { key: "villain", label: "Villain", icon: T + "archetype-villain.jpg" },
+  { key: "lover", label: "Lover", icon: T + "archetype-lover.jpg" },
 ];
 
 const EXPRESSION_OPTIONS: ForgeOption[] = [

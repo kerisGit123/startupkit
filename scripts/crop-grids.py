@@ -12,17 +12,82 @@ DARK_THRESHOLD = 35  # pixels below this brightness are "background"
 
 # Grid name -> list of output thumb filenames (left-to-right, top-to-bottom)
 GRIDS = {
-    "hair-color-grid.png": [
-        "hair-color-black.jpg", "hair-color-brown.jpg", "hair-color-blonde.jpg",
-        "hair-color-red.jpg", "hair-color-white.jpg", "hair-color-blue.jpg",
-        "hair-color-pink.jpg", "hair-color-green.jpg",
+    # ── Character grids ──
+    # Sheet 1: Gender (top) + Hair Texture (bottom) = 4×2
+    "char-gender-hairtexture-grid.png": [
+        "gender-male.jpg", "gender-female.jpg",
+        "gender-nonbinary.jpg", "gender-other.jpg",
+        None,  # empty cell at position 5
+        "hair-texture-straight.jpg", "hair-texture-wavy.jpg",
+        "hair-texture-curly.jpg", "hair-texture-coily.jpg",
+        None,  # empty cell at position 10
     ],
-    "ethnicity-grid.png": [
+    # Sheet 2: Age = 6×1 (already done)
+    "age-grid.png": [
+        "age-child.jpg", "age-teen.jpg", "age-young-adult.jpg",
+        "age-adult.jpg", "age-middle-aged.jpg", "age-elderly.jpg",
+    ],
+    # Sheet 3: Archetype = 4×2
+    "char-archetype-grid.png": [
+        "archetype-hero.jpg", "archetype-rebel.jpg",
+        "archetype-innocent.jpg", "archetype-everyman.jpg",
+        "archetype-explorer.jpg", "archetype-caregiver.jpg",
+        "archetype-trickster.jpg", "archetype-sage.jpg",
+        "archetype-villain.jpg", "archetype-lover.jpg",
+    ],
+    # Sheet 4: Expression = 4×2
+    "char-expression-grid.png": [
+        "expression-neutral.jpg", "expression-happy.jpg",
+        "expression-serious.jpg", "expression-angry.jpg",
+        "expression-sad.jpg", "expression-confident.jpg",
+        "expression-mysterious.jpg", "expression-fearful.jpg",
+    ],
+    # Sheet 5: Hair Style = 5×2
+    "char-hairstyle-grid.png": [
+        "hair-short-straight.jpg", "hair-short-curly.jpg",
+        "hair-medium-straight.jpg", "hair-medium-wavy.jpg",
+        "hair-long-straight.jpg", "hair-long-curly.jpg",
+        "hair-long-wavy.jpg", "hair-braids.jpg",
+        "hair-bald.jpg", "hair-buzz-cut.jpg",
+    ],
+    # Sheet 6: Outfit = 5×2
+    "char-outfit-grid.png": [
+        "outfit-casual.jpg", "outfit-formal.jpg", "outfit-streetwear.jpg",
+        "outfit-high-fashion.jpg", "outfit-military.jpg", "outfit-sporty.jpg",
+        "outfit-fantasy.jpg", "outfit-sci-fi.jpg",
+        "outfit-historical.jpg", "outfit-uniform.jpg",
+    ],
+    # Sheet 7: Details = 4×2
+    "char-details-grid.png": [
+        "detail-scar.jpg", "detail-freckles.jpg",
+        "detail-tattoos.jpg", "detail-eye-patch.jpg",
+        "detail-glasses.jpg", "detail-beard.jpg",
+        "detail-moustache.jpg", "detail-piercing.jpg",
+    ],
+    # Sheet 8: Build = 5×1 (guy model)
+    "char-build-grid.png": [
+        "build-slim.jpg", "build-average.jpg", "build-athletic.jpg",
+        "build-muscular.jpg", "build-stocky.jpg",
+    ],
+    # Sheet 9: Eye Color = 3×2
+    "char-eyecolor-grid.png": [
+        "eye-brown.jpg", "eye-blue.jpg", "eye-green.jpg",
+        "eye-hazel.jpg", "eye-gray.jpg", "eye-amber.jpg",
+    ],
+    # Sheet 10: Facial Hair = 4×2, trim last (guy model)
+    "char-facialhair-grid.png": [
+        "facial-clean-shaven.jpg", "facial-stubble.jpg",
+        "facial-short-beard.jpg", "facial-full-beard.jpg",
+        "facial-goatee.jpg", "facial-moustache.jpg",
+        "facial-long-beard.jpg",
+    ],
+    # Sheet 11: Ethnicity = 5×2 (9 + 1 empty)
+    "char-ethnicity-grid.png": [
         "ethnicity-east-asian.jpg", "ethnicity-south-asian.jpg",
         "ethnicity-southeast-asian.jpg", "ethnicity-black.jpg",
         "ethnicity-white.jpg", "ethnicity-latino.jpg",
         "ethnicity-middle-eastern.jpg", "ethnicity-mixed.jpg",
-        "ethnicity-other.jpg",
+        "ethnicity-other.jpg", None,
     ],
     "prop-category-grid.png": [
         "prop-cat-vehicle.jpg", "prop-cat-weapon.jpg", "prop-cat-tool.jpg",
@@ -268,17 +333,75 @@ def find_card_bounds(img_array):
     return sorted_cards
 
 
-def make_even_grid(img_w, img_h, num_cols, num_rows, padding=30, gap=16):
+def measure_gaps(img_array, threshold=25):
+    """Find dark gap positions by looking at max brightness per column/row."""
+    gray = np.mean(img_array[:, :, :3], axis=2)
+    h, w = gray.shape
+
+    def find_gaps(max_vals, thresh):
+        gaps = []
+        in_gap = False
+        start = 0
+        for i, v in enumerate(max_vals):
+            if v < thresh and not in_gap:
+                start = i
+                in_gap = True
+            elif v >= thresh and in_gap:
+                gaps.append((start, i))
+                in_gap = False
+        if in_gap:
+            gaps.append((start, len(max_vals)))
+        return gaps
+
+    col_gaps = find_gaps(np.max(gray, axis=0), threshold)
+    row_gaps = find_gaps(np.max(gray, axis=1), threshold)
+    return col_gaps, row_gaps
+
+
+def make_measured_grid(img_array, num_cols, num_rows):
+    """Compute exact card positions from measured gap positions in the image."""
+    col_gaps, row_gaps = measure_gaps(img_array)
+    h, w = img_array.shape[:2]
+
+    # Column boundaries: cards are the spaces between gaps
+    col_edges = []
+    for s, e in col_gaps:
+        col_edges.append((s, e))
+
+    # Build card x ranges from gaps
+    x_ranges = []
+    for i in range(len(col_edges) - 1):
+        x_start = col_edges[i][1]      # end of left gap
+        x_end = col_edges[i + 1][0]    # start of right gap
+        x_ranges.append((x_start, x_end))
+
+    # Row boundaries
+    y_ranges = []
+    for i in range(len(row_gaps) - 1):
+        y_start = row_gaps[i][1]
+        y_end = row_gaps[i + 1][0]
+        y_ranges.append((y_start, y_end))
+
+    # Build cards: row by row, left to right
+    cards = []
+    for y_start, y_end in y_ranges:
+        for x_start, x_end in x_ranges:
+            cards.append((x_start, y_start, x_end, y_end))
+
+    return cards
+
+
+def make_even_grid(img_w, img_h, num_cols, num_rows, padding_x=30, padding_y=30, gap_x=16, gap_y=16):
     """Fallback: generate evenly spaced card regions for a known grid layout."""
-    total_gap_x = gap * (num_cols - 1) + padding * 2
-    total_gap_y = gap * (num_rows - 1) + padding * 2
+    total_gap_x = gap_x * (num_cols - 1) + padding_x * 2
+    total_gap_y = gap_y * (num_rows - 1) + padding_y * 2
     card_w = (img_w - total_gap_x) // num_cols
     card_h = (img_h - total_gap_y) // num_rows
     cards = []
     for r in range(num_rows):
         for c in range(num_cols):
-            x1 = padding + c * (card_w + gap)
-            y1 = padding + r * (card_h + gap)
+            x1 = padding_x + c * (card_w + gap_x)
+            y1 = padding_y + r * (card_h + gap_y)
             cards.append((x1, y1, x1 + card_w, y1 + card_h))
     return cards
 
@@ -289,9 +412,22 @@ KNOWN_LAYOUTS = {
     "prop-category-grid.png": (6, 2),  # 6 top + 5 bottom, handle separately
 }
 
-# Grids that ALWAYS use even grid (dark cards break auto-detection)
+# Grids that ALWAYS use even grid
+# Format: grid_name -> (cols, rows) or (cols, rows, padding_x, padding_y, gap_x, gap_y)
 FORCE_EVEN_GRID = {
     "env-mood-grid.png": (5, 2),
+    # Character grids — all 1672x941, individually measured (px, py, gx, gy)
+    "char-gender-hairtexture-grid.png": (5, 2, 22, 33, 18, 17),
+    "age-grid.png": (6, 1, 19, 276, 14, 0),
+    "char-archetype-grid.png": (5, 2, 15, 25, 13, 12),  # will auto-measure
+    "char-expression-grid.png": (5, 2, 23, 27, 23, 23),
+    "char-hairstyle-grid.png": (5, 2, 7, 20, 10, 9),
+    "char-outfit-grid.png": (5, 2, 20, 34, 16, 12),
+    "char-details-grid.png": (5, 2, 15, 19, 17, 17),
+    "char-build-grid.png": (5, 2, 12, 21, 11, 12),
+    "char-eyecolor-grid.png": (5, 2, 32, 25, 12, 12),
+    "char-facialhair-grid.png": (5, 2, 15, 15, 17, 61),
+    "char-ethnicity-grid.png": (5, 2, 15, 25, 13, 12),
 }
 
 
@@ -303,15 +439,27 @@ def crop_grid(grid_name, thumb_names):
 
     img = Image.open(grid_path).convert("RGB")
     arr = np.array(img)
+    # Count real (non-None) entries for expected card count
     expected = len(thumb_names)
 
-    # Force even grid for problematic grids with very dark cards
+    # Force even grid for grids where auto-detection fails
     if grid_name in FORCE_EVEN_GRID:
-        cols, rows_count = FORCE_EVEN_GRID[grid_name]
-        cards = make_even_grid(img.width, img.height, cols, rows_count)
+        spec = FORCE_EVEN_GRID[grid_name]
+        cols, rows_count = spec[0], spec[1]
+        # Try measured grid first (exact gap detection)
+        cards = make_measured_grid(arr, cols, rows_count)
+        if len(cards) == cols * rows_count:
+            print(f"  Using measured grid ({cols}x{rows_count})")
+        elif len(spec) == 6:
+            cards = make_even_grid(img.width, img.height, cols, rows_count,
+                                   padding_x=spec[2], padding_y=spec[3],
+                                   gap_x=spec[4], gap_y=spec[5])
+            print(f"  Using forced even grid ({cols}x{rows_count})")
+        else:
+            cards = make_even_grid(img.width, img.height, cols, rows_count)
+            print(f"  Using forced even grid ({cols}x{rows_count})")
         cards = cards[:expected]
         found = len(cards)
-        print(f"  Using forced even grid ({cols}x{rows_count})")
     else:
         cards = find_card_bounds(arr)
         found = len(cards)
@@ -350,15 +498,19 @@ def crop_grid(grid_name, thumb_names):
             print(f"    Using even grid fallback ({cols}x{rows_count}): {found} cards")
 
     count = min(found, expected)
+    saved = 0
     for i in range(count):
+        if thumb_names[i] is None:
+            continue  # skip empty cells
         x1, y1, x2, y2 = cards[i]
         thumb = img.crop((x1, y1, x2, y2))
         # Resize to consistent thumb size
-        thumb = thumb.resize((300, 300) if (x2-x1) > (y2-y1) * 1.3 else (300, 400) if (y2-y1) > (x2-x1) * 1.3 else (300, 300), Image.LANCZOS)
+        thumb = thumb.resize((240, 320), Image.LANCZOS)
         out_path = os.path.join(THUMB_DIR, thumb_names[i])
         thumb.save(out_path, "JPEG", quality=90)
+        saved += 1
 
-    print(f"  OK {grid_name}: cropped {count} thumbs")
+    print(f"  OK {grid_name}: cropped {saved} thumbs")
 
 
 if __name__ == "__main__":
