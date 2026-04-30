@@ -133,6 +133,48 @@ const _LEGACY_MODELS_REMOVED: PricingModel[] = [
     }),
   },
   {
+    modelId: "gpt-image-2-text-to-image",
+    modelName: "GPT Image 2 (Text to Image)",
+    modelType: "image",
+    isActive: true,
+    isHot: true,
+    pricingType: "formula",
+    assignedFunction: "getGptImage2Price",
+    creditCost: 6,
+    factor: 0.625,
+    formulaJson: JSON.stringify({
+      pricing: {
+        base_cost: 6,
+        qualities: [
+          { name: "1K", cost: 6 },
+          { name: "2K", cost: 10 },
+          { name: "4K", cost: 16 },
+        ],
+      },
+    }),
+  },
+  {
+    modelId: "gpt-image-2-image-to-image",
+    modelName: "GPT Image 2 (Image to Image)",
+    modelType: "image",
+    isActive: true,
+    isHot: true,
+    pricingType: "formula",
+    assignedFunction: "getGptImage2Price",
+    creditCost: 6,
+    factor: 0.625,
+    formulaJson: JSON.stringify({
+      pricing: {
+        base_cost: 6,
+        qualities: [
+          { name: "1K", cost: 6 },
+          { name: "2K", cost: 10 },
+          { name: "4K", cost: 16 },
+        ],
+      },
+    }),
+  },
+  {
     modelId: "google/nano-banana-edit",
     modelName: "Nano Banana Edit",
     modelType: "image",
@@ -230,19 +272,24 @@ export const usePricingData = () => {
             }
           }
         } else {
-          console.log("[usePricingData] Using default models to ensure assignedFunction is present");
-          const defaultsWithAssignedFunction = DEFAULT_PRICING_MODELS.map(model => {
-            if (model.modelId === "nano-banana-2" || model.modelId === "topaz/image-upscale") {
-              console.log(`[usePricingData] Default model ${model.modelId}:`, {
-                pricingType: model.pricingType,
-                assignedFunction: model.assignedFunction,
-                creditCost: model.creditCost,
-                factor: model.factor
-              });
+          // Use DB data, merging with defaults so assignedFunction is always present
+          const dbModelIds = new Set(data.map((m: any) => m.modelId));
+          const merged = data.map((dbModel: any) => {
+            const defaultModel = DEFAULT_PRICING_MODELS.find(d => d.modelId === dbModel.modelId);
+            // Fill in assignedFunction from defaults if DB record is missing it
+            if (defaultModel && !dbModel.assignedFunction && defaultModel.assignedFunction) {
+              return { ...dbModel, assignedFunction: defaultModel.assignedFunction };
             }
-            return model;
+            return dbModel;
           });
-          setModels(defaultsWithAssignedFunction);
+          // Add any default models not in DB
+          for (const def of DEFAULT_PRICING_MODELS) {
+            if (!dbModelIds.has(def.modelId)) {
+              merged.push(def);
+            }
+          }
+          console.log("[usePricingData] Loaded", merged.length, "models (", data.length, "from DB)");
+          setModels(merged);
         }
         
         setError(null);
@@ -260,7 +307,8 @@ export const usePricingData = () => {
   }, []);
 
   const getModelCredits = useCallback((modelId: string, selectedQuality: string = "2K"): number => {
-    const model = models.find(m => m.modelId === modelId);
+    const model = models.find(m => m.modelId === modelId)
+      || DEFAULT_PRICING_MODELS.find(m => m.modelId === modelId);
     if (!model) {
       console.log("[usePricingData] Model not found:", modelId);
       return 0;
@@ -524,6 +572,22 @@ export const usePricingData = () => {
           console.log("[usePricingData] ElevenLabs TTS pricing:", { modelId, selectedQuality, charCount, blocks, base, factor, result: ttsResult });
           return ttsResult;
         }
+        case 'getGptImagePrice':
+        case 'getGptImage2Price': {
+          if (model.formulaJson) {
+            try {
+              const formula = JSON.parse(model.formulaJson);
+              const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
+              if (qualityData) {
+                const result = Math.ceil(qualityData.cost * factor);
+                return result;
+              }
+            } catch (e) {
+              console.error("[usePricingData] Error parsing GPT Image formula:", e);
+            }
+          }
+          return Math.ceil(base * factor);
+        }
         default:
           console.log("[usePricingData] Unknown assigned function, using fallback");
           return Math.ceil((model.creditCost || 0) * (model.factor || 1));
@@ -723,21 +787,24 @@ export const usePricingData = () => {
           }
         }
       } else {
-        console.log("[usePricingData] Using default models to ensure assignedFunction is present");
-        const defaultsWithAssignedFunction = DEFAULT_PRICING_MODELS.map(model => {
-          if (model.modelId === "nano-banana-2" || model.modelId === "topaz/image-upscale") {
-            console.log(`[usePricingData] Default model ${model.modelId}:`, {
-              pricingType: model.pricingType,
-              assignedFunction: model.assignedFunction,
-              creditCost: model.creditCost,
-              factor: model.factor
-            });
+        // Use DB data, merging with defaults so assignedFunction is always present
+        const dbModelIds = new Set(data.map((m: any) => m.modelId));
+        const merged = data.map((dbModel: any) => {
+          const defaultModel = DEFAULT_PRICING_MODELS.find(d => d.modelId === dbModel.modelId);
+          if (defaultModel && !dbModel.assignedFunction && defaultModel.assignedFunction) {
+            return { ...dbModel, assignedFunction: defaultModel.assignedFunction };
           }
-          return model;
+          return dbModel;
         });
-        setModels(defaultsWithAssignedFunction);
+        for (const def of DEFAULT_PRICING_MODELS) {
+          if (!dbModelIds.has(def.modelId)) {
+            merged.push(def);
+          }
+        }
+        console.log("[usePricingData] Loaded", merged.length, "models (", data.length, "from DB)");
+        setModels(merged);
       }
-      
+
       setError(null);
     } catch (err) {
       console.error("[usePricingData] Error fetching pricing models:", err);

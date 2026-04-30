@@ -1963,6 +1963,15 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
         finalOriginalImageUrl: backgroundImage || activeShot?.imageUrl
       });
       
+      // Extract resolution for GPT Image 2 from quality JSON
+      let resolutionForApi: string | undefined;
+      try {
+        const qp = JSON.parse(quality);
+        if (qp?.type === 'gpt-image-2' && qp.resolution) {
+          resolutionForApi = qp.resolution;
+        }
+      } catch { /* quality is not JSON */ }
+
       const response = await fetch('/api/storyboard/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1987,6 +1996,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
           cropHeight,     // Pass crop height
           originalImageUrl, // Pass original image URL for compositing
           cinemaMetadata, // Cinema Studio metadata
+          resolution: resolutionForApi,
         }),
       });
 

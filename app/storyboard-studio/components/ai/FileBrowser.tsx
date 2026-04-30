@@ -160,7 +160,7 @@ export function FileBrowser({
   // ── UI state ──────────────────────────────────────────────────────────────
   const [searchTerm, setSearchTerm]           = useState("");
   const [selectedFilter, setSelectedFilter]   = useState<CategoryFilter>(defaultCategory || "all");
-  const [selectedType, setSelectedType]       = useState<FileType>(defaultFileType || "all");
+  const [selectedType, setSelectedType]       = useState<FileType>(defaultFileType || (imageSelectionMode ? "image" : "all"));
   const [selectedElementCategory, setSelectedElementCategory] = useState<string>("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [viewSize, setViewSize]               = useState(140);

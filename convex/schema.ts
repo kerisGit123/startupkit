@@ -2015,6 +2015,17 @@ export default defineSchema({
     .index("by_companyId_date", ["companyId", "date"])
     .index("by_companyId_date_model", ["companyId", "date", "model"]),
 
+  // ============================================
+  // LANDING PAGE: Cached stats (avoids full-table scans)
+  // ============================================
+  // Single row updated by refreshLandingStats cron. getPublicStats reads
+  // this instead of scanning users + projects + files tables.
+  landing_stats: defineTable({
+    totalCreators: v.number(),
+    totalProjects: v.number(),
+    totalGenerations: v.number(),
+    updatedAt: v.number(),
+  }),
 
   // ============================================
   // STORYBOARD STUDIO: Personas (AI voice profiles for music generation)
@@ -2218,6 +2229,7 @@ export default defineSchema({
       v.literal("getKlingMotionControl"),
       v.literal("getNanoBananaPrice"),
       v.literal("getGptImagePrice"),
+      v.literal("getGptImage2Price"),
       v.literal("getVeo31"),
       v.literal("getGrokImageToVideo"),
       v.literal("getInfinitalkFromAudio"),

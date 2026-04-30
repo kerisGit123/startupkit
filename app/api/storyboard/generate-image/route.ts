@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       elementId,      // Element ID — when present, file is categorized as "elements"
       variantLabel,   // Element variant label (for character variants)
       variantModel,   // Element variant model used
+      resolution,     // Image resolution: 1K, 2K, 4K
     } = await req.json();
 
     console.log('[generate-image] API route received parameters:', {
@@ -150,6 +151,7 @@ export async function POST(req: NextRequest) {
         cinemaMetadata, // Cinema Studio metadata
         variantLabel,
         variantModel,
+        resolution,
       });
     }
 

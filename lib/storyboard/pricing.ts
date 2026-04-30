@@ -32,6 +32,7 @@ export interface PricingModel {
     | "getKlingMotionControl"
     | "getNanoBananaPrice"
     | "getGptImagePrice"
+    | "getGptImage2Price"
     | "getVeo31"
     | "getGrokImageToVideo"
     | "getInfinitalkFromAudio"

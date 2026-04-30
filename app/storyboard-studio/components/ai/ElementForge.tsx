@@ -223,7 +223,7 @@ function FieldEraSlider({ field, value, onChange }: { field: ForgeField; value: 
         className="overflow-x-auto select-none"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: "grab" } as any}
       >
-        <style>{`.era-drag::-webkit-scrollbar { display: none; }`}</style>
+        <style>{`.era-drag::-webkit-scrollbar { display: none; } .forge-scroll::-webkit-scrollbar { display: none; }`}</style>
         <div className="era-drag flex flex-col min-w-max" style={{ padding: `0 calc(50% - ${ITEM_W / 2}px)` }}>
           {/* Ticks row */}
           <div className="flex items-end h-10">
@@ -283,8 +283,8 @@ function FieldImageUpload({
 }) {
   if (value) {
     return (
-      <div className="relative group w-full h-36 rounded-xl overflow-hidden border border-(--border-primary)">
-        <img src={value} alt={field.label} className="w-full h-full object-cover cursor-pointer" onDoubleClick={() => onPreview?.(value)} />
+      <div className="relative group w-full h-44 rounded-xl overflow-hidden border border-(--border-primary) bg-black/30">
+        <img src={value} alt={field.label} className="w-full h-full object-contain cursor-pointer" onDoubleClick={() => onPreview?.(value)} />
         {/* Hover overlay with actions */}
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">
           <button
@@ -319,7 +319,7 @@ function FieldImageUpload({
   return (
     <div
       onClick={onBrowse}
-      className="w-full h-36 rounded-xl border-2 border-dashed border-(--border-primary) hover:border-(--accent-blue)/40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors"
+      className="w-full h-44 rounded-xl border-2 border-dashed border-(--border-primary) hover:border-(--accent-blue)/40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors"
     >
       <Upload size={20} className="text-(--text-tertiary)" />
       <span className="text-[12px] text-(--text-tertiary)">{field.placeholder || field.label}</span>
@@ -388,38 +388,42 @@ function FieldColorDots({ field, value, onChange }: { field: ForgeField; value: 
 function CarouselCard({ opt, selected, onClick }: { opt: ForgeOption; selected: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick}
-      className={`relative shrink-0 flex flex-col items-center gap-2.5 rounded-2xl transition-all duration-200 overflow-hidden ${
-        selected ? "ring-2 ring-(--accent-blue) ring-offset-2 ring-offset-[var(--bg-secondary)]"
-          : "hover:brightness-110"
+      className={`relative shrink-0 flex flex-col items-center gap-1.5 rounded-xl transition-all duration-250 overflow-hidden group ${
+        selected
+          ? "ring-2 ring-(--accent-blue)/80 ring-offset-1 ring-offset-[var(--bg-secondary)] scale-[1.03]"
+          : "hover:scale-[1.02]"
       }`}
-      style={{ width: 160 }}
+      style={{ width: 120 }}
     >
       {opt.icon ? (
-        <div className={`w-[160px] h-[180px] overflow-hidden rounded-2xl transition-all duration-200 ${
-          selected ? "brightness-110" : "brightness-75 hover:brightness-100"
+        <div className={`w-[120px] h-[135px] overflow-hidden rounded-xl transition-all duration-250 ${
+          selected ? "brightness-110 shadow-lg shadow-black/30" : "brightness-[0.6] group-hover:brightness-90"
         }`}>
           <img src={opt.icon} alt={opt.label} className="w-full h-full object-cover" draggable={false} />
         </div>
       ) : opt.color ? (
-        <div className={`w-[160px] h-[180px] rounded-2xl flex items-center justify-center transition-all duration-200 bg-white/3 ${
-          selected ? "ring-2 ring-(--accent-blue)" : ""
+        <div className={`w-[120px] h-[135px] rounded-xl flex items-center justify-center transition-all duration-250 ${
+          selected ? "bg-white/6 shadow-lg shadow-black/20" : "bg-white/[0.02] group-hover:bg-white/4"
         }`}>
-          <div className="w-20 h-20 rounded-full border-3 shadow-lg transition-all" style={{
+          <div className={`w-14 h-14 rounded-full transition-all duration-250 ${
+            selected ? "scale-110 shadow-lg" : "group-hover:scale-105"
+          }`} style={{
             backgroundColor: opt.color,
-            borderColor: selected ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.12)",
+            boxShadow: selected ? `0 0 20px ${opt.color}40` : "none",
+            border: selected ? "2px solid rgba(255,255,255,0.4)" : "2px solid rgba(255,255,255,0.08)",
           }} />
         </div>
       ) : (
-        <div className={`w-[160px] h-[180px] rounded-2xl flex items-center justify-center text-[32px] font-bold transition-all ${
-          selected ? "bg-(--accent-blue)/15 text-(--accent-blue)" : "bg-white/4 text-(--text-tertiary)"
+        <div className={`w-[120px] h-[135px] rounded-xl flex items-center justify-center text-[24px] font-bold transition-all duration-250 ${
+          selected ? "bg-(--accent-blue)/12 text-(--accent-blue) shadow-lg shadow-black/20" : "bg-white/[0.02] text-(--text-tertiary) group-hover:bg-white/4"
         }`}>{opt.label.charAt(0)}</div>
       )}
-      <span className={`text-[13px] font-medium text-center leading-tight ${
-        selected ? "text-(--text-primary)" : "text-(--text-tertiary)"
+      <span className={`text-[11px] font-medium text-center leading-tight px-1 transition-colors duration-200 ${
+        selected ? "text-white" : "text-white/40 group-hover:text-white/60"
       }`}>{opt.label}</span>
       {selected && (
-        <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-(--accent-blue) flex items-center justify-center shadow-md">
-          <Check className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-(--accent-blue) flex items-center justify-center shadow-md shadow-black/30">
+          <Check className="w-3 h-3 text-white" strokeWidth={2.5} />
         </div>
       )}
     </button>
@@ -430,6 +434,10 @@ function FieldCarousel({ field, value, onChange }: { field: ForgeField; value: s
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const scrollStartX = useRef(0);
+  const hasDragged = useRef(false);
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;
@@ -463,6 +471,38 @@ function FieldCarousel({ field, value, onChange }: { field: ForgeField; value: s
     scrollRef.current?.scrollBy({ left: dir * 350, behavior: "smooth" });
   };
 
+  // Drag-to-scroll handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    hasDragged.current = false;
+    dragStartX.current = e.clientX;
+    scrollStartX.current = scrollRef.current?.scrollLeft || 0;
+    if (scrollRef.current) scrollRef.current.style.cursor = "grabbing";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !scrollRef.current) return;
+      const dx = dragStartX.current - e.clientX;
+      if (Math.abs(dx) > 5) hasDragged.current = true;
+      scrollRef.current.scrollLeft = scrollStartX.current + dx;
+    };
+    const handleMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      if (scrollRef.current) scrollRef.current.style.cursor = "grab";
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => { window.removeEventListener("mousemove", handleMouseMove); window.removeEventListener("mouseup", handleMouseUp); };
+  }, []);
+
+  const handleCardClick = useCallback((opt: ForgeOption) => {
+    // Ignore click if user was dragging
+    if (hasDragged.current) return;
+    onChange(value === opt.key ? "" : opt.key);
+  }, [value, onChange]);
+
   return (
     <div className="relative">
       {/* Left arrow */}
@@ -480,14 +520,15 @@ function FieldCarousel({ field, value, onChange }: { field: ForgeField; value: s
         </button>
       )}
 
-      {/* Scrollable row */}
+      {/* Scrollable row — drag to slide */}
       <div ref={scrollRef}
-        className="flex gap-5 overflow-x-auto py-4 px-4 scroll-smooth items-end justify-center"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as any}
+        onMouseDown={handleMouseDown}
+        className="flex gap-3 overflow-x-auto py-3 px-3 items-end select-none"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: "grab" } as any}
       >
         {field.options?.map((opt) => (
           <CarouselCard key={opt.key} opt={opt} selected={value === opt.key}
-            onClick={() => onChange(value === opt.key ? "" : opt.key)} />
+            onClick={() => handleCardClick(opt)} />
         ))}
       </div>
 
@@ -505,6 +546,10 @@ function FieldMultiCarousel({ field, value, onChange }: { field: ForgeField; val
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const scrollStartX = useRef(0);
+  const hasDragged = useRef(false);
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;
@@ -527,6 +572,31 @@ function FieldMultiCarousel({ field, value, onChange }: { field: ForgeField; val
     scrollRef.current?.scrollBy({ left: dir * 350, behavior: "smooth" });
   };
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    isDragging.current = true;
+    hasDragged.current = false;
+    dragStartX.current = e.clientX;
+    scrollStartX.current = scrollRef.current?.scrollLeft || 0;
+    if (scrollRef.current) scrollRef.current.style.cursor = "grabbing";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !scrollRef.current) return;
+      const dx = dragStartX.current - e.clientX;
+      if (Math.abs(dx) > 5) hasDragged.current = true;
+      scrollRef.current.scrollLeft = scrollStartX.current + dx;
+    };
+    const handleMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      if (scrollRef.current) scrollRef.current.style.cursor = "grab";
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => { window.removeEventListener("mousemove", handleMouseMove); window.removeEventListener("mouseup", handleMouseUp); };
+  }, []);
+
   return (
     <div className="relative">
       {canScrollLeft && (
@@ -542,11 +612,12 @@ function FieldMultiCarousel({ field, value, onChange }: { field: ForgeField; val
         </button>
       )}
       <div ref={scrollRef}
-        className="flex gap-5 overflow-x-auto py-4 px-4 scroll-smooth items-end justify-center"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as any}>
+        onMouseDown={handleMouseDown}
+        className="flex gap-3 overflow-x-auto py-3 px-3 items-end select-none"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none", cursor: "grab" } as any}>
         {field.options?.map((opt) => (
           <CarouselCard key={opt.key} opt={opt} selected={selected.includes(opt.key)}
-            onClick={() => toggle(opt.key)} />
+            onClick={() => { if (!hasDragged.current) toggle(opt.key); }} />
         ))}
       </div>
       {canScrollLeft && <div className="absolute inset-y-0 left-0 w-20 bg-linear-to-r from-(--bg-secondary) to-transparent pointer-events-none z-10" />}
@@ -564,6 +635,103 @@ function FieldTwoLevelCarousel({ field, value, parentValue, onChange }: {
 
   const fakeField: ForgeField = { key: field.key, label: field.label, type: "carousel", options: subOptions };
   return <FieldCarousel field={fakeField} value={value} onChange={onChange} />;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STACKED FIELDS — groups fields vertically, supports row grouping + collapsible
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function SectionLabel({ label, required }: { label: string; required?: boolean }) {
+  return (
+    <div className="text-[11px] font-medium tracking-wide text-white/25 uppercase mb-1">
+      {label}
+      {required && <span className="text-red-400/70 ml-1">*</span>}
+    </div>
+  );
+}
+
+function CollapsibleField({ field, renderField, hasValue }: {
+  field: ForgeField; renderField: (f: ForgeField) => React.ReactNode; hasValue: boolean;
+}) {
+  const [open, setOpen] = useState(hasValue);
+  return (
+    <div>
+      <button onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[11px] font-medium tracking-wide text-white/25 uppercase hover:text-white/40 transition-colors">
+        <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${open ? "" : "-rotate-90"}`} strokeWidth={2} />
+        {field.label}
+        {hasValue && !open && <span className="w-1.5 h-1.5 bg-(--accent-blue) rounded-full" />}
+      </button>
+      <div className={`overflow-hidden transition-all duration-300 ${open ? "max-h-[500px] opacity-100 mt-1" : "max-h-0 opacity-0"}`}>
+        {renderField(field)}
+      </div>
+    </div>
+  );
+}
+
+function StackedFields({ fields, renderField, identity }: {
+  fields: ForgeField[]; renderField: (f: ForgeField) => React.ReactNode; identity: Record<string, any>;
+}) {
+  // Group consecutive fields with the same `row` value
+  const groups: (ForgeField | ForgeField[])[] = [];
+  let i = 0;
+  while (i < fields.length) {
+    const field = fields[i];
+    if (field.row) {
+      const rowGroup: ForgeField[] = [field];
+      while (i + 1 < fields.length && fields[i + 1].row === field.row) {
+        i++;
+        rowGroup.push(fields[i]);
+      }
+      groups.push(rowGroup);
+    } else {
+      groups.push(field);
+    }
+    i++;
+  }
+
+  return (
+    <div className="space-y-4">
+      {groups.map((group, gi) => {
+        if (Array.isArray(group)) {
+          return (
+            <div key={gi} className="flex gap-4">
+              {group.map((field) => (
+                <div key={field.key} className="flex-1 min-w-0">
+                  <SectionLabel label={field.label} />
+                  {renderField(field)}
+                </div>
+              ))}
+            </div>
+          );
+        }
+        const field = group;
+        if (field.collapsible) {
+          const hasValue = Array.isArray(identity[field.key]) ? identity[field.key].length > 0 : !!identity[field.key];
+          return <CollapsibleField key={field.key} field={field} renderField={renderField} hasValue={hasValue} />;
+        }
+        // Text/textarea fields get a simpler left-aligned label
+        if (field.type === "text" || field.type === "textarea") {
+          return (
+            <div key={field.key}>
+              <label className="text-[11px] font-medium tracking-wide text-white/30 uppercase mb-1.5 block">
+                {field.label}
+                {field.required && <span className="text-red-400/70 ml-1">*</span>}
+              </label>
+              {renderField(field)}
+            </div>
+          );
+        }
+        // Carousel/visual fields get the centered divider label
+        return (
+          <div key={field.key}>
+            <SectionLabel label={field.label} required={field.required} />
+            {renderField(field)}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function TemplateDropdown({ templates, selected, onSelect, onNew, onDuplicate, onEdit, onDelete }: {
@@ -990,8 +1158,9 @@ export function ElementForge({
             sceneContent: prompt,
             model,
             style: 'realistic',
-            quality: JSON.stringify({ type: model.startsWith('gpt-image-2') ? 'gpt-image-2' : model, mode: modelMode }),
+            quality: JSON.stringify({ type: model.startsWith('gpt-image-2') ? 'gpt-image-2' : model, mode: modelMode, nsfwChecker: false }),
             aspectRatio: genAspectRatio,
+            resolution: genResolution,
             companyId,
             userId,
             projectId: projectId as string,
@@ -1250,61 +1419,70 @@ export function ElementForge({
             ))}
           </div>
 
-          {/* Sub-tab bar (for Physical Appearance etc) */}
-          {currentWizardStep?.hasSubTabs && (
-            <div className="flex items-center justify-center gap-1 mt-2">
-              {currentWizardStep.fields.map((field, i) => {
-                const hasValue = !!identity[field.key];
-                return (
-                  <button key={field.key} onClick={() => setSubTabIdx(i)}
-                    className={`relative px-3.5 py-1.5 text-[12px] font-medium transition-all duration-200 ${
-                      i === subTabIdx
-                        ? "text-white"
-                        : hasValue
-                          ? "text-(--text-secondary) hover:text-(--text-primary)"
-                          : "text-(--text-tertiary) hover:text-(--text-secondary)"
-                    }`}>
-                    {field.label}
-                    {i === subTabIdx && (
-                      <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-white rounded-full" />
-                    )}
-                    {hasValue && i !== subTabIdx && (
-                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-(--accent-blue) rounded-full" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Sub-tab bar (for Physical Appearance etc) — skip pinned fields */}
+          {currentWizardStep?.hasSubTabs && (() => {
+            const subTabFields = currentWizardStep.fields.filter(f => !f.pinned);
+            return (
+              <div className="flex items-center justify-center gap-1 mt-2">
+                {subTabFields.map((field, i) => {
+                  const hasValue = !!identity[field.key];
+                  return (
+                    <button key={field.key} onClick={() => setSubTabIdx(i)}
+                      className={`relative px-3.5 py-1.5 text-[12px] font-medium transition-all duration-200 ${
+                        i === subTabIdx
+                          ? "text-white"
+                          : hasValue
+                            ? "text-(--text-secondary) hover:text-(--text-primary)"
+                            : "text-(--text-tertiary) hover:text-(--text-secondary)"
+                      }`}>
+                      {field.label}
+                      {i === subTabIdx && (
+                        <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-5 h-[2px] bg-white rounded-full" />
+                      )}
+                      {hasValue && i !== subTabIdx && (
+                        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-(--accent-blue) rounded-full" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ─── Tab Content ─────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-8 py-4 min-h-0">
+        <div className="forge-scroll flex-1 overflow-y-auto px-8 py-4 min-h-0" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as any}>
           {/* Wizard step fields (non sub-tabbed) */}
           {currentWizardStep && !currentWizardStep.hasSubTabs && (
-            <div className="space-y-8">
-              {currentWizardStep.fields.map((field) => (
-                <div key={field.key}>
-                  <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
-                    {field.label}
-                    {field.required && <span className="text-red-400 text-[10px]">*</span>}
-                  </label>
-                  {renderField(field)}
-                </div>
-              ))}
-            </div>
+            <StackedFields fields={currentWizardStep.fields} renderField={renderField} identity={identity} />
           )}
 
-          {/* Sub-tabbed step — single field, vertically centered */}
-          {currentWizardStep?.hasSubTabs && (
-            <div className="flex flex-col items-center justify-center h-full w-full">
-              {(() => {
-                const field = currentWizardStep.fields[subTabIdx];
-                if (!field) return null;
-                return <div className="w-full">{renderField(field)}</div>;
-              })()}
-            </div>
-          )}
+          {/* Sub-tabbed step — pinned fields on top, sub-tab content below */}
+          {currentWizardStep?.hasSubTabs && (() => {
+            const pinnedFields = currentWizardStep.fields.filter(f => f.pinned);
+            const subTabFields = currentWizardStep.fields.filter(f => !f.pinned);
+            const field = subTabFields[subTabIdx];
+            return (
+              <div className="flex flex-col h-full w-full">
+                {pinnedFields.length > 0 && (
+                  <div className="space-y-3 mb-4">
+                    {pinnedFields.map(pf => (
+                      <div key={pf.key}>
+                        <label className="text-[11px] font-medium tracking-wide text-white/25 uppercase mb-1.5 block">
+                          {pf.label}
+                          {pf.required && <span className="text-red-400/70 ml-1">*</span>}
+                        </label>
+                        {renderField(pf)}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex-1 flex flex-col items-center justify-center">
+                  {field && <div className="w-full">{renderField(field)}</div>}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Prompt tab */}
           {currentTab.key === "prompt" && (

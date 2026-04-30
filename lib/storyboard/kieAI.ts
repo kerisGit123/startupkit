@@ -149,6 +149,7 @@ export interface TriggerImageGenerationParams {
   cinemaMetadata?: Record<string, any>;
   variantLabel?: string;
   variantModel?: string;
+  resolution?: string; // 1K, 2K, 4K
 }
 
 // Video generation interface for Seedance 1.5 Pro
@@ -328,29 +329,31 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   let kieModel = actualModel;
   if (actualModel === 'gpt-image') {
     kieModel = 'gpt-image/1.5-image-to-image';
-  } else if (actualModel === 'gpt-image-2-image-to-image') {
+  } else if (actualModel === 'gpt-image-2-text-to-image' || actualModel === 'gpt-image-2-image-to-image') {
     // Parse mode from quality param JSON: { type: 'gpt-image-2', mode: 'image-to-image' | 'text-to-image', nsfwChecker: boolean }
-    let gpt2Mode = 'image-to-image';
+    let gpt2Mode = actualModel === 'gpt-image-2-text-to-image' ? 'text-to-image' : 'image-to-image';
     let gpt2Nsfw = false;
     try {
       const gpt2Params = JSON.parse(params.quality || '{}');
       if (gpt2Params.type === 'gpt-image-2') {
-        gpt2Mode = gpt2Params.mode || 'image-to-image';
+        gpt2Mode = gpt2Params.mode || gpt2Mode;
         gpt2Nsfw = gpt2Params.nsfwChecker ?? false;
       }
     } catch {}
     kieModel = gpt2Mode === 'text-to-image' ? 'gpt-image-2-text-to-image' : 'gpt-image-2-image-to-image';
   }
   
-  const resolution = actualModel === 'nano-banana-2'
-    ? (params.quality === "1K" || params.quality === "2K" || params.quality === "4K"
-        ? params.quality
-        : "1K") // Default to 1K for nano-banana-2
-    : (params.quality === "1K" || params.quality === "2K" || params.quality === "4K"
-        ? params.quality
-        : params.quality === "high"
-          ? "2K"
-          : "1K");
+  const resFromParam = params.resolution && ["1K", "2K", "4K"].includes(params.resolution) ? params.resolution : null;
+  const resolution = resFromParam
+    || (actualModel === 'nano-banana-2'
+      ? (params.quality === "1K" || params.quality === "2K" || params.quality === "4K"
+          ? params.quality
+          : "1K")
+      : (params.quality === "1K" || params.quality === "2K" || params.quality === "4K"
+          ? params.quality
+          : params.quality === "high"
+            ? "2K"
+            : "1K"));
   const defaultQuality = params.quality === "high" ? "high" : "standard";
   const isImageToImageModel = !!params.imageUrl;
   
@@ -517,6 +520,15 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
         prompt: fullPrompt,
         ...(inputUrls.length > 0 && { input_urls: inputUrls }),
         aspect_ratio: params.aspectRatio || "auto",
+        nsfw_checker: gpt2Nsfw,
+      };
+    })() : actualModel === 'gpt-image-2-text-to-image' ? (() => {
+      let gpt2Nsfw = false;
+      try { const p = JSON.parse(params.quality || '{}'); gpt2Nsfw = p.nsfwChecker ?? false; } catch {}
+      return {
+        prompt: fullPrompt,
+        aspect_ratio: params.aspectRatio || "16:9",
+        ...(resolution !== "1K" && params.aspectRatio !== "1:1" && params.aspectRatio !== "auto" && { resolution }),
         nsfw_checker: gpt2Nsfw,
       };
     })() : actualModel?.startsWith('gpt-image') ? {
