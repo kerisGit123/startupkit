@@ -22,28 +22,26 @@ async function updateStatus(
 }
 
 export async function POST(req: NextRequest) {
-  // 1. Auth + get Convex token
+  // 1. Auth
   const authResult = await auth();
   const clerkUserId = authResult.userId;
   if (!clerkUserId) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }
 
-  // Set Convex auth token so mutations requiring identity work
   let convexToken: string | null = null;
   try {
     convexToken = await authResult.getToken({ template: "convex" });
   } catch {
     try { convexToken = await authResult.getToken(); } catch {}
   }
-  if (convexToken) {
-    convex.setAuth(convexToken);
-  }
+  if (convexToken) convex.setAuth(convexToken);
 
   const body = await req.json();
   const {
     projectId,
     rebuildStrategy = "replace_all",
+    replaceSceneIds,           // For replace_section: ["1A", "1B", "2"]
   } = body;
 
   if (!projectId) {
@@ -62,43 +60,85 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 3. Set processing status
     await updateStatus(projectId, "processing", "Starting storyboard build...");
 
-    // 4. Clear existing data if replace_all
+    // ── Load existing data (for smart_merge and replace_section) ───────────
+
+    let existingElementMap = new Map<string, { id: Id<"storyboard_elements">; name: string; type: string }>();
+    let existingItemsBySceneId = new Map<string, { _id: Id<"storyboard_items">; sceneId: string }>();
+    let maxExistingOrder = 0;
+
+    const needsExistingData = rebuildStrategy === "smart_merge" || rebuildStrategy === "replace_section";
+
+    if (needsExistingData) {
+      await updateStatus(projectId, "processing", "Loading existing data...");
+
+      const existingElements = await convex.query(api.storyboard.build.listElementsForBuild, { projectId });
+      for (const el of existingElements) {
+        const key = `${el.name.toLowerCase().trim()}::${el.type}`;
+        existingElementMap.set(key, { id: el._id, name: el.name, type: el.type });
+      }
+
+      const existingItems = await convex.query(api.storyboard.build.listItemsForBuild, { projectId });
+      for (const item of existingItems) {
+        if (item.sceneId) existingItemsBySceneId.set(item.sceneId, { _id: item._id, sceneId: item.sceneId });
+        if (typeof item.order === "number" && item.order >= maxExistingOrder) {
+          maxExistingOrder = item.order + 1;
+        }
+      }
+
+      console.log(`[build-storyboard] Existing: ${existingElementMap.size} elements, ${existingItemsBySceneId.size} scenes`);
+    }
+
+    // ── Clear data based on strategy ──────────────────────────────────────
+
     if (rebuildStrategy === "replace_all") {
-      await updateStatus(projectId, "processing", "Clearing existing frames...");
+      await updateStatus(projectId, "processing", "Clearing all frames and elements...");
       await convex.mutation(api.storyboard.build.clearExistingData, { projectId });
     }
 
-    // 5. Analyze script with AI
+    if (rebuildStrategy === "replace_section" && replaceSceneIds?.length > 0) {
+      await updateStatus(projectId, "processing", `Clearing ${replaceSceneIds.length} scenes...`);
+      await convex.mutation(api.storyboard.build.clearItemsBySceneIds, {
+        projectId,
+        sceneIds: replaceSceneIds,
+      });
+      // Remove cleared scenes from existing map so they get recreated
+      for (const sid of replaceSceneIds) {
+        existingItemsBySceneId.delete(sid);
+      }
+    }
+
+    // ── Analyze script ────────────────────────────────────────────────────
+
     const analysis = await analyzeScript(script, async (message) => {
       await updateStatus(projectId, "processing", message);
     });
 
     if (analysis.scenes.length === 0) {
-      await updateStatus(projectId, "error", "Could not parse any scenes from the script. Try formatting scenes as: SCENE 1: Title");
-      return NextResponse.json({
-        success: false,
-        error: "No scenes found in script",
-        confidence: analysis.confidence,
-      }, { status: 422 });
+      await updateStatus(projectId, "error", "Could not parse any scenes from the script.");
+      return NextResponse.json({ success: false, error: "No scenes found" }, { status: 422 });
     }
 
-    // 6. Save elements
-    console.log(`[build-storyboard] Analysis complete: ${analysis.scenes.length} scenes, ${analysis.elements.length} elements, confidence: ${analysis.confidence}`);
-    if (analysis.elements.length > 0) {
-      console.log(`[build-storyboard] Elements:`, analysis.elements.map(e => `${e.name} (${e.type}, ${e.sceneIds.length} scenes)`));
-    }
-    await updateStatus(
-      projectId,
-      "processing",
-      `Creating ${analysis.elements.length} elements...`
-    );
+    // ── Save elements (with deduplication) ────────────────────────────────
 
     const savedElementMap = new Map<string, Id<"storyboard_elements">>();
+    let elementsReused = 0;
+    let elementsCreated = 0;
+
+    await updateStatus(projectId, "processing", `Processing ${analysis.elements.length} elements...`);
 
     for (const element of analysis.elements) {
+      const dedupeKey = `${element.name.toLowerCase().trim()}::${element.type}`;
+
+      // Reuse existing element if found
+      if (needsExistingData && existingElementMap.has(dedupeKey)) {
+        const existing = existingElementMap.get(dedupeKey)!;
+        savedElementMap.set(element.name, existing.id);
+        elementsReused++;
+        continue;
+      }
+
       try {
         const saved = await convex.mutation(api.storyboard.storyboardElements.create, {
           projectId,
@@ -113,42 +153,77 @@ export async function POST(req: NextRequest) {
         });
         if (saved) {
           savedElementMap.set(element.name, saved);
+          elementsCreated++;
         }
       } catch (err) {
         console.error(`[build-storyboard] Failed to save element ${element.name}:`, err);
       }
     }
 
-    // 7. Save scenes as storyboard items
-    await updateStatus(
-      projectId,
-      "processing",
-      `Creating ${analysis.scenes.length} storyboard frames...`
-    );
+    console.log(`[build-storyboard] Elements: ${elementsReused} reused, ${elementsCreated} created`);
 
-    let savedSceneCount = 0;
+    // ── Save scenes ───────────────────────────────────────────────────────
+
+    let scenesCreated = 0;
+    let scenesUpdated = 0;
+    let scenesSkipped = 0;
+    let nextOrder = rebuildStrategy === "replace_all" ? 0 : maxExistingOrder;
+
+    await updateStatus(projectId, "processing", `Creating storyboard frames...`);
+
     for (const scene of analysis.scenes) {
-      try {
-        // Build linked elements for this scene
-        const linkedElements: { id: Id<"storyboard_elements">; name: string; type: string }[] = [];
-        for (const element of analysis.elements) {
-          if (element.sceneIds.includes(scene.sceneId)) {
-            const elementId = savedElementMap.get(element.name);
-            if (elementId) {
-              linkedElements.push({
-                id: elementId,
-                name: element.name,
-                type: element.type,
-              });
-            }
+      // Build linked elements
+      const linkedElements: { id: Id<"storyboard_elements">; name: string; type: string }[] = [];
+      for (const element of analysis.elements) {
+        if (element.sceneIds.includes(scene.sceneId)) {
+          const elementId = savedElementMap.get(element.name);
+          if (elementId) {
+            linkedElements.push({ id: elementId, name: element.name, type: element.type });
           }
         }
+      }
 
-        // Create frame with prompts + model defaults in one call (no separate update step)
+      // ── smart_merge: update existing or create new ────────────────────
+      if (rebuildStrategy === "smart_merge") {
+        const existing = existingItemsBySceneId.get(scene.sceneId);
+        if (existing) {
+          // Update prompts on the existing scene
+          try {
+            await convex.mutation(api.storyboard.storyboardItems.update, {
+              id: existing._id,
+              title: scene.title,
+              description: scene.description,
+              imagePrompt: scene.imagePrompt || undefined,
+              videoPrompt: scene.videoPrompt || undefined,
+              duration: scene.duration,
+              linkedElements: linkedElements.length > 0 ? linkedElements : undefined,
+            });
+            scenesUpdated++;
+          } catch (err) {
+            console.error(`[build-storyboard] Failed to update scene ${scene.sceneId}:`, err);
+          }
+          continue;
+        }
+        // Fall through to create new scene below
+      }
+
+      // ── replace_section: skip scenes outside the target range ─────────
+      if (rebuildStrategy === "replace_section") {
+        const isTarget = replaceSceneIds?.includes(scene.sceneId);
+        if (!isTarget) {
+          scenesSkipped++;
+          continue;
+        }
+      }
+
+      // ── Create new scene ──────────────────────────────────────────────
+      try {
+        const order = rebuildStrategy === "replace_all" ? scene.order : nextOrder++;
+
         await convex.mutation(api.storyboard.storyboardItems.create, {
           projectId,
           sceneId: scene.sceneId,
-          order: scene.order,
+          order,
           title: scene.title,
           description: scene.description,
           duration: scene.duration,
@@ -159,14 +234,16 @@ export async function POST(req: NextRequest) {
           defaultVideoModel: scene.defaultVideoModel,
           linkedElements: linkedElements.length > 0 ? linkedElements : undefined,
         });
-
-        savedSceneCount++;
+        scenesCreated++;
       } catch (err) {
         console.error(`[build-storyboard] Failed to save scene ${scene.sceneId}:`, err);
       }
     }
 
-    // 9. Save preamble as project description (if available)
+    console.log(`[build-storyboard] Scenes: ${scenesCreated} created, ${scenesUpdated} updated, ${scenesSkipped} skipped`);
+
+    // ── Save preamble ─────────────────────────────────────────────────────
+
     if (analysis.preamble) {
       try {
         await convex.mutation(api.storyboard.build.updateProjectDescription, {
@@ -178,8 +255,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 10. Done
-    await updateStatus(projectId, "ready", "Storyboard built successfully");
+    // ── Done ──────────────────────────────────────────────────────────────
+
+    const parts: string[] = [];
+    if (scenesCreated) parts.push(`${scenesCreated} created`);
+    if (scenesUpdated) parts.push(`${scenesUpdated} updated`);
+    if (elementsReused) parts.push(`${elementsReused} elements reused`);
+    const summary = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+
+    await updateStatus(projectId, "ready", `Build complete${summary}`);
 
     return NextResponse.json({
       success: true,
@@ -190,19 +274,16 @@ export async function POST(req: NextRequest) {
         genre: analysis.genre,
         totalDuration: analysis.totalDuration,
         acts: analysis.actCount,
-        scenes: savedSceneCount,
-        elements: savedElementMap.size,
+        scenesCreated,
+        scenesUpdated,
+        scenesSkipped,
+        elementsCreated,
+        elementsReused,
       },
     });
   } catch (error) {
     console.error("[build-storyboard] Build failed:", error);
-
-    await updateStatus(
-      projectId,
-      "error",
-      `Build failed: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
-
+    await updateStatus(projectId, "error", `Build failed: ${error instanceof Error ? error.message : "Unknown error"}`);
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : "Build failed" },
       { status: 500 }

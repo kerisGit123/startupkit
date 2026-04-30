@@ -960,6 +960,7 @@ export default function StoryboardWorkspacePage() {
                 </button>
               )}
 
+
               {/* Search and Filters */}
               <div className="flex items-center gap-2">
                 <TopNavSearch
@@ -2225,6 +2226,7 @@ export default function StoryboardWorkspacePage() {
               specialInstructions: "",
               comments: [],
               tags: [],
+              linkedElements: item.linkedElements?.map((el: any) => ({ id: el.id, name: el.name, type: el.type })),
             } as Shot))}
           initialShotId={selectedSceneItem._id}
           onClose={handleCloseSceneEditor}

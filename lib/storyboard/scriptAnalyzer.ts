@@ -41,6 +41,7 @@ export interface ScriptAnalysisResult {
   parseMethod: "structured" | "freeform";
 }
 
+
 // ── Main entry point ─────────────────────────────────────────────────────────
 
 export async function analyzeScript(
@@ -79,6 +80,7 @@ export async function analyzeScript(
   // Step 2: Extract elements with AI (smart filtering)
   progress(`Found ${scenes.length} scenes. Extracting elements...`);
   const elements = await extractElements(scriptContent, scenes);
+
 
   progress("Analysis complete.");
 
@@ -334,21 +336,18 @@ async function extractElements(
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5",
     max_tokens: 4096,
-    system: `You extract reusable visual elements from scripts for storyboard production. Quality over quantity.
+    system: `You extract reusable visual elements from scripts for storyboard production. STRICT quality over quantity — aim for 3-6 elements total.
 
-CHARACTERS: Named/described individuals only. Skip unnamed extras ("crew", "crowd", "people", "figures").
-ENVIRONMENTS: Major distinct locations that appear in 2+ scenes. Skip sub-locations (a room INSIDE a location already extracted).
-PROPS: Standalone key story objects that appear in 2+ scenes AND could be generated as their own reference image.
+CHARACTERS: Named or uniquely described individuals only. Must be a single person or creature.
+  SKIP: groups ("crew", "crowd", "people", "figures", "team", "soldiers"), unnamed extras, roles that are just a job title without visual distinction.
 
-SKIP — these are NOT standalone elements:
-- Components/parts of a vehicle, building, or vessel (porthole, instrument panel, dashboard, steering wheel, headlights, spotlights, engine, door, window = part of the parent object)
-- Atmospheric/environmental effects (snow, fog, mist, rain, light beams, shadows, particles, dust, bubbles)
-- Generic materials or substances (water, glass, metal, darkness, ice, frost)
-- Camera/filmmaking terms (close-up, wide shot, macro)
+ENVIRONMENTS: Major DISTINCT locations that appear in 2+ scenes. One location per distinct place.
+  SKIP: sub-locations inside a parent (e.g. "cockpit" when "submarine" exists), rooms/areas within an already-extracted location, minor transition spaces.
 
-EXAMPLE — submarine script:
-YES: "Research Submarine" (standalone prop), "Lead Pilot" (character), "Deep Ocean Trench" (environment), "Giant Creature" (character)
-NO: "Submarine Porthole" (part of submarine), "Instrument Panel" (part of submarine), "Halogen Spotlights" (part of submarine), "Marine Snow" (atmospheric), "Sonar Screen" (part of submarine)
+PROPS: Standalone key story objects that could be generated as their own reference image. Must be a whole object, not a part.
+  SKIP: components/parts of a vehicle or building (porthole, panel, dashboard, steering wheel, headlights, spotlights, engine, door, window, screen, gauge, lever, seat = part of the parent object), atmospheric/environmental effects (snow, fog, mist, rain, light beams, shadows, particles, dust, bubbles), generic materials (water, glass, metal, darkness).
+
+STRICT DEDUPLICATION: Never extract both a parent and its part. If "Submarine" is extracted, do NOT also extract "Submarine Porthole", "Submarine Cabin Interior", "Instrument Panel" etc. Pick the broadest useful version only.
 
 occurrenceCount = number of distinct scenes where this element is visually prominent.
 Descriptions must be 30+ chars describing VISUAL appearance for AI image generation.
@@ -372,14 +371,33 @@ RETURN ONLY valid JSON (no markdown, no code fences):
     const cleanText = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
     const parsed = JSON.parse(cleanText);
     const elements = (parsed.elements || []) as AnalyzedElement[];
+    // Hard blocklist for parts/components that AI often extracts despite instructions
+    const PART_WORDS = /\b(porthole|panel|dashboard|gauge|lever|screen|monitor|dial|switch|button|seat|window|door|hatch|engine|spotlight|headlight|antenna|cable|pipe|valve|vent|hull|deck|railing|ladder|console|cockpit|interior|cabin)\b/i;
+    const GROUP_WORDS = /^(crew|crowd|people|figures|team|soldiers|group|extras|bystanders|villagers|citizens|passengers|workers|guards)\b/i;
+
     const filtered = elements.filter(el => {
       if (!el.name || !el.description || el.description.length < 20 || el.sceneIds.length === 0) return false;
+
+      // Block groups/unnamed extras for characters
+      if (el.type === "character" && GROUP_WORDS.test(el.name)) return false;
+
+      // Block parts/components for props and environments
+      if ((el.type === "prop" || el.type === "environment") && PART_WORDS.test(el.name)) return false;
+
       // Characters: always keep. Environments/props: only if 2+ occurrences.
       if (el.type === "character") return true;
       return el.occurrenceCount >= 2 || el.sceneIds.length >= 2;
     });
-    console.log(`[scriptAnalyzer] Extracted ${elements.length} elements, ${filtered.length} after filtering:`, filtered.map(e => `${e.name} (${e.type})`));
-    return filtered;
+
+    // Dedup: if a parent object exists (e.g. "Submarine"), remove child variants (e.g. "Submarine Porthole")
+    const names = filtered.map(e => e.name.toLowerCase());
+    const deduped = filtered.filter(el => {
+      const lower = el.name.toLowerCase();
+      // Check if any other element's name is a prefix of this one (parent exists)
+      return !names.some(other => other !== lower && lower.startsWith(other + " "));
+    });
+    console.log(`[scriptAnalyzer] Extracted ${elements.length} raw → ${filtered.length} filtered → ${deduped.length} deduped:`, deduped.map(e => `${e.name} (${e.type})`));
+    return deduped;
   } catch {
     console.error("[scriptAnalyzer] Failed to parse element JSON:", text.substring(0, 200));
     return [];

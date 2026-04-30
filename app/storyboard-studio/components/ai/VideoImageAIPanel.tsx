@@ -91,6 +91,7 @@ export interface ImageAIPanelProps {
   userPrompt?: string;
   onUserPromptChange?: (prompt: string) => void;
   activeShotId?: string; // Active shot/item ID for filtering generated files
+  activeShotLinkedElements?: Array<{ id: string; name: string; type: string }>;
   activeShotDescription?: string; // NEW: For loading storyboard item description
   activeShotImagePrompt?: string; // NEW: For loading storyboard item image prompt
   activeShotVideoPrompt?: string; // NEW: For loading storyboard item video prompt
@@ -209,6 +210,7 @@ export function ImageAIPanel({
   userPrompt = "",
   onUserPromptChange,
   activeShotId,
+  activeShotLinkedElements,
   activeShotDescription,
   activeShotImagePrompt,
   activeShotVideoPrompt,
@@ -284,6 +286,8 @@ export function ImageAIPanel({
     companyId: companyId
   });
   const projectData = useQuery(api.storyboard.projects.get, projectId ? { id: projectId } : "skip");
+  // Project elements for @mention autocomplete + generation-time reference image injection
+  const projectElements = useQuery(api.storyboard.build.listElementsForBuild, projectId ? { projectId } : "skip");
   const savedPersonas = useQuery(api.storyboard.personas.list, { companyId });
   const renameFileMutation = useMutation(api.storyboard.storyboardFiles.renameFile);
   const audioFiles = useQuery(api.storyboard.storyboardFiles.listAudioFiles, { companyId, categoryId: activeShotId });
@@ -1922,6 +1926,26 @@ export function ImageAIPanel({
           }
         }
 
+        // Resolve @ElementName badges → @Image{N}
+        // Reference images are auto-attached by SceneEditor from linkedElements.
+        // Here we just convert @LeadPilot → @Image{N} so the model knows which ref is which.
+        {
+          const elementBadges = Array.from(editorRef.current?.querySelectorAll('[data-element-name]') || []);
+          if (elementBadges.length > 0) {
+            // Manual refs are @Image1..N, element refs start after
+            let nextIdx = (referenceImages?.length || 0) + 1;
+            for (const badge of elementBadges) {
+              const elName = (badge as HTMLElement).dataset.elementName || "";
+              const mentionText = `@${elName.replace(/\s+/g, "")}`;
+              if (finalPrompt.includes(mentionText)) {
+                finalPrompt = finalPrompt.replace(mentionText, `@Image${nextIdx}`);
+                console.log(`[VideoImageAIPanel] ${mentionText} → @Image${nextIdx}`);
+                nextIdx++;
+              }
+            }
+          }
+        }
+
         // UGC/Showcase mode: convert custom badges to @Image(n) and merge images
         if (seedanceMode === "ugc") {
           const productCount = productImages.length;
@@ -3353,6 +3377,28 @@ export function ImageAIPanel({
                   cameraMotionOptions={outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") ? cameraMotionOptions : undefined}
                   onCameraMotionSelect={(value) => setCameraMotion(value)}
                   onPromptChange={(text) => { setEditorIsEmpty(!text.trim()); setCurrentPrompt(text); onUserPromptChange?.(text); }}
+                  mentionableElements={projectElements?.map((el: any) => ({
+                    id: el._id,
+                    name: el.name,
+                    type: el.type,
+                    thumbnailUrl: el.thumbnailUrl,
+                    referenceUrls: el.referenceUrls,
+                  }))}
+                  onElementMention={(element) => {
+                    // Get thumbnail or first reference image for the badge
+                    const imgUrl = element.thumbnailUrl || element.referenceUrls?.[0] || "";
+                    // Count existing element badges to get next number
+                    const existingBadges = editorRef.current?.querySelectorAll('[data-element-id]') || [];
+                    const imageNumber = existingBadges.length + 1;
+                    insertBadgeAtCaret({
+                      id: `el-${element.id}-${Date.now()}`,
+                      imageUrl: imgUrl,
+                      imageNumber,
+                      badgeType: "element",
+                      elementName: element.name,
+                      elementId: element.id,
+                    });
+                  }}
                 />
                 
                 {/* Video & Audio slots — right side, for Kling/Seedance 2.0 multimodal/Topaz Video Upscale */}
@@ -3533,6 +3579,26 @@ export function ImageAIPanel({
                   onOpenLibrary={() => setIsPromptLibraryOpen(true)}
                   companyId={companyId}
                   userId={user?.id}
+                  onAfterLoadPrompt={() => {
+                    // Auto-insert element badges for linked elements after prompt loads
+                    if (!activeShotLinkedElements?.length || !projectElements?.length) return;
+                    const el = editorRef.current;
+                    if (!el) return;
+                    let badgeNum = 1;
+                    for (const link of activeShotLinkedElements) {
+                      const elData = projectElements.find((e: any) => e._id === link.id);
+                      if (!elData) continue;
+                      const imgUrl = elData.thumbnailUrl || elData.referenceUrls?.[0] || "";
+                      insertBadgeAtCaret({
+                        id: `el-${link.id}-${Date.now()}`,
+                        imageUrl: imgUrl,
+                        imageNumber: badgeNum++,
+                        badgeType: "element",
+                        elementName: link.name,
+                        elementId: link.id,
+                      });
+                    }
+                  }}
                 />
 
                 {/* Camera Motion Preset — video mode only */}

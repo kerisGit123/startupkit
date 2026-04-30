@@ -82,6 +82,68 @@ export const getScriptContent = query({
   }
 });
 
+// List existing elements for a project (used by smart_merge build)
+export const listElementsForBuild = query({
+  args: { projectId: v.id("storyboard_projects") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("storyboard_elements")
+      .filter((q: any) => q.eq(q.field("projectId"), args.projectId))
+      .collect();
+  },
+});
+
+// List existing items for a project (used by smart_merge build)
+export const listItemsForBuild = query({
+  args: { projectId: v.id("storyboard_projects") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("storyboard_items")
+      .withIndex("by_order", (q: any) => q.eq("projectId", args.projectId))
+      .order("asc")
+      .collect();
+  },
+});
+
+// Clear only storyboard items (scenes/frames), preserve elements
+export const clearItems = mutation({
+  args: { projectId: v.id("storyboard_projects") },
+  handler: async (ctx, args) => {
+    const items = await ctx.db
+      .query("storyboard_items")
+      .filter((q: any) => q.eq(q.field("projectId"), args.projectId))
+      .collect();
+    for (const item of items) {
+      await ctx.db.delete(item._id);
+    }
+    return { deleted: items.length };
+  },
+});
+
+// Clear only specific scenes by their sceneId (for replace_section)
+export const clearItemsBySceneIds = mutation({
+  args: {
+    projectId: v.id("storyboard_projects"),
+    sceneIds: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const sceneIdSet = new Set(args.sceneIds);
+    const items = await ctx.db
+      .query("storyboard_items")
+      .filter((q: any) => q.eq(q.field("projectId"), args.projectId))
+      .collect();
+
+    let deleted = 0;
+    for (const item of items) {
+      if (item.sceneId && sceneIdSet.has(item.sceneId)) {
+        await ctx.db.delete(item._id);
+        deleted++;
+      }
+    }
+    return { deleted };
+  },
+});
+
 // Get build status for real-time updates
 export const getBuildStatus = query({
   args: {

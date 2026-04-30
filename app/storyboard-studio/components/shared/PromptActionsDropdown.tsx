@@ -34,6 +34,8 @@ interface PromptActionsDropdownProps {
   // Presets — for save/load prompt + note
   companyId?: string;
   userId?: string;
+  /** Called after loading a prompt — used to inject element badges */
+  onAfterLoadPrompt?: () => void;
 }
 
 export function PromptActionsDropdown({
@@ -54,6 +56,7 @@ export function PromptActionsDropdown({
   onEditorInput,
   companyId,
   userId,
+  onAfterLoadPrompt,
 }: PromptActionsDropdownProps) {
   const [open, setOpen] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState<"prompt" | "note" | null>(null);
@@ -82,6 +85,8 @@ export function PromptActionsDropdown({
       setCurrentPrompt(text);
       onUserPromptChange?.(text);
       onEditorInput?.();
+      // Inject element badges after text is loaded
+      setTimeout(() => onAfterLoadPrompt?.(), 50);
     }
     setOpen(false);
   };

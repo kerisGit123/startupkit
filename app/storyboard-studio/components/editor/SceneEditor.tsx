@@ -518,6 +518,11 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
     api.storyboard.storyboardFiles.listByProject,
     projectId ? { projectId } : "skip"
   );
+  // Elements for auto-attaching reference images at generation time
+  const projectElements = useQuery(
+    api.storyboard.build.listElementsForBuild,
+    projectId ? { projectId } : "skip"
+  );
   const updateStoryboardFile = useMutation(api.storyboard.storyboardFiles.update);
   const removeStoryboardFile = useMutation(api.storyboard.storyboardFiles.remove);
   // Get current default AI key from org_settings for this company
@@ -5475,6 +5480,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   zoomLevel={zoomLevel}
                   onZoomChange={setZoomLevel}
                   activeShotId={activeShot?.id ? String(activeShot.id) : undefined}
+                  activeShotLinkedElements={activeShot?.linkedElements}
                   activeShotDescription={activeShot?.description}
                   activeShotImagePrompt={activeShot?.imagePrompt}
                   activeShotVideoPrompt={activeShot?.videoPrompt}
@@ -5573,7 +5579,25 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         );
                         
                         console.log("Processed reference image URLs:", processedReferenceImages);
-                        
+
+                        // Auto-attach linked element reference images
+                        const activeShot = shots.find(s => s.id === activeShotId);
+                        if (activeShot?.linkedElements && projectElements) {
+                          const existingUrls = new Set(processedReferenceImages);
+                          for (const link of activeShot.linkedElements) {
+                            const el = projectElements.find((e: any) => e._id === link.id);
+                            if (el?.referenceUrls?.length) {
+                              // Use primary variant (first ref image) for consistency
+                              const refUrl = el.referenceUrls[el.primaryIndex ?? 0] || el.referenceUrls[0];
+                              if (refUrl && !existingUrls.has(refUrl)) {
+                                processedReferenceImages.push(refUrl);
+                                existingUrls.add(refUrl);
+                                console.log(`[SceneEditor] Auto-attached element ref: ${el.name} → ${refUrl.substring(0, 60)}...`);
+                              }
+                            }
+                          }
+                        }
+
                         try {
                           console.log("Final credits used:", creditsUsed);
                           console.log("Final quality:", quality);
@@ -6888,7 +6912,8 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       userPrompt={promptText}
                       onUserPromptChange={setPromptText}
                       activeShotId={activeShot?.id ? String(activeShot.id) : undefined}
-                  activeShotDescription={activeShot?.description}
+                      activeShotLinkedElements={activeShot?.linkedElements}
+                      activeShotDescription={activeShot?.description}
                       activeShotImagePrompt={activeShot?.imagePrompt}
                       activeShotVideoPrompt={activeShot?.videoPrompt}
                       generatedItemImages={

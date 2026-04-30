@@ -11,6 +11,15 @@ export interface CameraMotionOption {
   description: string;
 }
 
+/** Element available for @mention autocomplete */
+export interface MentionableElement {
+  id: string;
+  name: string;
+  type: string;
+  thumbnailUrl?: string;
+  referenceUrls?: string[];
+}
+
 export interface PromptTextareaProps {
   editorRef: React.RefObject<HTMLDivElement | null>;
   editorIsEmpty: boolean;
@@ -32,6 +41,10 @@ export interface PromptTextareaProps {
   onCameraMotionSelect?: (value: string) => void;
   /** Called when prompt text changes via context menu actions (paste, camera motion insert) */
   onPromptChange?: (text: string) => void;
+  /** Elements available for @mention autocomplete */
+  mentionableElements?: MentionableElement[];
+  /** Called when an element is selected from @mention autocomplete */
+  onElementMention?: (element: MentionableElement) => void;
 }
 
 /**
@@ -57,12 +70,83 @@ export function PromptTextarea({
   cameraMotionOptions,
   onCameraMotionSelect,
   onPromptChange,
+  mentionableElements,
+  onElementMention,
 }: PromptTextareaProps) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [showCameraSubmenu, setShowCameraSubmenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const submenuRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
+
+  // ── @ mention autocomplete ────────────────────────────────────────
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionPos, setMentionPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const mentionStartRef = useRef<{ node: Node; offset: number } | null>(null);
+
+  const mentionResults = React.useMemo(() => {
+    if (mentionQuery === null || !mentionableElements?.length) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionableElements.filter(el =>
+      el.name.toLowerCase().includes(q) || el.type.toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [mentionQuery, mentionableElements]);
+
+  // Track @ typing in editor input
+  const handleMentionDetect = useCallback(() => {
+    if (!mentionableElements?.length) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!range.collapsed) { setMentionQuery(null); return; }
+
+    const node = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) { setMentionQuery(null); return; }
+
+    const text = node.textContent || "";
+    const cursorPos = range.startOffset;
+    // Find @ before cursor
+    const beforeCursor = text.slice(0, cursorPos);
+    const atIdx = beforeCursor.lastIndexOf("@");
+    if (atIdx === -1) { setMentionQuery(null); return; }
+
+    // Check there's no space between @ and cursor (allow multi-word like @Lead)
+    const query = beforeCursor.slice(atIdx + 1);
+    if (/\n/.test(query)) { setMentionQuery(null); return; }
+
+    // Get caret position for dropdown placement
+    const rangeRect = range.getBoundingClientRect();
+    setMentionPos({ x: rangeRect.left, y: rangeRect.top });
+    setMentionQuery(query);
+    setMentionIndex(0);
+    mentionStartRef.current = { node, offset: atIdx };
+  }, [mentionableElements]);
+
+  const selectMention = useCallback((element: MentionableElement) => {
+    const start = mentionStartRef.current;
+    const el = editorRef.current;
+    if (!start || !el) return;
+
+    // Delete the @query text
+    const text = start.node.textContent || "";
+    const sel = window.getSelection();
+    if (!sel) return;
+    const cursorOffset = sel.getRangeAt(0).startOffset;
+    start.node.textContent = text.slice(0, start.offset) + text.slice(cursorOffset);
+
+    // Position cursor at the @ position
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    // Call the parent to insert a badge
+    onElementMention?.(element);
+    setMentionQuery(null);
+    mentionStartRef.current = null;
+  }, [editorRef, onElementMention]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -196,13 +280,22 @@ export function PromptTextarea({
         ref={editorRef}
         contentEditable={true}
         suppressContentEditableWarning={true}
-        onInput={onInput}
+        onInput={() => { onInput(); handleMentionDetect(); }}
         onDrop={onDrop}
         onDragOver={onDragOver}
-        onBlur={onBlur}
+        onBlur={(e) => { onBlur(); /* delay so click on dropdown registers */ setTimeout(() => { if (!document.querySelector('[data-mention-dropdown]')) setMentionQuery(null); }, 200); }}
         onCompositionStart={onCompositionStart}
         onCompositionEnd={onCompositionEnd}
-        onKeyDown={onKeyDown}
+        onKeyDown={(e) => {
+          // Handle mention dropdown keyboard nav
+          if (mentionQuery !== null && mentionResults.length > 0) {
+            if (e.key === "ArrowDown") { e.preventDefault(); setMentionIndex(i => Math.min(i + 1, mentionResults.length - 1)); return; }
+            if (e.key === "ArrowUp") { e.preventDefault(); setMentionIndex(i => Math.max(i - 1, 0)); return; }
+            if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); selectMention(mentionResults[mentionIndex]); return; }
+            if (e.key === "Escape") { e.preventDefault(); setMentionQuery(null); return; }
+          }
+          onKeyDown(e);
+        }}
         onContextMenu={handleContextMenu}
         className="w-full bg-transparent px-3 py-2.5 text-(--text-primary) focus:outline-none leading-5 text-[14px] selection:bg-blue-500/20"
         style={{
@@ -219,6 +312,42 @@ export function PromptTextarea({
         </div>
       )}
       {children}
+
+      {/* @ Mention autocomplete dropdown */}
+      {mentionQuery !== null && mentionResults.length > 0 && createPortal(
+        <div
+          data-mention-dropdown
+          className="fixed z-[9999] w-[220px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl py-1 max-h-[240px] overflow-y-auto"
+          style={{ left: mentionPos.x, top: mentionPos.y - 8, transform: "translateY(-100%)" }}
+        >
+          <div className="px-3 pt-1.5 pb-1 text-[9px] font-semibold tracking-wider uppercase text-(--text-tertiary)">
+            Elements
+          </div>
+          {mentionResults.map((el, i) => {
+            const typeIcon = el.type === "character" ? "👤" : el.type === "environment" ? "🌍" : "📦";
+            return (
+              <button
+                key={el.id}
+                onMouseDown={(e) => { e.preventDefault(); selectMention(el); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+                  i === mentionIndex ? "bg-white/8 text-(--text-primary)" : "text-(--text-secondary) hover:bg-white/5"
+                }`}
+              >
+                {el.thumbnailUrl ? (
+                  <img src={el.thumbnailUrl} alt="" className="w-6 h-6 rounded object-cover shrink-0" />
+                ) : (
+                  <span className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-[11px] shrink-0">{typeIcon}</span>
+                )}
+                <div className="min-w-0">
+                  <div className="text-[12px] font-medium truncate">{el.name}</div>
+                  <div className="text-[10px] text-(--text-tertiary) capitalize">{el.type}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>,
+        document.body
+      )}
 
       {/* Context Menu (portal to body) — uses design system CSS variables */}
       {contextMenu && createPortal(

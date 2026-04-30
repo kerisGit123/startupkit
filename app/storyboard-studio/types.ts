@@ -66,6 +66,7 @@ export interface Shot {
   lighting?: string;
   bgDescription?: string;
   characters?: string[];
+  linkedElements?: Array<{ id: string; name: string; type: string }>;
 }
 
 export interface Tag {
