@@ -1,4 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '@/convex/_generated/api';
 import { type PricingModel, DEFAULT_PRICING_MODELS } from '@/lib/storyboard/pricing';
 
 // Re-export for consumers that import from this file
@@ -12,336 +14,54 @@ interface Analytics {
   usageByModel: Record<string, number>;
 }
 
-// DEFAULT_PRICING_MODELS is now imported from @/lib/storyboard/pricing
-// The following legacy array is kept commented for reference but no longer used:
-// See lib/storyboard/pricing.ts for the canonical definitions
-const _LEGACY_MODELS_REMOVED: PricingModel[] = [
-  {
-    modelId: "nano-banana-2",
-    modelName: "Nano Banana 2",
-    modelType: "image",
-    isActive: true,
-    pricingType: "formula",
-    assignedFunction: "getNanoBananaPrice",
-    creditCost: 8,
-    factor: 1.3,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 8,
-        qualities: [
-          { name: "1K", cost: 8 },
-          { name: "2K", cost: 12 },
-          { name: "4K", cost: 18 },
-        ],
-      },
-    }),
-  },
-  {
-    modelId: "nano-banana-pro",
-    modelName: "Nano Banana Pro",
-    modelType: "image",
-    isActive: true,
-    pricingType: "formula",
-    assignedFunction: "getNanoBananaPrice",
-    creditCost: 18,
-    factor: 1.3,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 18,
-        qualities: [
-          { name: "1K", cost: 18 },
-          { name: "2K", cost: 18 },
-          { name: "4K", cost: 24 },
-        ],
-      },
-    }),
-  },
-  {
-    modelId: "bytedance/seedance-1.5-pro",
-    modelName: "Seedance 1.5 Pro",
-    modelType: "video",
-    isActive: true,
-    pricingType: "formula",
-    assignedFunction: "getSeedance15",
-    creditCost: 7,
-    factor: 1.3,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 7,
-        resolution_multipliers: { "480P": 1, "720P": 2, "1080P": 4 },
-        audio_multiplier: 2,
-        duration_multipliers: { "4s": 1, "8s": 2, "12s": 4 },
-      },
-    }),
-  },
-  {
-     modelId: "google/veo-3.1",
-  modelName: "Veo 3.1",
-  modelType: "video",
-  isActive: true,
-  pricingType: "formula",
-    assignedFunction: "getVeo31",
-    creditCost: 60,
-    factor: 1.3,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 60,
-      qualities: [
-        { name: "fast", cost: 60 },
-        { name: "quality", cost: 250 }
-      ],
-      },
-    }),
-  },
-  {
-    modelId: "topaz/image-upscale",
-    modelName: "Topaz Upscale",
-    modelType: "image",
-    isActive: true,
-    pricingType: "formula",
-    assignedFunction: "getTopazUpscale",
-    creditCost: 10,
-    factor: 1.3,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 10,
-        qualities: [
-          { name: "1", cost: 8 },
-          { name: "2", cost: 12 },
-          { name: "4", cost: 15 },
-        ],
-      },
-    }),
-  },
-  {
-    modelId: "gpt-image/1.5-image-to-image",
-    modelName: "GPT 1.5 Image to Image",
-    modelType: "image",
-    isActive: true,
-    pricingType: "formula",
-    assignedFunction: "getGptImagePrice",
-    creditCost: 4,
-    factor: 1.3,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 4,
-        qualities: [
-          { name: "medium", cost: 4 },
-          { name: "high", cost: 22 }
-        ]
-      }
-    }),
-  },
-  {
-    modelId: "gpt-image-2-text-to-image",
-    modelName: "GPT Image 2 (Text to Image)",
-    modelType: "image",
-    isActive: true,
-    isHot: true,
-    pricingType: "formula",
-    assignedFunction: "getGptImage2Price",
-    creditCost: 6,
-    factor: 0.625,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 6,
-        qualities: [
-          { name: "1K", cost: 6 },
-          { name: "2K", cost: 10 },
-          { name: "4K", cost: 16 },
-        ],
-      },
-    }),
-  },
-  {
-    modelId: "gpt-image-2-image-to-image",
-    modelName: "GPT Image 2 (Image to Image)",
-    modelType: "image",
-    isActive: true,
-    isHot: true,
-    pricingType: "formula",
-    assignedFunction: "getGptImage2Price",
-    creditCost: 6,
-    factor: 0.625,
-    formulaJson: JSON.stringify({
-      pricing: {
-        base_cost: 6,
-        qualities: [
-          { name: "1K", cost: 6 },
-          { name: "2K", cost: 10 },
-          { name: "4K", cost: 16 },
-        ],
-      },
-    }),
-  },
-  {
-    modelId: "google/nano-banana-edit",
-    modelName: "Nano Banana Edit",
-    modelType: "image",
-    isActive: true,
-    pricingType: "fixed",
-    creditCost: 4,
-    factor: 1.3,
-  },
-  {
-    modelId: "ideogram/character-edit",
-    modelName: "Character Edit",
-    modelType: "image",
-    isActive: true,
-    pricingType: "fixed",
-    creditCost: 5,
-    factor: 1.3,
-  },
-  {
-    modelId: "recraft/remove-background",
-    modelName: "Remove Background",
-    modelType: "image",
-    isActive: true,
-    pricingType: "fixed",
-    creditCost: 1,
-    factor: 1.0,
-  },
-  {
-    modelId: "ideogram/v3-reframe",
-    modelName: "Ideogram V3 Reframe",
-    modelType: "image",
-    isActive: true,
-    pricingType: "fixed",
-    creditCost: 7,
-    factor: 1.0,
-  },
-  {
-    modelId: "recraft/crisp-upscale",
-    modelName: "Crisp Upscale",
-   modelType: "image",
-    isActive: true,
-    pricingType: "fixed",
-    creditCost: 0.5,
-    factor: 1.3,
-  },
-
-];
-
-// DEFAULT_PRICING_MODELS re-exported from @/lib/storyboard/pricing via the import at top of file
-
 export const usePricingData = () => {
-  const [models, setModels] = useState<PricingModel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Single reactive query — Convex deduplicates across all components
+  const dbModels = useQuery(api.storyboard.pricing.getAllPricingModels);
 
-  useEffect(() => {
-    const fetchPricingModels = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const loading = dbModels === undefined;
 
-        const response = await fetch('/api/storyboard/pricing/models');
-        
-        if (!response.ok) {
-          console.warn("[usePricingData] API returned", response.status, "— using defaults");
-          setModels(DEFAULT_PRICING_MODELS);
-          return;
-        }
+  // Merge DB models with defaults (fill assignedFunction, add missing defaults)
+  const models = useMemo<PricingModel[]>(() => {
+    if (!dbModels) return [];
+    if (dbModels.length === 0) return DEFAULT_PRICING_MODELS;
 
-        const data = await response.json();
-
-        if (!Array.isArray(data)) {
-          console.warn("[usePricingData] Invalid response format, using defaults");
-          setModels(DEFAULT_PRICING_MODELS);
-          return;
-        }
-
-        // If database is empty, seed it once
-        if (data.length === 0) {
-          console.log("[usePricingData] Database is empty, seeding pricing models...");
-          const seedResponse = await fetch('/api/storyboard/pricing/seed-pricing-models', {
-            method: 'POST',
-          });
-          if (!seedResponse.ok) {
-            console.warn("[usePricingData] Failed to seed pricing models, using defaults");
-            setModels(DEFAULT_PRICING_MODELS);
-          } else {
-            // Refetch after seeding
-            const refetchResponse = await fetch('/api/storyboard/pricing/models');
-            if (refetchResponse.ok) {
-              const refetchedData = await refetchResponse.json();
-              setModels(refetchedData);
-              console.log("[usePricingData] Seeded and loaded", refetchedData.length, "models");
-            } else {
-              setModels(DEFAULT_PRICING_MODELS);
-            }
-          }
-        } else {
-          // Use DB data, merging with defaults so assignedFunction is always present
-          const dbModelIds = new Set(data.map((m: any) => m.modelId));
-          const merged = data.map((dbModel: any) => {
-            const defaultModel = DEFAULT_PRICING_MODELS.find(d => d.modelId === dbModel.modelId);
-            // Fill in assignedFunction from defaults if DB record is missing it
-            if (defaultModel && !dbModel.assignedFunction && defaultModel.assignedFunction) {
-              return { ...dbModel, assignedFunction: defaultModel.assignedFunction };
-            }
-            return dbModel;
-          });
-          // Add any default models not in DB
-          for (const def of DEFAULT_PRICING_MODELS) {
-            if (!dbModelIds.has(def.modelId)) {
-              merged.push(def);
-            }
-          }
-          console.log("[usePricingData] Loaded", merged.length, "models (", data.length, "from DB)");
-          setModels(merged);
-        }
-        
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching pricing models:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch pricing models');
-        // Use default models as fallback
-        setModels(DEFAULT_PRICING_MODELS);
-      } finally {
-        setLoading(false);
+    const dbModelIds = new Set(dbModels.map((m: any) => m.modelId));
+    const merged: PricingModel[] = dbModels.map((dbModel: any) => {
+      const defaultModel = DEFAULT_PRICING_MODELS.find(d => d.modelId === dbModel.modelId);
+      if (defaultModel && !dbModel.assignedFunction && defaultModel.assignedFunction) {
+        return { ...dbModel, assignedFunction: defaultModel.assignedFunction };
       }
-    };
-
-    fetchPricingModels();
-  }, []);
+      return dbModel;
+    });
+    for (const def of DEFAULT_PRICING_MODELS) {
+      if (!dbModelIds.has(def.modelId)) {
+        merged.push(def);
+      }
+    }
+    return merged;
+  }, [dbModels]);
 
   const getModelCredits = useCallback((modelId: string, selectedQuality: string = "2K"): number => {
     const model = models.find(m => m.modelId === modelId)
       || DEFAULT_PRICING_MODELS.find(m => m.modelId === modelId);
-    if (!model) {
-      console.log("[usePricingData] Model not found:", modelId);
-      return 0;
-    }
-    
+    if (!model) return 0;
+
     if (model.pricingType === 'fixed') {
-      const result = Math.ceil((model.creditCost || 0) * (model.factor || 1));
-      console.log("[usePricingData] Fixed pricing result:", result);
-      return result;
+      return Math.ceil((model.creditCost || 0) * (model.factor || 1));
     }
-    
-    // Formula-based pricing (use selected quality for multipliers)
+
+    // Formula-based pricing
     if (model.assignedFunction) {
       const base = model.creditCost || 0;
       const factor = model.factor || 1;
-      
+
       switch (model.assignedFunction) {
         case 'getNanoBananaPrice':
           if (model.formulaJson) {
             try {
               const formula = JSON.parse(model.formulaJson);
               const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-              if (qualityData) {
-                const nanoResult = Math.ceil(qualityData.cost * factor);
-                console.log("[usePricingData] Nano Banana pricing from formula:", {
-                  modelId,
-                  selectedQuality,
-                  cost: qualityData.cost,
-                  factor,
-                  result: nanoResult,
-                });
-                return nanoResult;
-              }
+              if (qualityData) return Math.ceil(qualityData.cost * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Nano Banana formula:", e);
             }
@@ -353,7 +73,6 @@ export const usePricingData = () => {
               const formula = JSON.parse(model.formulaJson);
               const pricing = formula.pricing;
 
-              // Parse resolution and duration from selectedQuality: "480P_8s_audio"
               const resolutionMatch = selectedQuality.match(/^([A-Za-z0-9]+)/);
               const resolutionValue = resolutionMatch ? resolutionMatch[1] : "480P";
               const durationMatch = selectedQuality.match(/(\d+s)/);
@@ -368,14 +87,10 @@ export const usePricingData = () => {
                 const resDurations = pricing.resolutions[resKey];
                 const baseCost = resDurations?.[durationKey] ?? base;
                 const audioMultiplier = hasAudio && pricing.audio_multiplier ? pricing.audio_multiplier : 1;
-                const result = Math.ceil(baseCost * audioMultiplier * factor);
-                console.log("[usePricingData] Seedance 1.5 pricing:", {
-                  modelId, selectedQuality, resKey, durationKey, baseCost, audioMultiplier, factor, result
-                });
-                return result;
+                return Math.ceil(baseCost * audioMultiplier * factor);
               }
 
-              // Legacy format fallback: base_cost * resolution_multipliers * duration_multipliers
+              // Legacy format fallback
               const legacyResKey = Object.keys(pricing.resolution_multipliers || {}).find(
                 key => key.toLowerCase() === resolutionValue.toLowerCase()
               );
@@ -385,36 +100,20 @@ export const usePricingData = () => {
                 durationMultiplier = pricing.duration_multipliers[durationMatch[1]] || 1;
               }
               const audioMult = hasAudio && pricing.audio_multiplier ? pricing.audio_multiplier : 1;
-              const result = Math.ceil(
+              return Math.ceil(
                 (pricing.base_cost || base) * resolutionMultiplier * durationMultiplier * audioMult * factor
               );
-              console.log("[usePricingData] Seedance 1.5 legacy pricing:", {
-                modelId, selectedQuality, baseCost: pricing.base_cost, resolutionMultiplier, durationMultiplier, audioMult, factor, result
-              });
-              return result;
             } catch (e) {
               console.error("[usePricingData] Error parsing Seedance formula:", e);
             }
           }
-          
-          // Fallback to basic calculation
           return Math.ceil(base * factor);
         case 'getTopazUpscale':
           if (model.formulaJson) {
             try {
               const formula = JSON.parse(model.formulaJson);
               const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-              if (qualityData) {
-                const topazResult = Math.ceil(qualityData.cost * factor);
-                console.log("[usePricingData] Topaz pricing from formula:", {
-                  modelId,
-                  selectedQuality,
-                  cost: qualityData.cost,
-                  factor,
-                  result: topazResult,
-                });
-                return topazResult;
-              }
+              if (qualityData) return Math.ceil(qualityData.cost * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Topaz formula:", e);
             }
@@ -425,17 +124,7 @@ export const usePricingData = () => {
             try {
               const formula = JSON.parse(model.formulaJson);
               const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-              if (qualityData) {
-                const veoResult = Math.ceil(qualityData.cost * factor);
-                console.log("[usePricingData] Veo 3.1 pricing from formula:", {
-                  modelId,
-                  selectedQuality,
-                  cost: qualityData.cost,
-                  factor,
-                  result: veoResult,
-                });
-                return veoResult;
-              }
+              if (qualityData) return Math.ceil(qualityData.cost * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Veo 3.1 formula:", e);
             }
@@ -446,17 +135,13 @@ export const usePricingData = () => {
             try {
               const formula = JSON.parse(model.formulaJson);
               const qualities = formula.pricing?.qualities || [];
-              // Parse resolution and duration from selectedQuality: "720P_4s"
               const klingResMatch = selectedQuality.match(/^(\d+[pP])/i);
               const klingDurMatch = selectedQuality.match(/(\d+)s/);
               const klingRes = klingResMatch ? klingResMatch[1] : "720p";
               const klingDuration = klingDurMatch ? parseInt(klingDurMatch[1]) : 4;
-              // Case-insensitive quality lookup
               const klingQuality = qualities.find((q: any) => q.name.toLowerCase() === klingRes.toLowerCase());
               const costPerSec = klingQuality ? klingQuality.cost : base;
-              const result = Math.ceil(costPerSec * klingDuration * factor);
-              console.log("[usePricingData] Kling Motion Control pricing:", { modelId, selectedQuality, klingRes, costPerSec, klingDuration, factor, result });
-              return result;
+              return Math.ceil(costPerSec * klingDuration * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Kling Motion Control formula:", e);
             }
@@ -467,16 +152,13 @@ export const usePricingData = () => {
             try {
               const formula = JSON.parse(model.formulaJson);
               const qualities = formula.pricing?.qualities || [];
-              // Parse resolution and duration from selectedQuality: "480p_6s"
               const grokResMatch = selectedQuality.match(/^(\d+[pP])/i);
               const grokDurMatch = selectedQuality.match(/(\d+)s/);
               const grokRes = grokResMatch ? grokResMatch[1] : "480p";
               const grokDuration = grokDurMatch ? parseInt(grokDurMatch[1]) : 6;
               const grokQuality = qualities.find((q: any) => q.name.toLowerCase() === grokRes.toLowerCase());
               const costPerSec = grokQuality ? grokQuality.cost : base;
-              const result = Math.ceil(costPerSec * grokDuration * factor);
-              console.log("[usePricingData] Grok Imagine pricing:", { modelId, selectedQuality, grokRes, costPerSec, grokDuration, factor, result });
-              return result;
+              return Math.ceil(costPerSec * grokDuration * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Grok Imagine formula:", e);
             }
@@ -487,16 +169,13 @@ export const usePricingData = () => {
             try {
               const formula = JSON.parse(model.formulaJson);
               const qualities = formula.pricing?.qualities || [];
-              // Parse upscale factor and duration from selectedQuality: "2_10s"
               const topazFactorMatch = selectedQuality.match(/^(\d+)/);
               const topazDurMatch = selectedQuality.match(/(\d+)s/);
               const topazFactor = topazFactorMatch ? topazFactorMatch[1] : "2";
               const topazDuration = topazDurMatch ? parseInt(topazDurMatch[1]) : 0;
               const topazQuality = qualities.find((q: any) => q.name === topazFactor);
               const costPerSec = topazQuality ? topazQuality.cost : base;
-              const result = Math.ceil(costPerSec * topazDuration * factor);
-              console.log("[usePricingData] Topaz Video Upscale pricing:", { modelId, selectedQuality, topazFactor, costPerSec, topazDuration, factor, result });
-              return result;
+              return Math.ceil(costPerSec * topazDuration * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Topaz Video Upscale formula:", e);
             }
@@ -507,21 +186,17 @@ export const usePricingData = () => {
             try {
               const formula = JSON.parse(model.formulaJson);
               const resolutions = formula.pricing?.resolutions;
-              // Parse selectedQuality: format "480P_5s_video" or "720P_8s_novideo"
               const resMatch = selectedQuality.match(/^(\d+[pP])/i);
               const durMatch = selectedQuality.match(/(\d+)s/);
               const hasVideo = !selectedQuality.includes('novideo');
               const rawRes = resMatch ? resMatch[1] : "480p";
               const duration = durMatch ? parseInt(durMatch[1]) : 5;
-              // Case-insensitive resolution lookup
               const resKey = Object.keys(resolutions || {}).find(
                 k => k.toLowerCase() === rawRes.toLowerCase()
               ) || rawRes;
               const resCost = resolutions?.[resKey];
               const costPerSec = resCost ? (hasVideo ? resCost.video_input : resCost.no_video) : base;
-              const result = Math.ceil(costPerSec * duration * factor);
-              console.log("[usePricingData] Seedance 2.0 pricing:", { modelId, selectedQuality, resKey, hasVideo, costPerSec, duration, factor, result });
-              return result;
+              return Math.ceil(costPerSec * duration * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Seedance 2.0 formula:", e);
             }
@@ -542,35 +217,27 @@ export const usePricingData = () => {
               ) || rawRes;
               const resCost = resolutions?.[resKey];
               const costPerSec = resCost ? (hasVideo ? resCost.video_input : resCost.no_video) : base;
-              const result = Math.ceil(costPerSec * duration * factor);
-              console.log("[usePricingData] Seedance 2.0 Fast pricing:", { modelId, selectedQuality, resKey, hasVideo, costPerSec, duration, factor, result });
-              return result;
+              return Math.ceil(costPerSec * duration * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing Seedance 2.0 Fast formula:", e);
             }
           }
           return Math.ceil(base * factor);
         case 'getInfinitalkFromAudio': {
-          // Parse resolution and duration from selectedQuality: "480p_10s"
           const itResMatch = selectedQuality.match(/^(\d+[pP])/i);
           const itDurMatch = selectedQuality.match(/(\d+)s/);
           const itRes = itResMatch ? itResMatch[1].toLowerCase() : "480p";
           const itDuration = itDurMatch ? parseInt(itDurMatch[1]) : 5;
           const itCosts: Record<string, number> = { "480p": 3, "720p": 12 };
           const itCostPerSec = itCosts[itRes] || base;
-          const itResult = Math.ceil(itCostPerSec * itDuration * factor);
-          console.log("[usePricingData] InfiniteTalk pricing:", { modelId, selectedQuality, itRes, itCostPerSec, itDuration, factor, result: itResult });
-          return itResult;
+          return Math.ceil(itCostPerSec * itDuration * factor);
         }
         case 'getElevenLabsTTS': {
-          // Parse character count from selectedQuality: "chars_1500"
           const charMatch = selectedQuality.match(/(\d+)/);
           const charCount = charMatch ? parseInt(charMatch[1]) : 0;
           if (charCount <= 0) return 0;
           const blocks = Math.ceil(charCount / 1000);
-          const ttsResult = Math.ceil(blocks * base * factor);
-          console.log("[usePricingData] ElevenLabs TTS pricing:", { modelId, selectedQuality, charCount, blocks, base, factor, result: ttsResult });
-          return ttsResult;
+          return Math.ceil(blocks * base * factor);
         }
         case 'getGptImagePrice':
         case 'getGptImage2Price': {
@@ -578,10 +245,7 @@ export const usePricingData = () => {
             try {
               const formula = JSON.parse(model.formulaJson);
               const qualityData = formula.pricing?.qualities?.find((q: any) => q.name === selectedQuality);
-              if (qualityData) {
-                const result = Math.ceil(qualityData.cost * factor);
-                return result;
-              }
+              if (qualityData) return Math.ceil(qualityData.cost * factor);
             } catch (e) {
               console.error("[usePricingData] Error parsing GPT Image formula:", e);
             }
@@ -589,42 +253,28 @@ export const usePricingData = () => {
           return Math.ceil(base * factor);
         }
         default:
-          console.log("[usePricingData] Unknown assigned function, using fallback");
           return Math.ceil((model.creditCost || 0) * (model.factor || 1));
       }
     } else {
-      console.log("[usePricingData] No assigned function, using simple calculation");
       return Math.ceil((model.creditCost || 0) * (model.factor || 1));
     }
   }, [models]);
 
-  // Additional management functions from hooks version
+  // Admin operations — still use fetch to API routes (low frequency, admin-only)
   const resetToDefaults = async () => {
     try {
-      console.log("🔄 Starting reset using Convex resetToDefaults function...");
-      
-      // Use the Convex resetToDefaults function directly
       const res = await fetch("/api/storyboard/pricing/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "resetDefaults" }),
       });
-      
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error("❌ Reset failed:", errorData);
         throw new Error(`Failed to reset pricing models: ${errorData.details || errorData.error || 'Unknown error'}`);
       }
-      
-      const result = await res.json();
-      console.log("✅ Reset successful:", result);
-      
-      // Refresh models
-      await fetchPricingModels();
-      console.log("🎉 Reset completed successfully!");
       return true;
     } catch (err) {
-      console.error("❌ Error resetting defaults:", err);
+      console.error("Error resetting defaults:", err);
       return false;
     }
   };
@@ -636,14 +286,10 @@ export const usePricingData = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-
       if (!response.ok) {
         const errorBody = await response.json().catch(async () => ({ details: await response.text() }));
         throw new Error(errorBody.details || errorBody.error || `Failed to save pricing model: ${response.status}`);
       }
-
-      // Refresh models after save
-      await fetchPricingModels();
       return { success: true };
     } catch (err) {
       console.error("Failed to save model:", err);
@@ -653,57 +299,18 @@ export const usePricingData = () => {
 
   const toggleModelActive = async (modelId: string) => {
     try {
-      console.log("Toggling model active status for modelId:", modelId);
-      
-      // Find the current model to get its current status
       const currentModel = models.find(m => m.modelId === modelId);
-      if (!currentModel) {
-        throw new Error("Model not found");
-      }
-      
-      // Toggle the isActive status
-      const updatedData = {
-        modelId: modelId,
-        isActive: !currentModel.isActive
-      };
-      
-      console.log("Sending update with data:", updatedData);
-      
-      // Update local state immediately for instant UI feedback
-      setModels(prevModels => 
-        prevModels.map(model => 
-          model.modelId === modelId 
-            ? { ...model, isActive: !model.isActive }
-            : model
-        )
-      );
-      
+      if (!currentModel) throw new Error("Model not found");
+
       const response = await fetch("/api/storyboard/pricing/models", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedData),
+        body: JSON.stringify({ modelId, isActive: !currentModel.isActive }),
       });
-      
-      console.log("Toggle API response status:", response.status);
-      console.log("Toggle API response ok:", response.ok);
-      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Toggle API error response:", errorText);
-        
-        // Revert local state on error
-        setModels(prevModels => 
-          prevModels.map(model => 
-            model.modelId === modelId 
-              ? { ...model, isActive: model.isActive }
-              : model
-          )
-        );
-        
         throw new Error(errorText || `Failed to toggle model: ${response.status}`);
       }
-      
-      console.log("✅ Model toggle successful");
       return true;
     } catch (err) {
       console.error("Failed to toggle model:", err);
@@ -718,14 +325,10 @@ export const usePricingData = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ modelId }),
       });
-
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(errorText || `Failed to delete model: ${response.status}`);
       }
-
-      // Refresh models after deletion
-      await fetchPricingModels();
       return true;
     } catch (err) {
       console.error("Failed to delete model:", err);
@@ -736,9 +339,7 @@ export const usePricingData = () => {
   const getAnalytics = async (): Promise<Analytics> => {
     try {
       const response = await fetch("/api/storyboard/pricing/analytics");
-      if (!response.ok) {
-        throw new Error("Failed to fetch analytics");
-      }
+      if (!response.ok) throw new Error("Failed to fetch analytics");
       return await response.json();
     } catch (err) {
       console.error("Failed to fetch analytics:", err);
@@ -746,79 +347,13 @@ export const usePricingData = () => {
     }
   };
 
-  // Helper function to fetch models (extracted from useEffect)
-  const fetchPricingModels = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await fetch('/api/storyboard/pricing/models');
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch pricing models');
-      }
-
-      const data = await response.json();
-
-      if (!Array.isArray(data)) {
-        console.warn("[usePricingData] Invalid response format, using defaults");
-        setModels(DEFAULT_PRICING_MODELS);
-        return;
-      }
-
-      // If database is empty, seed it once
-      if (data.length === 0) {
-        console.log("[usePricingData] Database is empty, seeding pricing models...");
-        const seedResponse = await fetch('/api/storyboard/pricing/seed-pricing-models', {
-          method: 'POST',
-        });
-        if (!seedResponse.ok) {
-          console.warn("[usePricingData] Failed to seed pricing models, using defaults");
-          setModels(DEFAULT_PRICING_MODELS);
-        } else {
-          // Refetch after seeding
-          const refetchResponse = await fetch('/api/storyboard/pricing/models');
-          if (refetchResponse.ok) {
-            const refetchedData = await refetchResponse.json();
-            setModels(refetchedData);
-            console.log("[usePricingData] Seeded and loaded", refetchedData.length, "models");
-          } else {
-            setModels(DEFAULT_PRICING_MODELS);
-          }
-        }
-      } else {
-        // Use DB data, merging with defaults so assignedFunction is always present
-        const dbModelIds = new Set(data.map((m: any) => m.modelId));
-        const merged = data.map((dbModel: any) => {
-          const defaultModel = DEFAULT_PRICING_MODELS.find(d => d.modelId === dbModel.modelId);
-          if (defaultModel && !dbModel.assignedFunction && defaultModel.assignedFunction) {
-            return { ...dbModel, assignedFunction: defaultModel.assignedFunction };
-          }
-          return dbModel;
-        });
-        for (const def of DEFAULT_PRICING_MODELS) {
-          if (!dbModelIds.has(def.modelId)) {
-            merged.push(def);
-          }
-        }
-        console.log("[usePricingData] Loaded", merged.length, "models (", data.length, "from DB)");
-        setModels(merged);
-      }
-
-      setError(null);
-    } catch (err) {
-      console.error("[usePricingData] Error fetching pricing models:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch pricing data");
-      setModels(DEFAULT_PRICING_MODELS);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // fetchPricingModels is no longer needed — Convex useQuery auto-updates
+  const fetchPricingModels = async () => {};
 
   return {
     models,
     loading,
-    error,
+    error: null as string | null,
     getModelCredits,
     resetToDefaults,
     saveModel,

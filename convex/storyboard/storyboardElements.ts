@@ -75,29 +75,16 @@ export const listByProject = query({
     companyId: v.optional(v.string()),
   },
   handler: async (ctx, { projectId, type, companyId }) => {
-    console.log(`[listByProject] === START ===`);
-    console.log(`[listByProject] Args: projectId=${projectId}, type=${type}, companyId=${companyId}`);
-    
     // Get user from auth context
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      console.log(`[listByProject] ERROR: User not authenticated`);
       throw new Error("User not authenticated");
     }
-    
-    console.log(`[listByProject] Auth identity:`, {
-      subject: identity.subject,
-      orgId: identity.orgId,
-      orgRole: identity.orgRole
-    });
-    
+
     const project = await ctx.db.get(projectId);
     if (!project) {
-      console.log(`[listByProject] ERROR: Project not found for projectId=${projectId}`);
       throw new Error("Project not found");
     }
-    
-    console.log(`[listByProject] Project found:`, { id: project._id, name: project.name, companyId: project.companyId });
     
     const candidateCompanyIds = Array.from(new Set([
       companyId,
@@ -106,11 +93,6 @@ export const listByProject = query({
       identity.subject,
     ].filter((value): value is string => Boolean(value))));
 
-    console.log(`[listByProject] Candidate companyIds=${candidateCompanyIds.join(",")}`);
-    console.log(`[listByProject] Filtering by projectId=${projectId}`);
-    if (type) {
-      console.log(`[listByProject] Filtering by type=${type}`);
-    }
 
     const allProjectElements = await ctx.db
       .query("storyboard_elements")
@@ -147,7 +129,6 @@ export const listByProject = query({
     }
 
     const combined = [...results, ...externalElements];
-    console.log(`[listByProject] Found ${results.length} project elements + ${externalElements.length} public/shared elements`);
 
     return combined;
   },
