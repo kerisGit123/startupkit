@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download, FileText, Share2, RefreshCw, Mic, Pencil, Check } from "lucide-react";
+import { Eye, Trash2, AlertCircle, Loader2, Cpu, Info, Copy, Play, X, Download, FileText, Share2, RefreshCw, Mic, Pencil, Check, Clock, RectangleHorizontal, Coins } from "lucide-react";
 import { VideoPreviewDialog } from "../shared/VideoPreviewDialog";
 import { CreatePersonaDialog } from "./CreatePersonaDialog";
 import { EditPersonaDialog } from "./EditPersonaDialog";
@@ -494,7 +494,52 @@ export function GeneratedImageCard({
         )}
       </div>
       
-      {/* Metadata Section */}
+      {/* Metadata Footer — Completed */}
+      {image.status === 'completed' && (
+        <div className="px-3 py-2 space-y-1.5">
+          {/* Model + Time */}
+          <div className="flex items-center gap-1.5">
+            <Cpu className="w-3 h-3 text-(--text-tertiary) shrink-0" strokeWidth={1.75} />
+            <span className="text-(--text-secondary) text-[11px] font-medium truncate">
+              {image.metadata?.model}
+            </span>
+            {image.metadata?.timestamp && (
+              <span className="text-(--text-tertiary) text-[10px] ml-auto shrink-0">
+                {formatRelativeTime(image.metadata.timestamp)}
+              </span>
+            )}
+          </div>
+
+          {/* Duration / Aspect / Credits row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {image.fileType === 'video' && image.metadata?.parameters?.duration && (
+              <span className="flex items-center gap-1 text-[10px] text-(--text-tertiary)">
+                <Clock className="w-2.5 h-2.5" strokeWidth={1.75} />
+                {image.metadata.parameters.duration}s
+              </span>
+            )}
+            {image.metadata?.parameters?.aspect_ratio && (
+              <span className="flex items-center gap-1 text-[10px] text-(--text-tertiary)">
+                <RectangleHorizontal className="w-2.5 h-2.5" strokeWidth={1.75} />
+                {image.metadata.parameters.aspect_ratio}
+              </span>
+            )}
+            {creditsUsed !== undefined && creditsUsed > 0 && (
+              <span className="flex items-center gap-1 text-[10px] text-(--text-tertiary)">
+                <Coins className="w-2.5 h-2.5" strokeWidth={1.75} />
+                {creditsUsed}
+              </span>
+            )}
+            {image.metadata?.generationTime > 0 && (
+              <span className="text-[10px] text-(--text-tertiary) ml-auto">
+                {image.metadata.generationTime}s
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Metadata Section — Processing/Error */}
       {image.status !== 'completed' && (
         <div className="px-3 py-2.5">
           {/* Status Badge + Response Code */}
