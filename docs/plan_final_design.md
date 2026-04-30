@@ -1381,3 +1381,121 @@ Divider: h-px bg-(--border-primary) mx-2 my-1
 | **NEW** `components/workspace/DetailPanel.tsx` | Right-side edit panel with tabbed interface |
 | **NEW** `components/workspace/ActionBar.tsx` | Bottom persistent toolbar |
 | **NEW** `components/workspace/FrameContextMenu.tsx` | Right-click menu component |
+
+---
+
+## 19. Frame Info Panel Improvements (Right Panel in SceneEditor)
+
+### Overview
+The right info panel (`w-[260px]`) in SceneEditor displays metadata for the current canvas content. Improved to be media-type-aware: Cinema Studio shows image metadata only, with dedicated sections for video and audio files.
+
+### Quality Field Formatting
+```
+Raw JSON like:
+  {"type":"gpt-image-2","mode":"text-to-image","nsfwChecker":false,"resolution":"1K"}
+Now displays as:
+  "1K, image to image"
+
+formatQuality() parses JSON, extracts resolution + mode, falls back to plain string.
+```
+
+### Cinema Studio — Image Files Only
+```
+Previously: matched ANY latest file (video/audio metadata would show while canvas displayed an image)
+Now: splits shotFiles into imageFiles / videoFiles / audioFiles
+     Cinema Studio metadata only matches image files
+     Prompt also sourced from image files first
+```
+
+### Videos Section (grid, 3 per row)
+```
+Section:   "VIDEOS (N)" — only shown when videoFiles exist
+Layout:    grid grid-cols-3 gap-1.5 (wrapping, no scrollbar)
+
+Thumbnail:
+  aspect-video rounded-md overflow-hidden
+  border border-(--border-primary) hover:border-(--border-secondary)
+  bg-(--bg-primary)
+
+  <video> element, seeks to 0.5s on load
+  Play icon overlay on hover: bg-black/30 → Play w-3.5 fill white
+  Model label at bottom: bg-black/60 text-[7px] text-white/80
+
+Click: opens VideoPreviewDialog
+```
+
+### Audio Section (accent pill dropdown)
+```
+Section:   "AUDIO (N)" — only shown when audioFiles exist
+
+Trigger Pill (rounded-full, accent-bordered, like "Commercial" badge):
+  Music files: border-purple-500/40 bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.15)]
+  Audio files: border-blue-500/40 bg-blue-500/10 shadow-[0_0_8px_rgba(59,130,246,0.15)]
+
+  Layout: w-full flex items-center gap-2 rounded-full px-3 py-1.5
+  Icon:   Mic w-3.5 h-3.5 (purple-400 or blue-400)
+  Label:  text-[12px] font-medium (purple-200 or blue-200) truncate
+  Chevron: w-3 h-3, rotates 180° when open
+
+Below pill:
+  Left:  model name text-[10px] text-(--text-tertiary)
+  Right: Play button — rounded-full px-2 py-1 text-[10px] font-medium
+         accent bg (purple-500/15 or blue-500/15)
+         Play icon w-3 h-3 fill + "Play" label
+
+Dropdown Panel:
+  absolute top-[calc(100%-20px)] mt-1 z-50
+  bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl
+  py-1.5 max-h-[220px] overflow-y-auto
+
+  Item: w-full flex items-center gap-2.5 px-3 py-2
+    Icon circle: w-6 h-6 rounded-full bg-purple-500/20 or bg-blue-500/20
+      Mic w-3 h-3 inside
+    Title: text-[12px] text-(--text-primary) font-medium truncate
+    Subtitle: text-[10px] text-(--text-tertiary) (model name)
+    Selected: bg-white/8 + accent dot (w-1.5 h-1.5 rounded-full)
+    Hover: hover:bg-white/5
+
+  Backdrop: fixed inset-0 z-40 (click to close)
+
+State: audioDropdownOpen, selectedAudioId
+Click item → updates selectedAudioId, closes dropdown
+Click play → opens AudioPreviewDialog with selected audio
+```
+
+### Action Buttons (unified grid)
+```
+All 6 actions in a single grid grid-cols-2:
+  Save to Frame, Retrieve, Combine, Delete, Download, Save to Cloud
+
+"Upload to R2" renamed → "Save to Cloud" (user-friendly)
+"Full Frame Details" button below the grid (full-width)
+```
+
+### GeneratedImagesPanel Alignment
+```
+Filter Controls:
+  Changed from pill buttons to underline tabs (matches Storyboard tabs)
+  Active: text-(--text-primary) border-b-2 border-white (completed)
+          text-blue-400 border-blue-400 (processing)
+          text-red-400 border-red-400 (error)
+  Inactive: text-(--text-tertiary) border-transparent
+
+Panel Background:
+  Changed from bg-(--bg-primary) to bg-(--bg-secondary)/95 backdrop-blur-md
+  Now matches the right info panel background
+
+Card hover: bg-(--bg-tertiary)/40 (was hardcoded #1A1D22)
+Image preview popup: rounded-2xl, backdrop-blur-sm, design system typography
+Video preview dialog: rounded-2xl, backdrop-blur-sm, CSS var colors
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `editor/SceneEditor.tsx` | Info panel: image-only Cinema Studio, Videos grid, Audio pill dropdown, action grid, formatQuality(), AudioPreviewDialog import |
+| `GeneratedImagesPanel/FilterControls.tsx` | Pill buttons → underline tabs |
+| `GeneratedImagesPanel/index.tsx` | Panel bg match, border consistency, share dialog buttons |
+| `GeneratedImagesPanel/GeneratedImageCard.tsx` | Card hover, image preview popup redesign |
+| `shared/VideoPreviewDialog.tsx` | rounded-2xl, backdrop-blur-sm, CSS var colors, design system close button |

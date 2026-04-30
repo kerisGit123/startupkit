@@ -25,26 +25,32 @@ export function FilterControls({ filters, onFilterChange }: FilterControlsProps)
     onFilterChange({ statuses: newFilters });
   };
 
+  const getActiveColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'text-(--text-primary) border-white';
+      case 'processing': return 'text-blue-400 border-blue-400';
+      case 'error': return 'text-red-400 border-red-400';
+      default: return 'text-(--text-primary) border-white';
+    }
+  };
+
   return (
-    <div className="px-4 py-3 border-b border-(--border-primary)">
-      <div className="flex gap-1.5 flex-wrap">
+    <div className="px-4 border-b border-(--border-primary)">
+      <div className="flex items-center gap-0">
         {['completed', 'processing', 'error'].map(status => (
           <button
             key={status}
             onClick={() => toggleFilter('statuses', status)}
-            className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition ${
+            className={`px-3 py-2.5 text-[12px] font-medium border-b-2 -mb-px transition-colors ${
               filters.statuses.includes(status)
-                ? status === 'completed' ? 'bg-green-500/15 text-green-400' :
-                  status === 'processing' ? 'bg-blue-500/15 text-blue-400' :
-                  status === 'error' ? 'bg-red-500/15 text-red-400' :
-                  'bg-white/10 text-[#E5E7EB]'
-                : 'bg-(--bg-secondary) text-(--text-secondary) hover:bg-(--bg-tertiary) border border-[#32363E]'
+                ? getActiveColor(status)
+                : 'text-(--text-tertiary) hover:text-(--text-secondary) border-transparent'
             }`}
           >
             {status.charAt(0).toUpperCase() + status.slice(1)}
             {status === 'processing' && ` (${filters.generatingCount || 0})`}
             {status === 'completed' && ` (${filters.completedCount || 0})`}
-            {status === 'error' && `(${filters.errorCount || 0})`}
+            {status === 'error' && ` (${filters.errorCount || 0})`}
           </button>
         ))}
       </div>

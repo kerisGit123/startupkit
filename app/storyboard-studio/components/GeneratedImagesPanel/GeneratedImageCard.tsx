@@ -219,7 +219,7 @@ export function GeneratedImageCard({
 
   return (
     <div
-      className="group relative bg-(--bg-secondary) rounded-xl overflow-hidden transition-all border border-(--border-secondary) hover:border-(--border-primary) hover:bg-[#1A1D22]"
+      className="group relative bg-(--bg-secondary) rounded-xl overflow-hidden transition-all duration-200 border border-(--border-secondary) hover:border-(--border-primary) hover:bg-(--bg-tertiary)/40"
       onContextMenu={handleContextMenu}
     >
       {/* Image Container */}
@@ -573,25 +573,25 @@ export function GeneratedImageCard({
 
       {/* Image Preview Popup — rendered via portal to escape panel overflow */}
       {showImagePreview && image.fileType !== 'video' && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4" style={{ zIndex: 99999 }}
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" style={{ zIndex: 99999 }}
           onClick={() => setShowImagePreview(false)}
         >
-          <div className="bg-(--bg-secondary) rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+          <div className="bg-(--bg-secondary) rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-(--border-primary) shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
-              <h3 className="text-white font-medium">{image.metadata?.model === 'combine-layers' ? 'Combined Image' : 'Generated Image'}</h3>
+              <h3 className="text-(--text-primary) text-[14px] font-semibold">{image.metadata?.model === 'combine-layers' ? 'Combined Image' : 'Generated Image'}</h3>
               <button
                 onClick={() => setShowImagePreview(false)}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" strokeWidth={1.75} />
               </button>
             </div>
 
             {/* Image */}
-            <div className="p-4 flex justify-center">
+            <div className="p-4 flex justify-center bg-(--bg-primary)">
               <img
                 src={image.url}
                 alt={image.filename}
@@ -604,22 +604,22 @@ export function GeneratedImageCard({
             <div className="p-4 border-t border-(--border-primary) flex items-center justify-between">
               <div>
                 {image.metadata?.model && (
-                  <div className="text-sm text-gray-400">Model: {image.metadata?.model}</div>
+                  <div className="text-[13px] text-(--text-secondary)">Model: {image.metadata?.model}</div>
                 )}
                 {image.prompt && (
-                  <div className="text-sm text-gray-400 mt-1 line-clamp-2">Prompt: {image.prompt}</div>
+                  <div className="text-[13px] text-(--text-secondary) mt-1 line-clamp-2">Prompt: {image.prompt}</div>
                 )}
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={handleDownload}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-sm rounded-lg transition-colors"
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-(--text-primary) text-[13px] font-medium rounded-xl transition-colors"
                 >
                   Download
                 </button>
                 <button
                   onClick={() => { onSelect(image); setShowImagePreview(false); }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition-colors"
+                  className="px-4 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[13px] font-medium rounded-xl transition-colors"
                 >
                   Use as Background
                 </button>

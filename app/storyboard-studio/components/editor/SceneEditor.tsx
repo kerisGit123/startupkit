@@ -32,6 +32,7 @@ import { DirectorChatPanel } from "@/components/director/DirectorChatPanel";
 import { SceneEditorHeader } from "./SceneEditorHeader";
 import { StoryboardStrip } from "./StoryboardStrip";
 import { VideoPreviewDialog } from "../shared/VideoPreviewDialog";
+import { AudioPreviewDialog } from "../shared/AudioPreviewDialog";
 import { Image as ImageIcon, Box } from "lucide-react";
 import { uploadToR2 } from "@/lib/uploadToR2";
 import { captureVideoFrame } from "@/lib/storyboard/snapshotUtils";
@@ -641,6 +642,10 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // Information dialog state
   const [showInfoDialog, setShowInfoDialog] = useState(false);
+  const [infoPanelVideoUrl, setInfoPanelVideoUrl] = useState<string | null>(null);
+  const [infoPanelAudio, setInfoPanelAudio] = useState<{ url: string; name: string; model?: string; prompt?: string; fileId?: string } | null>(null);
+  const [audioDropdownOpen, setAudioDropdownOpen] = useState(false);
+  const [selectedAudioId, setSelectedAudioId] = useState<string | null>(null);
 
   const openSceneImageContextMenu = useCallback((event: React.MouseEvent, imageUrl: string, name?: string, type?: string) => {
     event.preventDefault();
@@ -7085,15 +7090,33 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
       {/* ── Right: Frame Info Panel ── */}
       {showFrameInfo && !isMobile && (
         <div className="w-[260px] shrink-0 bg-(--bg-secondary)/95 backdrop-blur-md border-l border-(--border-primary) flex flex-col overflow-hidden">
-          {/* Prompt + Cinema Studio — from currently displayed generated file */}
+          {/* Prompt + Cinema Studio + Media — from currently displayed generated file */}
           {(() => {
             const shotFiles = projectFiles
               ?.filter(f => String(f.categoryId ?? "") === String(activeShotId) && f.category === "generated" && (f.status === "completed" || f.status === "ready"))
               ?.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            // Match by current canvas image URL, fall back to latest
+            // Split files by type
+            const imageFiles = shotFiles?.filter(f => f.fileType === "image" || (!f.fileType && f.sourceUrl));
+            const videoFiles = shotFiles?.filter(f => f.fileType === "video");
+            const audioFiles = shotFiles?.filter(f => f.fileType === "audio" || f.fileType === "music");
+            // Match canvas image against IMAGE files only, fall back to latest image
             const currentImg = backgroundImage || activeShot?.imageUrl;
-            const latestFile = (currentImg && shotFiles?.find(f => (f as any).sourceUrl === currentImg || (f as any).r2Key && currentImg.includes((f as any).r2Key))) || shotFiles?.[0];
+            const latestFile = (currentImg && imageFiles?.find(f => (f as any).sourceUrl === currentImg || (f as any).r2Key && currentImg.includes((f as any).r2Key))) || imageFiles?.[0];
             const meta = latestFile?.metadata as Record<string, any> | undefined;
+            // Format quality: parse JSON to readable string, or pass through plain strings
+            const formatQuality = (raw: any): string | undefined => {
+              if (!raw) return undefined;
+              if (typeof raw !== "string") return String(raw);
+              try {
+                const q = JSON.parse(raw);
+                const parts: string[] = [];
+                if (q.resolution) parts.push(q.resolution);
+                if (q.mode) parts.push(q.mode.replace(/-/g, " "));
+                return parts.length > 0 ? parts.join(", ") : raw;
+              } catch {
+                return raw;
+              }
+            };
             const cinemaItems = [
               { label: "Feature", value: meta?.feature },
               { label: "Camera", value: meta?.camera },
@@ -7101,7 +7124,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
               { label: "Focal Length", value: meta?.focalLength },
               { label: "Aperture", value: meta?.aperture },
               { label: "Model", value: meta?.modelName || meta?.model || latestFile?.model },
-              { label: "Quality", value: meta?.quality },
+              { label: "Quality", value: formatQuality(meta?.quality) },
               { label: "Aspect Ratio", value: meta?.aspectRatio || latestFile?.aspectRatio },
               { label: "Dimensions", value: meta?.dimensions },
               { label: "Camera Motion", value: meta?.cameraMotion },
@@ -7128,7 +7151,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   {displayPrompt || "No prompt set"}
                 </p>
               </div>
-              {/* Cinema Studio + Frame Info */}
+              {/* Cinema Studio + Frame Info + Media */}
               <div className="px-4 pt-3 pb-3 border-b border-(--border-primary) flex-1 overflow-y-auto">
                 {cinemaItems.length > 0 && (
                   <>
@@ -7143,6 +7166,118 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     </div>
                   </>
                 )}
+                {/* Videos grid — 3 per row, wrapping */}
+                {videoFiles && videoFiles.length > 0 && (
+                  <div className="mb-3">
+                    <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2 block">
+                      Videos ({videoFiles.length})
+                    </span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {videoFiles.map((vf: any) => (
+                        <button
+                          key={String(vf._id)}
+                          onClick={() => { setInfoPanelVideoUrl(vf.sourceUrl); }}
+                          className="relative group/vid rounded-md overflow-hidden border border-(--border-primary) hover:border-(--border-secondary) transition aspect-video bg-(--bg-primary)"
+                          title={vf.model || "Video"}
+                        >
+                          <video
+                            src={vf.sourceUrl}
+                            className="w-full h-full object-cover"
+                            muted
+                            playsInline
+                            preload="metadata"
+                            onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 0.5; }}
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover/vid:opacity-100 transition">
+                            <Play className="w-3.5 h-3.5 text-white" fill="white" />
+                          </div>
+                          <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-[7px] text-white/80 text-center py-px truncate px-0.5">
+                            {vf.model?.split("/").pop() || "video"}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Audio dropdown + play */}
+                {audioFiles && audioFiles.length > 0 && (() => {
+                  const audioOptions = audioFiles.map((af: any) => {
+                    const audioMeta = af.metadata as Record<string, any> | undefined;
+                    return { id: String(af._id), url: af.sourceUrl, label: audioMeta?.musicTitle || af.model?.split("/").pop() || "Audio", model: af.model, prompt: af.prompt || audioMeta?.prompt, isMusic: af.fileType === "music" };
+                  });
+                  const selected = audioOptions.find(a => a.id === selectedAudioId) || audioOptions[0];
+                  const accentColor = selected?.isMusic ? "purple" : "blue";
+                  return (
+                    <div className="mb-3">
+                      <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2 block">
+                        Audio ({audioFiles.length})
+                      </span>
+                      <div className="relative">
+                        {/* Pill trigger — accent-bordered like pic2 */}
+                        <button
+                          onClick={() => setAudioDropdownOpen(!audioDropdownOpen)}
+                          className={`w-full flex items-center gap-2 rounded-full px-3 py-1.5 border transition-all ${
+                            accentColor === "purple"
+                              ? "border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/15 shadow-[0_0_8px_rgba(168,85,247,0.15)]"
+                              : "border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/15 shadow-[0_0_8px_rgba(59,130,246,0.15)]"
+                          }`}
+                        >
+                          <Mic className={`w-3.5 h-3.5 shrink-0 ${accentColor === "purple" ? "text-purple-400" : "text-blue-400"}`} strokeWidth={1.75} />
+                          <span className={`text-[12px] font-medium truncate flex-1 text-left ${accentColor === "purple" ? "text-purple-200" : "text-blue-200"}`}>{selected?.label}</span>
+                          <ChevronDown className={`w-3 h-3 shrink-0 transition-transform ${accentColor === "purple" ? "text-purple-400/60" : "text-blue-400/60"} ${audioDropdownOpen ? "rotate-180" : ""}`} strokeWidth={2} />
+                        </button>
+                        {/* Play — small icon button, right-aligned below */}
+                        <div className="flex items-center justify-end gap-2 mt-1.5">
+                          <span className="text-[10px] text-(--text-tertiary) truncate flex-1">{selected?.model?.split("/").pop()}</span>
+                          <button
+                            onClick={() => {
+                              if (selected) setInfoPanelAudio({ url: selected.url, name: selected.label, model: selected.model, prompt: selected.prompt, fileId: selected.id });
+                            }}
+                            className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium transition ${
+                              accentColor === "purple"
+                                ? "text-purple-300 bg-purple-500/15 hover:bg-purple-500/25"
+                                : "text-blue-300 bg-blue-500/15 hover:bg-blue-500/25"
+                            }`}
+                            title="Play audio"
+                          >
+                            <Play className="w-3 h-3 ml-0.5" fill="currentColor" />
+                            Play
+                          </button>
+                        </div>
+                        {/* Dropdown panel */}
+                        {audioDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0 z-40" onClick={() => setAudioDropdownOpen(false)} />
+                            <div className="absolute left-0 right-0 top-[calc(100%-20px)] mt-1 z-50 bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl py-1.5 max-h-[220px] overflow-y-auto">
+                              {audioOptions.map((a, i) => (
+                                <button
+                                  key={a.id}
+                                  onClick={() => { setSelectedAudioId(a.id); setAudioDropdownOpen(false); }}
+                                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+                                    a.id === selected?.id ? "bg-white/8" : "hover:bg-white/5"
+                                  }`}
+                                >
+                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                                    a.isMusic ? "bg-purple-500/20" : "bg-blue-500/20"
+                                  }`}>
+                                    <Mic className={`w-3 h-3 ${a.isMusic ? "text-purple-400" : "text-blue-400"}`} strokeWidth={1.75} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-[12px] text-(--text-primary) font-medium truncate">{a.label}</div>
+                                    <div className="text-[10px] text-(--text-tertiary) truncate">{a.model?.split("/").pop()}</div>
+                                  </div>
+                                  {a.id === selected?.id && (
+                                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${a.isMusic ? "bg-purple-400" : "bg-blue-400"}`} />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {hasShot && (
                   <>
                     <span className="text-[10px] font-semibold tracking-wider uppercase text-(--text-secondary) mb-2.5 block">Frame Info</span>
@@ -7183,24 +7318,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                 { icon: Image, label: "Retrieve", onClick: () => setShowUploadOverrideBrowser(true) },
                 { icon: Layers, label: "Combine", onClick: handleCombineLayers },
                 { icon: Trash2, label: "Delete", onClick: handleDeleteCanvasImage, danger: true },
-              ].map((btn) => (
-                <button
-                  key={btn.label}
-                  onClick={btn.onClick}
-                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
-                    btn.danger
-                      ? "text-(--text-secondary) hover:text-red-400 hover:bg-red-500/10"
-                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
-                  }`}
-                >
-                  <btn.icon className="w-3.5 h-3.5 shrink-0" />
-                  <span>{btn.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-1 mt-1">
-              <button
-                onClick={() => {
+                { icon: Save, label: "Download", onClick: () => {
                   const img = backgroundImage || activeShot?.imageUrl;
                   if (img) {
                     const link = document.createElement('a');
@@ -7210,19 +7328,22 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     link.click();
                     document.body.removeChild(link);
                   }
-                }}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Download</span>
-              </button>
-              <button
-                onClick={() => { handleSaveToR2().catch(() => {}); }}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition-colors"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Upload to R2</span>
-              </button>
+                }},
+                { icon: Layers, label: "Save to Cloud", onClick: () => { handleSaveToR2().catch(() => {}); } },
+              ].map((btn) => (
+                <button
+                  key={btn.label}
+                  onClick={btn.onClick}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors ${
+                    (btn as any).danger
+                      ? "text-(--text-secondary) hover:text-red-400 hover:bg-red-500/10"
+                      : "text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5"
+                  }`}
+                >
+                  <btn.icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{btn.label}</span>
+                </button>
+              ))}
             </div>
             <button
               onClick={() => setShowInfoDialog(true)}
@@ -7331,6 +7452,26 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
             </div>
           </div>
         </div>
+      )}
+
+      {/* Info Panel — Video Preview */}
+      {infoPanelVideoUrl && (
+        <VideoPreviewDialog
+          url={infoPanelVideoUrl}
+          onClose={() => setInfoPanelVideoUrl(null)}
+        />
+      )}
+
+      {/* Info Panel — Audio Preview */}
+      {infoPanelAudio && (
+        <AudioPreviewDialog
+          url={infoPanelAudio.url}
+          name={infoPanelAudio.name}
+          model={infoPanelAudio.model}
+          prompt={infoPanelAudio.prompt}
+          fileId={infoPanelAudio.fileId}
+          onClose={() => setInfoPanelAudio(null)}
+        />
       )}
 
       {/* Frame Information Modal */}

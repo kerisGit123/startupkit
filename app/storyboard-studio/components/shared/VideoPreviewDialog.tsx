@@ -42,17 +42,17 @@ export function VideoPreviewDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/80 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
       style={{ zIndex: 99999 }}
       onClick={onClose}
     >
       <div
-        className="bg-(--bg-secondary) rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+        className="bg-(--bg-secondary) rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-(--border-primary) shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-(--border-primary)">
-          <h3 className="text-white font-medium">Video Preview</h3>
+          <h3 className="text-(--text-primary) text-[14px] font-semibold">Video Preview</h3>
           <div className="flex items-center gap-2">
             {/* Snapshot buttons */}
             {onSnapshotToSelf && (
@@ -83,15 +83,15 @@ export function VideoPreviewDialog({
             )}
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="w-7 h-7 rounded-md flex items-center justify-center text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 transition"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" strokeWidth={1.75} />
             </button>
           </div>
         </div>
 
         {/* Video Player */}
-        <div className="p-4">
+        <div className="p-4 bg-(--bg-primary)">
           <video
             ref={videoRef}
             src={url}
@@ -106,12 +106,12 @@ export function VideoPreviewDialog({
         {(model || prompt) && (
           <div className="p-4 border-t border-(--border-primary)">
             {model && (
-              <div className="text-sm text-gray-400">
+              <div className="text-[13px] text-(--text-secondary)">
                 Model: {model}
               </div>
             )}
             {prompt && (
-              <div className="text-sm text-gray-400 mt-1 line-clamp-2">
+              <div className="text-[13px] text-(--text-secondary) mt-1 line-clamp-2">
                 Prompt: {prompt}
               </div>
             )}

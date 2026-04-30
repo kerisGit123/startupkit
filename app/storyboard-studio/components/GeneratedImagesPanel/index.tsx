@@ -320,11 +320,11 @@ export function GeneratedImagesPanel({
 
   return (
     <>
-      <div className={`absolute top-0 left-0 h-full w-80 bg-(--bg-primary) border-r border-(--border-primary) transform transition-transform duration-300 ease-in-out z-30 ${
+      <div className={`absolute top-0 left-0 h-full w-80 bg-(--bg-secondary)/95 backdrop-blur-md border-r border-(--border-primary) transform transition-transform duration-300 ease-in-out z-30 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
         {/* Header */}
-        <div className="px-4 py-3.5 border-b border-(--border-primary) flex items-center justify-between">
+        <div className="px-4 py-3.5 border-b border-(--border-secondary) flex items-center justify-between">
           <h3 className="text-(--text-primary) text-[14px] font-semibold">Generated Images</h3>
           <button
             onClick={onClose}
@@ -342,12 +342,12 @@ export function GeneratedImagesPanel({
 
         {/* Content */}
         <div className="flex flex-col h-full">
-          <div className="flex-1 min-h-0 overflow-y-auto pb-32 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[#32363E]">
+          <div className="flex-1 min-h-0 overflow-y-auto pb-32 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-(--border-primary)">
             {/* Original Image Section */}
             {(originalImage || backgroundImage || activeShot?.imageUrl) && (
               <div className="p-4">
                 <h4 className="text-(--text-primary) text-[13px] font-semibold mb-3">Original</h4>
-                <div className="relative group cursor-pointer rounded-lg overflow-hidden border border-(--border-primary) hover:border-[#9CA3AF]/30 transition"
+                <div className="relative group cursor-pointer rounded-xl overflow-hidden border border-(--border-secondary) hover:border-(--border-primary) transition"
                        onClick={handleOriginalImageClick}
                        onContextMenu={(event) => {
                          const imageToSet = originalImage || backgroundImage || activeShot?.imageUrl;
@@ -463,7 +463,7 @@ export function GeneratedImagesPanel({
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShareCandidate(null)}
-                  className="px-5 py-2.5 text-[13px] text-(--text-secondary) hover:text-(--text-primary) bg-[#1E2126] hover:bg-[#32363E] border border-(--border-primary) rounded-lg transition font-medium"
+                  className="px-5 py-2.5 text-[13px] text-(--text-secondary) hover:text-(--text-primary) bg-(--bg-tertiary) hover:bg-white/10 border border-(--border-primary) rounded-xl transition font-medium"
                 >
                   Cancel
                 </button>
@@ -477,7 +477,7 @@ export function GeneratedImagesPanel({
                     }
                     setShareCandidate(null);
                   }}
-                  className="px-5 py-2.5 text-[13px] text-white bg-(--accent-blue) hover:bg-(--accent-blue-hover) rounded-lg transition font-semibold"
+                  className="px-5 py-2.5 text-[13px] text-white bg-(--accent-blue) hover:bg-(--accent-blue-hover) rounded-xl transition font-semibold"
                 >
                   Share
                 </button>
