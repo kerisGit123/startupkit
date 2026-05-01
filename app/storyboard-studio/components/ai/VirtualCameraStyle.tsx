@@ -280,17 +280,17 @@ export function VirtualCameraStyle({ settings, onSettingsChange, companyId, user
   // Panel position — centered above the trigger (or pill anchor if triggered from pill)
   const getPanelStyle = (): React.CSSProperties => {
     const panelW = 420;
-    const panelH = 220;
-    const gap = 20;
-    // Prefer the pill bar as anchor so panel sits above it
+    const gap = 6;
+    // Prefer pill bar → main panel → trigger button
     const pillBar = document.querySelector('[data-settings-pill]') as HTMLElement | null;
-    const anchor = pillBar || triggerRef.current;
+    const mainPanel = document.querySelector('[data-main-panel]') as HTMLElement | null;
+    const anchor = pillBar || mainPanel || triggerRef.current;
     if (!anchor) return {};
     const rect = anchor.getBoundingClientRect();
     let left = rect.left + rect.width / 2 - panelW / 2;
     left = Math.max(gap, Math.min(left, window.innerWidth - panelW - gap));
-    const top = Math.max(gap, rect.top - panelH - gap);
-    return { left, top, width: panelW };
+    const bottom = window.innerHeight - rect.top + gap;
+    return { left, bottom, width: panelW };
   };
 
   return (

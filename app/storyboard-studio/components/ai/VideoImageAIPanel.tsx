@@ -740,6 +740,7 @@ export function ImageAIPanel({
   // Dropdown visibility states
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modelBtnRef = useRef<HTMLButtonElement>(null);
+  const createModeBtnRef = useRef<HTMLButtonElement>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [modelFilter, setModelFilter] = useState<"all" | "image" | "video" | "audio">("all");
   const [showAspectRatioDropdown, setShowAspectRatioDropdown] = useState(false);
@@ -2064,7 +2065,7 @@ export function ImageAIPanel({
     ];
 
     return (
-    <div className="absolute bottom-0 left-0 right-0 mx-[20px] mb-[20px] flex flex-col gap-3">
+    <div className="absolute bottom-0 left-0 right-0 mx-[20px] mb-[20px] flex flex-col gap-0">
         {/* Topaz Video Upscale — standalone video input area */}
         {selectedModelOption.value === "topaz/video-upscale" && (
           <div className="mb-[0px]">
@@ -3103,10 +3104,10 @@ export function ImageAIPanel({
 
         {/* Add Image (left) + Genre / Format / Camera pill (center) — single row above main panel */}
         {outputMode !== "analyze" && selectedModelOption.value !== "topaz/video-upscale" && !selectedModelOption.value.startsWith("ai-music-api/") && projectData && (
-          <div className="relative flex items-center justify-center pb-1.5">
+          <div className="relative flex items-center justify-center mb-[3px]">
             {/* Inline Add Image — compact, pinned left */}
             {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "infinitalk/from-audio" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
-              <div className="absolute left-0 z-100">
+              <div className="absolute left-0">
               <AddImageMenu
                 onUploadClick={() => fileInputRef.current?.click()}
                 onR2Click={() => setShowFileBrowser(true)}
@@ -3230,7 +3231,7 @@ export function ImageAIPanel({
         )}
 
         {/* Main Panel */}
-        <div className="bg-(--bg-secondary)/95 backdrop-blur-md rounded-2xl">
+        <div data-main-panel className="bg-(--bg-secondary)/95 backdrop-blur-md rounded-2xl">
           {/* Cover Song quick guide */}
           {selectedModelOption.value === "ai-music-api/upload-cover" && (
             <div className="px-[10px] pt-[10px] pb-0">
@@ -4045,6 +4046,7 @@ export function ImageAIPanel({
               <div className="flex items-center">
                 {/* Main action button area (label only, not clickable for generate) */}
                 <button
+                  ref={createModeBtnRef}
                   onClick={() => setShowCreateModeDropdown(!showCreateModeDropdown)}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[12px] font-semibold uppercase tracking-wide transition-colors cursor-pointer ${
                     outputMode === "analyze"
@@ -4063,10 +4065,16 @@ export function ImageAIPanel({
                 </button>
               </div>
 
-              {showCreateModeDropdown && (
+              {showCreateModeDropdown && createPortal(
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowCreateModeDropdown(false)} />
-                  <div className="absolute bottom-full left-0 mb-2 w-[180px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50 py-1">
+                  <div className="fixed inset-0 z-[9998]" onClick={() => setShowCreateModeDropdown(false)} />
+                  <div
+                    className="fixed w-[180px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-[9999] py-1"
+                    style={createModeBtnRef.current ? (() => {
+                      const r = createModeBtnRef.current!.getBoundingClientRect();
+                      return { left: r.left, bottom: window.innerHeight - r.top + 8 };
+                    })() : undefined}
+                  >
                     {([
                       { key: "image" as const, Icon: Image, label: "Create Image" },
                       { key: "video" as const, Icon: Film, label: "Create Video" },
@@ -4114,7 +4122,8 @@ export function ImageAIPanel({
                       <span className="font-medium">Analyze</span>
                     </button>
                   </div>
-                </>
+                </>,
+                document.body
               )}
             </div>
 

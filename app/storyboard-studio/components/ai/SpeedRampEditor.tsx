@@ -292,14 +292,17 @@ export function SpeedRampEditor({ curve, onCurveChange, onInsertToPrompt }: Spee
   const matchedPreset = PRESETS.find(p => p.curve.every((v, i) => v === curve[i]));
 
   const getPanelStyle = (): React.CSSProperties => {
-    if (!triggerRef.current) return {};
-    const rect = triggerRef.current.getBoundingClientRect();
     const panelW = 460;
-    const gap = 10;
+    const gap = 6;
+    const pillBar = document.querySelector('[data-settings-pill]') as HTMLElement | null;
+    const mainPanel = document.querySelector('[data-main-panel]') as HTMLElement | null;
+    const anchor = pillBar || mainPanel || triggerRef.current;
+    if (!anchor) return {};
+    const rect = anchor.getBoundingClientRect();
     let left = rect.left + rect.width / 2 - panelW / 2;
     left = Math.max(gap, Math.min(left, window.innerWidth - panelW - gap));
-    const top = Math.max(gap, rect.top - 220);
-    return { left, top, width: panelW };
+    const bottom = window.innerHeight - rect.top + gap;
+    return { left, bottom, width: panelW };
   };
 
   return (

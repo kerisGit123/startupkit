@@ -170,6 +170,21 @@ export async function POST(req: NextRequest) {
           break;
         }
 
+        case 'getGptImage2Price': {
+          // GPT Image 2: resolution-based Kie costs. 1K=6, 2K=10, 4K=16.
+          const gpt2KieCosts: Record<string, number> = {
+            '1K': 6, '1k': 6,
+            '2K': 10, '2k': 10,
+            '4K': 16, '4k': 16,
+          };
+          const gpt2KieCost = gpt2KieCosts[quality] || gpt2KieCosts['1K'];
+          credits = Math.ceil(gpt2KieCost * (model.factor || 0.625));
+          console.log("[pricing-calc] GPT Image 2 formula:", {
+            quality, kieCost: gpt2KieCost, factor: model.factor, result: credits
+          });
+          break;
+        }
+
         case 'getInfinitalkFromAudio': {
           const itCosts: Record<string, number> = { "480p": 3, "480P": 3, "720p": 12, "720P": 12 };
           const itCostPerSec = itCosts[resolution] || model.creditCost || 3;

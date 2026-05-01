@@ -522,14 +522,18 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelType: "image",
     isActive: true,
     isHot: true,
-    pricingType: "fixed",
+    pricingType: "formula",
+    assignedFunction: "getGptImage2Price",
     creditCost: 6,
     factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
-        unit: "per_image",
         base_cost: 6,
-        note: "Kie cost: 6 credits. User charged: 4 credits (ceil(6 × 0.625)). ~25% margin.",
+        qualities: [
+          { name: "1K", cost: 6 },   // ceil(6 × 0.625) = 4 user credits
+          { name: "2K", cost: 10 },  // ceil(10 × 0.625) = 7 user credits
+          { name: "4K", cost: 16 },  // ceil(16 × 0.625) = 10 user credits
+        ],
       },
     }),
   },
@@ -539,15 +543,19 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     modelType: "image",
     isActive: true,
     isHot: true,
-    pricingType: "fixed",
+    pricingType: "formula",
+    assignedFunction: "getGptImage2Price",
     creditCost: 6,
     factor: 0.625,
     formulaJson: JSON.stringify({
       pricing: {
-        unit: "per_image",
         base_cost: 6,
         max_input_images: 16,
-        note: "Kie cost: 6 credits. User charged: 4 credits (ceil(6 × 0.625)). ~25% margin.",
+        qualities: [
+          { name: "1K", cost: 6 },   // ceil(6 × 0.625) = 4 user credits
+          { name: "2K", cost: 10 },  // ceil(10 × 0.625) = 7 user credits
+          { name: "4K", cost: 16 },  // ceil(16 × 0.625) = 10 user credits
+        ],
       },
     }),
   },
@@ -576,7 +584,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     isActive: true,
     pricingType: "fixed",
     creditCost: 1,
-    factor: 1.0,
+    factor: 0.625,
   },
   {
     modelId: "ideogram/v3-reframe",
@@ -585,7 +593,7 @@ export const DEFAULT_PRICING_MODELS: PricingModel[] = [
     isActive: true,
     pricingType: "fixed",
     creditCost: 7,
-    factor: 1.0,
+    factor: 0.625,
   },
   {
     modelId: "recraft/crisp-upscale",

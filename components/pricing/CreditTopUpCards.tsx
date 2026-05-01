@@ -54,56 +54,99 @@ export default function CreditTopUpCards() {
     }
   };
 
+  const accents = ["teal", "emerald", "amber"];
+  const accentMap: Record<string, { border: string; bg: string; text: string; glow: string; btnBg: string }> = {
+    teal:    { border: "border-teal-500/30",    bg: "bg-teal-500/8",    text: "text-teal-400",    glow: "shadow-teal-500/10",    btnBg: "bg-teal-500" },
+    emerald: { border: "border-emerald-500/30", bg: "bg-emerald-500/8", text: "text-emerald-400", glow: "shadow-emerald-500/10", btnBg: "bg-emerald-500" },
+    amber:   { border: "border-amber-500/30",   bg: "bg-amber-500/8",   text: "text-amber-400",   glow: "shadow-amber-500/10",   btnBg: "bg-amber-500" },
+  };
+
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {creditPackages.map((pkg) => (
-          <div
-            key={pkg.id}
-            className={`relative group transition-all duration-200 ${
-              pkg.highlighted ? "scale-[1.02]" : "hover:scale-[1.02]"
-            }`}
-          >
-            <div className={`relative bg-(--bg-secondary) border rounded-2xl p-6 transition-all duration-200 ${
-              pkg.highlighted
-                ? "border-(--accent-teal)/50 shadow-lg shadow-(--accent-teal)/5"
-                : "border-(--border-primary) hover:border-(--border-secondary)"
-            }`}>
-              {pkg.badge && (
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-3 py-1 bg-(--accent-teal) text-white text-[10px] font-semibold rounded-full uppercase tracking-wider">
-                  {pkg.badge}
+        {creditPackages.map((pkg, i) => {
+          const accent = accents[i] || "teal";
+          const a = accentMap[accent];
+          const perCredit = (pkg.amountInCents / pkg.credits / 100).toFixed(4);
+          const isHighlighted = i === 2; // Best value = largest pack
+
+          return (
+            <div
+              key={pkg.id}
+              className="relative group transition-all duration-300 hover:scale-[1.03]"
+            >
+              {isHighlighted && (
+                <span className={`absolute -top-3 left-1/2 -translate-x-1/2 z-10 px-4 py-1 ${a.btnBg} text-black text-[10px] font-bold rounded-full uppercase tracking-wider shadow-lg ${a.glow}`}>
+                  Best Value
                 </span>
               )}
 
-              <div className="text-center mb-5">
-                <div className="w-11 h-11 rounded-xl bg-(--accent-teal)/10 flex items-center justify-center mx-auto mb-3">
-                  <Coins className="w-5 h-5 text-(--accent-teal)" strokeWidth={1.75} />
+              <div className={`relative overflow-hidden rounded-2xl border ${isHighlighted ? a.border : "border-white/[0.08]"} bg-[#0c0c0f] transition-all duration-300 group-hover:${a.border} group-hover:shadow-xl ${isHighlighted ? `shadow-lg ${a.glow}` : ""}`}>
+                {/* Top accent bar */}
+                <div className={`h-1 w-full ${a.btnBg}`} />
+
+                <div className="p-6">
+                  {/* Icon */}
+                  <div className="flex justify-end mb-4">
+                    <div className={`w-9 h-9 rounded-xl ${a.bg} flex items-center justify-center`}>
+                      <Coins className={`w-4 h-4 ${a.text}`} />
+                    </div>
+                  </div>
+
+                  {/* Credits */}
+                  <div className="mb-1">
+                    <span className="text-4xl font-extrabold text-white tracking-tight">{pkg.credits.toLocaleString()}</span>
+                  </div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-white/30 mb-5">Credits</p>
+
+                  {/* Price */}
+                  <div className="mb-1">
+                    <span className="text-2xl font-bold text-white">{pkg.price}</span>
+                  </div>
+                  <p className="text-[11px] text-white/35 mb-5">USD {perCredit}/credit</p>
+
+                  {/* Estimated generations */}
+                  <div className="mb-5">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-white/25 mb-2">Estimated generations</p>
+                    <div className="space-y-1.5 text-[11px]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/40">Z-Image <span className="text-white/20">1 cr</span></span>
+                        <span className={`font-medium ${a.text}`}>≈ {pkg.credits.toLocaleString()} images</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/40">GPT Image 2 <span className="text-white/20">4 cr</span></span>
+                        <span className={`font-medium ${a.text}`}>≈ {Math.floor(pkg.credits / 4).toLocaleString()} images</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/40">Nano Banana 2 <span className="text-white/20">5 cr</span></span>
+                        <span className={`font-medium ${a.text}`}>≈ {Math.floor(pkg.credits / 5).toLocaleString()} images</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-white/40">Seedance 2.0 Fast <span className="text-white/20">23 cr</span></span>
+                        <span className={`font-medium ${a.text}`}>≈ {Math.floor(pkg.credits / 23).toLocaleString()} videos</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CTA */}
+                  <button
+                    onClick={() => handleBuyCredits(pkg.credits, pkg.amountInCents, pkg.price)}
+                    className={`w-full py-3 rounded-xl text-[13px] font-bold transition-all flex items-center justify-center gap-2 ${
+                      isHighlighted
+                        ? `${a.btnBg} hover:opacity-90 text-black shadow-lg ${a.glow}`
+                        : "bg-white/[0.08] hover:bg-white/[0.14] text-white border border-white/[0.1]"
+                    }`}
+                  >
+                    Buy Now
+                    <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2} />
+                  </button>
+
+                  <p className="text-center text-[10px] text-white/25 mt-3">One-time · Never expires</p>
                 </div>
-                <p className="text-2xl font-bold text-(--text-primary)">{pkg.credits.toLocaleString()}</p>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-(--text-tertiary) mt-1">Credits</p>
               </div>
-
-              <div className="text-center mb-5">
-                <p className="text-3xl font-bold text-(--text-primary)">{pkg.price}</p>
-                <p className="text-[11px] text-(--text-tertiary) mt-1">
-                  USD {(pkg.amountInCents / pkg.credits / 100).toFixed(4)}/credit
-                </p>
-              </div>
-
-              <button
-                onClick={() => handleBuyCredits(pkg.credits, pkg.amountInCents, pkg.price)}
-                className={`w-full py-2.5 rounded-xl text-[13px] font-medium transition-colors flex items-center justify-center gap-2 ${
-                  pkg.highlighted
-                    ? "bg-(--accent-teal) hover:opacity-90 text-white"
-                    : "bg-white/8 hover:bg-white/12 text-(--text-primary) border border-(--border-primary)"
-                }`}
-              >
-                Buy Now
-                <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </button>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Credit purchase confirmation dialog */}

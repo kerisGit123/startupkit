@@ -468,7 +468,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 1,
-    factor: 1.0,
+    factor: 0.625,
   },
   {
     modelId: "ideogram/v3-reframe",
@@ -477,7 +477,7 @@ const DEFAULT_PRICING_MODELS = [
     isActive: true,
     pricingType: "fixed" as const,
     creditCost: 7,
-    factor: 1.0,
+    factor: 0.625,
   },
   {
     modelId: "gpt-image/1.5-image-to-image",

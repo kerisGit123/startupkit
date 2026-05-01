@@ -25,9 +25,9 @@ export function getCreditPackages(): CreditPackage[] {
   // Default values — flat rate $0.0099/credit, no bulk discount
   // Margin is already thin at 19% ($0.0099 revenue vs $0.008 Kie cost per user credit)
   const defaults = {
-    small:  { credits: 1000,  amountInCents: 990 },    // $9.90   → $0.0099/credit
-    medium: { credits: 5000,  amountInCents: 4950 },   // $49.50  → $0.0099/credit
-    large:  { credits: 25000, amountInCents: 24750 },  // $247.50 → $0.0099/credit
+    small:  { credits: 1000,  amountInCents: 1000 },   // $10     → $0.010/credit
+    medium: { credits: 5000,  amountInCents: 5000 },   // $50     → $0.010/credit
+    large:  { credits: 25000, amountInCents: 24900 },  // $249    → $0.00996/credit
   };
 
   // Override from environment if available
@@ -40,25 +40,30 @@ export function getCreditPackages(): CreditPackage[] {
   const largeCredits = parseInt(process.env.NEXT_PUBLIC_CREDIT_LARGE_AMOUNT || String(defaults.large.credits));
   const largePrice = parseInt(process.env.NEXT_PUBLIC_CREDIT_LARGE_PRICE_CENTS || String(defaults.large.amountInCents));
 
+  const fmtPrice = (cents: number) => {
+    const dollars = cents / 100;
+    return `$${dollars % 1 === 0 ? dollars : dollars.toFixed(2)}`;
+  };
+
   return [
     {
       id: "small",
       credits: smallCredits,
-      price: `USD ${(smallPrice / 100).toFixed(2)}`,
+      price: fmtPrice(smallPrice),
       amountInCents: smallPrice,
       highlighted: false,
     },
     {
       id: "medium",
       credits: mediumCredits,
-      price: `USD ${(mediumPrice / 100).toFixed(2)}`,
+      price: fmtPrice(mediumPrice),
       amountInCents: mediumPrice,
       highlighted: false,
     },
     {
       id: "large",
       credits: largeCredits,
-      price: `USD ${(largePrice / 100).toFixed(2)}`,
+      price: fmtPrice(largePrice),
       amountInCents: largePrice,
       highlighted: false,
     },
@@ -72,22 +77,22 @@ export const DEFAULT_CREDIT_PACKAGES: CreditPackage[] = [
   {
     id: "small",
     credits: 1000,
-    price: "USD 9.90",
-    amountInCents: 990,
+    price: "USD 10",
+    amountInCents: 1000,
     highlighted: false,
   },
   {
     id: "medium",
     credits: 5000,
-    price: "USD 49.50",
-    amountInCents: 4950,
+    price: "USD 50",
+    amountInCents: 5000,
     highlighted: false,
   },
   {
     id: "large",
     credits: 25000,
-    price: "USD 247.50",
-    amountInCents: 24750,
+    price: "USD 249",
+    amountInCents: 24900,
     highlighted: false,
   },
 ];
