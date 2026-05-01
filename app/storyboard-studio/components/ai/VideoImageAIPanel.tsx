@@ -28,6 +28,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useFeatures } from "@/hooks/useFeatures";
 import PromptLibrary from "./PromptLibrary";
 import { FORMAT_PROMPT_MAP, GENRE_PRESETS, GENRE_PROMPTS, FORMAT_PRESETS } from "../../constants";
+import { GenrePicker } from "./GenrePicker";
+import { FormatPicker } from "./FormatPicker";
 import { FileBrowser } from "./FileBrowser";
 import { AudioPreviewDialog } from "../shared/AudioPreviewDialog";
 import { CreatePersonaDialog } from "../GeneratedImagesPanel/CreatePersonaDialog";
@@ -35,7 +37,7 @@ import { ManagePersonaDialog } from "../shared/ManagePersonaDialog";
 import { ElementLibrary } from "./ElementLibrary";
 import { TtsVoiceSelector, TtsLanguageSelector, TTS_DEFAULT_VOICE } from "../shared/TtsVoiceSelector";
 import { PromptActionsDropdown } from "../shared/PromptActionsDropdown";
-import { VirtualCameraStyle, buildCameraPromptText, buildCinemaStudioMetadata, type CinemaStudioMetadata } from "./VirtualCameraStyle";
+import { VirtualCameraStyle, buildCameraPromptText, buildCinemaStudioMetadata, type CinemaStudioMetadata, CAMERA_OPTIONS, LENS_OPTIONS } from "./VirtualCameraStyle";
 import { CameraAnglePicker, buildAnglePromptText, DEFAULT_ANGLE_SETTINGS } from "./CameraAnglePicker";
 import type { CameraAngleSettings } from "./CameraAnglePicker";
 import { ColorPalettePicker, buildColorPalettePromptText, type ColorPaletteColors } from "./ColorPalettePicker";
@@ -3126,19 +3128,22 @@ export function ImageAIPanel({
               />
               </div>
             )}
-            {/* Genre / Format / Camera pill */}
+            {/* Settings pill bar — Genre / Format / Camera / Angle / Motion / Speed / Palette */}
             <div data-settings-pill className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-(--bg-secondary)/95 backdrop-blur-md border border-white/[0.06]">
               {(() => {
                 const activeGenre = GENRE_PRESETS.find(s => s.id === projectData?.style);
                 const activeFormat = FORMAT_PRESETS.find(f => f.id === projectData?.formatPreset);
-                const camLabel = virtualCameraSettings.camera && virtualCameraSettings.camera !== "Auto"
-                  ? [virtualCameraSettings.camera, virtualCameraSettings.lens, virtualCameraSettings.focalLength].filter(Boolean).join(", ")
-                  : "Auto";
+                const camParts = [
+                  virtualCameraSettings.camera !== "default" ? CAMERA_OPTIONS.find(o => o.value === virtualCameraSettings.camera)?.label : null,
+                  virtualCameraSettings.lens !== "none" ? LENS_OPTIONS.find(o => o.value === virtualCameraSettings.lens)?.label : null,
+                  virtualCameraSettings.focalLength !== "none" ? virtualCameraSettings.focalLength + "mm" : null,
+                ].filter(Boolean);
+                const camLabel = camParts.length > 0 ? camParts.join(" · ") : "Auto";
                 return (
                   <>
                     {/* Genre — clickable, opens grid dialog */}
                     <button
-                      onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); }}
+                      onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); setShowPillMotion(false); }}
                       className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
                     >
                       <img
@@ -3190,7 +3195,7 @@ export function ImageAIPanel({
                     <div className="w-px h-3 bg-white/10" />
                     {/* Format — clickable, opens grid dialog */}
                     <button
-                      onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); }}
+                      onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); setShowPillMotion(false); }}
                       className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
                     >
                       <img
@@ -3307,8 +3312,12 @@ export function ImageAIPanel({
                             <span className="text-[11px] text-gray-500">Motion:</span>
                             <span className={`text-[11px] font-semibold ${cameraMotion !== "none" ? "text-blue-400" : "text-white"}`}>{cameraMotionOptions.find(o => o.value === cameraMotion)?.label || "None"}</span>
                           </button>
+                          {showPillMotion && createPortal(
+                            <div className="fixed inset-0 z-[9998]" onClick={() => setShowPillMotion(false)} />,
+                            document.body
+                          )}
                           {showPillMotion && (
-                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[170px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 py-1.5">
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[170px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-[9999] py-1.5">
                               {cameraMotionOptions.map((option) => (
                                 <button
                                   key={option.value}
