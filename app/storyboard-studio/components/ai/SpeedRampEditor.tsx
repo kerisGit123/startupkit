@@ -310,6 +310,7 @@ export function SpeedRampEditor({ curve, onCurveChange, onInsertToPrompt }: Spee
       {/* Trigger button */}
       <button
         ref={triggerRef}
+        data-speed-ramp-trigger
         onClick={() => { setIsOpen(!isOpen); setShowPresets(false); }}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] transition-colors cursor-pointer border ${
           isOpen

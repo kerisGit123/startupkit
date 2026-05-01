@@ -311,6 +311,7 @@ export function ColorPalettePicker({
       {/* Trigger button */}
       <button
         ref={triggerRef}
+        data-palette-picker-trigger
         onClick={() => { setIsOpen(!isOpen); setShowLoadMenu(false); setShowSaveInput(false); }}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] transition-colors cursor-pointer border ${
           isOpen

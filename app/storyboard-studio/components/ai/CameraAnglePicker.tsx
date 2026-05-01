@@ -617,6 +617,7 @@ export function CameraAnglePicker({ settings, onSettingsChange, subjectImageUrl,
       {/* Trigger button — matches VirtualCameraStyle trigger */}
       <button
         ref={triggerRef}
+        data-angle-picker-trigger
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] transition-colors cursor-pointer border ${
           isOpen

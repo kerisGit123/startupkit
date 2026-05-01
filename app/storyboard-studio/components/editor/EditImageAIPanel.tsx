@@ -60,9 +60,7 @@ const RELIGHT_PRESETS = [
 
 const REFRAME_SIZES = [
   { id: "landscape_16_9", label: "16:9" },
-  { id: "landscape_4_3", label: "4:3" },
   { id: "square_hd", label: "1:1" },
-  { id: "portrait_4_3", label: "3:4" },
   { id: "portrait_16_9", label: "9:16" },
 ];
 
@@ -803,11 +801,11 @@ export default function EditImageAIPanel({
       return "gpt-image/1.5-text-to-image";
     }
     
-    // Handle GPT Image 1.5 Image to Image model selection  
+    // Handle GPT Image 1.5 Image to Image model selection
     if (model === "gpt-image/1.5-image-to-image") {
       // Only set tool to image-to-image if user hasn't explicitly selected a different tool
-      // Don't override if user selected text-to-image tool
-      if (activeTool !== "image-to-image" && activeTool !== "text-to-image") {
+      // Don't override if user selected text-to-image, relight, or enhance tools (they share this model)
+      if (activeTool !== "image-to-image" && activeTool !== "text-to-image" && activeTool !== "relight" && activeTool !== "enhance") {
         setActiveTool("image-to-image");
       }
       return "gpt-image/1.5-image-to-image";

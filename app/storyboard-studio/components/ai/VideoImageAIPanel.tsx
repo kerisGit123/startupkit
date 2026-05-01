@@ -9,7 +9,7 @@ import {
   Upload, Download, Save, History, Trash2,
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
-  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2, Lock, LayoutGrid, SlidersHorizontal,
+  Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2, Lock, LayoutGrid, SlidersHorizontal, Timer, Crosshair,
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -552,6 +552,7 @@ export function ImageAIPanel({
   const [showPillGenre, setShowPillGenre] = useState(false);
   const [showPillFormat, setShowPillFormat] = useState(false);
   const [showPillCamera, setShowPillCamera] = useState(false);
+  const [showPillMotion, setShowPillMotion] = useState(false);
   const [addImageMenuOpen, setAddImageMenuOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeType, setAnalyzeType] = useState<"image" | "video" | "audio">("image");
@@ -3241,21 +3242,169 @@ export function ImageAIPanel({
                       </>,
                       document.body
                     )}
-                    <div className="w-px h-3 bg-white/10" />
-                    {/* Camera — clicks the existing Camera Studio trigger button */}
-                    <button
-                      data-pill-camera
-                      onClick={() => {
-                        setShowPillGenre(false); setShowPillFormat(false);
-                        const trigger = document.querySelector('[data-camera-studio-trigger] button') as HTMLButtonElement;
-                        trigger?.click();
-                      }}
-                      className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                    >
-                      <Camera className="w-4 h-4 text-gray-500" />
-                      <span className="text-[11px] text-gray-500">Camera:</span>
-                      <span className="text-[11px] font-semibold text-white truncate max-w-[150px]">{camLabel}</span>
-                    </button>
+                    {/* Camera — visible in image + video modes */}
+                    {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                      <>
+                        <div className="w-px h-3 bg-white/10" />
+                        <button
+                          data-pill-camera
+                          onClick={() => {
+                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                            if (hasProFeatures) {
+                              const trigger = document.querySelector('[data-camera-studio-trigger] button') as HTMLButtonElement;
+                              trigger?.click();
+                            } else {
+                              toast.info("Upgrade to Pro to use Camera Studio");
+                            }
+                          }}
+                          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          <Camera className={`w-4 h-4 ${hasProFeatures && camLabel !== "Auto" ? "text-blue-400" : "text-gray-500"}`} />
+                          <span className="text-[11px] text-gray-500">Camera:</span>
+                          <span className={`text-[11px] font-semibold truncate max-w-[120px] ${hasProFeatures && camLabel !== "Auto" ? "text-blue-400" : "text-white"}`}>{hasProFeatures ? camLabel : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                        </button>
+                      </>
+                    )}
+                    {/* Angle — visible in image + video modes */}
+                    {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                      <>
+                        <div className="w-px h-3 bg-white/10" />
+                        <button
+                          onClick={() => {
+                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                            if (hasProFeatures) {
+                              const trigger = document.querySelector('[data-angle-picker-trigger]') as HTMLButtonElement;
+                              trigger?.click();
+                            } else {
+                              toast.info("Upgrade to Pro to use Camera Angle");
+                            }
+                          }}
+                          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          {(() => {
+                            const isAngleDefault = cameraAngleSettings.rotation === 0 && cameraAngleSettings.tilt === 0 && cameraAngleSettings.zoom === 0;
+                            return (
+                              <>
+                                <Crosshair className={`w-4 h-4 ${hasProFeatures && !isAngleDefault ? "text-blue-400" : "text-gray-500"}`} />
+                                <span className="text-[11px] text-gray-500">Angle:</span>
+                                <span className={`text-[11px] font-semibold ${hasProFeatures && !isAngleDefault ? "text-blue-400" : "text-white"}`}>{hasProFeatures ? (isAngleDefault ? "Auto" : `${cameraAngleSettings.rotation}°`) : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                              </>
+                            );
+                          })()}
+                        </button>
+                      </>
+                    )}
+                    {/* Motion — visible in video mode only */}
+                    {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                      <>
+                        <div className="w-px h-3 bg-white/10" />
+                        <div className="relative">
+                          <button
+                            onClick={() => { setShowPillMotion(!showPillMotion); setShowPillGenre(false); setShowPillFormat(false); }}
+                            className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                          >
+                            <Film className={`w-4 h-4 ${cameraMotion !== "none" ? "text-blue-400" : "text-gray-500"}`} />
+                            <span className="text-[11px] text-gray-500">Motion:</span>
+                            <span className={`text-[11px] font-semibold ${cameraMotion !== "none" ? "text-blue-400" : "text-white"}`}>{cameraMotionOptions.find(o => o.value === cameraMotion)?.label || "None"}</span>
+                          </button>
+                          {showPillMotion && (
+                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[170px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 py-1.5">
+                              {cameraMotionOptions.map((option) => (
+                                <button
+                                  key={option.value}
+                                  onClick={() => {
+                                    setCameraMotion(option.value);
+                                    setShowPillMotion(false);
+                                    const el = editorRef.current;
+                                    if (el && option.description) {
+                                      const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                                      if (hasContent) {
+                                        el.innerHTML = el.innerHTML + '<br>' + option.description;
+                                      } else {
+                                        el.textContent = option.description;
+                                      }
+                                      const plainText = el.innerText || '';
+                                      setEditorIsEmpty(false);
+                                      setCurrentPrompt(plainText);
+                                      onUserPromptChange?.(plainText);
+                                    }
+                                  }}
+                                  className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors ${
+                                    cameraMotion === option.value
+                                      ? "bg-white/8 text-white"
+                                      : "text-gray-400 hover:bg-white/5 hover:text-white"
+                                  }`}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    {/* Speed — visible in video mode only */}
+                    {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                      <>
+                        <div className="w-px h-3 bg-white/10" />
+                        <button
+                          onClick={() => {
+                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                            if (hasProFeatures) {
+                              const trigger = document.querySelector('[data-speed-ramp-trigger]') as HTMLButtonElement;
+                              trigger?.click();
+                            } else {
+                              toast.info("Upgrade to Pro to use Speed Ramp");
+                            }
+                          }}
+                          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          {(() => {
+                            const isSpeedDefault = speedRampCurve.every(v => v === 2);
+                            const matchedPreset = !isSpeedDefault ? [{ name: "Slow-mo", curve: [0,0,1,0,0] }, { name: "Bullet Time", curve: [2,2,0,0,2] }, { name: "Flash In", curve: [4,3,2,2,2] }, { name: "Flash Out", curve: [2,2,2,3,4] }, { name: "Impact", curve: [2,3,0,1,2] }, { name: "Ramp Up", curve: [0,1,2,3,4] }, { name: "Ramp Down", curve: [4,3,2,1,0] }, { name: "Burst", curve: [1,1,4,4,1] }].find(p => p.curve.every((v, i) => v === speedRampCurve[i])) : null;
+                            return (
+                              <>
+                                <Timer className={`w-4 h-4 ${hasProFeatures && !isSpeedDefault ? "text-violet-400" : "text-gray-500"}`} />
+                                <span className="text-[11px] text-gray-500">Speed:</span>
+                                <span className={`text-[11px] font-semibold ${hasProFeatures && !isSpeedDefault ? "text-violet-400" : "text-white"}`}>{hasProFeatures ? (matchedPreset?.name || (isSpeedDefault ? "Normal" : "Custom")) : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                              </>
+                            );
+                          })()}
+                        </button>
+                      </>
+                    )}
+                    {/* Palette — visible in image + video modes */}
+                    {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                      <>
+                        <div className="w-px h-3 bg-white/10" />
+                        <button
+                          onClick={() => {
+                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                            if (hasProFeatures) {
+                              const trigger = document.querySelector('[data-palette-picker-trigger]') as HTMLButtonElement;
+                              trigger?.click();
+                            } else {
+                              toast.info("Upgrade to Pro to use Color Palette");
+                            }
+                          }}
+                          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          <Palette className={`w-4 h-4 ${hasProFeatures && colorPaletteColors.colors.length > 0 ? "text-rose-400" : "text-gray-500"}`} />
+                          {hasProFeatures && colorPaletteColors.colors.length > 0 ? (
+                            <div className="flex items-center gap-0.5">
+                              {colorPaletteColors.colors.map((c, i) => (
+                                <div key={i} className="w-2.5 h-2.5 rounded-full border border-white/20" style={{ backgroundColor: c }} />
+                              ))}
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-[11px] text-gray-500">Palette:</span>
+                              <span className="text-[11px] font-semibold text-white">{hasProFeatures ? "Auto" : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
                   </>
                 );
               })()}
@@ -3769,223 +3918,99 @@ export function ImageAIPanel({
                   }}
                 />
 
-                {/* Camera Motion Preset — video mode only */}
-                {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                  <div className="relative inline-block ml-2">
-                    <button
-                      onClick={() => setShowCameraMotionDropdown(!showCameraMotionDropdown)}
-                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] transition-colors cursor-pointer border ${
-                        cameraMotion !== "none"
-                          ? "text-(--accent-blue) border-(--accent-blue)/30 bg-(--accent-blue)/8"
-                          : "text-(--text-secondary) border-white/8 hover:text-(--text-primary) hover:bg-white/5"
-                      }`}
-                      title="Camera Motion Preset"
-                    >
-                      <Film className="w-3 h-3" />
-                      <span>{cameraMotionOptions.find(o => o.value === cameraMotion)?.label || "Camera"}</span>
-                      <ChevronDown className="w-3 h-3 opacity-50" />
-                    </button>
-
-                    {showCameraMotionDropdown && (
-                      <div className="absolute bottom-full right-0 mb-2 w-[170px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50 max-h-[280px] overflow-y-auto py-1.5">
-                          {cameraMotionOptions.map((option) => (
-                            <button
-                              key={option.value}
-                              onClick={() => {
-                                setCameraMotion(option.value);
-                                setShowCameraMotionDropdown(false);
-                                const el = editorRef.current;
-                                if (el && option.description) {
-                                  const saved = savedSelectionRef.current;
-                                  // Insert at saved cursor position (saved on blur when clicking dropdown)
-                                  if (saved && el.contains(saved.container)) {
-                                    el.focus();
-                                    const sel = window.getSelection();
-                                    const range = document.createRange();
-                                    range.setStart(saved.container, saved.offset);
-                                    range.collapse(true);
-                                    const br = document.createElement('br');
-                                    const textNode = document.createTextNode(option.description);
-                                    range.insertNode(textNode);
-                                    range.insertNode(br);
-                                    range.setStartAfter(textNode);
-                                    range.collapse(true);
-                                    sel?.removeAllRanges();
-                                    sel?.addRange(range);
-                                  } else {
-                                    // No cursor — append at end
-                                    const hasContent = el.innerHTML && el.innerHTML !== '<br>';
-                                    if (hasContent) {
-                                      el.innerHTML = el.innerHTML + '<br>' + option.description;
-                                    } else {
-                                      el.textContent = option.description;
-                                    }
-                                  }
-                                  const plainText = el.innerText || '';
-                                  setEditorIsEmpty(false);
-                                  setCurrentPrompt(plainText);
-                                  onUserPromptChange?.(plainText);
-                                }
-                              }}
-                              className={`w-full px-3 py-2 text-left text-[13px] transition-colors ${
-                                cameraMotion === option.value
-                                  ? "bg-white/8 text-(--text-primary)"
-                                  : "text-(--text-primary) hover:bg-white/5"
-                              }`}
-                            >
-                              <span>{option.label}</span>
-                            </button>
-                          ))}
-                      </div>
-                    )}
+                {/* Component triggers (visually hidden) — controlled from pill bar above */}
+                {hasProFeatures && (outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="w-0 h-0 overflow-hidden absolute" data-speed-ramp-host>
+                    <SpeedRampEditor
+                      curve={speedRampCurve}
+                      onCurveChange={setSpeedRampCurve}
+                      onInsertToPrompt={(text) => {
+                        const el = editorRef.current;
+                        if (!el || !text) return;
+                        const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                        if (hasContent) {
+                          el.innerHTML = el.innerHTML + '<br>' + text;
+                        } else {
+                          el.textContent = text;
+                        }
+                        const plainText = el.innerText || '';
+                        setEditorIsEmpty(false);
+                        setCurrentPrompt(plainText);
+                        onUserPromptChange?.(plainText);
+                      }}
+                    />
                   </div>
                 )}
-
-                {/* Speed Ramp Editor — video mode only (Pro+) */}
-                {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                  <div className="inline-block ml-1">
-                    {hasProFeatures ? (
-                      <SpeedRampEditor
-                        curve={speedRampCurve}
-                        onCurveChange={setSpeedRampCurve}
-                        onInsertToPrompt={(text) => {
-                          const el = editorRef.current;
-                          if (!el || !text) return;
-                          const hasContent = el.innerHTML && el.innerHTML !== '<br>';
-                          if (hasContent) {
-                            el.innerHTML = el.innerHTML + '<br>' + text;
-                          } else {
-                            el.textContent = text;
-                          }
-                          const plainText = el.innerText || '';
-                          setEditorIsEmpty(false);
-                          setCurrentPrompt(plainText);
-                          onUserPromptChange?.(plainText);
-                        }}
-                      />
-                    ) : (
-                      <button
-                        onClick={() => toast.info("Upgrade to Pro to use Speed Ramp")}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
-                        title="Pro feature — Upgrade to unlock"
-                      >
-                        <Lock className="w-3 h-3" strokeWidth={1.75} />
-                        <span>Speed</span>
-                      </button>
-                    )}
+                {hasProFeatures && (outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="w-0 h-0 overflow-hidden absolute" data-camera-studio-trigger>
+                    <VirtualCameraStyle
+                      settings={virtualCameraSettings}
+                      onSettingsChange={setVirtualCameraSettings}
+                      companyId={companyId}
+                      userId={user?.id}
+                    />
                   </div>
                 )}
-
-                {/* Virtual Camera Style — image and video modes (Pro+) */}
-                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                  <div className="inline-block ml-2">
-                    {hasProFeatures ? (
-                      <div data-camera-studio-trigger>
-                        <VirtualCameraStyle
-                          settings={virtualCameraSettings}
-                          onSettingsChange={setVirtualCameraSettings}
-                          companyId={companyId}
-                          userId={user?.id}
-                        />
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => toast.info("Upgrade to Pro to use Camera Studio")}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
-                        title="Pro feature — Upgrade to unlock"
-                      >
-                        <Lock className="w-3 h-3" strokeWidth={1.75} />
-                        <span>Camera</span>
-                      </button>
-                    )}
+                {hasProFeatures && (outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="w-0 h-0 overflow-hidden absolute" data-angle-picker-host>
+                    <CameraAnglePicker
+                      settings={cameraAngleSettings}
+                      onSettingsChange={setCameraAngleSettings}
+                      companyId={companyId}
+                      userId={user?.id}
+                      onInsertToPrompt={(text) => {
+                        const el = editorRef.current;
+                        if (!el || !text) return;
+                        const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                        if (hasContent) {
+                          el.innerHTML = el.innerHTML + '<br>' + text;
+                        } else {
+                          el.textContent = text;
+                        }
+                        const plainText = el.innerText || '';
+                        setEditorIsEmpty(false);
+                        setCurrentPrompt(plainText);
+                        onUserPromptChange?.(plainText);
+                      }}
+                    />
                   </div>
                 )}
-
-                {/* 3D Camera Angle Picker — image and video modes (Pro+) */}
-                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                  <div className="inline-block ml-1">
-                    {hasProFeatures ? (
-                      <CameraAnglePicker
-                        settings={cameraAngleSettings}
-                        onSettingsChange={setCameraAngleSettings}
-                        companyId={companyId}
-                        userId={user?.id}
-                        onInsertToPrompt={(text) => {
-                          const el = editorRef.current;
-                          if (!el || !text) return;
-                          const hasContent = el.innerHTML && el.innerHTML !== '<br>';
-                          if (hasContent) {
-                            el.innerHTML = el.innerHTML + '<br>' + text;
-                          } else {
-                            el.textContent = text;
-                          }
-                          const plainText = el.innerText || '';
-                          setEditorIsEmpty(false);
-                          setCurrentPrompt(plainText);
-                          onUserPromptChange?.(plainText);
-                        }}
-                      />
-                    ) : (
-                      <button
-                        onClick={() => toast.info("Upgrade to Pro to use Camera Angle")}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
-                        title="Pro feature — Upgrade to unlock"
-                      >
-                        <Lock className="w-3 h-3" strokeWidth={1.75} />
-                        <span>Angle</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Color Palette Picker — image and video modes (Pro+) */}
-                {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                  <div className="inline-block ml-1">
-                    {hasProFeatures ? (
-                      <ColorPalettePicker
-                        colors={colorPaletteColors}
-                        onColorsChange={setColorPaletteColors}
-                        companyId={companyId}
-                        userId={user?.id}
-                        generatedItemImages={generatedItemImages}
-                        generatedProjectImages={generatedProjectImages}
-                        onR2Click={() => setShowPaletteFileBrowser(true)}
-                        canOpenR2={canOpenFileBrowser()}
-                        onCaptureClick={() => {
-                          const canvasEditor = document.querySelector('[data-canvas-editor="true"]');
-                          if (!canvasEditor) return;
-                          const mainImage = canvasEditor.querySelector('img[data-canvas-base-image="true"], img') as HTMLImageElement;
-                          if (mainImage?.src) {
-                            setColorPaletteColors(prev => ({ ...prev, referenceUrl: mainImage.src }));
-                          }
-                        }}
-                        onInsertToPrompt={(text) => {
-                          const el = editorRef.current;
-                          if (!el || !text) return;
-                          const hasContent = el.innerHTML && el.innerHTML !== '<br>';
-                          if (hasContent) {
-                            el.innerHTML = el.innerHTML + '<br>' + text;
-                          } else {
-                            el.textContent = text;
-                          }
-                          const plainText = el.innerText || '';
-                          setEditorIsEmpty(false);
-                          setCurrentPrompt(plainText);
-                          onUserPromptChange?.(plainText);
-                        }}
-                        backgroundImage={backgroundImage}
-                        onSetOriginalImage={onSetOriginalImage}
-                      />
-                    ) : (
-                      <button
-                        onClick={() => toast.info("Upgrade to Pro to use Color Palette")}
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[12px] text-[#666] border border-white/8 cursor-not-allowed"
-                        title="Pro feature — Upgrade to unlock"
-                      >
-                        <Lock className="w-3 h-3" strokeWidth={1.75} />
-                        <span>Palette</span>
-                      </button>
-                    )}
+                {hasProFeatures && (outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
+                  <div className="w-0 h-0 overflow-hidden absolute" data-palette-picker-host>
+                    <ColorPalettePicker
+                      colors={colorPaletteColors}
+                      onColorsChange={setColorPaletteColors}
+                      companyId={companyId}
+                      userId={user?.id}
+                      generatedItemImages={generatedItemImages}
+                      generatedProjectImages={generatedProjectImages}
+                      onR2Click={() => setShowPaletteFileBrowser(true)}
+                      canOpenR2={canOpenFileBrowser()}
+                      onCaptureClick={() => {
+                        const canvasEditor = document.querySelector('[data-canvas-editor="true"]');
+                        if (!canvasEditor) return;
+                        const mainImage = canvasEditor.querySelector('img[data-canvas-base-image="true"], img') as HTMLImageElement;
+                        if (mainImage?.src) {
+                          setColorPaletteColors(prev => ({ ...prev, referenceUrl: mainImage.src }));
+                        }
+                      }}
+                      onInsertToPrompt={(text) => {
+                        const el = editorRef.current;
+                        if (!el || !text) return;
+                        const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                        if (hasContent) {
+                          el.innerHTML = el.innerHTML + '<br>' + text;
+                        } else {
+                          el.textContent = text;
+                        }
+                        const plainText = el.innerText || '';
+                        setEditorIsEmpty(false);
+                        setCurrentPrompt(plainText);
+                        onUserPromptChange?.(plainText);
+                      }}
+                      backgroundImage={backgroundImage}
+                      onSetOriginalImage={onSetOriginalImage}
+                    />
                   </div>
                 )}
               </div>
