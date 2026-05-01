@@ -3135,79 +3135,112 @@ export function ImageAIPanel({
                   : "Auto";
                 return (
                   <>
-                    {/* Genre — clickable */}
-                    <div className="relative">
-                      <button
-                        onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); }}
-                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                      >
-                        <img
-                          src={activeGenre?.preview || "/storytica/element_forge/grids/genre/auto.png"}
-                          alt=""
-                          className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
-                        />
-                        <span className="text-[11px] text-gray-500">Genre:</span>
-                        <span className="text-[11px] font-semibold text-white">{activeGenre?.label || "Auto"}</span>
-                      </button>
-                      {showPillGenre && (
-                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[280px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 p-2">
-                          <button
-                            onClick={() => { updateProjectMutation({ id: projectData._id, style: "", stylePrompt: "" }); setShowPillGenre(false); }}
-                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${!projectData?.style ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
-                          >
-                            <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[9px]">A</div>
-                            Auto
-                          </button>
-                          {GENRE_PRESETS.map(g => (
-                            <button
-                              key={g.id}
-                              onClick={() => { updateProjectMutation({ id: projectData._id, style: g.id, stylePrompt: GENRE_PROMPTS[g.id] || "" }); setShowPillGenre(false); }}
-                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${projectData?.style === g.id ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
-                            >
-                              <img src={g.preview} alt="" className="w-5 h-5 rounded-full object-cover" />
-                              {g.label}
+                    {/* Genre — clickable, opens grid dialog */}
+                    <button
+                      onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); }}
+                      className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                    >
+                      <img
+                        src={activeGenre?.preview || "/storytica/element_forge/grids/genre/auto.png"}
+                        alt=""
+                        className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
+                      />
+                      <span className="text-[11px] text-gray-500">Genre:</span>
+                      <span className="text-[11px] font-semibold text-white">{activeGenre?.label || "Auto"}</span>
+                    </button>
+                    {showPillGenre && createPortal(
+                      <>
+                        <div className="fixed inset-0 z-[9998] bg-black/40" onClick={() => setShowPillGenre(false)} />
+                        <div className="fixed z-[9999] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] max-h-[80vh] bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl overflow-y-auto p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-semibold text-white">Genre</h3>
+                            <button onClick={() => setShowPillGenre(false)} className="text-[#6E6E6E] hover:text-white transition">
+                              <X className="w-4 h-4" />
                             </button>
-                          ))}
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            {/* Auto option */}
+                            <button
+                              onClick={() => { updateProjectMutation({ id: projectData._id, style: "", stylePrompt: "" }); setShowPillGenre(false); }}
+                              className={`relative rounded-lg overflow-hidden border-2 transition-all aspect-[4/3] group ${!projectData?.style ? "border-purple-500 ring-1 ring-purple-500/30" : "border-transparent hover:border-white/20"}`}
+                            >
+                              <img src="/storytica/element_forge/grids/genre/auto.png" alt="Auto" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                              <span className="absolute bottom-1.5 left-0 right-0 text-center text-[10px] font-semibold text-white">Auto</span>
+                              {!projectData?.style && <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center"><Check className="w-2.5 h-2.5 text-white" /></div>}
+                            </button>
+                            {GENRE_PRESETS.map(g => (
+                              <button
+                                key={g.id}
+                                onClick={() => { updateProjectMutation({ id: projectData._id, style: g.id, stylePrompt: GENRE_PROMPTS[g.id] || "" }); setShowPillGenre(false); }}
+                                className={`relative rounded-lg overflow-hidden border-2 transition-all aspect-[4/3] group ${projectData?.style === g.id ? "border-purple-500 ring-1 ring-purple-500/30" : "border-transparent hover:border-white/20"}`}
+                              >
+                                <img src={g.preview} alt={g.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                                <span className="absolute bottom-1.5 left-0 right-0 text-center text-[10px] font-semibold text-white">{g.label}</span>
+                                {projectData?.style === g.id && <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center"><Check className="w-2.5 h-2.5 text-white" /></div>}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      </>,
+                      document.body
+                    )}
                     <div className="w-px h-3 bg-white/10" />
-                    {/* Format — clickable */}
-                    <div className="relative">
-                      <button
-                        onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); }}
-                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                      >
-                        <img
-                          src={activeFormat?.preview || "/storytica/element_forge/grids/format/auto.png"}
-                          alt=""
-                          className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
-                        />
-                        <span className="text-[11px] text-gray-500">Format:</span>
-                        <span className="text-[11px] font-semibold text-white">{activeFormat?.label || "Auto"}</span>
-                      </button>
-                      {showPillFormat && (
-                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[280px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 p-2">
-                          <button
-                            onClick={() => { updateProjectMutation({ id: projectData._id, formatPreset: "" }); setShowPillFormat(false); }}
-                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${!projectData?.formatPreset ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
-                          >
-                            <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[9px]">A</div>
-                            Auto
-                          </button>
-                          {FORMAT_PRESETS.map(f => (
-                            <button
-                              key={f.id}
-                              onClick={() => { updateProjectMutation({ id: projectData._id, formatPreset: f.id }); setShowPillFormat(false); }}
-                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${projectData?.formatPreset === f.id ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
-                            >
-                              <img src={f.preview} alt="" className="w-5 h-5 rounded-full object-cover" />
-                              {f.label}
+                    {/* Format — clickable, opens grid dialog */}
+                    <button
+                      onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); }}
+                      className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                    >
+                      <img
+                        src={activeFormat?.preview || "/storytica/element_forge/grids/format/auto.png"}
+                        alt=""
+                        className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
+                      />
+                      <span className="text-[11px] text-gray-500">Format:</span>
+                      <span className="text-[11px] font-semibold text-white">{activeFormat?.label || "Auto"}</span>
+                    </button>
+                    {showPillFormat && createPortal(
+                      <>
+                        <div className="fixed inset-0 z-[9998] bg-black/40" onClick={() => setShowPillFormat(false)} />
+                        <div className="fixed z-[9999] left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[540px] max-h-[80vh] bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl overflow-y-auto p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <h3 className="text-sm font-semibold text-white">Content Format</h3>
+                              <p className="text-[10px] text-[#6E6E6E] mt-0.5">Auto-appends framing, pacing, and camera behavior to all generation prompts.</p>
+                            </div>
+                            <button onClick={() => setShowPillFormat(false)} className="text-[#6E6E6E] hover:text-white transition">
+                              <X className="w-4 h-4" />
                             </button>
-                          ))}
+                          </div>
+                          <div className="grid grid-cols-4 gap-2">
+                            {/* Auto option */}
+                            <button
+                              onClick={() => { updateProjectMutation({ id: projectData._id, formatPreset: "" }); setShowPillFormat(false); }}
+                              className={`relative rounded-lg overflow-hidden border-2 transition-all aspect-[4/3] group ${!projectData?.formatPreset ? "border-teal-500 ring-1 ring-teal-500/30" : "border-transparent hover:border-white/20"}`}
+                            >
+                              <img src="/storytica/element_forge/grids/format/auto.png" alt="Auto" className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                              <span className="absolute bottom-1.5 left-0 right-0 text-center text-[10px] font-semibold text-white">Auto</span>
+                              {!projectData?.formatPreset && <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-teal-500 rounded-full flex items-center justify-center"><Check className="w-2.5 h-2.5 text-white" /></div>}
+                            </button>
+                            {FORMAT_PRESETS.map(f => (
+                              <button
+                                key={f.id}
+                                onClick={() => { updateProjectMutation({ id: projectData._id, formatPreset: f.id }); setShowPillFormat(false); }}
+                                className={`relative rounded-lg overflow-hidden border-2 transition-all aspect-[4/3] group ${projectData?.formatPreset === f.id ? "border-teal-500 ring-1 ring-teal-500/30" : "border-transparent hover:border-white/20"}`}
+                              >
+                                <img src={f.preview} alt={f.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                                <span className="absolute bottom-1.5 left-0 right-0 text-center text-[10px] font-semibold text-white">{f.label}</span>
+                                {projectData?.formatPreset === f.id && <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-teal-500 rounded-full flex items-center justify-center"><Check className="w-2.5 h-2.5 text-white" /></div>}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      </>,
+                      document.body
+                    )}
                     <div className="w-px h-3 bg-white/10" />
                     {/* Camera — clicks the existing Camera Studio trigger button */}
                     <button
