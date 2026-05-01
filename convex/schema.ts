@@ -1783,8 +1783,8 @@ export default defineSchema({
     
     isFavorite: v.optional(v.boolean()),
     aspectRatio: v.optional(v.string()), // "16:9" | "9:16" | "1:1" | "4:5" — project canvas ratio
-    style: v.optional(v.string()), // "cinematic" | "sketch" | "anime" | "cartoon" | etc. — top-level project theme
-    stylePrompt: v.optional(v.string()), // The actual style prompt text appended to all generations in this project
+    style: v.optional(v.string()), // Genre ID: "cinematic" | "horror" | "noir" | "anime" | "sci-fi" | etc. — project genre/style
+    stylePrompt: v.optional(v.string()), // The actual genre prompt text appended to all generations (mood, lighting, tone)
     formatPreset: v.optional(v.string()), // "film" | "documentary" | "youtube" | "reel" | etc. — content format prompt template key
     colorPalette: v.optional(v.object({
       referenceUrl: v.optional(v.string()),

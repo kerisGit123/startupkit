@@ -229,10 +229,12 @@ export async function triggerVideoGeneration(params: TriggerVideoGenerationParam
     status: 'processing',
   });
 
-  // Build callback URL with fileId
+  // Build callback URL with fileId + webhook secret
+  const webhookSecret = process.env.WEBHOOK_SECRET;
+  const secretParam = webhookSecret ? `&secret=${encodeURIComponent(webhookSecret)}` : '';
   const callbackUrl = params.callBackUrl.includes('fileId=')
-    ? params.callBackUrl
-    : `${baseUrl}/api/kie-callback?fileId=${createdFileId}`;
+    ? `${params.callBackUrl}${secretParam}`
+    : `${baseUrl}/api/kie-callback?fileId=${createdFileId}${secretParam}`;
 
   // Prepare the request body for Seedance 1.5 Pro API
   const requestBody = {
@@ -448,8 +450,12 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     status: 'processing',
   });
   
-  // Now create the KIE AI task with the callback URL
-  const callbackUrl = params.callbackUrl ?? `${baseUrl}/api/kie-callback?fileId=${createdFileId}`;
+  // Now create the KIE AI task with the callback URL + webhook secret
+  const webhookSecret = process.env.WEBHOOK_SECRET;
+  const secretParam = webhookSecret ? `&secret=${encodeURIComponent(webhookSecret)}` : '';
+  const callbackUrl = params.callbackUrl
+    ? `${params.callbackUrl}${secretParam}`
+    : `${baseUrl}/api/kie-callback?fileId=${createdFileId}${secretParam}`;
   
   // Encode URLs to handle filenames with spaces/special characters
   const encodeUrl = (url?: string) => url ? encodeURI(url).replace(/%25/g, '%') : url;

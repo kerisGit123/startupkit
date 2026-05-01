@@ -4,6 +4,13 @@ import { ConvexHttpClient } from 'convex/browser';
 import { api } from '@/convex/_generated/api';
 
 export async function POST(req: NextRequest) {
+  // ── Auth guard — only authenticated clients should poll results ──────────
+  const { auth } = await import('@clerk/nextjs/server');
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { taskId, fileId, companyId } = await req.json();
 
@@ -149,13 +156,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No result URLs found in task data' }, { status: 404 });
     }
 
-    // Feed the result to the kie-callback handler
-    const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/kie-callback?fileId=${fileId}`;
-    console.log('[pull-result] Forwarding to callback:', callbackUrl);
+    // Feed the result to the kie-callback handler (pass webhook secret for internal call)
+    const webhookSecret = process.env.WEBHOOK_SECRET || '';
+    const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/kie-callback?fileId=${fileId}&secret=${encodeURIComponent(webhookSecret)}`;
+    console.log('[pull-result] Forwarding to callback:', callbackUrl.replace(webhookSecret, '***'));
 
     const cbRes = await fetch(callbackUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-secret': webhookSecret,
+      },
       body: JSON.stringify(callbackPayload),
     });
 

@@ -15,7 +15,7 @@ import { FrameFavoriteButton } from "../../components/editor/FrameFavoriteButton
 import { FramePrimaryImageButton } from "../../components/editor/FramePrimaryImageButton";
 import { WorkspaceExportModal } from "../../components/modals/WorkspaceExportModal";
 import { FileBrowser } from "../../components/ai/FileBrowser";
-import { VISUAL_STYLES, STYLE_PROMPTS, FORMAT_PRESETS, FORMAT_PROMPT_MAP } from "../../constants";
+import { GENRE_PRESETS, GENRE_PROMPTS, GENRE_COMBO_TIPS, FORMAT_PRESETS, FORMAT_PROMPT_MAP } from "../../constants";
 import { ElementLibrary } from "../../components/ai/ElementLibrary";
 import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
 import { BatchGenerateDialog } from "../../components/storyboard/BatchGenerateDialog";
@@ -1262,49 +1262,46 @@ export default function StoryboardWorkspacePage() {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <span className="text-[12px] font-medium text-(--text-secondary) tabular-nums">{items.length} Frames</span>
-                    {/* Style Selector — border color matches the style's theme */}
+                    {/* Genre Selector — border color matches the genre's theme */}
                     <div className="relative">
                       {(() => {
-                        const activeStyle = VISUAL_STYLES.find(s => s.id === project?.style);
-                        // Map gradient start color to a Tailwind-compatible color for border + text
-                        const styleColorMap: Record<string, { border: string; text: string; bg: string }> = {
+                        const activeGenre = GENRE_PRESETS.find(s => s.id === project?.style);
+                        const genreColorMap: Record<string, { border: string; text: string; bg: string }> = {
                           "cinematic":     { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
-                          "sketch":        { border: "border-gray-400/50",    text: "text-gray-400",    bg: "bg-gray-400/8" },
-                          "dynamic-ink":   { border: "border-gray-500/50",    text: "text-gray-300",    bg: "bg-gray-500/8" },
-                          "vintage-bw":    { border: "border-gray-400/50",    text: "text-gray-400",    bg: "bg-gray-400/8" },
-                          "japanese-ink":  { border: "border-red-500/50",     text: "text-red-400",     bg: "bg-red-500/8" },
-                          "woodblock":     { border: "border-orange-500/50",  text: "text-orange-400",  bg: "bg-orange-500/8" },
-                          "cartoon":       { border: "border-yellow-400/50",  text: "text-yellow-400",  bg: "bg-yellow-400/8" },
-                          "3d-animation":  { border: "border-blue-500/50",    text: "text-blue-400",    bg: "bg-blue-500/8" },
-                          "anime":         { border: "border-pink-500/50",    text: "text-pink-400",    bg: "bg-pink-500/8" },
-                          "pencil":        { border: "border-gray-400/50",    text: "text-gray-400",    bg: "bg-gray-400/8" },
-                          "comic-book":    { border: "border-blue-500/50",    text: "text-blue-400",    bg: "bg-blue-500/8" },
-                          "pixel-art":     { border: "border-green-500/50",   text: "text-green-400",   bg: "bg-green-500/8" },
-                          "watercolor":    { border: "border-cyan-400/50",    text: "text-cyan-400",    bg: "bg-cyan-400/8" },
-                          "oil-painting":  { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
+                          "horror":        { border: "border-red-700/50",     text: "text-red-400",     bg: "bg-red-700/8" },
                           "noir":          { border: "border-gray-500/50",    text: "text-gray-300",    bg: "bg-gray-500/8" },
-                          "pop-art":       { border: "border-yellow-400/50",  text: "text-yellow-400",  bg: "bg-yellow-400/8" },
-                          "vhs-camcorder": { border: "border-yellow-600/50",  text: "text-yellow-500",  bg: "bg-yellow-600/8" },
-                          "smartphone":    { border: "border-blue-500/50",    text: "text-blue-400",    bg: "bg-blue-500/8" },
-                          "webcam":        { border: "border-green-500/50",   text: "text-green-400",   bg: "bg-green-500/8" },
-                          "dslr-handheld": { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
-                          "cctv":          { border: "border-green-600/50",   text: "text-green-400",   bg: "bg-green-600/8" },
-                          "35mm-film":     { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
+                          "sci-fi":        { border: "border-cyan-500/50",    text: "text-cyan-400",    bg: "bg-cyan-500/8" },
+                          "fantasy":       { border: "border-purple-500/50",  text: "text-purple-400",  bg: "bg-purple-500/8" },
+                          "drama":         { border: "border-amber-600/50",   text: "text-amber-400",   bg: "bg-amber-600/8" },
+                          "action":        { border: "border-orange-500/50",  text: "text-orange-400",  bg: "bg-orange-500/8" },
+                          "comedy":        { border: "border-yellow-400/50",  text: "text-yellow-400",  bg: "bg-yellow-400/8" },
+                          "thriller":      { border: "border-slate-500/50",   text: "text-slate-400",   bg: "bg-slate-500/8" },
+                          "anime":         { border: "border-pink-500/50",    text: "text-pink-400",    bg: "bg-pink-500/8" },
+                          "wuxia":         { border: "border-emerald-500/50", text: "text-emerald-400", bg: "bg-emerald-500/8" },
+                          "cyberpunk":     { border: "border-fuchsia-500/50", text: "text-fuchsia-400", bg: "bg-fuchsia-500/8" },
+                          "luxury":        { border: "border-amber-400/50",   text: "text-amber-300",   bg: "bg-amber-400/8" },
+                          "epic":          { border: "border-amber-500/50",   text: "text-amber-400",   bg: "bg-amber-500/8" },
+                          "corporate":     { border: "border-blue-500/50",    text: "text-blue-400",    bg: "bg-blue-500/8" },
+                          "vintage-retro": { border: "border-gray-400/50",    text: "text-gray-400",    bg: "bg-gray-400/8" },
                         };
-                        const colors = project?.style ? styleColorMap[project.style] : null;
-                        const hasStyle = activeStyle && project?.style && project.style !== 'custom';
+                        const colors = project?.style ? genreColorMap[project.style] : null;
+                        const hasGenre = activeGenre && project?.style && project.style !== 'custom';
                         return (
                           <button
                             onClick={() => setShowStyleDropdown(!showStyleDropdown)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-medium transition-colors border ${
-                              hasStyle && colors
+                            className={`flex items-center gap-1.5 px-1.5 pr-2.5 py-1 rounded-full text-[12px] font-medium transition-colors border ${
+                              hasGenre && colors
                                 ? `${colors.border} ${colors.text} ${colors.bg}`
                                 : 'text-(--text-secondary) border-(--border-primary) hover:text-(--text-primary) hover:bg-white/5'
                             }`}
                           >
-                            <Palette className="w-3.5 h-3.5" strokeWidth={1.75} />
-                            {project?.style ? (activeStyle?.label || project.style.charAt(0).toUpperCase() + project.style.slice(1)) : 'No Style'}
-                            <ChevronDown className="w-3 h-3" />
+                            <img
+                              src={activeGenre?.preview || "/storytica/element_forge/grids/genre/auto.png"}
+                              alt=""
+                              className="w-5 h-5 rounded-full object-cover"
+                            />
+                            <span className="text-[10px] text-(--text-tertiary)">Genre:</span>
+                            {project?.style ? (activeGenre?.label || project.style.charAt(0).toUpperCase() + project.style.slice(1)) : 'Auto'}
                           </button>
                         );
                       })()}
@@ -1313,7 +1310,7 @@ export default function StoryboardWorkspacePage() {
                           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowStyleDropdown(false)} />
                           <div className="absolute top-full mt-2 left-0 bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl z-50 w-[540px] p-4">
                             <div className="flex items-center justify-between mb-3">
-                              <h3 className="text-sm font-semibold text-white">Art Style</h3>
+                              <h3 className="text-sm font-semibold text-white">Genre</h3>
                               <div className="flex items-center gap-2">
                                 <button
                                   onClick={() => { setEditingStyleId(null); setCustomStyleName(""); setCustomStylePrompt(""); setShowCustomStyleForm(!showCustomStyleForm); }}
@@ -1330,16 +1327,16 @@ export default function StoryboardWorkspacePage() {
                             {/* Custom Style Create / Edit Form */}
                             {showCustomStyleForm && (
                               <div className="mb-3 p-3 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg space-y-2">
-                                <p className="text-[11px] text-[#A0A0A0] font-medium">{editingStyleId ? "Edit Custom Style" : "Create Custom Style"}</p>
+                                <p className="text-[11px] text-[#A0A0A0] font-medium">{editingStyleId ? "Edit Custom Genre" : "Create Custom Genre"}</p>
                                 <input
                                   type="text"
-                                  placeholder="Style name (e.g. My Cinematic)"
+                                  placeholder="Genre name (e.g. Dark Thriller)"
                                   value={customStyleName}
                                   onChange={(e) => setCustomStyleName(e.target.value)}
                                   className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50"
                                 />
                                 <textarea
-                                  placeholder="Style prompt (describe the visual style...)"
+                                  placeholder="Genre prompt (describe the mood, lighting, tone...)"
                                   value={customStylePrompt}
                                   onChange={(e) => setCustomStylePrompt(e.target.value)}
                                   rows={4}
@@ -1365,7 +1362,7 @@ export default function StoryboardWorkspacePage() {
                                             format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
                                           });
                                           updateProject({ id: project._id, style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() });
-                                          toast.success(`Style "${customStyleName}" updated`);
+                                          toast.success(`Genre "${customStyleName}" updated`);
                                         } else {
                                           // Create new preset
                                           await createPreset({
@@ -1377,7 +1374,7 @@ export default function StoryboardWorkspacePage() {
                                             userId: user?.id || "",
                                           });
                                           updateProject({ id: project._id, style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() });
-                                          toast.success(`Custom style "${customStyleName}" created and applied`);
+                                          toast.success(`Custom genre "${customStyleName}" created and applied`);
                                         }
                                         setCustomStyleName("");
                                         setCustomStylePrompt("");
@@ -1395,137 +1392,146 @@ export default function StoryboardWorkspacePage() {
                               </div>
                             )}
 
-                            <div className="grid grid-cols-4 gap-2 max-h-[350px] overflow-y-auto pr-1">
-                              {/* No Style — clear option */}
-                              <button
-                                onClick={() => {
-                                  updateProject({ id: project._id, style: "", stylePrompt: "" });
-                                  setShowStyleDropdown(false);
-                                }}
-                                className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                  !project?.style || project.style === ''
-                                    ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
-                                    : 'border-[#3D3D3D] hover:border-white/20'
-                                }`}
-                              >
-                                <div className="w-full h-full bg-gradient-to-br from-gray-800/60 to-gray-900/60 flex items-center justify-center">
-                                  <X className="w-6 h-6 text-gray-500" />
-                                </div>
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-gray-400 drop-shadow-lg">
-                                  No Style
-                                </span>
-                                {(!project?.style || project.style === '') && (
-                                  <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                    <Check className="w-2.5 h-2.5 text-white" />
-                                  </div>
-                                )}
-                              </button>
-
-                              {/* Built-in styles */}
-                              {VISUAL_STYLES.filter(s => s.id !== 'custom').map(style => (
+                            <div className="max-h-[400px] overflow-y-auto pr-1 space-y-3">
+                              <div className="grid grid-cols-4 gap-2">
+                                {/* Auto — clear genre */}
                                 <button
-                                  key={style.id}
                                   onClick={() => {
-                                    updateProject({ id: project._id, style: style.id, stylePrompt: STYLE_PROMPTS[style.id] || "" });
+                                    updateProject({ id: project._id, style: "", stylePrompt: "" });
                                     setShowStyleDropdown(false);
                                   }}
                                   className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                    project?.style === style.id
-                                      ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
-                                      : 'border-transparent hover:border-white/20'
-                                  }`}
-                                >
-                                  <img
-                                    src={style.preview}
-                                    alt={style.label}
-                                    className="w-full h-full object-cover"
-                                    loading="lazy"
-                                  />
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                  <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg">
-                                    {style.label}
-                                  </span>
-                                  {project?.style === style.id && (
-                                    <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                      <Check className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                  )}
-                                </button>
-                              ))}
-
-                              {/* Custom styles from storyboard_presets */}
-                              {(stylePresets || []).map(preset => (
-                                <button
-                                  key={preset._id}
-                                  onClick={() => {
-                                    const parsed = JSON.parse(preset.format || "{}");
-                                    updateProject({ id: project._id, style: parsed.style || preset.name, stylePrompt: parsed.stylePrompt || preset.prompt || "" });
-                                    setShowStyleDropdown(false);
-                                  }}
-                                  className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                    project?.style === preset.name
+                                    !project?.style || project.style === ''
                                       ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
                                       : 'border-[#3D3D3D] hover:border-white/20'
                                   }`}
                                 >
-                                  {preset.thumbnailUrl ? (
-                                    <img src={preset.thumbnailUrl} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
-                                  ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
-                                      <Palette className="w-6 h-6 text-purple-400/50" />
-                                    </div>
-                                  )}
+                                  <img src="/storytica/element_forge/grids/genre/auto.png" alt="Auto" className="w-full h-full object-cover" />
                                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                  <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg truncate px-1">
-                                    {preset.name}
+                                  <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-gray-400 drop-shadow-lg">
+                                    Auto
                                   </span>
-                                  {project?.style === preset.name && (
+                                  {(!project?.style || project.style === '') && (
                                     <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
                                       <Check className="w-2.5 h-2.5 text-white" />
                                     </div>
                                   )}
-                                  {/* Edit button */}
-                                  <div
-                                    role="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      setEditingStyleId(String(preset._id));
-                                      setCustomStyleName(preset.name);
-                                      setCustomStylePrompt(preset.prompt || "");
-                                      setShowCustomStyleForm(true);
+                                </button>
+
+                                {/* Built-in genres — flat grid */}
+                                {GENRE_PRESETS.map(style => (
+                                  <button
+                                    key={style.id}
+                                    onClick={() => {
+                                      updateProject({ id: project._id, style: style.id, stylePrompt: GENRE_PROMPTS[style.id] || "" });
+                                      setShowStyleDropdown(false);
                                     }}
-                                    className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                    className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
+                                      project?.style === style.id
+                                        ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
+                                        : 'border-transparent hover:border-white/20'
+                                    }`}
                                   >
-                                    <Edit3 className="w-2.5 h-2.5 text-white" />
-                                  </div>
-                                  {/* Delete button */}
-                                  <div
-                                    role="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      removePreset({ id: preset._id });
-                                      toast.success(`Style "${preset.name}" deleted`);
+                                    <img
+                                      src={style.preview}
+                                      alt={style.label}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                    <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg">
+                                      {style.label}
+                                    </span>
+                                    {project?.style === style.id && (
+                                      <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                                        <Check className="w-2.5 h-2.5 text-white" />
+                                      </div>
+                                    )}
+                                  </button>
+                                ))}
+
+                                {/* Custom genres from storyboard_presets */}
+                                {(stylePresets || []).map(preset => (
+                                  <button
+                                    key={preset._id}
+                                    onClick={() => {
+                                      const parsed = JSON.parse(preset.format || "{}");
+                                      updateProject({ id: project._id, style: parsed.style || preset.name, stylePrompt: parsed.stylePrompt || preset.prompt || "" });
+                                      setShowStyleDropdown(false);
                                     }}
-                                    className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                    className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
+                                      project?.style === preset.name
+                                        ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
+                                        : 'border-[#3D3D3D] hover:border-white/20'
+                                    }`}
                                   >
-                                    <X className="w-2.5 h-2.5 text-white" />
+                                    {preset.thumbnailUrl ? (
+                                      <img src={preset.thumbnailUrl} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
+                                    ) : (
+                                      <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
+                                        <Palette className="w-6 h-6 text-purple-400/50" />
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                    <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg truncate px-1">
+                                      {preset.name}
+                                    </span>
+                                    {project?.style === preset.name && (
+                                      <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                                        <Check className="w-2.5 h-2.5 text-white" />
+                                      </div>
+                                    )}
+                                    <div
+                                      role="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation(); e.preventDefault();
+                                        setEditingStyleId(String(preset._id));
+                                        setCustomStyleName(preset.name);
+                                        setCustomStylePrompt(preset.prompt || "");
+                                        setShowCustomStyleForm(true);
+                                      }}
+                                      className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                    >
+                                      <Edit3 className="w-2.5 h-2.5 text-white" />
+                                    </div>
+                                    <div
+                                      role="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation(); e.preventDefault();
+                                        removePreset({ id: preset._id });
+                                        toast.success(`Genre "${preset.name}" deleted`);
+                                      }}
+                                      className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                                    >
+                                      <X className="w-2.5 h-2.5 text-white" />
+                                    </div>
+                                  </button>
+                                ))}
+
+                                {/* + Add Custom */}
+                                <button
+                                  onClick={() => setShowCustomStyleForm(true)}
+                                  className="group relative aspect-[4/3] rounded-lg overflow-hidden border-2 border-dashed border-[#3D3D3D] hover:border-[#4A90E2]/50 transition-all flex items-center justify-center"
+                                >
+                                  <div className="flex flex-col items-center gap-1">
+                                    <Plus className="w-5 h-5 text-[#6E6E6E] group-hover:text-[#4A90E2] transition" />
+                                    <span className="text-[10px] text-[#6E6E6E] group-hover:text-[#4A90E2] font-medium transition">Add Custom</span>
                                   </div>
                                 </button>
-                              ))}
+                              </div>
 
-                              {/* + Add Custom Style card */}
-                              <button
-                                onClick={() => setShowCustomStyleForm(true)}
-                                className="group relative aspect-[4/3] rounded-lg overflow-hidden border-2 border-dashed border-[#3D3D3D] hover:border-[#4A90E2]/50 transition-all flex items-center justify-center"
-                              >
-                                <div className="flex flex-col items-center gap-1">
-                                  <Plus className="w-5 h-5 text-[#6E6E6E] group-hover:text-[#4A90E2] transition" />
-                                  <span className="text-[10px] text-[#6E6E6E] group-hover:text-[#4A90E2] font-medium transition">Add Custom</span>
+                              {/* Genre + Format combo tips */}
+                              <div className="border-t border-[#3D3D3D] pt-2 mt-2">
+                                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6E6E6E] mb-1.5">Combo Tips: Genre + Format</p>
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                  {GENRE_COMBO_TIPS.map(tip => (
+                                    <div key={tip.label} className="flex items-baseline gap-1.5 text-[10px]">
+                                      <span className="text-[#A0A0A0] font-medium truncate">{tip.label}:</span>
+                                      <span className="text-[#6E6E6E] truncate">{tip.genre} + {tip.format}</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              </button>
+                              </div>
                             </div>
                           </div>
                         </>
@@ -1539,7 +1545,7 @@ export default function StoryboardWorkspacePage() {
                         return (
                           <button
                             onClick={() => setShowFormatDropdown(!showFormatDropdown)}
-                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[12px] font-medium transition-colors border ${
+                            className={`flex items-center gap-1.5 px-1.5 pr-2.5 py-1 rounded-full text-[12px] font-medium transition-colors border ${
                               !hasFormat
                                 ? 'text-(--text-secondary) border-(--border-primary) hover:text-(--text-primary) hover:bg-white/5'
                                 : ''
@@ -1550,38 +1556,48 @@ export default function StoryboardWorkspacePage() {
                               backgroundColor: `${activeFormat.color}14`,
                             } : undefined}
                           >
-                            <Film className="w-3.5 h-3.5" strokeWidth={1.75} />
-                            {activeFormat?.label || 'No Format'}
-                            <ChevronDown className="w-3 h-3" />
+                            <img
+                              src={activeFormat?.preview || "/storytica/element_forge/grids/format/auto.png"}
+                              alt=""
+                              className="w-5 h-5 rounded-full object-cover"
+                            />
+                            <span className="text-[10px] text-(--text-tertiary)">Format:</span>
+                            {activeFormat?.label || 'Auto'}
                           </button>
                         );
                       })()}
                       {showFormatDropdown && (
                         <>
                           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowFormatDropdown(false)} />
-                          <div className="absolute top-full mt-2 left-0 bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl z-50 w-[320px] p-4">
+                          <div className="absolute top-full mt-2 left-0 bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl z-50 w-[420px] p-4">
                             <div className="flex items-center justify-between mb-3">
                               <h3 className="text-sm font-semibold text-white">Content Format</h3>
                               <button onClick={() => setShowFormatDropdown(false)} className="text-[#6E6E6E] hover:text-white transition">
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
-                            <p className="text-[10px] text-[#6E6E6E] mb-3">Auto-appends framing, pacing, and camera behavior to all generation prompts.</p>
-                            <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-y-auto pr-1">
-                              {/* No Format — clear option */}
+                            <p className="text-[10px] text-[#6E6E6E] mb-3">Auto-appends framing, pacing, and camera behavior to all generation prompts. Pair with Genre for mood &amp; lighting.</p>
+                            <div className="grid grid-cols-4 gap-2 max-h-[350px] overflow-y-auto pr-1">
+                              {/* Auto — clear format */}
                               <button
                                 onClick={() => {
                                   updateProject({ id: project._id, formatPreset: "" });
                                   setShowFormatDropdown(false);
                                 }}
-                                className={`relative px-3 py-2.5 rounded-lg border-2 transition-all text-center ${
+                                className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
                                   !project?.formatPreset || project.formatPreset === ''
-                                    ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-500/10'
-                                    : 'border-[#3D3D3D] hover:border-white/20 bg-[#2C2C2C]'
+                                    ? 'border-amber-500 ring-2 ring-amber-500/30'
+                                    : 'border-[#3D3D3D] hover:border-white/20'
                                 }`}
                               >
-                                <X className="w-4 h-4 mx-auto mb-1 text-gray-500" />
-                                <span className="text-[10px] font-medium text-gray-400">No Format</span>
+                                <img src="/storytica/element_forge/grids/format/auto.png" alt="Auto" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-gray-400 drop-shadow-lg">Auto</span>
+                                {(!project?.formatPreset || project.formatPreset === '') && (
+                                  <div className="absolute top-1 right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                                    <Check className="w-2.5 h-2.5 text-white" />
+                                  </div>
+                                )}
                               </button>
 
                               {FORMAT_PRESETS.map(format => (
@@ -1591,18 +1607,25 @@ export default function StoryboardWorkspacePage() {
                                     updateProject({ id: project._id, formatPreset: format.id });
                                     setShowFormatDropdown(false);
                                   }}
-                                  className={`relative px-3 py-2.5 rounded-lg border-2 transition-all text-center ${
+                                  className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
                                     project?.formatPreset === format.id
-                                      ? 'border-amber-500 ring-2 ring-amber-500/30 bg-amber-500/10'
-                                      : 'border-[#3D3D3D] hover:border-white/20 bg-[#2C2C2C]'
+                                      ? 'border-amber-500 ring-2 ring-amber-500/30'
+                                      : 'border-transparent hover:border-white/20'
                                   }`}
                                   title={format.prompt}
                                 >
-                                  <div className="w-4 h-4 rounded-full mx-auto mb-1" style={{ backgroundColor: format.color }} />
-                                  <span className="text-[10px] font-medium text-white">{format.label}</span>
+                                  {format.preview ? (
+                                    <img src={format.preview} alt={format.label} className="w-full h-full object-cover" loading="lazy" />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-[#2a3a4a] to-[#1a2a3a] flex items-center justify-center">
+                                      <div className="w-5 h-5 rounded-full opacity-60" style={{ backgroundColor: format.color }} />
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                                  <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg">{format.label}</span>
                                   {project?.formatPreset === format.id && (
-                                    <div className="absolute top-1 right-1 w-3 h-3 bg-amber-500 rounded-full flex items-center justify-center">
-                                      <Check className="w-2 h-2 text-white" />
+                                    <div className="absolute top-1 right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
+                                      <Check className="w-2.5 h-2.5 text-white" />
                                     </div>
                                   )}
                                 </button>

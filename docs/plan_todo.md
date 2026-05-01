@@ -1,10 +1,37 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-04-30 (Session #29 — Character Thumbnails + Custom Elements)
+> **Last updated:** 2026-05-01 (Session #30 — Genre System + Format Redesign + Webhook Security)
 
 ---
 
-## Recently Completed (Session #11-29 — 2026-04-26/30)
+## Recently Completed (Session #11-30 — 2026-04-26/05-01)
+
+### Session #30 — 2026-05-01 (Genre System + Format Redesign + Webhook Security)
+
+**Genre System (16 presets):**
+- [x] `GENRE_PRESETS` array — 16 genres (Cinematic, Horror, Noir, Sci-Fi, Fantasy, Drama, Action, Comedy, Thriller, Anime, Wuxia, Cyberpunk, Luxury, Epic, Corporate, Vintage-Retro) with gradient colors and preview images
+- [x] `GENRE_PROMPTS` mapping — detailed mood/lighting/tone descriptions per genre, auto-appended to all generation prompts
+- [x] `GENRE_COMBO_TIPS` — user-helpful pairing suggestions (e.g., "UGC Content: Comedy or Bold + YouTube or Reel/TikTok")
+- [x] Genre picker UI — 4-column visual grid in workspace toolbar with preview thumbnails, genre-themed button colors
+- [x] Custom genre creation form — name + prompt input, saved to `storyboard_presets`
+- [x] Wizard genre pills — 9-genre subset in Script tab for quick selection (WizardSteps.tsx)
+- [x] Genre preview images — 16 genre thumbnails in `public/storytica/element_forge/grids/genre/`
+
+**Format Redesign (12 content formats):**
+- [x] `FORMAT_PRESETS` array — 12 formats (Film, Documentary, YouTube, Reel/TikTok, Commercial, Music Video, Vlog, Tutorial, Presentation, Podcast, Product Demo, Cinematic Ad) with color coding and preview images
+- [x] `FORMAT_PROMPT_MAP` — framing/pacing/camera descriptions per format, auto-appended independently from genre
+- [x] Format picker UI — 4-column grid in workspace toolbar with auto + 12 format options
+- [x] Format preview images — 13 thumbnails in `public/storytica/element_forge/grids/format/`
+- [x] Dual-axis system — genre controls visual aesthetics (mood, lighting, color), format controls structure (framing, pacing, camera behavior)
+
+**Webhook Security (Option C — shared secret):**
+- [x] `WEBHOOK_SECRET` validation added to `/api/kie-callback/route.ts` — checks header `x-webhook-secret` or query param `secret`
+- [x] `WEBHOOK_SECRET` validation added to `/api/storyboard/kie-callback/route.ts` — same guard
+- [x] Clerk auth guard added to `/api/storyboard/pull-result/route.ts` — requires authenticated user
+- [x] Pull-result passes secret when forwarding to kie-callback internally
+- [x] `kieAI.ts` callback URL builder appends `&secret=` param so KIE AI sends it back
+- [x] `env.example` updated with `WEBHOOK_SECRET` documentation and generation instructions
+- [x] Comparison doc sections 7 and 10 synced to score 94 (was stale at 88/91)
 
 ### Session #29 — 2026-04-30 (Character Thumbnail Regeneration + Custom Element Builder)
 
@@ -473,8 +500,8 @@
 
 - [x] **Email relay auth fixed** — Added Clerk auth to `/api/send-email`, `/api/send-system-email`, `/api/test-email` (Session #18)
 - [x] **All AI generation routes auth fixed** — Added Clerk auth to 14 routes: `generate-image` (+ Convex token passthrough), `generate-video`, `generate-seedance`, `generate-seedance2`, `generate-veo`, `generate-kling-motion`, `generate-topaz-video`, `generate-music`, `generate-persona`, `generate-tts`, `generate-gpt-image2`, `generate-grok`, `generate-script`, `ai-analyze`, `inpaint` (Session #18)
-- [ ] **KIE callback routes lack signature verification** — public, no HMAC check
-- [ ] **n8n webhook subpath no auth** — `handleN8nWebhook` path has no secret check
+- [x] **KIE callback routes secured** — `WEBHOOK_SECRET` validation via header or query param on `/api/kie-callback` + `/api/storyboard/kie-callback`. Callback URLs auto-append secret. Pull-result route adds Clerk auth + passes secret internally (Session #30)
+- [x] **n8n webhook subpath removed** — `handleN8nWebhook` and `n8nWebhookCallback.ts` deleted in Session #24 dead code cleanup. Route no longer exists
 - [x] **R2 delete endpoint ownership verification** — Fixed: 3-layer ownership check (API routes + Convex mutations), orphan key rejection, legacy `uploadedBy` fallback (Session #20)
 - [x] **File type/size validation on upload routes** — Shared `validateUpload()` helper (`lib/upload-validation.ts`): MIME allowlist (image/video/audio/PDF) + per-category size limits (image 20MB, video 200MB, audio 50MB, doc 10MB). Applied to 5 upload routes: `storyboard/upload`, `upload-binary`, `r2-upload`, `chat/upload`, `/upload` (Session #21)
 - [x] **Auth added to unprotected routes** — Clerk auth added to `/upload`, `log-upload`, `grok-inpaint`, `crop` (Session #21)
@@ -526,7 +553,7 @@
 
 ### Remaining Feature TODOs (lower priority than UX)
 
-#### Ad Templates (Score 90 → 91)
+#### Ad Templates (Score 94 → 95)
 - [ ] Ad template presets (Product Showcase, Before/After, Testimonial, Countdown)
 
 #### AI Agent — Test & Polish
@@ -724,6 +751,14 @@
 - [ ] Phase 3: Public self-booking page
 - [ ] Phase 4: Google Calendar sync
 
+### Lighting Preset Picker — Future
+
+- [ ] Separate lighting preset picker (like Higgsfield Cinema Studio 3.5)
+- [ ] Presets: Auto, Soft Cross, Contre Jour, Window, Overhead Fall, Silhouette, Practicals
+- [ ] Independent axis from Genre (Genre = mood/color, Lighting = light setup)
+- [ ] Appends lighting prompt to generation alongside Genre + Format
+- [ ] Reference: Higgsfield also has Color Palette presets (Bleach Bypass, Teal Orange, Classic BW, etc.) — consider if needed
+
 ### Director View — Future
 
 - [ ] AI script generation, AI element detection
@@ -732,7 +767,7 @@
 
 ---
 
-## Competitive Gap Summary (updated 2026-04-29 — LEADING Higgsfield 92 vs 88)
+## Competitive Gap Summary (updated 2026-05-01 — LEADING Higgsfield 94 vs 88)
 
 | Competitor Feature | Status |
 |-------------------|--------|
@@ -751,11 +786,11 @@
 | Marketing Studio (URL→ad) | **PLANNED** — TikTok/Social Ads Builder (in-editor, better UX). Infrastructure now exists |
 | Higgsfield social network | **SKIP** — not relevant to B2B/agency target |
 
-### Honest scorecard (post Session #27 Script Builder + @Mention System)
+### Honest scorecard (post Session #30 Genre System + Format Redesign)
 
 | Platform | Score |
 |----------|:-----:|
-| **Us (Storytica)** | **93** |
+| **Us (Storytica)** | **94** |
 | Higgsfield 3.5 | **88** |
 | LTX Studio | 72 |
 | Zopia AI | 70 |

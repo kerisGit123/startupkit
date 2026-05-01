@@ -253,7 +253,7 @@ export const deleteWithR2 = mutation({
 });
 
 export const listByCategories = query({
-  args: { 
+  args: {
     companyId: v.string(),
     categories: v.array(v.string()), // Array of categories to include
   },
@@ -261,9 +261,12 @@ export const listByCategories = query({
     return await ctx.db
       .query("storyboard_files")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
-      .filter((q) => 
-        q.or(
-          ...categories.map(category => q.eq(q.field("category"), category))
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("status"), "deleted"),
+          q.or(
+            ...categories.map(category => q.eq(q.field("category"), category))
+          )
         )
       )
       .collect();
@@ -271,15 +274,17 @@ export const listByCategories = query({
 });
 
 export const listByCategory = query({
-  args: { 
+  args: {
     companyId: v.string(),
     category: v.string(), // 'temps', 'uploads', 'generated', 'elements', 'storyboard', 'videos'
   },
   handler: async (ctx, { companyId, category }) => {
     return await ctx.db
       .query("storyboard_files")
-      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
-      .filter((q) => q.eq(q.field("category"), category))
+      .withIndex("by_companyId_category", (q) =>
+        q.eq("companyId", companyId).eq("category", category)
+      )
+      .filter((q) => q.neq(q.field("status"), "deleted"))
       .collect();
   },
 });
@@ -296,6 +301,7 @@ export const listByCompany = query({
     const files = await ctx.db
       .query("storyboard_files")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .filter((q) => q.neq(q.field("status"), "deleted"))
       .collect();
     return files;
   },
@@ -426,12 +432,14 @@ export const listByProject = query({
         .withIndex("by_category", (q) =>
           q.eq("projectId", projectId).eq("category", category)
         )
+        .filter((q) => q.neq(q.field("status"), "deleted"))
         .collect();
     }
 
     return await ctx.db
       .query("storyboard_files")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .filter((q) => q.neq(q.field("status"), "deleted"))
       .collect();
   },
 });
@@ -505,14 +513,20 @@ export const listAudioFiles = query({
     categoryId: v.optional(v.string()),
   },
   handler: async (ctx, { companyId, categoryId }) => {
+    // Use by_companyId index + server-side filter for fileType/status
+    // instead of fetching ALL company files then filtering in JS
     const files = await ctx.db
       .query("storyboard_files")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("fileType"), "audio"),
+          q.eq(q.field("status"), "completed")
+        )
+      )
       .collect();
     return files
       .filter(f =>
-        f.fileType === "audio" &&
-        f.status === "completed" &&
         f.metadata?.audioId &&
         (!categoryId || String(f.categoryId) === categoryId)
       )

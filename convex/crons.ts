@@ -19,4 +19,16 @@ crons.daily(
   internal.storyboard.fileMetadataHandler.cleanupExpiredTemps
 );
 
+/**
+ * 📊 LANDING PAGE STATS REFRESH
+ *
+ * Updates the cached landing_stats row every hour so getPublicStats
+ * reads a single document instead of scanning 3 entire tables (~45 MB).
+ */
+crons.interval(
+  "refresh-landing-stats",
+  { hours: 1 },
+  internal.landingStats.refreshLandingStats
+);
+
 export default crons;

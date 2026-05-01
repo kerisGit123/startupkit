@@ -639,7 +639,7 @@ export function ColorPalettePicker({
                           body: JSON.stringify({
                             image: backgroundImage,
                             prompt: `Apply this color grading to the image, preserving all content: ${palettePrompt}`,
-                            model: "gpt-image/1.5-image-to-image",
+                            model: "qwen-z-image",
                           }),
                         });
                         if (!response.ok) throw new Error("Color grading failed");

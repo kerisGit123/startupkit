@@ -6,7 +6,7 @@ import { Sparkles, X, Loader2, Image, AlertTriangle } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { STYLE_PROMPTS, FORMAT_PROMPT_MAP } from "../../constants";
+import { GENRE_PROMPTS, FORMAT_PROMPT_MAP } from "../../constants";
 
 interface BatchGenerateDialogProps {
   projectId: Id<"storyboard_projects">;

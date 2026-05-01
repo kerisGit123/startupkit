@@ -173,7 +173,7 @@ function SelectorCard({
         </div>
 
         {/* Image or number */}
-        <div className="flex items-center justify-center h-[52px] px-2">
+        <div className="flex items-center justify-center h-[64px] px-2">
           {isFocalLength ? (
             <span className={`text-[28px] font-light tabular-nums ${
               isActive ? "text-(--text-primary)" : "text-(--text-secondary)"
@@ -184,7 +184,7 @@ function SelectorCard({
             <img
               src={selected.image}
               alt={selected.label}
-              className="max-h-[44px] max-w-full object-contain"
+              className="max-h-[56px] max-w-full object-contain"
               loading="lazy"
             />
           ) : (
@@ -277,16 +277,19 @@ export function VirtualCameraStyle({ settings, onSettingsChange, companyId, user
   if (settings.focalLength !== "none") summaryParts.push(FOCAL_LENGTH_OPTIONS.find(o => o.value === settings.focalLength)?.label + "mm");
   if (settings.aperture !== "none") summaryParts.push(APERTURE_OPTIONS.find(o => o.value === settings.aperture)?.label || "");
 
-  // Panel position — centered above the trigger
+  // Panel position — centered above the trigger (or pill anchor if triggered from pill)
   const getPanelStyle = (): React.CSSProperties => {
-    if (!triggerRef.current) return {};
-    const rect = triggerRef.current.getBoundingClientRect();
     const panelW = 420;
-    const gap = 10;
+    const panelH = 220;
+    const gap = 20;
+    // Prefer the pill bar as anchor so panel sits above it
+    const pillBar = document.querySelector('[data-settings-pill]') as HTMLElement | null;
+    const anchor = pillBar || triggerRef.current;
+    if (!anchor) return {};
+    const rect = anchor.getBoundingClientRect();
     let left = rect.left + rect.width / 2 - panelW / 2;
-    // Clamp to viewport
     left = Math.max(gap, Math.min(left, window.innerWidth - panelW - gap));
-    const top = Math.max(gap, rect.top - 220);
+    const top = Math.max(gap, rect.top - panelH - gap);
     return { left, top, width: panelW };
   };
 

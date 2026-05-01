@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Upload, FolderOpen, FileText, Camera, Sparkles, X, Film, Volume2 } from "lucide-react";
 
 export interface GeneratedImageItem {
@@ -34,6 +35,10 @@ export interface AddImageMenuProps {
   mediaType?: "image" | "video" | "audio";
   /** Hide the Upload button */
   hideUpload?: boolean;
+  /** Compact mode — smaller button for inline pill row */
+  compact?: boolean;
+  /** Called when menu opens/closes */
+  onMenuToggle?: (isOpen: boolean) => void;
 }
 
 export function AddImageMenu({
@@ -51,6 +56,8 @@ export function AddImageMenu({
   label,
   mediaType = "image",
   hideUpload = false,
+  compact = false,
+  onMenuToggle,
 }: AddImageMenuProps) {
   const resolvedLabel = label || (mediaType === "video" ? "Add Video" : mediaType === "audio" ? "Add Audio" : "Add Image");
   const IconComponent = mediaType === "video" ? Film : mediaType === "audio" ? Volume2 : Plus;
@@ -58,6 +65,7 @@ export function AddImageMenu({
   const [showMenu, setShowMenu] = useState(false);
   const [showGeneratedPicker, setShowGeneratedPicker] = useState(false);
   const [generatedScope, setGeneratedScope] = useState<"item" | "project">("item");
+  const menuBtnRef = React.useRef<HTMLButtonElement>(null);
 
   const hasItemImages = (generatedItemImages?.length ?? 0) > 0;
   const hasProjectImages = (generatedProjectImages?.length ?? 0) > 0;
@@ -75,43 +83,48 @@ export function AddImageMenu({
       <div className="relative">
         {/* Add Button */}
         <button
-          onClick={() => setShowMenu(!showMenu)}
-          className={`w-20 h-20 flex-shrink-0 rounded-lg border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-1 group ${
+          ref={menuBtnRef}
+          onClick={() => { const next = !showMenu; setShowMenu(next); onMenuToggle?.(next); }}
+          className={`${compact ? "px-2.5 py-1.5 rounded-full" : "w-20 h-20 rounded-lg"} flex-shrink-0 border-2 border-dashed transition-colors flex ${compact ? "flex-row" : "flex-col"} items-center justify-center gap-1 group ${
             accentColor === "green" ? "border-green-500/30 hover:border-green-500/50"
             : accentColor === "purple" ? "border-purple-500/30 hover:border-purple-500/50"
             : "border-emerald-500/30 hover:border-emerald-500/50"
           }`}
           title={resolvedLabel}
         >
-          <IconComponent className={`w-4 h-4 transition-colors ${
+          <IconComponent className={`${compact ? "w-3.5 h-3.5" : "w-4 h-4"} transition-colors ${
             accentColor === "green" ? "text-green-400 group-hover:text-green-300"
             : accentColor === "purple" ? "text-purple-400 group-hover:text-purple-300"
             : "text-emerald-400 group-hover:text-emerald-300"
           }`} />
-          <span className={`text-[10px] transition-colors ${
+          <span className={`${compact ? "text-[11px]" : "text-[10px]"} transition-colors ${
             accentColor === "green" ? "text-green-400 group-hover:text-green-300"
             : accentColor === "purple" ? "text-purple-400 group-hover:text-purple-300"
             : "text-emerald-400 group-hover:text-emerald-300"
           }`}>{resolvedLabel}</span>
         </button>
 
-        {/* Slide-out Menu */}
-        {showMenu && (
+        {/* Slide-out Menu — always uses portal to escape stacking contexts */}
+        {showMenu && createPortal(
           <>
             <div
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setShowMenu(false)}
+              className="fixed inset-0 bg-black/50 z-[9998]"
+              onClick={() => { setShowMenu(false); onMenuToggle?.(false); }}
             />
-            <div className="absolute top-0 left-full ml-2 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-50">
+            <div
+              className="fixed bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl z-[9999]"
+              style={menuBtnRef.current ? (() => {
+                const r = menuBtnRef.current!.getBoundingClientRect();
+                return compact
+                  ? { left: r.left, bottom: window.innerHeight - r.top + 8 }
+                  : { left: r.right + 8, top: r.top };
+              })() : undefined}
+            >
               <div className="p-3">
                 <div className="flex gap-2">
-                  {/* Upload from computer */}
                   {!hideUpload && (
                     <button
-                      onClick={() => {
-                        onUploadClick();
-                        setShowMenu(false);
-                      }}
+                      onClick={() => { onUploadClick(); setShowMenu(false); onMenuToggle?.(false); }}
                       className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
                       title="Upload from computer"
                     >
@@ -119,18 +132,9 @@ export function AddImageMenu({
                       <span className="text-xs">Upload</span>
                     </button>
                   )}
-
-                  {/* R2 File Browser */}
                   {onR2Click && (
                     <button
-                      onClick={() => {
-                        if (!canOpenR2) {
-                          onR2Unavailable?.();
-                          return;
-                        }
-                        onR2Click();
-                        setShowMenu(false);
-                      }}
+                      onClick={() => { if (!canOpenR2) { onR2Unavailable?.(); return; } onR2Click(); setShowMenu(false); onMenuToggle?.(false); }}
                       className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
                       title="Browse R2 files"
                     >
@@ -138,18 +142,9 @@ export function AddImageMenu({
                       <span className="text-xs">R2</span>
                     </button>
                   )}
-
-                  {/* Element Library */}
                   {onElementsClick && (
                     <button
-                      onClick={() => {
-                        if (!canOpenElements) {
-                          onElementsUnavailable?.();
-                          return;
-                        }
-                        onElementsClick();
-                        setShowMenu(false);
-                      }}
+                      onClick={() => { if (!canOpenElements) { onElementsUnavailable?.(); return; } onElementsClick(); setShowMenu(false); onMenuToggle?.(false); }}
                       className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
                       title="Browse elements"
                     >
@@ -157,14 +152,9 @@ export function AddImageMenu({
                       <span className="text-xs">Elements</span>
                     </button>
                   )}
-
-                  {/* Capture Background */}
                   {onCaptureClick && (
                     <button
-                      onClick={() => {
-                        onCaptureClick();
-                        setShowMenu(false);
-                      }}
+                      onClick={() => { onCaptureClick(); setShowMenu(false); onMenuToggle?.(false); }}
                       className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
                       title="Capture background"
                     >
@@ -172,16 +162,9 @@ export function AddImageMenu({
                       <span className="text-xs">Capture</span>
                     </button>
                   )}
-
-                  {/* Generated Images */}
                   {hasAnyGenerated && onSelectGeneratedImage && (
                     <button
-                      onClick={() => {
-                        // Default to item if it has images, otherwise project
-                        setGeneratedScope(hasItemImages ? "item" : "project");
-                        setShowGeneratedPicker(true);
-                        setShowMenu(false);
-                      }}
+                      onClick={() => { setGeneratedScope(hasItemImages ? "item" : "project"); setShowGeneratedPicker(true); setShowMenu(false); onMenuToggle?.(false); }}
                       className="flex flex-col items-center gap-1 px-3 py-2 text-gray-300 hover:bg-white/10 hover:text-white transition-colors rounded-md min-w-[80px]"
                       title="Use generated image as reference"
                     >
@@ -192,7 +175,8 @@ export function AddImageMenu({
                 </div>
               </div>
             </div>
-          </>
+          </>,
+          document.body
         )}
       </div>
 

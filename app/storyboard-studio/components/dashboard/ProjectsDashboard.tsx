@@ -16,7 +16,7 @@ import { Palette, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useSubscription } from "@/hooks/useSubscription";
 import { PLAN_LIMITS } from "@/lib/plan-config";
-import { VISUAL_STYLES, SIMPLE_TAGS, TAG_COLORS } from "../../constants";
+import { VISUAL_STYLES, GENRE_PRESETS, GENRE_COMBO_TIPS, SIMPLE_TAGS, TAG_COLORS } from "../../constants";
 import type { Project, Step } from "../../types";
 import { TagEditor } from "../storyboard/TagEditor";
 import { TopNavSearch } from "./TopNavSearch";
@@ -190,11 +190,11 @@ export function ProjectsDashboard({
     setIsCreating(true);
     try {
       if (newType === "board" && onCreateConvexProject) {
-        // Resolve stylePrompt: check presets first, then built-in STYLE_PROMPTS
+        // Resolve genrePrompt: check presets first, then built-in GENRE_PROMPTS
         const presetMatch = (stylePresets || []).find(p => p.name === newArtStyle);
         const customMatch = presetMatch ? { prompt: presetMatch.prompt || "" } : customStyleTemplates.find(s => s.name === newArtStyle);
-        const { STYLE_PROMPTS } = await import("../../constants");
-        const resolvedStylePrompt = customMatch?.prompt || STYLE_PROMPTS[newArtStyle] || "";
+        const { GENRE_PROMPTS } = await import("../../constants");
+        const resolvedStylePrompt = customMatch?.prompt || GENRE_PROMPTS[newArtStyle] || "";
         await onCreateConvexProject(newName, newFrameRatio, newArtStyle, resolvedStylePrompt);
       } else {
         const p: Project = {
@@ -870,10 +870,10 @@ export function ProjectsDashboard({
               </div>
             </div>
 
-            {/* Art style picker with preview images */}
+            {/* Genre picker with preview images */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
-                <label className="text-[#A0A0A0] text-sm block">Art style</label>
+                <label className="text-[#A0A0A0] text-sm block">Genre</label>
                 <button
                   onClick={() => { setEditingStyleId(null); setCustomStyleName(""); setCustomStylePrompt(""); setShowCustomStyleForm(!showCustomStyleForm); }}
                   className="flex items-center gap-1 text-[11px] text-[#4A90E2] hover:text-white transition px-2 py-1 rounded-lg border border-[#3D3D3D] hover:border-[#4A90E2]/30"
@@ -885,10 +885,10 @@ export function ProjectsDashboard({
               {/* Custom Style Create / Edit Form */}
               {showCustomStyleForm && (
                 <div className="mb-3 p-3 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg space-y-2">
-                  <p className="text-[11px] text-[#A0A0A0] font-medium">{editingStyleId ? "Edit Custom Style" : "Create Custom Style"}</p>
+                  <p className="text-[11px] text-[#A0A0A0] font-medium">{editingStyleId ? "Edit Custom Genre" : "Create Custom Genre"}</p>
                   <DarkInput
                     type="text"
-                    placeholder="Style name (e.g. My Cinematic)"
+                    placeholder="Genre name (e.g. Dark Thriller)"
                     value={customStyleName}
                     onChange={(e) => setCustomStyleName(e.target.value)}
                     size="xs"
@@ -918,7 +918,7 @@ export function ProjectsDashboard({
                               prompt: customStylePrompt.trim(),
                               format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
                             });
-                            toast.success(`Style "${customStyleName}" updated`);
+                            toast.success(`Genre "${customStyleName}" updated`);
                           } else {
                             await createPreset({
                               name: customStyleName.trim(),
@@ -929,7 +929,7 @@ export function ProjectsDashboard({
                               userId: "",
                             });
                             setNewArtStyle(customStyleName.trim());
-                            toast.success(`Custom style "${customStyleName}" created`);
+                            toast.success(`Custom genre "${customStyleName}" created`);
                           }
                           setCustomStyleName(""); setCustomStylePrompt(""); setEditingStyleId(null); setShowCustomStyleForm(false);
                         } catch (err: any) { toast.error(err.message || "Failed to save style"); }
@@ -942,35 +942,35 @@ export function ProjectsDashboard({
                 </div>
               )}
 
-              <div className="grid grid-cols-6 gap-2 max-h-[280px] overflow-y-auto pr-1">
-                {/* Built-in styles */}
-                {VISUAL_STYLES.filter(s => s.id !== 'custom').map(style => (
-                  <button
-                    key={style.id}
-                    onClick={() => setNewArtStyle(style.id)}
-                    className={`relative aspect-[4/3] rounded-lg border-2 transition overflow-hidden ${
-                      newArtStyle === style.id ? "border-[#4A90E2]" : "border-[#3D3D3D] hover:border-[#4A90E2]/50"
-                    }`}
-                  >
-                    <img
-                      src={style.preview}
-                      alt={style.label}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                    <div className="absolute bottom-0 left-0 right-0 p-1.5">
-                      <span className="text-[#FFFFFF] text-[10px] font-medium leading-tight block">{style.label}</span>
-                    </div>
-                    {newArtStyle === style.id && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A90E2] rounded-full flex items-center justify-center">
-                        <Check className="w-2.5 h-2.5 text-white" />
+              <div className="max-h-[320px] overflow-y-auto pr-1 space-y-3">
+                <div className="grid grid-cols-6 gap-2">
+                  {GENRE_PRESETS.map(style => (
+                    <button
+                      key={style.id}
+                      onClick={() => setNewArtStyle(style.id)}
+                      className={`relative aspect-[4/3] rounded-lg border-2 transition overflow-hidden ${
+                        newArtStyle === style.id ? "border-[#4A90E2]" : "border-[#3D3D3D] hover:border-[#4A90E2]/50"
+                      }`}
+                    >
+                      <img
+                        src={style.preview}
+                        alt={style.label}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                      <div className="absolute bottom-0 left-0 right-0 p-1.5">
+                        <span className="text-[#FFFFFF] text-[10px] font-medium leading-tight block">{style.label}</span>
                       </div>
-                    )}
-                  </button>
-                ))}
+                      {newArtStyle === style.id && (
+                        <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#4A90E2] rounded-full flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  ))}
 
-                {/* Custom styles from storyboard_presets */}
+                {/* Custom genres from storyboard_presets */}
                 {(stylePresets || []).map(preset => (
                   <button
                     key={preset._id}
@@ -1018,7 +1018,7 @@ export function ProjectsDashboard({
                         e.stopPropagation(); e.preventDefault();
                         removePreset({ id: preset._id });
                         if (newArtStyle === preset.name) setNewArtStyle(VISUAL_STYLES[0].id);
-                        toast.success(`Style "${preset.name}" deleted`);
+                        toast.success(`Genre "${preset.name}" deleted`);
                       }}
                       className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
                     >
@@ -1036,6 +1036,7 @@ export function ProjectsDashboard({
                   <span className="text-[10px] text-[#6E6E6E]">Add Custom</span>
                 </button>
               </div>
+            </div>
             </div>
 
             {/* Action buttons */}

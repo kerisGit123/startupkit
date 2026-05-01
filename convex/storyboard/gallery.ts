@@ -155,38 +155,48 @@ export const listSharedFiles = query({
       files = files.filter(f => f.fileType === args.filterFileType).slice(0, limit);
     }
 
-    // Join creator info — org files show org name, personal files show user name
+    // Join creator info — org files show org name, personal files show user name.
+    // Project only fields the gallery grid + filters actually use, dropping
+    // metadata, creditsUsed, taskId, mimeType, etc. to cut bandwidth ~60%.
     const filesWithUser = await Promise.all(
       files.map(async (file) => {
         const isOrg = file.companyId?.startsWith("org_");
 
+        let userName: string;
+        let userAvatar: string | null;
+
         if (isOrg && file.companyId) {
-          // Look up org name from credits_balance
           const orgBalance = await ctx.db
             .query("credits_balance")
             .withIndex("by_companyId", (q) => q.eq("companyId", file.companyId!))
             .first();
-          return {
-            ...file,
-            userName: orgBalance?.organizationName || file.companyId,
-            userAvatar: null,
-            isOrgCreator: true,
-          };
+          userName = orgBalance?.organizationName || file.companyId;
+          userAvatar = null;
+        } else {
+          const user = file.userId
+            ? await ctx.db
+                .query("users")
+                .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", file.userId!))
+                .first()
+            : null;
+          userName = user?.fullName || user?.firstName || "Anonymous";
+          userAvatar = user?.imageUrl || null;
         }
 
-        // Personal file — show user name
-        const user = file.userId
-          ? await ctx.db
-              .query("users")
-              .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", file.userId!))
-              .first()
-          : null;
-
         return {
-          ...file,
-          userName: user?.fullName || user?.firstName || "Anonymous",
-          userAvatar: user?.imageUrl || null,
-          isOrgCreator: false,
+          _id: file._id,
+          _creationTime: file._creationTime,
+          r2Key: file.r2Key,
+          sourceUrl: file.sourceUrl,
+          fileType: file.fileType,
+          model: file.model,
+          prompt: file.prompt,
+          tags: file.tags,
+          aspectRatio: file.aspectRatio,
+          sharedAt: file.sharedAt,
+          userName,
+          userAvatar,
+          isOrgCreator: !!isOrg,
         };
       })
     );

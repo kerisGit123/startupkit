@@ -311,7 +311,19 @@ export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   console.log('[kie-callback] Route hit!');
-  
+
+  // ── Webhook secret guard (Option C) ──────────────────────────────────────
+  const expectedSecret = process.env.WEBHOOK_SECRET;
+  if (expectedSecret) {
+    const incomingSecret =
+      request.headers.get('x-webhook-secret') ||
+      new URL(request.url).searchParams.get('secret');
+    if (incomingSecret !== expectedSecret) {
+      console.warn('[kie-callback] Rejected — invalid or missing webhook secret');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   try {
     const data = await request.json();
     const url = new URL(request.url);

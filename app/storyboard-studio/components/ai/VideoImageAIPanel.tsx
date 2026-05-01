@@ -2,6 +2,7 @@
 
 import { toast } from "sonner";
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { 
   Hand, Copy, Type, ArrowUpRight, Minus, Square, Circle, Pencil,
   Eraser, Brush, Undo2, Redo2, ChevronDown, Plus, X, Sparkles,
@@ -26,7 +27,7 @@ import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useFeatures } from "@/hooks/useFeatures";
 import PromptLibrary from "./PromptLibrary";
-import { FORMAT_PROMPT_MAP } from "../../constants";
+import { FORMAT_PROMPT_MAP, GENRE_PRESETS, GENRE_PROMPTS, FORMAT_PRESETS } from "../../constants";
 import { FileBrowser } from "./FileBrowser";
 import { AudioPreviewDialog } from "../shared/AudioPreviewDialog";
 import { CreatePersonaDialog } from "../GeneratedImagesPanel/CreatePersonaDialog";
@@ -291,6 +292,7 @@ export function ImageAIPanel({
   const projectElements = useQuery(api.storyboard.build.listElementsForBuild, projectId ? { projectId } : "skip");
   const savedPersonas = useQuery(api.storyboard.personas.list, { companyId });
   const renameFileMutation = useMutation(api.storyboard.storyboardFiles.renameFile);
+  const updateProjectMutation = useMutation(api.storyboard.projects.update);
   const audioFiles = useQuery(api.storyboard.storyboardFiles.listAudioFiles, { companyId, categoryId: activeShotId });
   const { getModelCredits } = usePricingData();
   
@@ -547,6 +549,10 @@ export function ImageAIPanel({
   const [showGridDropdown, setShowGridDropdown] = useState(false);
   const [showCreateModeDropdown, setShowCreateModeDropdown] = useState(false);
   const [showSettingsPopover, setShowSettingsPopover] = useState(false);
+  const [showPillGenre, setShowPillGenre] = useState(false);
+  const [showPillFormat, setShowPillFormat] = useState(false);
+  const [showPillCamera, setShowPillCamera] = useState(false);
+  const [addImageMenuOpen, setAddImageMenuOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeType, setAnalyzeType] = useState<"image" | "video" | "audio">("image");
   const [analyzeMediaUrl, setAnalyzeMediaUrl] = useState("");
@@ -733,6 +739,7 @@ export function ImageAIPanel({
 
   // Dropdown visibility states
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const modelBtnRef = useRef<HTMLButtonElement>(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [modelFilter, setModelFilter] = useState<"all" | "image" | "video" | "audio">("all");
   const [showAspectRatioDropdown, setShowAspectRatioDropdown] = useState(false);
@@ -2607,11 +2614,11 @@ export function ImageAIPanel({
           </div>
         )}
 
-        {/* Reference Images Panel — hidden for text-only models and Topaz */}
-        {outputMode !== "analyze" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (
-        <div className="mb-[0px]">
+        {/* Reference Images thumbnails — only show when images exist, hidden when empty (compact Add Image in pill row handles adding) */}
+        {outputMode !== "analyze" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (referenceImages.length > 0 || seedanceMode === "lipsync" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "first-frame" || seedanceMode === "first-last-frame") && (
+        <div className={`mb-0 ${addImageMenuOpen ? "invisible" : ""}`}>
           <div className="px-0 py-0">
-            <div className="flex items-start gap-2.5 overflow-x-auto">
+            <div className="flex items-center gap-2 overflow-x-auto">
             {/* Lipsync Mode: Character image + Audio slot */}
             {seedanceMode === "lipsync" ? (
               <>
@@ -3009,22 +3016,7 @@ export function ImageAIPanel({
                   </div>
                 ))}
 
-                {/* Combined Upload Button with Slide Menu */}
-                {maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
-                  <AddImageMenu
-                    onUploadClick={() => fileInputRef.current?.click()}
-                    onR2Click={() => setShowFileBrowser(true)}
-                    canOpenR2={canOpenFileBrowser()}
-                    onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
-                    onElementsClick={() => setShowElementLibrary(true)}
-                    canOpenElements={canOpenElementLibrary()}
-                    onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
-                    onCaptureClick={handleAddBackground}
-                    generatedItemImages={generatedItemImages}
-                    generatedProjectImages={generatedProjectImages}
-                    onSelectGeneratedImage={onSelectGeneratedImage}
-                  />
-                )}
+                {/* Add Image button moved to compact pill row below — no duplicate here */}
               </>
             )}
 
@@ -3089,28 +3081,152 @@ export function ImageAIPanel({
 
           {seedanceMode === "lipsync" ? (
             !firstFrameUrl && audioRefs.length === 0 && (
-              <p className="text-xs text-gray-500">
-                Add a character image and audio file. The AI will animate the character to match the audio (lip-sync).
+              <p className="text-xs text-gray-500 mt-1">
+                Add a character image and audio file for lip-sync.
               </p>
             )
           ) : seedanceMode === "ugc" ? (
             productImages.length === 0 && influencerImages.length === 0 && (
-              <p className="text-xs text-gray-500">
-                Add product and influencer images, then drag them into your prompt as @Product1, @Influencer1, etc.
+              <p className="text-xs text-gray-500 mt-1">
+                Add product and influencer images.
               </p>
             )
           ) : seedanceMode === "showcase" ? (
             subjectImages.length === 0 && presenterImages.length === 0 && (
-              <p className="text-xs text-gray-500">
-                Add presenter, subject (room/car/item), and scene images. Drag into prompt as @Presenter1, @Subject1, @Scene1.
+              <p className="text-xs text-gray-500 mt-1">
+                Add presenter, subject, and scene images.
               </p>
             )
-          ) : referenceImages.length === 0 && (
-            <p className="text-xs text-gray-500">
-              Click to add reference images from computer, R2 storage, or element library for consistent characters and props
-            </p>
-          )}
+          ) : null}
         </div>
+        )}
+
+        {/* Add Image (left) + Genre / Format / Camera pill (center) — single row above main panel */}
+        {outputMode !== "analyze" && selectedModelOption.value !== "topaz/video-upscale" && !selectedModelOption.value.startsWith("ai-music-api/") && projectData && (
+          <div className="relative flex items-center justify-center pb-1.5">
+            {/* Inline Add Image — compact, pinned left */}
+            {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "infinitalk/from-audio" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
+              <div className="absolute left-0 z-100">
+              <AddImageMenu
+                onUploadClick={() => fileInputRef.current?.click()}
+                onR2Click={() => setShowFileBrowser(true)}
+                canOpenR2={canOpenFileBrowser()}
+                onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
+                onElementsClick={() => setShowElementLibrary(true)}
+                canOpenElements={canOpenElementLibrary()}
+                onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
+                onCaptureClick={handleAddBackground}
+                generatedItemImages={generatedItemImages}
+                generatedProjectImages={generatedProjectImages}
+                onSelectGeneratedImage={onSelectGeneratedImage}
+                compact
+                onMenuToggle={setAddImageMenuOpen}
+              />
+              </div>
+            )}
+            {/* Genre / Format / Camera pill */}
+            <div data-settings-pill className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-(--bg-secondary)/95 backdrop-blur-md border border-white/[0.06]">
+              {(() => {
+                const activeGenre = GENRE_PRESETS.find(s => s.id === projectData?.style);
+                const activeFormat = FORMAT_PRESETS.find(f => f.id === projectData?.formatPreset);
+                const camLabel = virtualCameraSettings.camera && virtualCameraSettings.camera !== "Auto"
+                  ? [virtualCameraSettings.camera, virtualCameraSettings.lens, virtualCameraSettings.focalLength].filter(Boolean).join(", ")
+                  : "Auto";
+                return (
+                  <>
+                    {/* Genre — clickable */}
+                    <div className="relative">
+                      <button
+                        onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); }}
+                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                      >
+                        <img
+                          src={activeGenre?.preview || "/storytica/element_forge/grids/genre/auto.png"}
+                          alt=""
+                          className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
+                        />
+                        <span className="text-[11px] text-gray-500">Genre:</span>
+                        <span className="text-[11px] font-semibold text-white">{activeGenre?.label || "Auto"}</span>
+                      </button>
+                      {showPillGenre && (
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[280px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 p-2">
+                          <button
+                            onClick={() => { updateProjectMutation({ id: projectData._id, style: "", stylePrompt: "" }); setShowPillGenre(false); }}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${!projectData?.style ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
+                          >
+                            <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[9px]">A</div>
+                            Auto
+                          </button>
+                          {GENRE_PRESETS.map(g => (
+                            <button
+                              key={g.id}
+                              onClick={() => { updateProjectMutation({ id: projectData._id, style: g.id, stylePrompt: GENRE_PROMPTS[g.id] || "" }); setShowPillGenre(false); }}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${projectData?.style === g.id ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
+                            >
+                              <img src={g.preview} alt="" className="w-5 h-5 rounded-full object-cover" />
+                              {g.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-px h-3 bg-white/10" />
+                    {/* Format — clickable */}
+                    <div className="relative">
+                      <button
+                        onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); }}
+                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                      >
+                        <img
+                          src={activeFormat?.preview || "/storytica/element_forge/grids/format/auto.png"}
+                          alt=""
+                          className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
+                        />
+                        <span className="text-[11px] text-gray-500">Format:</span>
+                        <span className="text-[11px] font-semibold text-white">{activeFormat?.label || "Auto"}</span>
+                      </button>
+                      {showPillFormat && (
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[280px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-50 p-2">
+                          <button
+                            onClick={() => { updateProjectMutation({ id: projectData._id, formatPreset: "" }); setShowPillFormat(false); }}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${!projectData?.formatPreset ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
+                          >
+                            <div className="w-5 h-5 rounded-full bg-gray-700 flex items-center justify-center text-[9px]">A</div>
+                            Auto
+                          </button>
+                          {FORMAT_PRESETS.map(f => (
+                            <button
+                              key={f.id}
+                              onClick={() => { updateProjectMutation({ id: projectData._id, formatPreset: f.id }); setShowPillFormat(false); }}
+                              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-left transition-colors ${projectData?.formatPreset === f.id ? "bg-white/10 text-white" : "text-gray-400 hover:bg-white/5 hover:text-white"}`}
+                            >
+                              <img src={f.preview} alt="" className="w-5 h-5 rounded-full object-cover" />
+                              {f.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="w-px h-3 bg-white/10" />
+                    {/* Camera — clicks the existing Camera Studio trigger button */}
+                    <button
+                      data-pill-camera
+                      onClick={() => {
+                        setShowPillGenre(false); setShowPillFormat(false);
+                        const trigger = document.querySelector('[data-camera-studio-trigger] button') as HTMLButtonElement;
+                        trigger?.click();
+                      }}
+                      className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                    >
+                      <Camera className="w-4 h-4 text-gray-500" />
+                      <span className="text-[11px] text-gray-500">Camera:</span>
+                      <span className="text-[11px] font-semibold text-white truncate max-w-[150px]">{camLabel}</span>
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
         )}
 
         {/* Main Panel */}
@@ -3730,12 +3846,14 @@ export function ImageAIPanel({
                 {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
                   <div className="inline-block ml-2">
                     {hasProFeatures ? (
-                      <VirtualCameraStyle
-                        settings={virtualCameraSettings}
-                        onSettingsChange={setVirtualCameraSettings}
-                        companyId={companyId}
-                        userId={user?.id}
-                      />
+                      <div data-camera-studio-trigger>
+                        <VirtualCameraStyle
+                          settings={virtualCameraSettings}
+                          onSettingsChange={setVirtualCameraSettings}
+                          companyId={companyId}
+                          userId={user?.id}
+                        />
+                      </div>
                     ) : (
                       <button
                         onClick={() => toast.info("Upgrade to Pro to use Camera Studio")}
@@ -4061,6 +4179,7 @@ export function ImageAIPanel({
             {allModelOptions.length > 0 && (
               <div className="relative">
                 <button
+                  ref={modelBtnRef}
                   onClick={() => setShowModelDropdown(!showModelDropdown)}
                   className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[13px] font-medium text-(--text-primary) hover:bg-white/5 transition-colors cursor-pointer"
                 >
@@ -4068,10 +4187,16 @@ export function ImageAIPanel({
                   <span>{selectedModelOption?.label || "Nano Banana 2"}</span>
                 </button>
 
-                {showModelDropdown && (
+                {showModelDropdown && createPortal(
                   <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowModelDropdown(false)} />
-                  <div className="absolute bottom-full left-0 mb-2 w-[260px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-50">
+                  <div className="fixed inset-0 z-[9998]" onClick={() => setShowModelDropdown(false)} />
+                  <div
+                    className="fixed w-[260px] bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl z-[9999]"
+                    style={modelBtnRef.current ? (() => {
+                      const r = modelBtnRef.current!.getBoundingClientRect();
+                      return { left: r.left, bottom: window.innerHeight - r.top + 8 };
+                    })() : undefined}
+                  >
                     <div className="py-1.5 max-h-[360px] overflow-y-auto">
                       {(() => {
                         const filtered = allModelOptions.filter((m) => m.category === outputMode);
@@ -4155,7 +4280,8 @@ export function ImageAIPanel({
                       })()}
                     </div>
                   </div>
-                  </>
+                  </>,
+                  document.body
                 )}
               </div>
             )}

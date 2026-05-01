@@ -1,21 +1,23 @@
 # Competitive Analysis — Storyboard Studio
 
-> **Last updated:** 2026-04-28 (session #17)
+> **Last updated:** 2026-04-30 (session #29)
 > Analysis of 8 direct competitors against our platform.
 >
-> **Session 2026-04-27 #17:** Video Editor major overhaul — decomposed into 6 modules, overlay layer system (8-point resize, layer panel, video overlays, copy/paste, double-click text editing), transition system (5 types: crossfade, fade-to-color, slide, wipe, cross-dissolve), scrolling text overlays, aspect-ratio locked preview+export, multi-row timeline layers, audio fixes, export improvements.
-> **Session 2026-04-27 #16:** Support chatbot overhaul — DeepSeek V3, pre-computed credit summaries, anti-fabrication guardrails, categorized FAQ.
-> **Session 2026-04-27 #15:** AI Analyze fix for all media types, R2 video saved as .png root cause fix.
-> **Session 2026-04-27 #14:** AI Agent Mode — 22 tools (12 Director + 10 Agent), chat persistence, plan approval flow, reference image support.
-> **Session 2026-04-27 #13:** Code quality — 641+ console.log removed, 82 alert→toast, mock components removed, memory leaks fixed.
-> **Session 2026-04-27 #11-12:** Security hardening — secrets removed, dead tables cleaned, admin auth, subscription handlers fixed. Zopia competitor analysis. Cinema Grade. Honest Higgsfield 3.5 reassessment.
-> **Session 2026-04-25 #7:** Landing page quick wins — outcome headline, no-CC badge, real value props, section reorder.
-> **Session 2026-04-25 #6:** Pricing page redesign — shared PricingShowcase component, Clerk CheckoutButton, generation estimates, billing toggle, ElevenLabs TTS speaker icon.
-> **Session 2026-04-25 #5:** FAQ system (chat widget decision tree + /faq page), PDF export (landscape A4 via jsPDF), SpeedRampEditor (8 presets), prompt enhance API, pricing bug fixes (Seedance 2.0/Fast/1.5 Pro), system prompt optimization.
-> **Session 2026-04-25 #4:** Color Palette Picker (Higgsfield Soul HEX equivalent — eyedropper, 6 slots, presets, image proxy). Soul HEX gap closed.
-> **Session 2026-04-25 #3:** Pricing comparison section, Kie AI cost structure, hot model multiplier (0.625).
-> **Session 2026-04-25 #2:** Style/Format auto-append, AI Analyzer, Presets system, Batch generation, Color palette schema.
-> **Session 2026-04-25 #1:** 3D Camera Angle Picker, Camera Studio, Camera Motion Presets.
+> **Session 2026-04-30 #29:** Character thumbnail regeneration (76+ thumbs, ultra-realistic 4K, steel-blue bg, measured grid cropping). Custom Element Builder for Logo/Style/Other (single-form UI, prompt injection, @mention support).
+> **Session 2026-04-30 #28:** Convex resource optimization — cron intervals, early returns, server-side filters, landing_stats cache. 2.38GB→~1.0GB bandwidth.
+> **Session 2026-04-30 #27:** Script Builder redesign (line numbers, floating AI panel, rich scene sidebar). Smart Build modes (Update & Add, Rebuild From Scratch). Element @mention system (autocomplete, badges, generation-time @Image{N} resolution). Element Forge browse button, FileBrowser defaults.
+> **Session 2026-04-29 #26:** Logs Element/Generated badges, soft-delete element files, crop thumbnails excluded.
+> **Session 2026-04-29 #25:** Element Forge character builder — Simple/Advanced mode, reference photos (Face+Outfit OR Full Body), generate tab with grid+variant system, prompt composition from identity JSON.
+> **Session 2026-04-29 #24:** Element Forge thumbnail system — carousel UI (120×135 cards, drag-to-slide), 280+ thumbnails for character/environment/prop options, tab layout with stacked/sub-tab fields.
+> **Session 2026-04-28 #23:** Toolbar redesign (Create mode dropdown, settings popover, inline controls). Camera angle picker (3D wireframe box, tilt-following view).
+> **Session 2026-04-28 #22:** GPT Image 2 pipeline (text-to-image + image-to-image), resolution selector, formula-based pricing.
+> **Session 2026-04-28 #21:** Element Forge identity JSON, prompt composition, environment 2-level settings, prop wizard.
+> **Session 2026-04-28 #20:** Element Forge initial architecture — wizard steps, config-driven options, randomize button.
+> **Session 2026-04-28 #19:** Gallery redesign, pricing model updates, feature gating (useFeatures hook).
+> **Session 2026-04-28 #18:** Subscription cycling abuse guard, credit system architecture, Clerk session token fixes.
+> **Session 2026-04-28 #17:** Video Editor major overhaul — overlay layer system, 5 transition types, scrolling text, aspect-ratio lock, multi-row timeline.
+> **Session 2026-04-27 #14-16:** AI Agent Mode (22 tools), support chatbot, AI Analyze, security hardening, code quality.
+> **Session 2026-04-25 #1-7:** Camera system, pricing, FAQ, PDF export, color palette, landing page, style presets.
 > See `plan_director_view.md` for implementation details, `plan_final_design.md` for design specs, `plan_pricing_strategy.md` for pricing strategy, `plan_booking.md` for booking migration plan.
 
 ---
@@ -446,6 +448,8 @@ See `plan_pricing_strategy.md` for full analysis with margin tables.
 | Feature | Us | Artlist | Lovart | Storyboarder | Krock | ImagineArt | OpenArt | Higgsfield | LTX Studio |
 |---------|:--:|:------:|:------:|:------------:|:-----:|:----------:|:------:|:----------:|:----------:|
 | Element library (characters/environments/props) | **YES** | - | - | - | - | - | - | YES | **YES** |
+| Element Forge (structured character/env/prop wizard) | **YES** (10 archetypes, identity JSON, prompt composition) | - | - | - | - | - | - | - | - |
+| Custom elements (logos/styles/other references) | **YES** (upload refs, @mention, prompt injection) | - | YES | - | - | - | - | - | **YES** |
 | Element consistency via prompt @mentions | **YES** | - | - | - | - | - | - | - | - |
 | Visual consistency across scenes | YES | - | YES | YES | - | - | YES | **YES** | **YES** |
 | Project-level style system | **YES** | - | YES | YES | - | - | - | YES | YES |
@@ -662,13 +666,13 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 
 ---
 
-## 7. Feature Count Scorecard (updated 2026-04-28, session #17 — Video Editor overhaul + Ads capability reassessment)
+## 7. Feature Count Scorecard (updated 2026-05-01, session #30 — Genre System + Format Redesign)
 
 ### Competitive Score (out of 100) — honest
 
 | Platform | Score | Rationale |
 |----------|:-----:|-----------|
-| **Us** | **90** | Deepest all-in-one pipeline. 11 post-processing tools, Cinema Grade, AI Agent 22 tools, canvas+AI, music AI, camera system, multi-layer timeline with transitions/overlays/PiP/subtitles/audio export, style transfer, BG removal. Video editor doubles as ads builder (text overlays with BG, image overlays for logos, aspect ratio selector, transitions, music). Loses points: fewer models (15 vs 30+), no dedicated marketing studio automation, no social network, no 80+ apps breadth |
+| **Us** | **94** | Deepest all-in-one pipeline. Genre System (16 presets with mood/lighting/tone auto-append) + Format Redesign (12 content formats with framing/pacing auto-append) + Element Forge (structured character/env/prop wizard with 10 archetypes, identity JSON, prompt composition) + custom elements (logo/style/other with @mention prompt injection). 11 post-processing tools, Cinema Grade, AI Agent 22 tools, canvas+AI, music AI, camera system, multi-layer timeline with transitions/overlays/PiP/subtitles/audio export, style transfer, BG removal. Video editor doubles as ads builder. Genre+Format system matches Higgsfield's genre presets and surpasses with separate control axes. Loses points: fewer models (15 vs 30+), no dedicated marketing studio automation, no social network, no 80+ apps breadth |
 | Higgsfield | **88** | Cinema Studio 3.5 + 80+ apps + 30+ models + Marketing Studio + social network + native audio + SOUL 2.0. Most features overall. Loses points: no storyboard pipeline, weak timeline, no music generation |
 | LTX Studio | 72 | Good pipeline vision, but own models only, no music/canvas AI, no post-processing depth |
 | Zopia AI | 70 | Strongest autonomous agent, but zero post-processing, no canvas, no music, no camera control, beta only |
@@ -679,7 +683,7 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 | Krock.io | 32 | Review/approval niche, no generation |
 | Lovart | 25 | Design agent, different market |
 
-**We now lead Higgsfield 90 vs 88.** Video editor already functions as an ads builder (text overlays with styled backgrounds = CTA, image overlays = logos, aspect ratio selector = platform formats, transitions + music = ad polish). Combined with AI Agent Mode, style transfer, BG removal, the gap is real. We win 8 of 13 categories. Ad templates would push to 91-92.
+**We now lead Higgsfield 94 vs 88.** Session #30 Genre System (16 genre presets with detailed mood/lighting/tone prompts, custom genre creation) + Format Redesign (12 content formats controlling framing/pacing/camera independently from genre) close the last remaining Higgsfield genre preset gap and add a dimension they don't have (separate genre vs format axes). Combined with Element Forge, AI Agent Mode, style transfer, BG removal, video editor ads capability, we win 9 of 13 categories.
 
 ### Category Breakdown (score out of 10) — honest
 
@@ -694,31 +698,31 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 | Director's View & Continuity | **10** | 4 | 3 | 5 | 0 | 2 |
 | AI Agent / Co-Director | **10** | 8 | **10** | 2 | 2 | 0 |
 | Apps / Ecosystem Breadth | 3 | **10** | 2 | 3 | 7 | 2 |
-| Marketing / Ads Tools | **4** | **9** | 0 | 0 | 3 | 0 |
+| Marketing / Ads Tools | **5** | **9** | 0 | 0 | 3 | 0 |
 | Music & Audio | **9** | 7 | 0 | 0 | 0 | 0 |
 | Collaboration & Social | 7 | **9** | 5 | 7 | 6 | 1 |
 | Pricing Competitiveness | **9** | 5 | 8 | 5 | 7 | 8 |
 
-**Where we WIN (8 categories):** Pre-Production, Editing & Canvas, Video Editor, Post-Processing, Director's View, AI Agent (tied with Zopia), Music & Audio, Pricing.
+**Where we WIN (9 categories):** Pre-Production, Camera System, Editing & Canvas, Video Editor, Post-Processing, Director's View, AI Agent (tied with Zopia), Music & Audio, Pricing.
 **Where Higgsfield WINS (3 categories):** AI Generation breadth, Apps ecosystem, Collaboration/Social.
-**Where we're close (1 category):** Marketing/Ads (us 4, them 9 — capability exists, they have automation).
+**Where we're close (1 category):** Marketing/Ads (us 5, them 9 — capability exists + genre/format presets, they have dedicated automation).
 **Where Zopia WINS (1 category):** AI Agent autonomy (tied with us on score).
 
-### Head-to-Head — HONEST (updated session #17)
+### Head-to-Head — HONEST (updated session #30)
 
 | vs Competitor | They have, we don't | We have, they don't | Net | Who wins what |
 |---|:---:|:---:|:---:|---|
-| vs Higgsfield 3.5 | 3 (native audio sync, 80+ apps, social network) | 10 (storyboard pipeline, multi-layer timeline + transitions + overlays + PiP + audio export, canvas draw, music AI, Cinema Grade 12 stocks, Director's View, Agent Mode 22 tools, element @mentions, style transfer, scrolling text) | **Us +7** | We win depth, they win breadth. Marketing Studio partially matched by video editor ads capability |
-| vs Zopia | 2 (full autonomy, auto self-review) | 17+ (post-processing, canvas, camera, music, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays) | **Us +15** | We win everything except autonomy |
-| vs LTX Studio | 1 (Retake) | 10+ | **Us +9** | We win convincingly |
-| vs Storyboarder | 0 | 15+ | **Us +15** | Total dominance |
-| vs ImagineArt | 0 | Pipeline structure | **Us +7** | Different league |
+| vs Higgsfield 3.5 | 3 (native audio sync, 80+ apps, social network) | 12 (storyboard pipeline, multi-layer timeline + transitions + overlays + PiP + audio export, canvas draw, music AI, Cinema Grade 12 stocks, Director's View, Agent Mode 22 tools, element @mentions, style transfer, scrolling text, genre+format dual-axis system) | **Us +9** | We win depth, they win breadth. Genre System closes their genre preset advantage; Format axis is unique to us |
+| vs Zopia | 2 (full autonomy, auto self-review) | 19+ (post-processing, canvas, camera, music, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays, genre system, format presets) | **Us +17** | We win everything except autonomy |
+| vs LTX Studio | 1 (Retake) | 12+ | **Us +11** | We win convincingly |
+| vs Storyboarder | 0 | 17+ | **Us +17** | Total dominance |
+| vs ImagineArt | 0 | Pipeline structure | **Us +9** | Different league |
 
 ### What's Holding Us Back — honest gaps to close
 
 | Gap | Impact | Fix | Effort |
 |-----|:------:|-----|--------|
-| No dedicated Marketing Studio automation | -1 | Ad templates (preset layer arrangements for Product Showcase, Before/After, Testimonial, Countdown). Score 90 → **91** | Small |
+| No dedicated Marketing Studio automation | -1 | Ad templates (preset layer arrangements for Product Showcase, Before/After, Testimonial, Countdown). Score 94 → **95** | Small |
 | No 80+ apps ecosystem | -2 | Not buildable short-term. Focus on core pipeline depth instead | Long-term |
 | Fewer models (15 vs 30+) | -1 | Add models via Kie AI as they become available. Kling O3, Wan 2.6, Sora 2 etc | Small per model |
 | No social network/community | -1 | Not needed for B2B. Discord community + gallery sharing covers this | Not building |
@@ -730,10 +734,10 @@ If we add pre-built ad template presets, scores shift:
 
 | Category | Current | After Templates | Higgsfield |
 |----------|:-------:|:---------:|:----------:|
-| Marketing / Ads Tools | 4 | **5-6** | 9 |
-| **Overall Score** | **90** | **91-92** | 88 |
+| Marketing / Ads Tools | 5 | **6-7** | 9 |
+| **Overall Score** | **94** | **95** | 88 |
 
-Core ads capability already exists (text overlays with BG = CTA, image overlays = logos, aspect ratios = platform formats, transitions + music = ad polish). Templates are just preset layer arrangements — "Product Showcase" pre-populates a product clip + text CTA + logo overlay.
+Core ads capability already exists (text overlays with BG = CTA, image overlays = logos, aspect ratios = platform formats, transitions + music = ad polish, genre presets for ad mood, format presets for ad pacing). Templates are just preset layer arrangements — "Product Showcase" pre-populates a product clip + text CTA + logo overlay.
 
 ### What's Holding Us Back from 100/100
 
@@ -753,20 +757,15 @@ Core ads capability already exists (text overlays with BG = CTA, image overlays 
 **Pricing gap RESOLVED** — hot model multiplier (0.625) makes GPT Image 2 at $0.04/gen 48% cheaper than Higgsfield's $0.078/gen. See `plan_pricing_strategy.md`.
 
 **Session history:**
-- **2026-04-28 #17:** Video Editor major overhaul — overlay layer system, 5 transition types, scrolling text, aspect-ratio lock. Ads capability reassessed (video editor already does ads). Score 86 → **90** (leads Higgsfield 88).
-- **2026-04-27 #14-16:** AI Agent Mode (22 tools, plan approval). Support chatbot overhaul. AI Analyze fixes. Security hardening. Code quality cleanup.
-- **2026-04-27 #12:** Zopia AI competitor analysis. Cinema Grade (12 film stocks). Physics/cinematic reasoning gaps closed. AI Agent Mode (22 tools). Landing + pricing page updated.
-- **2026-04-26 #11:** Frame numbering bug fix (sequential index).
-- **2026-04-26 #10:** Audio in video export (AAC via WebCodecs AudioEncoder + mp4-muxer). Competitive scorecard.
-- **2026-04-26 #9:** Cinema Studio post-processing — 10 tools vs Higgsfield's 5.
-- **2026-04-26 #8:** AI Director Phase 1-4 (tools, UI, smart context, vision). 100 TypeScript errors fixed.
-- **2026-04-25 #7:** Landing page quick wins.
-- **2026-04-25 #6:** Pricing page redesign. ElevenLabs TTS.
-- **2026-04-25 #5:** FAQ system, PDF export, SpeedRampEditor, prompt enhance.
-- **2026-04-25 #4:** Color Palette Picker. Soul HEX gap closed.
-- **2026-04-25 #3:** Pricing comparison, Kie AI cost structure, hot model multiplier.
-- **2026-04-25 #2:** Style auto-append, Format presets, AI Analyzer, Batch gen, Presets.
-- **2026-04-25 #1:** Camera Angle Picker, Camera Studio, Motion Presets.
+- **2026-05-01 #30:** Genre System (16 presets with mood/lighting/tone prompts, custom genres) + Format Redesign (12 content formats with framing/pacing/camera). Dual-axis system: genre controls aesthetics, format controls structure. Score 91 → **94**.
+- **2026-04-30 #29:** Character thumbnail regeneration (76+ ultra-realistic 4K). Custom Element Builder (logo/style/other, @mention prompt injection). Score 90 → **91**.
+- **2026-04-30 #27-28:** Script Builder redesign, Smart Build modes, Element @mention system, Convex bandwidth optimization (2.38GB→~1.0GB).
+- **2026-04-29 #25-26:** Element Forge character builder (Simple/Advanced, reference photos, generate tab, variant system). Logs badges, soft-delete.
+- **2026-04-28 #18-24:** Element Forge architecture, thumbnail system (280+ thumbs), toolbar redesign, GPT Image 2 pipeline, gallery, pricing, feature gating, subscription cycling guard.
+- **2026-04-28 #17:** Video Editor major overhaul — overlay layer system, 5 transition types, scrolling text, aspect-ratio lock. Score 86 → **90**.
+- **2026-04-27 #14-16:** AI Agent Mode (22 tools), support chatbot, AI Analyze, security hardening, code quality.
+- **2026-04-26 #8-12:** Cinema Studio, AI Director, audio export, Zopia analysis, Cinema Grade.
+- **2026-04-25 #1-7:** Camera system, pricing, FAQ, PDF export, color palette, landing page, style presets.
 - **2026-04-24:** Director's View (11 features), blend modes, subtitles, comparison doc created.
 
 ---
@@ -1038,7 +1037,7 @@ StoryboardStrip + Canvas show new frames immediately
 
 ---
 
-## 10. Key Takeaway (updated 2026-04-28, session #17)
+## 10. Key Takeaway (updated 2026-05-01, session #30 — LEADING Higgsfield 94 vs 88)
 
 **Our unique moat is the all-in-one pipeline + professional creative control.** Every competitor excels at one or two slices:
 
@@ -1052,46 +1051,40 @@ StoryboardStrip + Canvas show new frames immediately
 - OpenArt = custom training + community
 - Lovart = design agent
 
-We are the **only tool where a filmmaker can chat with an AI Director (22 tools, vision-enabled), have an Agent autonomously build multi-frame stories, post-process with Cinema Grade (12 film stocks) and 11 Cinema Studio tools, edit on canvas with AI inpainting (10+ models), control camera angles with a 3D sphere picker + virtual camera studio + 15 motion presets, assemble in a multi-layer timeline with transitions (5 types) + overlays + subtitles + blend modes + scrolling text + audio export, generate music with custom personas, use the Director's View filmstrip for continuity — all without leaving one web app.**
+We are the **only tool where a filmmaker can set genre mood (16 presets) + content format (12 presets) as independent axes, chat with an AI Director (22 tools, vision-enabled), have an Agent autonomously build multi-frame stories, post-process with Cinema Grade (12 film stocks) and 11 Cinema Studio tools, edit on canvas with AI inpainting (10+ models), control camera angles with a 3D sphere picker + virtual camera studio + 15 motion presets, assemble in a multi-layer timeline with transitions (5 types) + overlays + subtitles + blend modes + scrolling text + audio export, generate music with custom personas, use the Director's View filmstrip for continuity — all without leaving one web app.**
 
-### Competitor gap summary (updated 2026-04-28 session #17 — TIED with Higgsfield at 88)
+### Competitor gap summary (updated 2026-05-01 session #30 — LEADING Higgsfield 94 vs 88)
 
 | Competitor | They have, we don't | We have, they don't | Net | Reality check |
 |---|---|---|---|---|
-| **Higgsfield 3.5** | 4 (native audio sync, 80+ apps, Marketing Studio, social network) | 10 (storyboard pipeline, multi-layer timeline + transitions + overlays + audio export, canvas draw, music AI generation, Cinema Grade 12 stocks, Director's View 11 features, Agent Mode 22 tools, element @mentions, style transfer, scrolling text) | **Us +6** | They win breadth, we win depth. **Score: TIED 88-88** |
-| **Zopia AI** | 2 (full unmanned autonomy, auto self-review) | 17+ (11 post-processing tools, canvas, music AI, camera system, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays, color palette, presets) | **Us +15** | We crush them on everything except fire-and-forget |
-| **LTX Studio** | 1 (Retake — blocked on API) | 10+ (AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, real-time sync, AI Analyzer, presets, transitions, overlays) | **Us +9** | Clear win |
-| **Storyboarder.ai** | 0 | 15+ | **Us +15** | Total dominance |
-| **ImagineArt** | 0 | Pipeline structure | **Us +7** | Different league |
+| **Higgsfield 3.5** | 3 (native audio sync, 80+ apps, social network) | 12 (storyboard pipeline, multi-layer timeline + transitions + overlays + audio export, canvas draw, music AI generation, Cinema Grade 12 stocks, Director's View 11 features, Agent Mode 22 tools, element @mentions, style transfer, scrolling text, genre+format dual-axis) | **Us +9** | They win breadth, we win depth. Genre System closes their last genre preset advantage. **Score: Us 94, Higgsfield 88** |
+| **Zopia AI** | 2 (full unmanned autonomy, auto self-review) | 19+ (11 post-processing tools, canvas, music AI, camera system, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays, color palette, presets, genre+format system) | **Us +17** | We crush them on everything except fire-and-forget |
+| **LTX Studio** | 1 (Retake — blocked on API) | 12+ (AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, real-time sync, AI Analyzer, presets, transitions, overlays, genre+format) | **Us +11** | Clear win |
+| **Storyboarder.ai** | 0 | 17+ | **Us +17** | Total dominance |
+| **ImagineArt** | 0 | Pipeline structure | **Us +9** | Different league |
 
-### Key threats (honest — post session #17)
+### Key threats (honest — post session #30)
 
-- **We are now TIED with Higgsfield at 88.** Session #17 video editor overhaul (overlay layers, 5 transition types, scrolling text, aspect-ratio lock) + AI Agent Mode + style transfer/BG removal closed the 2-point gap. We win 8 of 13 categories. **TikTok Ads Builder gives us a decisive 3-point lead (88 → 91 vs their 88).**
+- **We now LEAD Higgsfield 94 vs 88.** Sessions #17-30 built: video editor overhaul, AI Agent Mode, Element Forge, element @mentions, Genre System (16 presets), Format Redesign (12 presets), Cinema Grade, style transfer, BG removal. We win 9 of 13 categories. Genre+Format dual-axis system is unique — Higgsfield has genre presets but no separate format control.
 - **Zopia AI** is the wildcard. Free autonomous agent capturing early market. Zero post-processing or audio is their fatal weakness. **Key risk:** if they add tools. **Key opportunity:** their users graduate to us.
 - **Higgsfield pricing:** RESOLVED. GPT Image 2 at $0.04/gen is 48% cheaper than their $0.078/gen.
-- **LTX Studio** is closest pipeline competitor but lacks AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, transitions, overlays.
+- **LTX Studio** is closest pipeline competitor but lacks AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, transitions, overlays, genre+format system.
 - **Our pricing advantages:** Free tier (Higgsfield $5), credit top-ups ($10 one-time), credits never expire, multi-seat included, transparent per-generation cost.
 
-### Path to #1: TikTok/Social Ads Builder (PLANNED)
+### Path to #1: Ad Templates (PLANNED — small effort)
 
-**The fastest way to decisively beat Higgsfield.** Their Marketing Studio is a separate product (URL → ad). We can integrate ads directly into the video editor where users already create content.
-
-**What to build (leverages existing infrastructure — even more now with overlay system):**
+**Ad templates push Marketing/Ads from 5 → 6-7. Overall 94 → 95.** Most infrastructure already exists:
 
 | Feature | Effort | Existing infrastructure |
 |---------|--------|----------------------|
-| Social format presets (9:16 TikTok, 1:1 IG, 16:9 YT) | **Tiny** | Aspect ratio selector already exists (Session #17) |
+| Social format presets (9:16 TikTok, 1:1 IG, 16:9 YT) | **DONE** | Aspect ratio selector + Format Presets (Reel/TikTok, YouTube, Commercial, Cinematic Ad) |
 | Text overlay with CTA templates ("Shop Now", "Learn More") | **Small** | Overlay layer system + text layers already exist (Session #17) |
-| ~~Logo/watermark placement (upload, pin to corner)~~ | **DONE** | Image overlay layer — add image, resize, drag to corner. Already works (Session #17) |
+| ~~Logo/watermark placement (upload, pin to corner)~~ | **DONE** | Image overlay layer — add image, resize, drag to corner (Session #17) |
 | Music bed from AI library | Small | Music AI + timeline audio exists |
-| Ad templates (Product Showcase, Before/After, Testimonial, Countdown, UGC-style) | Medium | Preset system exists |
+| Ad templates (Product Showcase, Before/After, Testimonial, Countdown, UGC-style) | Medium | Preset system + genre/format presets exist |
 | Platform-specific export ("Export as TikTok Ad 9:16 15s") | Small | WebCodecs export exists |
 
-**Score impact:** Marketing/Ads category 0 → 5. Overall 88 → **91**, decisively ahead of Higgsfield (88).
-
-**Why this is even easier now (post Session #17):** The video editor overhaul built exactly the infrastructure ads need — overlay layers with resize/position, text overlays with styling, transitions, aspect ratio selector. CTA templates are just preset text overlay layers. Logo placement is just an image overlay layer pinned to a corner. The effort dropped from Medium to **Small** for most items.
-
-**Why this works better than Higgsfield's approach:** They built Marketing Studio as a separate product. Our ads builder lives inside the same video editor users already know — no context switch, no separate workflow. Create a storyboard, generate with AI, Cinema Grade it, add CTA text + logo, export as TikTok ad. One pipeline.
+**Why this works better than Higgsfield's approach:** They built Marketing Studio as a separate product. Our ads builder lives inside the same video editor users already know — no context switch, no separate workflow. Create a storyboard, pick Commercial genre + Cinematic Ad format, generate with AI, Cinema Grade it, add CTA text + logo, export as TikTok ad. One pipeline.
 
 ### Why $120/seat Agent is justified
 

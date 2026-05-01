@@ -10,18 +10,18 @@ import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { toast } from "sonner";
 import type { Step, Orientation, Shot, CastMember, LocationAsset } from "../../types";
-import { VISUAL_STYLES, STYLE_PROMPTS } from "../../constants";
+import { GENRE_PRESETS, GENRE_PROMPTS } from "../../constants";
 
-const WIZARD_ART_STYLES = [
-  { id: "Manga (Shonen)",            desc: "Action-packed, bold lines, speed effects",    emoji: "🔥" },
-  { id: "Manga (Seinen)",            desc: "Detailed, mature, realistic proportions",      emoji: "🌃" },
-  { id: "Manga (Shojo)",             desc: "Soft lines, emotional, decorative tones",      emoji: "🌸" },
-  { id: "Western Comic",             desc: "Bold inks, strong shadows, superhero style",   emoji: "💥" },
-  { id: "Noir",                      desc: "High contrast B&W, dramatic shadows, gritty",  emoji: "🕵️" },
-  { id: "Toon / Cartoon",            desc: "Simplified shapes, bright colors, fun",        emoji: "🤪" },
-  { id: "Watercolor / Illustration", desc: "Soft washes, painted textures, organic",       emoji: "🎨" },
-  { id: "Webtoon",                   desc: "Clean digital art, full color, vertical scroll",emoji: "📱" },
-  { id: "Inking & Coloring",         desc: "Traditional ink + flat/cel color",             emoji: "✒️" },
+const WIZARD_GENRES = [
+  { id: "cinematic",     desc: "Warm color grading, dramatic lighting, film look",    emoji: "🎬" },
+  { id: "horror",        desc: "Dark shadows, desaturated, cold and unsettling",      emoji: "👻" },
+  { id: "sci-fi",        desc: "Cool blue tones, neon accents, futuristic",           emoji: "🚀" },
+  { id: "fantasy",       desc: "Rich colors, ethereal god-rays, magical",             emoji: "🐉" },
+  { id: "drama",         desc: "Natural lighting, earthy tones, emotionally honest",  emoji: "🎭" },
+  { id: "anime",         desc: "Cel-shaded, vibrant colors, expressive eyes",         emoji: "✨" },
+  { id: "wuxia",         desc: "Misty mountains, flowing silk, martial arts",         emoji: "🏯" },
+  { id: "corporate",     desc: "Clean, professional, well-lit, trustworthy",          emoji: "💼" },
+  { id: "luxury",        desc: "Premium golden tones, elegant, aspirational",         emoji: "👑" },
 ];
 
 // ── Step nav ─────────────────────────────────────────────────────────────────
@@ -117,25 +117,25 @@ export function ScriptInput({ scriptIdea, sceneCount, onScriptIdeaChange, onScen
           </div>
         </div>
 
-        {/* Art Style picker */}
+        {/* Genre picker */}
         <div className="bg-[#13131a] border border-white/8 rounded-2xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="w-4 h-4 text-violet-400" />
-            <span className="text-white font-semibold text-sm">Art Style</span>
+            <span className="text-white font-semibold text-sm">Genre</span>
           </div>
           <div className="flex gap-2 mb-4">
             <button onClick={() => setUseCustom(false)}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${!useCustom ? "bg-pink-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
-              Preset Styles
+              Preset Genres
             </button>
             <button onClick={() => setUseCustom(true)}
               className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${useCustom ? "bg-pink-500 text-white" : "bg-white/5 text-gray-400 hover:bg-white/10"}`}>
-              Custom Style
+              Custom Genre
             </button>
           </div>
           {!useCustom ? (
             <div className="grid grid-cols-3 gap-2">
-              {WIZARD_ART_STYLES.map(s => (
+              {WIZARD_GENRES.map(s => (
                 <button key={s.id} onClick={() => setArtStyle(s.id)}
                   className={`p-3 rounded-xl border text-left transition ${artStyle === s.id ? "bg-pink-500/15 border-pink-500/40" : "bg-[#25252f] border-white/5 hover:border-white/15"}`}>
                   <div className="flex items-center gap-2 mb-1">
@@ -148,7 +148,7 @@ export function ScriptInput({ scriptIdea, sceneCount, onScriptIdeaChange, onScen
             </div>
           ) : (
             <input value={customStyle} onChange={e => setCustomStyle(e.target.value)}
-              placeholder="Describe your custom art style..."
+              placeholder="Describe your custom genre mood and lighting..."
               className="w-full px-4 py-3 bg-[#25252f] border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none text-sm" />
           )}
         </div>
@@ -369,7 +369,7 @@ export function StyleSelection({ selectedStyle, onStyleChange, onBack, onNext }:
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#0d0d12]">
       <div className="px-6 py-4 border-b border-white/6 shrink-0 flex items-center justify-between">
-        <h3 className="text-white text-lg font-bold">Choose a Visual Style</h3>
+        <h3 className="text-white text-lg font-bold">Choose a Genre</h3>
         <button
           onClick={() => { resetForm(); setShowForm(!showForm); }}
           className="flex items-center gap-1 text-[11px] text-[#4A90E2] hover:text-white transition px-2.5 py-1.5 rounded-lg border border-[#3D3D3D] hover:border-[#4A90E2]/30"
@@ -382,16 +382,16 @@ export function StyleSelection({ selectedStyle, onStyleChange, onBack, onNext }:
         {/* Custom Style Form */}
         {showForm && (
           <div className="mb-4 p-3 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg space-y-2">
-            <p className="text-[11px] text-[#A0A0A0] font-medium">{editingId ? "Edit Custom Style" : "Create Custom Style"}</p>
+            <p className="text-[11px] text-[#A0A0A0] font-medium">{editingId ? "Edit Custom Genre" : "Create Custom Genre"}</p>
             <input
               type="text"
-              placeholder="Style name"
+              placeholder="Genre name"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50"
             />
             <textarea
-              placeholder="Style prompt (describe the visual style...)"
+              placeholder="Genre prompt (describe the mood, lighting, tone...)"
               value={formPrompt}
               onChange={(e) => setFormPrompt(e.target.value)}
               rows={4}
@@ -436,23 +436,22 @@ export function StyleSelection({ selectedStyle, onStyleChange, onBack, onNext }:
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {/* Built-in styles */}
-          {VISUAL_STYLES.filter(s => s.id !== 'custom').map(style => (
-            <button key={style.id} onClick={() => onStyleChange(style.id)}
-              className={`group relative aspect-4/3 rounded-xl overflow-hidden border-2 transition ${
-                selectedStyle === style.id ? "border-pink-500 ring-2 ring-pink-500/30" : "border-transparent hover:border-white/20"
-              }`}>
-              <img src={style.preview} alt={style.label} className="w-full h-full object-cover" loading="lazy" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-              <span className="absolute bottom-2 left-0 right-0 text-center text-[11px] font-medium text-white drop-shadow-lg">{style.label}</span>
-              {selectedStyle === style.id && (
-                <div className="absolute top-2 right-2 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
-                  <Check className="w-3 h-3 text-white" />
-                </div>
-              )}
-            </button>
-          ))}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {GENRE_PRESETS.map(style => (
+              <button key={style.id} onClick={() => onStyleChange(style.id)}
+                className={`group relative aspect-4/3 rounded-xl overflow-hidden border-2 transition ${
+                  selectedStyle === style.id ? "border-pink-500 ring-2 ring-pink-500/30" : "border-transparent hover:border-white/20"
+                }`}>
+                <img src={style.preview} alt={style.label} className="w-full h-full object-cover" loading="lazy" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <span className="absolute bottom-2 left-0 right-0 text-center text-[11px] font-medium text-white drop-shadow-lg">{style.label}</span>
+                {selectedStyle === style.id && (
+                  <div className="absolute top-2 right-2 w-5 h-5 bg-pink-500 rounded-full flex items-center justify-center">
+                    <Check className="w-3 h-3 text-white" />
+                  </div>
+                )}
+              </button>
+            ))}
 
           {/* Custom styles from storyboard_presets */}
           {(stylePresets || []).map(preset => (
