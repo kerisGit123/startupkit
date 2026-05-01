@@ -4896,7 +4896,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                           promptText || "enhance",
                           "", // style
                           qualityToUse,
-                          "auto", // aspectRatio
+                          activeShot?.aspectRatio || "16:9", // aspectRatio
                           activeShot?.id || "", // itemId
                           creditsUsed,
                           aiModel,

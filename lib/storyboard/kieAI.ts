@@ -540,8 +540,8 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
     })() : actualModel?.startsWith('gpt-image') ? {
       prompt: fullPrompt,
       input_urls: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),
-      aspect_ratio: "1:1",
-      quality: params.quality || "high"
+      aspect_ratio: params.aspectRatio || "auto",
+      ...(resolution !== "1K" && params.aspectRatio && params.aspectRatio !== "1:1" && params.aspectRatio !== "auto" && { resolution }),
     } : isImageToImageModel ? {
       prompt: fullPrompt,
       image_input: [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean),

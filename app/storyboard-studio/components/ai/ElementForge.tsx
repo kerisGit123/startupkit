@@ -897,6 +897,11 @@ export function ElementForge({
 }: ElementForgeProps) {
   const meta = TYPE_META[type];
 
+  // Track created element so subsequent saves become updates (not duplicate creates)
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const effectiveMode = createdId ? "edit" : mode;
+  const effectiveElementId = element?._id ?? createdId;
+
   // Simple / Advanced mode
   const [isSimple, setIsSimple] = useState(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem("forge-mode") : null;
@@ -1060,11 +1065,11 @@ export function ElementForge({
           }
         : undefined;
 
-      let savedId: string | null = element?._id ?? null;
+      let savedId: string | null = effectiveElementId ?? null;
 
-      if (mode === "edit" && element?._id) {
+      if (effectiveMode === "edit" && effectiveElementId) {
         await updateElement({
-          id: element._id, name: name.trim(), description, identity: identityData,
+          id: effectiveElementId, name: name.trim(), description, identity: identityData,
           thumbnailUrl: thumbnailUrl || undefined,
           referencePhotos,
         });
@@ -1075,6 +1080,7 @@ export function ElementForge({
           createdBy: userId, visibility: "private", identity: identityData,
           referencePhotos,
         }) as unknown as string;
+        if (savedId) setCreatedId(savedId);
       }
       onSave({ name: name.trim(), type, description, identity: identityData });
       return savedId;
@@ -1084,7 +1090,7 @@ export function ElementForge({
     } finally {
       setSaving(false);
     }
-  }, [canSave, saving, identity, type, mode, element, projectId, userId, referenceUrls, thumbnailUrl, onSave, createElement, updateElement]);
+  }, [canSave, saving, identity, type, effectiveMode, effectiveElementId, projectId, userId, referenceUrls, thumbnailUrl, onSave, createElement, updateElement]);
 
   const handleSendToStudio = useCallback(async () => {
     if (!canSave) return;
@@ -1136,7 +1142,8 @@ export function ElementForge({
     if (isTextOnly) {
       prompt = composedPrompt;
     } else if (hasRefs) {
-      prompt = referencePrompt + composeImageOverrides(identity);
+      prompt = referencePrompt + composeImageOverrides(identity) +
+        `\n\nCRITICAL: The reference image(s) are for loose inspiration only (general shape/form). You MUST follow the TEXT description above for all visual details including colors, materials, style, and design. The text prompt takes absolute priority over the reference images.`;
     } else {
       prompt = referencePrompt;
     }
@@ -2062,7 +2069,7 @@ export function ElementForge({
               <button onClick={handleSave} disabled={!canSave || saving}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-(--accent-blue)/20">
                 <Sparkles className="w-4 h-4" strokeWidth={1.75} />
-                {saving ? "Saving..." : mode === "edit" ? "Save Changes" : `Create ${meta.label}`}
+                {saving ? "Saving..." : effectiveMode === "edit" ? "Save Changes" : `Create ${meta.label}`}
               </button>
               {showSendToStudio && onSendToStudio && (
                 <button onClick={handleSendToStudio} disabled={!canSave || saving}

@@ -551,6 +551,7 @@ export function ImageAIPanel({
   const [showGridDropdown, setShowGridDropdown] = useState(false);
   const [showCreateModeDropdown, setShowCreateModeDropdown] = useState(false);
   const [showSettingsPopover, setShowSettingsPopover] = useState(false);
+  const [pillBarExpanded, setPillBarExpanded] = useState(true);
   const [showPillGenre, setShowPillGenre] = useState(false);
   const [showPillFormat, setShowPillFormat] = useState(false);
   const [showPillCamera, setShowPillCamera] = useState(false);
@@ -3107,7 +3108,7 @@ export function ImageAIPanel({
 
         {/* Add Image (left) + Genre / Format / Camera pill (center) — single row above main panel */}
         {outputMode !== "analyze" && selectedModelOption.value !== "topaz/video-upscale" && !selectedModelOption.value.startsWith("ai-music-api/") && projectData && (
-          <div className="relative flex items-center justify-center mb-[3px]">
+          <div className="relative flex items-center justify-center mb-[3px] min-h-[32px]">
             {/* Inline Add Image — compact, pinned left */}
             {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "infinitalk/from-audio" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
               <div className="absolute left-0">
@@ -3129,228 +3130,264 @@ export function ImageAIPanel({
               </div>
             )}
             {/* Settings pill bar — Genre / Format / Camera / Angle / Motion / Speed / Palette */}
-            <div data-settings-pill className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-(--bg-secondary)/95 backdrop-blur-md border border-white/[0.06]">
-              {(() => {
-                const activeGenre = GENRE_PRESETS.find(s => s.id === projectData?.style);
-                const activeFormat = FORMAT_PRESETS.find(f => f.id === projectData?.formatPreset);
-                const camParts = [
-                  virtualCameraSettings.camera !== "default" ? CAMERA_OPTIONS.find(o => o.value === virtualCameraSettings.camera)?.label : null,
-                  virtualCameraSettings.lens !== "none" ? LENS_OPTIONS.find(o => o.value === virtualCameraSettings.lens)?.label : null,
-                  virtualCameraSettings.focalLength !== "none" ? virtualCameraSettings.focalLength + "mm" : null,
-                ].filter(Boolean);
-                const camLabel = camParts.length > 0 ? camParts.join(" · ") : "Auto";
-                return (
-                  <>
-                    {/* Genre — clickable, opens grid dialog */}
-                    <button
-                      onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); setShowPillMotion(false); }}
-                      className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                    >
-                      <img
-                        src={activeGenre?.preview || "/storytica/element_forge/grids/genre/auto.png"}
-                        alt=""
-                        className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
-                      />
-                      <span className="text-[11px] text-gray-500">Genre:</span>
-                      <span className="text-[11px] font-semibold text-white">{activeGenre?.label || "Auto"}</span>
-                    </button>
-                    <GenrePicker
-                      open={showPillGenre}
-                      onClose={() => setShowPillGenre(false)}
-                      selected={projectData?.style}
-                      onSelect={(id, prompt) => updateProjectMutation({ id: projectData._id, style: id, stylePrompt: prompt })}
+            {(() => {
+              const activeGenre = GENRE_PRESETS.find(s => s.id === projectData?.style);
+              const activeFormat = FORMAT_PRESETS.find(f => f.id === projectData?.formatPreset);
+              const camParts = [
+                virtualCameraSettings.camera !== "default" ? CAMERA_OPTIONS.find(o => o.value === virtualCameraSettings.camera)?.label : null,
+                virtualCameraSettings.lens !== "none" ? LENS_OPTIONS.find(o => o.value === virtualCameraSettings.lens)?.label : null,
+                virtualCameraSettings.focalLength !== "none" ? virtualCameraSettings.focalLength + "mm" : null,
+              ].filter(Boolean);
+              const camLabel = camParts.length > 0 ? camParts.join(" · ") : "Auto";
+              const isAngleDefault = cameraAngleSettings.rotation === 0 && cameraAngleSettings.tilt === 0 && cameraAngleSettings.zoom === 0;
+              const isSpeedDefault = speedRampCurve.every(v => v === 2);
+              const matchedSpeedPreset = !isSpeedDefault ? [{ name: "Slow-mo", curve: [0,0,1,0,0] }, { name: "Bullet Time", curve: [2,2,0,0,2] }, { name: "Flash In", curve: [4,3,2,2,2] }, { name: "Flash Out", curve: [2,2,2,3,4] }, { name: "Impact", curve: [2,3,0,1,2] }, { name: "Ramp Up", curve: [0,1,2,3,4] }, { name: "Ramp Down", curve: [4,3,2,1,0] }, { name: "Burst", curve: [1,1,4,4,1] }].find(p => p.curve.every((v, i) => v === speedRampCurve[i])) : null;
+              const motionLabel = cameraMotionOptions.find(o => o.value === cameraMotion)?.label || "None";
+              const speedLabel = matchedSpeedPreset?.name || (isSpeedDefault ? "Normal" : "Custom");
+              const isVideoMode = outputMode === "video";
+              const isImageOrVideo = outputMode === "image" || outputMode === "video";
+              const showAdvancedPills = isImageOrVideo && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/");
+
+              // Build compact summary segments
+              const summaryParts: string[] = [
+                activeGenre?.label || "Auto",
+                activeFormat?.label || "Auto",
+              ];
+              if (showAdvancedPills) {
+                if (camLabel !== "Auto") summaryParts.push(camLabel);
+                if (!isAngleDefault) summaryParts.push(`${cameraAngleSettings.rotation}°`);
+              }
+              if (isVideoMode && showAdvancedPills) {
+                if (cameraMotion !== "none") summaryParts.push(motionLabel);
+                if (!isSpeedDefault) summaryParts.push(speedLabel);
+              }
+              if (showAdvancedPills && colorPaletteColors.colors.length > 0) summaryParts.push("Palette");
+
+              return pillBarExpanded ? (
+                <div data-settings-pill className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-(--bg-secondary)/95 backdrop-blur-md border border-white/[0.06]">
+                  {/* Genre — clickable, opens grid dialog */}
+                  <button
+                    onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); setShowPillMotion(false); }}
+                    className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                  >
+                    <img
+                      src={activeGenre?.preview || "/storytica/element_forge/grids/genre/auto.png"}
+                      alt=""
+                      className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
                     />
-                    <div className="w-px h-3 bg-white/10" />
-                    {/* Format — clickable, opens grid dialog */}
-                    <button
-                      onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); setShowPillMotion(false); }}
-                      className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                    >
-                      <img
-                        src={activeFormat?.preview || "/storytica/element_forge/grids/format/auto.png"}
-                        alt=""
-                        className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
-                      />
-                      <span className="text-[11px] text-gray-500">Format:</span>
-                      <span className="text-[11px] font-semibold text-white">{activeFormat?.label || "Auto"}</span>
-                    </button>
-                    <FormatPicker
-                      open={showPillFormat}
-                      onClose={() => setShowPillFormat(false)}
-                      selected={projectData?.formatPreset}
-                      onSelect={(id) => updateProjectMutation({ id: projectData._id, formatPreset: id })}
+                    <span className="text-[11px] text-gray-500">Genre:</span>
+                    <span className="text-[11px] font-semibold text-white">{activeGenre?.label || "Auto"}</span>
+                  </button>
+                  <GenrePicker
+                    open={showPillGenre}
+                    onClose={() => setShowPillGenre(false)}
+                    selected={projectData?.style}
+                    onSelect={(id, prompt) => updateProjectMutation({ id: projectData._id, style: id, stylePrompt: prompt })}
+                  />
+                  <div className="w-px h-3 bg-white/10" />
+                  {/* Format — clickable, opens grid dialog */}
+                  <button
+                    onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); setShowPillMotion(false); }}
+                    className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                  >
+                    <img
+                      src={activeFormat?.preview || "/storytica/element_forge/grids/format/auto.png"}
+                      alt=""
+                      className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10"
                     />
-                    {/* Camera — visible in image + video modes */}
-                    {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                      <>
-                        <div className="w-px h-3 bg-white/10" />
+                    <span className="text-[11px] text-gray-500">Format:</span>
+                    <span className="text-[11px] font-semibold text-white">{activeFormat?.label || "Auto"}</span>
+                  </button>
+                  <FormatPicker
+                    open={showPillFormat}
+                    onClose={() => setShowPillFormat(false)}
+                    selected={projectData?.formatPreset}
+                    onSelect={(id) => updateProjectMutation({ id: projectData._id, formatPreset: id })}
+                  />
+                  {/* Camera — visible in image + video modes */}
+                  {showAdvancedPills && (
+                    <>
+                      <div className="w-px h-3 bg-white/10" />
+                      <button
+                        data-pill-camera
+                        onClick={() => {
+                          setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                          if (hasProFeatures) {
+                            const trigger = document.querySelector('[data-camera-studio-trigger] button') as HTMLButtonElement;
+                            trigger?.click();
+                          } else {
+                            toast.info("Upgrade to Pro to use Camera Studio");
+                          }
+                        }}
+                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                      >
+                        <Camera className={`w-4 h-4 ${hasProFeatures && camLabel !== "Auto" ? "text-blue-400" : "text-gray-500"}`} />
+                        <span className="text-[11px] text-gray-500">Camera:</span>
+                        <span className={`text-[11px] font-semibold truncate max-w-[120px] ${hasProFeatures && camLabel !== "Auto" ? "text-blue-400" : "text-white"}`}>{hasProFeatures ? camLabel : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                      </button>
+                    </>
+                  )}
+                  {/* Angle — visible in image + video modes */}
+                  {showAdvancedPills && (
+                    <>
+                      <div className="w-px h-3 bg-white/10" />
+                      <button
+                        onClick={() => {
+                          setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                          if (hasProFeatures) {
+                            const trigger = document.querySelector('[data-angle-picker-trigger]') as HTMLButtonElement;
+                            trigger?.click();
+                          } else {
+                            toast.info("Upgrade to Pro to use Camera Angle");
+                          }
+                        }}
+                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                      >
+                        <Crosshair className={`w-4 h-4 ${hasProFeatures && !isAngleDefault ? "text-blue-400" : "text-gray-500"}`} />
+                        <span className="text-[11px] text-gray-500">Angle:</span>
+                        <span className={`text-[11px] font-semibold ${hasProFeatures && !isAngleDefault ? "text-blue-400" : "text-white"}`}>{hasProFeatures ? (isAngleDefault ? "Auto" : `${cameraAngleSettings.rotation}°`) : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                      </button>
+                    </>
+                  )}
+                  {/* Motion — visible in video mode only */}
+                  {isVideoMode && showAdvancedPills && (
+                    <>
+                      <div className="w-px h-3 bg-white/10" />
+                      <div className="relative">
                         <button
-                          data-pill-camera
-                          onClick={() => {
-                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
-                            if (hasProFeatures) {
-                              const trigger = document.querySelector('[data-camera-studio-trigger] button') as HTMLButtonElement;
-                              trigger?.click();
-                            } else {
-                              toast.info("Upgrade to Pro to use Camera Studio");
-                            }
-                          }}
+                          onClick={() => { setShowPillMotion(!showPillMotion); setShowPillGenre(false); setShowPillFormat(false); }}
                           className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
                         >
-                          <Camera className={`w-4 h-4 ${hasProFeatures && camLabel !== "Auto" ? "text-blue-400" : "text-gray-500"}`} />
-                          <span className="text-[11px] text-gray-500">Camera:</span>
-                          <span className={`text-[11px] font-semibold truncate max-w-[120px] ${hasProFeatures && camLabel !== "Auto" ? "text-blue-400" : "text-white"}`}>{hasProFeatures ? camLabel : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                          <Film className={`w-4 h-4 ${cameraMotion !== "none" ? "text-blue-400" : "text-gray-500"}`} />
+                          <span className="text-[11px] text-gray-500">Motion:</span>
+                          <span className={`text-[11px] font-semibold ${cameraMotion !== "none" ? "text-blue-400" : "text-white"}`}>{motionLabel}</span>
                         </button>
-                      </>
-                    )}
-                    {/* Angle — visible in image + video modes */}
-                    {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                      <>
-                        <div className="w-px h-3 bg-white/10" />
-                        <button
-                          onClick={() => {
-                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
-                            if (hasProFeatures) {
-                              const trigger = document.querySelector('[data-angle-picker-trigger]') as HTMLButtonElement;
-                              trigger?.click();
-                            } else {
-                              toast.info("Upgrade to Pro to use Camera Angle");
-                            }
-                          }}
-                          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                        >
-                          {(() => {
-                            const isAngleDefault = cameraAngleSettings.rotation === 0 && cameraAngleSettings.tilt === 0 && cameraAngleSettings.zoom === 0;
-                            return (
-                              <>
-                                <Crosshair className={`w-4 h-4 ${hasProFeatures && !isAngleDefault ? "text-blue-400" : "text-gray-500"}`} />
-                                <span className="text-[11px] text-gray-500">Angle:</span>
-                                <span className={`text-[11px] font-semibold ${hasProFeatures && !isAngleDefault ? "text-blue-400" : "text-white"}`}>{hasProFeatures ? (isAngleDefault ? "Auto" : `${cameraAngleSettings.rotation}°`) : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
-                              </>
-                            );
-                          })()}
-                        </button>
-                      </>
-                    )}
-                    {/* Motion — visible in video mode only */}
-                    {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                      <>
-                        <div className="w-px h-3 bg-white/10" />
-                        <div className="relative">
-                          <button
-                            onClick={() => { setShowPillMotion(!showPillMotion); setShowPillGenre(false); setShowPillFormat(false); }}
-                            className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                          >
-                            <Film className={`w-4 h-4 ${cameraMotion !== "none" ? "text-blue-400" : "text-gray-500"}`} />
-                            <span className="text-[11px] text-gray-500">Motion:</span>
-                            <span className={`text-[11px] font-semibold ${cameraMotion !== "none" ? "text-blue-400" : "text-white"}`}>{cameraMotionOptions.find(o => o.value === cameraMotion)?.label || "None"}</span>
-                          </button>
-                          {showPillMotion && createPortal(
-                            <div className="fixed inset-0 z-[9998]" onClick={() => setShowPillMotion(false)} />,
-                            document.body
-                          )}
-                          {showPillMotion && (
-                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[170px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-[9999] py-1.5">
-                              {cameraMotionOptions.map((option) => (
-                                <button
-                                  key={option.value}
-                                  onClick={() => {
-                                    setCameraMotion(option.value);
-                                    setShowPillMotion(false);
-                                    const el = editorRef.current;
-                                    if (el && option.description) {
-                                      const hasContent = el.innerHTML && el.innerHTML !== '<br>';
-                                      if (hasContent) {
-                                        el.innerHTML = el.innerHTML + '<br>' + option.description;
-                                      } else {
-                                        el.textContent = option.description;
-                                      }
-                                      const plainText = el.innerText || '';
-                                      setEditorIsEmpty(false);
-                                      setCurrentPrompt(plainText);
-                                      onUserPromptChange?.(plainText);
+                        {showPillMotion && createPortal(
+                          <div className="fixed inset-0 z-[9998]" onClick={() => setShowPillMotion(false)} />,
+                          document.body
+                        )}
+                        {showPillMotion && (
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[170px] max-h-[300px] overflow-y-auto bg-(--bg-secondary) border border-white/10 rounded-xl shadow-2xl shadow-black/50 z-[9999] py-1.5">
+                            {cameraMotionOptions.map((option) => (
+                              <button
+                                key={option.value}
+                                onClick={() => {
+                                  setCameraMotion(option.value);
+                                  setShowPillMotion(false);
+                                  const el = editorRef.current;
+                                  if (el && option.description) {
+                                    const hasContent = el.innerHTML && el.innerHTML !== '<br>';
+                                    if (hasContent) {
+                                      el.innerHTML = el.innerHTML + '<br>' + option.description;
+                                    } else {
+                                      el.textContent = option.description;
                                     }
-                                  }}
-                                  className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors ${
-                                    cameraMotion === option.value
-                                      ? "bg-white/8 text-white"
-                                      : "text-gray-400 hover:bg-white/5 hover:text-white"
-                                  }`}
-                                >
-                                  {option.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                    {/* Speed — visible in video mode only */}
-                    {outputMode === "video" && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                      <>
-                        <div className="w-px h-3 bg-white/10" />
-                        <button
-                          onClick={() => {
-                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
-                            if (hasProFeatures) {
-                              const trigger = document.querySelector('[data-speed-ramp-trigger]') as HTMLButtonElement;
-                              trigger?.click();
-                            } else {
-                              toast.info("Upgrade to Pro to use Speed Ramp");
-                            }
-                          }}
-                          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                        >
-                          {(() => {
-                            const isSpeedDefault = speedRampCurve.every(v => v === 2);
-                            const matchedPreset = !isSpeedDefault ? [{ name: "Slow-mo", curve: [0,0,1,0,0] }, { name: "Bullet Time", curve: [2,2,0,0,2] }, { name: "Flash In", curve: [4,3,2,2,2] }, { name: "Flash Out", curve: [2,2,2,3,4] }, { name: "Impact", curve: [2,3,0,1,2] }, { name: "Ramp Up", curve: [0,1,2,3,4] }, { name: "Ramp Down", curve: [4,3,2,1,0] }, { name: "Burst", curve: [1,1,4,4,1] }].find(p => p.curve.every((v, i) => v === speedRampCurve[i])) : null;
-                            return (
-                              <>
-                                <Timer className={`w-4 h-4 ${hasProFeatures && !isSpeedDefault ? "text-violet-400" : "text-gray-500"}`} />
-                                <span className="text-[11px] text-gray-500">Speed:</span>
-                                <span className={`text-[11px] font-semibold ${hasProFeatures && !isSpeedDefault ? "text-violet-400" : "text-white"}`}>{hasProFeatures ? (matchedPreset?.name || (isSpeedDefault ? "Normal" : "Custom")) : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
-                              </>
-                            );
-                          })()}
-                        </button>
-                      </>
-                    )}
-                    {/* Palette — visible in image + video modes */}
-                    {(outputMode === "image" || outputMode === "video") && !["topaz/video-upscale", "infinitalk/from-audio", "elevenlabs/text-to-speech-multilingual-v2"].includes(selectedModelOption.value) && !selectedModelOption.value.startsWith("ai-music-api/") && (
-                      <>
-                        <div className="w-px h-3 bg-white/10" />
-                        <button
-                          onClick={() => {
-                            setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
-                            if (hasProFeatures) {
-                              const trigger = document.querySelector('[data-palette-picker-trigger]') as HTMLButtonElement;
-                              trigger?.click();
-                            } else {
-                              toast.info("Upgrade to Pro to use Color Palette");
-                            }
-                          }}
-                          className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
-                        >
-                          <Palette className={`w-4 h-4 ${hasProFeatures && colorPaletteColors.colors.length > 0 ? "text-rose-400" : "text-gray-500"}`} />
-                          {hasProFeatures && colorPaletteColors.colors.length > 0 ? (
-                            <div className="flex items-center gap-0.5">
-                              {colorPaletteColors.colors.map((c, i) => (
-                                <div key={i} className="w-2.5 h-2.5 rounded-full border border-white/20" style={{ backgroundColor: c }} />
-                              ))}
-                            </div>
-                          ) : (
-                            <>
-                              <span className="text-[11px] text-gray-500">Palette:</span>
-                              <span className="text-[11px] font-semibold text-white">{hasProFeatures ? "Auto" : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
-                            </>
-                          )}
-                        </button>
-                      </>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+                                    const plainText = el.innerText || '';
+                                    setEditorIsEmpty(false);
+                                    setCurrentPrompt(plainText);
+                                    onUserPromptChange?.(plainText);
+                                  }
+                                }}
+                                className={`w-full px-3 py-1.5 text-left text-[11px] transition-colors ${
+                                  cameraMotion === option.value
+                                    ? "bg-white/8 text-white"
+                                    : "text-gray-400 hover:bg-white/5 hover:text-white"
+                                }`}
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {/* Speed — visible in video mode only */}
+                  {isVideoMode && showAdvancedPills && (
+                    <>
+                      <div className="w-px h-3 bg-white/10" />
+                      <button
+                        onClick={() => {
+                          setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                          if (hasProFeatures) {
+                            const trigger = document.querySelector('[data-speed-ramp-trigger]') as HTMLButtonElement;
+                            trigger?.click();
+                          } else {
+                            toast.info("Upgrade to Pro to use Speed Ramp");
+                          }
+                        }}
+                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                      >
+                        <Timer className={`w-4 h-4 ${hasProFeatures && !isSpeedDefault ? "text-violet-400" : "text-gray-500"}`} />
+                        <span className="text-[11px] text-gray-500">Speed:</span>
+                        <span className={`text-[11px] font-semibold ${hasProFeatures && !isSpeedDefault ? "text-violet-400" : "text-white"}`}>{hasProFeatures ? speedLabel : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                      </button>
+                    </>
+                  )}
+                  {/* Palette — visible in image + video modes */}
+                  {showAdvancedPills && (
+                    <>
+                      <div className="w-px h-3 bg-white/10" />
+                      <button
+                        onClick={() => {
+                          setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
+                          if (hasProFeatures) {
+                            const trigger = document.querySelector('[data-palette-picker-trigger]') as HTMLButtonElement;
+                            trigger?.click();
+                          } else {
+                            toast.info("Upgrade to Pro to use Color Palette");
+                          }
+                        }}
+                        className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
+                      >
+                        <Palette className={`w-4 h-4 ${hasProFeatures && colorPaletteColors.colors.length > 0 ? "text-rose-400" : "text-gray-500"}`} />
+                        {hasProFeatures && colorPaletteColors.colors.length > 0 ? (
+                          <div className="flex items-center gap-0.5">
+                            {colorPaletteColors.colors.map((c, i) => (
+                              <div key={i} className="w-2.5 h-2.5 rounded-full border border-white/20" style={{ backgroundColor: c }} />
+                            ))}
+                          </div>
+                        ) : (
+                          <>
+                            <span className="text-[11px] text-gray-500">Palette:</span>
+                            <span className="text-[11px] font-semibold text-white">{hasProFeatures ? "Auto" : <Lock className="w-3 h-3 inline text-gray-600" />}</span>
+                          </>
+                        )}
+                      </button>
+                    </>
+                  )}
+                  {/* Collapse toggle */}
+                  <div className="w-px h-3 bg-white/10" />
+                  <button
+                    onClick={() => setPillBarExpanded(false)}
+                    className="flex items-center hover:opacity-80 transition-opacity cursor-pointer"
+                    title="Collapse settings bar"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                </div>
+              ) : (
+                /* Collapsed state — compact summary */
+                <button
+                  data-settings-pill
+                  onClick={() => setPillBarExpanded(true)}
+                  className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-(--bg-secondary)/95 backdrop-blur-md border border-white/[0.06] hover:border-white/15 transition-colors cursor-pointer group"
+                  title="Expand settings bar"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500 group-hover:text-gray-300 transition-colors" />
+                  <span className="text-[11px] text-gray-400 group-hover:text-gray-200 transition-colors truncate max-w-[400px]">
+                    {summaryParts.join(" · ")}
+                  </span>
+                  {colorPaletteColors.colors.length > 0 && hasProFeatures && (
+                    <div className="flex items-center gap-0.5 ml-0.5">
+                      {colorPaletteColors.colors.slice(0, 3).map((c, i) => (
+                        <div key={i} className="w-2 h-2 rounded-full border border-white/20" style={{ backgroundColor: c }} />
+                      ))}
+                    </div>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         )}
 

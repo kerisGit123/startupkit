@@ -17,8 +17,12 @@ export async function POST(req: NextRequest) {
     let convexToken: string | null = null;
     try {
       convexToken = await authResult.getToken({ template: "convex" });
-    } catch {
-      try { convexToken = await authResult.getToken(); } catch {}
+      console.log('[generate-image] Convex token obtained:', convexToken ? `${convexToken.substring(0, 20)}...` : 'NULL');
+    } catch (e) {
+      console.error('[generate-image] Failed to get convex token:', e);
+      try { convexToken = await authResult.getToken(); } catch (e2) {
+        console.error('[generate-image] Failed to get default token too:', e2);
+      }
     }
 
     const {
