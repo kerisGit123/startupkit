@@ -7,8 +7,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 export const maxDuration = 180;
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
 interface ConfirmedElement {
   elementId: string;
   elementName: string;
@@ -88,7 +86,6 @@ export async function POST(req: NextRequest) {
   let convexToken: string | null = null;
   try { convexToken = await authResult.getToken({ template: "convex" }); } catch {}
   try { if (!convexToken) convexToken = await authResult.getToken(); } catch {}
-  if (convexToken) convex.setAuth(convexToken);
 
   const { projectId, confirmedElements, affectedSceneIds } = await req.json() as {
     projectId: string;
@@ -99,6 +96,9 @@ export async function POST(req: NextRequest) {
   if (!projectId || !confirmedElements?.length) {
     return NextResponse.json({ error: "projectId and confirmedElements required" }, { status: 400 });
   }
+
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  if (convexToken) convex.setAuth(convexToken);
 
   const project = await convex.query(api.storyboard.projects.get, {
     id: projectId as Id<"storyboard_projects">,

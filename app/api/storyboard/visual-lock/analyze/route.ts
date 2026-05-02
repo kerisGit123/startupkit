@@ -7,8 +7,6 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 export const maxDuration = 120;
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
 const TYPE_INSTRUCTIONS: Record<string, string> = {
   character: `For CHARACTER elements, identify differences in:
 - Gender, age, ethnicity, build, height
@@ -44,13 +42,15 @@ export async function POST(req: NextRequest) {
   let convexToken: string | null = null;
   try { convexToken = await authResult.getToken({ template: "convex" }); } catch {}
   try { if (!convexToken) convexToken = await authResult.getToken(); } catch {}
-  if (convexToken) convex.setAuth(convexToken);
 
   const { projectId, elementIds } = await req.json();
 
   if (!projectId || !elementIds?.length) {
     return NextResponse.json({ error: "projectId and elementIds required" }, { status: 400 });
   }
+
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  if (convexToken) convex.setAuth(convexToken);
 
   // Fetch all project elements
   const allElements = await convex.query(api.storyboard.storyboardElements.listByProject, {

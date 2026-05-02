@@ -102,7 +102,7 @@ export function VisualLockModal({ projectId, onClose, onScriptUpdated }: VisualL
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);
   const [confirmedElements, setConfirmedElements] = useState<ConfirmedElement[]>([]);
-  const [rewriteResult, setRewriteResult] = useState<{ newScript: string; sceneChanges: SceneChange[]; creditsCharged: number } | null>(null);
+  const [rewriteResult, setRewriteResult] = useState<{ newScript: string; sceneChanges: SceneChange[]; creditsCharged: number; totalChanges: number; modelUsed: string } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
@@ -302,18 +302,14 @@ export function VisualLockModal({ projectId, onClose, onScriptUpdated }: VisualL
 
     try {
       const affectedSceneIds = rewriteResult.sceneChanges.map(s => s.sceneId);
-      const updatedElements = confirmedElements.map(el => ({
-        elementId: el.elementId,
-        newDescription: el.editedDescription,
-        newIdentity: el.editedIdentity,
-      }));
 
+      // Elements were already saved by saveElements() in the reviewing step — only save the script here
       const res = await fetch("/api/storyboard/visual-lock/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
-          updatedElements,
+          updatedElements: [],
           newScript: rewriteResult.newScript,
           rebuildScenes,
           affectedSceneIds,

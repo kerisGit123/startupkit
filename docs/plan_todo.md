@@ -4,6 +4,26 @@
 
 ---
 
+## Current State
+
+**On `main`, 7 commits ahead of origin (unpushed).** Last 4 sessions:
+
+```
+0febefe  Session #33 — AI Director Phase 1: suggest_shot_list, generate_scene tools, system prompt rewrite
+7fe5bf3  System Cleaning: orphan panel, temp cleanup, 1-year inactivity purge
+73d5744  Pill bar picker anchoring + ElementForge variant FileBrowser
+3f24671  Session #32: Visual Lock + element @mention pipeline + deletion cleanup
+```
+
+**Uncommitted polish (small refactors, ~16 line delta):**
+
+- `visual-lock/{analyze,apply,rewrite}/route.ts` — `ConvexHttpClient` moved from module-level to inside handler (cold-start safety)
+- `VisualLockModal.tsx` — minor type tightening on `rewriteResult` (added `totalChanges` + `modelUsed` fields)
+
+**Now blocked on testing — no further dev until verified.** See "Testing required (next session)" under Session #32 + #33 below.
+
+---
+
 ## Recently Completed (Session #11-33 — 2026-04-26/05-02)
 
 ### Session #33 — 2026-05-02 (AI Director/Agent Phase 1 — Tools + System Prompt)
@@ -99,8 +119,6 @@
 - [ ] Orphan repair cron — manually trigger via Convex dashboard, verify it processes any test orphans
 - [ ] Inactivity warning emails — set `credits_balance.lastActiveAt` to 10 months ago in Convex dashboard for a test account, then manually trigger `send-inactivity-warnings` cron to confirm Level 1 email arrives
 - [ ] Inactivity cron jobs running — after 24hrs of deployment, check Convex dashboard → Functions → Cron Jobs to confirm `send-inactivity-warnings` and `purge-inactive-accounts` show a successful last-run timestamp
-
-### Session #31 — 2026-05-01 (Enhance/Relight/Reframe Fix + Post-Processing Testing)
 
 ### Session #31 — 2026-05-01 (Enhance/Relight/Reframe Fix + Post-Processing Testing)
 

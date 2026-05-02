@@ -4,8 +4,6 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
 interface UpdatedElement {
   elementId: string;
   newDescription: string;
@@ -21,7 +19,6 @@ export async function POST(req: NextRequest) {
   let convexToken: string | null = null;
   try { convexToken = await authResult.getToken({ template: "convex" }); } catch {}
   try { if (!convexToken) convexToken = await authResult.getToken(); } catch {}
-  if (convexToken) convex.setAuth(convexToken);
 
   const { projectId, updatedElements, newScript, rebuildScenes, affectedSceneIds } = await req.json() as {
     projectId: string;
@@ -34,6 +31,9 @@ export async function POST(req: NextRequest) {
   if (!projectId) {
     return NextResponse.json({ error: "projectId required" }, { status: 400 });
   }
+
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  if (convexToken) convex.setAuth(convexToken);
 
   const results: { step: string; success: boolean; error?: string }[] = [];
 
