@@ -1,7 +1,7 @@
 # Chatbot System — Storytica Support Assistant
 
-> **Last updated:** 2026-04-27
-> **Status:** Production
+> **Last updated:** 2026-05-01
+> **Status:** Production — Phase 1 complete, Phase 2 pending
 > **Primary Model:** DeepSeek V3 via OpenRouter (~$0.0009/msg)
 > **Fallback Model:** Claude Haiku 4.5 via Anthropic SDK (~$0.0032/msg)
 

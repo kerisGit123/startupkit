@@ -1,10 +1,42 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-05-02 (Session #32 — Visual Lock + Element Pipeline + Deletion Cleanup)
+> **Last updated:** 2026-05-02 (Session #33 — AI Director/Agent Phase 1 Build)
 
 ---
 
-## Recently Completed (Session #11-32 — 2026-04-26/05-02)
+## Recently Completed (Session #11-33 — 2026-04-26/05-02)
+
+### Session #33 — 2026-05-02 (AI Director/Agent Phase 1 — Tools + System Prompt)
+
+**New Director tools (`lib/director/agent-tools.ts`):**
+
+- [x] `suggest_shot_list` — structured shot plan by scene type (action/dialogue/reveal/opening/drama): shot types, angles, movements, purpose per frame
+- [x] `generate_scene` — create a complete scene in one call; auto-assigns `scene-N` id; takes premise + composed frames array
+- [x] `update_project_style` now accepts `genre_preset` (16 options) in addition to `format_preset`
+- [x] `DirectorToolName` union updated — 24 tools total (was 22)
+
+**Tool implementations (`lib/director/tool-executor.ts`):**
+
+- [x] `suggest_shot_list` — 5 scene-type templates, sliced to requested frame count, returns structured JSON with per-shot guidance
+- [x] `generate_scene` — auto-generates next scene_id, creates all frames in one loop with prompts/notes
+- [x] `update_project_style` — now writes `genre` field to project alongside `formatPreset` and `stylePrompt`
+
+**System prompt rewrite (`lib/director/system-prompt.ts`) — stale since Session #14:**
+
+- [x] Genre & Format dual-axis section — all 16/12 presets, pairing examples, how each axis works
+- [x] Pill bar section — Camera/Angle/Motion/Speed/Palette control groups documented
+- [x] Element @mention section — model now always instructed to use `@ElementName` in prompts
+- [x] Element Forge / primary variant section — reference image pipeline explained
+- [x] Post-processing tools reference table (Enhance/Relight/Remove BG/Reframe/Inpaint/Upscale)
+- [x] Prompt writing examples updated to include `@ElementName` syntax
+- [x] Agent mode workflow updated: `suggest_shot_list → generate_scene → create_execution_plan → trigger_image_generation`
+
+**Still pending in Phase 1:**
+
+- [ ] End-to-end test: Agent Mode "build me a 6-frame story about a samurai at dawn"
+- [ ] Tune system prompt from observed agent behavior
+- [ ] DeepSeek routing for Director mode (cost savings — $0.0016/msg vs $0.006 Haiku)
+- [ ] Test quick-action chip strip (built Session #32, never visually verified)
 
 ### Session #32 — 2026-05-02 (Visual Lock + Element Mention Pipeline + Deletion Cleanup System)
 
@@ -640,9 +672,82 @@
 #### Ad Templates (Score 94 → 95)
 - [ ] Ad template presets (Product Showcase, Before/After, Testimonial, Countdown)
 
-#### AI Agent — Test & Polish
-- [ ] End-to-end test: Agent Mode "build me a 6-frame story"
-- [ ] Tune system prompt based on real agent behavior
+#### AI Director + Agent — Phase 1: Core Complete (THIS SESSION)
+
+Goal: Close the 3 gaps so the agent is solid enough to build the newbie flow on top of.
+
+##### Gap 1 — System prompt stale since Session #14 (Genre/Format/pill bar/Element Forge unknown)
+
+- [ ] Update `lib/director/system-prompt.ts` — add Genre (16 presets), Format (12 presets), pill bar (Camera/Angle/Motion/Speed/Palette), Element @mention pipeline, Element Forge (character identity sheets), post-processing tools reference
+
+##### Gap 2 — 10 director tools missing — build the 2 highest-value ones now
+
+| Tool | What it does | Priority |
+| ---- | ------------ | -------- |
+| `generate_scene` | One-liner → 4-6 frames with cinematic prompts. THE bridge to newbie flow. | Phase 1 |
+| `suggest_shot_list` | Given a scene, suggests shot coverage (wide/medium/close/reaction) before prompting | Phase 1 |
+| `check_continuity` | Spots character/prop/lighting inconsistencies between frames | Phase 3 |
+| `batch_fix_frames` | Re-prompts all frames based on style feedback | Phase 3 |
+| `analyze_emotional_arc` | Reviews pacing and emotional journey across scenes | Phase 3 |
+| `audit_style_drift` | Flags frames drifting from project genre/style | Phase 3 |
+| `apply_director_reference` | "Shoot this like Blade Runner 2049" — applies reference director style | Phase 3 |
+| `check_coverage` | Confirms all story beats are represented in the frame list | Phase 3 |
+| `create_shot_variations` | Generates 3 angle variations for the same moment | Phase 3 |
+| `smart_animate` | Suggests best motion preset per frame type (action/dialogue/establishing) | Phase 3 |
+
+- [ ] Add `generate_scene` + `suggest_shot_list` to `lib/director/agent-tools.ts`
+- [ ] Implement both in `lib/director/tool-executor.ts`
+
+##### Gap 3 — Never end-to-end tested
+
+- [ ] End-to-end test: Agent Mode "build me a 6-frame story about a samurai at dawn"
+- [ ] Tune system prompt from observed agent behavior
+
+##### Also in Phase 1
+
+- [ ] DeepSeek routing for Director mode (cost savings — see `plan_ai_director.md`)
+- [ ] Test quick-action chip balloons (persistent strip above input, built Session #32)
+
+---
+
+#### AI Director + Agent — Phase 2: Newbie Quick Create (NEXT SESSION — after Phase 1 proven)
+
+Goal: Zero-friction entry point. Type one sentence → storyboard done. Powered by Phase 1 agent.
+
+```text
+Type: "a knight fights a dragon at sunset over a burning city"
+  ↓  (genre/format pickers, already built)
+Agent: picks genre, format, 5 frames → writes cinematic prompts → generates all images
+  ↓
+"Your storyboard is ready" — 45 seconds
+```
+
+- [ ] Empty project magic wand UI — big textarea + genre/format pickers when 0 frames exist
+- [ ] `POST /api/director/quick-create` endpoint — takes `{ premise, genre, format, sceneCount }`, runs agent silently (no chat UI)
+- [ ] Uses `generate_scene` + `trigger_image_generation` under the hood
+- [ ] Progress bar showing steps (creating frames → writing prompts → generating images)
+- [ ] Redirect to finished storyboard on completion
+
+Why Phase 1 must come first: The newbie has no way to fix a bad storyboard. If the agent produces weak prompts or fails silently, first impression = churn. A solid agent = magic. A shaky agent = confusing mess.
+
+---
+
+#### AI Director + Agent — Phase 3: Advanced Director Tools (AFTER Phase 2)
+
+- [ ] `check_continuity` — Character/prop/lighting consistency checker across frames
+- [ ] `batch_fix_frames` — Re-prompt all frames from a single style note
+- [ ] `analyze_emotional_arc` — Pacing and emotional journey review
+- [ ] `audit_style_drift` — Flag frames drifting from project genre/style
+- [ ] `apply_director_reference` — Reference director style injection ("like Blade Runner 2049")
+- [ ] `check_coverage` — Confirm all story beats are covered
+- [ ] `create_shot_variations` — 3 angle variants for same moment
+- [ ] `smart_animate` — Suggest motion preset per frame type
+
+---
+
+#### Storytica MCP Server — Phase 4 / DEFERRED (after agent is proven)
+
+- See Priority 5 for full plan
 
 #### Video Editor — COMPLETE (Session #19)
 - [x] ~~Subtitle enhancements~~ — deferred, text overlays cover this use case
@@ -827,6 +932,42 @@
 ---
 
 ## Priority 5 — Paused / Deferred
+
+### Storytica MCP Server — DEFERRED (build after embedded agent is proven)
+
+**What it is:** An MCP server at `https://storytica.ai/mcp` that lets users access Storytica generation tools directly from Claude.ai, Claude Desktop, or Claude Code — without opening the app. Same positioning as Higgsfield MCP (`https://mcp.higgsfield.ai/mcp`).
+
+**Why defer:** The embedded Director/Agent must be end-to-end tested first. MCP is a distribution play, not a new capability.
+
+**Architecture:** Thin HTTP wrapper over existing tool-executor.ts logic. Auth via API key (user generates in dashboard → stored in `mcp_api_keys` Convex table).
+
+```text
+User adds https://storytica.ai/mcp in Claude settings
+  → Claude calls GET /mcp  → returns tool list
+  → Claude calls POST /mcp { tool, params }
+  → MCP reads API key from Authorization header
+  → Resolves to companyId, calls existing Convex mutations + Kie AI routes
+  → Returns result to Claude
+```
+
+**Build checklist:**
+
+- [ ] `mcp_api_keys` table in Convex — key, companyId, userId, label, createdAt, lastUsedAt
+- [ ] API key generator in user dashboard settings (create / revoke)
+- [ ] `app/api/mcp/route.ts` — MCP protocol handler (tools/list + tools/call JSON-RPC)
+- [ ] Auth middleware — reads `Authorization: Bearer <key>`, resolves companyId
+- [ ] `list_my_projects` tool — MCP has no URL context, user picks active project
+- [ ] `set_active_project` tool — sets active project for the session
+- [ ] Wire remaining tools through MCP: get_project_overview, get_scene_frames, update_frame_prompt, trigger_image_generation, trigger_video_generation, trigger_post_processing
+- [ ] Test with Claude Desktop connector
+- [ ] Test with Claude.ai custom connector
+- [ ] Add to `env.example` and docs
+
+**Estimated effort:** 3–4 days. All tool logic already exists in `lib/director/tool-executor.ts`.
+
+**Competitive note:** Higgsfield launched MCP — no embedded agent inside their app. We will have both: embedded Director/Agent (better UX, full project context) + MCP (power users, Claude ecosystem).
+
+---
 
 ### Booking System (plan_booking.md) — PAUSED
 

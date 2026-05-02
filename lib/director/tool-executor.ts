@@ -271,20 +271,22 @@ export async function dispatchDirectorTool(
       case "update_project_style": {
         const updateData: Record<string, any> = { id: projectId as any };
         if (input.style_prompt) updateData.stylePrompt = String(input.style_prompt);
+        if (input.genre_preset) updateData.genre = String(input.genre_preset);
         if (input.format_preset) updateData.formatPreset = String(input.format_preset);
 
-        if (!input.style_prompt && !input.format_preset) {
-          return { output: "Provide at least style_prompt or format_preset.", isError: true };
+        if (!input.style_prompt && !input.genre_preset && !input.format_preset) {
+          return { output: "Provide at least one of: style_prompt, genre_preset, format_preset.", isError: true };
         }
 
         await convex.mutation(api.storyboard.projects.update, updateData as any);
 
         const changes: string[] = [];
         if (input.style_prompt) changes.push("style prompt");
-        if (input.format_preset) changes.push(`format preset to "${input.format_preset}"`);
+        if (input.genre_preset) changes.push(`genre to "${input.genre_preset}"`);
+        if (input.format_preset) changes.push(`format to "${input.format_preset}"`);
 
         return {
-          output: `Updated project ${changes.join(" and ")}. This will apply to all future generations.`,
+          output: `Updated project ${changes.join(", ")}. This will apply to all future generations.`,
           isError: false,
         };
       }
@@ -635,6 +637,158 @@ export async function dispatchDirectorTool(
           const enhResult = await enhRes.json();
           return { output: `Enhanced prompt:\n\n${enhResult.enhanced || enhResult.prompt || enhResult.text || ""}`, isError: false };
         } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "suggest_shot_list": {
+        const description = String(input.description || "");
+        const sceneType = String(input.scene_type || "drama").toLowerCase();
+        const frameCount = Math.min(Math.max(Number(input.frame_count || 5), 3), 8);
+
+        type ShotTemplate = {
+          type: string;
+          angle: string;
+          movement: string;
+          purpose: string;
+          duration: number;
+        };
+
+        const SCENE_TEMPLATES: Record<string, ShotTemplate[]> = {
+          action: [
+            { type: "ESTABLISHING", angle: "wide aerial", movement: "slow crane down", purpose: "Show location and scale, set stakes", duration: 3 },
+            { type: "WIDE", angle: "low angle", movement: "static or slow track", purpose: "Reveal all combatants in environment", duration: 4 },
+            { type: "MEDIUM", angle: "eye-level", movement: "slow push-in", purpose: "Character emotion before action begins", duration: 3 },
+            { type: "EXTREME CLOSE-UP", angle: "macro", movement: "static", purpose: "Tension detail — weapon, hands, or eyes", duration: 2 },
+            { type: "WIDE", angle: "medium-wide", movement: "handheld", purpose: "Full choreography — see complete action", duration: 6 },
+            { type: "CLOSE-UP", angle: "over-shoulder", movement: "static", purpose: "Decisive moment from one character's view", duration: 3 },
+            { type: "WIDE", angle: "crane up", movement: "crane up and back", purpose: "Aftermath — scale of outcome revealed", duration: 4 },
+            { type: "MEDIUM CLOSE-UP", angle: "slight low angle", movement: "slow push-in", purpose: "Emotional payoff — character's face", duration: 4 },
+          ],
+          dialogue: [
+            { type: "ESTABLISHING", angle: "wide two-shot", movement: "slow dolly in", purpose: "Establish location and relationship between characters", duration: 5 },
+            { type: "MEDIUM", angle: "eye-level two-shot", movement: "static", purpose: "Show both characters together, set dynamic", duration: 4 },
+            { type: "OVER-THE-SHOULDER", angle: "OTS A→B", movement: "static", purpose: "Character A speaking — B's perspective", duration: 5 },
+            { type: "OVER-THE-SHOULDER", angle: "OTS B→A", movement: "static", purpose: "Character B responding — A's perspective", duration: 5 },
+            { type: "CLOSE-UP", angle: "eye-level", movement: "slow push-in", purpose: "Emotional peak — truth or conflict revealed", duration: 4 },
+            { type: "WIDE", angle: "wide shot", movement: "slow dolly out", purpose: "Closing — isolation or connection", duration: 4 },
+          ],
+          reveal: [
+            { type: "WIDE", angle: "high angle overhead", movement: "crane down", purpose: "Characters approaching the reveal location", duration: 4 },
+            { type: "MEDIUM", angle: "eye-level", movement: "tracking", purpose: "Characters moving toward the reveal", duration: 5 },
+            { type: "POV", angle: "first-person", movement: "handheld push-in", purpose: "What the character sees — audience shares perspective", duration: 4 },
+            { type: "INSERT", angle: "macro close-up", movement: "static", purpose: "The revealed object or scene in detail", duration: 3 },
+            { type: "CLOSE-UP", angle: "slight low angle", movement: "static", purpose: "Character reaction — face shows the weight", duration: 4 },
+            { type: "WIDE", angle: "aerial pullback", movement: "crane up and back", purpose: "Context — reveal shown in full environment", duration: 5 },
+          ],
+          opening: [
+            { type: "AERIAL", angle: "bird's-eye", movement: "slow drone sweep", purpose: "Establish world, location, scale", duration: 5 },
+            { type: "ESTABLISHING", angle: "wide eye-level", movement: "slow pan", purpose: "Ground-level environment introduction", duration: 4 },
+            { type: "MEDIUM", angle: "slight low angle", movement: "static or slow track", purpose: "First look at the protagonist", duration: 4 },
+            { type: "CLOSE-UP", angle: "eye-level", movement: "slow push-in", purpose: "Character's face — their state of mind", duration: 3 },
+            { type: "INSERT", angle: "macro close-up", movement: "static", purpose: "A detail that defines this world", duration: 2 },
+          ],
+          drama: [
+            { type: "ESTABLISHING", angle: "wide", movement: "static", purpose: "Set the scene and atmosphere", duration: 4 },
+            { type: "MEDIUM", angle: "eye-level", movement: "static", purpose: "Character in their environment", duration: 5 },
+            { type: "MEDIUM CLOSE-UP", angle: "slight low angle", movement: "slow push-in", purpose: "Emotional moment building", duration: 4 },
+            { type: "CLOSE-UP", angle: "eye-level", movement: "static", purpose: "Peak emotional expression", duration: 4 },
+            { type: "WIDE", angle: "wide shot", movement: "dolly out or crane up", purpose: "Closing — isolation or resolution", duration: 5 },
+          ],
+        };
+
+        const template = SCENE_TEMPLATES[sceneType] ?? SCENE_TEMPLATES.drama;
+        const selected = template.slice(0, frameCount);
+
+        const guidance: Record<string, string> = {
+          action: "Vary shot sizes to build rhythm. Wide for choreography, close for impact. Handheld adds chaos, static adds control. Cut on action for momentum.",
+          dialogue: "Establish → two-shot → OTS → OTS → close-up emotional peak. Keep camera still unless emotion demands movement.",
+          reveal: "Build anticipation through movement, then pause on the reveal. Let the close-up reaction do the work.",
+          opening: "Start macro (world), end micro (character). Give the audience somewhere to stand before introducing who to follow.",
+          drama: "Let pauses breathe. Push-in on emotion, dolly out on isolation. Wide shot for context, close-up for feeling.",
+        };
+
+        return {
+          output: stringifyResult({
+            description: description || "Scene",
+            sceneType,
+            shots: selected.map((s, i) => ({
+              frameNumber: i + 1,
+              shotType: s.type,
+              cameraAngle: s.angle,
+              movement: s.movement,
+              purpose: s.purpose,
+              suggestedDuration: `${s.duration}s`,
+            })),
+            guidance: guidance[sceneType] ?? guidance.drama,
+            note: `${selected.length}-shot plan for ${sceneType} scene. Use generate_scene or create_frames with these as your template.`,
+          }),
+          isError: false,
+        };
+      }
+
+      case "generate_scene": {
+        const premise = String(input.premise || "");
+        const frames = input.frames as any[];
+
+        if (!frames || frames.length === 0)
+          return { output: "frames array is required. Compose the frames yourself based on the premise, then call this tool.", isError: true };
+
+        const existingItems = await convex.query(
+          api.storyboard.storyboardItems.listByProject,
+          { projectId: projectId as any }
+        );
+
+        // Auto-generate scene_id as the next available one
+        const existingSceneIds = [
+          ...new Set((existingItems as any[]).map((i) => i.sceneId).filter(Boolean)),
+        ];
+        let sceneId = String(input.scene_id || "");
+        if (!sceneId) {
+          const nextNum = existingSceneIds.length + 1;
+          sceneId = `scene-${nextNum}`;
+        }
+
+        const maxOrder =
+          existingItems.length > 0
+            ? Math.max(...(existingItems as any[]).map((i) => i.order))
+            : -1;
+
+        const createdFrameNumbers: number[] = [];
+
+        for (let i = 0; i < frames.length; i++) {
+          const f = frames[i];
+          const order = maxOrder + 1 + i;
+          const id = await convex.mutation(api.storyboard.storyboardItems.create, {
+            projectId: projectId as any,
+            sceneId,
+            order,
+            title: f.title || `Shot ${order + 1}`,
+            description: f.description || premise,
+            duration: f.duration || 5,
+            generatedBy: ctx.userId,
+          });
+
+          const updateFields: Record<string, any> = { id: id as any };
+          if (f.image_prompt) updateFields.imagePrompt = f.image_prompt;
+          if (f.video_prompt) updateFields.videoPrompt = f.video_prompt;
+          if (Object.keys(updateFields).length > 1) {
+            await convex.mutation(api.storyboard.storyboardItems.update, updateFields as any);
+          }
+          if (f.notes) {
+            await convex.mutation(api.storyboard.storyboardItems.updateFrameNotes, {
+              id: id as any,
+              notes: f.notes,
+            });
+          }
+
+          createdFrameNumbers.push(order + 1);
+        }
+
+        const genre = input.genre ? ` (${input.genre} genre)` : "";
+        const format = input.format ? `, ${input.format} format` : "";
+        return {
+          output: `Created ${frames.length} frames in ${sceneId} for "${premise}"${genre}${format}. Frame numbers: ${createdFrameNumbers.join(", ")}. Prompts are set — ready for image generation.`,
+          isError: false,
+        };
       }
 
       case "browse_project_files": {

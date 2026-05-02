@@ -110,13 +110,22 @@ export const DIRECTOR_TOOLS: Anthropic.Tool[] = [
   {
     name: "update_project_style",
     description:
-      "Update the project-wide visual style. This affects ALL future generations. Set the style prompt (descriptive text appended to every prompt) and/or the format preset.",
+      "Update the project-wide visual style. This affects ALL future generations. Set style prompt, genre preset (mood/lighting/color), and/or format preset (framing/pacing). Genre and format are independent axes — use both together for best results.",
     input_schema: {
       type: "object",
       properties: {
         style_prompt: {
           type: "string",
           description: "Visual style description appended to every generation prompt (e.g., 'cinematic lighting, 35mm film grain, shallow depth of field, warm color grading, anamorphic lens flare')",
+        },
+        genre_preset: {
+          type: "string",
+          enum: [
+            "cinematic", "horror", "noir", "sci-fi", "fantasy", "drama",
+            "action", "comedy", "thriller", "anime", "wuxia", "cyberpunk",
+            "luxury", "epic", "corporate", "vintage-retro",
+          ],
+          description: "Genre preset controlling visual aesthetic — mood, lighting, color. Auto-appended to all generation prompts.",
         },
         format_preset: {
           type: "string",
@@ -125,7 +134,7 @@ export const DIRECTOR_TOOLS: Anthropic.Tool[] = [
             "music-video", "vlog", "tutorial", "presentation",
             "podcast", "product-demo", "cinematic-ad",
           ],
-          description: "Content format preset that adds framing/pacing context",
+          description: "Content format preset controlling framing, pacing, camera behavior. Independent from genre.",
         },
       },
       required: [],
@@ -207,6 +216,75 @@ export const DIRECTOR_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["frame_number"],
+    },
+  },
+
+  // ── SCENE PLANNING tools ─────────────────────────────────────────────
+  {
+    name: "suggest_shot_list",
+    description:
+      "Get a structured shot list recommendation for a scene before creating frames. Returns specific shot types, camera angles, movements, and purpose for each frame. Call this first to plan coverage, then use create_frames or generate_scene to build the frames.",
+    input_schema: {
+      type: "object",
+      properties: {
+        description: {
+          type: "string",
+          description: "What happens in the scene (e.g., 'two detectives interrogate a suspect in a dark room')",
+        },
+        scene_type: {
+          type: "string",
+          enum: ["action", "dialogue", "reveal", "opening", "drama"],
+          description: "Type of scene for appropriate shot coverage (default: 'drama')",
+        },
+        frame_count: {
+          type: "number",
+          description: "Number of shots to suggest (3-8, default: 5)",
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: "generate_scene",
+    description:
+      "Create a complete scene with multiple frames in one call. Use suggest_shot_list first to plan the shots, then compose the frames based on your filmmaking knowledge and call this tool. Automatically assigns a scene_id if none is provided. Designed for 'build me a scene about X' requests.",
+    input_schema: {
+      type: "object",
+      properties: {
+        premise: {
+          type: "string",
+          description: "What the scene is about (e.g., 'samurai faces his nemesis at dawn in an empty dojo')",
+        },
+        scene_id: {
+          type: "string",
+          description: "Scene ID to create frames in (e.g., 'scene-1'). Auto-generated as the next available scene if omitted.",
+        },
+        genre: {
+          type: "string",
+          description: "Genre for context — influences how you compose the prompts (e.g., 'action', 'drama', 'noir')",
+        },
+        format: {
+          type: "string",
+          description: "Content format for pacing context (e.g., 'film', 'commercial', 'reel')",
+        },
+        frames: {
+          type: "array",
+          description: "Array of frames to create — compose these yourself based on the premise, genre, and shot list plan",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Shot title (e.g., 'Wide establishing — empty dojo at dawn')" },
+              description: { type: "string", description: "What happens in this frame" },
+              image_prompt: { type: "string", description: "Full cinematic image prompt: shot type, lighting, mood, @ElementName references" },
+              video_prompt: { type: "string", description: "Camera movement and action for video generation" },
+              duration: { type: "number", description: "Duration in seconds (default: 5)" },
+              notes: { type: "string", description: "Director notes" },
+            },
+            required: ["title", "image_prompt"],
+          },
+        },
+      },
+      required: ["premise", "frames"],
     },
   },
 
@@ -534,6 +612,8 @@ export type DirectorToolName =
   | "create_frames"
   | "batch_update_prompts"
   | "analyze_frame_image"
+  | "suggest_shot_list"
+  | "generate_scene"
   | "get_model_recommendations"
   | "search_knowledge_base"
   // Agent-mode tools

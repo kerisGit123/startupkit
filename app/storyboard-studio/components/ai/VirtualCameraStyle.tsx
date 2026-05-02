@@ -43,6 +43,7 @@ interface VirtualCameraStyleProps {
   onSettingsChange: (settings: VirtualCameraSettings) => void;
   companyId?: string;
   userId?: string;
+  anchorEl?: HTMLElement | null;
 }
 
 // ── Option Data ──────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ function SelectorCard({
 
 // ── Main Component — Floating Panel ──────────────────────────────────────
 
-export function VirtualCameraStyle({ settings, onSettingsChange, companyId, userId }: VirtualCameraStyleProps) {
+export function VirtualCameraStyle({ settings, onSettingsChange, companyId, userId, anchorEl: externalAnchorEl }: VirtualCameraStyleProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionKey | null>(null);
   const [showSaveInput, setShowSaveInput] = useState(false);
@@ -277,20 +278,20 @@ export function VirtualCameraStyle({ settings, onSettingsChange, companyId, user
   if (settings.focalLength !== "none") summaryParts.push(FOCAL_LENGTH_OPTIONS.find(o => o.value === settings.focalLength)?.label + "mm");
   if (settings.aperture !== "none") summaryParts.push(APERTURE_OPTIONS.find(o => o.value === settings.aperture)?.label || "");
 
-  // Panel position — centered above the trigger (or pill anchor if triggered from pill)
   const getPanelStyle = (): React.CSSProperties => {
     const panelW = 420;
-    const gap = 6;
-    // Prefer pill bar → main panel → trigger button
-    const pillBar = document.querySelector('[data-settings-pill]') as HTMLElement | null;
-    const mainPanel = document.querySelector('[data-main-panel]') as HTMLElement | null;
-    const anchor = pillBar || mainPanel || triggerRef.current;
+    const gap = 12;
+    const anchor = externalAnchorEl ?? triggerRef.current;
     if (!anchor) return {};
     const rect = anchor.getBoundingClientRect();
     let left = rect.left + rect.width / 2 - panelW / 2;
     left = Math.max(gap, Math.min(left, window.innerWidth - panelW - gap));
-    const bottom = window.innerHeight - rect.top + gap;
-    return { left, bottom, width: panelW };
+    const pickerEstHeight = 480;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= pickerEstHeight || spaceBelow >= rect.top) {
+      return { top: rect.bottom + gap, left, width: panelW };
+    }
+    return { bottom: window.innerHeight - rect.top + gap, left, width: panelW };
   };
 
   return (

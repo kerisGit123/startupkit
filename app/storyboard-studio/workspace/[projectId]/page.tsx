@@ -15,7 +15,9 @@ import { FrameFavoriteButton } from "../../components/editor/FrameFavoriteButton
 import { FramePrimaryImageButton } from "../../components/editor/FramePrimaryImageButton";
 import { WorkspaceExportModal } from "../../components/modals/WorkspaceExportModal";
 import { FileBrowser } from "../../components/ai/FileBrowser";
-import { GENRE_PRESETS, GENRE_PROMPTS, GENRE_COMBO_TIPS, FORMAT_PRESETS, FORMAT_PROMPT_MAP } from "../../constants";
+import { GenrePicker } from "../../components/ai/GenrePicker";
+import { FormatPicker } from "../../components/ai/FormatPicker";
+import { GENRE_PRESETS, FORMAT_PRESETS } from "../../constants";
 import { ElementLibrary } from "../../components/ai/ElementLibrary";
 import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
 import { VisualLockModal } from "../../components/storyboard/VisualLockModal";
@@ -174,12 +176,13 @@ export default function StoryboardWorkspacePage() {
     setDeletingItemIds(prev => new Set(prev).add(itemId));
 
     try {
-      // Step 1: Clean up R2 files linked to this item (fire-and-forget, don't block delete)
-      fetch("/api/storyboard/cleanup-item-files", {
+      // Step 1: Clean up R2 files + soft/hard-delete storyboard_files records
+      // Must await before removeItem so files aren't orphaned if cleanup fails.
+      await fetch("/api/storyboard/cleanup-item-files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemIds: [itemId] }),
-      }).catch(err => console.warn("[Workspace] cleanup-item-files failed (non-blocking):", err));
+      }).catch(err => console.warn("[Workspace] cleanup-item-files failed:", err));
 
       // Step 2: Delete the Convex item record
       await removeItem({ id: itemId });
@@ -531,11 +534,9 @@ export default function StoryboardWorkspacePage() {
   const [extendSceneCount, setExtendSceneCount] = useState(4);
   const [isExtending, setIsExtending] = useState(false);
   const [showStyleDropdown, setShowStyleDropdown] = useState(false);
-  const [showCustomStyleForm, setShowCustomStyleForm] = useState(false);
-  const [customStyleName, setCustomStyleName] = useState("");
-  const [customStylePrompt, setCustomStylePrompt] = useState("");
-  const [editingStyleId, setEditingStyleId] = useState<string | null>(null);
   const [showFormatDropdown, setShowFormatDropdown] = useState(false);
+  const genreTriggerRef = useRef<HTMLButtonElement>(null);
+  const formatTriggerRef = useRef<HTMLButtonElement>(null);
   const [isBuilding, setIsBuilding] = useState(false);
   const [isAddingFrame, setIsAddingFrame] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -1303,6 +1304,7 @@ export default function StoryboardWorkspacePage() {
                         const hasGenre = activeGenre && project?.style && project.style !== 'custom';
                         return (
                           <button
+                            ref={genreTriggerRef}
                             onClick={() => setShowStyleDropdown(!showStyleDropdown)}
                             className={`flex items-center gap-1.5 px-1.5 pr-2.5 py-1 rounded-full text-[12px] font-medium transition-colors border ${
                               hasGenre && colors
@@ -1320,237 +1322,26 @@ export default function StoryboardWorkspacePage() {
                           </button>
                         );
                       })()}
-                      {showStyleDropdown && (
-                        <>
-                          <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowStyleDropdown(false)} />
-                          <div className="absolute top-full mt-2 left-0 bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl z-50 w-[540px] p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="text-sm font-semibold text-white">Genre</h3>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => { setEditingStyleId(null); setCustomStyleName(""); setCustomStylePrompt(""); setShowCustomStyleForm(!showCustomStyleForm); }}
-                                  className="flex items-center gap-1 text-[11px] text-[#4A90E2] hover:text-white transition px-2 py-1 rounded-lg border border-[#3D3D3D] hover:border-[#4A90E2]/30"
-                                >
-                                  <Plus className="w-3 h-3" /> Custom
-                                </button>
-                                <button onClick={() => { setShowStyleDropdown(false); setShowCustomStyleForm(false); }} className="text-[#6E6E6E] hover:text-white transition">
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Custom Style Create / Edit Form */}
-                            {showCustomStyleForm && (
-                              <div className="mb-3 p-3 bg-[#2C2C2C] border border-[#3D3D3D] rounded-lg space-y-2">
-                                <p className="text-[11px] text-[#A0A0A0] font-medium">{editingStyleId ? "Edit Custom Genre" : "Create Custom Genre"}</p>
-                                <input
-                                  type="text"
-                                  placeholder="Genre name (e.g. Dark Thriller)"
-                                  value={customStyleName}
-                                  onChange={(e) => setCustomStyleName(e.target.value)}
-                                  className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50"
-                                />
-                                <textarea
-                                  placeholder="Genre prompt (describe the mood, lighting, tone...)"
-                                  value={customStylePrompt}
-                                  onChange={(e) => setCustomStylePrompt(e.target.value)}
-                                  rows={4}
-                                  className="w-full px-3 py-2 bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg text-xs text-white placeholder-[#6E6E6E] focus:outline-none focus:border-[#4A90E2]/50 resize-none"
-                                />
-                                <div className="flex gap-2 justify-end">
-                                  <button
-                                    onClick={() => { setShowCustomStyleForm(false); setEditingStyleId(null); setCustomStyleName(""); setCustomStylePrompt(""); }}
-                                    className="px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-white bg-[#1A1A1A] border border-[#3D3D3D] rounded-lg transition"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    disabled={!customStyleName.trim() || !customStylePrompt.trim()}
-                                    onClick={async () => {
-                                      try {
-                                        if (editingStyleId) {
-                                          // Update existing preset
-                                          await updatePresetMut({
-                                            id: editingStyleId as any,
-                                            name: customStyleName.trim(),
-                                            prompt: customStylePrompt.trim(),
-                                            format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
-                                          });
-                                          updateProject({ id: project._id, style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() });
-                                          toast.success(`Genre "${customStyleName}" updated`);
-                                        } else {
-                                          // Create new preset
-                                          await createPreset({
-                                            name: customStyleName.trim(),
-                                            category: "style",
-                                            format: JSON.stringify({ style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() }),
-                                            prompt: customStylePrompt.trim(),
-                                            companyId: currentCompanyId,
-                                            userId: user?.id || "",
-                                          });
-                                          updateProject({ id: project._id, style: customStyleName.trim(), stylePrompt: customStylePrompt.trim() });
-                                          toast.success(`Custom genre "${customStyleName}" created and applied`);
-                                        }
-                                        setCustomStyleName("");
-                                        setCustomStylePrompt("");
-                                        setEditingStyleId(null);
-                                        setShowCustomStyleForm(false);
-                                      } catch (err: any) {
-                                        toast.error(err.message || "Failed to save style");
-                                      }
-                                    }}
-                                    className="px-3 py-1.5 text-xs text-white bg-[#4A90E2] hover:bg-[#357ABD] rounded-lg transition font-medium disabled:opacity-40"
-                                  >
-                                    {editingStyleId ? "Update" : "Create & Apply"}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="max-h-[400px] overflow-y-auto pr-1 space-y-3">
-                              <div className="grid grid-cols-4 gap-2">
-                                {/* Auto — clear genre */}
-                                <button
-                                  onClick={() => {
-                                    updateProject({ id: project._id, style: "", stylePrompt: "" });
-                                    setShowStyleDropdown(false);
-                                  }}
-                                  className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                    !project?.style || project.style === ''
-                                      ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
-                                      : 'border-[#3D3D3D] hover:border-white/20'
-                                  }`}
-                                >
-                                  <img src="/storytica/element_forge/grids/genre/auto.png" alt="Auto" className="w-full h-full object-cover" />
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                  <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-gray-400 drop-shadow-lg">
-                                    Auto
-                                  </span>
-                                  {(!project?.style || project.style === '') && (
-                                    <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                      <Check className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                  )}
-                                </button>
-
-                                {/* Built-in genres — flat grid */}
-                                {GENRE_PRESETS.map(style => (
-                                  <button
-                                    key={style.id}
-                                    onClick={() => {
-                                      updateProject({ id: project._id, style: style.id, stylePrompt: GENRE_PROMPTS[style.id] || "" });
-                                      setShowStyleDropdown(false);
-                                    }}
-                                    className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                      project?.style === style.id
-                                        ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
-                                        : 'border-transparent hover:border-white/20'
-                                    }`}
-                                  >
-                                    <img
-                                      src={style.preview}
-                                      alt={style.label}
-                                      className="w-full h-full object-cover"
-                                      loading="lazy"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                    <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg">
-                                      {style.label}
-                                    </span>
-                                    {project?.style === style.id && (
-                                      <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                        <Check className="w-2.5 h-2.5 text-white" />
-                                      </div>
-                                    )}
-                                  </button>
-                                ))}
-
-                                {/* Custom genres from storyboard_presets */}
-                                {(stylePresets || []).map(preset => (
-                                  <button
-                                    key={preset._id}
-                                    onClick={() => {
-                                      const parsed = JSON.parse(preset.format || "{}");
-                                      updateProject({ id: project._id, style: parsed.style || preset.name, stylePrompt: parsed.stylePrompt || preset.prompt || "" });
-                                      setShowStyleDropdown(false);
-                                    }}
-                                    className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                      project?.style === preset.name
-                                        ? 'border-purple-500 ring-2 ring-purple-500/30 scale-[1.02]'
-                                        : 'border-[#3D3D3D] hover:border-white/20'
-                                    }`}
-                                  >
-                                    {preset.thumbnailUrl ? (
-                                      <img src={preset.thumbnailUrl} alt={preset.name} className="w-full h-full object-cover" loading="lazy" />
-                                    ) : (
-                                      <div className="w-full h-full bg-gradient-to-br from-purple-900/40 to-blue-900/40 flex items-center justify-center">
-                                        <Palette className="w-6 h-6 text-purple-400/50" />
-                                      </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                    <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg truncate px-1">
-                                      {preset.name}
-                                    </span>
-                                    {project?.style === preset.name && (
-                                      <div className="absolute top-1 right-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                        <Check className="w-2.5 h-2.5 text-white" />
-                                      </div>
-                                    )}
-                                    <div
-                                      role="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation(); e.preventDefault();
-                                        setEditingStyleId(String(preset._id));
-                                        setCustomStyleName(preset.name);
-                                        setCustomStylePrompt(preset.prompt || "");
-                                        setShowCustomStyleForm(true);
-                                      }}
-                                      className="absolute bottom-1 right-1 w-5 h-5 bg-[#4A90E2]/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                                    >
-                                      <Edit3 className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                    <div
-                                      role="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation(); e.preventDefault();
-                                        removePreset({ id: preset._id });
-                                        toast.success(`Genre "${preset.name}" deleted`);
-                                      }}
-                                      className="absolute top-1 left-1 w-4 h-4 bg-red-500/80 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                                    >
-                                      <X className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                  </button>
-                                ))}
-
-                                {/* + Add Custom */}
-                                <button
-                                  onClick={() => setShowCustomStyleForm(true)}
-                                  className="group relative aspect-[4/3] rounded-lg overflow-hidden border-2 border-dashed border-[#3D3D3D] hover:border-[#4A90E2]/50 transition-all flex items-center justify-center"
-                                >
-                                  <div className="flex flex-col items-center gap-1">
-                                    <Plus className="w-5 h-5 text-[#6E6E6E] group-hover:text-[#4A90E2] transition" />
-                                    <span className="text-[10px] text-[#6E6E6E] group-hover:text-[#4A90E2] font-medium transition">Add Custom</span>
-                                  </div>
-                                </button>
-                              </div>
-
-                              {/* Genre + Format combo tips */}
-                              <div className="border-t border-[#3D3D3D] pt-2 mt-2">
-                                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6E6E6E] mb-1.5">Combo Tips: Genre + Format</p>
-                                <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                  {GENRE_COMBO_TIPS.map(tip => (
-                                    <div key={tip.label} className="flex items-baseline gap-1.5 text-[10px]">
-                                      <span className="text-[#A0A0A0] font-medium truncate">{tip.label}:</span>
-                                      <span className="text-[#6E6E6E] truncate">{tip.genre} + {tip.format}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </>
-                      )}
+                      <GenrePicker
+                        open={showStyleDropdown}
+                        onClose={() => setShowStyleDropdown(false)}
+                        anchorEl={genreTriggerRef.current}
+                        selected={project?.style}
+                        onSelect={(id, prompt) => { updateProject({ id: project._id, style: id, stylePrompt: prompt }); }}
+                        customPresets={(stylePresets || []).map(p => ({ id: String(p._id), name: p.name, prompt: p.prompt || "", thumbnailUrl: p.thumbnailUrl }))}
+                        onCreateCustom={async (name, prompt) => {
+                          await createPreset({ name, category: "style", format: JSON.stringify({ style: name, stylePrompt: prompt }), prompt, companyId: currentCompanyId, userId: user?.id || "" });
+                          updateProject({ id: project._id, style: name, stylePrompt: prompt });
+                          toast.success(`Custom genre "${name}" created and applied`);
+                        }}
+                        onEditPreset={async (id, name, prompt) => {
+                          await updatePresetMut({ id: id as any, name, prompt, format: JSON.stringify({ style: name, stylePrompt: prompt }) });
+                          updateProject({ id: project._id, style: name, stylePrompt: prompt });
+                          toast.success(`Genre "${name}" updated`);
+                        }}
+                        onDeletePreset={(id) => { removePreset({ id: id as any }); toast.success("Genre deleted"); }}
+                        showComboTips
+                      />
                     </div>
                     {/* Format Selector — border color matches format's color */}
                     <div className="relative">
@@ -1559,6 +1350,7 @@ export default function StoryboardWorkspacePage() {
                         const hasFormat = !!activeFormat;
                         return (
                           <button
+                            ref={formatTriggerRef}
                             onClick={() => setShowFormatDropdown(!showFormatDropdown)}
                             className={`flex items-center gap-1.5 px-1.5 pr-2.5 py-1 rounded-full text-[12px] font-medium transition-colors border ${
                               !hasFormat
@@ -1581,74 +1373,13 @@ export default function StoryboardWorkspacePage() {
                           </button>
                         );
                       })()}
-                      {showFormatDropdown && (
-                        <>
-                          <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowFormatDropdown(false)} />
-                          <div className="absolute top-full mt-2 left-0 bg-[#1A1A1A] border border-[#3D3D3D] rounded-xl shadow-2xl z-50 w-[420px] p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="text-sm font-semibold text-white">Content Format</h3>
-                              <button onClick={() => setShowFormatDropdown(false)} className="text-[#6E6E6E] hover:text-white transition">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                            <p className="text-[10px] text-[#6E6E6E] mb-3">Auto-appends framing, pacing, and camera behavior to all generation prompts. Pair with Genre for mood &amp; lighting.</p>
-                            <div className="grid grid-cols-4 gap-2 max-h-[350px] overflow-y-auto pr-1">
-                              {/* Auto — clear format */}
-                              <button
-                                onClick={() => {
-                                  updateProject({ id: project._id, formatPreset: "" });
-                                  setShowFormatDropdown(false);
-                                }}
-                                className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                  !project?.formatPreset || project.formatPreset === ''
-                                    ? 'border-amber-500 ring-2 ring-amber-500/30'
-                                    : 'border-[#3D3D3D] hover:border-white/20'
-                                }`}
-                              >
-                                <img src="/storytica/element_forge/grids/format/auto.png" alt="Auto" className="w-full h-full object-cover" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-gray-400 drop-shadow-lg">Auto</span>
-                                {(!project?.formatPreset || project.formatPreset === '') && (
-                                  <div className="absolute top-1 right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
-                                    <Check className="w-2.5 h-2.5 text-white" />
-                                  </div>
-                                )}
-                              </button>
-
-                              {FORMAT_PRESETS.map(format => (
-                                <button
-                                  key={format.id}
-                                  onClick={() => {
-                                    updateProject({ id: project._id, formatPreset: format.id });
-                                    setShowFormatDropdown(false);
-                                  }}
-                                  className={`group relative aspect-[4/3] rounded-lg overflow-hidden border-2 transition-all ${
-                                    project?.formatPreset === format.id
-                                      ? 'border-amber-500 ring-2 ring-amber-500/30'
-                                      : 'border-transparent hover:border-white/20'
-                                  }`}
-                                  title={format.prompt}
-                                >
-                                  {format.preview ? (
-                                    <img src={format.preview} alt={format.label} className="w-full h-full object-cover" loading="lazy" />
-                                  ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-[#2a3a4a] to-[#1a2a3a] flex items-center justify-center">
-                                      <div className="w-5 h-5 rounded-full opacity-60" style={{ backgroundColor: format.color }} />
-                                    </div>
-                                  )}
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                                  <span className="absolute bottom-1 left-0 right-0 text-center text-[10px] font-medium text-white drop-shadow-lg">{format.label}</span>
-                                  {project?.formatPreset === format.id && (
-                                    <div className="absolute top-1 right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center">
-                                      <Check className="w-2.5 h-2.5 text-white" />
-                                    </div>
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </>
-                      )}
+                      <FormatPicker
+                        open={showFormatDropdown}
+                        onClose={() => setShowFormatDropdown(false)}
+                        selected={project?.formatPreset}
+                        onSelect={(id) => updateProject({ id: project._id, formatPreset: id })}
+                        anchorEl={formatTriggerRef.current}
+                      />
                     </div>
                     {duplicateCount > 0 && (
                       <div className="w-px h-4 bg-(--border-primary) mx-1" />

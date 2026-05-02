@@ -30,6 +30,8 @@ interface CameraAnglePickerProps {
   userId?: string;
   /** Insert angle text into prompt textarea for user editing */
   onInsertToPrompt?: (text: string) => void;
+  /** External anchor element — picker opens above/below this element instead of the internal trigger */
+  anchorEl?: HTMLElement | null;
 }
 
 // ── Prompt Text Builder ──────────────────────────────────────────────────
@@ -538,7 +540,7 @@ function AngleSlider({
 
 // ── Main Component ───────────────────────────────────────────────────────
 
-export function CameraAnglePicker({ settings, onSettingsChange, subjectImageUrl, companyId, userId, onInsertToPrompt }: CameraAnglePickerProps) {
+export function CameraAnglePicker({ settings, onSettingsChange, subjectImageUrl, companyId, userId, onInsertToPrompt, anchorEl: externalAnchorEl }: CameraAnglePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [presetIdx, setPresetIdx] = useState(-1);
   const [showPresets, setShowPresets] = useState(false);
@@ -600,16 +602,18 @@ export function CameraAnglePicker({ settings, onSettingsChange, subjectImageUrl,
 
   const getPanelStyle = (): React.CSSProperties => {
     const panelW = 340;
-    const gap = 6;
-    const pillBar = document.querySelector('[data-settings-pill]') as HTMLElement | null;
-    const mainPanel = document.querySelector('[data-main-panel]') as HTMLElement | null;
-    const anchor = pillBar || mainPanel || triggerRef.current;
+    const gap = 12;
+    const anchor = externalAnchorEl ?? triggerRef.current;
     if (!anchor) return {};
     const rect = anchor.getBoundingClientRect();
     let left = rect.left + rect.width / 2 - panelW / 2;
     left = Math.max(gap, Math.min(left, window.innerWidth - panelW - gap));
-    const bottom = window.innerHeight - rect.top + gap;
-    return { left, bottom, width: panelW };
+    const pickerEstHeight = 480;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= pickerEstHeight || spaceBelow >= rect.top) {
+      return { top: rect.bottom + gap, left, width: panelW };
+    }
+    return { bottom: window.innerHeight - rect.top + gap, left, width: panelW };
   };
 
   return (

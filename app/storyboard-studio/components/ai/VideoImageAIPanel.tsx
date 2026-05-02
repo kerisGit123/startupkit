@@ -555,6 +555,11 @@ export function ImageAIPanel({
   const [pillBarExpanded, setPillBarExpanded] = useState(true);
   const [showPillGenre, setShowPillGenre] = useState(false);
   const [showPillFormat, setShowPillFormat] = useState(false);
+  const pillGenreRef = useRef<HTMLButtonElement>(null);
+  const pillFormatRef = useRef<HTMLButtonElement>(null);
+  const pillAngleRef = useRef<HTMLButtonElement>(null);
+  const pillPaletteRef = useRef<HTMLButtonElement>(null);
+  const pillCameraRef = useRef<HTMLButtonElement>(null);
   const [showPillCamera, setShowPillCamera] = useState(false);
   const [showPillMotion, setShowPillMotion] = useState(false);
   const [addImageMenuOpen, setAddImageMenuOpen] = useState(false);
@@ -3219,6 +3224,7 @@ export function ImageAIPanel({
                 <div data-settings-pill className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-(--bg-secondary)/95 backdrop-blur-md border border-white/[0.06]">
                   {/* Genre — clickable, opens grid dialog */}
                   <button
+                    ref={pillGenreRef}
                     onClick={() => { setShowPillGenre(!showPillGenre); setShowPillFormat(false); setShowPillMotion(false); }}
                     className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
                   >
@@ -3235,10 +3241,12 @@ export function ImageAIPanel({
                     onClose={() => setShowPillGenre(false)}
                     selected={projectData?.style}
                     onSelect={(id, prompt) => updateProjectMutation({ id: projectData._id, style: id, stylePrompt: prompt })}
+                    anchorEl={pillGenreRef.current}
                   />
                   <div className="w-px h-3 bg-white/10" />
                   {/* Format — clickable, opens grid dialog */}
                   <button
+                    ref={pillFormatRef}
                     onClick={() => { setShowPillFormat(!showPillFormat); setShowPillGenre(false); setShowPillMotion(false); }}
                     className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"
                   >
@@ -3255,12 +3263,14 @@ export function ImageAIPanel({
                     onClose={() => setShowPillFormat(false)}
                     selected={projectData?.formatPreset}
                     onSelect={(id) => updateProjectMutation({ id: projectData._id, formatPreset: id })}
+                    anchorEl={pillFormatRef.current}
                   />
                   {/* Camera — visible in image + video modes */}
                   {showAdvancedPills && (
                     <>
                       <div className="w-px h-3 bg-white/10" />
                       <button
+                        ref={pillCameraRef}
                         data-pill-camera
                         onClick={() => {
                           setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
@@ -3284,6 +3294,7 @@ export function ImageAIPanel({
                     <>
                       <div className="w-px h-3 bg-white/10" />
                       <button
+                        ref={pillAngleRef}
                         onClick={() => {
                           setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
                           if (hasProFeatures) {
@@ -3381,6 +3392,7 @@ export function ImageAIPanel({
                     <>
                       <div className="w-px h-3 bg-white/10" />
                       <button
+                        ref={pillPaletteRef}
                         onClick={() => {
                           setShowPillGenre(false); setShowPillFormat(false); setShowPillMotion(false);
                           if (hasProFeatures) {
@@ -3968,6 +3980,7 @@ export function ImageAIPanel({
                       onSettingsChange={setVirtualCameraSettings}
                       companyId={companyId}
                       userId={user?.id}
+                      anchorEl={pillCameraRef.current}
                     />
                   </div>
                 )}
@@ -3992,6 +4005,7 @@ export function ImageAIPanel({
                         setCurrentPrompt(plainText);
                         onUserPromptChange?.(plainText);
                       }}
+                      anchorEl={pillAngleRef.current}
                     />
                   </div>
                 )}
@@ -4030,6 +4044,7 @@ export function ImageAIPanel({
                       }}
                       backgroundImage={backgroundImage}
                       onSetOriginalImage={onSetOriginalImage}
+                      anchorEl={pillPaletteRef.current}
                     />
                   </div>
                 )}

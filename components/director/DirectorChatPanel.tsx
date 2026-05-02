@@ -339,33 +339,52 @@ export function DirectorChatPanel({
     }
   }, [initialMessage, streaming, sendMessage]);
 
-  // ── Quick actions (context-aware) ──────────────────────────────────
+  // ── Quick action chips (always visible, context-aware) ──────────────
 
-  const directorQuickActions = currentFrameNumber
-    ? [
-        ...(currentFrameImageUrl
-          ? [{ label: `Analyze frame ${currentFrameNumber} image`, prompt: `Analyze the generated image for frame ${currentFrameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. Give specific feedback on what works and what could be improved.` }]
-          : []),
-        { label: `Review frame ${currentFrameNumber}`, prompt: `Review frame ${currentFrameNumber} in detail. Analyze its prompt, composition, camera angle, lighting, and suggest specific improvements.` },
-        { label: `Improve frame ${currentFrameNumber} prompt`, prompt: `Look at frame ${currentFrameNumber}'s image prompt and rewrite it to be more cinematic. Add specific camera angle, lighting, composition, and mood details.` },
-      ]
-    : [
-        { label: "Review storyboard", prompt: "Review my entire storyboard. Check for shot variety, pacing, continuity issues, and missing coverage. Give specific suggestions." },
-        { label: "Improve prompts", prompt: "Look at all my frames and improve the image prompts. Make them more cinematic with specific camera angles, lighting, and composition." },
-        { label: "Suggest style", prompt: "Based on my project, suggest a visual style prompt that would work well. Consider the genre, mood, and content." },
-      ];
+  // kind: "execute" = triggers generation (Agent only), "advise" = read/write advice (both modes)
+  type QuickAction = { label: string; prompt: string; icon?: string; kind: "advise" | "execute" };
 
-  const agentQuickActions = [
-    { label: "Generate all frames", prompt: "Check my credit balance and generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
-    { label: "Build a story", prompt: "I want to create a new story. Help me plan the scenes and frames, then generate all the images. Ask me about the story first." },
-    { label: "Generate videos", prompt: "Generate videos for all frames that have images but no videos. Use Seedance 1.5 Pro at 480p for budget. Show me the plan first." },
+  const frameAdviceActions: QuickAction[] = [
+    ...(currentFrameImageUrl
+      ? [{ label: "Analyze image", icon: "🔍", kind: "advise" as const, prompt: `Analyze the generated image for frame ${currentFrameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. What works and what could be improved?` }]
+      : [{ label: "Write prompt", icon: "✍️", kind: "advise" as const, prompt: `Write a detailed cinematic image prompt for frame ${currentFrameNumber}. Include camera angle, lighting, composition, mood, and style.` }]),
+    { label: "Improve prompt", icon: "✨", kind: "advise", prompt: `Look at frame ${currentFrameNumber}'s current image prompt and rewrite it to be more cinematic. Add specific camera angle, lighting, composition, and mood details. Update it directly.` },
+    { label: "Camera angle", icon: "🎬", kind: "advise", prompt: `What's the best camera angle and shot type for frame ${currentFrameNumber}? Consider the scene context and what would be most cinematic.` },
+    { label: "Lighting setup", icon: "💡", kind: "advise", prompt: `Suggest the best lighting setup for frame ${currentFrameNumber}. Consider the mood, time of day, and what would complement the scene.` },
+    { label: "What's wrong", icon: "🩺", kind: "advise", prompt: `Critically review frame ${currentFrameNumber}. What are the weaknesses in the prompt? What might generate poorly and why? Be specific.` },
+    { label: "Add notes", icon: "📝", kind: "advise", prompt: `Add director notes to frame ${currentFrameNumber} with production guidance — key things to watch for when generating.` },
   ];
-  const quickActions = mode === "agent" ? agentQuickActions : directorQuickActions;
+
+  const projectAdviceActions: QuickAction[] = [
+    { label: "Review storyboard", icon: "📋", kind: "advise", prompt: "Review my entire storyboard. Check for shot variety, pacing, continuity issues, and missing coverage. Give specific suggestions for improvement." },
+    { label: "Shot variety", icon: "🎥", kind: "advise", prompt: "Look at all my frames and check for shot variety. Are there too many similar angles or compositions? Suggest a more diverse shot plan." },
+    { label: "Improve all prompts", icon: "✨", kind: "advise", prompt: "Look at all my frames and improve the image prompts. Make them more cinematic with specific camera angles, lighting, and composition. Update them directly." },
+    { label: "Visual style", icon: "🎨", kind: "advise", prompt: "Based on my project content, suggest a visual style that would work well — lighting mood, color palette, film stock, lens choice. Update the project style if I approve." },
+    { label: "Script help", icon: "📄", kind: "advise", prompt: "Review my project description and help me improve the narrative structure. Are there gaps, pacing issues, or missing scenes?" },
+    { label: "Pacing check", icon: "⏱️", kind: "advise", prompt: "Review my storyboard for pacing. Are scene durations appropriate? Does the flow feel right? Which scenes need more or fewer frames?" },
+    { label: "Consistency check", icon: "🔗", kind: "advise", prompt: "Check my storyboard for visual consistency — do the prompts maintain consistent character descriptions, environment, and style across frames?" },
+  ];
+
+  // Execute chips — Agent only
+  const executeActions: QuickAction[] = [
+    { label: "Generate images", icon: "🖼️", kind: "execute", prompt: "Check my credit balance, then generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
+    { label: "Animate frames", icon: "🎞️", kind: "execute", prompt: "Generate videos for all frames that have images but no videos. Use Seedance 2.0 Fast for budget. Show me the plan with credit costs first." },
+    { label: "Enhance all", icon: "⬆️", kind: "execute", prompt: "Post-process all generated images with the Enhance tool to improve quality. Show me a plan with credit costs before executing." },
+    { label: "Smart generate", icon: "🧠", kind: "execute", prompt: "Look at my storyboard. Which frames have no image yet? Which ones have images but no video? Suggest the most cost-effective generation plan and execute after approval." },
+    { label: "Check credits", icon: "💳", kind: "execute", prompt: "What is my current credit balance? How many images or videos can I still generate with it?" },
+    { label: "Build full story", icon: "🚀", kind: "execute", prompt: "I want to build a complete storyboard end-to-end. Help me plan the scenes and frames, then generate all the images. Ask me about the story concept first." },
+  ];
+
+  // Director = advice only. Agent = execute chips first, then all advice chips too.
+  const adviceActions = currentFrameNumber ? frameAdviceActions : projectAdviceActions;
+  const quickActions: QuickAction[] = mode === "agent"
+    ? [...executeActions, ...adviceActions]
+    : adviceActions;
 
   // ── Render ────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed right-0 top-0 h-full w-[400px] z-[60] flex flex-col bg-[#0f0f13] border-l border-[#2a2a32] shadow-2xl">
+    <div className="fixed right-0 top-0 h-full w-[400px] z-60 flex flex-col bg-[#0f0f13] border-l border-[#2a2a32] shadow-2xl">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a32] shrink-0">
         <div className="flex items-center gap-1 bg-[#1a1a22] rounded-lg p-0.5 border border-[#2a2a32]">
@@ -428,16 +447,19 @@ export function DirectorChatPanel({
             <p className="text-sm text-gray-400 mb-1">{mode === "agent" ? "AI Agent" : "AI Director"}</p>
             <p className="text-xs text-gray-600 mb-4">
               {mode === "agent"
-                ? "I can generate images, create videos, manage credits, and execute multi-step plans for your project."
-                : "I can review your storyboard, write prompts, set up shots, and break scripts into frames."}
+                ? "I can advise on your storyboard and execute — generate images, create videos, post-process, and run multi-step plans."
+                : currentFrameNumber
+                  ? `Frame ${currentFrameNumber} selected. I'll advise on prompts, camera, and composition.`
+                  : "I advise on your storyboard — prompts, shot variety, pacing, style. You stay in control of generating."}
             </p>
             <div className="flex flex-col gap-2 w-full">
               {quickActions.map((action) => (
                 <button
                   key={action.label}
                   onClick={() => sendMessage(action.prompt)}
-                  className="text-xs text-left px-3 py-2 rounded-lg bg-[#1a1a22] border border-[#2a2a32] text-gray-400 hover:text-gray-200 hover:border-amber-500/30 hover:bg-[#1e1e28] transition"
+                  className="text-xs text-left px-3 py-2 rounded-lg bg-[#1a1a22] border border-[#2a2a32] text-gray-400 hover:text-gray-200 hover:border-amber-500/30 hover:bg-[#1e1e28] transition flex items-center gap-2"
                 >
+                  {action.icon && <span>{action.icon}</span>}
                   {action.label}
                 </button>
               ))}
@@ -513,8 +535,36 @@ export function DirectorChatPanel({
         )}
       </div>
 
+      {/* Quick action chips — always visible */}
+      <div className="px-3 pt-2 pb-1 border-t border-[#2a2a32] shrink-0">
+        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+          {quickActions.map((action, i) => {
+            const isExecute = action.kind === "execute";
+            // thin divider between execute and advise groups in Agent mode
+            const showDivider = mode === "agent" && i === executeActions.length;
+            return (
+              <div key={action.label} className="flex items-center gap-1.5 shrink-0">
+                {showDivider && <div className="w-px h-4 bg-[#2a2a32] shrink-0" />}
+                <button
+                  onClick={() => sendMessage(action.prompt)}
+                  disabled={streaming}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] disabled:opacity-40 disabled:cursor-not-allowed transition whitespace-nowrap ${
+                    isExecute
+                      ? "bg-purple-500/10 border-purple-500/25 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/40"
+                      : "bg-[#1a1a22] border-[#2a2a32] text-gray-400 hover:text-gray-200 hover:border-amber-500/30 hover:bg-[#1e1e28]"
+                  }`}
+                >
+                  {action.icon && <span className="text-[11px]">{action.icon}</span>}
+                  {action.label}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Input */}
-      <div className="px-3 py-3 border-t border-[#2a2a32] shrink-0">
+      <div className="px-3 py-3 shrink-0">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}

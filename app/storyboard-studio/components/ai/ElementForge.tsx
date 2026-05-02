@@ -1219,8 +1219,7 @@ export function ElementForge({
   const removeVariantMut = useMutation(api.storyboard.storyboardElements.removeVariant);
   const deleteFileMut = useMutation(api.storyboard.storyboardFiles.remove);
   const appendReferenceImageMut = useMutation(api.storyboard.storyboardElements.appendReferenceImage);
-  const [isUploadingVariant, setIsUploadingVariant] = useState(false);
-  const uploadVariantInputRef = useRef<HTMLInputElement>(null);
+  const [showVariantFileBrowser, setShowVariantFileBrowser] = useState(false);
 
   // Direct upload for reference photo fields (Mood/Style, Layout, Full Scene, Face, Outfit etc.)
   const [uploadingRefFieldKey, setUploadingRefFieldKey] = useState<string | null>(null);
@@ -1276,28 +1275,16 @@ export function ElementForge({
     }
   }, [element, liveReferenceUrls, liveVariants, elementFiles, removeVariantMut, deleteFileMut]);
 
-  // Upload an existing image directly as a variant — no generation, no credits
-  const handleUploadVariant = useCallback(async (file: File) => {
+  const handleSelectVariantFromBrowser = useCallback(async (url: string) => {
     if (!canSave || !userId) return;
-    const effectiveCompanyId = companyId || userId;
     const elementId = await handleSave();
-    if (!elementId) { alert("Failed to save element. Please try again."); return; }
-    setIsUploadingVariant(true);
-    try {
-      const result = await uploadToR2({ file, category: "elements", projectId: projectId as string, userId, companyId: effectiveCompanyId, tags: ["variant", "uploaded"] });
-      if (result.publicUrl) {
-        const baseName = identity.name?.trim() || "Variant";
-        const label = genVariantLabel.trim() || `${baseName} (uploaded)`;
-        await appendReferenceImageMut({ id: elementId as Id<"storyboard_elements">, imageUrl: result.publicUrl, variantLabel: label, variantModel: "uploaded" });
-        setGenVariantLabel("");
-      }
-    } catch (err) {
-      console.error("[ElementForge] Upload variant failed:", err);
-      alert("Upload failed. Please try again.");
-    } finally {
-      setIsUploadingVariant(false);
-    }
-  }, [canSave, companyId, userId, projectId, identity.name, genVariantLabel, handleSave, appendReferenceImageMut]);
+    if (!elementId) { toast.error("Failed to save element. Please try again."); return; }
+    const baseName = identity.name?.trim() || "Variant";
+    const label = genVariantLabel.trim() || `${baseName} (uploaded)`;
+    await appendReferenceImageMut({ id: elementId as Id<"storyboard_elements">, imageUrl: url, variantLabel: label, variantModel: "uploaded" });
+    setGenVariantLabel("");
+    setShowVariantFileBrowser(false);
+  }, [canSave, userId, identity.name, genVariantLabel, handleSave, appendReferenceImageMut]);
 
   const [pullingFileId, setPullingFileId] = useState<string | null>(null);
 
@@ -1452,11 +1439,11 @@ export function ElementForge({
                   const isPrimary = i === livePrimaryIndex;
                   return (
                     <img key={i} src={url} alt={`Variant ${i + 1}`}
-                      onClick={() => setPreviewUrl(url)}
+                      onClick={() => setActiveTab(tabs.length - 1)}
                       className={`w-8 h-8 rounded-full object-cover border-2 cursor-pointer hover:border-white/40 transition-colors ${
                         isPrimary ? "border-amber-400" : "border-white/15"
                       } ${i > 0 ? "-ml-1.5" : ""}`}
-                      title="Click to preview"
+                      title="Go to Generate tab"
                     />
                   );
                 })}
@@ -1925,36 +1912,17 @@ export function ElementForge({
                     <span className="text-(--text-secondary) font-normal">({liveReferenceUrls.length}{pendingFiles.length > 0 ? ` + ${pendingFiles.length} processing` : ""})</span>
                   )}
                 </label>
-                {/* Hidden file input — triggered by the upload card */}
-                <input
-                  ref={uploadVariantInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleUploadVariant(file);
-                    e.target.value = "";
-                  }}
-                />
-
                 {liveReferenceUrls.length === 0 && pendingFiles.length === 0 ? (
-                  /* Empty state — clickable upload area */
+                  /* Empty state — opens FileBrowser */
                   <button
-                    onClick={() => uploadVariantInputRef.current?.click()}
-                    disabled={!canSave || isUploadingVariant}
+                    onClick={() => setShowVariantFileBrowser(true)}
+                    disabled={!canSave}
                     className="flex flex-col items-center justify-center gap-2 w-full h-24 rounded-xl border border-dashed border-(--border-primary) hover:border-white/25 hover:bg-white/3 disabled:opacity-40 disabled:cursor-not-allowed transition-all group"
                   >
-                    {isUploadingVariant ? (
-                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <>
-                        <Upload className="w-5 h-5 text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors" />
-                        <span className="text-[12px] text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors">
-                          Upload image · or generate above
-                        </span>
-                      </>
-                    )}
+                    <FolderOpen className="w-5 h-5 text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors" />
+                    <span className="text-[12px] text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors">
+                      Browse files · or generate above
+                    </span>
                   </button>
                 ) : (
                   <div
@@ -2146,21 +2114,15 @@ export function ElementForge({
                       );
                     })}
 
-                    {/* Upload card — always at the end of the grid */}
+                    {/* Browse card — always at the end of the grid */}
                     <button
-                      onClick={() => uploadVariantInputRef.current?.click()}
-                      disabled={!canSave || isUploadingVariant}
+                      onClick={() => setShowVariantFileBrowser(true)}
+                      disabled={!canSave}
                       className="shrink-0 w-[180px] rounded-xl border-2 border-dashed border-(--border-primary) hover:border-white/25 hover:bg-white/3 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex flex-col items-center justify-center gap-2 aspect-[4/3] group"
-                      title="Upload your own image as a variant (no credits)"
+                      title="Browse files to add as variant (no credits)"
                     >
-                      {isUploadingVariant ? (
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <Upload className="w-5 h-5 text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors" />
-                          <span className="text-[11px] text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors">Upload Image</span>
-                        </>
-                      )}
+                      <FolderOpen className="w-5 h-5 text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors" />
+                      <span className="text-[11px] text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors">Browse Files</span>
                     </button>
                   </div>
                 )}
@@ -2311,6 +2273,23 @@ export function ElementForge({
                   updateField(refBrowseField, url);
                   setRefBrowseField(null);
                 }
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* FileBrowser for adding a variant from existing files */}
+      {showVariantFileBrowser && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60">
+          <div className="w-[90vw] max-w-4xl h-[80vh]">
+            <FileBrowser
+              projectId={projectId}
+              onClose={() => setShowVariantFileBrowser(false)}
+              imageSelectionMode={true}
+              defaultCategory="elements"
+              onSelectFile={(url, fileType) => {
+                if (fileType === "image" && url) handleSelectVariantFromBrowser(url);
               }}
             />
           </div>

@@ -1,7 +1,7 @@
 # AI Director + Agent — Architecture & Status
 
-> **Status:** Built — ready for live testing
-> **Last updated:** 2026-04-27 (Session #14)
+> **Status:** Built — end-to-end testing pending
+> **Last updated:** 2026-05-01 (Session #32)
 > **Model:** DeepSeek V3 (Director/Support) + Claude Haiku 4.5 (Agent/Vision)
 
 ---
@@ -155,7 +155,7 @@ convex/
   schema.ts               -- director_chat_sessions, agent_tasks, director_analytics
 
 components/director/
-  DirectorChatPanel.tsx   -- Chat UI: mode toggle, plan cards, history, quick actions
+  DirectorChatPanel.tsx   -- Chat UI: mode toggle, plan cards, history, persistent chip strip, quick actions
 ```
 
 ---
@@ -204,12 +204,30 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 
 ---
 
+## Studio Context (updated 2026-05-01)
+
+Since the AI Director was built (Session #14), the studio has grown significantly. The Director/Agent system prompt and tool responses should reflect the current feature set:
+
+| Area | What changed | Impact on Director |
+| ---- | ------------ | ------------------ |
+| **Genre system** | 16 genre presets (Cinematic → Vintage-Retro) with mood/lighting prompts auto-appended | `update_project_style` should reference genres |
+| **Format system** | 12 content formats (Film → Cinematic Ad) with framing/pacing prompts | `update_project_style` should include format |
+| **Pill bar** | Camera, Angle, Motion, Speed, Palette consolidated into single pill control surface | `get_presets` returns these categories — UI label changed |
+| **Element @mention** | `@ElementName` badges in prompts, auto-attach reference images at generation | Agent's `trigger_image_generation` passes element refs |
+| **Post-processing** | Enhance/Relight/Reframe/BG Remove all working via GPT Image 2 img2img | Agent's `trigger_post_processing` — all tools confirmed working |
+| **Element Forge** | Structured character/environment/prop wizard, variant system, primary variant as identity sheet | `get_element_library` returns `referenceUrls[primaryIndex]` |
+| **Script pipeline** | Build Storyboard (Update & Add / Rebuild), Extend Story, element extraction | Agent can suggest `create_frames` + element creation workflow |
+
+---
+
 ## What's Left
 
 | Item | Priority | Status |
 |------|----------|--------|
-| End-to-end test with dev server | High | Next session |
-| Tune system prompt from real usage | High | After testing |
-| DeepSeek routing implementation | Medium | Next session |
+| End-to-end test: "build me a 6-frame story" | High | Pending |
+| Tune system prompt from real agent usage | High | After testing |
+| DeepSeek routing for Director mode | Medium | Pending |
+| Update system prompt with Genre/Format/pill bar context | Medium | Next session |
 | Billing (seats, teaser, overflow) | Later | After agent proven |
+| Message usage counters (Director daily, Agent monthly) | Later | Phase 2 |
 | Async resume (Kie callback wakes agent) | Low | Polish |
