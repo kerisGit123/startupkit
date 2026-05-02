@@ -45,4 +45,33 @@ crons.daily(
   internal.storyboard.fileMetadataHandler.repairOrphanFiles
 );
 
+/**
+ * 📧 INACTIVITY WARNING EMAILS
+ *
+ * Runs daily at 06:00 UTC. Sends warning emails to accounts approaching the
+ * 1-year inactivity window:
+ *   - Level 1 (10 months inactive): "Your files will be removed in 60 days"
+ *   - Level 2 (11 months inactive): "Final notice — 30 days left"
+ * Users just need to log in once to reset the clock.
+ */
+crons.daily(
+  "send-inactivity-warnings",
+  { hourUTC: 6, minuteUTC: 0 },
+  internal.inactivityCleanup.sendInactivityWarnings
+);
+
+/**
+ * 🗑️ PURGE INACTIVE ACCOUNTS
+ *
+ * Runs daily at 06:30 UTC. Purges R2 files for accounts with no login
+ * activity for 12+ months. Processes 20 accounts per run and re-runs
+ * daily until the queue is empty. Convex metadata (credits, projects,
+ * storyboard records) is preserved for audit — only R2 media is deleted.
+ */
+crons.daily(
+  "purge-inactive-accounts",
+  { hourUTC: 6, minuteUTC: 30 },
+  internal.inactivityCleanup.purgeInactiveAccounts
+);
+
 export default crons;

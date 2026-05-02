@@ -580,10 +580,21 @@ export default defineSchema({
     // and not expired, grantMonthlyCreditsIfDue caps the monthly grant
     // to zero so the abuser can't keep harvesting fresh allowances.
     cyclingBlockedUntil: v.optional(v.number()),
+    // Inactivity tracking: updated on every login via LoginTracker.
+    // Used by the 1-year inactivity purge cron to find and clean up
+    // abandoned accounts (R2 files deleted, Convex metadata preserved).
+    lastActiveAt: v.optional(v.number()),
+    // Owner's email captured at login time for inactivity warning emails.
+    ownerEmail: v.optional(v.string()),
+    // Timestamps when inactivity warning emails were sent.
+    // warning1 sent at ~10 months, warning2 (final) at ~11 months.
+    inactivityWarnedAt: v.optional(v.number()),
+    inactivityFinalWarnedAt: v.optional(v.number()),
   })
     .index("by_companyId", ["companyId"])
     .index("by_creatorUserId", ["creatorUserId"])
-    .index("by_lapsedAt", ["lapsedAt"]),
+    .index("by_lapsedAt", ["lapsedAt"])
+    .index("by_lastActiveAt", ["lastActiveAt"]),
 
   // ============================================
   // CORE: User Activity Logs (MAU Tracking)

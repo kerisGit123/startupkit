@@ -1241,15 +1241,22 @@ export default function StoryboardWorkspacePage() {
             <div className="flex-1 overflow-y-auto p-6">
             {!items || items.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
-                <Grid3x3 className="w-12 h-12 text-[#6E6E6E] mb-4" />
-                <p className="text-[#A0A0A0] font-medium mb-2">No frames yet</p>
-                <p className="text-[#6E6E6E] text-sm mb-6">Write a script and click "Build Storyboard", or create frames manually</p>
+                <Sparkles className="w-10 h-10 text-amber-400/50 mb-4" />
+                <p className="text-[#A0A0A0] font-medium mb-2">Start with AI Director</p>
+                <p className="text-[#6E6E6E] text-sm mb-6 max-w-xs">Describe a scene and the agent will build your storyboard — frames, prompts, and images ready to generate</p>
+                <button
+                  onClick={() => setShowDirectorChat(true)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 hover:border-amber-500/60 text-amber-400 text-sm font-medium rounded-lg transition mb-4">
+                  <Sparkles className="w-4 h-4" />
+                  Open AI Director
+                </button>
                 <div className="flex items-center gap-3">
                   <button onClick={() => setTab("script")}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#4A90E2] hover:bg-[#357ABD] text-white text-sm font-medium rounded-lg transition">
-                    <FileText className="w-4 h-4" />
-                    Go to Script
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[#6E6E6E] hover:text-[#A0A0A0] text-xs font-medium transition">
+                    <FileText className="w-3.5 h-3.5" />
+                    Write a script instead
                   </button>
+                  <span className="text-[#3D3D3D] text-xs">·</span>
                   <button
                     disabled={isAddingFrame}
                     onClick={async () => {
@@ -1267,9 +1274,9 @@ export default function StoryboardWorkspacePage() {
                         });
                       } finally { setIsAddingFrame(false); }
                     }}
-                    className="flex items-center gap-2 px-4 py-2 border border-[#3D3D3D] hover:border-[#4A90E2]/50 hover:bg-[#4A90E2]/10 text-[#A0A0A0] hover:text-white text-sm font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed">
-                    {isAddingFrame ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    {isAddingFrame ? "Creating..." : "Create Frame"}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-[#6E6E6E] hover:text-[#A0A0A0] text-xs font-medium transition disabled:opacity-50 disabled:cursor-not-allowed">
+                    {isAddingFrame ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    {isAddingFrame ? "Creating..." : "Add frame manually"}
                   </button>
                 </div>
               </div>

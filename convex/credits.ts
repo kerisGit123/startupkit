@@ -1608,6 +1608,100 @@ export const listCompanyR2Keys = query({
   },
 });
 
+// ─── Inactivity tracking ──────────────────────────────────────────────────────
+
+// Called by LoginTracker on every login. Sets lastActiveAt and captures
+// ownerEmail (only on first call — never overwrites an existing email).
+export const updateLastActive = mutation({
+  args: { email: v.optional(v.string()) },
+  handler: async (ctx, { email }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return;
+    const companyId = (identity as any).org_id ?? identity.subject;
+    const row = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .first();
+    if (!row) return;
+    const patch: Record<string, any> = { lastActiveAt: Date.now() };
+    if (email && !row.ownerEmail) patch.ownerEmail = email;
+    await ctx.db.patch(row._id, patch);
+  },
+});
+
+// Accounts inactive for 10+ months, first warning not yet sent.
+export const listInactiveForWarning1 = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit = 50 }) => {
+    const cutoff = Date.now() - 305 * 24 * 60 * 60 * 1000; // ~10 months
+    return await ctx.db
+      .query("credits_balance")
+      .withIndex("by_lastActiveAt", (q) => q.lt("lastActiveAt", cutoff))
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("lastActiveAt"), undefined),
+          q.neq(q.field("ownerEmail"), undefined),
+          q.eq(q.field("purgedAt"), undefined),
+          q.eq(q.field("inactivityWarnedAt"), undefined),
+        )
+      )
+      .take(limit);
+  },
+});
+
+// Accounts inactive for 11+ months, first warning sent but final not yet.
+export const listInactiveForWarning2 = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit = 50 }) => {
+    const cutoff = Date.now() - 335 * 24 * 60 * 60 * 1000; // ~11 months
+    return await ctx.db
+      .query("credits_balance")
+      .withIndex("by_lastActiveAt", (q) => q.lt("lastActiveAt", cutoff))
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("lastActiveAt"), undefined),
+          q.neq(q.field("ownerEmail"), undefined),
+          q.eq(q.field("purgedAt"), undefined),
+          q.neq(q.field("inactivityWarnedAt"), undefined),
+          q.eq(q.field("inactivityFinalWarnedAt"), undefined),
+        )
+      )
+      .take(limit);
+  },
+});
+
+// Accounts inactive for 12+ months — eligible for R2 purge.
+export const listInactiveForPurge = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, { limit = 20 }) => {
+    const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000; // 12 months
+    return await ctx.db
+      .query("credits_balance")
+      .withIndex("by_lastActiveAt", (q) => q.lt("lastActiveAt", cutoff))
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("lastActiveAt"), undefined),
+          q.eq(q.field("purgedAt"), undefined),
+        )
+      )
+      .take(limit);
+  },
+});
+
+export const markInactivityWarning1 = internalMutation({
+  args: { id: v.id("credits_balance") },
+  handler: async (ctx, { id }) => {
+    await ctx.db.patch(id, { inactivityWarnedAt: Date.now() });
+  },
+});
+
+export const markInactivityWarning2 = internalMutation({
+  args: { id: v.id("credits_balance") },
+  handler: async (ctx, { id }) => {
+    await ctx.db.patch(id, { inactivityFinalWarnedAt: Date.now() });
+  },
+});
+
 /**
  * Propagate a plan change across all workspaces owned by a user.
  * Called by subscription.created / subscription.updated / subscription.deleted

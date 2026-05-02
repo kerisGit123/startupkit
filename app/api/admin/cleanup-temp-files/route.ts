@@ -56,8 +56,9 @@ export async function POST(req: NextRequest) {
     }
     
     const oldFiles = allFiles.filter(f => {
-      const isOld = f.createdAt < cutoffTime;
-      const isTemps = f.category === "temps"; // Only clean temporary files, never generated
+      const fileTime = f.createdAt ?? f.uploadedAt;
+      const isOld = fileTime < cutoffTime;
+      const isTemps = f.category === "temps";
       return isOld && isTemps;
     });
     
@@ -73,35 +74,16 @@ export async function POST(req: NextRequest) {
 
     // Step 2: Delete files from R2 using r2Key from Convex records
     let deletedR2Files = 0;
-    let totalBytesFreed = 0;
     const errors: string[] = [];
 
-    console.log(`[cleanup-temp-files] Deleting R2 files based on Convex r2Key records...`);
-
-    // Delete R2 files using r2Key from Convex records
     for (const file of oldFiles) {
       if (file.r2Key) {
         try {
-          // Delete the object from R2 directly (without getting attributes first)
-          const deleteParams = {
-            Bucket: BUCKET,
-            Key: file.r2Key,
-          };
-          
-          const deleteCommand = new DeleteObjectCommand(deleteParams);
-          await r2.send(deleteCommand);
-          
+          await r2.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: file.r2Key }));
           deletedR2Files++;
-          // Note: We can't get size easily without GetObjectAttributes, so we'll estimate
-          totalBytesFreed += 1024 * 1024; // Estimate 1MB per file for now
-          
-          console.log(`[cleanup-temp-files] Deleted R2 file: ${file.r2Key}`);
         } catch (r2Error) {
-          console.error(`[cleanup-temp-files] Error deleting R2 file ${file.r2Key}:`, r2Error);
-          errors.push(`Failed to delete R2 file ${file.r2Key}: ${r2Error instanceof Error ? r2Error.message : 'Unknown error'}`);
+          errors.push(`R2 delete failed for ${file.r2Key}: ${r2Error instanceof Error ? r2Error.message : 'Unknown'}`);
         }
-      } else {
-        console.log(`[cleanup-temp-files] No r2Key for file ${file._id}, skipping R2 deletion`);
       }
     }
 
@@ -112,24 +94,56 @@ export async function POST(req: NextRequest) {
         await convex.mutation(api.storyboard.storyboardFiles.remove, { id: file._id });
         deletedConvexRecords++;
       } catch (convexError) {
-        console.error(`[cleanup-temp-files] Error deleting Convex record ${file._id}:`, convexError);
-        errors.push(`Failed to delete database record for ${file.sourceUrl || file._id}`);
+        errors.push(`Convex delete failed for ${file._id}: ${convexError instanceof Error ? convexError.message : 'Unknown'}`);
       }
     }
 
-    // Format bytes freed
-    const formatBytes = (bytes: number): string => {
-      if (bytes === 0) return "0 Bytes";
-      const k = 1024;
-      const sizes = ["Bytes", "KB", "MB", "GB"];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-    };
+    // Step 4: Delete raw R2 temps/ objects (no Convex record — partial uploads, staging files)
+    // These are the files counted by cleanup-stats but never deleted by the Convex-only pass above.
+    try {
+      const cutoffDate = new Date(cutoffTime);
+      let continuationToken: string | undefined;
+      const staleKeys: string[] = [];
+
+      do {
+        const listResp = await r2.send(new ListObjectsV2Command({
+          Bucket: BUCKET,
+          Prefix: "temps/",
+          MaxKeys: 1000,
+          ContinuationToken: continuationToken,
+        }));
+
+        for (const obj of listResp.Contents ?? []) {
+          if (obj.Key && obj.LastModified && obj.LastModified < cutoffDate) {
+            staleKeys.push(obj.Key);
+          }
+        }
+
+        continuationToken = listResp.IsTruncated ? listResp.NextContinuationToken : undefined;
+      } while (continuationToken);
+
+      // Batch delete in chunks of 1000 (R2 limit)
+      for (let i = 0; i < staleKeys.length; i += 1000) {
+        const chunk = staleKeys.slice(i, i + 1000);
+        await r2.send(new DeleteObjectsCommand({
+          Bucket: BUCKET,
+          Delete: { Objects: chunk.map(Key => ({ Key })), Quiet: true },
+        }));
+        deletedR2Files += chunk.length;
+      }
+
+      if (staleKeys.length > 0) {
+        console.log(`[cleanup-temp-files] Deleted ${staleKeys.length} raw R2 temps/ objects`);
+      }
+    } catch (r2ListError) {
+      console.error("[cleanup-temp-files] Error cleaning raw R2 temps/:", r2ListError);
+      errors.push(`R2 temps/ scan failed: ${r2ListError instanceof Error ? r2ListError.message : 'Unknown'}`);
+    }
 
     const result = {
       deletedFiles: deletedR2Files,
       deletedRecords: deletedConvexRecords,
-      freedSpace: formatBytes(totalBytesFreed),
+      freedSpace: deletedR2Files > 0 ? `~${deletedR2Files} objects removed` : "0 Bytes",
       errors,
     };
 

@@ -8,6 +8,7 @@ import { api } from "@/convex/_generated/api";
 export function LoginTracker() {
   const { user, isLoaded } = useUser();
   const trackLogin = useMutation(api.userActivity.trackLogin);
+  const updateLastActive = useMutation(api.credits.updateLastActive);
   const hasTracked = useRef(false);
 
   useEffect(() => {
@@ -15,11 +16,11 @@ export function LoginTracker() {
       if (!isLoaded) {
         return;
       }
-      
+
       if (!user) {
         return;
       }
-      
+
       if (hasTracked.current) {
         return;
       }
@@ -47,6 +48,11 @@ export function LoginTracker() {
           return;
         }
 
+        // Stamp lastActiveAt on credits_balance — used by 1-year inactivity purge
+        await updateLastActive({
+          email: user.primaryEmailAddress?.emailAddress,
+        }).catch(() => {});
+
         hasTracked.current = true;
       } catch (error) {
         console.error("❌ Failed to track login:", error);
@@ -54,7 +60,7 @@ export function LoginTracker() {
     };
 
     trackUserLogin();
-  }, [isLoaded, user, trackLogin]);
+  }, [isLoaded, user, trackLogin, updateLastActive]);
 
   return null; // This component doesn't render anything
 }

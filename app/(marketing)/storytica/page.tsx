@@ -6,7 +6,7 @@ import {
   ArrowRight, Check, Star, Shield,
   Menu, X, FileText, Video, Coins,
   Minus, Plus, Layers, Zap, MessageSquare,
-  Image, Camera, Brush, Box, Music, Mic,
+  Image, Camera, Brush, Box, Music, Mic, HardDrive,
 } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
@@ -242,7 +242,7 @@ export default function StorticaLanding() {
 
               {/* Bullets */}
               <div className={`flex flex-col gap-2 mb-7 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
-                {["25+ AI models (image, video, music, audio, utility)", "16 genre presets + 12 format presets for cinematic control", "Camera Studio with 9 cameras, 6 lenses & 15 motion presets", "AI Director agent with 22 tools + video editor with transitions"].map(b => (
+                {["25+ AI models (image, video, music, audio, utility)", "16 genre presets + 12 format presets for cinematic control", "Camera Studio with 9 cameras, 6 lenses & 15 motion presets", "AI Director agent with 22 tools + video editor with transitions", "Files kept as long as you're active — no 30-day auto-deletion like other platforms"].map(b => (
                   <span key={b} className="flex items-center gap-2.5 font-body text-[13px] text-white/50"><Check className="w-3.5 h-3.5 text-teal-400 shrink-0" />{b}</span>
                 ))}
               </div>
@@ -609,6 +609,7 @@ export default function StorticaLanding() {
             {[
               { icon: Shield, text: "Content never trains AI" },
               { icon: Coins, text: "Credits never expire" },
+              { icon: HardDrive, text: "Files kept while active" },
               { icon: Zap, text: "No watermarks on exports" },
               { icon: Users, text: "Team & org support" },
               { icon: Download, text: "PDF, MP4, WAV export" },
@@ -658,6 +659,7 @@ export default function StorticaLanding() {
             <Faq q="Is there a video editor?" a="Yes. Multi-layer timeline with video, audio, and subtitle tracks. Overlay system for text, images, video picture-in-picture, and shapes. 5 transition types (crossfade, wipe, slide, dissolve, fade-to-color). Blend modes, opacity control, scrolling text overlays, and aspect ratio selector (16:9, 9:16, 1:1). Export to MP4 or WAV." />
             <Faq q="Is there an AI Director?" a="Yes. The AI Director has 22 tools — breaks scripts into shots, generates storyboards, manages elements, and controls your entire project. Agent Mode enables autonomous multi-step execution with plan approval. Plus a Director's View filmstrip with comparison mode, animatic playback, and continuity checking." />
             <Faq q="What is the Genre & Format system?" a="16 genre presets (Cinematic, Horror, Noir, Sci-Fi, Fantasy, Anime, Cyberpunk, and more) control mood, lighting, and color grading. 12 format presets (Film, YouTube, Reel/TikTok, Commercial, Music Video, and more) control framing, pacing, and camera behavior. They work as two independent axes — combine any genre with any format. You can also create custom genres." />
+            <Faq q="Are my generated files ever deleted?" a="Your files stay in your library as long as your account is active. If your account has no activity for 12 months, we'll send you a warning email — simply log back in to keep everything. This is still far more generous than other AI platforms that auto-delete files after just 30 days regardless of activity. Only temporary processing files are cleaned up automatically." />
             <Faq q="Does it support team collaboration?" a="Yes. Create organizations, invite members with roles (Admin, Member, Viewer). Members share the org's credit pool and storage." />
             <Faq q="Is there a free plan?" a="Yes. 50 credits/month, 300MB storage. No credit card required. Upgrade anytime for more credits and pro workflow tools." />
           </div></R>
