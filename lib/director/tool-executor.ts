@@ -470,6 +470,39 @@ export async function dispatchDirectorTool(
         return { output: stringifyResult(trimmed), isError: false };
       }
 
+      case "create_element": {
+        const elName = String(input.name || "").trim();
+        const elType = String(input.type || "character");
+        const elDesc = String(input.description || "");
+        if (!elName) return { output: "name is required.", isError: true };
+        if (!["character", "environment", "prop"].includes(elType))
+          return { output: "type must be character, environment, or prop.", isError: true };
+
+        const existing = await convex.query(api.storyboard.storyboardElements.listByProject, { projectId: projectId as any });
+        const duplicate = (existing as any[]).find((e) => e.name.toLowerCase() === elName.toLowerCase());
+        if (duplicate) {
+          return { output: `Element "@${elName}" already exists (${duplicate.type}). Use @${elName} in prompts.`, isError: false };
+        }
+
+        const keywords = Array.isArray(input.keywords) ? (input.keywords as unknown[]).map(String) : [];
+
+        await convex.mutation(api.storyboard.storyboardElements.create, {
+          projectId: projectId as any,
+          name: elName,
+          type: elType,
+          description: elDesc,
+          thumbnailUrl: "",
+          referenceUrls: [],
+          tags: keywords,
+          createdBy: ctx.userId,
+        });
+
+        return {
+          output: `Created ${elType} "@${elName}". Use @${elName} in prompts — the reference image slot is empty until the user uploads one via the Element Library.`,
+          isError: false,
+        };
+      }
+
       case "get_credit_balance": {
         try {
           const balance = await convex.query(api.credits.getBalance, { companyId: ctx.companyId });

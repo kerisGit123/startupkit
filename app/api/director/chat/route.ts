@@ -111,12 +111,22 @@ export async function POST(req: NextRequest) {
       currentFrameNumber,
       currentSceneId,
     };
-    const systemPrompt = mode === "agent"
+    const systemPromptText = mode === "agent"
       ? buildAgentSystemPrompt(promptOptions)
       : buildDirectorSystemPrompt(promptOptions);
 
-    // Select tools based on mode
-    const tools = getToolsForMode(mode);
+    // Cached system prompt — stable per project within a session
+    const systemContent: Anthropic.TextBlockParam[] = [
+      { type: "text", text: systemPromptText, cache_control: { type: "ephemeral" } },
+    ];
+
+    // Select tools based on mode, cache the full tool list (never changes per request)
+    const rawTools = getToolsForMode(mode);
+    const tools = rawTools.map((tool, i) =>
+      i === rawTools.length - 1
+        ? { ...tool, cache_control: { type: "ephemeral" as const } }
+        : tool
+    ) as Anthropic.Tool[];
 
     // ── Tool context (pass convex client for tools) ─────────────────
     const toolCtx: DirectorToolContext = {
@@ -142,12 +152,29 @@ export async function POST(req: NextRequest) {
           const toolCallLog: { name: string; input?: unknown; output?: string }[] = [];
 
           for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+            // Cache the stable history prefix: mark second-to-last message so
+            // everything before the current volatile exchange is cached.
+            const messagesForCall: Anthropic.MessageParam[] = currentMessages.length >= 2
+              ? currentMessages.map((msg, i) => {
+                  if (i !== currentMessages.length - 2) return msg;
+                  const raw = msg.content;
+                  const content = typeof raw === "string"
+                    ? [{ type: "text" as const, text: raw, cache_control: { type: "ephemeral" as const } }]
+                    : (raw as any[]).map((block: any, j: number) =>
+                        j === (raw as any[]).length - 1
+                          ? { ...block, cache_control: { type: "ephemeral" as const } }
+                          : block
+                      );
+                  return { ...msg, content } as Anthropic.MessageParam;
+                })
+              : currentMessages;
+
             const response = await anthropic.messages.create({
               model: "claude-haiku-4-5",
               max_tokens: MAX_TOKENS,
-              system: systemPrompt,
+              system: systemContent,
               tools: tools,
-              messages: currentMessages,
+              messages: messagesForCall,
             });
 
             const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");

@@ -331,6 +331,37 @@ export const DIRECTOR_TOOLS: Anthropic.Tool[] = [
 // ═══════════════════════════════════════════════════════════════════════
 
 export const AGENT_TOOLS: Anthropic.Tool[] = [
+  // ── ELEMENT CREATION ───────────────────────────────────────────────
+  {
+    name: "create_element",
+    description:
+      "Create a new element (character, environment, or prop) in the project's element library. Call this BEFORE generate_scene when the scene introduces new characters, locations, or important props that don't already exist. Elements created here are text-only — users add reference images later via the Element Library. Once created, use @ElementName in prompts for consistency.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "Element name — becomes the @mention tag. Use CamelCase with no spaces (e.g., 'CaptainRivera', 'ResearchSubmarine', 'DepthCharge').",
+        },
+        type: {
+          type: "string",
+          enum: ["character", "environment", "prop"],
+          description: "Element type: character (people/creatures), environment (locations/settings), prop (objects/vehicles).",
+        },
+        description: {
+          type: "string",
+          description: "Visual description used in generation prompts. Characters: appearance, clothing, age, distinguishing features. Environments: location, atmosphere, key visual elements. Props: physical description, material, size.",
+        },
+        keywords: {
+          type: "array",
+          items: { type: "string" },
+          description: "Words that identify this element in scene text (e.g., ['captain', 'Rivera', 'commander'] for CaptainRivera). Used for auto-injection into prompts.",
+        },
+      },
+      required: ["name", "type", "description"],
+    },
+  },
+
   // ── CREDIT / PRICING ───────────────────────────────────────────────
   {
     name: "get_credit_balance",
@@ -617,6 +648,7 @@ export type DirectorToolName =
   | "get_model_recommendations"
   | "search_knowledge_base"
   // Agent-mode tools
+  | "create_element"
   | "get_credit_balance"
   | "get_model_pricing"
   | "create_execution_plan"

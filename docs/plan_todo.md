@@ -97,6 +97,8 @@
 - [ ] Single item delete — verify AI files become `status="deleted"`, `categoryId=null`, `r2Key=""`; uploaded files completely gone; R2 bucket purged
 - [ ] Project delete — verify full cascade with no orphans
 - [ ] Orphan repair cron — manually trigger via Convex dashboard, verify it processes any test orphans
+- [ ] Inactivity warning emails — set `credits_balance.lastActiveAt` to 10 months ago in Convex dashboard for a test account, then manually trigger `send-inactivity-warnings` cron to confirm Level 1 email arrives
+- [ ] Inactivity cron jobs running — after 24hrs of deployment, check Convex dashboard → Functions → Cron Jobs to confirm `send-inactivity-warnings` and `purge-inactive-accounts` show a successful last-run timestamp
 
 ### Session #31 — 2026-05-01 (Enhance/Relight/Reframe Fix + Post-Processing Testing)
 

@@ -80,6 +80,7 @@ const TOOL_LABELS: Record<string, string> = {
   analyze_frame_image: "Analyzing image...",
   get_model_recommendations: "Checking models...",
   search_knowledge_base: "Searching...",
+  create_element: "Creating element...",
   get_credit_balance: "Checking credits...",
   get_model_pricing: "Comparing models...",
   create_execution_plan: "Planning...",
