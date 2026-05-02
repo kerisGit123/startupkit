@@ -180,7 +180,7 @@ skills/
 **Brain = seat. Hands = credits.**
 
 | Plan | Director | Agent Teaser | Agent Seats |
-|------|----------|-------------|-------------|
+| ---- | -------- | ------------ | ----------- |
 | Free | No | No | No |
 | Pro ($45/mo) | Free, unlimited | 30 msgs/month | Buy up to 1 ($120/mo) |
 | Business ($119/mo) | Free, unlimited | 30 msgs/month | Buy up to 3 ($120/mo each) |
@@ -188,61 +188,90 @@ skills/
 
 Agent conversations covered by seat. Generation triggered by agent costs credits from org pool (same pricing as manual generation).
 
-### Implementation needed (deferred):
+### Implementation needed (deferred until agent is proven)
 
 - Agent seat table + Stripe add-on subscription
 - Seat assignment UI in org owner dashboard
 - Teaser counter (30 msgs/month, resets monthly)
 - Overflow billing (1 credit/msg after cap)
-- Model choice selector in Agent settings (DeepSeek/Haiku/Auto)
 
 ---
 
 ## Competitive Position
 
 | Aspect | Higgsfield Mr. Higgs | Our AI Director + Agent |
-|--------|---------------------|------------------------|
-| Advises on prompts | Yes | Yes + filmmaking rationale |
+| ------ | -------------------- | ----------------------- |
+| Advises on prompts | Yes | Yes + filmmaking rationale + shot planning |
 | Triggers generation | No | Yes (Agent Mode) |
 | Plan approval | No | Yes — shows cost before executing |
-| Character consistency | Soul ID | Element referenceUrls passed to generation |
+| Character consistency | Soul ID | Element @mention + referenceUrls at generation |
 | Prompt templates | No | Yes — loads from workspace library |
-| Camera/style presets | Limited | Full preset system (angles, lens, palettes) |
+| Camera/style presets | Limited | Full pill bar (Camera/Angle/Motion/Speed/Palette) |
 | Post-processing | No | Yes — enhance, relight, remove BG, reframe |
 | Vision analysis | No | Yes — looks at generated images |
-| Project context | Per-shot | Full project (all scenes, frames, elements, style) |
+| Project context | Per-shot | Full project (scenes, frames, elements, genre, style) |
 | Conversation history | Unclear | Persistent per project, loads on reopen |
-| Model choice | Proprietary | User picks DeepSeek (cheap) or Haiku (quality) |
+| Shot list planning | No | Yes — `suggest_shot_list` by scene type |
+| Build scene from premise | No | Yes — `generate_scene` one-call scene creation |
 | Autonomous workflows | No | Yes — "build me a 6-frame story" end-to-end |
 
-**No competitor has an AI that both advises and executes within project context.**
+**No competitor has an AI that both advises and executes within full project context.**
 
 ---
 
-## Studio Context (updated 2026-05-01)
+## Studio Context (updated 2026-05-02 Session #33 — ALL DONE)
 
-Since the AI Director was built (Session #14), the studio has grown significantly. The Director/Agent system prompt and tool responses should reflect the current feature set:
+All items below are now reflected in the system prompt (`lib/director/system-prompt.ts`) rewritten in Session #33:
 
-| Area | What changed | Impact on Director |
-| ---- | ------------ | ------------------ |
-| **Genre system** | 16 genre presets (Cinematic → Vintage-Retro) with mood/lighting prompts auto-appended | `update_project_style` should reference genres |
-| **Format system** | 12 content formats (Film → Cinematic Ad) with framing/pacing prompts | `update_project_style` should include format |
-| **Pill bar** | Camera, Angle, Motion, Speed, Palette consolidated into single pill control surface | `get_presets` returns these categories — UI label changed |
-| **Element @mention** | `@ElementName` badges in prompts, auto-attach reference images at generation | Agent's `trigger_image_generation` passes element refs |
-| **Post-processing** | Enhance/Relight/Reframe/BG Remove all working via GPT Image 2 img2img | Agent's `trigger_post_processing` — all tools confirmed working |
-| **Element Forge** | Structured character/environment/prop wizard, variant system, primary variant as identity sheet | `get_element_library` returns `referenceUrls[primaryIndex]` |
-| **Script pipeline** | Build Storyboard (Update & Add / Rebuild), Extend Story, element extraction | Agent can suggest `create_frames` + element creation workflow |
+| Area | Status | What the agent now knows |
+| ---- | ------ | ------------------------ |
+| **Genre system** | ✅ Done | 16 presets, `update_project_style(genre_preset=)`, pairing examples |
+| **Format system** | ✅ Done | 12 presets, independent axis from genre, `update_project_style(format_preset=)` |
+| **Pill bar** | ✅ Done | Camera/Angle/Motion/Speed/Palette — agent references by pill bar category names |
+| **Element @mention** | ✅ Done | Always uses `@ElementName` in prompts; explains auto-attach pipeline |
+| **Element Forge** | ✅ Done | Primary variant as identity sheet; `referenceUrls[primaryIndex]` |
+| **Post-processing** | ✅ Done | Full table: Enhance/Relight/Remove BG/Reframe/Inpaint/Upscale with credits |
+| **Script pipeline** | ✅ Done | Agent knows Build Storyboard, Extend Story, `create_frames` workflow |
+| **New tools** | ✅ Done | `suggest_shot_list` + `generate_scene` added to Director tool set |
 
 ---
 
-## What's Left
+## Roadmap
 
-| Item | Priority | Status |
-|------|----------|--------|
-| End-to-end test: "build me a 6-frame story" | High | Pending |
-| Tune system prompt from real agent usage | High | After testing |
-| DeepSeek routing for Director mode | Medium | Pending |
-| Update system prompt with Genre/Format/pill bar context | Medium | Next session |
-| Billing (seats, teaser, overflow) | Later | After agent proven |
-| Message usage counters (Director daily, Agent monthly) | Later | Phase 2 |
-| Async resume (Kie callback wakes agent) | Low | Polish |
+### Phase 1 — Core Complete (Session #33 ✅)
+
+- [x] 24 tools built and implemented
+- [x] System prompt rewritten with full studio context
+- [x] `suggest_shot_list` + `generate_scene` tools added
+- [x] `update_project_style` supports genre + format + style
+- [ ] End-to-end test: "build me a 6-frame story about a samurai at dawn"
+- [ ] Tune system prompt from real agent behavior
+
+### Phase 2 — Newbie Quick Create (after Phase 1 proven)
+
+Zero-friction entry: type one sentence → full storyboard generated automatically.
+
+- [ ] Empty project magic wand UI (big textarea + genre/format pickers when 0 frames)
+- [ ] `POST /api/director/quick-create` — silent agent loop, no chat UI
+- [ ] Uses `generate_scene` + `trigger_image_generation` under the hood
+- [ ] Progress bar → redirect to finished storyboard
+
+### Phase 3 — Advanced Director Tools
+
+- [ ] `check_continuity` — character/prop/lighting consistency across frames
+- [ ] `batch_fix_frames` — re-prompt all frames from a style note
+- [ ] `analyze_emotional_arc` — pacing review across scenes
+- [ ] `audit_style_drift` — flag frames drifting from project genre
+- [ ] `apply_director_reference` — "shoot like Blade Runner 2049"
+- [ ] `check_coverage` — confirm all story beats are covered
+- [ ] `create_shot_variations` — 3 angle variants for same moment
+- [ ] `smart_animate` — suggest motion preset per frame type
+
+### Phase 4 — Agent Skills Migration + Billing
+
+- [ ] Migrate `lib/director/` to `skills/director-agent/` folder structure
+- [ ] Agent seat table + Stripe add-on subscription
+- [ ] Seat assignment UI in org owner dashboard
+- [ ] Teaser counter (30 msgs/month) + overflow billing
+- [ ] Message usage counters (Director daily, Agent monthly)
+- [ ] Async resume (Kie callback wakes agent for long jobs)

@@ -1,15 +1,16 @@
 # Chatbot System — Storytica Support Assistant
 
-> **Last updated:** 2026-05-01
+> **Last updated:** 2026-05-02 (Session #33)
 > **Status:** Production — Phase 1 complete, Phase 2 pending
 > **Primary Model:** DeepSeek V3 via OpenRouter (~$0.0009/msg)
 > **Fallback Model:** Claude Haiku 4.5 via Anthropic SDK (~$0.0032/msg)
+> **Scope:** Support chatbot only — AI Director/Agent is a separate system (see plan_ai_director.md)
 
 ---
 
 ## Architecture Overview
 
-```
+```text
 User (browser)
   │
   ├── FAQ Balloon clicked ──► Hardcoded answer (zero API calls)
@@ -45,7 +46,7 @@ User (browser)
 ### Known Issues (as of 2026-04-27)
 
 | Issue | Severity | Mitigation |
-|-------|----------|------------|
+| ----- | -------- | ---------- |
 | **Language leaking** — randomly outputs Chinese, Arabic, Bengali text mid-response | Medium | Language-matching rule in system prompt + client-side artifact filter. Not 100% reliable. |
 | **Data fabrication** — invents plausible-sounding transactions, dates, amounts not in tool results | High | "Never fabricate" rule in system prompt + `INSTRUCTION` field injected into tool results. Mostly effective but occasional leaks. |
 | **JSON tool call leaks** — outputs raw JSON `{"category":"billing",...}` as text instead of proper function calls | Medium | Client-side regex filter strips JSON blocks, tool separators. Final cleanup on message complete. |
@@ -347,8 +348,7 @@ If DeepSeek request throws, route catches and retries with Haiku. Logged as `[su
 - [x] Create `lib/openrouter.ts` — OpenRouter client for DeepSeek V3
 - [x] Add `OPENROUTER_API_KEY` to `env.example`
 - [x] Switch Support chat from Haiku to DeepSeek V3 (with Haiku fallback)
-- [x] Switch Director chat to DeepSeek V3 for `mode=director`
-- [x] Keep Agent chat on Haiku for `mode=agent` + vision tasks
+- [x] Director/Agent chat stays on Claude Haiku 4.5 — Claude Agent Skills architecture requires Claude API only (DeepSeek routing for Director was considered and rejected Session #33)
 - [x] Test: Support chat answers FAQ/billing questions correctly on DeepSeek
 - [x] Fix: Credit spending query (compound index, sinceMs, limit 500)
 - [x] Fix: Pre-computed summaries (no AI math)
