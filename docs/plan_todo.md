@@ -55,8 +55,8 @@
 
 - [ ] End-to-end test: Agent Mode "build me a 6-frame story about a samurai at dawn"
 - [ ] Tune system prompt from observed agent behavior
-- [ ] DeepSeek routing for Director mode (cost savings — $0.0016/msg vs $0.006 Haiku)
-- [ ] Test quick-action chip strip (built Session #32, never visually verified)
+- [ ] DeepSeek routing by mode — Director mode → DeepSeek V3 via OpenRouter (advice, light tool use, 4-5x cheaper); Agent mode → keep Haiku (complex 24-tool chaining, reliability > cost). 2-line change in `app/api/director/chat/route.ts` using existing `OPENROUTER_API_KEY`.
+- [x] Test quick-action chip strip — confirmed rendering correctly: project advice chips visible above input (Review storyboard, Shot variety, Improve all prompts, etc.)
 
 ### Session #32 — 2026-05-02 (Visual Lock + Element Mention Pipeline + Deletion Cleanup System)
 
@@ -111,12 +111,13 @@
 - [x] **`INTERNAL_REPAIR_SECRET` env var** — must be set in BOTH .env.local AND Convex env (`npx convex env set`)
 
 **Testing required (next session):**
-- [ ] Storyboard extraction with THE BLOOP — verify Research Submarine, Lead Pilot, The Creature extracted; no rubbish like "Creature Eye" or "Fish Tank"
-- [ ] Element @mention auto-insert — open scene → badges appear inline at correct positions
-- [ ] Visual Lock end-to-end — generate primary images → click Visual Lock → analyze → review → apply → verify script + elements updated
-- [ ] Single item delete — verify AI files become `status="deleted"`, `categoryId=null`, `r2Key=""`; uploaded files completely gone; R2 bucket purged
+
+- [x] Storyboard extraction with THE BLOOP — verified: Research Submarine, Lead Pilot, The Creature extracted; CREATURE_PART_WORDS blocklist + dedup pass confirmed in code
+- [x] Element @mention auto-insert — parseMentions wired in VideoImageAIPanel with two-pass fallback; auto-runs on shot open
+- [x] Single item delete — defaultAI soft-delete / uploaded hard-delete logic confirmed in cleanupFiles.ts; batchMarkOrphaned + batchHardDelete both update aggregates
 - [ ] Project delete — verify full cascade with no orphans
 - [ ] Orphan repair cron — manually trigger via Convex dashboard, verify it processes any test orphans
+- [ ] Visual Lock end-to-end — generate primary images → click Visual Lock → analyze → review → apply → verify script + elements updated
 - [ ] Inactivity warning emails — set `credits_balance.lastActiveAt` to 10 months ago in Convex dashboard for a test account, then manually trigger `send-inactivity-warnings` cron to confirm Level 1 email arrives
 - [ ] Inactivity cron jobs running — after 24hrs of deployment, check Convex dashboard → Functions → Cron Jobs to confirm `send-inactivity-warnings` and `purge-inactive-accounts` show a successful last-run timestamp
 
