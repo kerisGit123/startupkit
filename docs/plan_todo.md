@@ -1,26 +1,73 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-05-02 (Session #33 — AI Director/Agent Phase 1 Build)
+> **Last updated:** 2026-05-02 (Session #34 — Onboarding strategy parked)
+
+---
+
+## Parked / Backlog
+
+### Onboarding / First-Time Experience — PARKED (Session #34)
+
+**Strategy agreed — build after AI Director + Visual Lock are verified.**
+
+**Core idea: Empty project → Script tab auto-opens → two paths:**
+
+| Path                                       | Cost        | Action                                                              |
+|--------------------------------------------|-------------|---------------------------------------------------------------------|
+| Paste your own script → Build Storyboard   | **Free**    | scriptAnalyzer parses, frames created                               |
+| AI Generate Script from one sentence       | **Credits** | New `scriptGenerator.ts` → Haiku expands to full structured script  |
+
+**What needs to be built:**
+
+- [ ] `lib/storyboard/scriptGenerator.ts` — Haiku expands one sentence into full structured script (SCENE markers, image prompts, video prompts). ~$0.005/call.
+- [ ] `app/api/storyboard/generate-script/route.ts` — credit-gated API route for script generation
+- [ ] Workspace: default to Script tab when project has no frames + no script
+- [ ] "Generate Script" button in Script tab with credit cost preview (beside existing Build Storyboard button)
+- [ ] Auto-build storyboard after script is saved (free, no extra click)
+- [ ] Auto-show `BatchGenerateDialog` after build completes ("Generate images for all N frames? Cost: X credits")
+- [ ] Build Storyboard rate limit: 20 builds/hour per user (add to API route, not credit-gated)
+
+**Pricing logic:**
+
+- Build Storyboard (parse + frame creation) = **FREE** — costs ~$0.01, is the conversion hook
+- AI Generate Script = **Credits** — real model cost, high-intent users pay
+- Batch image gen = **Credits** — already implemented
+
+**Two wow moments for new users:**
+
+1. Frames appear instantly after build ("It understood my story!")
+2. Images fill in one by one after batch gen ("It looks like a real film!")
+
+**NOT building yet:**
+
+- Full `/create` onboarding page — overkill for now, use workspace flow
+- Server-side video export — needs FFmpeg/rendering service
+- Auto-export after image gen — too many credits without user approval
 
 ---
 
 ## Current State
 
-**On `main`, 7 commits ahead of origin (unpushed).** Last 4 sessions:
+**On `main`, working tree clean. 8 commits ahead of origin (unpushed).** Last 5 commits:
 
 ```
+c778ea1  Visual Lock polish: per-request Convex client + tightened types
 0febefe  Session #33 — AI Director Phase 1: suggest_shot_list, generate_scene tools, system prompt rewrite
 7fe5bf3  System Cleaning: orphan panel, temp cleanup, 1-year inactivity purge
 73d5744  Pill bar picker anchoring + ElementForge variant FileBrowser
 3f24671  Session #32: Visual Lock + element @mention pipeline + deletion cleanup
 ```
 
-**Uncommitted polish (small refactors, ~16 line delta):**
+**Now blocked on testing — no further dev until verified.** See "Testing required (next session)" under Session #32 + #33 below. Onboarding strategy parked above (Session #34) until tests pass.
 
-- `visual-lock/{analyze,apply,rewrite}/route.ts` — `ConvexHttpClient` moved from module-level to inside handler (cold-start safety)
-- `VisualLockModal.tsx` — minor type tightening on `rewriteResult` (added `totalChanges` + `modelUsed` fields)
+**Top priorities for next session (in order):**
 
-**Now blocked on testing — no further dev until verified.** See "Testing required (next session)" under Session #32 + #33 below.
+1. **THE BLOOP storyboard extraction** — single highest-leverage test (exercises element extraction quality + @mention injection in one project)
+2. **Visual Lock end-to-end** — generate primary images → analyze → review → apply with the per-request Convex client (`c778ea1`)
+3. **Single item delete** — verify `defaultAI` rule (soft vs hard delete) on real data
+4. **AI Director "samurai at dawn" agent test** — `suggest_shot_list → generate_scene → create_execution_plan` end-to-end
+5. **Push to `origin/main`** — once tests pass, ship the 8 pending commits
+6. **Then unpark onboarding** (Session #34 plan above) — `scriptGenerator.ts` → "Generate Script" button → auto-build → BatchGenerateDialog
 
 ---
 
