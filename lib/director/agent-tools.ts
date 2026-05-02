@@ -592,6 +592,43 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     },
   },
 
+  // ── SKILL DELEGATION ──────────────────────────────────────────────
+  {
+    name: "invoke_skill",
+    description:
+      "Call a specialized Claude skill for a focused creative task. Use 'video-prompt-builder' when the user wants to write a new story from scratch — pass their creative brief and receive a full Seedance-optimized cinematic script with act structure, scene breakdowns, image prompts, and video prompts per scene. After the skill returns, show the full script to the user and ask if they want to save it.",
+    input_schema: {
+      type: "object",
+      properties: {
+        skill_name: {
+          type: "string",
+          enum: ["video-prompt-builder"],
+          description: "Which skill to invoke. 'video-prompt-builder' generates a structured Seedance-ready cinematic script from a creative brief.",
+        },
+        prompt: {
+          type: "string",
+          description: "Creative brief for the skill. For video-prompt-builder: story concept, genre, duration, key characters, visual mood. Example: 'a koi fish and tabby cat unlikely friendship, heartwarming, 3 minutes, Studio Ghibli mood'",
+        },
+      },
+      required: ["skill_name", "prompt"],
+    },
+  },
+  {
+    name: "save_script",
+    description:
+      "Save a script to the current project. Call this after invoke_skill returns a script and the user confirms they want to save it. After saving, tell the user to open the Script tab and click 'Build Storyboard' — the platform automatically extracts characters/environments/props and creates all frames with @ElementName injection. When they return after building, call get_element_library and suggest hero shots to lock the look of each element.",
+    input_schema: {
+      type: "object",
+      properties: {
+        script_content: {
+          type: "string",
+          description: "The full script text to save. Pass the complete output from invoke_skill.",
+        },
+      },
+      required: ["script_content"],
+    },
+  },
+
   // ── FILE BROWSING ──────────────────────────────────────────────────
   {
     name: "browse_project_files",
@@ -648,6 +685,8 @@ export type DirectorToolName =
   | "get_model_recommendations"
   | "search_knowledge_base"
   // Agent-mode tools
+  | "invoke_skill"
+  | "save_script"
   | "create_element"
   | "get_credit_balance"
   | "get_model_pricing"

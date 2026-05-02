@@ -2,6 +2,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import type { DirectorToolName } from "./agent-tools";
 import { MODEL_KNOWLEDGE } from "./constants";
+import { getAnthropicClient } from "@/lib/support/anthropic";
 
 function stringifyResult(obj: unknown): string {
   try {
@@ -822,6 +823,72 @@ export async function dispatchDirectorTool(
           output: `Created ${frames.length} frames in ${sceneId} for "${premise}"${genre}${format}. Frame numbers: ${createdFrameNumbers.join(", ")}. Prompts are set — ready for image generation.`,
           isError: false,
         };
+      }
+
+      case "invoke_skill": {
+        const skillName = String(input.skill_name || "").trim();
+        const skillPrompt = String(input.prompt || "").trim();
+
+        if (!skillName) return { output: "skill_name is required.", isError: true };
+        if (!skillPrompt) return { output: "prompt is required.", isError: true };
+
+        const SKILL_IDS: Record<string, string | undefined> = {
+          "video-prompt-builder": process.env.SKILL_VIDEO_PROMPT_BUILDER_ID,
+        };
+
+        const skillId = SKILL_IDS[skillName];
+        if (!skillId) {
+          return {
+            output: `Skill '${skillName}' is not configured. Ask the admin to set SKILL_VIDEO_PROMPT_BUILDER_ID in the environment.`,
+            isError: true,
+          };
+        }
+
+        try {
+          const anthropic = getAnthropicClient();
+          const response = await (anthropic as any).beta.messages.create({
+            model: "claude-haiku-4-5",
+            max_tokens: 8192,
+            betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+            container: {
+              skills: [{ type: "custom", skill_id: skillId, version: "latest" }],
+            },
+            tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+            messages: [{ role: "user", content: skillPrompt }],
+          });
+
+          const text = ((response.content as any[]) || [])
+            .filter((b: any) => b.type === "text")
+            .map((b: any) => b.text as string)
+            .join("");
+
+          if (!text) return { output: "Skill returned no text output.", isError: true };
+          return { output: text, isError: false };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { output: `Skill invocation failed: ${msg}`, isError: true };
+        }
+      }
+
+      case "save_script": {
+        const scriptContent = String(input.script_content || "").trim();
+        if (!scriptContent) return { output: "script_content is required.", isError: true };
+        if (scriptContent.length < 50) return { output: "Script is too short to save.", isError: true };
+
+        try {
+          await convex.mutation(api.storyboard.projects.update, {
+            id: projectId as any,
+            script: scriptContent,
+          });
+
+          return {
+            output: `Script saved (${scriptContent.length} characters). Tell the user: open the Script tab and click "Build Storyboard" — it automatically extracts all characters, environments, and props, then creates every frame with @ElementName references injected. Come back when it's done.`,
+            isError: false,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { output: `Failed to save script: ${msg}`, isError: true };
+        }
       }
 
       case "browse_project_files": {
