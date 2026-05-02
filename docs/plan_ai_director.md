@@ -1,8 +1,8 @@
 # AI Director + Agent — Architecture & Status
 
-> **Status:** Built — end-to-end testing pending
-> **Last updated:** 2026-05-01 (Session #32)
-> **Model:** DeepSeek V3 (Director/Support) + Claude Haiku 4.5 (Agent/Vision)
+> **Status:** Built — system prompt + tools updated (Session #33), end-to-end testing pending
+> **Last updated:** 2026-05-02 (Session #33)
+> **Model:** Claude Haiku 4.5 (Director + Agent + Vision) — Claude API only
 
 ---
 
@@ -10,7 +10,7 @@
 
 Two AI modes embedded in the storyboard studio:
 
-**AI Director** — Free creative advisor for all Pro+ users. Reads your project, writes prompts, analyzes images, suggests camera angles and lighting. Cannot trigger generation — the user clicks "Generate" manually.
+**AI Director** — Free creative advisor for all Pro+ users. Reads your project, writes prompts, analyzes images, suggests camera angles and lighting, plans shot lists, creates scene breakdowns. Cannot trigger generation — the user clicks "Generate" manually.
 
 **AI Agent** — Autonomous executor ($120/seat/month). Everything Director does + triggers image/video generation, post-processing, uses element references for character consistency, loads prompt templates and presets. Always shows a plan with credit costs before executing.
 
@@ -18,22 +18,24 @@ Two AI modes embedded in the storyboard studio:
 
 ---
 
-## Tool Inventory (22 tools)
+## Tool Inventory (24 tools)
 
-### Director Tools (12 — free for Pro+)
+### Director Tools (14 — free for Pro+)
 
 | Tool | Category | What it does |
 |------|----------|-------------|
-| `get_project_overview` | Read | Project context: scenes, frames, style, elements, script |
+| `get_project_overview` | Read | Project context: scenes, frames, style, genre, elements, script |
 | `get_scene_frames` | Read | All frames in a scene with prompts/status |
 | `get_frame_details` | Read | Full frame details + imageUrl, videoUrl, audioUrl |
-| `get_element_library` | Read | Elements with referenceUrls + thumbnailUrl |
-| `update_frame_prompt` | Write | Improve image and/or video prompts |
+| `get_element_library` | Read | Elements with referenceUrls + primaryIndex (primary variant) |
+| `update_frame_prompt` | Write | Improve image and/or video prompts with @ElementName |
 | `update_frame_notes` | Write | Add director notes to frames |
-| `update_project_style` | Write | Set project-wide style + format preset |
-| `create_frames` | Write | Batch create frames in a scene |
-| `batch_update_prompts` | Write | Bulk prompt improvements |
+| `update_project_style` | Write | Set genre preset + format preset + style prompt |
+| `create_frames` | Write | Batch create frames in an existing scene |
+| `batch_update_prompts` | Write | Bulk prompt improvements across multiple frames |
 | `analyze_frame_image` | Vision | Look at generated image, give visual feedback |
+| `suggest_shot_list` | Plan | Shot list recommendation by scene type (action/dialogue/reveal/opening/drama) |
+| `generate_scene` | Plan | Create a complete scene in one call — auto-assigns scene_id |
 | `get_model_recommendations` | Knowledge | Model suggestions by category |
 | `search_knowledge_base` | Knowledge | KB search for tips/guides |
 
@@ -44,7 +46,7 @@ Two AI modes embedded in the storyboard studio:
 | `get_credit_balance` | Read | Check org credit balance | Free |
 | `get_model_pricing` | Read | Compare model costs | Free |
 | `get_prompt_templates` | Read | Load proven prompts by type | Free |
-| `get_presets` | Read | Load camera angles, color palettes, camera studio | Free |
+| `get_presets` | Read | Load camera angles, color palettes, pill bar presets | Free |
 | `browse_project_files` | Read | Find uploaded/generated files | Free |
 | `enhance_prompt` | Execute | Rough prompt → cinematic detailed prompt | ~1 cr |
 | `create_execution_plan` | Plan | Show plan with cost, approve/cancel | Free |
@@ -56,31 +58,25 @@ Two AI modes embedded in the storyboard studio:
 
 ## Model Routing
 
-### Decision: Use DeepSeek V3 for cheap tasks, Haiku for critical tasks
+### Decision: Claude Haiku 4.5 for all Director/Agent modes
+
+Director and Agent use the **Claude API exclusively** — required for the Claude Agent Skills architecture path (see below). DeepSeek V3 stays only for the Support chatbot (FAQ/billing, no tool chaining complexity).
 
 | Feature | Model | Cost/msg | Why |
 |---------|-------|----------|-----|
-| Support Chat | DeepSeek V3 (via OpenRouter) | $0.0016 | FAQ, billing, tickets — no creativity needed |
-| Director | DeepSeek V3 (via OpenRouter) | $0.0016 | Advice, simple tool calls |
-| Agent | Haiku (via Anthropic SDK) | $0.006 | Credits at stake, reliable tool routing |
-| Vision | Haiku (via Anthropic SDK) | $0.006 | Only Haiku supports vision |
+| Support Chat | DeepSeek V3 (via OpenRouter) | $0.0016 | FAQ, billing — separate system, no skills architecture |
+| Director | Claude Haiku 4.5 (Anthropic SDK) | $0.006 | Claude Skills compatible, reliable tool use |
+| Agent | Claude Haiku 4.5 (Anthropic SDK) | $0.006 | Credits at stake, reliable 24-tool chaining |
+| Vision | Claude Haiku 4.5 (Anthropic SDK) | $0.006 | Vision support built-in |
 
-### Agent Seat — User Chooses Model
+### Agent Seat Economics (Haiku-only)
 
-| Model choice | Messages/month | Max cost | Margin on $120 seat |
-|-------------|---------------|---------|---------------------|
-| DeepSeek (default) | 7,000 | $11.20 | 91% |
-| Auto (smart routing) | 6,000 | ~$15 | 87% |
-| Haiku (premium) | 5,000 | $30 | 75% |
+| Scale | Monthly cost | Margin on $120 seat |
+| ----- | ------------ | ------------------- |
+| 5,000 msgs/month (cap) | $30 | 75% |
+| 3,000 msgs/month (typical) | $18 | 85% |
 
 After cap: 1 credit/msg overflow (seamless, no hard lock).
-
-### Cost savings vs Haiku-only:
-
-| Scale | Haiku only | With DeepSeek routing | Savings |
-|-------|-----------|----------------------|---------|
-| 50 active Director users | $270/month | $72/month | $198/month |
-| 100 Agent seats (active) | $900/month | $372/month | $528/month |
 
 ---
 
@@ -100,10 +96,10 @@ route.ts (server)
   +-- Load project context → inject into system prompt
   +-- Load conversation history (last 20 from Convex)
   +-- Select tools via getToolsForMode(mode)
-  +-- Select model: DeepSeek (director) or Haiku (agent)
+  +-- Both modes → Claude Haiku 4.5 (Anthropic SDK)
   |
   v
-Claude Haiku 4.5 / DeepSeek V3 (via OpenRouter)
+Claude Haiku 4.5
   |
   +-- Text response → streamed via SSE
   +-- Tool calls → dispatchDirectorTool() → Convex / API routes → back to LLM
@@ -141,7 +137,7 @@ data: {"type":"done"}
 
 ```
 lib/director/
-  agent-tools.ts          -- 22 tool definitions + getToolsForMode()
+  agent-tools.ts          -- 24 tool definitions + getToolsForMode()
   tool-executor.ts        -- dispatchDirectorTool() — all tool implementations
   system-prompt.ts        -- buildDirectorSystemPrompt() + buildAgentSystemPrompt()
   constants.ts            -- Model knowledge, shot types, camera movements
@@ -157,6 +153,25 @@ convex/
 components/director/
   DirectorChatPanel.tsx   -- Chat UI: mode toggle, plan cards, history, persistent chip strip, quick actions
 ```
+
+### Claude Agent Skills — Future Refactor
+
+The current flat-file structure (`lib/director/`) is functionally equivalent to the Claude Agent Skills pattern. Planned migration after end-to-end testing:
+
+```text
+skills/
+  director-agent/
+    instructions.md    ← system-prompt.ts content
+    tools.json         ← agent-tools.ts definitions
+    examples/          ← example conversations (samurai story, car commercial, etc.)
+    genres/            ← genre-specific prompt snippets
+  support-agent/
+    instructions.md    ← lib/support/systemPrompt.ts content
+    tools.json         ← lib/support/tools.ts definitions
+    knowledge/         ← static FAQ, pricing, policies
+```
+
+**Why defer:** Agent Skills migration is pure refactoring — no user-facing change. Test the agent first, migrate after it's proven.
 
 ---
 
