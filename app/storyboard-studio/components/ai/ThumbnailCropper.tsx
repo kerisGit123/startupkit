@@ -110,7 +110,8 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
     });
   }, [displaySize]);
 
-  // Save: fetch image as blob (avoids CORS taint), draw cropped region to canvas
+  // Save: fetch image bytes as a blob URL (always same-origin → no CORS taint on createImageBitmap).
+  // Try a direct browser fetch first; fall back to the server-side proxy if the CDN blocks direct access.
   const handleSave = useCallback(async () => {
     try {
       const scale = imgNatural.w / displaySize.w;
@@ -119,15 +120,33 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
       const sw = crop.size * scale;
       const sh = crop.size * scale;
 
-      // Load image via proxy to avoid CORS issues with external CDN URLs
+      // 1. Fetch image bytes from the browser (avoids proxy round-trip for R2/CDN images)
+      let blobUrl: string | null = null;
+      try {
+        const res = await fetch(imageUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+      } catch {
+        // Direct fetch blocked (CORS / auth) — fall back to server-side proxy
+        const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(imageUrl)}`;
+        const res = await fetch(proxyUrl);
+        if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+      }
+
+      // 2. Load the blob URL into an Image element (always same-origin — no taint)
       const img = new Image();
-      const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(imageUrl)}`;
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
-        img.onerror = () => reject(new Error("Failed to load image"));
-        img.src = proxyUrl;
+        img.onerror = () => reject(new Error("Failed to load image from blob"));
+        img.src = blobUrl!;
       });
+
+      // 3. Crop and draw onto canvas
       const bitmap = await createImageBitmap(img, Math.round(sx), Math.round(sy), Math.round(sw), Math.round(sh));
+      URL.revokeObjectURL(blobUrl!);
 
       const canvas = document.createElement("canvas");
       const outputSize = 256;

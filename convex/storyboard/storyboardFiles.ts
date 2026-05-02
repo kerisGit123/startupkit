@@ -854,3 +854,70 @@ export const updateFileTags = mutation({
   },
 });
 
+// Batch-cleanup files when their parent storyboard_item or storyboard_element is deleted.
+//
+// Two paths based on whether the file was AI-generated (defaultAI is set):
+//
+//   defaultAI present → AI-generated file → KEEP the record for log/credit audit
+//     - R2 bytes already deleted by the caller (cleanup-item-files route)
+//     - Patch: r2Key = "", sourceUrl = "", status = "deleted"
+//     - creditUsed + defaultAI remain intact for the generation log
+//
+//   defaultAI absent → user-uploaded file → HARD DELETE the record entirely
+//     - R2 bytes already deleted by the caller
+//     - ctx.db.delete(fileId) — no audit need, no credit tracking
+// Hard-delete user-uploaded files (no defaultAI, no audit need).
+// Called from cleanupFiles module after R2 bytes are already deleted.
+export const batchHardDelete = mutation({
+  args: { fileIds: v.array(v.id("storyboard_files")) },
+  handler: async (ctx, { fileIds }) => {
+    let deleted = 0;
+    for (const fileId of fileIds) {
+      const file = await ctx.db.get(fileId);
+      if (!file) continue;
+      await ctx.db.delete(fileId);
+      await syncFileAggregates(ctx, file, null);
+      deleted++;
+    }
+    return { deleted };
+  },
+});
+
+export const batchMarkOrphaned = mutation({
+  args: { fileIds: v.array(v.id("storyboard_files")) },
+  handler: async (ctx, { fileIds }) => {
+    let softDeleted = 0;
+    let hardDeleted = 0;
+
+    for (const fileId of fileIds) {
+      const file = await ctx.db.get(fileId);
+      if (!file) continue;
+
+      if (file.defaultAI) {
+        // AI-generated — keep record for credit/log audit, clear R2 pointer.
+        // categoryId = null explicitly marks the parent item/element is gone,
+        // distinguishing intentional soft-deletes from true orphans (cleanup bugs).
+        const before = file;
+        await ctx.db.patch(fileId, {
+          r2Key: "",
+          sourceUrl: "",
+          status: "deleted",
+          categoryId: null,
+          deletedAt: Date.now(),
+          size: 0,
+        });
+        const after = await ctx.db.get(fileId);
+        await syncFileAggregates(ctx, before, after);
+        softDeleted++;
+      } else {
+        // User-uploaded — no audit need, hard delete entirely
+        await ctx.db.delete(fileId);
+        await syncFileAggregates(ctx, file, null);
+        hardDeleted++;
+      }
+    }
+
+    return { softDeleted, hardDeleted };
+  },
+});
+

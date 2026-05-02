@@ -26,6 +26,8 @@ export function usePromptEditor(opts?: {
   const savedSelectionRef = useRef<{ container: Node; offset: number } | null>(null);
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
   const isComposingRef = useRef(false);
+  // Tracks which badge is currently being dragged for internal reorder
+  const draggingBadgeRef = useRef<HTMLSpanElement | null>(null);
 
   // ── Extract plain text (excluding badges) ──────────────────────────
   const extractPlainText = useCallback((): string => {
@@ -91,8 +93,21 @@ export function usePromptEditor(opts?: {
       "class",
       `inline-flex items-center gap-1 ${colors.bg} border ${colors.border} rounded px-1.5 py-0.5 align-middle mx-0.5 select-none`
     );
-    span.style.cursor = "default";
+    span.style.cursor = "grab";
     span.style.fontSize = "inherit";
+    span.setAttribute("draggable", "true");
+
+    // Internal drag-to-reorder: store ref on dragstart, restore on dragend
+    span.addEventListener("dragstart", (e: DragEvent) => {
+      draggingBadgeRef.current = span;
+      e.dataTransfer!.effectAllowed = "move";
+      e.dataTransfer!.setData("application/x-internal-badge", "1");
+      requestAnimationFrame(() => { span.style.opacity = "0.4"; });
+    });
+    span.addEventListener("dragend", () => {
+      span.style.opacity = "1";
+      draggingBadgeRef.current = null;
+    });
 
     // Audio badges show a speaker icon instead of image thumbnail
     const isAudio = badgeType === 'audio';
@@ -351,12 +366,46 @@ export function usePromptEditor(opts?: {
   // ── Drag & Drop ────────────────────────────────────────────────────
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = "copy";
+    e.dataTransfer.dropEffect = e.dataTransfer.types.includes("application/x-internal-badge")
+      ? "move"
+      : "copy";
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
 
+    // ── Internal badge reorder ────────────────────────────────────────
+    // User dragged an existing badge to a new position within the editor.
+    // Range.insertNode moves a node already in the DOM rather than cloning it.
+    if (e.dataTransfer.types.includes("application/x-internal-badge") && draggingBadgeRef.current) {
+      const badge = draggingBadgeRef.current;
+      const doc = document as any;
+      let range: Range | null = null;
+      if (typeof doc.caretRangeFromPoint === "function") {
+        range = doc.caretRangeFromPoint(e.clientX, e.clientY);
+      } else if (typeof doc.caretPositionFromPoint === "function") {
+        const pos = doc.caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos) {
+          range = document.createRange();
+          range.setStart(pos.offsetNode, pos.offset);
+          range.collapse(true);
+        }
+      }
+      if (range) {
+        range.insertNode(badge); // moves badge to drop position
+        // Place cursor just after the dropped badge
+        const sel = window.getSelection();
+        const after = document.createRange();
+        after.setStartAfter(badge);
+        after.collapse(true);
+        sel?.removeAllRanges();
+        sel?.addRange(after);
+        editorRef.current?.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      return;
+    }
+
+    // ── External drop (image/product/influencer badges from outside) ──
     // Check for UGC badge data (product/influencer)
     const badgeData = e.dataTransfer.getData("application/x-badge");
     let imageUrl = e.dataTransfer.getData("imageUrl");
@@ -449,6 +498,83 @@ export function usePromptEditor(opts?: {
     opts?.onPromptChange?.("");
   }, [opts]);
 
+  // ── Parse @ElementName text into badge DOM elements ──────────────────
+  // Called after a prompt is loaded into the editor. Scans for @mentions stored
+  // during storyboard build and replaces them with proper badge elements.
+  // If the element has a reference image, the badge carries it for generation.
+  const parseMentions = useCallback((
+    elements: Array<{ _id: string; name: string; thumbnailUrl?: string; referenceUrls?: string[]; primaryIndex?: number }>
+  ) => {
+    const el = editorRef.current;
+    if (!el || !elements.length) return;
+
+    // Collect text nodes that contain @ symbols (avoid walking into existing badges)
+    const textNodes: Text[] = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        // Skip text inside existing badge spans
+        let parent = node.parentElement;
+        while (parent && parent !== el) {
+          if (parent.dataset?.type === "mention") return NodeFilter.FILTER_REJECT;
+          parent = parent.parentElement;
+        }
+        return node.textContent?.includes("@") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+      },
+    });
+    let node = walker.nextNode();
+    while (node) { textNodes.push(node as Text); node = walker.nextNode(); }
+
+    let badgeNum = 1;
+    for (const textNode of textNodes) {
+      const text = textNode.textContent || "";
+      const pattern = /@([A-Za-z][A-Za-z0-9]*)/g;
+      let match: RegExpExecArray | null;
+      let lastIndex = 0;
+      const fragment = document.createDocumentFragment();
+      let foundAny = false;
+
+      while ((match = pattern.exec(text)) !== null) {
+        const key = match[1].toLowerCase();
+        // Match element by normalising spaces: "Research Submarine" → "researchsubmarine"
+        const element = elements.find(
+          (e) => e.name.replace(/\s+/g, "").toLowerCase() === key
+        );
+        if (!element) continue;
+        foundAny = true;
+
+        if (match.index > lastIndex) {
+          fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+        }
+
+        // Prefer primary variant; fall back to first ref, then thumbnail
+        const imgUrl =
+          element.referenceUrls?.[element.primaryIndex ?? 0] ||
+          element.referenceUrls?.[0] ||
+          element.thumbnailUrl ||
+          "";
+
+        fragment.appendChild(createBadgeElement({
+          id: `el-${element._id}-${Date.now()}-${badgeNum}`,
+          imageUrl: imgUrl,
+          imageNumber: badgeNum++,
+          badgeType: "element",
+          elementName: element.name.replace(/\s+/g, ""),
+          elementId: element._id,
+        }));
+
+        lastIndex = match.index + match[0].length;
+      }
+
+      if (!foundAny) continue;
+      if (lastIndex < text.length) {
+        fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+      textNode.parentNode?.replaceChild(fragment, textNode);
+    }
+
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, [createBadgeElement]);
+
   return {
     editorRef,
     editorIsEmpty,
@@ -457,6 +583,7 @@ export function usePromptEditor(opts?: {
     extractTextWithBadges,
     createBadgeElement,
     insertBadgeAtCaret,
+    parseMentions,
     handleEditorInput,
     handleEditorBlur,
     handleCompositionStart,

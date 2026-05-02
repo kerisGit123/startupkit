@@ -22,8 +22,9 @@ export interface AnalyzedScene {
 export interface AnalyzedElement {
   name: string;
   type: "character" | "environment" | "prop";
-  description: string;    // Detailed physical description (min 30 chars)
-  sceneIds: string[];     // Which scenes this element appears in
+  description: string;              // Rich visual description (100+ chars) for image generation
+  identity?: Record<string, any>;   // Structured wizard fields (gender, hairColor, mood, material, etc.)
+  sceneIds: string[];               // Which scenes this element appears in
   occurrenceCount: number;
   importance: "primary" | "secondary";
   tags: string[];
@@ -335,29 +336,77 @@ async function extractElements(
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5",
-    max_tokens: 4096,
-    system: `You extract reusable visual elements from scripts for storyboard production. STRICT quality over quantity — aim for 3-6 elements total.
+    max_tokens: 6000,
+    system: `You are an experienced movie production designer extracting reference assets from a script. Your task: identify the visual elements that genuinely need dedicated reference images to maintain consistency across multiple shots.
 
-CHARACTERS: Named or uniquely described individuals only. Must be a single person or creature.
-  SKIP: groups ("crew", "crowd", "people", "figures", "team", "soldiers"), unnamed extras, roles that are just a job title without visual distinction.
+CORE QUESTION before adding any element: "Would I pin this to my production reference board and generate a standalone reference image for it?" If the answer is no, skip it.
 
-ENVIRONMENTS: Major DISTINCT locations that appear in 2+ scenes. One location per distinct place.
-  SKIP: sub-locations inside a parent (e.g. "cockpit" when "submarine" exists), rooms/areas within an already-extracted location, minor transition spaces.
+━━━ WHAT TO EXTRACT ━━━
 
-PROPS: Standalone key story objects that could be generated as their own reference image. Must be a whole object, not a part.
-  SKIP: components/parts of a vehicle or building (porthole, panel, dashboard, steering wheel, headlights, spotlights, engine, door, window, screen, gauge, lever, seat = part of the parent object), atmospheric/environmental effects (snow, fog, mist, rain, light beams, shadows, particles, dust, bubbles), generic materials (water, glass, metal, darkness).
+CHARACTERS — Named individuals OR any living creature/being with a specific appearance the art department must match scene after scene.
+  ✓ "Dr. Sarah Chen" — lead scientist with described appearance
+  ✓ "The Creature" — deep-sea monster; type=character, non-human
+  ✓ "The Dragon" — even if only its claw or eye appears on screen; type=character, non-human
+  ✗ "Crew" / "Scientists" / "Guards" — unnamed groups, no specific design
+  ✗ Any role mentioned once without a described appearance
 
-STRICT DEDUPLICATION: Never extract both a parent and its part. If "Submarine" is extracted, do NOT also extract "Submarine Porthole", "Submarine Cabin Interior", "Instrument Panel" etc. Pick the broadest useful version only.
+  CRITICAL — LIVING CREATURES ARE ALWAYS CHARACTERS, NEVER PROPS:
+  Any animal, monster, beast, alien, creature, entity — even if the script only shows a body part
+  (eye, claw, tentacle, fin, jaw) — is a living being. Extract the WHOLE CREATURE as type=character.
+  Name it after the creature, NOT the body part.
+  ✗ "Creature Eye" as prop  →  ✓ "The Creature" as character (non-human)
+  ✗ "Monster Tentacle" as prop  →  ✓ "The Monster" as character (non-human)
+  ✗ "Giant Claw" as prop  →  ✓ "The Giant" as character (non-human)
+  ✗ "Alien Appendage" as prop  →  ✓ "The Alien" as character (non-human)
+
+ENVIRONMENTS — The PRIMARY location(s) the entire story is set in. One entry per distinct place.
+  ✓ "Aquarium Research Center" — main location, needs consistent look
+  ✓ "Deep Ocean Floor" — recurring distinct location
+  ✗ "Computer Lab" — sub-room inside the Research Center already extracted
+  ✗ "Corridor", "Observation Room" — architectural sub-spaces of a parent location
+  ✗ Transition spaces or locations that appear in only one scene
+
+PROPS — HERO PROPS only: INANIMATE objects that are central to the plot, have a unique recognisable design, and must look identical every time they appear. A prop has no life — it does not breathe, move, think, or feel.
+  ✓ "The Research Submarine" — hero vehicle, unique design, appears throughout
+  ✓ "Ancient Artifact" — plot-driving object with specific described appearance
+  ✗ "Aquarium Glass" — a surface/material of the environment, not a standalone object
+  ✗ "Research Computer" — generic set dressing any art director would place
+  ✗ "Fish Tank" — part of the aquarium environment
+  ✗ "Desk", "Chair", "Shelf" — generic furniture, set dressing
+  ✗ "Computer Monitor", "Keyboard", "Screen" — generic technology set dressing
+  ✗ "Lab Equipment", "Instruments" — vague generic items
+  ✗ Any body part of a living creature (eye, claw, tentacle, paw, wing, fin, tail, jaw, fang) — that is a CHARACTER
+
+━━━ STRICT RULES ━━━
+
+1. NEVER extract a sub-component of something already extracted. If "Research Submarine" is in the list, do NOT add "Submarine Porthole", "Submarine Interior", "Instrument Panel", "Control Console", "Periscope", "Hatch".
+2. NEVER extract a sub-location of an extracted environment. If "Aquarium Research Center" is in the list, do NOT add "Computer Room", "Observation Deck", "Storage Bay", "Control Room" within it.
+3. NEVER extract generic set dressing: computers, desks, chairs, tables, shelves, lamps, cables, generic machinery, glass surfaces, water, fog, mist, particles, light beams, shadows.
+4. A prop must have a UNIQUE DESIGN described in the script. "A computer" is not unique. "A cracked obsidian sphere with glowing blue veins" is.
+5. Body parts of living creatures are NEVER props — reclassify as the whole creature (type=character, non-human).
+6. Aim for 2–5 elements total. Fewer high-confidence elements always beats many low-confidence ones.
+
+━━━ DESCRIPTION FORMAT (100+ chars) ━━━
+CHARACTER: "[Build] [age] [ethnicity] [gender] with [hair description] and [eye color] eyes. Wearing [specific outfit]. [Distinctive features: scars, tattoos, accessories]."
+ENVIRONMENT: "Establishing shot of [location] at [time of day]. [Key architectural/natural features]. [Lighting, atmosphere, color palette]. [Scale and mood]."
+PROP: "A [size] [material] [object name]. [Shape, colors, surface texture, condition]. [Any distinctive markings, engravings, or damage]. Standalone product photograph."
+
+━━━ IDENTITY FIELDS ━━━
+CHARACTER: gender("male"|"female"|"non-binary"|"other"), ageRange("child"|"teen"|"young-adult"|"adult"|"middle-aged"|"elderly"), ethnicity("east-asian"|"south-asian"|"southeast-asian"|"black"|"white"|"latino"|"middle-eastern"|"mixed"|"other"), build("slim"|"average"|"athletic"|"muscular"|"stocky"), hairColor("black"|"brown"|"blonde"|"red"|"white"), hairStyle("short-straight"|"short-curly"|"medium-straight"|"medium-wavy"|"long-straight"|"long-curly"|"long-wavy"|"braids"|"bald"|"buzz-cut"), eyeColor("brown"|"blue"|"green"|"hazel"|"gray"|"amber"), outfit("casual"|"formal"|"military"|"sporty"|"sci-fi"|"historical"|"uniform"), outfitCustom(text), detailsCustom(text — distinctive features), expression("neutral"|"serious"|"confident"|"mysterious"|"fearful"), era("modern"|"near-future"|"far-future"|"fantasy"|"1920s"|"1940s"|"1960s"|"1980s"|"timeless")
+  Non-human: characterKind(free text, e.g. "research submarine"), isNonHuman: true, put all visual detail in detailsCustom
+
+ENVIRONMENT: timeOfDay("dawn"|"morning"|"noon"|"afternoon"|"golden-hour"|"sunset"|"dusk"|"night"|"midnight"), weather("clear"|"cloudy"|"foggy"|"rainy"|"stormy"|"misty"), mood("eerie"|"grand"|"claustrophobic"|"serene"|"vast"|"mysterious"|"cozy"|"chaotic"), keyFeatures(text — comma-separated key visual elements), customNotes(text)
+
+PROP: category("vehicle"|"weapon"|"tool"|"furniture"|"technology"|"container"|"misc"), material("metal"|"wood"|"plastic"|"glass"|"leather"|"stone"|"fabric"|"crystal"), size("tiny"|"small"|"medium"|"large"|"massive"), condition("pristine"|"worn"|"damaged"|"weathered"|"rusted"), details(text — shape, colors, distinctive markings), era("modern"|"futuristic"|"vintage"|"ancient"|"steampunk")
 
 occurrenceCount = number of distinct scenes where this element is visually prominent.
-Descriptions must be 30+ chars describing VISUAL appearance for AI image generation.
-
+IMPORTANT: Use ONLY the exact scene IDs from the list below — copy them character-for-character. Do NOT invent IDs or omit letter suffixes (e.g. use "scene_1a" not "scene_1").
 SCENES: ${sceneList}
 
-RETURN ONLY valid JSON (no markdown, no code fences):
-{"elements":[{"name":"...","type":"character","description":"...","sceneIds":["scene_1a"],"occurrenceCount":2,"importance":"primary","tags":["human"]}]}`,
+RETURN ONLY valid JSON (no markdown):
+{"elements":[{"name":"...","type":"character","description":"...","identity":{...},"sceneIds":["scene_1a","scene_1b"],"occurrenceCount":2,"importance":"primary","tags":["human"]}]}`,
     messages: [
-      { role: "user", content: `Extract high-value elements:\n\n${scriptContent}` },
+      { role: "user", content: `Extract production reference elements:\n\n${scriptContent}` },
     ],
   });
 
@@ -370,10 +419,43 @@ RETURN ONLY valid JSON (no markdown, no code fences):
     // Strip markdown code fences if present (Haiku sometimes wraps JSON in ```json ... ```)
     const cleanText = text.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
     const parsed = JSON.parse(cleanText);
-    const elements = (parsed.elements || []) as AnalyzedElement[];
-    // Hard blocklist for parts/components that AI often extracts despite instructions
-    const PART_WORDS = /\b(porthole|panel|dashboard|gauge|lever|screen|monitor|dial|switch|button|seat|window|door|hatch|engine|spotlight|headlight|antenna|cable|pipe|valve|vent|hull|deck|railing|ladder|console|cockpit|interior|cabin)\b/i;
-    const GROUP_WORDS = /^(crew|crowd|people|figures|team|soldiers|group|extras|bystanders|villagers|citizens|passengers|workers|guards)\b/i;
+
+    // Build a lookup of valid scene IDs from the actual parsed scenes
+    const validSceneIds = new Set(scenes.map(s => s.sceneId));
+
+    // Fuzzy scene ID expansion: "scene_1" → ["scene_1a", "scene_1b"] when the script
+    // uses lettered sub-scenes. The AI often omits the letter suffix even though the
+    // SCENES list shows the full IDs. We expand parent IDs to all their children so
+    // the occurrence count is correct and elements aren't wrongly filtered out.
+    const expandSceneId = (id: string): string[] => {
+      if (validSceneIds.has(id)) return [id]; // exact match
+      const lower = id.toLowerCase();
+      // Collect every valid ID that starts with this AI-provided ID (e.g. "scene_1" → "scene_1a", "scene_1b")
+      const children = [...validSceneIds].filter(v => v.toLowerCase().startsWith(lower));
+      if (children.length > 0) return children;
+      // Also accept if the AI added extra detail (e.g. "scene_1_surface" vs "scene_1a") — strip to shared prefix
+      const parentMatch = [...validSceneIds].find(v => lower.startsWith(v.toLowerCase()));
+      return parentMatch ? [parentMatch] : [];
+    };
+
+    // Validate sceneIds and recompute occurrenceCount from ground truth — never trust the AI's count
+    const elements = ((parsed.elements || []) as AnalyzedElement[]).map(el => {
+      const confirmedSceneIds = [...new Set(
+        (el.sceneIds || []).flatMap((id: string) => expandSceneId(id))
+      )];
+      return { ...el, sceneIds: confirmedSceneIds, occurrenceCount: confirmedSceneIds.length };
+    });
+
+    // Hard blocklist — catches generic set dressing and sub-components the AI extracts despite instructions
+    // Note: "glass" is intentionally NOT a standalone block — "Magnifying Glass", "Glass Orb" are valid props.
+    // Only compound phrases that are clearly sub-components are blocked.
+    // Biological body parts are listed separately — they should be reclassified as the whole creature (character).
+    const PART_WORDS = /\b(porthole|panel|dashboard|gauge|lever|screen|monitor|dial|switch|button|seat|window|door|hatch|engine|spotlight|headlight|antenna|cable|pipe|valve|vent|hull|deck|railing|ladder|console|cockpit|interior|cabin|aquarium glass|tank glass|fish tank|water tank|observation glass|computer|laptop|keyboard|mouse|workstation|desk|table|chair|shelf|shelving|rack|cabinet|filing|locker|lamp|light fixture|bulb|corridor|hallway|staircase|room|area|zone|space|section|bay|duct|wiring|floor|ceiling|wall|beam|pillar|column|strut|bracket|mount|hinge|bolt|screw|nozzle|grip|trigger|barrel|blade|tip)\b/i;
+    // Body parts of living creatures — these should be the whole creature (character), not a prop
+    const CREATURE_PART_WORDS = /\b(eye|eyes|claw|claws|tentacle|tentacles|paw|paws|wing|wings|fin|fins|tail|jaw|jaws|fang|fangs|talon|talons|limb|limbs|appendage|appendages|beak|hoof|hooves|horn|horns|tusk|tusks|maw|snout|hide|scales|feather|feathers)\b/i;
+    const GROUP_WORDS = /^(crew|crowd|people|figures|team|soldiers|group|extras|bystanders|villagers|citizens|passengers|workers|guards|staff|personnel|audience|spectators|onlookers|residents|inhabitants)\b/i;
+    // Generic / vague nouns that are never worth a standalone reference image
+    const VAGUE_WORDS = /^(equipment|apparatus|device|technology|machinery|instruments|tools|materials|supplies|contents|items|objects|things|stuff|elements|components|parts|features|details)\b/i;
 
     const filtered = elements.filter(el => {
       if (!el.name || !el.description || el.description.length < 20 || el.sceneIds.length === 0) return false;
@@ -381,21 +463,43 @@ RETURN ONLY valid JSON (no markdown, no code fences):
       // Block groups/unnamed extras for characters
       if (el.type === "character" && GROUP_WORDS.test(el.name)) return false;
 
-      // Block parts/components for props and environments
-      if ((el.type === "prop" || el.type === "environment") && PART_WORDS.test(el.name)) return false;
+      // Block parts, set dressing, sub-components for props and environments
+      if (el.type === "prop" || el.type === "environment") {
+        if (PART_WORDS.test(el.name)) return false;
+        if (VAGUE_WORDS.test(el.name)) return false;
+        // Block biological body parts classified as props — these should be whole creatures (characters)
+        if (el.type === "prop" && CREATURE_PART_WORDS.test(el.name)) return false;
+      }
 
-      // Characters: always keep. Environments/props: only if 2+ occurrences.
+      // Characters: always keep. Environments: 2+ scenes. Props: stricter — 3+ scenes OR marked primary.
       if (el.type === "character") return true;
-      return el.occurrenceCount >= 2 || el.sceneIds.length >= 2;
+      if (el.type === "environment") return el.occurrenceCount >= 2 || el.sceneIds.length >= 2;
+      // Props must be genuinely recurring hero objects
+      return (el.occurrenceCount >= 3 || el.sceneIds.length >= 3) || el.importance === "primary";
     });
 
-    // Dedup: if a parent object exists (e.g. "Submarine"), remove child variants (e.g. "Submarine Porthole")
+    // Dedup pass 1: if a parent name is a prefix of a child name (e.g. "Submarine" → "Submarine Porthole"), remove child
     const names = filtered.map(e => e.name.toLowerCase());
-    const deduped = filtered.filter(el => {
+    let deduped = filtered.filter(el => {
       const lower = el.name.toLowerCase();
-      // Check if any other element's name is a prefix of this one (parent exists)
       return !names.some(other => other !== lower && lower.startsWith(other + " "));
     });
+
+    // Dedup pass 2: remove elements whose name is a keyword found inside an extracted environment name
+    // e.g. environment="Aquarium Research Center" → drop prop="Fish Tank", prop="Research Computer"
+    const envNames = deduped.filter(e => e.type === "environment").map(e => e.name.toLowerCase());
+    if (envNames.length > 0) {
+      deduped = deduped.filter(el => {
+        if (el.type === "environment") return true;
+        const lower = el.name.toLowerCase();
+        // Drop if every word in this element's name appears in any environment name (it's a sub-feature)
+        for (const envName of envNames) {
+          const elWords = lower.split(/\s+/).filter(w => w.length > 3);
+          if (elWords.length > 0 && elWords.every(w => envName.includes(w))) return false;
+        }
+        return true;
+      });
+    }
     console.log(`[scriptAnalyzer] Extracted ${elements.length} raw → ${filtered.length} filtered → ${deduped.length} deduped:`, deduped.map(e => `${e.name} (${e.type})`));
     return deduped;
   } catch {

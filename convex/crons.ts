@@ -31,4 +31,18 @@ crons.interval(
   internal.landingStats.refreshLandingStats
 );
 
+/**
+ * 🔧 ORPHAN FILE REPAIR
+ *
+ * Runs daily at 04:00 UTC. Scans for storyboard_files whose parent item/element
+ * was deleted without the cleanup route running (crash, bug, or direct DB edit).
+ * Soft-deletes AI-generated orphans (kept for logs), hard-deletes uploaded orphans.
+ * Batches 50 files per run — re-runs the next day until all orphans are cleared.
+ */
+crons.daily(
+  "repair-orphan-files",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.storyboard.fileMetadataHandler.repairOrphanFiles
+);
+
 export default crons;

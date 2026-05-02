@@ -3,11 +3,106 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { analyzeScript } from "@/lib/storyboard/scriptAnalyzer";
+import { cleanupItemFiles } from "@/lib/storyboard/cleanupFiles";
 import type { Id } from "@/convex/_generated/dataModel";
 
 export const maxDuration = 300;
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+// ── @mention injection ────────────────────────────────────────────────────────
+// Characters/props: injected inline beside their first name match in the prompt.
+// Environments: only injected when the environment is actually visible in the scene
+//   (keyword match found). When matched, prepended as "In the environment of @Name,"
+//   so GPT Image 2 knows this is the scene's setting, not just a referenced object.
+//   Interior/close-up shots with no environment keywords get no environment badge.
+//
+// Example (exterior scene):
+//   "Twin spotlights cone forward into abyssal water"
+//   → "In the environment of @DeepOceanAbyss, @ResearchSubmarine Twin spotlights..."
+//
+// Example (interior scene):
+//   "Extreme macro on a brass depth gauge inside the cabin"
+//   → "@ResearchSubmarine Extreme macro on a brass depth gauge inside the cabin"
+//   (no environment — not visible in this shot)
+
+const STOP_WORDS = new Set(["the", "a", "an", "of", "in", "at", "to", "for", "and", "or", "its", "with"]);
+
+function environmentKeywordMatch(prompt: string, elementName: string): boolean {
+  const fullEsc = elementName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\b${fullEsc}\\b`, "i").test(prompt)) return true;
+  const keywords = elementName
+    .split(/\s+/)
+    .filter(w => w.length >= 5 && !STOP_WORDS.has(w.toLowerCase()));
+  return keywords.some(kw => {
+    const kwEsc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${kwEsc}\\b`, "i").test(prompt);
+  });
+}
+
+function injectInline(prompt: string, elementName: string): string {
+  const mention = `@${elementName.replace(/\s+/g, "")}`;
+  if (prompt.includes(mention)) return prompt;
+
+  // Insert badge BEFORE the matching text — preserve the original word.
+  // e.g. "research submarine" → "@ResearchSubmarine research submarine"
+
+  const fullEsc = elementName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const fullMatch = new RegExp(`\\b(${fullEsc})\\b`, "i").exec(prompt);
+  if (fullMatch) {
+    return prompt.slice(0, fullMatch.index) + mention + " " + prompt.slice(fullMatch.index);
+  }
+
+  const keywords = elementName
+    .split(/\s+/)
+    .filter(w => w.length >= 5 && !STOP_WORDS.has(w.toLowerCase()))
+    .sort((a, b) => b.length - a.length);
+
+  for (const kw of keywords) {
+    const kwEsc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const kwMatch = new RegExp(`\\b(${kwEsc})\\b`, "i").exec(prompt);
+    if (kwMatch) {
+      return prompt.slice(0, kwMatch.index) + mention + " " + prompt.slice(kwMatch.index);
+    }
+  }
+
+  // No match — prepend (character/prop is always in the scene even if not named)
+  return mention + " " + prompt;
+}
+
+function injectElementMentions(
+  prompt: string,
+  elements: Array<{ name: string; type: string }>
+): string {
+  if (!prompt || elements.length === 0) return prompt;
+
+  let result = prompt;
+
+  // Characters and props: inject inline at name match, fall back to prepend
+  const inlineEls = elements
+    .filter(el => el.type !== "environment")
+    .sort((a, b) => b.name.length - a.name.length);
+  for (const el of inlineEls) {
+    result = injectInline(result, el.name);
+  }
+
+  // Environments: only when visible in the scene (keyword match).
+  // Wrap as "In the environment of @Name," so GPT Image 2 treats it as the scene setting.
+  const envEls = elements.filter(el => el.type === "environment");
+  const envPrefix = envEls
+    .filter(el => {
+      const mention = `@${el.name.replace(/\s+/g, "")}`;
+      return !result.includes(mention) && environmentKeywordMatch(result, el.name);
+    })
+    .map(el => `@${el.name.replace(/\s+/g, "")}`)
+    .join(", ");
+
+  if (envPrefix) {
+    result = `In the environment of ${envPrefix}, ` + result;
+  }
+
+  return result;
+}
 
 async function updateStatus(
   projectId: Id<"storyboard_projects">,
@@ -90,20 +185,38 @@ export async function POST(req: NextRequest) {
       console.log(`[build-storyboard] Existing: ${existingElementMap.size} elements, ${existingItemsBySceneId.size} scenes`);
     }
 
-    // ── Clear data based on strategy ──────────────────────────────────────
+    // ── Clean up R2 files before clearing items ───────────────────────────
+    // Prevents storyboard_files from becoming orphans when items are deleted.
+    // R2 bytes are freed, file records stay (creditUsed preserved for audit).
 
     if (rebuildStrategy === "replace_all") {
+      await updateStatus(projectId, "processing", "Cleaning up generated files...");
+      const allItems = await convex.query(api.storyboard.build.listItemsForBuild, { projectId });
+      const allElements = await convex.query(api.storyboard.build.listElementsForBuild, { projectId });
+      const itemIds = allItems.map((i: any) => i._id);
+      const elementIds = allElements.map((e: any) => e._id);
+      if (itemIds.length > 0 || elementIds.length > 0) {
+        await cleanupItemFiles(convex, itemIds, elementIds);
+      }
       await updateStatus(projectId, "processing", "Clearing all frames and elements...");
       await convex.mutation(api.storyboard.build.clearExistingData, { projectId });
     }
 
     if (rebuildStrategy === "replace_section" && replaceSceneIds?.length > 0) {
       await updateStatus(projectId, "processing", `Clearing ${replaceSceneIds.length} scenes...`);
+      // Collect item IDs for the scenes being replaced so we can clean their files
+      const allItems = await convex.query(api.storyboard.build.listItemsForBuild, { projectId });
+      const sceneIdSet = new Set(replaceSceneIds);
+      const replacedItemIds = allItems
+        .filter((i: any) => i.sceneId && sceneIdSet.has(i.sceneId))
+        .map((i: any) => i._id);
+      if (replacedItemIds.length > 0) {
+        await cleanupItemFiles(convex, replacedItemIds);
+      }
       await convex.mutation(api.storyboard.build.clearItemsBySceneIds, {
         projectId,
         sceneIds: replaceSceneIds,
       });
-      // Remove cleared scenes from existing map so they get recreated
       for (const sid of replaceSceneIds) {
         existingItemsBySceneId.delete(sid);
       }
@@ -150,6 +263,7 @@ export async function POST(req: NextRequest) {
           tags: element.tags,
           createdBy: clerkUserId,
           visibility: "private",
+          identity: element.identity,
         });
         if (saved) {
           savedElementMap.set(element.name, saved);
@@ -183,18 +297,23 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Inject @mentions into prompts as inline placeholders for the UI badge system.
+      // Environments prepend (they set the scene). Characters/props inject at their name in the text.
+      // e.g. "A weathered @ResearchSubmarine being lowered into a @DeepOceanAbyss slate-grey sea"
+      const imagePrompt = injectElementMentions(scene.imagePrompt || "", linkedElements);
+      const videoPrompt = injectElementMentions(scene.videoPrompt || "", linkedElements);
+
       // ── smart_merge: update existing or create new ────────────────────
       if (rebuildStrategy === "smart_merge") {
         const existing = existingItemsBySceneId.get(scene.sceneId);
         if (existing) {
-          // Update prompts on the existing scene
           try {
             await convex.mutation(api.storyboard.storyboardItems.update, {
               id: existing._id,
               title: scene.title,
               description: scene.description,
-              imagePrompt: scene.imagePrompt || undefined,
-              videoPrompt: scene.videoPrompt || undefined,
+              imagePrompt: imagePrompt || undefined,
+              videoPrompt: videoPrompt || undefined,
               duration: scene.duration,
               linkedElements: linkedElements.length > 0 ? linkedElements : undefined,
             });
@@ -228,8 +347,8 @@ export async function POST(req: NextRequest) {
           description: scene.description,
           duration: scene.duration,
           generatedBy: clerkUserId,
-          imagePrompt: scene.imagePrompt || undefined,
-          videoPrompt: scene.videoPrompt || undefined,
+          imagePrompt: imagePrompt || undefined,
+          videoPrompt: videoPrompt || undefined,
           defaultImageModel: scene.defaultImageModel,
           defaultVideoModel: scene.defaultVideoModel,
           linkedElements: linkedElements.length > 0 ? linkedElements : undefined,

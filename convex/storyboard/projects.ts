@@ -313,21 +313,42 @@ export const remove = mutation({
       console.error(`[Project Remove] Error deleting private elements:`, error);
     }
 
-    // 3. Remove all files for this project
+    // 3. Handle files for this project.
+    // R2 bytes should already be deleted by the API route (delete-project)
+    // before this mutation runs. This step handles the Convex records only:
+    //   defaultAI present → keep record (audit trail), clear r2Key/categoryId
+    //   defaultAI absent  → hard delete the record entirely
     try {
       const projectFiles = await ctx.db
         .query("storyboard_files")
         .withIndex("by_project", (q) => q.eq("projectId", id))
         .collect();
-      
-      console.log(`[Project Remove] Found ${projectFiles.length} files to delete`);
-      
+
+      console.log(`[Project Remove] Processing ${projectFiles.length} files`);
+
       for (const file of projectFiles) {
-        await ctx.db.delete(file._id);
-        console.log(`[Project Remove] Deleted project file: ${file._id}`);
+        // Skip files already processed by cleanupItemFiles (status="deleted", categoryId=null).
+        // The API route runs cleanup before this mutation — this loop is a safety net
+        // for files that were missed (e.g. if cleanup partially failed).
+        if (file.status === "deleted") continue;
+
+        if (file.defaultAI) {
+          // AI-generated: keep for logs, mark as deleted, clear pointers
+          await ctx.db.patch(file._id, {
+            r2Key: "",
+            sourceUrl: "",
+            status: "deleted",
+            categoryId: null,
+            deletedAt: Date.now(),
+            size: 0,
+          });
+        } else {
+          // User-uploaded: no audit need, hard delete
+          await ctx.db.delete(file._id);
+        }
       }
     } catch (error) {
-      console.error(`[Project Remove] Error deleting project files:`, error);
+      console.error(`[Project Remove] Error processing files:`, error);
     }
 
     // NOTE: Credit usage records are PRESERVED for billing and audit purposes

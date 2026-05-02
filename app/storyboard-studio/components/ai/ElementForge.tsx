@@ -276,36 +276,30 @@ function FieldEraSlider({ field, value, onChange }: { field: ForgeField; value: 
 }
 
 function FieldImageUpload({
-  field, value, onChange, onBrowse, onPreview,
+  field, value, onChange, onBrowse, onPreview, onUpload, isUploading,
 }: {
   field: ForgeField; value: string; onChange: (v: string) => void;
   onBrowse: () => void; onPreview?: (url: string) => void;
+  onUpload?: () => void;   // Direct file-picker upload (no credits)
+  isUploading?: boolean;   // Show spinner while uploading
 }) {
   if (value) {
     return (
       <div className="relative group w-full h-44 rounded-xl overflow-hidden border border-(--border-primary) bg-black/30">
         <img src={value} alt={field.label} className="w-full h-full object-contain cursor-pointer" onDoubleClick={() => onPreview?.(value)} />
-        {/* Hover overlay with actions */}
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-2">
-          <button
-            onClick={() => onPreview?.(value)}
-            className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all backdrop-blur-sm"
-            title="Preview full size"
-          >
+          <button onClick={() => onPreview?.(value)} className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all backdrop-blur-sm" title="Preview full size">
             <ImagePlus size={14} />
           </button>
-          <button
-            onClick={onBrowse}
-            className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all backdrop-blur-sm"
-            title="Change image"
-          >
+          {onUpload ? (
+            <button onClick={onUpload} className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all backdrop-blur-sm" title="Replace with upload">
+              <Upload size={14} />
+            </button>
+          ) : null}
+          <button onClick={onBrowse} className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25 transition-all backdrop-blur-sm" title="Browse existing files">
             <FolderOpen size={14} />
           </button>
-          <button
-            onClick={() => onChange("")}
-            className="p-2 rounded-lg bg-red-500/30 text-white hover:bg-red-500/50 transition-all backdrop-blur-sm"
-            title="Remove image"
-          >
+          <button onClick={() => onChange("")} className="p-2 rounded-lg bg-red-500/30 text-white hover:bg-red-500/50 transition-all backdrop-blur-sm" title="Remove image">
             <Trash2 size={14} />
           </button>
         </div>
@@ -316,13 +310,28 @@ function FieldImageUpload({
     );
   }
 
+  // Empty state — clicking uploads directly if onUpload provided, else opens browser
   return (
     <div
-      onClick={onBrowse}
+      onClick={onUpload ?? onBrowse}
       className="w-full h-44 rounded-xl border-2 border-dashed border-(--border-primary) hover:border-(--accent-blue)/40 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors"
     >
-      <Upload size={20} className="text-(--text-tertiary)" />
-      <span className="text-[12px] text-(--text-tertiary)">{field.placeholder || field.label}</span>
+      {isUploading ? (
+        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+      ) : (
+        <Upload size={20} className="text-(--text-tertiary)" />
+      )}
+      <span className="text-[12px] text-(--text-tertiary)">
+        {isUploading ? "Uploading..." : (field.placeholder || field.label)}
+      </span>
+      {onUpload && !isUploading && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onBrowse(); }}
+          className="text-[10px] text-(--text-tertiary) hover:text-(--text-secondary) underline underline-offset-2 transition-colors"
+        >
+          or browse existing files
+        </button>
+      )}
     </div>
   );
 }
@@ -946,6 +955,7 @@ export function ElementForge({
   const [isGenerating, setIsGenerating] = useState(false);
   const [genVariantLabel, setGenVariantLabel] = useState(() => element?.name || "");
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);
+  const [refStrength, setRefStrength] = useState<"prompt" | "balanced" | "image">("balanced");
   const { getModelCredits } = usePricingData();
 
   const [activeTab, setActiveTab] = useState(0);
@@ -1107,7 +1117,8 @@ export function ElementForge({
 
   // Generate image from the Generate tab
   const handleGenerate = useCallback(async () => {
-    if (!canSave || isGenerating || !companyId) return;
+    if (!canSave || isGenerating) return;
+    const effectiveCompanyId = companyId || userId;
 
     // Auto-save element first (creates if new, updates if existing)
     const elementId = await handleSave();
@@ -1142,8 +1153,15 @@ export function ElementForge({
     if (isTextOnly) {
       prompt = composedPrompt;
     } else if (hasRefs) {
-      prompt = referencePrompt + composeImageOverrides(identity) +
-        `\n\nCRITICAL: The reference image(s) are for loose inspiration only (general shape/form). You MUST follow the TEXT description above for all visual details including colors, materials, style, and design. The text prompt takes absolute priority over the reference images.`;
+      const overrides = composeImageOverrides(identity);
+      if (refStrength === "prompt") {
+        prompt = referencePrompt + overrides + `\n\nCRITICAL: The reference image(s) are for loose inspiration only (general shape/form). You MUST follow the TEXT description above for ALL visual details including colors, materials, textures, style, and design. The text prompt takes absolute priority over the reference images. Do NOT replicate the reference — reimagine the subject based on the text.`;
+      } else if (refStrength === "balanced") {
+        prompt = referencePrompt + overrides + `\n\nUse the reference image(s) as a guide for general shape and composition, but follow the text description for specific details like colors, materials, and style.`;
+      } else {
+        // Image mode: no override — follow reference closely
+        prompt = referencePrompt + overrides;
+      }
     } else {
       prompt = referencePrompt;
     }
@@ -1168,7 +1186,7 @@ export function ElementForge({
             quality: JSON.stringify({ type: model.startsWith('gpt-image-2') ? 'gpt-image-2' : model, mode: modelMode, nsfwChecker: false }),
             aspectRatio: genAspectRatio,
             resolution: genResolution,
-            companyId,
+            companyId: effectiveCompanyId,
             userId,
             projectId: projectId as string,
             elementId,
@@ -1194,12 +1212,32 @@ export function ElementForge({
     } finally {
       setIsGenerating(false);
     }
-  }, [canSave, isGenerating, companyId, element, identity, referencePrompt, composedPrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, userId, projectId, handleSave, genCredits]);
+  }, [canSave, isGenerating, companyId, element, identity, referencePrompt, composedPrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, userId, projectId, handleSave, genCredits, refStrength]);
 
   const setPrimaryVariant = useMutation(api.storyboard.storyboardElements.setPrimaryVariant);
   const updateVariantLabelMut = useMutation(api.storyboard.storyboardElements.updateVariantLabel);
   const removeVariantMut = useMutation(api.storyboard.storyboardElements.removeVariant);
   const deleteFileMut = useMutation(api.storyboard.storyboardFiles.remove);
+  const appendReferenceImageMut = useMutation(api.storyboard.storyboardElements.appendReferenceImage);
+  const [isUploadingVariant, setIsUploadingVariant] = useState(false);
+  const uploadVariantInputRef = useRef<HTMLInputElement>(null);
+
+  // Direct upload for reference photo fields (Mood/Style, Layout, Full Scene, Face, Outfit etc.)
+  const [uploadingRefFieldKey, setUploadingRefFieldKey] = useState<string | null>(null);
+  const refPhotoUploadInputRef = useRef<HTMLInputElement>(null);
+  const handleUploadRefPhoto = useCallback(async (file: File, fieldKey: string) => {
+    if (!userId) return;
+    const effectiveCompanyId = companyId || userId; // fall back to userId for personal accounts
+    setUploadingRefFieldKey(fieldKey);
+    try {
+      const result = await uploadToR2({ file, category: "elements", projectId: projectId as string, userId, companyId: effectiveCompanyId, tags: ["reference"] });
+      if (result.publicUrl) updateField(fieldKey, result.publicUrl);
+    } catch (err) {
+      console.error("[ElementForge] Reference photo upload failed:", err);
+    } finally {
+      setUploadingRefFieldKey(null);
+    }
+  }, [companyId, userId, projectId, updateField]);
 
   // Query files linked to this element to show generating/failed states
   const elementFiles = useQuery(
@@ -1237,6 +1275,29 @@ export function ElementForge({
       console.error("[ElementForge] Failed to delete variant:", e);
     }
   }, [element, liveReferenceUrls, liveVariants, elementFiles, removeVariantMut, deleteFileMut]);
+
+  // Upload an existing image directly as a variant — no generation, no credits
+  const handleUploadVariant = useCallback(async (file: File) => {
+    if (!canSave || !userId) return;
+    const effectiveCompanyId = companyId || userId;
+    const elementId = await handleSave();
+    if (!elementId) { alert("Failed to save element. Please try again."); return; }
+    setIsUploadingVariant(true);
+    try {
+      const result = await uploadToR2({ file, category: "elements", projectId: projectId as string, userId, companyId: effectiveCompanyId, tags: ["variant", "uploaded"] });
+      if (result.publicUrl) {
+        const baseName = identity.name?.trim() || "Variant";
+        const label = genVariantLabel.trim() || `${baseName} (uploaded)`;
+        await appendReferenceImageMut({ id: elementId as Id<"storyboard_elements">, imageUrl: result.publicUrl, variantLabel: label, variantModel: "uploaded" });
+        setGenVariantLabel("");
+      }
+    } catch (err) {
+      console.error("[ElementForge] Upload variant failed:", err);
+      alert("Upload failed. Please try again.");
+    } finally {
+      setIsUploadingVariant(false);
+    }
+  }, [canSave, companyId, userId, projectId, identity.name, genVariantLabel, handleSave, appendReferenceImageMut]);
 
   const [pullingFileId, setPullingFileId] = useState<string | null>(null);
 
@@ -1649,6 +1710,20 @@ export function ElementForge({
           {/* ─── Generate tab ─────────────────────────────────────────── */}
           {currentTab.key === "generate" && (
             <div className="flex flex-col h-full gap-4">
+              {/* Hidden file input for reference photo direct upload */}
+              <input
+                ref={refPhotoUploadInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  const fieldKey = refPhotoUploadInputRef.current?.dataset.fieldKey;
+                  if (file && fieldKey) handleUploadRefPhoto(file, fieldKey);
+                  e.target.value = "";
+                }}
+              />
+
               {/* Reference Photos row — labels adapt per element type */}
               <div className={genModel === "z-image" ? "opacity-40 pointer-events-none" : ""}>
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">
@@ -1660,23 +1735,23 @@ export function ElementForge({
                   <div className={`flex-[2] flex gap-2 ${identity.ref_fullBody ? "opacity-30 pointer-events-none" : ""}`}>
                     {type === "environment" ? (
                       <>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Mood / Style", type: "image-upload", placeholder: "Mood / style ref" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} /></div>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Layout", type: "image-upload", placeholder: "Layout / composition" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Mood / Style", type: "image-upload", placeholder: "Mood / style ref" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_face"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_face"} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Layout", type: "image-upload", placeholder: "Layout / composition" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_outfit"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_outfit"} /></div>
                       </>
                     ) : type === "prop" ? (
                       <>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Front View", type: "image-upload", placeholder: "Front / main angle" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} /></div>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Detail", type: "image-upload", placeholder: "Detail / texture" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Front View", type: "image-upload", placeholder: "Front / main angle" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_face"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_face"} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Detail", type: "image-upload", placeholder: "Detail / texture" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_outfit"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_outfit"} /></div>
                       </>
                     ) : isNonHuman ? (
                       <>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_head", label: "Head", type: "image-upload", placeholder: "Head" }} value={identity.ref_head || ""} onChange={(v) => updateField("ref_head", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_head")} /></div>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_body", label: "Body", type: "image-upload", placeholder: "Body" }} value={identity.ref_body || ""} onChange={(v) => updateField("ref_body", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_body")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_head", label: "Head", type: "image-upload", placeholder: "Head" }} value={identity.ref_head || ""} onChange={(v) => updateField("ref_head", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_head")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_head"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_head"} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_body", label: "Body", type: "image-upload", placeholder: "Body" }} value={identity.ref_body || ""} onChange={(v) => updateField("ref_body", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_body")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_body"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_body"} /></div>
                       </>
                     ) : (
                       <>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Face", type: "image-upload", placeholder: "Face" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} /></div>
-                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Outfit", type: "image-upload", placeholder: "Outfit" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_face", label: "Face", type: "image-upload", placeholder: "Face" }} value={identity.ref_face || ""} onChange={(v) => updateField("ref_face", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_face")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_face"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_face"} /></div>
+                        <div className="flex-1"><FieldImageUpload field={{ key: "ref_outfit", label: "Outfit", type: "image-upload", placeholder: "Outfit" }} value={identity.ref_outfit || ""} onChange={(v) => updateField("ref_outfit", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_outfit")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_outfit"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_outfit"} /></div>
                       </>
                     )}
                   </div>
@@ -1686,10 +1761,33 @@ export function ElementForge({
                     <div className="w-px flex-1 bg-white/10" />
                   </div>
                   <div className={`flex-1 ${(identity.ref_face || identity.ref_outfit || identity.ref_head || identity.ref_body) ? "opacity-30 pointer-events-none" : ""}`}>
-                    <FieldImageUpload field={{ key: "ref_fullBody", label: type === "environment" ? "Full Scene" : type === "prop" ? "Full Object" : "Full Body", type: "image-upload", placeholder: type === "environment" ? "Full scene reference" : type === "prop" ? "Full object reference" : "Full body" }} value={identity.ref_fullBody || ""} onChange={(v) => updateField("ref_fullBody", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_fullBody")} />
+                    <FieldImageUpload field={{ key: "ref_fullBody", label: type === "environment" ? "Full Scene" : type === "prop" ? "Full Object" : "Full Body", type: "image-upload", placeholder: type === "environment" ? "Full scene reference" : type === "prop" ? "Full object reference" : "Full body" }} value={identity.ref_fullBody || ""} onChange={(v) => updateField("ref_fullBody", v)} onPreview={(url) => setPreviewUrl(url)} onBrowse={() => setRefBrowseField("ref_fullBody")} onUpload={() => { if (refPhotoUploadInputRef.current) { refPhotoUploadInputRef.current.dataset.fieldKey = "ref_fullBody"; refPhotoUploadInputRef.current.click(); } }} isUploading={uploadingRefFieldKey === "ref_fullBody"} />
                   </div>
                 </div>
               </div>
+
+              {/* Reference strength toggle — only visible when refs exist and not z-image */}
+              {genModel !== "z-image" && (identity.ref_face || identity.ref_outfit || identity.ref_fullBody || identity.ref_head || identity.ref_body) && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-(--text-tertiary) shrink-0">Priority:</span>
+                  <div className="flex rounded-lg border border-(--border-primary) overflow-hidden">
+                    {([
+                      { value: "prompt" as const, label: "Prompt", tip: "Text drives the output" },
+                      { value: "balanced" as const, label: "Balanced", tip: "Mix of both" },
+                      { value: "image" as const, label: "Image", tip: "Follow reference closely" },
+                    ]).map(opt => (
+                      <button key={opt.value} onClick={() => setRefStrength(opt.value)} title={opt.tip}
+                        className={`px-3 py-1 text-[11px] font-medium transition-colors ${
+                          refStrength === opt.value
+                            ? "bg-(--accent-blue) text-white"
+                            : "text-(--text-tertiary) hover:text-(--text-secondary) hover:bg-white/5"
+                        }`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Toolbar row — VideoImageAIPanel style */}
               <div className="flex items-center gap-2 px-1">
@@ -1817,19 +1915,47 @@ export function ElementForge({
                     </>
                   )}
                 </button>
+
               </div>
 
               {/* Generated Variants — takes remaining space */}
               <div className="flex-1 min-h-0">
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 block">
-                  Generated Variants {(liveReferenceUrls.length > 0 || pendingFiles.length > 0) && (
+                  Variants {(liveReferenceUrls.length > 0 || pendingFiles.length > 0) && (
                     <span className="text-(--text-secondary) font-normal">({liveReferenceUrls.length}{pendingFiles.length > 0 ? ` + ${pendingFiles.length} processing` : ""})</span>
                   )}
                 </label>
+                {/* Hidden file input — triggered by the upload card */}
+                <input
+                  ref={uploadVariantInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadVariant(file);
+                    e.target.value = "";
+                  }}
+                />
+
                 {liveReferenceUrls.length === 0 && pendingFiles.length === 0 ? (
-                  <div className="flex items-center justify-center h-24 rounded-xl border border-dashed border-(--border-primary) text-[12px] text-(--text-tertiary)">
-                    No variants yet — generate your first image above
-                  </div>
+                  /* Empty state — clickable upload area */
+                  <button
+                    onClick={() => uploadVariantInputRef.current?.click()}
+                    disabled={!canSave || isUploadingVariant}
+                    className="flex flex-col items-center justify-center gap-2 w-full h-24 rounded-xl border border-dashed border-(--border-primary) hover:border-white/25 hover:bg-white/3 disabled:opacity-40 disabled:cursor-not-allowed transition-all group"
+                  >
+                    {isUploadingVariant ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5 text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors" />
+                        <span className="text-[12px] text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors">
+                          Upload image · or generate above
+                        </span>
+                      </>
+                    )}
+                  </button>
                 ) : (
                   <div
                     ref={variantScrollRef}
@@ -1936,10 +2062,13 @@ export function ElementForge({
                     {liveReferenceUrls.map((url, idx) => {
                       const isPrimary = idx === livePrimaryIndex;
                       const variant = liveVariants?.[idx];
+                      const isUploaded = variant?.model === "uploaded";
                       const isEditing = editingVariantIdx === idx;
                       return (
                         <div key={idx} className={`group relative shrink-0 w-[180px] rounded-xl overflow-hidden border-2 transition-all ${
-                          isPrimary ? "border-amber-400 ring-1 ring-amber-400/20" : "border-transparent hover:border-white/20"
+                          isPrimary ? "border-amber-400 ring-1 ring-amber-400/20"
+                          : isUploaded ? "border-blue-500/50 hover:border-blue-400/70"
+                          : "border-transparent hover:border-white/20"
                         }`}>
                           <img
                             src={url}
@@ -1982,6 +2111,11 @@ export function ElementForge({
                           {isPrimary && (
                             <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-amber-400/20 text-[8px] font-semibold text-amber-300 uppercase">Primary</div>
                           )}
+                          {isUploaded && (
+                            <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-blue-500/25 border border-blue-400/30 text-[8px] font-semibold text-blue-300 uppercase flex items-center gap-1">
+                              <Upload className="w-2.5 h-2.5" /> Uploaded
+                            </div>
+                          )}
                           <div className="px-2 py-1.5 bg-(--bg-primary)">
                             {isEditing ? (
                               <input
@@ -1997,15 +2131,37 @@ export function ElementForge({
                               />
                             ) : (
                               <span
-                                className="text-[11px] text-(--text-secondary) truncate block cursor-pointer hover:text-(--text-primary)"
+                                className="flex items-center gap-1 text-[11px] truncate cursor-pointer hover:text-(--text-primary)"
                                 onDoubleClick={() => { setEditingVariantIdx(idx); setEditingVariantName(variant?.label || `${identity.name || "Variant"} ${idx + 1}`); }}
                                 title="Double-click to rename"
-                              >{variant?.label || `${identity.name || "Variant"} ${idx + 1}`}</span>
+                              >
+                                {isUploaded && <Upload className="w-2.5 h-2.5 shrink-0 text-blue-400" />}
+                                <span className={`truncate ${isUploaded ? "text-blue-300/80" : "text-(--text-secondary)"}`}>
+                                  {variant?.label || `${identity.name || "Variant"} ${idx + 1}`}
+                                </span>
+                              </span>
                             )}
                           </div>
                         </div>
                       );
                     })}
+
+                    {/* Upload card — always at the end of the grid */}
+                    <button
+                      onClick={() => uploadVariantInputRef.current?.click()}
+                      disabled={!canSave || isUploadingVariant}
+                      className="shrink-0 w-[180px] rounded-xl border-2 border-dashed border-(--border-primary) hover:border-white/25 hover:bg-white/3 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex flex-col items-center justify-center gap-2 aspect-[4/3] group"
+                      title="Upload your own image as a variant (no credits)"
+                    >
+                      {isUploadingVariant ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Upload className="w-5 h-5 text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors" />
+                          <span className="text-[11px] text-(--text-tertiary) group-hover:text-(--text-secondary) transition-colors">Upload Image</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
               </div>

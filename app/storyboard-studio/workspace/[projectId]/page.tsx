@@ -18,6 +18,7 @@ import { FileBrowser } from "../../components/ai/FileBrowser";
 import { GENRE_PRESETS, GENRE_PROMPTS, GENRE_COMBO_TIPS, FORMAT_PRESETS, FORMAT_PROMPT_MAP } from "../../constants";
 import { ElementLibrary } from "../../components/ai/ElementLibrary";
 import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
+import { VisualLockModal } from "../../components/storyboard/VisualLockModal";
 import { BatchGenerateDialog } from "../../components/storyboard/BatchGenerateDialog";
 import { PresetManager } from "../../components/storyboard/PresetManager";
 import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
@@ -161,49 +162,52 @@ export default function StoryboardWorkspacePage() {
   const [dragOverItem, setDragOverItem] = useState<string | null>(null);
   const [itemsWithDialogOpen, setItemsWithDialogOpen] = useState<Set<string>>(new Set());
 
-  // Safe item deletion with error handling and debouncing
+  // Safe item deletion: clean up R2 files first, then delete the Convex record.
+  // storyboard_files records are NOT deleted (creditUsed audit trail preserved),
+  // but their R2 bytes are freed and they are marked status="orphaned".
   const handleRemoveItem = async (itemId: Id<"storyboard_items">, sceneTitle?: string) => {
-    // Prevent duplicate deletions
     if (deletingItemIds.has(itemId) || recentlyDeletedItems.has(itemId)) {
       console.log(`[Workspace] Deletion already in progress or recently completed for: ${sceneTitle || itemId}`);
       return;
     }
 
-    // Add to tracking sets
     setDeletingItemIds(prev => new Set(prev).add(itemId));
-    
+
     try {
+      // Step 1: Clean up R2 files linked to this item (fire-and-forget, don't block delete)
+      fetch("/api/storyboard/cleanup-item-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: [itemId] }),
+      }).catch(err => console.warn("[Workspace] cleanup-item-files failed (non-blocking):", err));
+
+      // Step 2: Delete the Convex item record
       await removeItem({ id: itemId });
       console.log(`[Workspace] Successfully deleted item: ${sceneTitle || itemId}`);
-      
-      // Add to recently deleted set for 2 seconds to prevent rapid re-deletion
+
       setRecentlyDeletedItems(prev => new Set(prev).add(itemId));
       setTimeout(() => {
         setRecentlyDeletedItems(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(itemId);
-          return newSet;
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
         });
       }, 2000);
-      
+
     } catch (error) {
       console.error("[Workspace] Failed to delete item:", error);
-      
-      // User-friendly error message
       if (error instanceof Error && error.message.includes("not found")) {
-        // Don't show alert for recently deleted items (user experience)
         if (!recentlyDeletedItems.has(itemId)) {
-          alert(`This scene "${sceneTitle || 'Unknown'}" may have already been deleted or is no longer available. The scene list will refresh automatically.`);
+          alert(`This scene "${sceneTitle || 'Unknown'}" may have already been deleted or is no longer available.`);
         }
       } else {
         alert(`Unable to delete scene "${sceneTitle || 'Unknown'}". Please try again or refresh the page.`);
       }
     } finally {
-      // Remove from deleting set
       setDeletingItemIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(itemId);
-        return newSet;
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
       });
     }
   };
@@ -521,6 +525,7 @@ export default function StoryboardWorkspacePage() {
   const [scriptDirty, setScriptDirty] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showBuildDialog, setShowBuildDialog] = useState(false);
+  const [showVisualLock, setShowVisualLock] = useState(false);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [extendPrompt, setExtendPrompt] = useState("");
   const [extendSceneCount, setExtendSceneCount] = useState(4);
@@ -936,14 +941,24 @@ export default function StoryboardWorkspacePage() {
           )}
 
           {tab === "script" && !scriptDirty && parseScriptScenes(displayScript).scenes.length > 0 && (
-            <button
-              onClick={() => setShowBuildDialog(true)}
-              disabled={isBuilding}
-              className="flex items-center gap-1.5 px-4 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[12px] font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
-              Build Storyboard
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowVisualLock(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 border border-white/8 rounded-xl transition-all"
+                title="Visual Lock — align script to reference images"
+              >
+                <Lock className="w-3.5 h-3.5" strokeWidth={1.75} />
+                Visual Lock
+              </button>
+              <button
+                onClick={() => setShowBuildDialog(true)}
+                disabled={isBuilding}
+                className="flex items-center gap-1.5 px-4 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[12px] font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
+                Build Storyboard
+              </button>
+            </div>
           )}
 
           {tab === "storyboard" && (
@@ -2389,6 +2404,17 @@ export default function StoryboardWorkspacePage() {
           </div>
         </div>
       )}
+      {showVisualLock && (
+        <VisualLockModal
+          projectId={projectId as string}
+          onClose={() => setShowVisualLock(false)}
+          onScriptUpdated={(newScript) => {
+            setScriptText(newScript);
+            setScriptDirty(false);
+          }}
+        />
+      )}
+
       <BuildStoryboardDialogSimplified
         open={showBuildDialog}
         onOpenChange={setShowBuildDialog}

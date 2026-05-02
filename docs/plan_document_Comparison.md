@@ -1,8 +1,9 @@
 # Competitive Analysis — Storyboard Studio
 
-> **Last updated:** 2026-04-30 (session #29)
+> **Last updated:** 2026-05-02 (session #32)
 > Analysis of 8 direct competitors against our platform.
 >
+> **Session 2026-05-02 #32:** Visual Lock feature (production continuity — vision-analyze element images, rewrite script to match, segment-based Haiku/Sonnet auto-select, 9-step modal). @mention pipeline upgraded (inline injection, parseMentions in editor, drag-and-drop reorder, @ElementName→@Image{n} substitution at generate time). Element extraction quality bar (movie director framing, type-specific 100+ char descriptions, identity field population, sceneIds fuzzy expansion, occurrenceCount from ground truth, living creatures always characters). File deletion cleanup architecture (defaultAI rule for soft vs hard delete, shared cleanupFiles module, orphan repair daily cron, INTERNAL_REPAIR_SECRET env var).
 > **Session 2026-04-30 #29:** Character thumbnail regeneration (76+ thumbs, ultra-realistic 4K, steel-blue bg, measured grid cropping). Custom Element Builder for Logo/Style/Other (single-form UI, prompt injection, @mention support).
 > **Session 2026-04-30 #28:** Convex resource optimization — cron intervals, early returns, server-side filters, landing_stats cache. 2.38GB→~1.0GB bandwidth.
 > **Session 2026-04-30 #27:** Script Builder redesign (line numbers, floating AI panel, rich scene sidebar). Smart Build modes (Update & Add, Rebuild From Scratch). Element @mention system (autocomplete, badges, generation-time @Image{N} resolution). Element Forge browse button, FileBrowser defaults.
@@ -666,14 +667,14 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 
 ---
 
-## 7. Feature Count Scorecard (updated 2026-05-01, session #30 — Genre System + Format Redesign)
+## 7. Feature Count Scorecard (updated 2026-05-02, session #32 — Visual Lock + Element Pipeline + Deletion Cleanup)
 
 ### Competitive Score (out of 100) — honest
 
 | Platform | Score | Rationale |
 |----------|:-----:|-----------|
-| **Us** | **94** | Deepest all-in-one pipeline. Genre System (16 presets with mood/lighting/tone auto-append) + Format Redesign (12 content formats with framing/pacing auto-append) + Element Forge (structured character/env/prop wizard with 10 archetypes, identity JSON, prompt composition) + custom elements (logo/style/other with @mention prompt injection). 11 post-processing tools, Cinema Grade, AI Agent 22 tools, canvas+AI, music AI, camera system, multi-layer timeline with transitions/overlays/PiP/subtitles/audio export, style transfer, BG removal. Video editor doubles as ads builder. Genre+Format system matches Higgsfield's genre presets and surpasses with separate control axes. Loses points: fewer models (15 vs 30+), no dedicated marketing studio automation, no social network, no 80+ apps breadth |
-| Higgsfield | **88** | Cinema Studio 3.5 + 80+ apps + 30+ models + Marketing Studio + social network + native audio + SOUL 2.0. Most features overall. Loses points: no storyboard pipeline, weak timeline, no music generation |
+| **Us** | **95** | Deepest all-in-one pipeline. Genre System (16 presets) + Format Redesign (12 content formats) + Element Forge (structured wizard, identity JSON) + custom elements with @mention prompt injection. **Visual Lock** (production continuity — vision-analyze element images, rewrite script to match, segment-based Haiku/Sonnet) is unique to us. **Full @mention pipeline** (inline injection, drag-and-drop badge reorder, @ElementName→@Image{n} substitution at generate time) gives character consistency LTX-style but deeper. 11 post-processing tools, Cinema Grade, AI Agent 22 tools, canvas+AI, music AI, camera system, multi-layer timeline with transitions/overlays/PiP/subtitles/audio export, style transfer, BG removal. Video editor doubles as ads builder. Robust file deletion with audit trail (defaultAI rule, soft vs hard delete) + daily orphan repair cron. Loses points: fewer models (15 vs 30+), no dedicated marketing studio automation, no social network, no 80+ apps breadth |
+| Higgsfield | **88** | Cinema Studio 3.5 + 80+ apps + 30+ models + Marketing Studio + social network + native audio + SOUL 2.0. Most features overall. Loses points: no storyboard pipeline, weak timeline, no music generation, no script-to-image continuity sync |
 | LTX Studio | 72 | Good pipeline vision, but own models only, no music/canvas AI, no post-processing depth |
 | Zopia AI | 70 | Strongest autonomous agent, but zero post-processing, no canvas, no music, no camera control, beta only |
 | ImagineArt | 58 | Broad AI + scale (30M users), zero project structure |
@@ -683,7 +684,7 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 | Krock.io | 32 | Review/approval niche, no generation |
 | Lovart | 25 | Design agent, different market |
 
-**We now lead Higgsfield 94 vs 88.** Session #30 Genre System (16 genre presets with detailed mood/lighting/tone prompts, custom genre creation) + Format Redesign (12 content formats controlling framing/pacing/camera independently from genre) close the last remaining Higgsfield genre preset gap and add a dimension they don't have (separate genre vs format axes). Combined with Element Forge, AI Agent Mode, style transfer, BG removal, video editor ads capability, we win 9 of 13 categories.
+**We now lead Higgsfield 95 vs 88.** Session #32 adds Visual Lock (production continuity — no competitor has this) and the full @mention pipeline with @Image{n} substitution at generate time. Genre + Format dual-axis system + Element Forge + AI Agent + style transfer + BG removal + video editor ads — we win 9 of 13 categories. Visual Lock is the first script-to-image continuity sync feature in this category, putting us ahead on production workflow depth.
 
 ### Category Breakdown (score out of 10) — honest
 
@@ -708,14 +709,14 @@ On videos:  📋 Copy Style (2cr)  ·  📝 Describe Video (2cr)  ·  🎥 Copy 
 **Where we're close (1 category):** Marketing/Ads (us 5, them 9 — capability exists + genre/format presets, they have dedicated automation).
 **Where Zopia WINS (1 category):** AI Agent autonomy (tied with us on score).
 
-### Head-to-Head — HONEST (updated session #30)
+### Head-to-Head — HONEST (updated session #32)
 
 | vs Competitor | They have, we don't | We have, they don't | Net | Who wins what |
 |---|:---:|:---:|:---:|---|
-| vs Higgsfield 3.5 | 3 (native audio sync, 80+ apps, social network) | 12 (storyboard pipeline, multi-layer timeline + transitions + overlays + PiP + audio export, canvas draw, music AI, Cinema Grade 12 stocks, Director's View, Agent Mode 22 tools, element @mentions, style transfer, scrolling text, genre+format dual-axis system) | **Us +9** | We win depth, they win breadth. Genre System closes their genre preset advantage; Format axis is unique to us |
-| vs Zopia | 2 (full autonomy, auto self-review) | 19+ (post-processing, canvas, camera, music, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays, genre system, format presets) | **Us +17** | We win everything except autonomy |
-| vs LTX Studio | 1 (Retake) | 12+ | **Us +11** | We win convincingly |
-| vs Storyboarder | 0 | 17+ | **Us +17** | Total dominance |
+| vs Higgsfield 3.5 | 3 (native audio sync, 80+ apps, social network) | 14 (storyboard pipeline, multi-layer timeline + transitions + overlays + PiP + audio export, canvas draw, music AI, Cinema Grade 12 stocks, Director's View, Agent Mode 22 tools, element @mentions with drag-and-drop reorder + @Image{n} substitution, **Visual Lock production continuity**, style transfer, scrolling text, genre+format dual-axis system, robust deletion architecture with audit trail) | **Us +11** | We win depth, they win breadth. Visual Lock is unique to us — no competitor has script-to-image continuity sync |
+| vs Zopia | 2 (full autonomy, auto self-review) | 21+ (post-processing, canvas, camera, music, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays, genre system, format presets, Visual Lock, @mention pipeline) | **Us +19** | We win everything except autonomy |
+| vs LTX Studio | 1 (Retake) | 14+ | **Us +13** | We win convincingly. LTX has element tagging but no Visual Lock continuity sync |
+| vs Storyboarder | 0 | 19+ | **Us +19** | Total dominance |
 | vs ImagineArt | 0 | Pipeline structure | **Us +9** | Different league |
 
 ### What's Holding Us Back — honest gaps to close
@@ -735,7 +736,7 @@ If we add pre-built ad template presets, scores shift:
 | Category | Current | After Templates | Higgsfield |
 |----------|:-------:|:---------:|:----------:|
 | Marketing / Ads Tools | 5 | **6-7** | 9 |
-| **Overall Score** | **94** | **95** | 88 |
+| **Overall Score** | **95** | **96** | 88 |
 
 Core ads capability already exists (text overlays with BG = CTA, image overlays = logos, aspect ratios = platform formats, transitions + music = ad polish, genre presets for ad mood, format presets for ad pacing). Templates are just preset layer arrangements — "Product Showcase" pre-populates a product clip + text CTA + logo overlay.
 
@@ -1037,7 +1038,7 @@ StoryboardStrip + Canvas show new frames immediately
 
 ---
 
-## 10. Key Takeaway (updated 2026-05-01, session #30 — LEADING Higgsfield 94 vs 88)
+## 10. Key Takeaway (updated 2026-05-02, session #32 — LEADING Higgsfield 95 vs 88)
 
 **Our unique moat is the all-in-one pipeline + professional creative control.** Every competitor excels at one or two slices:
 
@@ -1053,19 +1054,19 @@ StoryboardStrip + Canvas show new frames immediately
 
 We are the **only tool where a filmmaker can set genre mood (16 presets) + content format (12 presets) as independent axes, chat with an AI Director (22 tools, vision-enabled), have an Agent autonomously build multi-frame stories, post-process with Cinema Grade (12 film stocks) and 11 Cinema Studio tools, edit on canvas with AI inpainting (10+ models), control camera angles with a 3D sphere picker + virtual camera studio + 15 motion presets, assemble in a multi-layer timeline with transitions (5 types) + overlays + subtitles + blend modes + scrolling text + audio export, generate music with custom personas, use the Director's View filmstrip for continuity — all without leaving one web app.**
 
-### Competitor gap summary (updated 2026-05-01 session #30 — LEADING Higgsfield 94 vs 88)
+### Competitor gap summary (updated 2026-05-02 session #32 — LEADING Higgsfield 95 vs 88)
 
 | Competitor | They have, we don't | We have, they don't | Net | Reality check |
 |---|---|---|---|---|
-| **Higgsfield 3.5** | 3 (native audio sync, 80+ apps, social network) | 12 (storyboard pipeline, multi-layer timeline + transitions + overlays + audio export, canvas draw, music AI generation, Cinema Grade 12 stocks, Director's View 11 features, Agent Mode 22 tools, element @mentions, style transfer, scrolling text, genre+format dual-axis) | **Us +9** | They win breadth, we win depth. Genre System closes their last genre preset advantage. **Score: Us 94, Higgsfield 88** |
-| **Zopia AI** | 2 (full unmanned autonomy, auto self-review) | 19+ (11 post-processing tools, canvas, music AI, camera system, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays, color palette, presets, genre+format system) | **Us +17** | We crush them on everything except fire-and-forget |
-| **LTX Studio** | 1 (Retake — blocked on API) | 12+ (AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, real-time sync, AI Analyzer, presets, transitions, overlays, genre+format) | **Us +11** | Clear win |
-| **Storyboarder.ai** | 0 | 17+ | **Us +17** | Total dominance |
+| **Higgsfield 3.5** | 3 (native audio sync, 80+ apps, social network) | 14 (storyboard pipeline, multi-layer timeline + transitions + overlays + audio export, canvas draw, music AI generation, Cinema Grade 12 stocks, Director's View 11 features, Agent Mode 22 tools, **Visual Lock production continuity**, element @mention pipeline w/ drag-and-drop reorder + @Image{n} substitution, style transfer, scrolling text, genre+format dual-axis, robust deletion w/ audit trail) | **Us +11** | They win breadth, we win depth. Visual Lock is unique to us — no competitor has script-to-image continuity sync. **Score: Us 95, Higgsfield 88** |
+| **Zopia AI** | 2 (full unmanned autonomy, auto self-review) | 21+ (11 post-processing tools, canvas, music AI, camera system, Cinema Grade, multi-layer timeline + transitions, style transfer, BG removal, overlays, color palette, presets, genre+format system, Visual Lock, @mention pipeline) | **Us +19** | We crush them on everything except fire-and-forget |
+| **LTX Studio** | 1 (Retake — blocked on API) | 14+ (AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, real-time sync, AI Analyzer, presets, transitions, overlays, genre+format, Visual Lock, deeper element @mention pipeline) | **Us +13** | Clear win. LTX has element tagging but no Visual Lock continuity sync |
+| **Storyboarder.ai** | 0 | 19+ | **Us +19** | Total dominance |
 | **ImagineArt** | 0 | Pipeline structure | **Us +9** | Different league |
 
-### Key threats (honest — post session #30)
+### Key threats (honest — post session #32)
 
-- **We now LEAD Higgsfield 94 vs 88.** Sessions #17-30 built: video editor overhaul, AI Agent Mode, Element Forge, element @mentions, Genre System (16 presets), Format Redesign (12 presets), Cinema Grade, style transfer, BG removal. We win 9 of 13 categories. Genre+Format dual-axis system is unique — Higgsfield has genre presets but no separate format control.
+- **We now LEAD Higgsfield 95 vs 88.** Session #32 added Visual Lock (production continuity — script-to-image alignment via vision analysis + targeted rewrite) and the full @mention pipeline (inline injection, drag-and-drop reorder, @ElementName→@Image{n} substitution at generate time). No competitor has Visual Lock. We win 9 of 13 categories. The combined moat: Cinema Studio depth + Director/Agent automation + production-pipeline continuity (Visual Lock + smart deletion architecture w/ audit trail).
 - **Zopia AI** is the wildcard. Free autonomous agent capturing early market. Zero post-processing or audio is their fatal weakness. **Key risk:** if they add tools. **Key opportunity:** their users graduate to us.
 - **Higgsfield pricing:** RESOLVED. GPT Image 2 at $0.04/gen is 48% cheaper than their $0.078/gen.
 - **LTX Studio** is closest pipeline competitor but lacks AI Director/Agent, music AI, canvas+AI, Cinema Studio, Cinema Grade, transitions, overlays, genre+format system.
@@ -1073,7 +1074,7 @@ We are the **only tool where a filmmaker can set genre mood (16 presets) + conte
 
 ### Path to #1: Ad Templates (PLANNED — small effort)
 
-**Ad templates push Marketing/Ads from 5 → 6-7. Overall 94 → 95.** Most infrastructure already exists:
+**Ad templates push Marketing/Ads from 5 → 6-7. Overall 95 → 96.** Most infrastructure already exists:
 
 | Feature | Effort | Existing infrastructure |
 |---------|--------|----------------------|

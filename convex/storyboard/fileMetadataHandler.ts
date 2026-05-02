@@ -1,4 +1,5 @@
-import { mutation, internalMutation } from "../_generated/server";
+import { mutation, internalMutation, internalAction, internalQuery } from "../_generated/server";
+import { internal } from "../_generated/api";
 import { v } from "convex/values";
 
 /**
@@ -343,5 +344,120 @@ export const cleanupExpiredTemps = internalMutation({
       deleted: expired.length,
       cutoffDate: new Date(cutoff).toISOString(),
     };
+  },
+});
+
+/**
+ * ORPHAN REPAIR — daily safety net (cron runs this via repairOrphanFiles action)
+ *
+ * Finds storyboard_files whose categoryId points to a deleted parent (item/element)
+ * but status != "deleted" — meaning cleanup didn't run when the parent was deleted.
+ *
+ * defaultAI present → soft-delete: r2Key="", status="deleted", categoryId=null (kept for logs)
+ * defaultAI absent  → hard-delete: record removed entirely
+ *
+ * Batches 50 per run to stay within action timeout. Runs daily at 04:00 UTC.
+ */
+export const repairOrphanFiles = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ scanned: number; repaired: number; skipped: number }> => {
+    const candidates: any[] = await ctx.runQuery(
+      internal.storyboard.fileMetadataHandler.listOrphanCandidates,
+      { limit: 50 }
+    );
+
+    let repaired = 0;
+    let skipped = 0;
+    const softDeleteIds: string[] = [];
+    const hardDeleteIds: string[] = [];
+
+    // Collect r2Keys to delete in a single batched HTTP call after the scan loop.
+    // Convex actions cannot use the AWS SDK directly (no Node runtime in V8 isolates),
+    // so we delegate R2 deletion to an internal HTTP endpoint that does have the SDK.
+    const orphanR2Keys: string[] = [];
+
+    for (const file of candidates) {
+      const parentStillExists: boolean = await ctx.runQuery(
+        internal.storyboard.fileMetadataHandler.parentExists,
+        { categoryId: file.categoryId }
+      );
+
+      if (parentStillExists) { skipped++; continue; }
+
+      if (file.r2Key) orphanR2Keys.push(file.r2Key);
+      if (file.defaultAI) { softDeleteIds.push(file._id); }
+      else { hardDeleteIds.push(file._id); }
+      repaired++;
+    }
+
+    // Batch-delete the R2 bytes via a server-side endpoint that has the AWS SDK
+    if (orphanR2Keys.length > 0) {
+      await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/storyboard/repair-r2-batch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": process.env.INTERNAL_REPAIR_SECRET || "",
+        },
+        body: JSON.stringify({ r2Keys: orphanR2Keys }),
+      }).catch(err => console.warn("[orphanRepair] repair-r2-batch failed:", err));
+    }
+
+    if (softDeleteIds.length > 0) {
+      await ctx.runMutation(internal.storyboard.fileMetadataHandler.markOrphansDeleted, { fileIds: softDeleteIds });
+    }
+    if (hardDeleteIds.length > 0) {
+      await ctx.runMutation(internal.storyboard.fileMetadataHandler.hardDeleteOrphans, { fileIds: hardDeleteIds });
+    }
+
+    console.log(`[orphanRepair] scanned:${candidates.length} repaired:${repaired} skipped:${skipped}`);
+    return { scanned: candidates.length, repaired, skipped };
+  },
+});
+
+export const listOrphanCandidates = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, { limit }) => {
+    return await ctx.db
+      .query("storyboard_files")
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("status"), "deleted"),
+          q.neq(q.field("categoryId"), null),
+          q.neq(q.field("categoryId"), undefined)
+        )
+      )
+      .take(limit);
+  },
+});
+
+export const parentExists = internalQuery({
+  args: { categoryId: v.string() },
+  handler: async (ctx, { categoryId }) => {
+    const doc = await ctx.db.get(categoryId as any);
+    return doc !== null;
+  },
+});
+
+export const markOrphansDeleted = internalMutation({
+  args: { fileIds: v.array(v.string()) },
+  handler: async (ctx, { fileIds }) => {
+    for (const id of fileIds) {
+      const file = await ctx.db.get(id as any);
+      if (!file || file.status === "deleted") continue;
+      await ctx.db.patch(id as any, {
+        r2Key: "", sourceUrl: "", status: "deleted",
+        categoryId: null, deletedAt: Date.now(), size: 0,
+      });
+    }
+  },
+});
+
+export const hardDeleteOrphans = internalMutation({
+  args: { fileIds: v.array(v.string()) },
+  handler: async (ctx, { fileIds }) => {
+    for (const id of fileIds) {
+      const file = await ctx.db.get(id as any);
+      if (file) await ctx.db.delete(id as any);
+    }
   },
 });

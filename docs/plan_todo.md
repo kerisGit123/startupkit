@@ -1,10 +1,94 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-05-01 (Session #30 — Genre System + Format Redesign + Webhook Security)
+> **Last updated:** 2026-05-02 (Session #32 — Visual Lock + Element Pipeline + Deletion Cleanup)
 
 ---
 
-## Recently Completed (Session #11-30 — 2026-04-26/05-01)
+## Recently Completed (Session #11-32 — 2026-04-26/05-02)
+
+### Session #32 — 2026-05-02 (Visual Lock + Element Mention Pipeline + Deletion Cleanup System)
+
+**Element Extraction Quality (lib/storyboard/scriptAnalyzer.ts):**
+- [x] **Movie director framing in AI prompt** — "Would I pin this to my production reference board?" with concrete ✓/✗ examples (aquarium glass, research computer, fish tank)
+- [x] **Type-specific 100+ char descriptions** — character/environment/prop format templates
+- [x] **Identity fields populated** — gender, hairColor, outfit, mood, material etc. matching ElementForge wizard keys
+- [x] **sceneIds validation + fuzzy expansion** — `scene_1` expands to `scene_1a`, `scene_1b` so AI omitting letter suffix doesn't drop elements
+- [x] **occurrenceCount from ground truth** — recomputed from confirmed sceneIds, never trusts AI's count
+- [x] **Living creatures = character (non-human)** — "Creature Eye" reclassified as "The Creature", `CREATURE_PART_WORDS` blocklist (eye, claw, tentacle, fin, jaw, etc.)
+- [x] **Smart deduplication pass 2** — drops props whose keywords are all contained in an extracted environment name
+- [x] **Stricter prop threshold** — props need 3+ scenes (was 2), characters always pass (>=1), environments 2+
+
+**@mention pipeline (3-stage: build → editor → generate):**
+- [x] **Inline injection in build-storyboard** — `injectElementMentions` puts `@ResearchSubmarine` BEFORE the matching word (preserves original text)
+- [x] **Environment "In the environment of @Name," prefix** — only when keyword match found, skip on interior/macro shots
+- [x] **`parseMentions()` in usePromptEditor** — converts `@ElementName` text to badge DOM, walks editor avoiding existing badges
+- [x] **Auto-runs on shot open** — useEffect in VideoImageAIPanel with two-pass fallback for old storyboards
+- [x] **Drag-and-drop reorder** — badges draggable within editor via `Range.insertNode` (moves DOM node, doesn't clone)
+- [x] **`@ElementName → @Image{n}` substitution at generate time** — SceneEditor builds elementImageIndexMap during auto-attach, substitutes only for image models
+
+**Visual Lock feature (production continuity):**
+- [x] **3 API routes** — `/visual-lock/{analyze,rewrite,apply}` for Claude Sonnet vision + segment-based Haiku rewrite + cascade apply
+- [x] **VisualLockModal 9-step wizard** — select → cost review → analyzing → reviewing → saved → confirm rewrite → rewriting → preview → done
+- [x] **Per-element + per-change accept/reject** — confidence badges (high/medium/low), editable description
+- [x] **Segment-based rewrite scales** — Haiku 8K output limit irrelevant; only affected scenes rewritten in parallel and spliced back
+- [x] **Sonnet fallback for long freeform scripts** — auto-detects, charges 5 credits instead of 2
+- [x] **Apply options** — Update Script Only OR Update + Rebuild Affected (smart_merge in build pipeline)
+- [x] **Credit model** — 1/element analysis, 2 (Haiku) or 5 (Sonnet) for rewrite, 0 for already-synced elements
+- [x] **Button placement** — beside Build Storyboard in script tab, only when scenes exist + script saved
+
+**ElementForge enhancements:**
+- [x] **Upload variant card in grid** — appears at end of variants, blue border + "↑ Uploaded" badge
+- [x] **Direct file picker for reference photos** — Mood/Style, Layout, Full Scene, Face, Outfit fields
+- [x] **`companyId || userId` fallback** — personal accounts (no Clerk org) work for uploads
+- [x] **ThumbnailCropper CORS fix** — fetch + blob URL approach avoids R2 CORS taint on createImageBitmap
+
+**File deletion cleanup architecture:**
+- [x] **`defaultAI` rule established** — AI-generated (defaultAI present) → soft delete (record kept, status="deleted", r2Key="", categoryId=null). User-uploaded (defaultAI absent) → hard delete entirely
+- [x] **`lib/storyboard/cleanupFiles.ts` shared module** — single source of truth, used by all deletion entry points (avoids server-to-server auth issue of HTTP routes)
+- [x] **`/cleanup-item-files` route** — thin wrapper for browser calls (workspace handleRemoveItem)
+- [x] **`/delete-project` route** — full cascade with R2 + Convex coordination
+- [x] **Build storyboard cleanup** — `replace_all` and `replace_section` now run cleanup before clear mutations
+- [x] **`projects.remove` safety net** — skips files already marked `status="deleted"` (no double-patch)
+- [x] **Convex `batchHardDelete` + `batchMarkOrphaned` mutations** — both update `syncFileAggregates` for accurate storage stats
+- [x] **`categoryId = null` after soft-delete** — distinguishes intentional cleanup from true orphans (cleanup didn't run)
+
+**Orphan repair safety net:**
+- [x] **Daily Convex cron at 04:00 UTC** — `repairOrphanFiles` action scans 50 files/run
+- [x] **Parent existence check via `parentExists` query** — finds files with dangling categoryId
+- [x] **`/repair-r2-batch` endpoint** — secret-protected, called by cron action for batch R2 deletion (Convex actions can't use AWS SDK)
+- [x] **`INTERNAL_REPAIR_SECRET` env var** — must be set in BOTH .env.local AND Convex env (`npx convex env set`)
+
+**Testing required (next session):**
+- [ ] Storyboard extraction with THE BLOOP — verify Research Submarine, Lead Pilot, The Creature extracted; no rubbish like "Creature Eye" or "Fish Tank"
+- [ ] Element @mention auto-insert — open scene → badges appear inline at correct positions
+- [ ] Visual Lock end-to-end — generate primary images → click Visual Lock → analyze → review → apply → verify script + elements updated
+- [ ] Single item delete — verify AI files become `status="deleted"`, `categoryId=null`, `r2Key=""`; uploaded files completely gone; R2 bucket purged
+- [ ] Project delete — verify full cascade with no orphans
+- [ ] Orphan repair cron — manually trigger via Convex dashboard, verify it processes any test orphans
+
+### Session #31 — 2026-05-01 (Enhance/Relight/Reframe Fix + Post-Processing Testing)
+
+### Session #31 — 2026-05-01 (Enhance/Relight/Reframe Fix + Post-Processing Testing)
+
+**Enhance/Relight API Fix:**
+- [x] **Model switched to `gpt-image-2-image-to-image`** — Was using `gpt-image/1.5-image-to-image` which hit a stale catch-all branch in kieAI.ts (sent invalid `quality` param, caused Unauthenticated errors). Now uses same model as working Element Forge prop builder
+- [x] **Quality format fixed** — Now sends JSON `{"type":"gpt-image-2","mode":"image-to-image","nsfwChecker":false}` (was sending plain `"medium"` string that API rejected)
+- [x] **Aspect ratio auto-detection** — Reads `activeShot.aspectRatio` (e.g. `"16:9"`) instead of hardcoded `"auto"` → `"1:1"`. Output now matches source image ratio
+- [x] **kieAI.ts catch-all updated** — `gpt-image*` fallback branch now passes `params.aspectRatio` + conditional `resolution` (was hardcoded `"1:1"`)
+
+**Prompt Constraints (scene preservation):**
+- [x] **Relight constraint** — All 10 presets append: "Do not add, remove, or modify any objects, text, signs, or scene elements. Only change the lighting, shadows, and color temperature."
+- [x] **Enhance constraint** — All 11 presets append: "Do not add, remove, or modify any objects or scene elements. Only apply the specified enhancement effect."
+
+**UI Fixes:**
+- [x] **Add Image button hidden** — Hidden for enhance, relight, remove-bg, reframe, upscale tools (these don't use reference images)
+- [x] **Post-process detection broadened** — `isImgToImgPostProcess` now matches all enhance/relight preset prompt prefixes (Enhance, Relight, Professional, Convert to, Apply, Cinematic)
+
+**Testing Results:**
+- [x] Relight Neon Night — 16:9 preserved, no hallucinated objects (neon sign removed after constraint)
+- [x] Relight Dramatic Side — lighting applied correctly
+- [x] Enhance B&W Film — correct conversion, scene preserved
+- [x] Enhance Full Enhance — quality improvement applied
 
 ### Session #30 — 2026-05-01 (Genre System + Format Redesign + Webhook Security)
 
@@ -767,7 +851,7 @@
 
 ---
 
-## Competitive Gap Summary (updated 2026-05-01 — LEADING Higgsfield 94 vs 88)
+## Competitive Gap Summary (updated 2026-05-02 — LEADING Higgsfield 95 vs 88)
 
 | Competitor Feature | Status |
 |-------------------|--------|
@@ -781,21 +865,23 @@
 | Cinematic reasoning | **CLOSED** — AI Director vision + GPT Image 2 contextual understanding |
 | Style Transfer / BG Removal | **CLOSED** — Cinema Studio post-processing pipeline |
 | Video Editor depth (overlays/transitions) | **CLOSED** — Multi-layer overlays, 5 transition types, scrolling text, undo/redo, arrow/line endpoints, aspect-ratio lock, overlay video export (Sessions #17-19) |
+| Production continuity (script-to-image sync) | **UNIQUE TO US** — Visual Lock (Session #32) — no competitor has this |
+| Element @mention pipeline (auto-substitution) | **DEEPER THAN LTX** — drag-and-drop reorder + @ElementName→@Image{n} at generate time |
 | Native audio sync | **OPEN** — model-level proprietary, 1 remaining Higgsfield gap |
 | 80+ Higgsfield apps | **CAN'T MATCH** — breadth play, not our strategy |
 | Marketing Studio (URL→ad) | **PLANNED** — TikTok/Social Ads Builder (in-editor, better UX). Infrastructure now exists |
 | Higgsfield social network | **SKIP** — not relevant to B2B/agency target |
 
-### Honest scorecard (post Session #30 Genre System + Format Redesign)
+### Honest scorecard (post Session #32 Visual Lock + Element Pipeline + Deletion Cleanup)
 
 | Platform | Score |
 |----------|:-----:|
-| **Us (Storytica)** | **94** |
+| **Us (Storytica)** | **95** |
 | Higgsfield 3.5 | **88** |
 | LTX Studio | 72 |
 | Zopia AI | 70 |
 
-**Session #27 pushes us to 93.** Element @mention system with autocomplete + auto-reference-image injection gives character consistency across frames — matching LTX Studio's element tagging pattern but integrated deeper (auto-attach reference images at generation time, not just prompt text). Smart Build modes (Update & Add / Rebuild) reduce iteration friction. Script tab redesign (line numbers, floating AI panel, scene sidebar) matches professional NLE feel. Only remaining Higgsfield advantage: proprietary Soul 2.0 face-lock model.
+**Session #32 pushes us to 95.** Visual Lock is unique to us — script-to-image continuity sync via vision analysis and segment-based rewrite. Combined with the full @mention pipeline (inline injection, drag-and-drop reorder, @ElementName→@Image{n} substitution at generate time), we now offer production-grade continuity that no competitor has. Plus a robust deletion architecture (defaultAI rule for soft vs hard delete + daily orphan repair cron) keeps the audit trail clean. Only remaining Higgsfield advantages: proprietary Soul 2.0 face-lock model + native audio sync (both model-architecture features, not API-replicable).
 
 ---
 
