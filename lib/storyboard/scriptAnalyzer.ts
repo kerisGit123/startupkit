@@ -1,4 +1,5 @@
 import { getAnthropicClient } from "@/lib/support/anthropic";
+import type { TextBlock } from "@anthropic-ai/sdk/resources/messages/messages.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -309,7 +310,7 @@ RETURN ONLY valid JSON, no markdown:
   });
 
   const text = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
+    .filter((b): b is TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
 
@@ -411,7 +412,7 @@ RETURN ONLY valid JSON (no markdown):
   });
 
   const text = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
+    .filter((b): b is TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
 

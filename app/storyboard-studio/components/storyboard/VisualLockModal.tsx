@@ -251,7 +251,7 @@ export function VisualLockModal({ projectId, onClose, onScriptUpdated }: VisualL
       const affectedSceneIds = [...new Set(
         analysisResults.flatMap(r => {
           const el = allElements.find((e: any) => e._id === r.elementId);
-          return el?.sceneIds || [];
+          return el?.appearsInScenes || [];
         })
       )];
 

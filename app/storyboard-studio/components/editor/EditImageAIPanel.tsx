@@ -161,6 +161,7 @@ export interface EditImageAIPanelProps {
   generatedProjectImages?: Array<{ id: string; url: string; filename: string }>;
   onAddReferenceFromUrl?: (url: string) => void | Promise<void>;
   activeShotId?: string;
+  activeShotLinkedElements?: Array<{ id: string; name: string; type: string }>;
   originalImage?: string;
   userId?: string;
   user?: any;

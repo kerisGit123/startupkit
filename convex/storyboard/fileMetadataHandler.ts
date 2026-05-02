@@ -443,7 +443,7 @@ export const markOrphansDeleted = internalMutation({
   handler: async (ctx, { fileIds }) => {
     for (const id of fileIds) {
       const file = await ctx.db.get(id as any);
-      if (!file || file.status === "deleted") continue;
+      if (!file || (file as any).status === "deleted") continue;
       await ctx.db.patch(id as any, {
         r2Key: "", sourceUrl: "", status: "deleted",
         categoryId: null, deletedAt: Date.now(), size: 0,

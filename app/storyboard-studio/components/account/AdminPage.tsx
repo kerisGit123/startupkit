@@ -109,12 +109,13 @@ export default function AdminPage({ sidebarOpen, onToggleSidebar }: AdminPagePro
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const tabs: { key: CleaningTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
+  const allTabs: { key: CleaningTab; label: string; icon: React.ReactNode; adminOnly?: boolean }[] = [
     { key: "storage",  label: "Storage",        icon: <HardDrive className="w-4 h-4" /> },
     { key: "temp",     label: "Temp Files",      icon: <Clock className="w-4 h-4" /> },
     { key: "orphans",  label: "Orphaned Files",  icon: <Ghost className="w-4 h-4" /> },
     { key: "admin",    label: "Admin",           icon: <Shield className="w-4 h-4" />, adminOnly: true },
-  ].filter(t => !t.adminOnly || isSuperAdmin);
+  ];
+  const tabs = allTabs.filter(t => !t.adminOnly || isSuperAdmin);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-(--bg-primary) text-(--text-primary)">

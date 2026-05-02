@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { getAnthropicClient } from "@/lib/support/anthropic";
+import type { TextBlock } from "@anthropic-ai/sdk/resources/messages/messages.js";
 import type { Id } from "@/convex/_generated/dataModel";
 
 export const maxDuration = 120;
@@ -122,7 +123,7 @@ Return JSON:
         });
 
         const text = response.content
-          .filter((b): b is { type: "text"; text: string } => b.type === "text")
+          .filter((b): b is TextBlock => b.type === "text")
           .map(b => b.text)
           .join("");
 

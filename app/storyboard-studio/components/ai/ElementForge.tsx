@@ -24,6 +24,7 @@ import {
   randomizeIdentity,
 } from "./elementForgeConfig";
 import { ThumbnailCropper } from "./ThumbnailCropper";
+import { toast } from "sonner";
 
 // Fallback templates if no prompt templates exist in the database
 const FALLBACK_TEMPLATES: Record<ForgeElementType, { name: string; prompt: string }[]> = {
@@ -1079,7 +1080,7 @@ export function ElementForge({
 
       if (effectiveMode === "edit" && effectiveElementId) {
         await updateElement({
-          id: effectiveElementId, name: name.trim(), description, identity: identityData,
+          id: effectiveElementId as Id<"storyboard_elements">, name: name.trim(), description, identity: identityData,
           thumbnailUrl: thumbnailUrl || undefined,
           referencePhotos,
         });
