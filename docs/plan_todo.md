@@ -51,12 +51,74 @@
 - [x] Prompt writing examples updated to include `@ElementName` syntax
 - [x] Agent mode workflow updated: `suggest_shot_list → generate_scene → create_execution_plan → trigger_image_generation`
 
-**Still pending in Phase 1:**
+**Still pending in Phase 1 — Session #34 opens here:**
 
-- [ ] End-to-end test: Agent Mode "build me a 6-frame story about a samurai at dawn"
+- [ ] End-to-end test (see test plan below)
 - [ ] Tune system prompt from observed agent behavior
-- [ ] DeepSeek routing by mode — Director mode → DeepSeek V3 via OpenRouter (advice, light tool use, 4-5x cheaper); Agent mode → keep Haiku (complex 24-tool chaining, reliability > cost). 2-line change in `app/api/director/chat/route.ts` using existing `OPENROUTER_API_KEY`.
-- [x] Test quick-action chip strip — confirmed rendering correctly: project advice chips visible above input (Review storyboard, Shot variety, Improve all prompts, etc.)
+- [x] DeepSeek routing for Director — CANCELLED. Claude-only (Agent Skills architecture requires Claude API throughout)
+- [x] Test quick-action chip strip — confirmed rendering correctly
+
+---
+
+#### Session #34 Test Plan — Agent Mode End-to-End
+
+Open the running app. Open the **Director chat panel** (right side of storyboard studio). Switch to **Agent mode**.
+
+##### Test 1 — Full story build (the main test)
+
+Type exactly: "Build me a 6-frame story about a samurai at dawn"
+
+Expected tool call sequence:
+
+1. `get_project_overview` — reads project context
+2. `suggest_shot_list` — plans 6 shots (scene_type: action or drama)
+3. `generate_scene` — creates 6 frames in storyboard (check they appear live)
+4. `get_credit_balance` — checks affordability
+5. `create_execution_plan` — shows plan card with 6 steps + total credits
+6. Click Approve
+7. `trigger_image_generation` × 6 — fires all generations
+
+Pass criteria:
+
+- [ ] All 7 tool calls fire in order (watch tool indicators in chat)
+- [ ] 6 frames appear in the storyboard tab in real time
+- [ ] Each frame has a cinematic image prompt (not blank)
+- [ ] Plan card shows correct credit cost before approval
+- [ ] After approval, generation jobs start (frames show "generating" spinner)
+- [ ] Prompts use `@ElementName` syntax if project has elements
+
+##### Test 2 — Director mode advice
+
+Switch to Director mode. Type: "Review my storyboard and suggest improvements"
+
+Expected: calls `get_project_overview` + `get_scene_frames`, returns specific advice. No generation triggered.
+
+Pass criteria:
+
+- [ ] Gives specific advice (not generic)
+- [ ] Does NOT offer to generate images (Director mode only advises)
+- [ ] References actual frame numbers and prompts from the project
+
+##### Test 3 — suggest_shot_list standalone
+
+In Director mode, type: "Plan the shots for a tense interrogation scene, 5 frames"
+
+Expected: calls `suggest_shot_list(scene_type="dialogue", frame_count=5)`.
+
+Pass criteria:
+
+- [ ] Returns 5 specific shots with types, angles, movements, purpose
+- [ ] Shot types vary (not all mediums)
+
+##### What to report back for tuning
+
+After running the tests, note:
+
+- Which tool calls were skipped or called in wrong order
+- Whether prompts look cinematic or generic
+- Whether the agent was verbose or concise
+- Any tool errors (look at tool_result indicators)
+- Any unexpected behavior
 
 ### Session #32 — 2026-05-02 (Visual Lock + Element Mention Pipeline + Deletion Cleanup System)
 
