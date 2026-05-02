@@ -857,12 +857,25 @@ export async function dispatchDirectorTool(
             messages: [{ role: "user", content: skillPrompt }],
           });
 
+          // The skill writes the structured script via a text_editor_code_execution "create" call.
+          // Extract file_text from that block — it has the full ACT/SCENE/Prompt script.
+          const createBlock = ((response.content as any[]) || []).find(
+            (b: any) =>
+              b.type === "server_tool_use" &&
+              b.name === "text_editor_code_execution" &&
+              b.input?.command === "create" &&
+              typeof b.input?.file_text === "string"
+          );
+          if (createBlock?.input?.file_text) {
+            return { output: createBlock.input.file_text, isError: false };
+          }
+
+          // Fallback: text blocks (summary only — no structured prompts)
           const text = ((response.content as any[]) || [])
             .filter((b: any) => b.type === "text")
             .map((b: any) => b.text as string)
             .join("");
-
-          if (!text) return { output: "Skill returned no text output.", isError: true };
+          if (!text) return { output: "Skill returned no output.", isError: true };
           return { output: text, isError: false };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
