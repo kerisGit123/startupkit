@@ -342,7 +342,10 @@ export function DirectorChatPanel({
           }
         }
       } catch (err: any) {
-        if (err.name === "AbortError") return;
+        if (err.name === "AbortError") {
+          setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, isStreaming: false } : m));
+          return;
+        }
         setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content: "Connection error. Please try again.", isError: true, isStreaming: false } : m));
       } finally {
         setStreaming(false);
@@ -634,15 +637,36 @@ export function DirectorChatPanel({
                     }
                   </button>
                 )}
+                {/* Tool call disclosure */}
+                {msg.role === "assistant" && !msg.isStreaming && msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                  <div className="mt-1 flex items-center gap-1 text-[10px] text-gray-600">
+                    <Wrench className="w-2.5 h-2.5 shrink-0" strokeWidth={1.5} />
+                    <span>
+                      {msg.toolsUsed.length} tool{msg.toolsUsed.length !== 1 ? "s" : ""}
+                      {" · "}
+                      {msg.toolsUsed
+                        .slice(0, 4)
+                        .map((t) => (TOOL_LABELS[t] || t).replace("...", ""))
+                        .join(", ")}
+                      {msg.toolsUsed.length > 4 ? ` +${msg.toolsUsed.length - 4}` : ""}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )
         )}
 
         {activeTool && (
-          <div className="flex items-center gap-2 text-[11px] text-(--text-secondary) px-1">
-            <Wrench className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
-            <span>{TOOL_LABELS[activeTool] || `Using ${activeTool}...`}</span>
+          <div className="flex flex-col gap-1 px-1">
+            <div className="flex items-center gap-2 text-[11px] text-amber-400/80">
+              <Wrench className="w-3.5 h-3.5 animate-spin shrink-0" strokeWidth={1.75} />
+              <span>{TOOL_LABELS[activeTool] || `Using ${activeTool}...`}</span>
+              {elapsed > 0 && <span className="text-amber-400/50 tabular-nums">{elapsed}s</span>}
+            </div>
+            {activeTool === "invoke_skill" && (
+              <p className="text-[10px] text-amber-300/40 pl-5">Keep this panel open — script generation takes ~30–60s</p>
+            )}
           </div>
         )}
       </div>

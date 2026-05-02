@@ -1,29 +1,27 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-05-02 (Session #34 — Onboarding strategy parked)
+> **Last updated:** 2026-05-03 (Session #35 — AI Director Skills integration + agent UX hardening)
 
 ---
 
 ## Parked / Backlog
 
-### Onboarding / First-Time Experience — PARKED (Session #34)
+### Onboarding / First-Time Experience — PARTIALLY SUPERSEDED (Session #35)
 
-**Strategy agreed — build after AI Director + Visual Lock are verified.**
+**`scriptGenerator.ts` plan is superseded by `invoke_skill` via AI Director (Session #35).** The Director in Agent mode now calls the `video-prompt-builder` Claude Console skill which produces a richer structured script (IMAGE/VIDEO prompts + 🟢🔴 Seedance model hints) than a standalone Haiku call would. No separate route needed for script generation.
 
-**Core idea: Empty project → Script tab auto-opens → two paths:**
+**Remaining onboarding work (still needed):**
 
-| Path                                       | Cost        | Action                                                              |
-|--------------------------------------------|-------------|---------------------------------------------------------------------|
-| Paste your own script → Build Storyboard   | **Free**    | scriptAnalyzer parses, frames created                               |
-| AI Generate Script from one sentence       | **Credits** | New `scriptGenerator.ts` → Haiku expands to full structured script  |
+| Path                                     | Cost        | Status                                                                              |
+|------------------------------------------|-------------|-------------------------------------------------------------------------------------|
+| Paste your own script → Build Storyboard | **Free**    | ✅ DONE — scriptAnalyzer parses, frames created                                     |
+| AI Generate Script (Agent chat)          | **Credits** | ✅ DONE — invoke_skill via Director. Needs persistence fix (Session #35 limitation) |
+| Empty project smart entry point          | —           | 🔲 TODO — show textarea + auto-trigger Agent mode when 0 frames                     |
 
-**What needs to be built:**
+**Still to build:**
 
-- [ ] `lib/storyboard/scriptGenerator.ts` — Haiku expands one sentence into full structured script (SCENE markers, image prompts, video prompts). ~$0.005/call.
-- [ ] `app/api/storyboard/generate-script/route.ts` — credit-gated API route for script generation
-- [ ] Workspace: default to Script tab when project has no frames + no script
-- [ ] "Generate Script" button in Script tab with credit cost preview (beside existing Build Storyboard button)
-- [ ] Auto-build storyboard after script is saved (free, no extra click)
+- [ ] Workspace: show "Start with AI" panel when project has 0 frames + 0 script (big textarea → invoke_skill auto-triggered)
+- [ ] Auto-build storyboard after `save_script` (Director proactively offers "Build Storyboard?" after save)
 - [ ] Auto-show `BatchGenerateDialog` after build completes ("Generate images for all N frames? Cost: X credits")
 - [ ] Build Storyboard rate limit: 20 builds/hour per user (add to API route, not credit-gated)
 
@@ -48,30 +46,63 @@
 
 ## Current State
 
-**On `main`, working tree clean. 8 commits ahead of origin (unpushed).** Last 5 commits:
+**On `main`, uncommitted Session #35 changes + 8 commits ahead of origin (unpushed).** Last 5 commits:
 
-```
-c778ea1  Visual Lock polish: per-request Convex client + tightened types
-0febefe  Session #33 — AI Director Phase 1: suggest_shot_list, generate_scene tools, system prompt rewrite
-7fe5bf3  System Cleaning: orphan panel, temp cleanup, 1-year inactivity purge
-73d5744  Pill bar picker anchoring + ElementForge variant FileBrowser
-3f24671  Session #32: Visual Lock + element @mention pipeline + deletion cleanup
+```text
+807ab8a  plan_todo: refresh Current State with c778ea1 + add session priorities
+eaff205  Docs: add Session #34 Agent end-to-end test plan to plan_todo.md
+5dad25b  Docs: update plan_ai_director + plan_chatbot for Session #33
+ca52dcc  Update plan_ai_director.md: Session #33 tool inventory
+cc93d6c  Update todo: mark extraction, @mention, item delete, chip strip verified
 ```
 
-**Now blocked on testing — no further dev until verified.** See "Testing required (next session)" under Session #32 + #33 below. Onboarding strategy parked above (Session #34) until tests pass.
+**Session #35 changes not yet committed:** `lib/director/tool-executor.ts`, `lib/director/agent-tools.ts`, `lib/director/system-prompt.ts`, `app/api/director/chat/route.ts`, `components/director/DirectorChatPanel.tsx`, `scripts/test-skill.mjs`, `.env.local`, `env.example`.
 
 **Top priorities for next session (in order):**
 
-1. **THE BLOOP storyboard extraction** — single highest-leverage test (exercises element extraction quality + @mention injection in one project)
-2. **Visual Lock end-to-end** — generate primary images → analyze → review → apply with the per-request Convex client (`c778ea1`)
-3. **Single item delete** — verify `defaultAI` rule (soft vs hard delete) on real data
-4. **AI Director "samurai at dawn" agent test** — `suggest_shot_list → generate_scene → create_execution_plan` end-to-end
-5. **Push to `origin/main`** — once tests pass, ship the 8 pending commits
-6. **Then unpark onboarding** (Session #34 plan above) — `scriptGenerator.ts` → "Generate Script" button → auto-build → BatchGenerateDialog
+1. **Commit Session #35 changes** — commit all director/skill files, then push the full 9-commit backlog to origin/main
+2. **invoke_skill end-to-end test** — open Agent mode, type "write a story about a dragon", verify: Director calls invoke_skill → save_script → script appears in Script tab → Build Storyboard creates frames
+3. **Convex action for invoke_skill persistence** — if user closes panel during the 30–60s skill call, result is lost. Move invoke_skill to a Convex action so it saves regardless of SSE connection (see Session #35 known limitation)
+4. **Visual Lock end-to-end** — generate primary images → click Visual Lock → analyze → review → apply → verify script + elements updated
+5. **Unpark onboarding** — `scriptGenerator.ts` superseded by `invoke_skill` flow; update the onboarding plan to route "Generate Script" through the Director chat panel in Agent mode
 
 ---
 
-## Recently Completed (Session #11-33 — 2026-04-26/05-02)
+## Recently Completed (Session #11-35 — 2026-04-26/05-03)
+
+### Session #35 — 2026-05-03 (AI Director — Skills Integration + Agent UX Hardening)
+
+**Claude Console Skills integration (`lib/director/`):**
+
+- [x] `invoke_skill` tool in `agent-tools.ts` — calls `video-prompt-builder` skill via Anthropic beta API (`betas: ["code-execution-2025-08-25", "skills-2025-10-02"]`, `container.skills`)
+- [x] `save_script` tool in `agent-tools.ts` — saves raw skill output to project script via `api.storyboard.projects.update`
+- [x] `tool-executor.ts` — `invoke_skill`: extracts full structured script from `server_tool_use` create block `file_text` (NOT text blocks); 2 retries with exponential delay (2s/4s); Sonnet 4.6 for better structured output
+- [x] `tool-executor.ts` — `save_script`: saves to project, returns guidance to Director to send user to Build Storyboard
+- [x] `system-prompt.ts` — "New Story from Scratch" flow documented: `invoke_skill → save_script → guide to Build Storyboard`. Strict rules: "DO NOT ask clarifying questions — call invoke_skill immediately", "pass EXACT raw text to save_script — never reformat"
+- [x] `SKILL_VIDEO_PROMPT_BUILDER_ID=skill_01TL24F7TFF8M1JJSFk693D1` added to `.env.local` + `env.example`
+- [x] `scripts/test-skill.mjs` — standalone smoke test that loads `.env.local`, calls beta API, extracts `file_text` from create block
+- [x] Skill output format (`### SCENE 1`, `🖼️ Image Prompt:`, `🎬 Video Prompt:`, `🟢 Seedance 1.5 Pro`) already triggers `parseStructuredScript` path in `scriptAnalyzer.ts` — zero changes to analyzer needed
+
+**Dynamic model strategy (`app/api/director/chat/route.ts`):**
+
+- [x] Outer Director loop stays on `claude-haiku-4-5` by default (fast + cheap for all other tools)
+- [x] After `invoke_skill` succeeds: `nextModel` set to `claude-sonnet-4-6` for the NEXT loop iteration only — ensures Director follows "pass raw text to save_script" precisely, then drops back to Haiku
+- [x] `done` SSE event now carries `toolsUsed: string[]` — full tool name list sent to client
+
+**Agent UX (`components/director/DirectorChatPanel.tsx`):**
+
+- [x] Copy button on assistant messages — hover to reveal (top-right corner), Check icon on copy, 1.5s reset
+- [x] Red Square stop button during streaming — replaces disabled Loader2 spinner; calls `abortRef.current?.abort()`; AbortError handler marks message `isStreaming: false` without clearing partial content
+- [x] Progress timer — `elapsed` state ticks every second while any tool is active, shown as `42s` beside tool label (tabular-nums)
+- [x] "Keep panel open" warning during `invoke_skill` — dimmed amber text below timer row: "script generation takes ~30–60s"
+- [x] Tool call disclosure — `Wrench + "2 tools · Building script, Saving script"` rendered in 10px gray text below each completed assistant message bubble
+- [x] `toolsUsed?: string[]` added to `Message` interface; populated on `done` SSE event
+
+**Known limitation (deferred):**
+
+- invoke_skill result is **lost if user closes the panel** before `save_script` runs — SSE disconnects, Anthropic beta call may complete on server but has no client to stream to, and `save_script` is never called. Fix: move `invoke_skill` to a Convex action (server-side, runs independent of browser connection, saves result directly). Deferred to next session.
+
+---
 
 ### Session #33 — 2026-05-02 (AI Director/Agent Phase 1 — Tools + System Prompt)
 
@@ -170,6 +201,7 @@ After running the tests, note:
 ### Session #32 — 2026-05-02 (Visual Lock + Element Mention Pipeline + Deletion Cleanup System)
 
 **Element Extraction Quality (lib/storyboard/scriptAnalyzer.ts):**
+
 - [x] **Movie director framing in AI prompt** — "Would I pin this to my production reference board?" with concrete ✓/✗ examples (aquarium glass, research computer, fish tank)
 - [x] **Type-specific 100+ char descriptions** — character/environment/prop format templates
 - [x] **Identity fields populated** — gender, hairColor, outfit, mood, material etc. matching ElementForge wizard keys
@@ -180,6 +212,7 @@ After running the tests, note:
 - [x] **Stricter prop threshold** — props need 3+ scenes (was 2), characters always pass (>=1), environments 2+
 
 **@mention pipeline (3-stage: build → editor → generate):**
+
 - [x] **Inline injection in build-storyboard** — `injectElementMentions` puts `@ResearchSubmarine` BEFORE the matching word (preserves original text)
 - [x] **Environment "In the environment of @Name," prefix** — only when keyword match found, skip on interior/macro shots
 - [x] **`parseMentions()` in usePromptEditor** — converts `@ElementName` text to badge DOM, walks editor avoiding existing badges
@@ -188,6 +221,7 @@ After running the tests, note:
 - [x] **`@ElementName → @Image{n}` substitution at generate time** — SceneEditor builds elementImageIndexMap during auto-attach, substitutes only for image models
 
 **Visual Lock feature (production continuity):**
+
 - [x] **3 API routes** — `/visual-lock/{analyze,rewrite,apply}` for Claude Sonnet vision + segment-based Haiku rewrite + cascade apply
 - [x] **VisualLockModal 9-step wizard** — select → cost review → analyzing → reviewing → saved → confirm rewrite → rewriting → preview → done
 - [x] **Per-element + per-change accept/reject** — confidence badges (high/medium/low), editable description
@@ -198,12 +232,14 @@ After running the tests, note:
 - [x] **Button placement** — beside Build Storyboard in script tab, only when scenes exist + script saved
 
 **ElementForge enhancements:**
+
 - [x] **Upload variant card in grid** — appears at end of variants, blue border + "↑ Uploaded" badge
 - [x] **Direct file picker for reference photos** — Mood/Style, Layout, Full Scene, Face, Outfit fields
 - [x] **`companyId || userId` fallback** — personal accounts (no Clerk org) work for uploads
 - [x] **ThumbnailCropper CORS fix** — fetch + blob URL approach avoids R2 CORS taint on createImageBitmap
 
 **File deletion cleanup architecture:**
+
 - [x] **`defaultAI` rule established** — AI-generated (defaultAI present) → soft delete (record kept, status="deleted", r2Key="", categoryId=null). User-uploaded (defaultAI absent) → hard delete entirely
 - [x] **`lib/storyboard/cleanupFiles.ts` shared module** — single source of truth, used by all deletion entry points (avoids server-to-server auth issue of HTTP routes)
 - [x] **`/cleanup-item-files` route** — thin wrapper for browser calls (workspace handleRemoveItem)
@@ -214,6 +250,7 @@ After running the tests, note:
 - [x] **`categoryId = null` after soft-delete** — distinguishes intentional cleanup from true orphans (cleanup didn't run)
 
 **Orphan repair safety net:**
+
 - [x] **Daily Convex cron at 04:00 UTC** — `repairOrphanFiles` action scans 50 files/run
 - [x] **Parent existence check via `parentExists` query** — finds files with dangling categoryId
 - [x] **`/repair-r2-batch` endpoint** — secret-protected, called by cron action for batch R2 deletion (Convex actions can't use AWS SDK)
@@ -233,20 +270,24 @@ After running the tests, note:
 ### Session #31 — 2026-05-01 (Enhance/Relight/Reframe Fix + Post-Processing Testing)
 
 **Enhance/Relight API Fix:**
+
 - [x] **Model switched to `gpt-image-2-image-to-image`** — Was using `gpt-image/1.5-image-to-image` which hit a stale catch-all branch in kieAI.ts (sent invalid `quality` param, caused Unauthenticated errors). Now uses same model as working Element Forge prop builder
 - [x] **Quality format fixed** — Now sends JSON `{"type":"gpt-image-2","mode":"image-to-image","nsfwChecker":false}` (was sending plain `"medium"` string that API rejected)
 - [x] **Aspect ratio auto-detection** — Reads `activeShot.aspectRatio` (e.g. `"16:9"`) instead of hardcoded `"auto"` → `"1:1"`. Output now matches source image ratio
 - [x] **kieAI.ts catch-all updated** — `gpt-image*` fallback branch now passes `params.aspectRatio` + conditional `resolution` (was hardcoded `"1:1"`)
 
 **Prompt Constraints (scene preservation):**
+
 - [x] **Relight constraint** — All 10 presets append: "Do not add, remove, or modify any objects, text, signs, or scene elements. Only change the lighting, shadows, and color temperature."
 - [x] **Enhance constraint** — All 11 presets append: "Do not add, remove, or modify any objects or scene elements. Only apply the specified enhancement effect."
 
 **UI Fixes:**
+
 - [x] **Add Image button hidden** — Hidden for enhance, relight, remove-bg, reframe, upscale tools (these don't use reference images)
 - [x] **Post-process detection broadened** — `isImgToImgPostProcess` now matches all enhance/relight preset prompt prefixes (Enhance, Relight, Professional, Convert to, Apply, Cinematic)
 
 **Testing Results:**
+
 - [x] Relight Neon Night — 16:9 preserved, no hallucinated objects (neon sign removed after constraint)
 - [x] Relight Dramatic Side — lighting applied correctly
 - [x] Enhance B&W Film — correct conversion, scene preserved
@@ -255,6 +296,7 @@ After running the tests, note:
 ### Session #30 — 2026-05-01 (Genre System + Format Redesign + Webhook Security)
 
 **Genre System (16 presets):**
+
 - [x] `GENRE_PRESETS` array — 16 genres (Cinematic, Horror, Noir, Sci-Fi, Fantasy, Drama, Action, Comedy, Thriller, Anime, Wuxia, Cyberpunk, Luxury, Epic, Corporate, Vintage-Retro) with gradient colors and preview images
 - [x] `GENRE_PROMPTS` mapping — detailed mood/lighting/tone descriptions per genre, auto-appended to all generation prompts
 - [x] `GENRE_COMBO_TIPS` — user-helpful pairing suggestions (e.g., "UGC Content: Comedy or Bold + YouTube or Reel/TikTok")
@@ -264,6 +306,7 @@ After running the tests, note:
 - [x] Genre preview images — 16 genre thumbnails in `public/storytica/element_forge/grids/genre/`
 
 **Format Redesign (12 content formats):**
+
 - [x] `FORMAT_PRESETS` array — 12 formats (Film, Documentary, YouTube, Reel/TikTok, Commercial, Music Video, Vlog, Tutorial, Presentation, Podcast, Product Demo, Cinematic Ad) with color coding and preview images
 - [x] `FORMAT_PROMPT_MAP` — framing/pacing/camera descriptions per format, auto-appended independently from genre
 - [x] Format picker UI — 4-column grid in workspace toolbar with auto + 12 format options
@@ -271,6 +314,7 @@ After running the tests, note:
 - [x] Dual-axis system — genre controls visual aesthetics (mood, lighting, color), format controls structure (framing, pacing, camera behavior)
 
 **Webhook Security (Option C — shared secret):**
+
 - [x] `WEBHOOK_SECRET` validation added to `/api/kie-callback/route.ts` — checks header `x-webhook-secret` or query param `secret`
 - [x] `WEBHOOK_SECRET` validation added to `/api/storyboard/kie-callback/route.ts` — same guard
 - [x] Clerk auth guard added to `/api/storyboard/pull-result/route.ts` — requires authenticated user
@@ -282,6 +326,7 @@ After running the tests, note:
 ### Session #29 — 2026-04-30 (Character Thumbnail Regeneration + Custom Element Builder)
 
 **Character Thumbnail Regeneration:**
+
 - [x] Regenerated all character thumbnails — ultra realistic 4K, front-facing, dark steel-blue navy (#2c3e5a) background
 - [x] Fixed 5×2 grid system — all grids use consistent layout, empty cells filled with background color
 - [x] Crop script upgraded — `make_measured_grid()` auto-measures gap positions from actual image, `None` skip for empty cells
@@ -293,6 +338,7 @@ After running the tests, note:
 - [x] Grid prompts documented in `docs/character-grid-prompts.md`
 
 **Custom Element Builder (Logo/Style/Other):**
+
 - [x] Removed Font type (AI unreliable for exact font reproduction)
 - [x] Added `CUSTOM_ELEMENT_TYPES` set + `CUSTOM_TYPE_CONFIG` with per-type help text, image limits, placeholders
 - [x] Clean single-form create panel for Logo/Style/Other (no tabs — Name, Help, Description, Browse, Images, Visibility toggle)
@@ -305,6 +351,7 @@ After running the tests, note:
 - [x] @mention autocomplete already works for all element types (no changes needed)
 
 **Testing Plan — Character Thumbnails:**
+
 - [ ] Verify all character builder carousels show correct thumbnails (no blank/broken images)
 - [ ] Check Gender tab: Male, Female, Non-binary, Other — correct faces, no black edges
 - [ ] Check Age tab: Child through Elderly — correct progression, no squeezing
@@ -321,6 +368,7 @@ After running the tests, note:
 - [ ] Check Hair Color tab: all 8 — still old gray style (acceptable, not regenerated)
 
 **Testing Plan — Custom Element Builder:**
+
 - [ ] Navigate to Logos tab → click "Create Logo" → form opens with correct type badge, help text, placeholder
 - [ ] Navigate to Styles tab → click "Create Style" → form opens correctly
 - [ ] Navigate to Other tab → click "Create Other" → form opens with Description required
@@ -345,13 +393,14 @@ After running the tests, note:
 **Problem:** Convex dashboard showed 2.38 GB database bandwidth on startupkit + 84K function calls + high action compute on my-app (tracker-app2).
 
 **my-app (tracker-app2) — Function Calls + Action Compute:**
+
 - [x] **Cron interval 1min → 5min** — `processBlastQueue` was running every minute (42K calls/month), now every 5 minutes with larger batch (50). ~80% reduction in function calls
 - [x] **Early return on empty queue** — `processBlastQueue` now returns immediately when no pending messages, avoiding wasted action compute (was 0.014 GB-h, now near-zero when idle)
 
 **startupkit — Database Bandwidth (2.38 GB → est. ~1.0-1.2 GB):**
 
 | Query | Bandwidth | Problem | Fix | Status |
-|-------|-----------|---------|-----|--------|
+| --- | --- | --- | --- | --- |
 | `listByProject` | 431 MB | Returns soft-deleted files | Added `status != deleted` filter | DONE |
 | `listAudioFiles` | 284 MB | Fetches ALL company files, filters audio in JS | Added server-side `fileType=audio` + `status=completed` filter | DONE |
 | `listSharedFiles` (x2 pages) | 233 MB x2 | Returns full documents with `metadata` blob (200 records) | Now projects only 12 needed fields (drops metadata, creditsUsed, etc.) | DONE |
@@ -362,11 +411,13 @@ After running the tests, note:
 | `getPublicStats` | 45 MB | Scans 3 entire tables (`users`, `projects`, `files`) just for `.length` | Cached in `landing_stats` table, refreshed hourly by cron | DONE |
 
 **New infrastructure:**
+
 - [x] `landing_stats` table in schema — single row with `totalCreators`, `totalProjects`, `totalGenerations`
 - [x] `refreshLandingStats` internal mutation — updates cached stats from table scans
 - [x] Hourly cron `refresh-landing-stats` — keeps landing stats fresh without per-visitor table scans
 
 **Future optimizations (not yet done):**
+
 - [ ] **Static landing page** — Convert `/storytica` to ISR with `revalidate = 3600`. Would eliminate even the single-row Convex read per visitor
 - [ ] **Gallery pagination** — Both `/community` and in-studio gallery fetch 200 items. Could use cursor-based pagination to load in chunks
 - [ ] **Monitor post-deploy** — Check Convex dashboard after deploying to verify bandwidth reduction
@@ -374,6 +425,7 @@ After running the tests, note:
 ### Session #27 — 2026-04-30 (Script Builder Redesign + Element @Mention + Smart Build)
 
 **Script Tab Redesign:**
+
 - [x] **Line numbers** with scene header highlighting (blue for SCENE lines)
 - [x] **Floating AI prompt panel** — VideoImageAIPanel-style bottom panel (backdrop-blur, rounded-2xl, border-t hairline)
 - [x] **Rich scene sidebar** — Cards with scene ID badge, duration, cyan location badges, amber character badges
@@ -381,6 +433,7 @@ After running the tests, note:
 - [x] **Build dialog CSS vars** — Migrated from hardcoded hex to design system variables
 
 **Build Storyboard — Smart Modes:**
+
 - [x] **Update & Add mode** — Reparses script, updates prompts on existing scenes (by sceneId match), adds new scenes, reuses elements by name+type. Nothing deleted
 - [x] **Rebuild From Scratch mode** — Deletes all frames + elements, rebuilds everything
 - [x] **replace_section API support** — `clearItemsBySceneIds` mutation for future selective rebuild
@@ -388,11 +441,13 @@ After running the tests, note:
 - [x] **Convex queries** — `listElementsForBuild`, `listItemsForBuild`, `clearItemsBySceneIds`
 
 **Element Extraction Improvements:**
+
 - [x] **Tighter AI prompt** — Aim for 3-6 elements, strict dedup rules, no parent+child
 - [x] **Post-filter blocklist** — Parts (porthole, panel, cabin, interior, dashboard), groups (crew, crowd, team)
 - [x] **Parent-child dedup** — If "Submarine" exists, skip "Submarine Porthole"
 
 **Element @Mention System (full pipeline):**
+
 - [x] **`element` badge type** — Orange color, `@LeadPilot` label with thumbnail in prompt editor
 - [x] **@ autocomplete dropdown** — Type `@` in prompt → dropdown shows project elements with thumbnails, keyboard nav (arrows/enter/esc)
 - [x] **Auto-insert badges** — Loading a frame's prompt auto-inserts element badges from `linkedElements`
@@ -401,6 +456,7 @@ After running the tests, note:
 - [x] **Data flow** — `linkedElements` on Shot type -> SceneEditor -> VideoImageAIPanel -> API
 
 **Other Fixes:**
+
 - [x] **Element visibility dropdown** — Dropdown selector instead of instant toggle (prevents element disappearing)
 - [x] **Element Forge browse button** — Reference photos show browse (folder) + delete on hover for easy swap
 - [x] **FileBrowser defaultCategory** — Opens to Elements when launched from Element Forge
@@ -417,12 +473,14 @@ After running the tests, note:
 ### Session #25 — 2026-04-29 (Element Forge Character Builder + Image Generation)
 
 **Simple/Advanced Mode:**
+
 - [x] **Simple mode** — 3 tabs: Identity, Prompt, Generate. Casual users fill name + 3 picks → generate in 20 seconds
 - [x] **Advanced mode** — 8 tabs: Identity, Era, Physical Appearance, Personality, Details, Outfit, Prompt, Generate. Full power
 - [x] **Toggle persisted** in localStorage, independent from Human/Non-Human toggle
 - [x] **Details/Outfit Custom** fields changed from text to textarea for longer descriptions
 
 **Reference Photos (Face+Outfit OR Full Body):**
+
 - [x] **(Face + Outfit) OR Full Body** layout with visual "OR" divider. Opposite side dims when one is filled
 - [x] **Non-human**: Head + Body OR Full Body
 - [x] **FileBrowser integration** — clicking slots opens R2 FileBrowser to pick/upload images (not direct upload)
@@ -431,6 +489,7 @@ After running the tests, note:
 - [x] **Files stay as `uploads`** — URL stored on element is the relationship, no special category
 
 **Generate Tab (last tab):**
+
 - [x] **Model selector** — styled dropdown (GPT Image 2 default, Nano Banana 2, Z-Image) with descriptions
 - [x] **Settings popup** — VideoImageAIPanel-style grid: aspect ratio (16:9/1:1/9:16), resolution (1K/2K/4K), format (PNG/JPG), grid (1x1/2x2)
 - [x] **Credit display** via `usePricingData` hook, shows per-generation cost
@@ -440,6 +499,7 @@ After running the tests, note:
 - [x] **Image overrides** — `composeImageOverrides()` appends explicit hair color/eye color/ethnicity instructions for img2img consistency
 
 **Variant System:**
+
 - [x] **Schema**: `referencePhotos`, `variants[]`, `primaryIndex` on `storyboard_elements`
 - [x] **Live variant gallery** — Convex reactive via `getById` query, auto-updates when callback adds images
 - [x] **Processing/failed cards** — shows spinner + file ID for generating, error + delete for failed. Hover: pull result, copy ID, delete
@@ -451,6 +511,7 @@ After running the tests, note:
 - [x] **Header avatars** — shows variant circles with amber border on primary
 
 **Mutations Added:**
+
 - [x] `getById` — live element query for reactive updates
 - [x] `appendReferenceImage` — accepts `variantLabel` + `variantModel`, creates variant metadata
 - [x] `setPrimaryVariant` — sets primaryIndex + updates thumbnailUrl
@@ -458,12 +519,14 @@ After running the tests, note:
 - [x] `removeVariant` — removes from arrays, adjusts primaryIndex, returns removed URL for R2 cleanup
 
 **Pipeline Integration:**
+
 - [x] **generate-image route** — passes `variantLabel`/`variantModel` through to kieAI metadata
 - [x] **kie-callback** — reads variant metadata from file, passes to `appendReferenceImage`
 - [x] **VideoImageAIPanel** — uses `referenceUrls[primaryIndex]` as identity sheet
 - [x] **pull-result route** — added `/api/v1/jobs/record-info` endpoint for image generation tasks + diagnostic logging
 
 **Bug Fixes:**
+
 - [x] **ThumbnailCropper CORS** — uses `/api/proxy/image` to fetch external CDN images
 - [x] **ThumbnailCropper clip-path** — replaced overflow-hidden+translate with `clip-path: inset()` for accurate cropping at all positions
 - [x] **Save no longer overwrites referenceUrls** — edit mode skips referenceUrls (managed by callbacks only)
@@ -472,6 +535,7 @@ After running the tests, note:
 ### Session #24 — 2026-04-29 (Script-to-Storyboard Pipeline Overhaul)
 
 **Phase 0 — Cleanup (~1,200 lines dead code removed):**
+
 - [x] **Deleted `enhanced-script-extraction/route.ts`** — 740 lines of dead GPT-4o per-scene extraction
 - [x] **Deleted `n8nWebhookCallback.ts`** — dead n8n integration
 - [x] **Removed `createFromN8n`** from storyboardItems + storyboardElements (dead exports)
@@ -480,6 +544,7 @@ After running the tests, note:
 - [x] **Cleaned `BuildStoryboardDialogSimplified`** — removed unused scriptType/language dropdowns
 
 **Phase 1 — New features:**
+
 - [x] **Default models on frames** — `defaultImageModel` (GPT Image 2) + `defaultVideoModel` (Seedance 2.0 Fast, or 1.5 Pro if script says so) stored on `storyboard_items`
 - [x] **Tighter element extraction** — Characters always, environments/props only if 2+ occurrences. Quality prompt: "Would a production designer need a separate reference image?" No sub-parts, no atmospheric effects
 - [x] **Preamble → project description** — Text before first ACT/SCENE saved to project description
@@ -493,6 +558,7 @@ After running the tests, note:
 - [x] **`build.updateProjectDescription` mutation** — Auth-free mutation for saving preamble during build (projects.update requires workspace auth)
 
 **Bonus fix:**
+
 - [x] **`log-upload/route.ts` double `userId` declaration** — pre-existing bug, fixed
 
 ### Session #23 — 2026-04-29 (Element Forge Soul Cast Redesign)
@@ -566,10 +632,12 @@ After running the tests, note:
 **Status: SHIPPED. No further changes planned.**
 
 **Architecture & Decomposition:**
+
 - [x] **Decomposed 1,800-line VideoEditor** into 6 modular files: `types.ts`, `PreviewCanvas.tsx`, `ControlBar.tsx`, `TimelineTracks.tsx`, `LayerPanel.tsx`, `useExport.ts`
 - [x] **Track naming** — Video track renamed to "Background" (reflects actual usage as base scene layer)
 
 **Overlay Layer System (LayerPanel + PreviewCanvas):**
+
 - [x] **8-point resize handles** + 2-point line/arrow handles + rotation handle on canvas
 - [x] **Layer panel** with tools, lock/eye/type icons, properties, media picker with thumbnails
 - [x] **Video overlay support** — blob URL fetch with presigned fallback, plays with sound
@@ -582,21 +650,25 @@ After running the tests, note:
 - [x] **Undo/redo** — Ctrl+Z / Ctrl+Shift+Z. Uses refs to avoid stale closures. Covers: add/delete/duplicate/paste layers, drag/resize/rotate position, timeline trim/drag. UI buttons in control bar. 50-entry history limit
 
 **Preview Canvas:**
+
 - [x] **Aspect-ratio locked preview** — canvas maintains correct ratio (16:9, 9:16, 1:1) with padding, `object-cover` for base media
 - [x] **Aspect ratio selector** — per project, stored in Convex (removed 4:5)
 - [x] **GPU hints** — `will-change` and `backfaceVisibility` on transitioning layers for smoother rendering
 
 **Timeline:**
+
 - [x] **Multi-row timeline layers** with draggable start/end edges
 - [x] **Image clip duration draggable** — right edge extends/shrinks image duration freely (no copy/paste needed)
 - [x] **NaN width fix** — `getVisDur` handles NaN, timeline clip widths fallback safely
 
 **Audio Fixes:**
+
 - [x] **Playback sound fix** — added `playingRef` to solve stale closure in `syncPreview` called from `tick`
 - [x] **Auto-play on insert fix** — audio/video no longer plays when added to track (explicit `pause()` when not in play mode)
 - [x] **Video overlay layer sound** — removed hardcoded `muted` attribute from overlay videos
 
 **Export Improvements:**
+
 - [x] **Base media fills canvas** — `drawImage(0,0,W,H)` stretch-to-fill, no more black bars
 - [x] **Video-embedded audio in export** — decodes audio from video track clips + overlay video layers
 - [x] **Overlay video audio fix** — shared `fetchBlob` with presigned URL fallback, cached blobs reused for audio extraction (no double fetch/CORS issues)
@@ -608,6 +680,7 @@ After running the tests, note:
 - [x] **Export download only** — removed auto-save to database/R2 on export
 
 **Bug Fixes:**
+
 - [x] **mediaBlobUrls infinite loop** — removed from useEffect deps, uses ref to check existing URLs
 - [x] **Video sync modulo-by-zero** — guarded with `el.duration > 0` and clamped layerTime
 - [x] **Audio modulo wrapping** — removed unnecessary modulo (already clamped by maxSamples)
@@ -840,25 +913,18 @@ Goal: Close the 3 gaps so the agent is solid enough to build the newbie flow on 
 
 ---
 
-#### AI Director + Agent — Phase 2: Newbie Quick Create (NEXT SESSION — after Phase 1 proven)
+#### AI Director + Agent — Phase 2: Newbie Quick Create (PARTIALLY DONE via invoke_skill)
 
-Goal: Zero-friction entry point. Type one sentence → storyboard done. Powered by Phase 1 agent.
+**Core script generation path is DONE via Session #35.** User types one sentence in Agent chat → Director calls `invoke_skill` (video-prompt-builder) → saves structured script → guides to Build Storyboard. No dedicated quick-create route needed for script generation.
 
-```text
-Type: "a knight fights a dragon at sunset over a burning city"
-  ↓  (genre/format pickers, already built)
-Agent: picks genre, format, 5 frames → writes cinematic prompts → generates all images
-  ↓
-"Your storyboard is ready" — 45 seconds
-```
+**Remaining Phase 2 work:**
 
-- [ ] Empty project magic wand UI — big textarea + genre/format pickers when 0 frames exist
-- [ ] `POST /api/director/quick-create` endpoint — takes `{ premise, genre, format, sceneCount }`, runs agent silently (no chat UI)
-- [ ] Uses `generate_scene` + `trigger_image_generation` under the hood
-- [ ] Progress bar showing steps (creating frames → writing prompts → generating images)
-- [ ] Redirect to finished storyboard on completion
+- [ ] **invoke_skill persistence via Convex action** — currently result is lost if user closes the panel during 30–60s call. Move to a Convex action that saves to `project.script` directly, client subscribes via `useQuery`. High priority.
+- [ ] **Empty project entry point UI** — when 0 frames + 0 script: show big textarea prompt "Tell me your story..." with Agent mode auto-selected, invoke_skill triggered automatically
+- [ ] **Post-script auto-prompt** — after `save_script`, Director proactively offers "Click Build Storyboard in the Script tab to create your frames" with a deep-link button
+- [ ] **Batch generate after build** — after Build Storyboard completes, Director detects N new frames with no images and proactively suggests batch image generation (already possible via `create_execution_plan`)
 
-Why Phase 1 must come first: The newbie has no way to fix a bad storyboard. If the agent produces weak prompts or fails silently, first impression = churn. A solid agent = magic. A shaky agent = confusing mess.
+Why original `scriptGenerator.ts` plan is superseded: invoke_skill via Director produces a richer, Seedance-ready structured script (IMAGE/VIDEO prompts + 🟢🔴 model hints) that feeds directly into scriptAnalyzer's `parseStructuredScript` path. The standalone route approach would have produced a simpler script without model hints.
 
 ---
 
