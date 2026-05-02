@@ -626,7 +626,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
 
   // ImageAI Panel state
   const [aiEditMode, setAiEditMode] = useState<AIEditMode>("area-edit");
-  const [aiModel, setAiModel] = useState("nano-banana-2");
+  const [aiModel, setAiModel] = useState("gpt-image-2-image-to-image");
   const [aiRefImages, setAiRefImages] = useState<{ id: string; url: string; filename?: string }[]>([]);
   const [selectedQuality, setSelectedQuality] = useState("standard"); // Store selected quality from EditImageAIPanel
 
@@ -4881,7 +4881,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                     try {
                       // Fast-path for post-processing tools (enhance, relight, remove-bg, reframe)
                       const postProcessTools = ["recraft/remove-background", "ideogram/v3-reframe"];
-                      const isImgToImgPostProcess = aiModel === "gpt-image/1.5-image-to-image" && (promptText.startsWith("Enhance") || promptText.startsWith("Relight") || promptText.startsWith("Professional image enhancement") || promptText.startsWith("Remove background"));
+                      const isImgToImgPostProcess = (aiModel === "gpt-image/1.5-image-to-image" || aiModel === "gpt-image-2-image-to-image") && (promptText.startsWith("Enhance") || promptText.startsWith("Relight") || promptText.startsWith("Professional") || promptText.startsWith("Remove background") || promptText.startsWith("Convert to") || promptText.startsWith("Apply") || promptText.startsWith("Cinematic"));
                       const isDirectPostProcess = postProcessTools.includes(aiModel);
 
                       if (isDirectPostProcess || isImgToImgPostProcess) {
@@ -4892,10 +4892,15 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         }
                         console.log('[onGenerate] Post-processing via generateImageWithCredits:', aiModel, promptText.substring(0, 50));
 
+                        // For GPT Image 2, quality must be JSON format
+                        const postProcessQuality = aiModel === "gpt-image-2-image-to-image"
+                          ? JSON.stringify({ type: "gpt-image-2", mode: "image-to-image", nsfwChecker: false })
+                          : qualityToUse;
+
                         const postProcessResult = await generateImageWithCredits(
                           promptText || "enhance",
-                          "", // style
-                          qualityToUse,
+                          "realistic", // style
+                          postProcessQuality,
                           activeShot?.aspectRatio || "16:9", // aspectRatio
                           activeShot?.id || "", // itemId
                           creditsUsed,
@@ -5595,23 +5600,42 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                         
                         console.log("Processed reference image URLs:", processedReferenceImages);
 
-                        // Auto-attach linked element reference images
+                        // Auto-attach linked element reference images.
+                        // Also build a name→index map so we can substitute @ElementName → @Image{n}
+                        // in the prompt — GPT Image 2 understands @Image{n} to reference input images.
+                        const elementImageIndexMap = new Map<string, number>(); // normalizedName → 1-based index
                         const activeShot = shots.find(s => s.id === activeShotId);
                         if (activeShot?.linkedElements && projectElements) {
                           const existingUrls = new Set(processedReferenceImages);
                           for (const link of activeShot.linkedElements) {
                             const el = projectElements.find((e: any) => e._id === link.id);
                             if (el?.referenceUrls?.length) {
-                              // Use primary variant (first ref image) for consistency
                               const refUrl = el.referenceUrls[el.primaryIndex ?? 0] || el.referenceUrls[0];
                               if (refUrl && !existingUrls.has(refUrl)) {
                                 processedReferenceImages.push(refUrl);
                                 existingUrls.add(refUrl);
-                                console.log(`[SceneEditor] Auto-attached element ref: ${el.name} → ${refUrl.substring(0, 60)}...`);
+                                // Record the 1-based index this element occupies in the reference array
+                                elementImageIndexMap.set(
+                                  el.name.replace(/\s+/g, "").toLowerCase(),
+                                  processedReferenceImages.length
+                                );
+                                console.log(`[SceneEditor] Auto-attached element ref: ${el.name} → @Image${processedReferenceImages.length}`);
                               }
                             }
                           }
                         }
+
+                        // Build the final prompt for image-generation models (GPT Image 2 etc.).
+                        // Replace @ElementName badges with @Image{n} so the model knows which input
+                        // image to use at that point in the scene.
+                        // Example: "@Marcus walks home" → "@Image3 walks home"  (if Marcus = ref image 3)
+                        // Video-generation models receive extractedPrompt unchanged — @Name reads as text there.
+                        const finalPromptForAPI = elementImageIndexMap.size > 0
+                          ? extractedPrompt.replace(/@([A-Za-z][A-Za-z0-9]*)/g, (match, name) => {
+                              const idx = elementImageIndexMap.get(name.toLowerCase());
+                              return idx !== undefined ? `@Image${idx}` : match;
+                            })
+                          : extractedPrompt;
 
                         try {
                           console.log("Final credits used:", creditsUsed);
@@ -6826,9 +6850,9 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                           } else {
                             // Use the existing generateImageWithCredits function for other models
                             console.log("Using generateImageWithCredits for other models...");
-                            
+
                             const result = await generateImageWithCredits(
-                              extractedPrompt, // Use extracted prompt from VideoImageAIPanel
+                              finalPromptForAPI, // @ElementName badges replaced with @Image{n} for GPT Image 2
                               "realistic", // Default style
                               quality, // Use quality from VideoImageAIPanel callback
                               kieAIAspectRatio, // Use mapped KIE AI aspect ratio

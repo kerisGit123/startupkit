@@ -202,7 +202,7 @@ export function ImageAIPanel({
   onModeChange,
   onGenerate,
   credits = 20,
-  model = "nano-banana-2",
+  model = "gpt-image-2-image-to-image",
   onModelChange,
   referenceImages = [],
   onAddReferenceImage,
@@ -343,6 +343,7 @@ export function ImageAIPanel({
     extractTextWithBadges,
     createBadgeElement,
     insertBadgeAtCaret,
+    parseMentions,
     handleEditorInput,
     handleEditorBlur,
     handleCompositionStart,
@@ -375,9 +376,9 @@ export function ImageAIPanel({
     if (newMode === "video" && onModelChange) {
       onModelChange("bytedance/seedance-1.5-pro");
     }
-    // Auto-switch to Nano Banana 2 when switching to image mode
+    // Auto-switch to GPT Image 2 when switching to image mode
     else if (newMode === "image" && onModelChange) {
-      onModelChange("nano-banana-2");
+      onModelChange("gpt-image-2-image-to-image");
     }
   };
 
@@ -1616,6 +1617,57 @@ export function ImageAIPanel({
       setEditorIsEmpty(false);
     }
   }, []);
+
+  // Convert @ElementName placeholders → badges whenever the active shot or elements change.
+  // Two-pass: parseMentions handles inline @mentions (new storyboards); the fallback
+  // inserts badges at the end for linked elements with no matching @mention in the text
+  // (old storyboards built before inline injection was added).
+  const lastParsedShotId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeShotId || !projectElements?.length) return;
+    if (lastParsedShotId.current === activeShotId) return; // Already processed this shot
+
+    const el = editorRef.current;
+    if (!el) return;
+
+    const run = () => {
+      // Pass 1 — convert any @ElementName text nodes to badge DOM elements
+      parseMentions(projectElements);
+
+      // Pass 2 — for linked elements that still have no badge in the editor, append at end
+      if (activeShotLinkedElements?.length) {
+        const existingIds = new Set(
+          Array.from(el.querySelectorAll("[data-element-id]")).map(
+            n => (n as HTMLElement).dataset.elementId
+          )
+        );
+        let badgeNum = el.querySelectorAll('[data-type="mention"]').length + 1;
+        for (const link of activeShotLinkedElements) {
+          if (existingIds.has(link.id)) continue;
+          const elData = projectElements.find((e: any) => e._id === link.id);
+          if (!elData) continue;
+          const imgUrl =
+            elData.referenceUrls?.[elData.primaryIndex ?? 0] ||
+            elData.referenceUrls?.[0] ||
+            elData.thumbnailUrl || "";
+          insertBadgeAtCaret({
+            id: `el-${link.id}-${Date.now()}`,
+            imageUrl: imgUrl,
+            imageNumber: badgeNum++,
+            badgeType: "element",
+            elementName: link.name.replace(/\s+/g, ""),
+            elementId: link.id,
+          });
+        }
+      }
+
+      lastParsedShotId.current = activeShotId;
+    };
+
+    // Brief delay to let the editor DOM settle after the initial text is set
+    const t = setTimeout(run, 120);
+    return () => clearTimeout(t);
+  }, [activeShotId, projectElements, activeShotLinkedElements]);
 
   useEffect(() => {
     if (!selectedModelOption) return;
@@ -3876,23 +3928,12 @@ export function ImageAIPanel({
                   companyId={companyId}
                   userId={user?.id}
                   onAfterLoadPrompt={() => {
-                    // Auto-insert element badges for linked elements after prompt loads
-                    if (!activeShotLinkedElements?.length || !projectElements?.length) return;
-                    const el = editorRef.current;
-                    if (!el) return;
-                    let badgeNum = 1;
-                    for (const link of activeShotLinkedElements) {
-                      const elData = projectElements.find((e: any) => e._id === link.id);
-                      if (!elData) continue;
-                      const imgUrl = elData.thumbnailUrl || elData.referenceUrls?.[0] || "";
-                      insertBadgeAtCaret({
-                        id: `el-${link.id}-${Date.now()}`,
-                        imageUrl: imgUrl,
-                        imageNumber: badgeNum++,
-                        badgeType: "element",
-                        elementName: link.name,
-                        elementId: link.id,
-                      });
+                    // Convert @ElementName text placeholders to badge elements.
+                    // The build-storyboard route prepends @mentions to stored prompts;
+                    // parseMentions walks the editor DOM and replaces them with badges
+                    // that carry the element's reference image (if one has been generated).
+                    if (projectElements?.length) {
+                      parseMentions(projectElements);
                     }
                   }}
                 />

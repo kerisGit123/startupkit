@@ -31,31 +31,35 @@ const Paintbrush = ({ className }: { className?: string }) => (
 );
 
 // ── Post-Processing Presets ────────────────────────────────────────────
+const ENHANCE_CONSTRAINT = "Do not add, remove, or modify any objects or scene elements. Only apply the specified enhancement effect. Keep the composition and all elements identical to the original.";
+
 const ENHANCE_PRESETS = [
-  { id: "face-skin", label: "Face & Skin", prompt: "Enhance facial details, natural skin retouching, restore clarity, improve skin texture while maintaining realism, professional portrait retouching" },
-  { id: "sharpen", label: "Sharpen", prompt: "Enhance fine details, sharpen textures and edges, increase clarity, improve micro-contrast while preserving natural look" },
-  { id: "color-tone", label: "Color & Tone", prompt: "Professional color correction, enhance color vibrancy, improve tonal range, cinematic color grading, balanced highlights and shadows" },
-  { id: "cinematic", label: "Cinematic", prompt: "Cinematic film grade enhancement, add subtle film grain, anamorphic lens quality, professional color grading, shallow depth of field feel" },
-  { id: "full", label: "Full Enhance", prompt: "Professional image enhancement: sharpen details, improve skin texture, enhance colors, cinematic color grading, increase clarity, natural retouching" },
-  { id: "bw-film", label: "B&W Film", prompt: "Convert to black and white film photography, rich tonal range, deep blacks, bright whites, classic silver gelatin print look, Kodak Tri-X grain texture, dramatic contrast" },
-  { id: "16mm-film", label: "16mm Film", prompt: "Apply 16mm film stock look, visible film grain, slightly soft focus, warm color cast, lifted blacks, vintage color science, nostalgic indie film aesthetic" },
-  { id: "old-lens", label: "Old Lens", prompt: "Apply vintage lens characteristics, soft vignetting, subtle chromatic aberration, dreamy glow in highlights, slightly desaturated colors, classic portrait lens rendering" },
-  { id: "split-tone", label: "Split Tone", prompt: "Apply split toning color grade, cool blue shadows with warm amber highlights, cinematic color separation, teal and orange look, balanced mid-tones" },
-  { id: "soft-skin", label: "Soft Skin", prompt: "Apply soft skin beauty retouching, smooth skin texture, preserve pores subtly, soft diffused glow, beauty dish lighting feel, magazine editorial finish" },
-  { id: "natural", label: "Natural", prompt: "Apply natural color correction, true-to-life colors, balanced white point, neutral skin tones, clean highlights, natural shadow detail, no artificial grading" },
+  { id: "face-skin", label: "Face & Skin", prompt: `Enhance facial details, natural skin retouching, restore clarity, improve skin texture while maintaining realism, professional portrait retouching. ${ENHANCE_CONSTRAINT}` },
+  { id: "sharpen", label: "Sharpen", prompt: `Enhance fine details, sharpen textures and edges, increase clarity, improve micro-contrast while preserving natural look. ${ENHANCE_CONSTRAINT}` },
+  { id: "color-tone", label: "Color & Tone", prompt: `Professional color correction, enhance color vibrancy, improve tonal range, cinematic color grading, balanced highlights and shadows. ${ENHANCE_CONSTRAINT}` },
+  { id: "cinematic", label: "Cinematic", prompt: `Cinematic film grade enhancement, add subtle film grain, anamorphic lens quality, professional color grading, shallow depth of field feel. ${ENHANCE_CONSTRAINT}` },
+  { id: "full", label: "Full Enhance", prompt: `Professional image enhancement: sharpen details, improve skin texture, enhance colors, cinematic color grading, increase clarity, natural retouching. ${ENHANCE_CONSTRAINT}` },
+  { id: "bw-film", label: "B&W Film", prompt: `Convert to black and white film photography, rich tonal range, deep blacks, bright whites, classic silver gelatin print look, Kodak Tri-X grain texture, dramatic contrast. ${ENHANCE_CONSTRAINT}` },
+  { id: "16mm-film", label: "16mm Film", prompt: `Apply 16mm film stock look, visible film grain, slightly soft focus, warm color cast, lifted blacks, vintage color science, nostalgic indie film aesthetic. ${ENHANCE_CONSTRAINT}` },
+  { id: "old-lens", label: "Old Lens", prompt: `Apply vintage lens characteristics, soft vignetting, subtle chromatic aberration, dreamy glow in highlights, slightly desaturated colors, classic portrait lens rendering. ${ENHANCE_CONSTRAINT}` },
+  { id: "split-tone", label: "Split Tone", prompt: `Apply split toning color grade, cool blue shadows with warm amber highlights, cinematic color separation, teal and orange look, balanced mid-tones. ${ENHANCE_CONSTRAINT}` },
+  { id: "soft-skin", label: "Soft Skin", prompt: `Apply soft skin beauty retouching, smooth skin texture, preserve pores subtly, soft diffused glow, beauty dish lighting feel, magazine editorial finish. ${ENHANCE_CONSTRAINT}` },
+  { id: "natural", label: "Natural", prompt: `Apply natural color correction, true-to-life colors, balanced white point, neutral skin tones, clean highlights, natural shadow detail, no artificial grading. ${ENHANCE_CONSTRAINT}` },
 ];
 
+const RELIGHT_CONSTRAINT = "Do not add, remove, or modify any objects, text, signs, or scene elements. Only change the lighting, shadows, and color temperature. Keep all elements identical to the original.";
+
 const RELIGHT_PRESETS = [
-  { id: "dramatic-side", label: "Dramatic Side", prompt: "Relight this image with strong directional side light from the left, deep shadows on right, high contrast, dramatic cinematic mood" },
-  { id: "soft-front", label: "Soft Front", prompt: "Relight this image with soft diffused front lighting, even illumination, beauty lighting, soft shadows, flattering portrait light" },
-  { id: "backlit", label: "Backlit / Rim", prompt: "Relight this image with strong backlight creating rim light and silhouette edge glow, lens flare, contre-jour cinematic lighting" },
-  { id: "golden-hour", label: "Golden Hour", prompt: "Relight this image with warm golden hour sunlight, long shadows, amber tones, magic hour cinematography, warm color grading" },
-  { id: "blue-hour", label: "Blue Hour", prompt: "Relight this image with cool blue twilight lighting, soft ambient, pre-dawn or post-sunset atmosphere, cold color grading" },
-  { id: "neon", label: "Neon Night", prompt: "Relight this image with neon colored lighting, cyberpunk city glow, mixed colored light sources, urban night atmosphere" },
-  { id: "moonlight", label: "Moonlight", prompt: "Relight this image with cold moonlight from above, blue-silver tones, night scene, low ambient light, mysterious atmosphere" },
-  { id: "rembrandt", label: "Studio Rembrandt", prompt: "Relight this image with classic Rembrandt lighting, triangle of light on cheek, one key light at 45 degrees, dramatic portrait" },
-  { id: "overhead", label: "Overhead", prompt: "Relight this image with harsh overhead lighting, strong top-down shadows, noon sun directly above, high contrast" },
-  { id: "underlight", label: "Underlight", prompt: "Relight this image with dramatic underlighting from below, horror/thriller mood, eerie upward shadows, unsettling atmosphere" },
+  { id: "dramatic-side", label: "Dramatic Side", prompt: `Relight this image with strong directional side light from the left, deep shadows on right, high contrast, dramatic cinematic mood. ${RELIGHT_CONSTRAINT}` },
+  { id: "soft-front", label: "Soft Front", prompt: `Relight this image with soft diffused front lighting, even illumination, beauty lighting, soft shadows, flattering portrait light. ${RELIGHT_CONSTRAINT}` },
+  { id: "backlit", label: "Backlit / Rim", prompt: `Relight this image with strong backlight creating rim light and silhouette edge glow, lens flare, contre-jour cinematic lighting. ${RELIGHT_CONSTRAINT}` },
+  { id: "golden-hour", label: "Golden Hour", prompt: `Relight this image with warm golden hour sunlight, long shadows, amber tones, magic hour cinematography, warm color grading. ${RELIGHT_CONSTRAINT}` },
+  { id: "blue-hour", label: "Blue Hour", prompt: `Relight this image with cool blue twilight lighting, soft ambient, pre-dawn or post-sunset atmosphere, cold color grading. ${RELIGHT_CONSTRAINT}` },
+  { id: "neon", label: "Neon Night", prompt: `Relight this image with neon colored lighting, cyberpunk city glow, mixed colored light sources, urban night atmosphere. ${RELIGHT_CONSTRAINT}` },
+  { id: "moonlight", label: "Moonlight", prompt: `Relight this image with cold moonlight from above, blue-silver tones, night scene, low ambient light, mysterious atmosphere. ${RELIGHT_CONSTRAINT}` },
+  { id: "rembrandt", label: "Studio Rembrandt", prompt: `Relight this image with classic Rembrandt lighting, triangle of light on cheek, one key light at 45 degrees, dramatic portrait. ${RELIGHT_CONSTRAINT}` },
+  { id: "overhead", label: "Overhead", prompt: `Relight this image with harsh overhead lighting, strong top-down shadows, noon sun directly above, high contrast. ${RELIGHT_CONSTRAINT}` },
+  { id: "underlight", label: "Underlight", prompt: `Relight this image with dramatic underlighting from below, horror/thriller mood, eerie upward shadows, unsettling atmosphere. ${RELIGHT_CONSTRAINT}` },
 ];
 
 const REFRAME_SIZES = [
@@ -447,9 +451,9 @@ export default function EditImageAIPanel({
     if (newMode === "video" && onModelChange) {
       onModelChange("bytedance/seedance-1.5-pro");
     }
-    // Auto-switch to Nano Banana 2 when switching to image mode
+    // Auto-switch to GPT Image 2 when switching to image mode
     else if (newMode === "image" && onModelChange) {
-      onModelChange("nano-banana-2");
+      onModelChange("gpt-image-2-image-to-image");
     }
   };
 
@@ -750,11 +754,9 @@ export default function EditImageAIPanel({
   };
 
   // Calculate maximum reference images based on model and mode
-  const getMaxReferenceImages = () => {
-    return selectedModelOption?.maxReferenceImages || 0;
-  };
-
-  const maxReferenceImages = getMaxReferenceImages();
+  // Hide Add Image for enhance/relight/remove-bg/reframe tools
+  const noRefTools = ["enhance", "relight", "remove-bg", "reframe", "upscale"];
+  const maxReferenceImages = noRefTools.includes(activeTool) ? 0 : (selectedModelOption?.maxReferenceImages ?? 0);
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showQualityDropdown, setShowQualityDropdown] = useState(false);
 
@@ -770,10 +772,10 @@ export default function EditImageAIPanel({
       { value: "recraft/crisp-upscale", label: "Recraft Crisp", sub: "AI Upscale", credits: getModelCredits("recraft/crisp-upscale"), maxReferenceImages: 0 },
       { value: "topaz/image-upscale", label: "Topaz Upscale", sub: `${selectedQuality} Upscale`, credits: getModelCredits("topaz/image-upscale"), maxReferenceImages: 0 },
     ] : activeTool === "enhance" ? [
-      { value: "gpt-image/1.5-image-to-image", label: "GPT Image 2", sub: "Best quality", credits: getModelCredits("gpt-image/1.5-image-to-image"), maxReferenceImages: 0 },
+      { value: "gpt-image-2-image-to-image", label: "GPT Image 2", sub: "Best quality", credits: getModelCredits("gpt-image-2-image-to-image"), maxReferenceImages: 0 },
       { value: "google/nano-banana-edit", label: "Nano Banana Edit", sub: "Cheaper", credits: getModelCredits("google/nano-banana-edit"), maxReferenceImages: 0 },
     ] : activeTool === "relight" ? [
-      { value: "gpt-image/1.5-image-to-image", label: "GPT Image 2", sub: "Best quality", credits: getModelCredits("gpt-image/1.5-image-to-image"), maxReferenceImages: 0 },
+      { value: "gpt-image-2-image-to-image", label: "GPT Image 2", sub: "Best quality", credits: getModelCredits("gpt-image-2-image-to-image"), maxReferenceImages: 0 },
       { value: "google/nano-banana-edit", label: "Nano Banana Edit", sub: "Cheaper", credits: getModelCredits("google/nano-banana-edit"), maxReferenceImages: 0 },
     ] : activeTool === "remove-bg" ? [
       { value: "recraft/remove-background", label: "Recraft Remove BG", sub: "1 credit", credits: 1, maxReferenceImages: 0 },
@@ -1204,7 +1206,7 @@ export default function EditImageAIPanel({
       // Select enhance tool — uses GPT Image 2 img2img with enhance prompt presets
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      onModelChange?.("gpt-image/1.5-image-to-image");
+      onModelChange?.("gpt-image-2-image-to-image");
       onToolSelect?.("enhance");
       // Auto-set prompt from selected preset
       const preset = ENHANCE_PRESETS.find(p => p.id === selectedEnhancePreset) ?? ENHANCE_PRESETS[4];
@@ -1214,7 +1216,7 @@ export default function EditImageAIPanel({
       // Select relight tool — uses GPT Image 2 img2img with lighting prompt presets
       setActiveTool(id);
       setShowBrushSizeMenu(false);
-      onModelChange?.("gpt-image/1.5-image-to-image");
+      onModelChange?.("gpt-image-2-image-to-image");
       onToolSelect?.("relight");
       // Auto-set prompt from selected preset
       const preset = RELIGHT_PRESETS.find(p => p.id === selectedRelightPreset) ?? RELIGHT_PRESETS[0];
