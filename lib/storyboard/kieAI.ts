@@ -370,27 +370,6 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
   const { api } = await import("../../convex/_generated/api");
   const requiredCredits = params.creditsUsed || (params.quality ? IMAGE_CREDITS[params.quality] : undefined) || IMAGE_CREDITS.standard || 5;
 
-  // Step 1: Check if company has sufficient credits before proceeding
-  if (params.companyId && requiredCredits) {
-    // Get current company credit balance
-    const currentBalance = await convex.query(api.credits.getBalance, {
-      companyId: params.companyId
-    });
-    
-    if (currentBalance < requiredCredits) {
-      console.warn('[triggerImageGeneration] Insufficient credits:', {
-        currentBalance,
-        creditsNeeded: requiredCredits,
-        shortfall: requiredCredits - currentBalance
-      });
-      
-      throw new Error(`Insufficient credits. You have ${currentBalance} credits but need ${requiredCredits} credits. Please purchase more credits to continue.`);
-    }
-    
-  } else {
-    console.warn('[triggerImageGeneration] Missing companyId or creditsUsed, cannot check balance');
-  }
-
   // Resolve API key early: need kieAiId for placeholder record
   const { apiKey: resolvedImageKey, kieAiId } = await resolveKieApiKey(params.companyId);
   // Step 2: Create placeholder record
