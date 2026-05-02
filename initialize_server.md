@@ -266,6 +266,33 @@ The Convex runtime reads these for cron jobs, internal mutations, and auth.
 | `SUPPORT_INTERNAL_SECRET` | Same as `SUPPORT_INTERNAL_SECRET` in `.env.local` |
 | `NEXT_PUBLIC_APP_URL` | Your production domain (used by inactivity cron to call API routes) |
 
+### ⚠️ Critical: `INTERNAL_REPAIR_SECRET` must be in BOTH places
+
+**Risk if missed:** the daily `repair-orphan-files` cron runs at 04:00 UTC, makes an authenticated HTTP call from Convex → `/api/storyboard/repair-r2-batch` to delete orphaned R2 objects. If the secret doesn't match (or isn't set on either side), the endpoint returns 403, the cron silently logs a warning, and **true orphans pile up — R2 storage bills grow with no automatic cleanup**.
+
+**Quick setup — both must be the same value:**
+
+```bash
+# 1. Add to .env.local (Next.js side)
+INTERNAL_REPAIR_SECRET=c9bc053ae875d7b8b588685ee80541efd3978c812320d89c8868eb5489e9c14d
+
+# 2. Mirror to Convex (cron action side)
+npx convex env set INTERNAL_REPAIR_SECRET c9bc053ae875d7b8b588685ee80541efd3978c812320d89c8868eb5489e9c14d
+```
+
+The example value above is illustrative — generate your own with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+# or:  openssl rand -hex 32
+```
+
+**Verify it took:**
+
+```bash
+npx convex env list | grep INTERNAL_REPAIR_SECRET
+```
+
 ---
 
 ## 10. Email (SMTP / Brevo) — Admin UI Config
