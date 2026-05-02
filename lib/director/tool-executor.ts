@@ -844,43 +844,60 @@ export async function dispatchDirectorTool(
           };
         }
 
-        try {
-          const anthropic = getAnthropicClient();
-          const response = await (anthropic as any).beta.messages.create({
-            model: "claude-haiku-4-5",
-            max_tokens: 8192,
-            betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-            container: {
-              skills: [{ type: "custom", skill_id: skillId, version: "latest" }],
-            },
-            tools: [{ type: "code_execution_20250825", name: "code_execution" }],
-            messages: [{ role: "user", content: skillPrompt }],
-          });
+        const MAX_RETRIES = 2;
+        let lastErr: Error | null = null;
 
-          // The skill writes the structured script via a text_editor_code_execution "create" call.
-          // Extract file_text from that block — it has the full ACT/SCENE/Prompt script.
-          const createBlock = ((response.content as any[]) || []).find(
-            (b: any) =>
-              b.type === "server_tool_use" &&
-              b.name === "text_editor_code_execution" &&
-              b.input?.command === "create" &&
-              typeof b.input?.file_text === "string"
-          );
-          if (createBlock?.input?.file_text) {
-            return { output: createBlock.input.file_text, isError: false };
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            if (attempt > 0) {
+              await new Promise((r) => setTimeout(r, 2000 * attempt));
+            }
+
+            const anthropic = getAnthropicClient();
+            const response = await (anthropic as any).beta.messages.create({
+              model: "claude-sonnet-4-6",
+              max_tokens: 8192,
+              betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+              container: {
+                skills: [{ type: "custom", skill_id: skillId, version: "latest" }],
+              },
+              tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+              messages: [{ role: "user", content: skillPrompt }],
+            });
+
+            // The skill writes the structured script via text_editor_code_execution "create".
+            // file_text has the full ACT/SCENE/Prompt script — extract it first.
+            const createBlock = ((response.content as any[]) || []).find(
+              (b: any) =>
+                b.type === "server_tool_use" &&
+                b.name === "text_editor_code_execution" &&
+                b.input?.command === "create" &&
+                typeof b.input?.file_text === "string"
+            );
+            if (createBlock?.input?.file_text) {
+              return { output: createBlock.input.file_text as string, isError: false };
+            }
+
+            // Fallback: join text blocks (summary only, no structured prompts)
+            const text = ((response.content as any[]) || [])
+              .filter((b: any) => b.type === "text")
+              .map((b: any) => b.text as string)
+              .join("");
+            if (!text) {
+              lastErr = new Error("Skill returned no output");
+              continue;
+            }
+            return { output: text, isError: false };
+          } catch (err) {
+            lastErr = err instanceof Error ? err : new Error(String(err));
+            if (attempt < MAX_RETRIES) continue;
           }
-
-          // Fallback: text blocks (summary only — no structured prompts)
-          const text = ((response.content as any[]) || [])
-            .filter((b: any) => b.type === "text")
-            .map((b: any) => b.text as string)
-            .join("");
-          if (!text) return { output: "Skill returned no output.", isError: true };
-          return { output: text, isError: false };
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return { output: `Skill invocation failed: ${msg}`, isError: true };
         }
+
+        return {
+          output: `Skill invocation failed after ${MAX_RETRIES + 1} attempts: ${lastErr?.message}. Please try again.`,
+          isError: true,
+        };
       }
 
       case "save_script": {

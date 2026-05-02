@@ -150,6 +150,7 @@ export async function POST(req: NextRequest) {
           let currentMessages = claudeMessages;
           let finalOutput = "";
           const toolCallLog: { name: string; input?: unknown; output?: string }[] = [];
+          let nextModel = "claude-haiku-4-5";
 
           for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
             // Cache the stable history prefix: mark second-to-last message so
@@ -169,8 +170,11 @@ export async function POST(req: NextRequest) {
                 })
               : currentMessages;
 
+            const modelForThisCall = nextModel;
+            nextModel = "claude-haiku-4-5"; // reset — only stays Sonnet for one iteration
+
             const response = await anthropic.messages.create({
-              model: "claude-haiku-4-5",
+              model: modelForThisCall,
               max_tokens: MAX_TOKENS,
               system: systemContent,
               tools: tools,
@@ -197,6 +201,12 @@ export async function POST(req: NextRequest) {
               const result = await dispatchDirectorTool(tb.name, tb.input, toolCtx);
               toolCallLog.push({ name: tb.name, input: tb.input, output: result.output });
               send({ type: "tool_result", name: tb.name, isError: result.isError });
+
+              // Upgrade to Sonnet for the next loop iteration when invoke_skill succeeds —
+              // ensures the Director follows "pass raw text to save_script" instructions precisely.
+              if (tb.name === "invoke_skill" && !result.isError) {
+                nextModel = "claude-sonnet-4-6";
+              }
 
               // Check if tool returned a plan approval request
               if (tb.name === "create_execution_plan" && !result.isError) {
@@ -273,7 +283,7 @@ export async function POST(req: NextRequest) {
             ];
           }
 
-          send({ type: "done" });
+          send({ type: "done", toolsUsed: toolCallLog.map((t) => t.name) });
 
           // Persist session
           try {

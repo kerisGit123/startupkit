@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { X, Send, Sparkles, Trash2, Loader2, Wrench, Bot, MessageSquare } from "lucide-react";
+import { X, Send, Sparkles, Trash2, Loader2, Wrench, Bot, MessageSquare, Copy, Check } from "lucide-react";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -16,6 +16,7 @@ interface Message {
   isError?: boolean;
   isPlanApproval?: boolean;
   planData?: PlanData;
+  toolsUsed?: string[];
 }
 
 interface PlanData {
@@ -38,31 +39,110 @@ interface DirectorChatPanelProps {
   companyId?: string;
   currentFrameNumber?: number;
   currentSceneId?: string;
-  currentFrameImageUrl?: string; // If the current frame has a generated image
-  initialMessage?: string; // Auto-send this message when set (e.g. from "Review this frame" button)
+  currentFrameImageUrl?: string;
+  initialMessage?: string;
   onClose: () => void;
 }
 
-// ── Inline markdown renderer (matches SupportChatWidget) ────────────
+// ── Markdown renderer ──────────────────────────────────────────────
 
-function renderInlineMarkdown(text: string) {
+function renderInlineSpans(text: string, keyOffset: number = 0): (string | React.ReactElement)[] {
   const parts: (string | React.ReactElement)[] = [];
-  // Bold: **text**
-  const regex = /\*\*(.+?)\*\*/g;
+  // Bold + inline code
+  const regex = /\*\*(.+?)\*\*|`([^`]+)`/g;
   let lastIndex = 0;
   let match;
-  let key = 0;
+  let key = keyOffset;
   while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.slice(lastIndex, match.index));
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    if (match[1] !== undefined) {
+      parts.push(<strong key={key++} className="font-semibold text-(--text-primary)">{match[1]}</strong>);
+    } else {
+      parts.push(<code key={key++} className="px-1 py-0.5 rounded text-[11px] bg-white/8 text-(--text-primary) font-mono">{match[2]}</code>);
     }
-    parts.push(<strong key={key++} className="font-semibold text-white">{match[1]}</strong>);
     lastIndex = regex.lastIndex;
   }
-  if (lastIndex < text.length) {
-    parts.push(text.slice(lastIndex));
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
+}
+
+function renderMarkdown(text: string): React.ReactElement {
+  const lines = text.split("\n");
+  const elements: React.ReactElement[] = [];
+  let key = 0;
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // H3
+    if (line.startsWith("### ")) {
+      elements.push(
+        <p key={key++} className="text-[12px] font-semibold text-(--text-primary) mt-2 mb-0.5">
+          {renderInlineSpans(line.slice(4), key)}
+        </p>
+      );
+      i++; continue;
+    }
+    // H2
+    if (line.startsWith("## ")) {
+      elements.push(
+        <p key={key++} className="text-[13px] font-semibold text-(--text-primary) mt-2.5 mb-1">
+          {renderInlineSpans(line.slice(3), key)}
+        </p>
+      );
+      i++; continue;
+    }
+    // H1
+    if (line.startsWith("# ")) {
+      elements.push(
+        <p key={key++} className="text-[14px] font-semibold text-(--text-primary) mt-2.5 mb-1">
+          {renderInlineSpans(line.slice(2), key)}
+        </p>
+      );
+      i++; continue;
+    }
+    // Divider
+    if (line.trim() === "---" || line.trim() === "***") {
+      elements.push(<div key={key++} className="h-px bg-(--border-primary) my-2" />);
+      i++; continue;
+    }
+    // Unordered list item
+    if (/^[-*] /.test(line)) {
+      elements.push(
+        <div key={key++} className="flex items-start gap-1.5 text-[13px] text-(--text-secondary) leading-snug">
+          <span className="mt-1.5 w-1 h-1 rounded-full bg-(--text-tertiary) shrink-0" />
+          <span>{renderInlineSpans(line.slice(2), key)}</span>
+        </div>
+      );
+      i++; continue;
+    }
+    // Numbered list item
+    const numMatch = line.match(/^(\d+)\. (.+)/);
+    if (numMatch) {
+      elements.push(
+        <div key={key++} className="flex items-start gap-2 text-[13px] text-(--text-secondary) leading-snug">
+          <span className="shrink-0 text-(--text-tertiary) tabular-nums min-w-[14px] text-right">{numMatch[1]}.</span>
+          <span>{renderInlineSpans(numMatch[2], key)}</span>
+        </div>
+      );
+      i++; continue;
+    }
+    // Blank line — small gap
+    if (line.trim() === "") {
+      elements.push(<div key={key++} className="h-1" />);
+      i++; continue;
+    }
+    // Regular paragraph
+    elements.push(
+      <p key={key++} className="text-[13px] text-(--text-secondary) leading-relaxed">
+        {renderInlineSpans(line, key)}
+      </p>
+    );
+    i++;
   }
-  return parts.length > 0 ? parts : text;
+
+  return <div className="space-y-0.5">{elements}</div>;
 }
 
 // ── Tool name display mapping ───────────────────────────────────────
@@ -91,6 +171,10 @@ const TOOL_LABELS: Record<string, string> = {
   get_presets: "Loading presets...",
   enhance_prompt: "Enhancing prompt...",
   browse_project_files: "Browsing files...",
+  invoke_skill: "Building script...",
+  save_script: "Saving script...",
+  suggest_shot_list: "Planning shots...",
+  generate_scene: "Building scene...",
 };
 
 // ── Component ───────────────────────────────────────────────────────
@@ -111,12 +195,15 @@ export function DirectorChatPanel({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
   const [mode, setMode] = useState<AgentMode>("director");
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const toolStartRef = useRef<number | null>(null);
 
   const session = useQuery(
     api.directorChat.getSession,
@@ -150,34 +237,39 @@ export function DirectorChatPanel({
     }
   };
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, activeTool]);
 
-  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Elapsed timer — ticks every second while a tool is active
+  useEffect(() => {
+    if (!activeTool) {
+      setElapsed(0);
+      toolStartRef.current = null;
+      return;
+    }
+    toolStartRef.current = Date.now();
+    setElapsed(0);
+    const id = setInterval(() => {
+      if (toolStartRef.current) {
+        setElapsed(Math.floor((Date.now() - toolStartRef.current) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [activeTool]);
 
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || streaming) return;
 
-      const userMsg: Message = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        content: text.trim(),
-      };
-
-      const assistantMsg: Message = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: "",
-        isStreaming: true,
-      };
+      const userMsg: Message = { id: `user-${Date.now()}`, role: "user", content: text.trim() };
+      const assistantMsg: Message = { id: `assistant-${Date.now()}`, role: "assistant", content: "", isStreaming: true };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setInput("");
@@ -191,22 +283,13 @@ export function DirectorChatPanel({
         const res = await fetch("/api/director/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            projectId,
-            message: text.trim(),
-            currentFrameNumber,
-            currentSceneId,
-            mode,
-          }),
+          body: JSON.stringify({ projectId, message: text.trim(), currentFrameNumber, currentSceneId, mode }),
           signal: controller.signal,
         });
 
         if (!res.ok || !res.body) {
           let errMsg = `Request failed: ${res.status}`;
-          try {
-            const errJson = await res.json();
-            errMsg = errJson.error || errMsg;
-          } catch {}
+          try { const errJson = await res.json(); errMsg = errJson.error || errMsg; } catch {}
           throw new Error(errMsg);
         }
 
@@ -217,7 +300,6 @@ export function DirectorChatPanel({
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
@@ -226,77 +308,42 @@ export function DirectorChatPanel({
             if (!line.startsWith("data: ")) continue;
             const jsonStr = line.slice(6).trim();
             if (!jsonStr) continue;
-
             try {
               const event = JSON.parse(jsonStr);
-
               switch (event.type) {
                 case "text":
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsg.id
-                        ? { ...m, content: m.content + event.delta }
-                        : m
-                    )
-                  );
+                  setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content: m.content + event.delta } : m));
                   break;
-
                 case "tool_call":
                   setActiveTool(event.name);
                   break;
-
                 case "tool_result":
                   setActiveTool(null);
                   break;
-
                 case "error":
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsg.id
-                        ? { ...m, content: event.message || "Something went wrong.", isError: true, isStreaming: false }
-                        : m
-                    )
-                  );
+                  setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content: event.message || "Something went wrong.", isError: true, isStreaming: false } : m));
                   setStreaming(false);
                   return;
-
                 case "plan_approval":
                   setMessages((prev) => [
                     ...prev,
-                    {
-                      id: `plan-${Date.now()}`,
-                      role: "assistant",
-                      content: "",
-                      isPlanApproval: true,
-                      planData: { steps: event.steps || [], totalCredits: event.totalCredits || 0, status: "pending" },
-                    },
+                    { id: `plan-${Date.now()}`, role: "assistant", content: "", isPlanApproval: true, planData: { steps: event.steps || [], totalCredits: event.totalCredits || 0, status: "pending" } },
                   ]);
                   break;
-
                 case "done":
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMsg.id
-                        ? { ...m, isStreaming: false }
-                        : m
-                    )
-                  );
+                  setMessages((prev) => prev.map((m) =>
+                    m.id === assistantMsg.id
+                      ? { ...m, isStreaming: false, toolsUsed: event.toolsUsed || [] }
+                      : m
+                  ));
                   break;
               }
-            } catch {
-              // skip malformed JSON
-            }
+            } catch { /* skip malformed JSON */ }
           }
         }
       } catch (err: any) {
         if (err.name === "AbortError") return;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsg.id
-              ? { ...m, content: "Connection error. Please try again.", isError: true, isStreaming: false }
-              : m
-          )
-        );
+        setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content: "Connection error. Please try again.", isError: true, isStreaming: false } : m));
       } finally {
         setStreaming(false);
         setActiveTool(null);
@@ -331,7 +378,6 @@ export function DirectorChatPanel({
     [sendMessage]
   );
 
-  // ── Auto-send initialMessage (e.g. from "Review this frame" button) ──
   const initialMessageSent = useRef<string | null>(null);
   useEffect(() => {
     if (initialMessage && initialMessage !== initialMessageSent.current && !streaming) {
@@ -340,9 +386,8 @@ export function DirectorChatPanel({
     }
   }, [initialMessage, streaming, sendMessage]);
 
-  // ── Quick action chips (always visible, context-aware) ──────────────
+  // ── Quick actions (empty state only) ───────────────────────────
 
-  // kind: "execute" = triggers generation (Agent only), "advise" = read/write advice (both modes)
   type QuickAction = { label: string; prompt: string; icon?: string; kind: "advise" | "execute" };
 
   const frameAdviceActions: QuickAction[] = [
@@ -366,7 +411,6 @@ export function DirectorChatPanel({
     { label: "Consistency check", icon: "🔗", kind: "advise", prompt: "Check my storyboard for visual consistency — do the prompts maintain consistent character descriptions, environment, and style across frames?" },
   ];
 
-  // Execute chips — Agent only
   const executeActions: QuickAction[] = [
     { label: "Generate images", icon: "🖼️", kind: "execute", prompt: "Check my credit balance, then generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
     { label: "Animate frames", icon: "🎞️", kind: "execute", prompt: "Generate videos for all frames that have images but no videos. Use Seedance 2.0 Fast for budget. Show me the plan with credit costs first." },
@@ -376,121 +420,169 @@ export function DirectorChatPanel({
     { label: "Build full story", icon: "🚀", kind: "execute", prompt: "I want to build a complete storyboard end-to-end. Help me plan the scenes and frames, then generate all the images. Ask me about the story concept first." },
   ];
 
-  // Director = advice only. Agent = execute chips first, then all advice chips too.
   const adviceActions = currentFrameNumber ? frameAdviceActions : projectAdviceActions;
-  const quickActions: QuickAction[] = mode === "agent"
-    ? [...executeActions, ...adviceActions]
-    : adviceActions;
+  const hasMessages = messages.length > 0;
 
   // ── Render ────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed right-0 top-0 h-full w-[400px] z-60 flex flex-col bg-[#0f0f13] border-l border-[#2a2a32] shadow-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a32] shrink-0">
-        <div className="flex items-center gap-1 bg-[#1a1a22] rounded-lg p-0.5 border border-[#2a2a32]">
-          <button
-            onClick={() => setMode("director")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
-              mode === "director"
-                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            <Sparkles className="w-3 h-3" />
-            Director
-          </button>
-          <button
-            onClick={() => setMode("agent")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition ${
-              mode === "agent"
-                ? "bg-purple-500/20 text-purple-400 border border-purple-500/30"
-                : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            <Bot className="w-3 h-3" />
-            Agent
-          </button>
+    <div className="fixed right-0 top-0 h-full w-[400px] z-60 flex flex-col bg-(--bg-primary) border-l border-(--border-primary) shadow-2xl">
+
+      {/* Header — underline tab style */}
+      <div className="shrink-0">
+        <div className="flex items-center justify-between px-4 pt-2">
+          <div className="flex items-center">
+            <button
+              onClick={() => setMode("director")}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-medium border-b-2 transition-colors ${
+                mode === "director"
+                  ? "text-(--text-primary) border-white"
+                  : "text-(--text-tertiary) border-transparent hover:text-(--text-secondary)"
+              }`}
+            >
+              <Sparkles
+                className={`w-3.5 h-3.5 ${mode === "director" ? "text-amber-400" : ""}`}
+                strokeWidth={1.75}
+              />
+              Director
+            </button>
+            <button
+              onClick={() => setMode("agent")}
+              className={`flex items-center gap-1.5 px-3 py-2.5 text-[12px] font-medium border-b-2 transition-colors ${
+                mode === "agent"
+                  ? "text-(--text-primary) border-white"
+                  : "text-(--text-tertiary) border-transparent hover:text-(--text-secondary)"
+              }`}
+            >
+              <Bot
+                className={`w-3.5 h-3.5 ${mode === "agent" ? "text-(--accent-teal)" : ""}`}
+                strokeWidth={1.75}
+              />
+              Agent
+            </button>
+          </div>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={clearHistory}
+              className="p-1.5 rounded-md text-(--text-tertiary) hover:text-(--text-primary) hover:bg-white/5 transition"
+              title="Clear history"
+            >
+              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.75} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-(--text-tertiary) hover:text-(--text-primary) hover:bg-white/5 transition"
+            >
+              <X className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={clearHistory}
-            className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/5 transition"
-            title="Clear history"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-md text-gray-500 hover:text-gray-300 hover:bg-white/5 transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <div className="h-px bg-(--border-primary)" />
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+
         {hiddenCount > 0 && (
-          <button onClick={loadPreviousMessages} className="w-full py-2 px-3 rounded-lg bg-[#1a1a22] border border-[#2a2a32] text-xs text-gray-500 hover:text-gray-300 hover:border-gray-600 transition flex items-center justify-center gap-2">
-            <MessageSquare className="w-3 h-3" />
+          <button
+            onClick={loadPreviousMessages}
+            className="w-full py-2 px-3 rounded-lg bg-(--bg-secondary) border border-(--border-primary) text-[11px] text-(--text-tertiary) hover:text-(--text-secondary) hover:border-(--border-secondary) transition flex items-center justify-center gap-2"
+          >
+            <MessageSquare className="w-3 h-3" strokeWidth={1.75} />
             <span>{hiddenCount} earlier message{hiddenCount !== 1 ? "s" : ""}</span>
           </button>
         )}
 
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
-            {mode === "agent" ? (
-              <Bot className="w-8 h-8 text-purple-400/60 mb-3" />
-            ) : (
-              <Sparkles className="w-8 h-8 text-amber-400/60 mb-3" />
-            )}
-            <p className="text-sm text-gray-400 mb-1">{mode === "agent" ? "AI Agent" : "AI Director"}</p>
-            <p className="text-xs text-gray-600 mb-4">
-              {mode === "agent"
-                ? "I can advise on your storyboard and execute — generate images, create videos, post-process, and run multi-step plans."
-                : currentFrameNumber
-                  ? `Frame ${currentFrameNumber} selected. I'll advise on prompts, camera, and composition.`
-                  : "I advise on your storyboard — prompts, shot variety, pacing, style. You stay in control of generating."}
-            </p>
-            <div className="flex flex-col gap-2 w-full">
-              {quickActions.map((action) => (
+        {/* Empty state — identity + quick actions */}
+        {!hasMessages && (
+          <div className="flex flex-col h-full pt-2">
+            <div className="flex flex-col items-center text-center mb-5">
+              <div className="w-10 h-10 rounded-2xl bg-white/4 flex items-center justify-center mb-3 border border-(--border-primary)">
+                {mode === "agent"
+                  ? <Bot className="w-5 h-5 text-(--text-tertiary)" strokeWidth={1.75} />
+                  : <Sparkles className="w-5 h-5 text-(--text-tertiary)" strokeWidth={1.75} />
+                }
+              </div>
+              <p className="text-[13px] font-medium text-(--text-primary) mb-1">
+                {mode === "agent" ? "AI Agent" : "AI Director"}
+              </p>
+              <p className="text-[12px] text-(--text-secondary) leading-relaxed max-w-[260px]">
+                {mode === "agent"
+                  ? "Generate images, create videos, post-process, and run multi-step plans."
+                  : currentFrameNumber
+                    ? `Frame ${currentFrameNumber} selected. Advising on prompts, camera, and composition.`
+                    : "Advising on prompts, shot variety, pacing, and visual style."}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              {mode === "agent" && (
+                <>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-(--text-tertiary) px-0.5 mb-0.5">Execute</p>
+                  {executeActions.map((action) => (
+                    <button
+                      key={action.label}
+                      onClick={() => sendMessage(action.prompt)}
+                      className="text-[12px] text-left px-3 py-2 rounded-lg bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition flex items-center gap-2.5"
+                    >
+                      {action.icon && <span>{action.icon}</span>}
+                      <span className="flex-1">{action.label}</span>
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-(--accent-teal) shrink-0">run</span>
+                    </button>
+                  ))}
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-(--text-tertiary) px-0.5 mt-2 mb-0.5">Advise</p>
+                </>
+              )}
+              {adviceActions.map((action) => (
                 <button
                   key={action.label}
                   onClick={() => sendMessage(action.prompt)}
-                  className="text-xs text-left px-3 py-2 rounded-lg bg-[#1a1a22] border border-[#2a2a32] text-gray-400 hover:text-gray-200 hover:border-amber-500/30 hover:bg-[#1e1e28] transition flex items-center gap-2"
+                  className="text-[12px] text-left px-3 py-2 rounded-lg bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition flex items-center gap-2.5"
                 >
                   {action.icon && <span>{action.icon}</span>}
-                  {action.label}
+                  <span>{action.label}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
 
+        {/* Messages */}
         {messages.map((msg) =>
           msg.isPlanApproval && msg.planData ? (
             <div key={msg.id} className="flex justify-start">
-              <div className="max-w-[90%] rounded-xl border border-purple-500/30 bg-purple-500/5 p-3 space-y-2">
-                <p className="text-xs font-semibold text-purple-300">Execution Plan</p>
-                <div className="space-y-1">
+              <div className="w-full rounded-xl border border-(--border-primary) bg-(--bg-secondary) p-3 space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-(--text-tertiary)">Execution Plan</p>
+                <div className="space-y-1.5">
                   {msg.planData.steps.map((step, i) => (
-                    <div key={i} className="flex items-center justify-between text-[12px]">
-                      <span className="text-gray-300">
+                    <div key={i} className="flex items-start justify-between gap-3 text-[12px]">
+                      <span className="text-(--text-secondary) leading-snug">
                         {step.action}
-                        {step.frameNumber != null && <span className="text-gray-500 ml-1">F{step.frameNumber}</span>}
-                        {step.model && <span className="text-gray-600 ml-1">({step.model})</span>}
+                        {step.frameNumber != null && <span className="text-(--text-tertiary) ml-1">· F{step.frameNumber}</span>}
+                        {step.model && <span className="text-(--text-tertiary) ml-1">· {step.model}</span>}
                       </span>
-                      <span className="text-amber-400 ml-2 shrink-0">{step.credits} cr</span>
+                      <span className="text-amber-400 tabular-nums shrink-0 font-medium">{step.credits} cr</span>
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center justify-between pt-1 border-t border-[#2a2a32]">
-                  <span className="text-xs text-gray-400">Total: <strong className="text-white">{msg.planData.totalCredits} credits</strong></span>
+                <div className="flex items-center justify-between pt-2 border-t border-(--border-primary)">
+                  <span className="text-[12px] text-(--text-secondary)">
+                    Total: <span className="text-(--text-primary) font-semibold">{msg.planData.totalCredits} credits</span>
+                  </span>
                   {msg.planData.status === "pending" ? (
                     <div className="flex gap-2">
-                      <button onClick={() => handlePlanApproval(msg.id, true)} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition">Approve</button>
-                      <button onClick={() => handlePlanApproval(msg.id, false)} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition">Cancel</button>
+                      <button
+                        onClick={() => handlePlanApproval(msg.id, true)}
+                        className="px-3 py-1 rounded-md text-[11px] font-medium bg-(--accent-blue)/12 text-(--accent-blue) border border-(--accent-blue)/25 hover:bg-(--accent-blue)/20 transition"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handlePlanApproval(msg.id, false)}
+                        className="px-3 py-1 rounded-md text-[11px] font-medium bg-red-500/8 text-red-400 border border-red-500/15 hover:bg-red-500/15 transition"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   ) : (
                     <span className={`text-[11px] font-medium ${msg.planData.status === "approved" ? "text-green-400" : "text-red-400"}`}>
@@ -501,71 +593,62 @@ export function DirectorChatPanel({
               </div>
             </div>
           ) : (
-            <div
-              key={msg.id}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`max-w-[85%] px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap ${
-                  msg.role === "user"
-                    ? "bg-blue-600/20 text-blue-100 border border-blue-500/20"
-                    : msg.isError
-                      ? "bg-red-500/10 text-red-300 border border-red-500/20"
-                      : "bg-[#1a1a22] text-gray-300 border border-[#2a2a32]"
-                }`}
-              >
-                {renderInlineMarkdown(msg.content || (msg.isStreaming ? "" : "..."))}
-                {msg.isStreaming && !msg.content && (
-                  <span className="inline-flex gap-1 text-gray-500">
-                    <span className="animate-pulse">.</span>
-                    <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>.</span>
-                    <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>.</span>
-                  </span>
+            <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className="relative group max-w-[88%]">
+                <div
+                  className={`px-3 py-2.5 rounded-xl text-[13px] leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-(--accent-blue)/12 text-(--text-primary) border border-(--accent-blue)/20"
+                      : msg.isError
+                        ? "bg-red-500/8 text-red-300 border border-red-500/15"
+                        : "bg-(--bg-secondary) text-(--text-secondary) border border-(--border-primary)"
+                  }`}
+                >
+                  {msg.role === "user"
+                    ? <span className="whitespace-pre-wrap">{msg.content}</span>
+                    : msg.content
+                      ? renderMarkdown(msg.content)
+                      : null
+                  }
+                  {msg.isStreaming && !msg.content && (
+                    <span className="inline-flex gap-1 text-(--text-tertiary)">
+                      <span className="animate-pulse">.</span>
+                      <span className="animate-pulse" style={{ animationDelay: "0.2s" }}>.</span>
+                      <span className="animate-pulse" style={{ animationDelay: "0.4s" }}>.</span>
+                    </span>
+                  )}
+                </div>
+                {msg.role === "assistant" && !msg.isStreaming && msg.content && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(msg.content);
+                      setCopiedId(msg.id);
+                      setTimeout(() => setCopiedId(null), 1500);
+                    }}
+                    className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-(--bg-tertiary) hover:bg-(--bg-secondary) border border-(--border-primary) rounded-md p-1 text-(--text-tertiary) hover:text-(--text-primary)"
+                    title="Copy"
+                  >
+                    {copiedId === msg.id
+                      ? <Check className="w-3 h-3 text-green-400" />
+                      : <Copy className="w-3 h-3" strokeWidth={1.75} />
+                    }
+                  </button>
                 )}
               </div>
             </div>
           )
         )}
 
-        {/* Tool call indicator */}
         {activeTool && (
-          <div className="flex items-center gap-2 text-xs text-amber-400/80 px-2">
-            <Wrench className="w-3 h-3 animate-spin" />
+          <div className="flex items-center gap-2 text-[11px] text-(--text-secondary) px-1">
+            <Wrench className="w-3.5 h-3.5 animate-spin" strokeWidth={1.75} />
             <span>{TOOL_LABELS[activeTool] || `Using ${activeTool}...`}</span>
           </div>
         )}
       </div>
 
-      {/* Quick action chips — always visible */}
-      <div className="px-3 pt-2 pb-1 border-t border-[#2a2a32] shrink-0">
-        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
-          {quickActions.map((action, i) => {
-            const isExecute = action.kind === "execute";
-            // thin divider between execute and advise groups in Agent mode
-            const showDivider = mode === "agent" && i === executeActions.length;
-            return (
-              <div key={action.label} className="flex items-center gap-1.5 shrink-0">
-                {showDivider && <div className="w-px h-4 bg-[#2a2a32] shrink-0" />}
-                <button
-                  onClick={() => sendMessage(action.prompt)}
-                  disabled={streaming}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] disabled:opacity-40 disabled:cursor-not-allowed transition whitespace-nowrap ${
-                    isExecute
-                      ? "bg-purple-500/10 border-purple-500/25 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/40"
-                      : "bg-[#1a1a22] border-[#2a2a32] text-gray-400 hover:text-gray-200 hover:border-amber-500/30 hover:bg-[#1e1e28]"
-                  }`}
-                >
-                  {action.icon && <span className="text-[11px]">{action.icon}</span>}
-                  {action.label}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Input */}
-      <div className="px-3 py-3 shrink-0">
+      <div className="border-t border-(--border-primary) px-3 py-3 shrink-0">
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
@@ -581,19 +664,18 @@ export function DirectorChatPanel({
             }
             disabled={streaming}
             rows={1}
-            className="flex-1 resize-none bg-[#1a1a22] border border-[#2a2a32] rounded-xl px-3 py-2.5 text-[13px] text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-amber-500/40 disabled:opacity-50 max-h-[120px] overflow-y-auto"
+            className="flex-1 resize-none bg-(--bg-secondary) border border-(--border-primary) rounded-xl px-3 py-2.5 text-[13px] text-(--text-primary) placeholder:text-(--text-tertiary) focus:outline-none focus:border-(--accent-blue)/40 disabled:opacity-50 max-h-[120px] overflow-y-auto leading-5"
             style={{ minHeight: "40px" }}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || streaming}
-            className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-30 disabled:cursor-not-allowed transition shrink-0"
+            className="p-2.5 rounded-xl bg-(--accent-blue)/12 text-(--accent-blue) hover:bg-(--accent-blue)/20 border border-(--accent-blue)/20 disabled:opacity-30 disabled:cursor-not-allowed transition shrink-0"
           >
-            {streaming ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
+            {streaming
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Send className="w-4 h-4" strokeWidth={1.75} />
+            }
           </button>
         </div>
       </div>
