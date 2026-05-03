@@ -396,6 +396,63 @@ export function DirectorChatPanel({
     setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: "assistant" as const, content }]);
   }, []);
 
+  const analyzeCurrentImage = useCallback(async () => {
+    if (!currentFrameImageUrl || streaming) return;
+    const userMsgId = `user-${Date.now()}`;
+    const assistantMsgId = `analyze-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, role: "user" as const, content: `Analyze the current image (frame ${currentFrameNumber})` },
+      { id: assistantMsgId, role: "assistant" as const, content: "", isStreaming: true },
+    ]);
+    setStreaming(true);
+    try {
+      const res = await fetch("/api/director/quick-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: currentFrameImageUrl, frameNumber: currentFrameNumber }),
+      });
+      const data = await res.json();
+      setMessages((prev) => prev.map((m) =>
+        m.id === assistantMsgId
+          ? { ...m, content: data.analysis || "Could not analyze image.", isStreaming: false }
+          : m
+      ));
+    } catch {
+      setMessages((prev) => prev.map((m) =>
+        m.id === assistantMsgId
+          ? { ...m, content: "Failed to analyze image.", isError: true, isStreaming: false }
+          : m
+      ));
+    } finally {
+      setStreaming(false);
+    }
+  }, [currentFrameImageUrl, currentFrameNumber, streaming]);
+
+  const analyzeStoryboard = useCallback(() => {
+    const items = (storyItems as any[] | undefined) ?? null;
+    if (!items) { answerLocally("Still loading storyboard data — try again in a moment."); return; }
+    if (items.length === 0) { answerLocally("Your storyboard has no frames yet."); return; }
+
+    const withImage = items.filter((i: any) => i.imageUrl || i.imageStorageId).length;
+    const withVideo = items.filter((i: any) => i.videoUrl || i.videoStorageId).length;
+    const scenes = new Set(items.map((i: any) => i.sceneId).filter(Boolean)).size;
+
+    const samples = items.slice(0, 4).map((i: any, idx: number) => {
+      const prompt = (i.imagePrompt || i.prompt || i.description || "").slice(0, 70);
+      return `- Frame ${i.frameNumber ?? idx + 1}: ${prompt || "No prompt yet"}${prompt.length >= 70 ? "…" : ""}`;
+    }).join("\n");
+
+    answerLocally(
+      `**Storyboard overview** (${items.length} frames, ${scenes} scene${scenes !== 1 ? "s" : ""})` +
+      `\n\n- **${withImage}** frame${withImage !== 1 ? "s" : ""} with generated images` +
+      `\n- **${withVideo}** frame${withVideo !== 1 ? "s" : ""} with videos` +
+      `\n- **${items.length - withImage}** frame${(items.length - withImage) !== 1 ? "s" : ""} still need images` +
+      `\n\n**Sample prompts:**\n${samples}` +
+      `\n\n*Ask the Director for a detailed pacing, shot variety, or consistency review.*`
+    );
+  }, [storyItems, answerLocally]);
+
   const handleCreditPill = useCallback((type: "balance" | "framecost" | "cheapest" | "compare") => {
     const bal = creditBalance ?? null;
     const items = (storyItems as any[] | undefined) ?? null;
@@ -454,7 +511,7 @@ export function DirectorChatPanel({
 
   const directorPills: Record<string, QuickPill[]> = {
     project: [
-      { label: "What is this storyboard about?", prompt: "Give me a quick overview — what's the story, how many scenes and frames, and what's the visual style of this project?" },
+      { label: "What is this storyboard about?", localHandler: () => analyzeStoryboard() },
       { label: "Review shot variety", prompt: "Look at all my frames and check for shot variety. Are there too many similar angles or compositions? Tell me what to change." },
       { label: "Pacing check", prompt: "Review my storyboard for pacing. Are scene durations appropriate? Does the flow feel right? Which scenes need more or fewer frames?" },
       { label: "Consistency check", prompt: "Check my storyboard for visual consistency — do the prompts maintain consistent character descriptions, environment, and style across frames?" },
@@ -462,9 +519,10 @@ export function DirectorChatPanel({
     ],
     frame: [
       { label: "What is the current frame about?", prompt: `Tell me about frame ${currentFrameNumber ?? "the current frame"} — what's happening, what's in the prompt, and any director notes?` },
-      { label: "Analyze the current image", prompt: currentFrameImageUrl
-        ? `Analyze the generated image for frame ${currentFrameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. What works and what should be improved?`
-        : `Analyze frame ${currentFrameNumber}. Review the current prompt — what will the generated image look like? What could go wrong?` },
+      ...(currentFrameImageUrl
+        ? [{ label: "Analyze the current image", localHandler: () => analyzeCurrentImage() }]
+        : [{ label: "Analyze the current image", prompt: `Analyze frame ${currentFrameNumber}. Review the current prompt — what will the generated image look like? What could go wrong?` }]
+      ),
       { label: "Camera angle advice", prompt: `What's the best camera angle and shot type for frame ${currentFrameNumber}? Consider the scene context and what would be most cinematic.` },
       { label: "Lighting setup", prompt: `Suggest the best lighting setup for frame ${currentFrameNumber}. Consider the mood, time of day, and what would complement the scene.` },
       { label: "What's wrong with this frame?", prompt: `Critically review frame ${currentFrameNumber}. What are the weaknesses in the prompt? What might generate poorly and why? Be specific.` },
