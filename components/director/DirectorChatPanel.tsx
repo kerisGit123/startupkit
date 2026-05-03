@@ -212,6 +212,14 @@ export function DirectorChatPanel({
     api.directorChat.getSession,
     userId && projectId ? { projectId: projectId as any, userId } : "skip"
   );
+  const creditBalance = useQuery(
+    api.credits.getBalance,
+    companyId ? { companyId } : "skip"
+  );
+  const storyItems = useQuery(
+    api.storyboard.storyboardItems.listByProject,
+    projectId ? { projectId: projectId as any } : "skip"
+  );
   const clearSessionMutation = useMutation(api.directorChat.clearSession);
   const allRestoredRef = useRef<Message[]>([]);
 
@@ -384,6 +392,40 @@ export function DirectorChatPanel({
     [sendMessage]
   );
 
+  const answerLocally = useCallback((content: string) => {
+    setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: "assistant" as const, content }]);
+  }, []);
+
+  const handleCreditPill = useCallback((type: "balance" | "framecost" | "cheapest" | "compare") => {
+    const bal = creditBalance ?? null;
+    const items = (storyItems as any[] | undefined) ?? null;
+
+    if (type === "balance") {
+      if (bal === null) { answerLocally("Still loading your credit balance — try again in a moment."); return; }
+      const imgBudget = Math.floor(bal / 2);
+      const imgStd = Math.floor(bal / 4);
+      const vidFast = Math.floor(bal / 8);
+      answerLocally(
+        `Your current balance is **${bal} credits**.\n\nApproximate capacity:\n- **${imgBudget} images** at budget quality (2cr each)\n- **${imgStd} images** at standard quality (4cr each)\n- **${vidFast} videos** at Seedance Fast (8cr each)`
+      );
+    } else if (type === "framecost") {
+      if (!items) { answerLocally("Still loading storyboard data — try again in a moment."); return; }
+      const noImg = items.filter((i: any) => !i.imageUrl && !i.imageStorageId);
+      const total = items.length;
+      answerLocally(
+        `Your project has **${total} frame${total !== 1 ? "s" : ""}** total — **${noImg.length}** without an image yet.\n\nEstimated cost to generate the missing images:\n- Budget model (2cr) → **${noImg.length * 2} credits**\n- Standard model (4cr) → **${noImg.length * 4} credits**${bal !== null ? `\n\nYour balance: **${bal} credits**` : ""}`
+      );
+    } else if (type === "cheapest") {
+      answerLocally(
+        `**Most budget-friendly approach:**\n\n- **Flux Lite** — 2cr/image · Fast drafts and layout checks\n- **Standard** — 4cr/image · Good quality for most frames\n- **High quality** — 8cr/image · Hero shots and key scenes\n\nTip: Generate all frames at budget first to validate composition, then re-generate key frames at higher quality.${bal !== null ? `\n\nYour balance: **${bal} credits**` : ""}`
+      );
+    } else if (type === "compare") {
+      answerLocally(
+        `**Image vs Video cost:**\n\n**Images**\n- Budget (Flux Lite) · 2cr\n- Standard · 4cr\n- Premium · 8cr\n\n**Videos (5s clip)**\n- Seedance Fast · 8cr\n- Wan 2.1 · 12cr\n- Seedance Pro · 15cr\n\nVideos cost 2–8× more than images. Recommended: generate all images first, then animate only the priority scenes.`
+      );
+    }
+  }, [creditBalance, storyItems, answerLocally]);
+
   useEffect(() => { setQuickCategory(null); }, [mode]);
 
   const initialMessageSent = useRef<string | null>(null);
@@ -408,7 +450,9 @@ export function DirectorChatPanel({
     { id: "credits", icon: "💳", label: "Credits" },
   ];
 
-  const directorPills: Record<string, { label: string; prompt: string }[]> = {
+  type QuickPill = { label: string; prompt?: string; localHandler?: () => void };
+
+  const directorPills: Record<string, QuickPill[]> = {
     project: [
       { label: "What is this storyboard about?", prompt: "Give me a quick overview — what's the story, how many scenes and frames, and what's the visual style of this project?" },
       { label: "Review shot variety", prompt: "Look at all my frames and check for shot variety. Are there too many similar angles or compositions? Tell me what to change." },
@@ -436,7 +480,7 @@ export function DirectorChatPanel({
     ],
   };
 
-  const agentPills: Record<string, { label: string; prompt: string }[]> = {
+  const agentPills: Record<string, QuickPill[]> = {
     write: [
       { label: "🐉 Dragon epic · 5 min", prompt: "Write me an epic dragon story, 5 minutes" },
       { label: "💕 Romance · 2 min", prompt: "Write a romantic love story, 2 minutes" },
@@ -453,10 +497,10 @@ export function DirectorChatPanel({
       { label: "Build full storyboard", prompt: "Build the complete storyboard end-to-end — write the script, create frames, then generate images. Ask me about the story concept first." },
     ],
     credits: [
-      { label: "Check my credit balance", prompt: "What is my current credit balance? How many images or videos can I still generate with it?" },
-      { label: "How much for all images?", prompt: "How many frames in my project don't have images yet? Calculate the total credit cost to generate all of them." },
-      { label: "Cheapest way to generate", prompt: "What's the most budget-friendly way to generate images for all my frames? Compare model costs and recommend the best option." },
-      { label: "Image vs video cost", prompt: "Compare the cost of generating images vs videos for my project. Which models give the best quality-per-credit ratio?" },
+      { label: "Check my credit balance", localHandler: () => handleCreditPill("balance") },
+      { label: "How much for all images?", localHandler: () => handleCreditPill("framecost") },
+      { label: "Cheapest way to generate", localHandler: () => handleCreditPill("cheapest") },
+      { label: "Image vs video cost", localHandler: () => handleCreditPill("compare") },
     ],
   };
 
@@ -764,7 +808,10 @@ export function DirectorChatPanel({
                 {(mode === "director" ? directorPills[quickCategory] : agentPills[quickCategory])?.map((pill) => (
                   <button
                     key={pill.label}
-                    onClick={() => { sendMessage(pill.prompt); setQuickCategory(null); }}
+                    onClick={() => {
+                      if (pill.localHandler) { pill.localHandler(); } else if (pill.prompt) { sendMessage(pill.prompt); }
+                      setQuickCategory(null);
+                    }}
                     className="px-2.5 py-1 rounded-full text-[11px] bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition-all text-left"
                   >
                     {pill.label}
