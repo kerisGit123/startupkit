@@ -100,6 +100,27 @@ export const appendMessages = mutation({
   },
 });
 
+// Admin helper — run once from Convex dashboard to enable/disable agent seat
+export const setAgentAccess = mutation({
+  args: {
+    companyId: v.string(),
+    enabled: v.boolean(),
+    seatCount: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const settings = await ctx.db
+      .query("org_settings")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .first();
+    if (!settings) return { error: `No org_settings row found for companyId: ${args.companyId}` };
+    await ctx.db.patch(settings._id, {
+      agentModeEnabled: args.enabled,
+      ...(args.seatCount !== undefined && { agentSeatCount: args.seatCount }),
+    });
+    return { ok: true, companyId: args.companyId, agentModeEnabled: args.enabled };
+  },
+});
+
 // Check whether agent mode is enabled for a company (seat billing gate)
 export const getAgentAccess = query({
   args: { companyId: v.string() },
