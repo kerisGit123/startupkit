@@ -596,18 +596,23 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "invoke_skill",
     description:
-      "Call a specialized Claude skill for a focused creative task. Use 'video-prompt-builder' when the user wants to write a new story from scratch — pass their creative brief and receive a full Seedance-optimized cinematic script with act structure, scene breakdowns, image prompts, and video prompts per scene. COSTS 6 credits/min (simple stories) or 8 credits/min (action/VFX/fantasy/complex) — minimum 6 credits. Always call get_credit_balance first and show the user the cost before calling this. Long stories are split into 2-min acts automatically. After the skill returns, show a short summary and ask if they want to save and build.",
+      "Call a specialized Claude skill for a focused creative task. Use 'video-prompt-builder' when the user wants to write a new story from scratch. TWO QUALITY MODES — always ask user which they want before calling: 'quick' (Haiku, 6–8 cr/min, fast) or 'cinematic' (Sonnet, 18 cr/min, premium quality with richer camera language). Always call get_credit_balance first and show the cost. Long stories split into 2-min acts automatically.",
     input_schema: {
       type: "object",
       properties: {
         skill_name: {
           type: "string",
           enum: ["video-prompt-builder"],
-          description: "Which skill to invoke. 'video-prompt-builder' generates a structured Seedance-ready cinematic script from a creative brief.",
+          description: "Which skill to invoke.",
         },
         prompt: {
           type: "string",
-          description: "Creative brief for the skill. For video-prompt-builder: story concept, genre, duration, key characters, visual mood. Example: 'a koi fish and tabby cat unlikely friendship, heartwarming, 3 minutes, Studio Ghibli mood'",
+          description: "Creative brief: story concept, genre, duration, key characters, visual mood.",
+        },
+        quality: {
+          type: "string",
+          enum: ["quick", "cinematic"],
+          description: "'quick' = Haiku model, 6cr/min simple or 8cr/min complex (action/VFX/fantasy). 'cinematic' = Sonnet model, 18cr/min flat — richer camera language, TIME REMAP, cinematic lens specs. Default: 'quick'.",
         },
       },
       required: ["skill_name", "prompt"],

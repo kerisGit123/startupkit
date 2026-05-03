@@ -116,6 +116,20 @@ export async function POST(req: NextRequest) {
   const totalScenes = (script.match(/###\s*SCENE|\bSCENE\s+\d/gi) || []).length || 4;
   const rewriteCredits = Math.max(3, Math.ceil(totalScenes / 10) * 3);
 
+  // Pre-flight balance check — prevents running expensive API call when user can't pay
+  const companyId = (project as any).companyId as string | undefined;
+  if (companyId) {
+    try {
+      const balance = await convex.query(api.credits.getBalance, { companyId });
+      if (balance < rewriteCredits) {
+        return NextResponse.json(
+          { error: `Insufficient credits. Script rewrite needs ${rewriteCredits} credits but your balance is ${balance}.` },
+          { status: 402 }
+        );
+      }
+    } catch { /* non-fatal — proceed and let deduction fail if needed */ }
+  }
+
   // Determine if structured (has SCENE markers) or freeform
   const isStructured = /SCENE\s+\d/i.test(script);
   const scriptTokenEstimate = Math.ceil(script.length / 4);

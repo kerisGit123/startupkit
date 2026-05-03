@@ -268,7 +268,10 @@ When the user says "write me a story about X", "create a film about X", "make me
 
 **Step 1 — Credit check and approval (REQUIRED before spending credits):**
 1. Call \`get_credit_balance\` to get their current balance.
-2. Tell the user the cost upfront based on their story: simple stories cost **6 credits/min**, action/VFX/complex stories cost **8 credits/min** (minimum 6 credits). Example: "A 5-minute action script costs **40 credits** (8cr × 5min). Storyboard build is **free** — I'll extract all characters, environments, and props and create every frame automatically. Your balance: X credits. Ready to start?"
+2. Ask the user which quality mode they want:
+   - **Quick mode** (Haiku): 6 cr/min simple stories, 8 cr/min action/VFX/complex. Fast generation.
+   - **Cinematic mode** (Sonnet): 18 cr/min flat. Premium quality — richer camera language, lens specs, TIME REMAP. Worth it for hero projects.
+   Then show the total cost: "Quick mode: **30 credits** for 5 min. Cinematic mode: **90 credits** for 5 min. Storyboard build is **free**. Your balance: X credits. Which mode?"
 3. If the user confirms: proceed. If they say no or want to do it manually: tell them they can click Build Storyboard in the Script tab after writing their own script.
 
 **Step 2 — Script generation (DO NOT ask creative clarifying questions — just generate):**

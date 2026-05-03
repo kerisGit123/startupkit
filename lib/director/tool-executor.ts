@@ -926,12 +926,15 @@ export async function dispatchDirectorTool(
           };
         }
 
-        // Tiered credit pricing: simple story 6cr/min, complex (action/VFX/fantasy) 8cr/min
+        const quality = (input.quality as string | undefined) ?? "quick";
+        const isCinematic = quality === "cinematic";
         const durationMin = parseDurationMinutes(skillPrompt);
-        const complex = isComplexStory(skillPrompt);
-        const ratePerMin = complex ? 8 : 6;
+        const numActs = Math.ceil(durationMin / 2); // 2 min (8 scenes) per call
+
+        // Cinematic (Sonnet): flat 18cr/min — covers $0.27/act worst case at 25% margin
+        // Quick (Haiku): 6cr/min simple, 8cr/min complex — covers $0.098/act worst case at 18% margin
+        const ratePerMin = isCinematic ? 18 : (isComplexStory(skillPrompt) ? 8 : 6);
         const totalCredits = Math.max(ratePerMin, Math.ceil(durationMin) * ratePerMin);
-        const numActs = Math.ceil(durationMin / 2); // 2 min (8 scenes) per Haiku call
 
         let currentBalance = 0;
         try {
@@ -939,7 +942,7 @@ export async function dispatchDirectorTool(
         } catch { /* non-fatal */ }
         if (currentBalance < totalCredits) {
           return {
-            output: `Insufficient credits. This script (${Math.ceil(durationMin)} min, ${complex ? "complex/action" : "simple"}) costs ${totalCredits} credits, but your balance is ${currentBalance}. Please top up to continue.`,
+            output: `Insufficient credits. This script (${Math.ceil(durationMin)} min, ${isCinematic ? "cinematic" : isComplexStory(skillPrompt) ? "complex/action" : "simple"}) costs ${totalCredits} credits, but your balance is ${currentBalance}. Please top up to continue.`,
             isError: true,
           };
         }
@@ -951,7 +954,7 @@ export async function dispatchDirectorTool(
               if (attempt > 0) await new Promise((r) => setTimeout(r, 2000 * attempt));
               const anthropic = getAnthropicClient();
               const response = await (anthropic as any).beta.messages.create({
-                model: "claude-haiku-4-5-20251001",
+                model: isCinematic ? "claude-sonnet-4-6" : "claude-haiku-4-5-20251001",
                 max_tokens: 8192,
                 betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
                 container: { skills: [{ type: "custom", skill_id: skillId, version: "latest" }] },
@@ -1006,7 +1009,7 @@ export async function dispatchDirectorTool(
           await convex.mutation(api.credits.deductCredits, {
             companyId: ctx.companyId,
             tokens: totalCredits,
-            reason: `AI script generation (${Math.ceil(durationMin)}min, ${complex ? "complex" : "simple"}, ${numActs} act${numActs > 1 ? "s" : ""})`,
+            reason: `AI script generation (${Math.ceil(durationMin)}min, ${isCinematic ? "cinematic/Sonnet" : "quick/Haiku"}, ${numActs} act${numActs > 1 ? "s" : ""})`,
             type: "usage",
             model: "video-prompt-builder",
             action: "script_generation",
