@@ -354,6 +354,41 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 
 ---
 
+## Honest Self-Assessment (Session #36)
+
+> Rated before end-to-end testing. Goal: know exactly what to fix before charging real money.
+
+| Area | Score | Verdict |
+| ---- | ----- | ------- |
+| Architecture & backend | 8/10 | SSE streaming, tool chaining, prompt caching, model upgrade, multi-act — all solid |
+| UI/UX | 7/10 | Balloon nav, credit confirm, local answers are good. invoke_skill spinner (30–60s, no progress) is weak |
+| Pricing logic | 7.5/10 | Margin analysis rigorous. Quick/Cinematic, scene-based Visual Lock, per-pill estimates, pre-flight 402 |
+| Completeness | 5/10 | Too many untested paths, no seat billing, two vision paths diverging |
+| **Overall** | **6.5/10** | **Good enough to demo. Not ready to charge for Agent mode.** |
+
+### Gaps that block monetisation
+
+**Critical — fix before charging for Agent:**
+
+- **Agent seat billing does not exist.** Agent mode is effectively free. No paywall, no teaser counter, no seat table.
+- **End-to-end flow never tested.** The full "write me a dragon story → `invoke_skill` → `save_script` → `build_storyboard`" path has not been run once in production.
+- **`invoke_skill` 30–60s blank spinner.** User sees "Building script..." with no progress signal. For the most expensive action in the product, this is bad UX.
+
+**Should fix before real users:**
+
+- **Two separate vision paths diverging.** `analyze_frame_image` tool (Director, via tool executor) vs direct `/api/ai-analyze` (balloon pill, Gemini 2.5 Flash). They return different formats, charge differently, have no shared error handling.
+- **Director advisory questions have no rate limiting.** Each Director message costs us ~$0.006 Haiku API with no cost recovery on free plan. At scale, heavy Director users are loss-making.
+- **20-message hardcap is a blunt instrument.** No conversation compression or smart summarisation — long sessions lose context abruptly at the 20-message window.
+- **System prompt not tuned from real sessions.** Written speculatively; actual agent behaviour under real prompts is unknown.
+
+**Polish / nice to have:**
+
+- `quickCategory` persists when navigating between frames — balloon shows stale category breadcrumb
+- No error recovery for partial `invoke_skill` failures mid-multi-act
+- No typing indicator during local-answer computation (instant, but visually jarring)
+
+---
+
 ## Session History
 
 ### Session #33 — Core build ✅
@@ -383,15 +418,20 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 
 ## Roadmap
 
-### Phase 1 — Core Complete ✅
+### Phase 1 — Core Built, Pre-launch Gaps Remain
 
 - [x] 26 tools built and implemented
 - [x] System prompt rewritten with full studio context
 - [x] invoke_skill: multi-act script generation, tiered pricing
 - [x] Balloon category nav with credit confirm pattern
 - [x] Local answers (zero AI cost) for data-lookup pills
-- [ ] End-to-end test: "write me a dragon story" → invoke_skill → save_script → build_storyboard
-- [ ] Tune system prompt from real agent behavior
+- [ ] **BLOCKER:** End-to-end test — "write me a dragon story" → invoke_skill → save_script → build_storyboard
+- [ ] **BLOCKER:** Agent seat billing + paywall (currently free for all)
+- [ ] invoke_skill progress signal — stream act-by-act status instead of blank spinner
+- [ ] Unify vision paths — one shared route used by both Director tool and balloon pill
+- [ ] Director rate limiting — daily message cap for free-plan users
+- [ ] Conversation compression — smart summarise beyond the 20-message window
+- [ ] Tune system prompt from real agent behaviour
 
 ### Phase 2 — Newbie Quick Create (after Phase 1 proven)
 
