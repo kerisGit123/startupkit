@@ -64,6 +64,19 @@ export async function POST(req: NextRequest) {
 
     const companyId = (project as any).companyId || orgId || clerkUserId;
 
+    // ── Agent seat check ────────────────────────────────────────────
+    if (mode === "agent") {
+      const agentEnabled = await convex.query(api.directorChat.getAgentAccess, {
+        companyId,
+      });
+      if (!agentEnabled) {
+        return new Response(
+          JSON.stringify({ error: "Agent mode requires an active seat subscription.", code: "AGENT_SEAT_REQUIRED" }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     const elements = await convex.query(
       api.storyboard.storyboardElements.listByProject,
       { projectId: projectId as any }
@@ -131,14 +144,6 @@ export async function POST(req: NextRequest) {
         : tool
     ) as Anthropic.Tool[];
 
-    // ── Tool context (pass convex client for tools) ─────────────────
-    const toolCtx: DirectorToolContext = {
-      convex,
-      projectId,
-      companyId,
-      userId: clerkUserId,
-    };
-
     // ── SSE streaming ───────────────────────────────────────────────
     const anthropic = getAnthropicClient();
 
@@ -147,6 +152,17 @@ export async function POST(req: NextRequest) {
         const enc = new TextEncoder();
         const send = (data: Record<string, unknown>) => {
           controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+        };
+
+        // Tool context — created inside start() so onProgress can call send()
+        const toolCtx: DirectorToolContext = {
+          convex,
+          projectId,
+          companyId,
+          userId: clerkUserId,
+          onProgress: (message: string) => {
+            send({ type: "tool_progress", message });
+          },
         };
 
         try {

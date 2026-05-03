@@ -1,7 +1,7 @@
 # AI Director + Agent — Architecture & Status
 
-> **Status:** Built + Script Generation live (Sessions #33–#36), end-to-end testing pending
-> **Last updated:** 2026-05-03 (Session #36)
+> **Status:** Built + Script Generation live (Sessions #33–#37), end-to-end flow fixed
+> **Last updated:** 2026-05-03 (Session #37)
 > **Models:** Haiku 4.5 default · Sonnet 4.6 for post-invoke_skill iteration + Cinematic mode
 
 ---
@@ -354,27 +354,28 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 
 ---
 
-## Honest Self-Assessment (Session #36)
+## Honest Self-Assessment (Session #37)
 
-> Rated before end-to-end testing. Goal: know exactly what to fix before charging real money.
+> Session #37 addressed the three blockers from #36. Remaining gaps listed below.
 
 | Area | Score | Verdict |
 | ---- | ----- | ------- |
 | Architecture & backend | 8/10 | SSE streaming, tool chaining, prompt caching, model upgrade, multi-act — all solid |
-| UI/UX | 7/10 | Balloon nav, credit confirm, local answers are good. invoke_skill spinner (30–60s, no progress) is weak |
+| UI/UX | 7.5/10 | Progress signal added; invoke_skill now shows per-act status. Paywall card clean. |
 | Pricing logic | 7.5/10 | Margin analysis rigorous. Quick/Cinematic, scene-based Visual Lock, per-pill estimates, pre-flight 402 |
-| Completeness | 5/10 | Too many untested paths, no seat billing, two vision paths diverging |
-| **Overall** | **6.5/10** | **Good enough to demo. Not ready to charge for Agent mode.** |
+| Completeness | 6.5/10 | E2E flow fixed, seat gate in place. Stripe not wired yet. Vision paths still diverge. |
+| **Overall** | **7.5/10** | **Ready to demo and manually enable seats. Not yet ready for self-serve Stripe checkout.** |
 
-### Gaps that block monetisation
+### Gaps that block full self-serve monetisation
 
-**Critical — fix before charging for Agent:**
+**High priority:**
 
-- **Agent seat billing does not exist.** Agent mode is effectively free. No paywall, no teaser counter, no seat table.
-- **End-to-end flow never tested.** The full "write me a dragon story → `invoke_skill` → `save_script` → `build_storyboard`" path has not been run once in production.
-- **`invoke_skill` 30–60s blank spinner.** User sees "Building script..." with no progress signal. For the most expensive action in the product, this is bad UX.
+- **Stripe integration for agent seat add-on** — `agentModeEnabled` must be toggled automatically on subscription events. Currently requires manual DB edit.
+- **End-to-end flow untested in production.** Logic fixed but the `invoke_skill` → `save_script` → `build_storyboard` chain still needs a real run to validate.
 
-**Should fix before real users:**
+**Should fix before scale:**
+
+**Should fix before scale:**
 
 - **Two separate vision paths diverging.** `analyze_frame_image` tool (Director, via tool executor) vs direct `/api/ai-analyze` (balloon pill, Gemini 2.5 Flash). They return different formats, charge differently, have no shared error handling.
 - **Director advisory questions have no rate limiting.** Each Director message costs us ~$0.006 Haiku API with no cost recovery on free plan. At scale, heavy Director users are loss-making.
@@ -397,6 +398,14 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 - System prompt rewritten with full studio context
 - `suggest_shot_list` + `generate_scene` tools added
 - `update_project_style` supports genre + format + style
+
+### Session #37 — E2E flow fix + progress signal + seat paywall ✅
+
+- System prompt: removed confirmation pause between invoke_skill → save_script → build_storyboard; pipeline now runs automatically in one go
+- `onProgress` callback on `DirectorToolContext` — `invoke_skill` reports per-act progress; `build_storyboard` reports parse/elements/frames steps
+- Route sends `{ type: "tool_progress", message }` SSE event; UI shows it inline below the spinning tool indicator
+- Agent seat billing: `agentModeEnabled` + `agentSeatCount` added to `org_settings` schema; `getAgentAccess` query in `directorChat.ts`; 403 gate in route; paywall card in DirectorChatPanel when seat not active
+- Director mode unaffected — `agentAccess === false` only hides the input area in Agent tab, not Director
 
 ### Session #36 — Script generation + balloon UX ✅
 
@@ -425,13 +434,15 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 - [x] invoke_skill: multi-act script generation, tiered pricing
 - [x] Balloon category nav with credit confirm pattern
 - [x] Local answers (zero AI cost) for data-lookup pills
-- [ ] **BLOCKER:** End-to-end test — "write me a dragon story" → invoke_skill → save_script → build_storyboard
-- [ ] **BLOCKER:** Agent seat billing + paywall (currently free for all)
-- [ ] invoke_skill progress signal — stream act-by-act status instead of blank spinner
+- [x] **E2E flow fixed** — system prompt now runs invoke_skill → save_script → build_storyboard automatically with no confirmation pause
+- [x] **Agent seat paywall** — `agentModeEnabled` on `org_settings`, `getAgentAccess` query, 403 in route, paywall UI in DirectorChatPanel
+- [x] **invoke_skill progress signal** — `onProgress` callback → SSE `tool_progress` event → per-act status shown in UI indicator
+- [x] **build_storyboard progress** — parse / element-count / frame-create steps reported via same signal
 - [ ] Unify vision paths — one shared route used by both Director tool and balloon pill
 - [ ] Director rate limiting — daily message cap for free-plan users
 - [ ] Conversation compression — smart summarise beyond the 20-message window
-- [ ] Tune system prompt from real agent behaviour
+- [ ] Tune system prompt from real agent behaviour (needs first real production runs)
+- [ ] Stripe integration for agent seat add-on subscription (Phase 4)
 
 ### Phase 2 — Newbie Quick Create (after Phase 1 proven)
 

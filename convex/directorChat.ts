@@ -100,6 +100,18 @@ export const appendMessages = mutation({
   },
 });
 
+// Check whether agent mode is enabled for a company (seat billing gate)
+export const getAgentAccess = query({
+  args: { companyId: v.string() },
+  handler: async (ctx, args) => {
+    const settings = await ctx.db
+      .query("org_settings")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .first();
+    return settings?.agentModeEnabled ?? false;
+  },
+});
+
 // Clear session history (start fresh)
 export const clearSession = mutation({
   args: {

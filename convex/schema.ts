@@ -288,6 +288,10 @@ export default defineSchema({
     createdAt: v.optional(v.number()),
     updatedAt: v.number(),
     updatedBy: v.string(),
+
+    // AI Agent Seat
+    agentModeEnabled: v.optional(v.boolean()), // true = org has at least one active agent seat
+    agentSeatCount: v.optional(v.number()),    // number of purchased seats (for display)
   }).index("by_companyId", ["companyId"]),
 
   // ============================================

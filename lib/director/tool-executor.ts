@@ -99,6 +99,7 @@ export interface DirectorToolContext {
   projectId: string;
   companyId: string;
   userId: string;
+  onProgress?: (message: string) => void;
 }
 
 export interface DirectorToolResult {
@@ -981,6 +982,10 @@ export async function dispatchDirectorTool(
         let prevSummary: string | undefined;
 
         for (let act = 1; act <= numActs; act++) {
+          ctx.onProgress?.(numActs > 1
+            ? `Writing Act ${act} of ${numActs}...`
+            : "Writing script..."
+          );
           const actPrompt = buildActPrompt(skillPrompt, act, numActs, prevSummary);
           const result = await callSkillAct(actPrompt);
           if (!result) {
@@ -991,8 +996,14 @@ export async function dispatchDirectorTool(
           }
           actOutputs.push(result);
           prevSummary = extractActSummary(result);
+          const sceneCount = (result.match(/### SCENE/g) || []).length;
+          ctx.onProgress?.(numActs > 1
+            ? `Act ${act} of ${numActs} done — ${sceneCount} scene${sceneCount !== 1 ? "s" : ""}`
+            : `Script complete — ${sceneCount} scene${sceneCount !== 1 ? "s" : ""}`
+          );
         }
 
+        if (numActs > 1) ctx.onProgress?.("Merging acts...");
         const scriptText = mergeActScripts(actOutputs);
 
         // Persist immediately so the script survives if the SSE connection drops
@@ -1086,11 +1097,14 @@ export async function dispatchDirectorTool(
         }
 
         // Run the full script analysis pipeline
+        ctx.onProgress?.("Parsing script...");
         const analysis = await analyzeScript(script);
 
         if (analysis.scenes.length === 0) {
           return { output: "Could not parse any scenes from the script. Check the script format.", isError: true };
         }
+
+        ctx.onProgress?.(`${analysis.scenes.length} frames, ${analysis.elements.length} elements — saving...`);
 
         // Save elements
         const savedElementMap = new Map<string, any>();
@@ -1122,6 +1136,7 @@ export async function dispatchDirectorTool(
         }
 
         // Save scenes (frames)
+        ctx.onProgress?.("Creating frames...");
         let scenesCreated = 0;
         let scenesUpdated = 0;
 

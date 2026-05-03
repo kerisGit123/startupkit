@@ -196,6 +196,7 @@ export function DirectorChatPanel({
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [toolProgress, setToolProgress] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [mode, setMode] = useState<AgentMode>("director");
   const [scriptMode, setScriptMode] = useState<"quick" | "cinematic">("quick");
@@ -215,6 +216,10 @@ export function DirectorChatPanel({
   );
   const creditBalance = useQuery(
     api.credits.getBalance,
+    companyId ? { companyId } : "skip"
+  );
+  const agentAccess = useQuery(
+    api.directorChat.getAgentAccess,
     companyId ? { companyId } : "skip"
   );
   const storyItems = useQuery(
@@ -329,9 +334,14 @@ export function DirectorChatPanel({
                   break;
                 case "tool_call":
                   setActiveTool(event.name);
+                  setToolProgress(null);
+                  break;
+                case "tool_progress":
+                  setToolProgress(event.message || null);
                   break;
                 case "tool_result":
                   setActiveTool(null);
+                  setToolProgress(null);
                   break;
                 case "error":
                   setMessages((prev) => prev.map((m) => m.id === assistantMsg.id ? { ...m, content: event.message || "Something went wrong.", isError: true, isStreaming: false } : m));
@@ -363,6 +373,7 @@ export function DirectorChatPanel({
       } finally {
         setStreaming(false);
         setActiveTool(null);
+        setToolProgress(null);
         abortRef.current = null;
       }
     },
@@ -831,14 +842,41 @@ export function DirectorChatPanel({
               <span>{TOOL_LABELS[activeTool] || `Using ${activeTool}...`}</span>
               {elapsed > 0 && <span className="text-amber-400/50 tabular-nums">{elapsed}s</span>}
             </div>
-            {(activeTool === "invoke_skill" || activeTool === "build_storyboard") && (
+            {toolProgress ? (
+              <p className="text-[10px] text-amber-300/60 pl-5">{toolProgress}</p>
+            ) : (activeTool === "invoke_skill" || activeTool === "build_storyboard") ? (
               <p className="text-[10px] text-amber-300/40 pl-5">Keep this panel open — this step takes ~30–60s</p>
-            )}
+            ) : null}
           </div>
         )}
       </div>
 
+      {/* Agent paywall — shown instead of input when seat not active */}
+      {mode === "agent" && agentAccess === false && (
+        <div className="border-t border-(--border-primary) px-4 py-4 shrink-0 space-y-3">
+          <div className="rounded-xl border border-(--border-primary) bg-(--bg-secondary) p-3 space-y-2">
+            <p className="text-[11px] font-semibold text-(--text-primary)">Agent Mode requires a seat</p>
+            <p className="text-[12px] text-(--text-secondary) leading-relaxed">
+              Trigger image/video generation, write scripts end-to-end, and run multi-step autonomous workflows.
+            </p>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-(--text-tertiary)">$120 / seat / month</span>
+              <a
+                href="/dashboard/billing"
+                className="px-3 py-1 rounded-md text-[11px] font-medium bg-(--accent-blue)/12 text-(--accent-blue) border border-(--accent-blue)/25 hover:bg-(--accent-blue)/20 transition"
+              >
+                Upgrade
+              </a>
+            </div>
+          </div>
+          <p className="text-[10px] text-(--text-tertiary) text-center">
+            AI Director (advisory mode) is free for all Pro+ users.
+          </p>
+        </div>
+      )}
+
       {/* Input */}
+      {(mode !== "agent" || agentAccess !== false) && (
       <div className="border-t border-(--border-primary) px-3 pt-2 pb-3 shrink-0">
 
         {/* Balloon — category nav + quick actions */}
@@ -1026,6 +1064,7 @@ export function DirectorChatPanel({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
