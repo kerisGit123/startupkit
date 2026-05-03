@@ -200,7 +200,7 @@ export function DirectorChatPanel({
   const [mode, setMode] = useState<AgentMode>("director");
   const [scriptMode, setScriptMode] = useState<"quick" | "cinematic">("quick");
   const [quickCategory, setQuickCategory] = useState<string | null>(null);
-  const [confirmingAction, setConfirmingAction] = useState<{ label: string; cost: number; action: () => Promise<void> } | null>(null);
+  const [confirmingAction, setConfirmingAction] = useState<{ label: string; cost: number; isEstimate?: boolean; action: () => Promise<void> } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
@@ -568,7 +568,7 @@ export function DirectorChatPanel({
     { id: "credits", icon: "💳", label: "Credits" },
   ];
 
-  type QuickPill = { label: string; prompt?: string; localHandler?: () => void };
+  type QuickPill = { label: string; prompt?: string; localHandler?: () => void; creditEstimate?: { quick: number; cinematic: number } };
 
   const directorPills: Record<string, QuickPill[]> = {
     project: [
@@ -601,12 +601,12 @@ export function DirectorChatPanel({
 
   const agentPills: Record<string, QuickPill[]> = {
     write: [
-      { label: "🐉 Dragon epic · 5 min", prompt: "Write me an epic dragon story, 5 minutes" },
-      { label: "💕 Romance · 2 min", prompt: "Write a romantic love story, 2 minutes" },
-      { label: "🧒 Kids adventure · 1 min", prompt: "Write a fun kids adventure story, 1 minute" },
-      { label: "🚀 Sci-fi thriller · 3 min", prompt: "Write a sci-fi thriller, 3 minutes" },
-      { label: "🕵️ Mystery · 2 min", prompt: "Write a mystery thriller, 2 minutes" },
-      { label: "🧙 Fantasy · 4 min", prompt: "Write an epic fantasy adventure, 4 minutes" },
+      { label: "🐉 Dragon epic · 5 min", prompt: "Write me an epic dragon story, 5 minutes", creditEstimate: { quick: 40, cinematic: 90 } },
+      { label: "💕 Romance · 2 min",     prompt: "Write a romantic love story, 2 minutes",   creditEstimate: { quick: 12, cinematic: 36 } },
+      { label: "🧒 Kids adventure · 1 min", prompt: "Write a fun kids adventure story, 1 minute", creditEstimate: { quick: 6, cinematic: 18 } },
+      { label: "🚀 Sci-fi thriller · 3 min", prompt: "Write a sci-fi thriller, 3 minutes",   creditEstimate: { quick: 24, cinematic: 54 } },
+      { label: "🕵️ Mystery · 2 min",    prompt: "Write a mystery thriller, 2 minutes",       creditEstimate: { quick: 12, cinematic: 36 } },
+      { label: "🧙 Fantasy · 4 min",    prompt: "Write an epic fantasy adventure, 4 minutes", creditEstimate: { quick: 32, cinematic: 72 } },
     ],
     generate: [
       { label: "Generate all images", prompt: "Check my credit balance, then generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
@@ -848,18 +848,23 @@ export function DirectorChatPanel({
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 space-y-2">
               <p className="text-[11px] text-(--text-secondary) leading-snug">
                 <span className="text-amber-400 font-medium">{confirmingAction.label}</span>
-                {" — costs "}
-                <span className="text-amber-300 font-semibold">{confirmingAction.cost} credit</span>
+              </p>
+              <p className="text-[11px] text-(--text-tertiary)">
+                {"This will deduct "}
+                <span className="text-amber-300 font-semibold">
+                  {confirmingAction.isEstimate ? "~" : ""}{confirmingAction.cost} credit{confirmingAction.cost !== 1 ? "s" : ""}
+                </span>
                 {creditBalance != null && (
-                  <span className="text-(--text-tertiary)"> · Balance: {creditBalance} cr</span>
+                  <span> from your balance ({creditBalance} cr available)</span>
                 )}
+                {"."}
               </p>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { confirmingAction.action(); setConfirmingAction(null); }}
+                  onClick={() => { confirmingAction.action(); setConfirmingAction(null); setQuickCategory(null); }}
                   className="px-3 py-1 rounded-md text-[11px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition"
                 >
-                  Confirm · {confirmingAction.cost}cr
+                  Confirm · {confirmingAction.isEstimate ? "~" : ""}{confirmingAction.cost}cr
                 </button>
                 <button
                   onClick={() => setConfirmingAction(null)}
@@ -954,11 +959,29 @@ export function DirectorChatPanel({
                   <button
                     key={pill.label}
                     onClick={() => {
-                      if (pill.localHandler) { pill.localHandler(); } else if (pill.prompt) { sendMessage(pill.prompt); setQuickCategory(null); }
+                      if (pill.creditEstimate) {
+                        const cost = scriptMode === "cinematic" ? pill.creditEstimate.cinematic : pill.creditEstimate.quick;
+                        setConfirmingAction({
+                          label: `${pill.label} · ${scriptMode === "cinematic" ? "Cinematic" : "Quick"} mode`,
+                          cost,
+                          isEstimate: true,
+                          action: async () => { sendMessage(pill.prompt!); setQuickCategory(null); },
+                        });
+                      } else if (pill.localHandler) {
+                        pill.localHandler();
+                      } else if (pill.prompt) {
+                        sendMessage(pill.prompt);
+                        setQuickCategory(null);
+                      }
                     }}
                     className="px-2.5 py-1 rounded-full text-[11px] bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition-all text-left"
                   >
                     {pill.label}
+                    {pill.creditEstimate && (
+                      <span className="ml-1 text-amber-400/70 text-[10px]">
+                        · {scriptMode === "cinematic" ? pill.creditEstimate.cinematic : pill.creditEstimate.quick}cr
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
