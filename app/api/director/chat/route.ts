@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { projectId, message, currentFrameNumber, currentSceneId, mode = "director" } = body;
+    const { projectId, message, currentFrameNumber, currentSceneId, mode = "director", scriptMode = "quick" } = body;
     if (!projectId || !message) {
       return new Response(JSON.stringify({ error: "projectId and message are required" }), {
         status: 400, headers: { "Content-Type": "application/json" },
@@ -111,9 +111,12 @@ export async function POST(req: NextRequest) {
       currentFrameNumber,
       currentSceneId,
     };
-    const systemPromptText = mode === "agent"
+    const basePrompt = mode === "agent"
       ? buildAgentSystemPrompt(promptOptions)
       : buildDirectorSystemPrompt(promptOptions);
+    const systemPromptText = mode === "agent"
+      ? `${basePrompt}\n\n---\nUSER SCRIPT MODE: ${scriptMode === "cinematic" ? "CINEMATIC (Sonnet, 18cr/min)" : "QUICK (Haiku, 8cr/min)"}. Always pass quality: "${scriptMode}" when calling invoke_skill. Never ask the user to choose — they already chose via the UI toggle.`
+      : basePrompt;
 
     // Cached system prompt — stable per project within a session
     const systemContent: Anthropic.TextBlockParam[] = [

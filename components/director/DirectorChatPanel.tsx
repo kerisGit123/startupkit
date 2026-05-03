@@ -198,6 +198,7 @@ export function DirectorChatPanel({
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [mode, setMode] = useState<AgentMode>("director");
+  const [scriptMode, setScriptMode] = useState<"quick" | "cinematic">("quick");
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
@@ -284,7 +285,7 @@ export function DirectorChatPanel({
         const res = await fetch("/api/director/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectId, message: text.trim(), currentFrameNumber, currentSceneId, mode }),
+          body: JSON.stringify({ projectId, message: text.trim(), currentFrameNumber, currentSceneId, mode, scriptMode }),
           signal: controller.signal,
         });
 
@@ -354,7 +355,7 @@ export function DirectorChatPanel({
         abortRef.current = null;
       }
     },
-    [projectId, currentFrameNumber, currentSceneId, streaming, mode]
+    [projectId, currentFrameNumber, currentSceneId, streaming, mode, scriptMode]
   );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -673,7 +674,57 @@ export function DirectorChatPanel({
       </div>
 
       {/* Input */}
-      <div className="border-t border-(--border-primary) px-3 py-3 shrink-0">
+      <div className="border-t border-(--border-primary) px-3 pt-2 pb-3 shrink-0">
+
+        {/* Balloon area — mode toggle + story starters (agent mode only) */}
+        {mode === "agent" && (
+          <div className="mb-2 space-y-1.5">
+            {/* Quick / Cinematic toggle */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setScriptMode("quick")}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                  scriptMode === "quick"
+                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                    : "bg-(--bg-secondary) border-(--border-primary) text-(--text-tertiary) hover:text-(--text-secondary)"
+                }`}
+              >
+                ⚡ Quick · 8cr/min
+              </button>
+              <button
+                onClick={() => setScriptMode("cinematic")}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                  scriptMode === "cinematic"
+                    ? "bg-(--accent-blue)/15 border-(--accent-blue)/30 text-(--accent-blue)"
+                    : "bg-(--bg-secondary) border-(--border-primary) text-(--text-tertiary) hover:text-(--text-secondary)"
+                }`}
+              >
+                🎬 Cinematic · 18cr/min
+              </button>
+            </div>
+
+            {/* Story starter pills — empty state only */}
+            {messages.length === 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: "🐉 Dragon epic · 5min", prompt: "Write me an epic dragon story, 5 minutes" },
+                  { label: "💕 Romance · 2min", prompt: "Write a romantic love story, 2 minutes" },
+                  { label: "🧒 Kids story · 1min", prompt: "Write a fun kids adventure story, 1 minute" },
+                  { label: "🚀 Sci-fi · 3min", prompt: "Write a sci-fi thriller, 3 minutes" },
+                ].map((s) => (
+                  <button
+                    key={s.label}
+                    onClick={() => sendMessage(s.prompt)}
+                    className="px-2.5 py-1 rounded-full text-[11px] bg-(--bg-secondary) border border-(--border-primary) text-(--text-tertiary) hover:text-(--text-primary) hover:border-(--border-secondary) transition-all"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
