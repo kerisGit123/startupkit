@@ -440,6 +440,56 @@ export function DirectorChatPanel({
     });
   }, [currentFrameImageUrl, currentFrameNumber, streaming, companyId, deductCredits]);
 
+  const handleCurrentFrameAbout = useCallback(() => {
+    const items = (storyItems as any[] | undefined) ?? null;
+    if (!currentFrameNumber && !currentSceneId) {
+      answerLocally("No frame is selected. Click on a frame in the canvas first.");
+      return;
+    }
+    if (!items) {
+      answerLocally("Still loading storyboard data — try again in a moment.");
+      return;
+    }
+    // Match by sceneId (most precise) or fall back to sorted order index
+    let frame: any = currentSceneId
+      ? items.find((i: any) => i.sceneId === currentSceneId)
+      : null;
+    if (!frame && currentFrameNumber) {
+      const sorted = [...items].sort((a: any, b: any) => a.order - b.order);
+      frame = sorted[currentFrameNumber - 1] ?? null;
+    }
+    if (!frame) {
+      answerLocally(`Frame ${currentFrameNumber ?? "selected"} not found in this project.`);
+      return;
+    }
+
+    const imagePrompt: string | null = frame.imagePrompt || null;
+    const videoPrompt: string | null = frame.videoPrompt || null;
+    const description: string | null = frame.description || null;
+    const notes: string | null = frame.notes || null;
+    const hasImage = !!(frame.imageUrl || frame.primaryImage);
+    const hasVideo = !!(frame.videoUrl);
+    const imgStatus = frame.imageGeneration?.status ?? null;
+    const vidStatus = frame.videoGeneration?.status ?? null;
+
+    const lines: string[] = [];
+    lines.push(`**Frame ${currentFrameNumber ?? ""} — ${frame.title || "Untitled"}**`);
+    lines.push("");
+    lines.push(`**Image prompt:**`);
+    lines.push(imagePrompt ? imagePrompt : "_Not set_");
+    lines.push("");
+    lines.push(`**Video prompt:**`);
+    lines.push(videoPrompt ? videoPrompt : "_Not set_");
+    if (description) { lines.push(""); lines.push(`**Description:** ${description}`); }
+    if (notes) { lines.push(""); lines.push(`**Director notes:** ${notes}`); }
+    lines.push("");
+    const imgLabel = hasImage ? "✓ Image ready" : imgStatus ? `⏳ Image ${imgStatus}` : "○ No image";
+    const vidLabel = hasVideo ? "✓ Video ready" : vidStatus ? `⏳ Video ${vidStatus}` : "○ No video";
+    lines.push(`${imgLabel} · ${vidLabel}`);
+
+    answerLocally(lines.join("\n"));
+  }, [storyItems, currentFrameNumber, currentSceneId, answerLocally]);
+
   const analyzeStoryboard = useCallback(() => {
     const items = (storyItems as any[] | undefined) ?? null;
     if (!items) { answerLocally("Still loading storyboard data — try again in a moment."); return; }
@@ -529,10 +579,10 @@ export function DirectorChatPanel({
       { label: "Script help", prompt: "Review my project and help me improve the narrative structure. Are there gaps, pacing issues, or missing scenes?" },
     ],
     frame: [
-      { label: "What is the current frame about?", prompt: `Tell me about frame ${currentFrameNumber ?? "the current frame"} — what's happening, what's in the prompt, and any director notes?` },
+      { label: "What is the current frame about?", localHandler: () => handleCurrentFrameAbout() },
       ...(currentFrameImageUrl
         ? [{ label: "Analyze the current image · 1cr", localHandler: () => analyzeCurrentImage() }]
-        : [{ label: "Analyze the current image", prompt: `Analyze frame ${currentFrameNumber}. Review the current prompt — what will the generated image look like? What could go wrong?` }]
+        : [{ label: "Analyze the current image", localHandler: () => handleCurrentFrameAbout() }]
       ),
       { label: "Camera angle advice", prompt: `What's the best camera angle and shot type for frame ${currentFrameNumber}? Consider the scene context and what would be most cinematic.` },
       { label: "Lighting setup", prompt: `Suggest the best lighting setup for frame ${currentFrameNumber}. Consider the mood, time of day, and what would complement the scene.` },
