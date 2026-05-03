@@ -199,6 +199,7 @@ export function DirectorChatPanel({
   const [elapsed, setElapsed] = useState(0);
   const [mode, setMode] = useState<AgentMode>("director");
   const [scriptMode, setScriptMode] = useState<"quick" | "cinematic">("quick");
+  const [quickCategory, setQuickCategory] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
@@ -383,6 +384,8 @@ export function DirectorChatPanel({
     [sendMessage]
   );
 
+  useEffect(() => { setQuickCategory(null); }, [mode]);
+
   const initialMessageSent = useRef<string | null>(null);
   useEffect(() => {
     if (initialMessage && initialMessage !== initialMessageSent.current && !streaming) {
@@ -391,41 +394,72 @@ export function DirectorChatPanel({
     }
   }, [initialMessage, streaming, sendMessage]);
 
-  // ── Quick actions (empty state only) ───────────────────────────
+  // ── Quick action categories ──────────────────────────────────────
 
-  type QuickAction = { label: string; prompt: string; icon?: string; kind: "advise" | "execute" };
-
-  const frameAdviceActions: QuickAction[] = [
-    ...(currentFrameImageUrl
-      ? [{ label: "Analyze image", icon: "🔍", kind: "advise" as const, prompt: `Analyze the generated image for frame ${currentFrameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. What works and what could be improved?` }]
-      : [{ label: "Write prompt", icon: "✍️", kind: "advise" as const, prompt: `Write a detailed cinematic image prompt for frame ${currentFrameNumber}. Include camera angle, lighting, composition, mood, and style.` }]),
-    { label: "Improve prompt", icon: "✨", kind: "advise", prompt: `Look at frame ${currentFrameNumber}'s current image prompt and rewrite it to be more cinematic. Add specific camera angle, lighting, composition, and mood details. Update it directly.` },
-    { label: "Camera angle", icon: "🎬", kind: "advise", prompt: `What's the best camera angle and shot type for frame ${currentFrameNumber}? Consider the scene context and what would be most cinematic.` },
-    { label: "Lighting setup", icon: "💡", kind: "advise", prompt: `Suggest the best lighting setup for frame ${currentFrameNumber}. Consider the mood, time of day, and what would complement the scene.` },
-    { label: "What's wrong", icon: "🩺", kind: "advise", prompt: `Critically review frame ${currentFrameNumber}. What are the weaknesses in the prompt? What might generate poorly and why? Be specific.` },
-    { label: "Add notes", icon: "📝", kind: "advise", prompt: `Add director notes to frame ${currentFrameNumber} with production guidance — key things to watch for when generating.` },
+  const directorCategories = [
+    { id: "project", icon: "📋", label: "Storyboard" },
+    { id: "frame", icon: "🎬", label: "This frame" },
+    { id: "improve", icon: "✨", label: "Improve" },
   ];
 
-  const projectAdviceActions: QuickAction[] = [
-    { label: "Review storyboard", icon: "📋", kind: "advise", prompt: "Review my entire storyboard. Check for shot variety, pacing, continuity issues, and missing coverage. Give specific suggestions for improvement." },
-    { label: "Shot variety", icon: "🎥", kind: "advise", prompt: "Look at all my frames and check for shot variety. Are there too many similar angles or compositions? Suggest a more diverse shot plan." },
-    { label: "Improve all prompts", icon: "✨", kind: "advise", prompt: "Look at all my frames and improve the image prompts. Make them more cinematic with specific camera angles, lighting, and composition. Update them directly." },
-    { label: "Visual style", icon: "🎨", kind: "advise", prompt: "Based on my project content, suggest a visual style that would work well — lighting mood, color palette, film stock, lens choice. Update the project style if I approve." },
-    { label: "Script help", icon: "📄", kind: "advise", prompt: "Review my project description and help me improve the narrative structure. Are there gaps, pacing issues, or missing scenes?" },
-    { label: "Pacing check", icon: "⏱️", kind: "advise", prompt: "Review my storyboard for pacing. Are scene durations appropriate? Does the flow feel right? Which scenes need more or fewer frames?" },
-    { label: "Consistency check", icon: "🔗", kind: "advise", prompt: "Check my storyboard for visual consistency — do the prompts maintain consistent character descriptions, environment, and style across frames?" },
+  const agentCategories = [
+    { id: "write", icon: "📝", label: "Write story" },
+    { id: "generate", icon: "🖼️", label: "Generate" },
+    { id: "credits", icon: "💳", label: "Credits" },
   ];
 
-  const executeActions: QuickAction[] = [
-    { label: "Generate images", icon: "🖼️", kind: "execute", prompt: "Check my credit balance, then generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
-    { label: "Animate frames", icon: "🎞️", kind: "execute", prompt: "Generate videos for all frames that have images but no videos. Use Seedance 2.0 Fast for budget. Show me the plan with credit costs first." },
-    { label: "Enhance all", icon: "⬆️", kind: "execute", prompt: "Post-process all generated images with the Enhance tool to improve quality. Show me a plan with credit costs before executing." },
-    { label: "Smart generate", icon: "🧠", kind: "execute", prompt: "Look at my storyboard. Which frames have no image yet? Which ones have images but no video? Suggest the most cost-effective generation plan and execute after approval." },
-    { label: "Check credits", icon: "💳", kind: "execute", prompt: "What is my current credit balance? How many images or videos can I still generate with it?" },
-    { label: "Build full story", icon: "🚀", kind: "execute", prompt: "I want to build a complete storyboard end-to-end. Help me plan the scenes and frames, then generate all the images. Ask me about the story concept first." },
-  ];
+  const directorPills: Record<string, { label: string; prompt: string }[]> = {
+    project: [
+      { label: "What is this storyboard about?", prompt: "Give me a quick overview — what's the story, how many scenes and frames, and what's the visual style of this project?" },
+      { label: "Review shot variety", prompt: "Look at all my frames and check for shot variety. Are there too many similar angles or compositions? Tell me what to change." },
+      { label: "Pacing check", prompt: "Review my storyboard for pacing. Are scene durations appropriate? Does the flow feel right? Which scenes need more or fewer frames?" },
+      { label: "Consistency check", prompt: "Check my storyboard for visual consistency — do the prompts maintain consistent character descriptions, environment, and style across frames?" },
+      { label: "Script help", prompt: "Review my project and help me improve the narrative structure. Are there gaps, pacing issues, or missing scenes?" },
+    ],
+    frame: [
+      { label: "What is the current frame about?", prompt: `Tell me about frame ${currentFrameNumber ?? "the current frame"} — what's happening, what's in the prompt, and any director notes?` },
+      { label: "Analyze the current image", prompt: currentFrameImageUrl
+        ? `Analyze the generated image for frame ${currentFrameNumber}. Check composition, lighting, color, mood, and whether it matches the prompt. What works and what should be improved?`
+        : `Analyze frame ${currentFrameNumber}. Review the current prompt — what will the generated image look like? What could go wrong?` },
+      { label: "Camera angle advice", prompt: `What's the best camera angle and shot type for frame ${currentFrameNumber}? Consider the scene context and what would be most cinematic.` },
+      { label: "Lighting setup", prompt: `Suggest the best lighting setup for frame ${currentFrameNumber}. Consider the mood, time of day, and what would complement the scene.` },
+      { label: "What's wrong with this frame?", prompt: `Critically review frame ${currentFrameNumber}. What are the weaknesses in the prompt? What might generate poorly and why? Be specific.` },
+      { label: "Add director notes", prompt: `Add director notes to frame ${currentFrameNumber} with production guidance — key things to watch for when generating.` },
+    ],
+    improve: [
+      { label: "Improve all prompts", prompt: "Look at all my frames and improve the image prompts. Make them more cinematic with specific camera angles, lighting, and composition. Update them directly." },
+      { label: "Visual style suggestion", prompt: "Based on my project content, suggest a visual style that would work well — lighting mood, color palette, film stock, lens choice. Update the project style if I approve." },
+      { label: "Full storyboard review", prompt: "Review my entire storyboard. Check for shot variety, pacing, continuity issues, and missing coverage. Give specific suggestions for improvement." },
+      ...(currentFrameNumber ? [
+        { label: "Rewrite this frame's prompt", prompt: `Rewrite frame ${currentFrameNumber}'s image prompt to be more cinematic. Add specific camera angle, lighting, composition, and mood details. Update it directly.` },
+      ] : []),
+    ],
+  };
 
-  const adviceActions = currentFrameNumber ? frameAdviceActions : projectAdviceActions;
+  const agentPills: Record<string, { label: string; prompt: string }[]> = {
+    write: [
+      { label: "🐉 Dragon epic · 5 min", prompt: "Write me an epic dragon story, 5 minutes" },
+      { label: "💕 Romance · 2 min", prompt: "Write a romantic love story, 2 minutes" },
+      { label: "🧒 Kids adventure · 1 min", prompt: "Write a fun kids adventure story, 1 minute" },
+      { label: "🚀 Sci-fi thriller · 3 min", prompt: "Write a sci-fi thriller, 3 minutes" },
+      { label: "🕵️ Mystery · 2 min", prompt: "Write a mystery thriller, 2 minutes" },
+      { label: "🧙 Fantasy · 4 min", prompt: "Write an epic fantasy adventure, 4 minutes" },
+    ],
+    generate: [
+      { label: "Generate all images", prompt: "Check my credit balance, then generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
+      { label: "Animate all frames", prompt: "Generate videos for all frames that have images but no videos. Use Seedance 2.0 Fast for budget. Show me the plan with credit costs first." },
+      { label: "Enhance all images", prompt: "Post-process all generated images with the Enhance tool to improve quality. Show me a plan with credit costs before executing." },
+      { label: "Smart generate plan", prompt: "Look at my storyboard. Which frames have no image yet? Which ones have images but no video? Suggest the most cost-effective generation plan and execute after approval." },
+      { label: "Build full storyboard", prompt: "Build the complete storyboard end-to-end — write the script, create frames, then generate images. Ask me about the story concept first." },
+    ],
+    credits: [
+      { label: "Check my credit balance", prompt: "What is my current credit balance? How many images or videos can I still generate with it?" },
+      { label: "How much for all images?", prompt: "How many frames in my project don't have images yet? Calculate the total credit cost to generate all of them." },
+      { label: "Cheapest way to generate", prompt: "What's the most budget-friendly way to generate images for all my frames? Compare model costs and recommend the best option." },
+      { label: "Image vs video cost", prompt: "Compare the cost of generating images vs videos for my project. Which models give the best quality-per-credit ratio?" },
+    ],
+  };
+
   const hasMessages = messages.length > 0;
 
   // ── Render ────────────────────────────────────────────────────────
@@ -498,57 +532,25 @@ export function DirectorChatPanel({
           </button>
         )}
 
-        {/* Empty state — identity + quick actions */}
+        {/* Empty state — identity only */}
         {!hasMessages && (
-          <div className="flex flex-col h-full pt-2">
-            <div className="flex flex-col items-center text-center mb-5">
-              <div className="w-10 h-10 rounded-2xl bg-white/4 flex items-center justify-center mb-3 border border-(--border-primary)">
-                {mode === "agent"
-                  ? <Bot className="w-5 h-5 text-(--text-tertiary)" strokeWidth={1.75} />
-                  : <Sparkles className="w-5 h-5 text-(--text-tertiary)" strokeWidth={1.75} />
-                }
-              </div>
-              <p className="text-[13px] font-medium text-(--text-primary) mb-1">
-                {mode === "agent" ? "AI Agent" : "AI Director"}
-              </p>
-              <p className="text-[12px] text-(--text-secondary) leading-relaxed max-w-[260px]">
-                {mode === "agent"
-                  ? "Generate images, create videos, post-process, and run multi-step plans."
-                  : currentFrameNumber
-                    ? `Frame ${currentFrameNumber} selected. Advising on prompts, camera, and composition.`
-                    : "Advising on prompts, shot variety, pacing, and visual style."}
-              </p>
+          <div className="flex flex-col items-center text-center pt-6 pb-2">
+            <div className="w-10 h-10 rounded-2xl bg-white/4 flex items-center justify-center mb-3 border border-(--border-primary)">
+              {mode === "agent"
+                ? <Bot className="w-5 h-5 text-(--text-tertiary)" strokeWidth={1.75} />
+                : <Sparkles className="w-5 h-5 text-(--text-tertiary)" strokeWidth={1.75} />
+              }
             </div>
-
-            <div className="flex flex-col gap-1.5">
-              {mode === "agent" && (
-                <>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-(--text-tertiary) px-0.5 mb-0.5">Execute</p>
-                  {executeActions.map((action) => (
-                    <button
-                      key={action.label}
-                      onClick={() => sendMessage(action.prompt)}
-                      className="text-[12px] text-left px-3 py-2 rounded-lg bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition flex items-center gap-2.5"
-                    >
-                      {action.icon && <span>{action.icon}</span>}
-                      <span className="flex-1">{action.label}</span>
-                      <span className="text-[9px] font-semibold uppercase tracking-wide text-(--accent-teal) shrink-0">run</span>
-                    </button>
-                  ))}
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-(--text-tertiary) px-0.5 mt-2 mb-0.5">Advise</p>
-                </>
-              )}
-              {adviceActions.map((action) => (
-                <button
-                  key={action.label}
-                  onClick={() => sendMessage(action.prompt)}
-                  className="text-[12px] text-left px-3 py-2 rounded-lg bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition flex items-center gap-2.5"
-                >
-                  {action.icon && <span>{action.icon}</span>}
-                  <span>{action.label}</span>
-                </button>
-              ))}
-            </div>
+            <p className="text-[13px] font-medium text-(--text-primary) mb-1">
+              {mode === "agent" ? "AI Agent" : "AI Director"}
+            </p>
+            <p className="text-[12px] text-(--text-secondary) leading-relaxed max-w-[260px]">
+              {mode === "agent"
+                ? "Write scripts, generate images, animate frames, and run multi-step plans."
+                : currentFrameNumber
+                  ? `Frame ${currentFrameNumber} selected. Ask about prompts, camera, and composition.`
+                  : "Ask about your storyboard, frames, pacing, and visual style."}
+            </p>
           </div>
         )}
 
@@ -676,54 +678,102 @@ export function DirectorChatPanel({
       {/* Input */}
       <div className="border-t border-(--border-primary) px-3 pt-2 pb-3 shrink-0">
 
-        {/* Balloon area — mode toggle + story starters (agent mode only) */}
-        {mode === "agent" && (
-          <div className="mb-2 space-y-1.5">
-            {/* Quick / Cinematic toggle */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setScriptMode("quick")}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                  scriptMode === "quick"
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                    : "bg-(--bg-secondary) border-(--border-primary) text-(--text-tertiary) hover:text-(--text-secondary)"
-                }`}
-              >
-                ⚡ Quick · 8cr/min
-              </button>
-              <button
-                onClick={() => setScriptMode("cinematic")}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                  scriptMode === "cinematic"
-                    ? "bg-(--accent-blue)/15 border-(--accent-blue)/30 text-(--accent-blue)"
-                    : "bg-(--bg-secondary) border-(--border-primary) text-(--text-tertiary) hover:text-(--text-secondary)"
-                }`}
-              >
-                🎬 Cinematic · 18cr/min
-              </button>
-            </div>
-
-            {/* Story starter pills — empty state only */}
-            {messages.length === 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: "🐉 Dragon epic · 5min", prompt: "Write me an epic dragon story, 5 minutes" },
-                  { label: "💕 Romance · 2min", prompt: "Write a romantic love story, 2 minutes" },
-                  { label: "🧒 Kids story · 1min", prompt: "Write a fun kids adventure story, 1 minute" },
-                  { label: "🚀 Sci-fi · 3min", prompt: "Write a sci-fi thriller, 3 minutes" },
-                ].map((s) => (
+        {/* Balloon — category nav + quick actions */}
+        <div className="mb-2">
+          {quickCategory === null ? (
+            /* Category grid */
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {(mode === "director" ? directorCategories : agentCategories).map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setQuickCategory(cat.id)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border bg-(--bg-secondary) border-(--border-primary) text-(--text-tertiary) hover:text-(--text-primary) hover:border-(--border-secondary) transition-all"
+                >
+                  <span>{cat.icon}</span>
+                  <span>{cat.label}</span>
+                </button>
+              ))}
+              {/* Script mode toggle inline when in agent mode and no category */}
+              {mode === "agent" && (
+                <div className="flex items-center gap-1 ml-auto">
                   <button
-                    key={s.label}
-                    onClick={() => sendMessage(s.prompt)}
-                    className="px-2.5 py-1 rounded-full text-[11px] bg-(--bg-secondary) border border-(--border-primary) text-(--text-tertiary) hover:text-(--text-primary) hover:border-(--border-secondary) transition-all"
+                    onClick={() => setScriptMode("quick")}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
+                      scriptMode === "quick"
+                        ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                        : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+                    }`}
                   >
-                    {s.label}
+                    ⚡ Quick
+                  </button>
+                  <button
+                    onClick={() => setScriptMode("cinematic")}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
+                      scriptMode === "cinematic"
+                        ? "bg-(--accent-blue)/15 border-(--accent-blue)/30 text-(--accent-blue)"
+                        : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+                    }`}
+                  >
+                    🎬 Cinematic
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Pills for selected category */
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setQuickCategory(null)}
+                  className="flex items-center gap-1 text-[11px] text-(--text-tertiary) hover:text-(--text-secondary) transition"
+                >
+                  ← Home
+                </button>
+                <span className="text-[11px] text-(--text-tertiary)">·</span>
+                <span className="text-[11px] text-(--text-tertiary)">
+                  {[...directorCategories, ...agentCategories].find(c => c.id === quickCategory)?.icon}{" "}
+                  {[...directorCategories, ...agentCategories].find(c => c.id === quickCategory)?.label}
+                </span>
+                {/* Script mode toggle for write category */}
+                {mode === "agent" && quickCategory === "write" && (
+                  <div className="flex items-center gap-1 ml-auto">
+                    <button
+                      onClick={() => setScriptMode("quick")}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
+                        scriptMode === "quick"
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                          : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+                      }`}
+                    >
+                      ⚡ Quick
+                    </button>
+                    <button
+                      onClick={() => setScriptMode("cinematic")}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${
+                        scriptMode === "cinematic"
+                          ? "bg-(--accent-blue)/15 border-(--accent-blue)/30 text-(--accent-blue)"
+                          : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+                      }`}
+                    >
+                      🎬 Cinematic
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5 max-h-[88px] overflow-y-auto">
+                {(mode === "director" ? directorPills[quickCategory] : agentPills[quickCategory])?.map((pill) => (
+                  <button
+                    key={pill.label}
+                    onClick={() => { sendMessage(pill.prompt); setQuickCategory(null); }}
+                    className="px-2.5 py-1 rounded-full text-[11px] bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition-all text-left"
+                  >
+                    {pill.label}
                   </button>
                 ))}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
 
         <div className="flex items-end gap-2">
           <textarea
