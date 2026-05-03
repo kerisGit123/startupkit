@@ -3,6 +3,88 @@ import { api } from "@/convex/_generated/api";
 import type { DirectorToolName } from "./agent-tools";
 import { MODEL_KNOWLEDGE } from "./constants";
 import { getAnthropicClient } from "@/lib/support/anthropic";
+import { analyzeScript } from "@/lib/storyboard/scriptAnalyzer";
+import { cleanupItemFiles } from "@/lib/storyboard/cleanupFiles";
+
+// @mention injection — mirrors the logic in build-storyboard/route.ts
+const _STOP_WORDS = new Set(["the", "a", "an", "of", "in", "at", "to", "for", "and", "or", "its", "with"]);
+
+function _envKeywordMatch(prompt: string, elementName: string): boolean {
+  const fullEsc = elementName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\b${fullEsc}\\b`, "i").test(prompt)) return true;
+  const keywords = elementName.split(/\s+/).filter(w => w.length >= 5 && !_STOP_WORDS.has(w.toLowerCase()));
+  return keywords.some(kw => new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(prompt));
+}
+
+function _injectInline(prompt: string, elementName: string): string {
+  const mention = `@${elementName.replace(/\s+/g, "")}`;
+  if (prompt.includes(mention)) return prompt;
+  const fullEsc = elementName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const fullMatch = new RegExp(`\\b(${fullEsc})\\b`, "i").exec(prompt);
+  if (fullMatch) return prompt.slice(0, fullMatch.index) + mention + " " + prompt.slice(fullMatch.index);
+  const keywords = elementName.split(/\s+/).filter(w => w.length >= 5 && !_STOP_WORDS.has(w.toLowerCase())).sort((a, b) => b.length - a.length);
+  for (const kw of keywords) {
+    const kwMatch = new RegExp(`\\b(${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})\\b`, "i").exec(prompt);
+    if (kwMatch) return prompt.slice(0, kwMatch.index) + mention + " " + prompt.slice(kwMatch.index);
+  }
+  return mention + " " + prompt;
+}
+
+function _injectElementMentions(prompt: string, elements: Array<{ name: string; type: string }>): string {
+  if (!prompt || elements.length === 0) return prompt;
+  let result = prompt;
+  const inlineEls = elements.filter(el => el.type !== "environment").sort((a, b) => b.name.length - a.name.length);
+  for (const el of inlineEls) result = _injectInline(result, el.name);
+  const envEls = elements.filter(el => el.type === "environment");
+  const envPrefix = envEls
+    .filter(el => { const mention = `@${el.name.replace(/\s+/g, "")}`; return !result.includes(mention) && _envKeywordMatch(result, el.name); })
+    .map(el => `@${el.name.replace(/\s+/g, "")}`).join(", ");
+  if (envPrefix) result = `In the environment of ${envPrefix}, ` + result;
+  return result;
+}
+
+// ── invoke_skill helpers ──────────────────────────────────────────────────────
+
+function parseDurationMinutes(brief: string): number {
+  const minMatch = brief.match(/(\d+(?:\.\d+)?)\s*[-\s]?min(?:ute)?s?/i);
+  if (minMatch) return parseFloat(minMatch[1]);
+  const secMatch = brief.match(/(\d+)\s*sec(?:ond)?s?/i);
+  if (secMatch) return parseFloat(secMatch[1]) / 60;
+  return 1; // default 1 min if not specified
+}
+
+function isComplexStory(brief: string): boolean {
+  return /dragon|fight|battle|explos|magic|warrior|vfx|action|war|sci.?fi|superhero|combat|sword|monster|alien|robot|attack|chase|destroy|epic\s+battle/i.test(brief);
+}
+
+function buildActPrompt(originalBrief: string, actNum: number, totalActs: number, prevSummary?: string): string {
+  if (totalActs === 1) return originalBrief;
+  const startMin = (actNum - 1) * 2;
+  const endMin = actNum * 2;
+  const startScene = (actNum - 1) * 8 + 1;
+  const endScene = actNum * 8;
+  let prompt = `${originalBrief}\n\nGenerate Act ${actNum} of ${totalActs} only — scenes ${startScene}–${endScene} (${startMin}:00–${endMin}:00).`;
+  if (prevSummary) prompt += ` Story so far: ${prevSummary}`;
+  return prompt;
+}
+
+function extractActSummary(scriptText: string): string {
+  const matches = [...scriptText.matchAll(/###\s*SCENE\s+\d+[^—\n]*—\s*([^\n]+)/g)];
+  if (matches.length === 0) return "";
+  return (matches[matches.length - 1][1] || "").substring(0, 150);
+}
+
+function mergeActScripts(acts: string[]): string {
+  if (acts.length === 1) return acts[0];
+  let merged = acts[0].replace(/\n>\s*💰[^\n]+\n?$/, "");
+  for (let i = 1; i < acts.length; i++) {
+    const act = acts[i];
+    const firstScene = act.indexOf("### SCENE");
+    const scenePart = firstScene >= 0 ? act.substring(firstScene) : act;
+    merged += "\n\n" + scenePart.replace(/\n>\s*💰[^\n]+\n?$/, "");
+  }
+  return merged;
+}
 
 function stringifyResult(obj: unknown): string {
   try {
@@ -844,60 +926,97 @@ export async function dispatchDirectorTool(
           };
         }
 
-        const MAX_RETRIES = 2;
-        let lastErr: Error | null = null;
+        // Tiered credit pricing: simple story 6cr/min, complex (action/VFX/fantasy) 8cr/min
+        const durationMin = parseDurationMinutes(skillPrompt);
+        const complex = isComplexStory(skillPrompt);
+        const ratePerMin = complex ? 8 : 6;
+        const totalCredits = Math.max(ratePerMin, Math.ceil(durationMin) * ratePerMin);
+        const numActs = Math.ceil(durationMin / 2); // 2 min (8 scenes) per Haiku call
 
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-          try {
-            if (attempt > 0) {
-              await new Promise((r) => setTimeout(r, 2000 * attempt));
-            }
-
-            const anthropic = getAnthropicClient();
-            const response = await (anthropic as any).beta.messages.create({
-              model: "claude-sonnet-4-6",
-              max_tokens: 8192,
-              betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
-              container: {
-                skills: [{ type: "custom", skill_id: skillId, version: "latest" }],
-              },
-              tools: [{ type: "code_execution_20250825", name: "code_execution" }],
-              messages: [{ role: "user", content: skillPrompt }],
-            });
-
-            // The skill writes the structured script via text_editor_code_execution "create".
-            // file_text has the full ACT/SCENE/Prompt script — extract it first.
-            const createBlock = ((response.content as any[]) || []).find(
-              (b: any) =>
-                b.type === "server_tool_use" &&
-                b.name === "text_editor_code_execution" &&
-                b.input?.command === "create" &&
-                typeof b.input?.file_text === "string"
-            );
-            if (createBlock?.input?.file_text) {
-              return { output: createBlock.input.file_text as string, isError: false };
-            }
-
-            // Fallback: join text blocks (summary only, no structured prompts)
-            const text = ((response.content as any[]) || [])
-              .filter((b: any) => b.type === "text")
-              .map((b: any) => b.text as string)
-              .join("");
-            if (!text) {
-              lastErr = new Error("Skill returned no output");
-              continue;
-            }
-            return { output: text, isError: false };
-          } catch (err) {
-            lastErr = err instanceof Error ? err : new Error(String(err));
-            if (attempt < MAX_RETRIES) continue;
-          }
+        let currentBalance = 0;
+        try {
+          currentBalance = await convex.query(api.credits.getBalance, { companyId: ctx.companyId });
+        } catch { /* non-fatal */ }
+        if (currentBalance < totalCredits) {
+          return {
+            output: `Insufficient credits. This script (${Math.ceil(durationMin)} min, ${complex ? "complex/action" : "simple"}) costs ${totalCredits} credits, but your balance is ${currentBalance}. Please top up to continue.`,
+            isError: true,
+          };
         }
 
-        return {
-          output: `Skill invocation failed after ${MAX_RETRIES + 1} attempts: ${lastErr?.message}. Please try again.`,
-          isError: true,
-        };
+        async function callSkillAct(actPrompt: string): Promise<string | null> {
+          const MAX_RETRIES = 2;
+          for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              if (attempt > 0) await new Promise((r) => setTimeout(r, 2000 * attempt));
+              const anthropic = getAnthropicClient();
+              const response = await (anthropic as any).beta.messages.create({
+                model: "claude-haiku-4-5-20251001",
+                max_tokens: 8192,
+                betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+                container: { skills: [{ type: "custom", skill_id: skillId, version: "latest" }] },
+                tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+                messages: [{ role: "user", content: actPrompt }],
+              });
+              const createBlock = ((response.content as any[]) || []).find(
+                (b: any) =>
+                  b.type === "server_tool_use" &&
+                  b.name === "text_editor_code_execution" &&
+                  b.input?.command === "create" &&
+                  typeof b.input?.file_text === "string"
+              );
+              if (createBlock?.input?.file_text) return createBlock.input.file_text as string;
+              const text = ((response.content as any[]) || [])
+                .filter((b: any) => b.type === "text").map((b: any) => b.text as string).join("");
+              if (text) return text;
+            } catch { /* retry */ }
+          }
+          return null;
+        }
+
+        const actOutputs: string[] = [];
+        let prevSummary: string | undefined;
+
+        for (let act = 1; act <= numActs; act++) {
+          const actPrompt = buildActPrompt(skillPrompt, act, numActs, prevSummary);
+          const result = await callSkillAct(actPrompt);
+          if (!result) {
+            return {
+              output: `Script generation failed at Act ${act} of ${numActs}. Please try again.`,
+              isError: true,
+            };
+          }
+          actOutputs.push(result);
+          prevSummary = extractActSummary(result);
+        }
+
+        const scriptText = mergeActScripts(actOutputs);
+
+        // Persist immediately so the script survives if the SSE connection drops
+        try {
+          await convex.mutation(api.storyboard.projects.update, {
+            id: projectId as any,
+            script: scriptText,
+          });
+        } catch (saveErr) {
+          console.warn("[invoke_skill] Auto-save failed:", saveErr);
+        }
+
+        try {
+          await convex.mutation(api.credits.deductCredits, {
+            companyId: ctx.companyId,
+            tokens: totalCredits,
+            reason: `AI script generation (${Math.ceil(durationMin)}min, ${complex ? "complex" : "simple"}, ${numActs} act${numActs > 1 ? "s" : ""})`,
+            type: "usage",
+            model: "video-prompt-builder",
+            action: "script_generation",
+            projectId: projectId as any,
+          });
+        } catch (deductErr) {
+          console.warn("[invoke_skill] Credit deduction failed:", deductErr);
+        }
+
+        return { output: scriptText, isError: false };
       }
 
       case "save_script": {
@@ -906,19 +1025,163 @@ export async function dispatchDirectorTool(
         if (scriptContent.length < 50) return { output: "Script is too short to save.", isError: true };
 
         try {
-          await convex.mutation(api.storyboard.projects.update, {
+          // Check if invoke_skill already auto-saved this exact script to avoid
+          // a redundant write (idempotent — safe to write again if different).
+          const currentProject = await convex.query(api.storyboard.projects.get, {
             id: projectId as any,
-            script: scriptContent,
           });
+          const alreadySaved = (currentProject as any)?.script === scriptContent;
+
+          if (!alreadySaved) {
+            await convex.mutation(api.storyboard.projects.update, {
+              id: projectId as any,
+              script: scriptContent,
+            });
+          }
 
           return {
-            output: `Script saved (${scriptContent.length} characters). Tell the user: open the Script tab and click "Build Storyboard" — it automatically extracts all characters, environments, and props, then creates every frame with @ElementName references injected. Come back when it's done.`,
+            output: `Script ${alreadySaved ? "confirmed" : "saved"} (${scriptContent.length} characters). Now call build_storyboard to create all frames automatically.`,
             isError: false,
           };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           return { output: `Failed to save script: ${msg}`, isError: true };
         }
+      }
+
+      case "build_storyboard": {
+        const rebuildStrategy = String(input.rebuild_strategy || "replace_all");
+
+        // Load saved script from project
+        const proj = await convex.query(api.storyboard.projects.get, { id: projectId as any });
+        if (!proj) return { output: "Project not found.", isError: true };
+
+        const script = (proj as any).script;
+        if (!script || script.trim().length < 20) {
+          return { output: "No script saved yet. Call save_script first.", isError: true };
+        }
+
+        // Clean up and clear existing data if replacing all
+        if (rebuildStrategy === "replace_all") {
+          const existingItems = await convex.query(api.storyboard.build.listItemsForBuild, { projectId: projectId as any });
+          const existingElements = await convex.query(api.storyboard.build.listElementsForBuild, { projectId: projectId as any });
+          if (existingItems.length > 0 || existingElements.length > 0) {
+            try {
+              await cleanupItemFiles(convex, existingItems.map((i: any) => i._id), existingElements.map((e: any) => e._id));
+            } catch { /* non-fatal */ }
+          }
+          await convex.mutation(api.storyboard.build.clearExistingData, { projectId: projectId as any });
+        }
+
+        // Load existing data for smart_merge dedup
+        const existingElementMap = new Map<string, any>();
+        if (rebuildStrategy === "smart_merge") {
+          const existing = await convex.query(api.storyboard.build.listElementsForBuild, { projectId: projectId as any });
+          for (const el of existing as any[]) {
+            existingElementMap.set(`${el.name.toLowerCase().trim()}::${el.type}`, el);
+          }
+        }
+
+        // Run the full script analysis pipeline
+        const analysis = await analyzeScript(script);
+
+        if (analysis.scenes.length === 0) {
+          return { output: "Could not parse any scenes from the script. Check the script format.", isError: true };
+        }
+
+        // Save elements
+        const savedElementMap = new Map<string, any>();
+        let elementsCreated = 0;
+        let elementsReused = 0;
+
+        for (const element of analysis.elements) {
+          const key = `${element.name.toLowerCase().trim()}::${element.type}`;
+          if (rebuildStrategy === "smart_merge" && existingElementMap.has(key)) {
+            savedElementMap.set(element.name, existingElementMap.get(key)._id);
+            elementsReused++;
+            continue;
+          }
+          try {
+            const id = await convex.mutation(api.storyboard.storyboardElements.create, {
+              projectId: projectId as any,
+              name: element.name,
+              type: element.type,
+              description: element.description,
+              thumbnailUrl: "",
+              referenceUrls: [],
+              tags: element.tags,
+              createdBy: ctx.userId,
+              visibility: "private",
+              identity: element.identity,
+            });
+            if (id) { savedElementMap.set(element.name, id); elementsCreated++; }
+          } catch { /* skip failed elements */ }
+        }
+
+        // Save scenes (frames)
+        let scenesCreated = 0;
+        let scenesUpdated = 0;
+
+        for (const scene of analysis.scenes) {
+          const linkedElements = analysis.elements
+            .filter(el => el.sceneIds.includes(scene.sceneId))
+            .map(el => {
+              const id = savedElementMap.get(el.name);
+              return id ? { id, name: el.name, type: el.type } : null;
+            })
+            .filter(Boolean) as { id: any; name: string; type: string }[];
+
+          const imagePrompt = _injectElementMentions(scene.imagePrompt || "", linkedElements);
+          const videoPrompt = _injectElementMentions(scene.videoPrompt || "", linkedElements);
+
+          try {
+            await convex.mutation(api.storyboard.storyboardItems.create, {
+              projectId: projectId as any,
+              sceneId: scene.sceneId,
+              order: scene.order,
+              title: scene.title,
+              description: scene.description,
+              duration: scene.duration,
+              generatedBy: ctx.userId,
+              imagePrompt: imagePrompt || undefined,
+              videoPrompt: videoPrompt || undefined,
+              defaultImageModel: scene.defaultImageModel,
+              defaultVideoModel: scene.defaultVideoModel,
+              linkedElements: linkedElements.length > 0 ? linkedElements : undefined,
+            });
+            scenesCreated++;
+          } catch { /* skip failed scenes */ }
+        }
+
+        if (analysis.preamble) {
+          try {
+            await convex.mutation(api.storyboard.build.updateProjectDescription, {
+              projectId: projectId as any,
+              description: analysis.preamble,
+            });
+          } catch { /* non-fatal */ }
+        }
+
+        const characters = analysis.elements.filter(e => e.type === "character").map(e => e.name);
+        const environments = analysis.elements.filter(e => e.type === "environment").map(e => e.name);
+        const props = analysis.elements.filter(e => e.type === "prop").map(e => e.name);
+
+        return {
+          output: stringifyResult({
+            success: true,
+            title: analysis.title || proj.name,
+            genre: analysis.genre,
+            parseMethod: analysis.parseMethod,
+            framesCreated: scenesCreated,
+            scenesUpdated,
+            elementsCreated,
+            elementsReused,
+            elements: { characters, environments, props },
+            totalDuration: `${analysis.totalDuration}s`,
+            note: `Storyboard built. All frames are live in the Storyboard tab. ${characters.length > 0 ? `Characters extracted: ${characters.join(", ")}. ` : ""}Now offer to generate hero reference images for each character using z-image (1 credit each) to lock their look for consistency.`,
+          }),
+          isError: false,
+        };
       }
 
       case "browse_project_files": {

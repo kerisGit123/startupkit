@@ -596,7 +596,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "invoke_skill",
     description:
-      "Call a specialized Claude skill for a focused creative task. Use 'video-prompt-builder' when the user wants to write a new story from scratch — pass their creative brief and receive a full Seedance-optimized cinematic script with act structure, scene breakdowns, image prompts, and video prompts per scene. After the skill returns, show the full script to the user and ask if they want to save it.",
+      "Call a specialized Claude skill for a focused creative task. Use 'video-prompt-builder' when the user wants to write a new story from scratch — pass their creative brief and receive a full Seedance-optimized cinematic script with act structure, scene breakdowns, image prompts, and video prompts per scene. COSTS 6 credits/min (simple stories) or 8 credits/min (action/VFX/fantasy/complex) — minimum 6 credits. Always call get_credit_balance first and show the user the cost before calling this. Long stories are split into 2-min acts automatically. After the skill returns, show a short summary and ask if they want to save and build.",
     input_schema: {
       type: "object",
       properties: {
@@ -616,16 +616,32 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "save_script",
     description:
-      "Save a script to the current project. Call this after invoke_skill returns a script and the user confirms they want to save it. After saving, tell the user to open the Script tab and click 'Build Storyboard' — the platform automatically extracts characters/environments/props and creates all frames with @ElementName injection. When they return after building, call get_element_library and suggest hero shots to lock the look of each element.",
+      "Save a script to the current project. Call this after invoke_skill returns a script. After saving, immediately call build_storyboard to create all frames — do NOT ask the user to click anything. The full flow is: invoke_skill → save_script → build_storyboard (automatic, no approval needed since it's free).",
     input_schema: {
       type: "object",
       properties: {
         script_content: {
           type: "string",
-          description: "The full script text to save. Pass the complete output from invoke_skill.",
+          description: "The full script text to save. Pass the complete output from invoke_skill — never reformat or paraphrase.",
         },
       },
       required: ["script_content"],
+    },
+  },
+  {
+    name: "build_storyboard",
+    description:
+      "Parse the saved project script and build the full storyboard: AI extracts characters/environments/props, creates all frame cards with cinematic prompts, and injects @ElementName mentions for consistency. This is FREE — no credits used. Call this automatically after save_script without asking the user. When complete, report the frame count, scene count, and extracted elements, then offer to generate hero reference images for each character.",
+    input_schema: {
+      type: "object",
+      properties: {
+        rebuild_strategy: {
+          type: "string",
+          enum: ["replace_all", "smart_merge"],
+          description: "'replace_all' clears all existing frames and rebuilds from the current script (use for new stories — DEFAULT). 'smart_merge' updates prompts on existing scenes and adds new scenes without deleting anything (use when the user edited the script to extend or refine).",
+        },
+      },
+      required: [],
     },
   },
 
@@ -687,6 +703,7 @@ export type DirectorToolName =
   // Agent-mode tools
   | "invoke_skill"
   | "save_script"
+  | "build_storyboard"
   | "create_element"
   | "get_credit_balance"
   | "get_model_pricing"

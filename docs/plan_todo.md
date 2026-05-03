@@ -1,6 +1,6 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-05-03 (Session #35 — AI Director Skills integration + agent UX hardening)
+> **Last updated:** 2026-05-03 (Session #36 — invoke_skill persistence fix + Stop button)
 
 ---
 
@@ -15,7 +15,7 @@
 | Path                                     | Cost        | Status                                                                              |
 |------------------------------------------|-------------|-------------------------------------------------------------------------------------|
 | Paste your own script → Build Storyboard | **Free**    | ✅ DONE — scriptAnalyzer parses, frames created                                     |
-| AI Generate Script (Agent chat)          | **Credits** | ✅ DONE — invoke_skill via Director. Needs persistence fix (Session #35 limitation) |
+| AI Generate Script (Agent chat)          | **Credits** | ✅ DONE — invoke_skill via Director. Auto-saves on completion (Session #36)          |
 | Empty project smart entry point          | —           | 🔲 TODO — show textarea + auto-trigger Agent mode when 0 frames                     |
 
 **Still to build:**
@@ -46,29 +46,71 @@
 
 ## Current State
 
-**On `main`, uncommitted Session #35 changes + 8 commits ahead of origin (unpushed).** Last 5 commits:
+**On `main`, 5 commits ahead of origin (unpushed). Session #36 changes uncommitted.** Last 5 commits:
 
 ```text
-807ab8a  plan_todo: refresh Current State with c778ea1 + add session priorities
-eaff205  Docs: add Session #34 Agent end-to-end test plan to plan_todo.md
-5dad25b  Docs: update plan_ai_director + plan_chatbot for Session #33
-ca52dcc  Update plan_ai_director.md: Session #33 tool inventory
-cc93d6c  Update todo: mark extraction, @mention, item delete, chip strip verified
+5299681  Session #35: agent UX hardening — progress timer, tool history, Sonnet after invoke_skill, retry logic
+4df411c  Director: redesign chat panel to match LTX dark theme + proper markdown rendering
+9957370  Director: improve invoke_skill flow for video-prompt-builder
+97eb390  Session #33: Director invoke_skill + save_script + story-from-scratch workflow
+ef915fb  Initialize runbook: ⚠️ critical callout for INTERNAL_REPAIR_SECRET
 ```
 
-**Session #35 changes not yet committed:** `lib/director/tool-executor.ts`, `lib/director/agent-tools.ts`, `lib/director/system-prompt.ts`, `app/api/director/chat/route.ts`, `components/director/DirectorChatPanel.tsx`, `scripts/test-skill.mjs`, `.env.local`, `env.example`.
+**Session #36 changes not yet committed (5 files):**
+- `lib/director/tool-executor.ts` — `build_storyboard` case, `invoke_skill` credit check/deduction + auto-save, `save_script` idempotent, `_injectElementMentions` helper
+- `lib/director/agent-tools.ts` — `build_storyboard` tool definition, updated `save_script` + `invoke_skill` descriptions, `DirectorToolName` union
+- `lib/director/system-prompt.ts` — "New Story from Scratch" flow: credit check first, show pricing, user confirms, invoke_skill → save_script → build_storyboard
+- `components/director/DirectorChatPanel.tsx` — Stop button, `build_storyboard` label, updated keep-open warning
+- `docs/plan_todo.md`
 
 **Top priorities for next session (in order):**
 
-1. **Commit Session #35 changes** — commit all director/skill files, then push the full 9-commit backlog to origin/main
-2. **invoke_skill end-to-end test** — open Agent mode, type "write a story about a dragon", verify: Director calls invoke_skill → save_script → script appears in Script tab → Build Storyboard creates frames
-3. **Convex action for invoke_skill persistence** — if user closes panel during the 30–60s skill call, result is lost. Move invoke_skill to a Convex action so it saves regardless of SSE connection (see Session #35 known limitation)
-4. **Visual Lock end-to-end** — generate primary images → click Visual Lock → analyze → review → apply → verify script + elements updated
-5. **Unpark onboarding** — `scriptGenerator.ts` superseded by `invoke_skill` flow; update the onboarding plan to route "Generate Script" through the Director chat panel in Agent mode
+1. **Commit Session #36 changes** — commit the 5 modified files, then push the full 6-commit backlog to origin/main
+2. **End-to-end test: full agent story flow** — open Agent mode → "write me a dragon story" → agent checks balance → shows 10cr cost → user confirms → `invoke_skill` → summary → user says save → `save_script` → `build_storyboard` → frames appear live → agent offers hero shots
+3. **Visual Lock end-to-end** — generate primary images → click Visual Lock → analyze → review → apply → verify script + elements updated
+4. **Unpark onboarding** — when 0 frames + 0 script, show big textarea "Tell me your story..." with Agent mode auto-selected
 
 ---
 
-## Recently Completed (Session #11-35 — 2026-04-26/05-03)
+## Recently Completed (Session #11-36 — 2026-04-26/05-03)
+
+### Session #36 — 2026-05-03 (build_storyboard tool + credit pricing + persistence fix + Stop button)
+
+**`build_storyboard` tool — closes the full agent loop (`lib/director/`, `components/director/`):**
+
+- [x] `build_storyboard` added to `AGENT_TOOLS` in `agent-tools.ts` — description says FREE, auto-call after `save_script`
+- [x] `invoke_skill` description updated — mentions 10-credit cost, requires `get_credit_balance` first
+- [x] `save_script` description updated — says "then immediately call `build_storyboard`", not "tell user to click"
+- [x] `build_storyboard` implemented in `tool-executor.ts`:
+  - Imports `analyzeScript` from `@/lib/storyboard/scriptAnalyzer` (shared wheel — not reinvented)
+  - Imports `cleanupItemFiles` from `@/lib/storyboard/cleanupFiles` (R2 cleanup before replace_all)
+  - Inlines `_injectElementMentions` helper (mirrors `build-storyboard/route.ts` — should move to shared util later)
+  - `replace_all`: cleans existing files → clears data → `analyzeScript` → creates elements → creates frames with @mentions
+  - `smart_merge`: deduplicates elements by `name::type` key, appends new scenes only
+  - Returns structured summary (frames, scenes, characters, environments, props)
+- [x] `build_storyboard` added to `DirectorToolName` union
+- [x] `build_storyboard: "Building storyboard..."` added to `TOOL_LABELS` in DirectorChatPanel
+- [x] "Keep panel open" warning extended to cover `build_storyboard` (also takes ~30–60s)
+
+**Credit pricing for AI generation steps:**
+
+- [x] `invoke_skill` now checks credit balance before calling the skill API — returns error if balance < 6
+- [x] `invoke_skill` deducts **6 credits** on success via `api.credits.deductCredits` (type: usage, model: video-prompt-builder, action: script_generation) — covers ~$0.06–$0.08 Sonnet cost at $0.02/credit with margin
+- [x] `build_storyboard` is **FREE** — no credit deduction (Haiku cost ~$0.002/build, conversion hook)
+- [x] System prompt updated — "New Story from Scratch" flow now starts with `get_credit_balance`, shows "Script: 6 credits, Build: free" before any action
+- [x] System prompt flow: credit check → user approves → `invoke_skill` (10 cr) → summary → ask "save + build?" → `save_script` → `build_storyboard` (free) → hero shots offer
+
+**invoke_skill persistence fix (`lib/director/tool-executor.ts`):**
+
+- [x] Auto-saves script to `project.script` immediately on skill completion — survives SSE disconnect
+- [x] `save_script` made idempotent — skips write if content identical
+
+**Stop button (`components/director/DirectorChatPanel.tsx`):**
+
+- [x] Red Stop button (Square icon) replaces disabled spinner while `streaming === true` — calls `abortRef.current?.abort()`
+- [x] Removed `Loader2` import
+
+---
 
 ### Session #35 — 2026-05-03 (AI Director — Skills Integration + Agent UX Hardening)
 
@@ -919,7 +961,7 @@ Goal: Close the 3 gaps so the agent is solid enough to build the newbie flow on 
 
 **Remaining Phase 2 work:**
 
-- [ ] **invoke_skill persistence via Convex action** — currently result is lost if user closes the panel during 30–60s call. Move to a Convex action that saves to `project.script` directly, client subscribes via `useQuery`. High priority.
+- [x] **invoke_skill persistence** — auto-saves `project.script` immediately on skill completion, before returning to Director. `save_script` is now idempotent. Script survives SSE disconnect (Session #36).
 - [ ] **Empty project entry point UI** — when 0 frames + 0 script: show big textarea prompt "Tell me your story..." with Agent mode auto-selected, invoke_skill triggered automatically
 - [ ] **Post-script auto-prompt** — after `save_script`, Director proactively offers "Click Build Storyboard in the Script tab to create your frames" with a deep-link button
 - [ ] **Batch generate after build** — after Build Storyboard completes, Director detects N new frames with no images and proactively suggests batch image generation (already possible via `create_execution_plan`)

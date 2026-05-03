@@ -112,6 +112,10 @@ export async function POST(req: NextRequest) {
   const script = project.script;
   const anthropic = getAnthropicClient();
 
+  // Scene-based rewrite pricing: ceil(totalScenes / 10) × 3 credits
+  const totalScenes = (script.match(/###\s*SCENE|\bSCENE\s+\d/gi) || []).length || 4;
+  const rewriteCredits = Math.max(3, Math.ceil(totalScenes / 10) * 3);
+
   // Determine if structured (has SCENE markers) or freeform
   const isStructured = /SCENE\s+\d/i.test(script);
   const scriptTokenEstimate = Math.ceil(script.length / 4);
@@ -185,6 +189,6 @@ export async function POST(req: NextRequest) {
     sceneChanges,
     totalChanges,
     modelUsed: useSonnet ? "sonnet" : "haiku",
-    creditsCharged: useSonnet ? 5 : 2,
+    creditsCharged: rewriteCredits,
   });
 }

@@ -335,6 +335,110 @@ and they lead to more image/video generations (where the real volume is).
 
 ---
 
+## Director AI — Script Generation (invoke_skill)
+
+> **Last tested:** 2026-05-03. Real token usage measured via API `usage` field.
+
+The Director agent calls the `video-prompt-builder` Claude skill to generate cinematic scripts.
+The skill reads multiple reference files internally before generating — this creates high input token overhead that varies by story genre complexity.
+
+### Real Token Usage (Empirical)
+
+| Model | Story | Input Tokens | Output Tokens | API Cost |
+| ----- | ----- | ------------ | ------------- | -------- |
+| Haiku 4.5 | 4 scenes / ~60s / simple (koi+cat) | 31,109 | 2,646 | $0.0355 |
+| Haiku 4.5 | 10 scenes / complex (dragon/VFX/action) | 84,870 | 7,467 | $0.0978 |
+| Sonnet 4.6 | 10 scenes / complex (dragon/VFX/action) | 59,649 | 7,239 | $0.2875 |
+
+**Key finding:** Input token cost is driven by story genre complexity, not scene count. Complex stories (action, VFX, fantasy, fighting) load more reference files — 84K vs 31K tokens. Sonnet at $3/1M input is unprofitable at any reasonable credit price. Haiku at $0.80/1M is the only viable model.
+
+### Profitability by Configuration
+
+| Config | Credits | Revenue | Worst Cost | Floor Margin |
+| ------ | ------- | ------- | ---------- | ------------ |
+| Haiku, simple story | 6 | $0.06 | $0.036 | 40% |
+| Haiku, complex story | 6 | $0.06 | $0.098 | -62.9% LOSS |
+| Haiku, complex story | 12 | $0.12 | $0.098 | 18.3% |
+| Sonnet, complex story | 35 | $0.35 | $0.288 | 17.7% |
+
+**Decision: Haiku only, tiered by genre.** Simple stories cheapest, complex stories priced to cover higher reference-file overhead.
+
+### Max Scenes Per Haiku Call
+
+Haiku 4.5 output limit is 8,192 tokens. At ~650–750 tokens/scene:
+
+- 8 scenes per call = ~6,000 tokens — safe
+- 10 scenes → ~7,500 tokens — tested at edge (7,467 tokens, succeeded)
+- 12+ scenes → likely truncation
+
+**Cap at 8 scenes per call (~2 min per act).** System automatically splits longer stories.
+
+### Pricing — 6 or 8 Credits Per Minute
+
+Simple (nature, romance, friendship, travel): **6 credits/min**
+Complex (action, VFX, fantasy, fighting, sci-fi, war): **8 credits/min**
+Minimum: 6 credits (covers any story under 1 min)
+
+| Duration | Simple credits | Simple margin | Complex credits | Complex margin |
+| -------- | -------------- | ------------- | --------------- | -------------- |
+| 1 min | **6** | 40% | **8** | 18% |
+| 2 min | **12** | 40% | **16** | 18% |
+| 5 min | **30** | 40% | **40** | 18% |
+| 10 min | **60** | 40% | **80** | 18% |
+| 20 min | **120** | 40% | **160** | 18% |
+
+Simple margin uses $0.036/call cost. Complex uses $0.098/call (worst case).
+
+### What to Tell Users (Agent Confirmation Message)
+
+> "A **5-minute action script** costs **40 credits** (8cr/min — action/VFX stories load more AI reference data). Storyboard build is **free**. Your balance: X credits. Ready to start?"
+
+> "A **5-minute simple script** costs **30 credits** (6cr/min). Storyboard build is **free**. Your balance: X credits. Ready to start?"
+
+### Build Storyboard — FREE
+
+`build_storyboard` (element extraction + frame creation) is charged 0 credits. It's the conversion hook — users who see their storyboard built are far more likely to spend credits generating images and videos.
+
+---
+
+## Visual Lock — Pricing
+
+Visual Lock surgically rewrites only the scenes where a locked element appears. It does NOT rewrite the full script, and uses direct Claude API (no skills reference-file overhead). Cost is flat and predictable.
+
+### Credit Formula
+
+```
+Total = (elements analyzed × 1cr) + ceil(totalScenes / 10) × 3cr
+```
+
+| Step | Charge | Notes |
+|------|--------|-------|
+| Analyze each element | 1cr/element | Claude Sonnet vision — 1 API call per element |
+| Script rewrite | ceil(scenes/10) × 3cr | Haiku, only rewrites affected scenes in parallel |
+
+### Rewrite Pricing by Script Length
+
+| Total scenes | Rewrite credits | Revenue | Haiku cost (50% affected) | Margin |
+|---|---|---|---|---|
+| 1–10 | **3cr** | $0.03 | $0.013 | 57% |
+| 11–20 | **6cr** | $0.06 | $0.025 | 58% |
+| 21–30 | **9cr** | $0.09 | $0.038 | 58% |
+| 71–80 | **24cr** | $0.24 | $0.100 | 58% |
+
+Consistent ~57–58% margin at every script length.
+
+### Example — 20-scene story, 3 elements locked
+
+> `(3 × 1cr analyze) + 6cr rewrite` = **9 credits total ($0.09)**
+
+### Implementation Notes
+
+- `totalScenes` counted server-side from SCENE markers in the script (no frontend param needed)
+- UI shows dynamic credit cost: `ceil(scenes/10) × 3` before user confirms rewrite
+- Modal uses `items?.length` from `listItemsForBuild` query to estimate cost before the API call
+
+---
+
 ## Implementation — Multiplier Approach
 
 ### How It Works

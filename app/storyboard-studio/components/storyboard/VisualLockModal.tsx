@@ -120,7 +120,9 @@ export function VisualLockModal({ projectId, onClose, onScriptUpdated }: VisualL
 
   // Credit calculation
   const analysisCost = selectedIds.size; // 1 credit per element
-  const rewriteCost = rewriteResult?.creditsCharged ?? 2; // shown after analysis
+  const totalScenes = items?.length ?? 0;
+  const estimatedRewriteCost = Math.max(3, Math.ceil(totalScenes / 10) * 3);
+  const rewriteCost = rewriteResult?.creditsCharged ?? estimatedRewriteCost;
 
   // ── Step: Select ──────────────────────────────────────────────────────────
 
@@ -654,8 +656,8 @@ export function VisualLockModal({ projectId, onClose, onScriptUpdated }: VisualL
                 <span className="text-[12px] text-(--text-secondary)">Script rewrite</span>
                 <div className="flex items-center gap-1.5 text-[12px]">
                   <Coins className="w-3.5 h-3.5 text-amber-400" strokeWidth={1.75} />
-                  <span className="text-(--text-primary) font-medium">2 credits</span>
-                  <span className="text-[10px] text-(--text-tertiary)">(Haiku)</span>
+                  <span className="text-(--text-primary) font-medium">{estimatedRewriteCost} credits</span>
+                  <span className="text-[10px] text-(--text-tertiary)">({totalScenes} scenes)</span>
                 </div>
               </div>
               <p className="text-[10px] text-(--text-tertiary) bg-(--bg-secondary) rounded-lg px-3 py-2 leading-relaxed">
@@ -674,7 +676,7 @@ export function VisualLockModal({ projectId, onClose, onScriptUpdated }: VisualL
             className="flex items-center gap-1.5 px-4 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[13px] font-medium rounded-xl transition-all"
           >
             <FileText className="w-3.5 h-3.5" strokeWidth={1.75} />
-            Rewrite Script — 2 credits →
+            Rewrite Script — {estimatedRewriteCost} credits →
           </button>
         </div>
       </>

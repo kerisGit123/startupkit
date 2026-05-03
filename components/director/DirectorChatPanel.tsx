@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { X, Send, Sparkles, Trash2, Loader2, Wrench, Bot, MessageSquare, Copy, Check } from "lucide-react";
+import { X, Send, Sparkles, Trash2, Wrench, Bot, MessageSquare, Copy, Check, Square } from "lucide-react";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -173,6 +173,7 @@ const TOOL_LABELS: Record<string, string> = {
   browse_project_files: "Browsing files...",
   invoke_skill: "Building script...",
   save_script: "Saving script...",
+  build_storyboard: "Building storyboard...",
   suggest_shot_list: "Planning shots...",
   generate_scene: "Building scene...",
 };
@@ -664,8 +665,8 @@ export function DirectorChatPanel({
               <span>{TOOL_LABELS[activeTool] || `Using ${activeTool}...`}</span>
               {elapsed > 0 && <span className="text-amber-400/50 tabular-nums">{elapsed}s</span>}
             </div>
-            {activeTool === "invoke_skill" && (
-              <p className="text-[10px] text-amber-300/40 pl-5">Keep this panel open — script generation takes ~30–60s</p>
+            {(activeTool === "invoke_skill" || activeTool === "build_storyboard") && (
+              <p className="text-[10px] text-amber-300/40 pl-5">Keep this panel open — this step takes ~30–60s</p>
             )}
           </div>
         )}
@@ -691,16 +692,23 @@ export function DirectorChatPanel({
             className="flex-1 resize-none bg-(--bg-secondary) border border-(--border-primary) rounded-xl px-3 py-2.5 text-[13px] text-(--text-primary) placeholder:text-(--text-tertiary) focus:outline-none focus:border-(--accent-blue)/40 disabled:opacity-50 max-h-[120px] overflow-y-auto leading-5"
             style={{ minHeight: "40px" }}
           />
-          <button
-            onClick={() => sendMessage(input)}
-            disabled={!input.trim() || streaming}
-            className="p-2.5 rounded-xl bg-(--accent-blue)/12 text-(--accent-blue) hover:bg-(--accent-blue)/20 border border-(--accent-blue)/20 disabled:opacity-30 disabled:cursor-not-allowed transition shrink-0"
-          >
-            {streaming
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <Send className="w-4 h-4" strokeWidth={1.75} />
-            }
-          </button>
+          {streaming ? (
+            <button
+              onClick={() => abortRef.current?.abort()}
+              className="p-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition shrink-0"
+              title="Stop"
+            >
+              <Square className="w-4 h-4 fill-current" />
+            </button>
+          ) : (
+            <button
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim()}
+              className="p-2.5 rounded-xl bg-(--accent-blue)/12 text-(--accent-blue) hover:bg-(--accent-blue)/20 border border-(--accent-blue)/20 disabled:opacity-30 disabled:cursor-not-allowed transition shrink-0"
+            >
+              <Send className="w-4 h-4" strokeWidth={1.75} />
+            </button>
+          )}
         </div>
       </div>
     </div>
