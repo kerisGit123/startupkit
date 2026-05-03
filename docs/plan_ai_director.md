@@ -1,8 +1,8 @@
 # AI Director + Agent — Architecture & Status
 
-> **Status:** Built — system prompt + tools updated (Session #33), end-to-end testing pending
-> **Last updated:** 2026-05-02 (Session #33)
-> **Model:** Claude Haiku 4.5 (Director + Agent + Vision) — Claude API only
+> **Status:** Built + Script Generation live (Sessions #33–#36), end-to-end testing pending
+> **Last updated:** 2026-05-03 (Session #36)
+> **Models:** Haiku 4.5 default · Sonnet 4.6 for post-invoke_skill iteration + Cinematic mode
 
 ---
 
@@ -12,18 +12,18 @@ Two AI modes embedded in the storyboard studio:
 
 **AI Director** — Free creative advisor for all Pro+ users. Reads your project, writes prompts, analyzes images, suggests camera angles and lighting, plans shot lists, creates scene breakdowns. Cannot trigger generation — the user clicks "Generate" manually.
 
-**AI Agent** — Autonomous executor ($120/seat/month). Everything Director does + triggers image/video generation, post-processing, uses element references for character consistency, loads prompt templates and presets. Always shows a plan with credit costs before executing.
+**AI Agent** — Autonomous executor ($120/seat/month). Everything Director does + triggers image/video generation, post-processing, writes scripts via Skills API, builds full storyboards end-to-end. Always shows a plan with credit costs before executing generation.
 
 **Director is the free teaser. Agent is the product.**
 
 ---
 
-## Tool Inventory (24 tools)
+## Tool Inventory (26 tools)
 
 ### Director Tools (14 — free for Pro+)
 
 | Tool | Category | What it does |
-|------|----------|-------------|
+| ---- | -------- | ------------ |
 | `get_project_overview` | Read | Project context: scenes, frames, style, genre, elements, script |
 | `get_scene_frames` | Read | All frames in a scene with prompts/status |
 | `get_frame_details` | Read | Full frame details + imageUrl, videoUrl, audioUrl |
@@ -39,37 +39,52 @@ Two AI modes embedded in the storyboard studio:
 | `get_model_recommendations` | Knowledge | Model suggestions by category |
 | `search_knowledge_base` | Knowledge | KB search for tips/guides |
 
-### Agent Tools (10 — seat required)
+### Agent Tools (12 — seat required)
 
 | Tool | Category | What it does | Credits |
-|------|----------|-------------|---------|
+| ---- | -------- | ------------ | ------- |
 | `get_credit_balance` | Read | Check org credit balance | Free |
 | `get_model_pricing` | Read | Compare model costs | Free |
 | `get_prompt_templates` | Read | Load proven prompts by type | Free |
 | `get_presets` | Read | Load camera angles, color palettes, pill bar presets | Free |
 | `browse_project_files` | Read | Find uploaded/generated files | Free |
 | `enhance_prompt` | Execute | Rough prompt → cinematic detailed prompt | ~1 cr |
-| `create_execution_plan` | Plan | Show plan with cost, approve/cancel | Free |
-| `trigger_image_generation` | Execute | Generate image with reference element/frame | 1-18 cr |
-| `trigger_video_generation` | Execute | Generate video from frame image | 5-90 cr |
-| `trigger_post_processing` | Execute | Enhance, relight, remove BG, reframe | 1-7 cr |
+| `create_execution_plan` | Plan | Show plan with cost, approve/cancel before generation | Free |
+| `trigger_image_generation` | Execute | Generate image with reference element/frame | 1–18 cr |
+| `trigger_video_generation` | Execute | Generate video from frame image | 5–90 cr |
+| `trigger_post_processing` | Execute | Enhance, relight, remove BG, reframe | 1–7 cr |
+| `invoke_skill` | Script | Write script via Claude Agent Skills Beta (multi-act) | 6–18 cr/min |
+| `save_script` | Write | Save completed script to project | Free |
 
 ---
 
 ## Model Routing
 
-### Decision: Claude Haiku 4.5 for all Director/Agent modes
+### Per-call model selection
 
-Director and Agent use the **Claude API exclusively** — required for the Claude Agent Skills architecture path (see below). DeepSeek V3 stays only for the Support chatbot (FAQ/billing, no tool chaining complexity).
+| Situation | Model | Why |
+| --------- | ----- | --- |
+| All Director messages | Haiku 4.5 | Fast, cheap, sufficient for advisory |
+| All Agent messages (default) | Haiku 4.5 | Tool chaining, 24 tools |
+| After `invoke_skill` succeeds | Sonnet 4.6 (one iteration) | Ensures Director accurately follows "pass raw text to save_script" — upgrade auto-resets after that one call |
+| `invoke_skill` with `quality: "cinematic"` | Sonnet 4.6 | User chose premium mode |
+| Support chatbot | DeepSeek V3 (OpenRouter) | Separate system, no skills architecture |
 
-| Feature | Model | Cost/msg | Why |
-|---------|-------|----------|-----|
-| Support Chat | DeepSeek V3 (via OpenRouter) | $0.0016 | FAQ, billing — separate system, no skills architecture |
-| Director | Claude Haiku 4.5 (Anthropic SDK) | $0.006 | Claude Skills compatible, reliable tool use |
-| Agent | Claude Haiku 4.5 (Anthropic SDK) | $0.006 | Credits at stake, reliable 24-tool chaining |
-| Vision | Claude Haiku 4.5 (Anthropic SDK) | $0.006 | Vision support built-in |
+### scriptMode (UI toggle → API body → system prompt)
 
-### Agent Seat Economics (Haiku-only)
+Users pick **Quick** or **Cinematic** in the balloon area above the chat input. This is injected into the system prompt and determines which model `invoke_skill` uses:
+
+```text
+QUICK mode (default):
+  → Haiku 4.5 via Skills Beta
+  → 6 cr/min simple stories, 8 cr/min action/VFX stories
+
+CINEMATIC mode:
+  → Sonnet 4.6 via Skills Beta
+  → 18 cr/min flat (covers higher token cost + margin)
+```
+
+### Agent Seat Economics
 
 | Scale | Monthly cost | Margin on $120 seat |
 | ----- | ------------ | ------------------- |
@@ -80,14 +95,156 @@ After cap: 1 credit/msg overflow (seamless, no hard lock).
 
 ---
 
+## invoke_skill — Script Generation
+
+### How it works
+
+Uses the **Claude Agent Skills Beta API** (`betas: ["code-execution-2025-08-25", "skills-2025-10-02"]`). The skill reads reference files internally (video-prompt-builder), causing 31K–84K input token overhead before generating any output.
+
+**Multi-act architecture** (solves the 20-scene problem):
+
+- Duration ≤ 2 min → single call
+- Duration > 2 min → split into 2-min acts, called sequentially
+- Each act gets a continuity summary from the previous act
+- Outputs merged with SCENE numbering fixed across act boundaries
+
+```text
+durationMin = parsed from brief ("5 minutes" → 5.0)
+numActs = ceil(durationMin / 2)
+
+For each act:
+  → callSkillAct(originalBrief, actNum, totalActs, prevSummary)
+  → extract continuity summary
+  → merge with prev acts
+
+Final: mergeActScripts([act1, act2, act3, ...])
+```
+
+### Credit pricing
+
+```text
+Quick mode (Haiku):
+  - Simple story: 6 cr/min
+  - Action/VFX/dragon/battle/sci-fi: 8 cr/min (detected via regex)
+  - Minimum: 6 cr (under 1 min still costs minimum)
+
+Cinematic mode (Sonnet):
+  - 18 cr/min flat (covers $0.12–0.18 input token cost per call)
+  - Minimum: 18 cr
+
+Formula: max(ratePerMin, ceil(durationMin) × ratePerMin)
+```
+
+### Estimated costs shown in UI (balloon area)
+
+| Story | Quick | Cinematic |
+| ----- | ----- | --------- |
+| Dragon epic 5 min | ~40 cr | ~90 cr |
+| Romance 2 min | ~12 cr | ~36 cr |
+| Kids adventure 1 min | ~6 cr | ~18 cr |
+| Sci-fi thriller 3 min | ~24 cr | ~54 cr |
+| Mystery 2 min | ~12 cr | ~36 cr |
+| Fantasy 4 min | ~32 cr | ~72 cr |
+
+---
+
+## Visual Lock — Pricing
+
+Scene-based pricing: `max(3, ceil(totalScenes / 10) × 3) credits`
+
+| Script size | Scenes | Cost |
+| ----------- | ------ | ---- |
+| Short | 1–10 | 3 cr |
+| Medium | 11–20 | 6 cr |
+| Long | 21–30 | 9 cr |
+| Epic | 40 scenes | 12 cr |
+
+Pre-flight balance check: queries balance before calling Haiku. Returns HTTP 402 with error message if insufficient — avoids running API call user can't pay for.
+
+---
+
+## DirectorChatPanel UI
+
+### Balloon Area (always visible above input, both modes)
+
+A category navigation system (Home → Category → Pills) that lives above the textarea. Replaces the old empty-state-only quick actions.
+
+**Navigation:**
+
+- Home view: row of category pill buttons
+- Category selected: `← Home · 🎬 This frame` breadcrumb + action pills (max-height scroll)
+- Confirm state: amber banner replaces pills entirely
+
+**Director mode categories:**
+
+| Category | Pills |
+| -------- | ----- |
+| 📋 Storyboard | What is this storyboard about? (local), Review shot variety, Pacing check, Consistency check, Script help |
+| 🎬 This frame | What is the current frame about? (local), Analyze the current image · 1cr (confirm), Camera angle advice, Lighting setup, What's wrong with this frame?, Add director notes |
+| ✨ Improve | Improve all prompts, Visual style suggestion, Full storyboard review, Rewrite this frame's prompt |
+
+**Agent mode categories:**
+
+| Category | Pills |
+| -------- | ----- |
+| 📝 Write story | 6 story starters with credit estimates, Quick/Cinematic toggle inline |
+| 🖼️ Generate | Generate all images, Animate all frames, Enhance all images, Smart generate plan, Build full storyboard |
+| 💳 Credits | Check my credit balance (local), How much for all images? (local), Cheapest way to generate (local), Image vs video cost (local) |
+
+### Credit confirm banner
+
+Any pill that charges user credits shows an amber confirmation banner before executing:
+
+```text
+[pill click]
+  ↓
+confirmingAction state set → balloon shows:
+  ┌─────────────────────────────────────────────┐
+  │ 🐉 Dragon epic · 5 min · Quick mode          │
+  │ This will deduct ~40 credits from your        │
+  │ balance (350 cr available).                   │
+  │  [Confirm · ~40cr]  [Cancel]                 │
+  └─────────────────────────────────────────────┘
+  ↓ confirm
+sendMessage(prompt) + setQuickCategory(null)
+```
+
+- **Exact cost** (no `~`): image analyze (1 cr)
+- **Estimated cost** (with `~`): write story pills (depends on actual story complexity)
+- Generate pills (generate all images, animate, enhance) → **not** confirmed in balloon — the Agent's `create_execution_plan` shows exact per-frame costs in the chat first
+
+### Local answers (zero AI cost, zero credits)
+
+These pills read from `useQuery` data already loaded in the panel — no API call:
+
+| Pill | Data source |
+| ---- | ----------- |
+| "What is this storyboard about?" | `storyItems` — frame count, scenes, image/video status, sample prompts |
+| "What is the current frame about?" | `storyItems` — imagePrompt, videoPrompt, description, notes, generation status. Shows `_Not set_` if empty. Matched by `sceneId` then sorted `order`. |
+| "Check my credit balance" | `api.credits.getBalance` — balance + image/video capacity |
+| "How much for all images?" | `storyItems` filtered for no imageUrl/imageStorageId × model costs |
+| "Cheapest way to generate" | Static pricing table |
+| "Image vs video cost" | Static pricing table |
+
+### Direct image analysis (non-Director path)
+
+"Analyze the current image · 1cr" (when `currentFrameImageUrl` exists):
+
+- Calls `/api/ai-analyze` directly (Gemini 2.5 Flash via OpenRouter)
+- Deducts 1 credit via `api.credits.deductCredits` on confirm
+- Injects result as local assistant message — no Director conversation overhead, no tool calls, no history loading
+- Falls back to `handleCurrentFrameAbout()` (local data) if no image exists
+
+---
+
 ## Architecture
 
 ### Request Flow
 
-```
+```text
 DirectorChatPanel (React, docked right side)
   |
-  POST /api/director/chat  { projectId, message, mode, currentFrameNumber }
+  POST /api/director/chat  { projectId, message, mode, scriptMode, currentFrameNumber, currentSceneId }
   |  SSE streaming
   v
 route.ts (server)
@@ -96,26 +253,32 @@ route.ts (server)
   +-- Load project context → inject into system prompt
   +-- Load conversation history (last 20 from Convex)
   +-- Select tools via getToolsForMode(mode)
-  +-- Both modes → Claude Haiku 4.5 (Anthropic SDK)
+  +-- Inject scriptMode into system prompt (agent mode only):
+  |     "USER SCRIPT MODE: QUICK (Haiku, 8cr/min). Always pass quality: 'quick'"
+  +-- Default model: claude-haiku-4-5
   |
   v
-Claude Haiku 4.5
+Agentic loop (up to MAX_TOOL_ITERATIONS):
   |
+  +-- Claude Haiku 4.5 (or Sonnet after invoke_skill)
   +-- Text response → streamed via SSE
   +-- Tool calls → dispatchDirectorTool() → Convex / API routes → back to LLM
-  +-- Plan approval → plan_approval SSE event → UI shows Approve/Cancel card
-  +-- Up to 8 tool iterations per message
+  +-- plan_approval event → UI shows Approve/Cancel card in chat
+  +-- invoke_skill success → nextModel = Sonnet for one iteration
+  |
+  v
+Persist session → directorChat.appendMessages (Convex)
 ```
 
 ### SSE Events
 
-```
+```json
 data: {"type":"text","delta":"Let me look at your project..."}
 data: {"type":"tool_call","name":"get_project_overview"}
 data: {"type":"tool_result","name":"get_project_overview","isError":false}
 data: {"type":"text","delta":"Your project has 8 scenes..."}
 data: {"type":"plan_approval","steps":[...],"totalCredits":30,"balance":500}
-data: {"type":"done"}
+data: {"type":"done","toolsUsed":["get_project_overview","invoke_skill","save_script"]}
 ```
 
 ### Chat Persistence
@@ -125,25 +288,21 @@ data: {"type":"done"}
 - Frontend shows last 10 messages + "Load previous" button
 - Backend sends last 20 to LLM for context regardless of UI
 
-### Async Task Queue (for future use)
-
-- `agent_tasks` table: stores execution plans with step-by-step status
-- `director_analytics` table: tool calls, corrections, plan approvals/rejections
-- Future: Kie callback can wake agent to continue next step
-
 ---
 
 ## File Structure
 
-```
+```text
 lib/director/
-  agent-tools.ts          -- 24 tool definitions + getToolsForMode()
+  agent-tools.ts          -- 26 tool definitions + getToolsForMode()
   tool-executor.ts        -- dispatchDirectorTool() — all tool implementations
+                             invoke_skill: multi-act, credit deduction, model routing
+                             save_script: saves to project
   system-prompt.ts        -- buildDirectorSystemPrompt() + buildAgentSystemPrompt()
   constants.ts            -- Model knowledge, shot types, camera movements
 
 app/api/director/
-  chat/route.ts           -- SSE streaming, mode routing, plan approval events
+  chat/route.ts           -- SSE streaming, scriptMode injection, model upgrade logic
 
 convex/
   directorChat.ts         -- Session CRUD (getOrCreate, append, clear)
@@ -151,27 +310,9 @@ convex/
   schema.ts               -- director_chat_sessions, agent_tasks, director_analytics
 
 components/director/
-  DirectorChatPanel.tsx   -- Chat UI: mode toggle, plan cards, history, persistent chip strip, quick actions
+  DirectorChatPanel.tsx   -- Chat UI: mode tabs, balloon category nav, credit confirm
+                             banner, local answers, direct image analysis, plan cards
 ```
-
-### Claude Agent Skills — Future Refactor
-
-The current flat-file structure (`lib/director/`) is functionally equivalent to the Claude Agent Skills pattern. Planned migration after end-to-end testing:
-
-```text
-skills/
-  director-agent/
-    instructions.md    ← system-prompt.ts content
-    tools.json         ← agent-tools.ts definitions
-    examples/          ← example conversations (samurai story, car commercial, etc.)
-    genres/            ← genre-specific prompt snippets
-  support-agent/
-    instructions.md    ← lib/support/systemPrompt.ts content
-    tools.json         ← lib/support/tools.ts definitions
-    knowledge/         ← static FAQ, pricing, policies
-```
-
-**Why defer:** Agent Skills migration is pure refactoring — no user-facing change. Test the agent first, migrate after it's proven.
 
 ---
 
@@ -186,14 +327,7 @@ skills/
 | Business ($119/mo) | Free, unlimited | 30 msgs/month | Buy up to 3 ($120/mo each) |
 | Ultra ($299/mo) | Free, unlimited | — | 1 included + up to 5 ($120/mo each) |
 
-Agent conversations covered by seat. Generation triggered by agent costs credits from org pool (same pricing as manual generation).
-
-### Implementation needed (deferred until agent is proven)
-
-- Agent seat table + Stripe add-on subscription
-- Seat assignment UI in org owner dashboard
-- Teaser counter (30 msgs/month, resets monthly)
-- Overflow billing (1 credit/msg after cap)
+Agent conversations covered by seat. Generation triggered by agent costs credits from org pool (same pricing as manual generation). `invoke_skill` credits charged on success only.
 
 ---
 
@@ -204,11 +338,12 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 | Advises on prompts | Yes | Yes + filmmaking rationale + shot planning |
 | Triggers generation | No | Yes (Agent Mode) |
 | Plan approval | No | Yes — shows cost before executing |
+| Script writing | No | Yes — invoke_skill, multi-act, Quick/Cinematic |
 | Character consistency | Soul ID | Element @mention + referenceUrls at generation |
 | Prompt templates | No | Yes — loads from workspace library |
 | Camera/style presets | Limited | Full pill bar (Camera/Angle/Motion/Speed/Palette) |
 | Post-processing | No | Yes — enhance, relight, remove BG, reframe |
-| Vision analysis | No | Yes — looks at generated images |
+| Vision analysis | No | Yes — direct Gemini 2.5 Flash, 1cr, instant |
 | Project context | Per-shot | Full project (scenes, frames, elements, genre, style) |
 | Conversation history | Unclear | Persistent per project, loads on reopen |
 | Shot list planning | No | Yes — `suggest_shot_list` by scene type |
@@ -219,32 +354,43 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 
 ---
 
-## Studio Context (updated 2026-05-02 Session #33 — ALL DONE)
+## Session History
 
-All items below are now reflected in the system prompt (`lib/director/system-prompt.ts`) rewritten in Session #33:
+### Session #33 — Core build ✅
 
-| Area | Status | What the agent now knows |
-| ---- | ------ | ------------------------ |
-| **Genre system** | ✅ Done | 16 presets, `update_project_style(genre_preset=)`, pairing examples |
-| **Format system** | ✅ Done | 12 presets, independent axis from genre, `update_project_style(format_preset=)` |
-| **Pill bar** | ✅ Done | Camera/Angle/Motion/Speed/Palette — agent references by pill bar category names |
-| **Element @mention** | ✅ Done | Always uses `@ElementName` in prompts; explains auto-attach pipeline |
-| **Element Forge** | ✅ Done | Primary variant as identity sheet; `referenceUrls[primaryIndex]` |
-| **Post-processing** | ✅ Done | Full table: Enhance/Relight/Remove BG/Reframe/Inpaint/Upscale with credits |
-| **Script pipeline** | ✅ Done | Agent knows Build Storyboard, Extend Story, `create_frames` workflow |
-| **New tools** | ✅ Done | `suggest_shot_list` + `generate_scene` added to Director tool set |
+- 24 tools built and implemented
+- System prompt rewritten with full studio context
+- `suggest_shot_list` + `generate_scene` tools added
+- `update_project_style` supports genre + format + style
+
+### Session #36 — Script generation + balloon UX ✅
+
+- `invoke_skill` tool: multi-act architecture, Quick/Cinematic pricing, complexity detection
+- `save_script` tool added
+- `quality` parameter on invoke_skill: "quick" | "cinematic"
+- After invoke_skill success → upgrade to Sonnet 4.6 for one iteration
+- Visual Lock: scene-based pricing `ceil(scenes/10) × 3cr`, pre-flight balance check
+- DirectorChatPanel: full balloon category nav redesign (Home → Category → Pills)
+- Director categories: Storyboard, This frame, Improve
+- Agent categories: Write story (with credit estimates), Generate, Credits
+- Credit confirm banner: any deduction-causing pill shows cost + balance before proceeding
+- Local answers (zero credits): storyboard overview, current frame about, credits calc
+- Direct image analysis: `/api/ai-analyze` (Gemini 2.5 Flash, 1cr, confirm required)
+- `handleCurrentFrameAbout`: reads imagePrompt + videoPrompt from storyItems, shows `_Not set_`
+- Write story pills show estimated credit cost per scriptMode, confirm before sendMessage
 
 ---
 
 ## Roadmap
 
-### Phase 1 — Core Complete (Session #33 ✅)
+### Phase 1 — Core Complete ✅
 
-- [x] 24 tools built and implemented
+- [x] 26 tools built and implemented
 - [x] System prompt rewritten with full studio context
-- [x] `suggest_shot_list` + `generate_scene` tools added
-- [x] `update_project_style` supports genre + format + style
-- [ ] End-to-end test: "build me a 6-frame story about a samurai at dawn"
+- [x] invoke_skill: multi-act script generation, tiered pricing
+- [x] Balloon category nav with credit confirm pattern
+- [x] Local answers (zero AI cost) for data-lookup pills
+- [ ] End-to-end test: "write me a dragon story" → invoke_skill → save_script → build_storyboard
 - [ ] Tune system prompt from real agent behavior
 
 ### Phase 2 — Newbie Quick Create (after Phase 1 proven)
