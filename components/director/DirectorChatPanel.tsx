@@ -200,6 +200,7 @@ export function DirectorChatPanel({
   const [mode, setMode] = useState<AgentMode>("director");
   const [scriptMode, setScriptMode] = useState<"quick" | "cinematic">("quick");
   const [quickCategory, setQuickCategory] = useState<string | null>(null);
+  const [confirmingAction, setConfirmingAction] = useState<{ label: string; cost: number; action: () => Promise<void> } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [hiddenCount, setHiddenCount] = useState(0);
@@ -221,6 +222,7 @@ export function DirectorChatPanel({
     projectId ? { projectId: projectId as any } : "skip"
   );
   const clearSessionMutation = useMutation(api.directorChat.clearSession);
+  const deductCredits = useMutation(api.credits.deductCredits);
   const allRestoredRef = useRef<Message[]>([]);
 
   useEffect(() => {
@@ -396,38 +398,47 @@ export function DirectorChatPanel({
     setMessages((prev) => [...prev, { id: `local-${Date.now()}`, role: "assistant" as const, content }]);
   }, []);
 
-  const analyzeCurrentImage = useCallback(async () => {
+  const analyzeCurrentImage = useCallback(() => {
     if (!currentFrameImageUrl || streaming) return;
-    const userMsgId = `user-${Date.now()}`;
-    const assistantMsgId = `analyze-${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: userMsgId, role: "user" as const, content: `Analyze the current image (frame ${currentFrameNumber})` },
-      { id: assistantMsgId, role: "assistant" as const, content: "", isStreaming: true },
-    ]);
-    setStreaming(true);
-    try {
-      const res = await fetch("/api/director/quick-analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: currentFrameImageUrl, frameNumber: currentFrameNumber }),
-      });
-      const data = await res.json();
-      setMessages((prev) => prev.map((m) =>
-        m.id === assistantMsgId
-          ? { ...m, content: data.analysis || "Could not analyze image.", isStreaming: false }
-          : m
-      ));
-    } catch {
-      setMessages((prev) => prev.map((m) =>
-        m.id === assistantMsgId
-          ? { ...m, content: "Failed to analyze image.", isError: true, isStreaming: false }
-          : m
-      ));
-    } finally {
-      setStreaming(false);
-    }
-  }, [currentFrameImageUrl, currentFrameNumber, streaming]);
+    setConfirmingAction({
+      label: "Analyze current image · Gemini 2.5 Flash",
+      cost: 1,
+      action: async () => {
+        const userMsgId = `user-${Date.now()}`;
+        const assistantMsgId = `analyze-${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          { id: userMsgId, role: "user" as const, content: `Analyze the current image (frame ${currentFrameNumber})` },
+          { id: assistantMsgId, role: "assistant" as const, content: "", isStreaming: true },
+        ]);
+        setStreaming(true);
+        try {
+          if (companyId) {
+            await deductCredits({ companyId, tokens: 1, reason: "AI Analyze Image" });
+          }
+          const res = await fetch("/api/ai-analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mediaType: "image", mediaUrl: currentFrameImageUrl }),
+          });
+          const data = await res.json();
+          setMessages((prev) => prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: data.result || "Could not analyze image.", isStreaming: false }
+              : m
+          ));
+        } catch {
+          setMessages((prev) => prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: "Failed to analyze image.", isError: true, isStreaming: false }
+              : m
+          ));
+        } finally {
+          setStreaming(false);
+        }
+      },
+    });
+  }, [currentFrameImageUrl, currentFrameNumber, streaming, companyId, deductCredits]);
 
   const analyzeStoryboard = useCallback(() => {
     const items = (storyItems as any[] | undefined) ?? null;
@@ -483,7 +494,7 @@ export function DirectorChatPanel({
     }
   }, [creditBalance, storyItems, answerLocally]);
 
-  useEffect(() => { setQuickCategory(null); }, [mode]);
+  useEffect(() => { setQuickCategory(null); setConfirmingAction(null); }, [mode]);
 
   const initialMessageSent = useRef<string | null>(null);
   useEffect(() => {
@@ -520,7 +531,7 @@ export function DirectorChatPanel({
     frame: [
       { label: "What is the current frame about?", prompt: `Tell me about frame ${currentFrameNumber ?? "the current frame"} — what's happening, what's in the prompt, and any director notes?` },
       ...(currentFrameImageUrl
-        ? [{ label: "Analyze the current image", localHandler: () => analyzeCurrentImage() }]
+        ? [{ label: "Analyze the current image · 1cr", localHandler: () => analyzeCurrentImage() }]
         : [{ label: "Analyze the current image", prompt: `Analyze frame ${currentFrameNumber}. Review the current prompt — what will the generated image look like? What could go wrong?` }]
       ),
       { label: "Camera angle advice", prompt: `What's the best camera angle and shot type for frame ${currentFrameNumber}? Consider the scene context and what would be most cinematic.` },
@@ -782,7 +793,33 @@ export function DirectorChatPanel({
 
         {/* Balloon — category nav + quick actions */}
         <div className="mb-2">
-          {quickCategory === null ? (
+          {confirmingAction ? (
+            /* Credit confirm banner */
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 space-y-2">
+              <p className="text-[11px] text-(--text-secondary) leading-snug">
+                <span className="text-amber-400 font-medium">{confirmingAction.label}</span>
+                {" — costs "}
+                <span className="text-amber-300 font-semibold">{confirmingAction.cost} credit</span>
+                {creditBalance != null && (
+                  <span className="text-(--text-tertiary)"> · Balance: {creditBalance} cr</span>
+                )}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { confirmingAction.action(); setConfirmingAction(null); }}
+                  className="px-3 py-1 rounded-md text-[11px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition"
+                >
+                  Confirm · {confirmingAction.cost}cr
+                </button>
+                <button
+                  onClick={() => setConfirmingAction(null)}
+                  className="px-3 py-1 rounded-md text-[11px] font-medium bg-(--bg-secondary) text-(--text-tertiary) border border-(--border-primary) hover:text-(--text-secondary) transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : quickCategory === null ? (
             /* Category grid */
             <div className="flex items-center gap-1.5 flex-wrap">
               {(mode === "director" ? directorCategories : agentCategories).map((cat) => (
@@ -867,8 +904,7 @@ export function DirectorChatPanel({
                   <button
                     key={pill.label}
                     onClick={() => {
-                      if (pill.localHandler) { pill.localHandler(); } else if (pill.prompt) { sendMessage(pill.prompt); }
-                      setQuickCategory(null);
+                      if (pill.localHandler) { pill.localHandler(); } else if (pill.prompt) { sendMessage(pill.prompt); setQuickCategory(null); }
                     }}
                     className="px-2.5 py-1 rounded-full text-[11px] bg-(--bg-secondary) border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:border-(--border-secondary) transition-all text-left"
                   >
