@@ -171,6 +171,7 @@ export async function POST(req: NextRequest) {
           let finalOutput = "";
           const toolCallLog: { name: string; input?: unknown; output?: string }[] = [];
           let nextModel = "claude-haiku-4-5";
+          let planApprovalPending = false; // stops the loop when create_execution_plan fires
 
           for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
             // Cache the stable history prefix: mark second-to-last message so
@@ -235,7 +236,8 @@ export async function POST(req: NextRequest) {
                 } catch { /* non-fatal */ }
               }
 
-              // Check if tool returned a plan approval request
+              // Check if tool returned a plan approval request — stop the loop so the
+              // user must click Approve before any generation tool fires.
               if (tb.name === "create_execution_plan" && !result.isError) {
                 try {
                   const planData = JSON.parse(result.output);
@@ -246,6 +248,7 @@ export async function POST(req: NextRequest) {
                       totalCredits: planData.totalCredits,
                       balance: planData.balance,
                     });
+                    planApprovalPending = true;
                   }
                 } catch {}
               }
@@ -331,6 +334,9 @@ export async function POST(req: NextRequest) {
               { role: "assistant", content: response.content },
               { role: "user", content: toolResultsForHistory },
             ];
+
+            // Plan approval gates all further tool execution — stop here and wait for user.
+            if (planApprovalPending) break;
           }
 
           send({ type: "done", toolsUsed: toolCallLog.map((t) => t.name) });
