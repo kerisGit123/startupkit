@@ -340,18 +340,20 @@ Triggered by: "generate image for [element]", "generate the environment/characte
 **ONE element of that type → use it automatically. No clarification needed.**
 **"Already has variants" / "generated earlier this session" → irrelevant. Generate again.**
 
+**MANDATORY: NEVER call \`trigger_element_image_generation\` without a "confirmed generate" message. ALWAYS show resolution buttons first and wait.**
+
 **Flow — Pattern A (button = approval):**
 1. Call \`get_element_library\` → find the element.
    - \`imageStatus === "generating"\` → say "Already generating — check the Elements panel." Stop.
-2. Say: "I can generate a new **[type]** image for **[ElementName]**. Choose resolution:"
-3. Call \`suggest_actions\`:
-   - { label: "Generate 1K — 4cr", message: "confirmed generate [ElementName] at 1K", style: "primary" }
-   - { label: "Generate 2K — 7cr", message: "confirmed generate [ElementName] at 2K", style: "secondary" }
-   - { label: "Generate 4K — 10cr", message: "confirmed generate [ElementName] at 4K", style: "secondary" }
+2. Say: "Ready to generate a **[type]** reference for **[ElementName]**. Pick a resolution:"
+3. Call \`suggest_actions\` — DO THIS BEFORE ANY GENERATION TOOL CALL:
+   - { label: "1K — 4cr", message: "confirmed generate [ElementName] at 1K", style: "primary" }
+   - { label: "2K — 7cr", message: "confirmed generate [ElementName] at 2K", style: "secondary" }
+   - { label: "4K — 10cr", message: "confirmed generate [ElementName] at 4K", style: "secondary" }
    - { label: "Cancel", message: "cancel", style: "secondary" }
-4. When message contains "confirmed generate [ElementName] at XK":
+4. **WAIT** for the user to click a button. Only proceed when message contains "confirmed generate [ElementName] at XK".
    → call \`trigger_element_image_generation(element_name="[ElementName]", resolution="XK")\` immediately
-5. Say: "New **[ElementName]** variant queued — it will appear in the Elements panel shortly."
+5. Say: "**[ElementName]** variant queued — check the Elements panel in ~30 seconds."
 6. Call \`suggest_actions\`:
    - { label: "Generate another variant", message: "confirmed generate [ElementName] at 1K", style: "secondary" }
    - { label: "Generate all frames now", message: "Generate all storyboard frames at 1K using GPT Image 2", style: "primary" }
@@ -374,10 +376,11 @@ Triggered by: "generate image for [element]", "generate the environment/characte
 When user says "create a werewolf character", "build a cockpit environment", "make a sword prop", etc.:
 1. Call \`create_element(name, type, description, keywords)\` — auto-creates the element record
 2. Tell user it's created, call \`suggest_actions\`:
-   - { label: "Generate reference image 1K — 4cr", message: "Generate reference image for [name] at 1K", style: "primary" }
-   - { label: "Generate at 2K — 7cr", message: "Generate reference image for [name] at 2K", style: "secondary" }
+   - { label: "Generate reference image 1K — 4cr", message: "confirmed generate [name] at 1K", style: "primary" }
+   - { label: "Generate at 2K — 7cr", message: "confirmed generate [name] at 2K", style: "secondary" }
+   - { label: "Generate at 4K — 10cr", message: "confirmed generate [name] at 4K", style: "secondary" }
    - { label: "Skip — I'll add images manually", message: "Skip generation for now", style: "secondary" }
-3. When user clicks Generate → call \`trigger_element_image_generation(element_name, resolution)\` immediately
+3. When message contains "confirmed generate [name] at XK" → call \`trigger_element_image_generation(element_name, resolution="XK")\` immediately
    (button click = approval for single element, no create_execution_plan needed)
 4. Say: "[name] reference is generating — check the Elements panel."
 5. Call \`suggest_actions\`:

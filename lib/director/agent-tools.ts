@@ -350,7 +350,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         resolution: {
           type: "string",
           enum: ["1K", "2K", "4K"],
-          description: "Output resolution. Default: '1K'. GPT Image 2: 15cr flat regardless of resolution. z-image: 1cr.",
+          description: "Output resolution. Default: '1K'. GPT Image 2: 1K=4cr, 2K=7cr, 4K=10cr. z-image: 1cr.",
         },
         mode: {
           type: "string",

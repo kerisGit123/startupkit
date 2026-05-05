@@ -722,13 +722,13 @@ export async function dispatchDirectorTool(
         const el = (elements as any[]).find((e) => e.name.toLowerCase() === elName.toLowerCase());
         if (!el) return { output: `Element "${elName}" not found in the library.`, isError: true };
 
-        // Guard: skip if there's already a generation in flight for this element.
-        // Ignore files older than 10 min — those are stuck (KIE callback never fired).
-        const STUCK_THRESHOLD_MS = 10 * 60 * 1000;
+        // Guard: skip if there's already an active generation in flight for this element.
+        // Files older than 2 min are considered stuck (KIE callback never fired) and are ignored.
+        const STUCK_THRESHOLD_MS = 2 * 60 * 1000;
         const pendingCheck = await convex.query(api.storyboard.storyboardFiles.listPendingElementFiles, { elementIds: [el._id] }) as any[];
         const activePending = pendingCheck.filter((f: any) => (Date.now() - (f.createdAt ?? 0)) < STUCK_THRESHOLD_MS);
         if (activePending.length > 0) {
-          return { output: `A reference image for "${el.name}" is already generating — check the Elements panel in a moment.`, isError: false };
+          return { output: `A reference image for "${el.name}" was just queued — check the Elements panel in a moment.`, isError: false };
         }
 
         // ── Reference photos (user-uploaded for img2img) ──────────────────────
@@ -753,7 +753,8 @@ export async function dispatchDirectorTool(
           : (baseModel === "gpt-image-2" || baseModel === "gpt-image-2-image-to-image" ? "gpt-image-2-text-to-image" : baseModel);
 
         const resolution = String(input.resolution || "1K");
-        const creditsUsed = model.startsWith("gpt-image-2") ? 15
+        const creditsUsed = model.startsWith("gpt-image-2")
+          ? (resolution === "4K" ? 10 : resolution === "2K" ? 7 : 4)
           : model === "z-image" ? 1 : 5;
 
         // ── Compose element description — identity fields → composePrompt ─────
