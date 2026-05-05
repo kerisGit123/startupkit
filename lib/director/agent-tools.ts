@@ -362,7 +362,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
           description: "Optional custom image prompt. If omitted, the default prompt template is applied to the element's stored description (the Element Forge pipeline). Only provide if you specifically want to override the template system.",
         },
       },
-      required: ["element_name"],
+      required: ["element_name", "resolution"],
     },
   },
 

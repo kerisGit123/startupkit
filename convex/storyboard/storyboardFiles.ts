@@ -437,7 +437,7 @@ export const listPendingElementFiles = query({
   handler: async (ctx, { elementIds }) => {
     if (elementIds.length === 0) return [];
     const idSet = new Set(elementIds.map(String));
-    const results: { categoryId: string; status: string; createdAt: number }[] = [];
+    const results: { _id: string; categoryId: string; status: string; createdAt: number }[] = [];
     for (const elementId of elementIds) {
       const files = await ctx.db
         .query("storyboard_files")
@@ -450,7 +450,7 @@ export const listPendingElementFiles = query({
         )
         .collect();
       for (const f of files) {
-        results.push({ categoryId: String(f.categoryId), status: f.status ?? "generating", createdAt: f.createdAt ?? f._creationTime });
+        results.push({ _id: String(f._id), categoryId: String(f.categoryId), status: f.status ?? "generating", createdAt: f.createdAt ?? f._creationTime });
       }
     }
     return results;
