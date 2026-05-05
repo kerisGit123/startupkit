@@ -173,12 +173,21 @@ export const TEMPLATE_ANNOTATIONS: Record<string, TemplateAnnotation> = {
 
   'E01 - Full Production Environment Reference Sheet': {
     matchKeywords: [
+      // exterior / outdoor
       'exterior', 'outdoor', 'outside', 'building exterior', 'facade', 'urban',
       'city', 'street', 'plaza', 'square', 'town', 'courtyard', 'alley',
-      'neighborhood', 'district', 'village', 'campus', 'compound', 'location',
+      'neighborhood', 'district', 'village', 'campus', 'compound',
       'rooftop', 'bridge', 'park', 'garden exterior', 'waterfront', 'harbor',
+      // interior venues & large spaces
+      'arena', 'stadium', 'tournament', 'venue', 'stage', 'hall', 'auditorium',
+      'colosseum', 'gymnasium', 'dojo', 'training ground', 'battle ring',
+      // cultural / period settings
+      'chinese traditional', 'japanese', 'medieval', 'ancient', 'historical setting',
+      'period setting', 'traditional setting', 'cultural setting',
+      // generic strong signals
+      'location', 'setting', 'production reference', 'environment reference',
     ],
-    matchDescription: 'Flagship exterior and outdoor location reference sheet — urban streets, buildings, city environments',
+    matchDescription: 'Flagship full-production location reference sheet — any environment type: exterior, interior venue, cultural or period setting',
     priority: 4,
   },
 
@@ -283,7 +292,7 @@ export const TEMPLATE_ANNOTATIONS: Record<string, TemplateAnnotation> = {
     matchKeywords: [
       'interior space', 'indoor space', 'hall', 'corridor', 'lobby',
       'chamber', 'vault', 'warehouse interior', 'factory interior',
-      'hangar', 'station interior', 'arena interior', 'throne room',
+      'hangar', 'station interior', 'arena interior', 'arena', 'throne room',
       'great hall', 'dungeon interior', 'laboratory', 'control room',
       'server room', 'power plant interior', 'cathedral interior',
       'temple interior', 'cave interior', 'underground chamber',

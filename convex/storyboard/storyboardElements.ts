@@ -329,6 +329,18 @@ export const setPrimaryVariant = mutation({
   },
 });
 
+// Clear the preferred template selection for an element
+export const clearPreferredTemplate = mutation({
+  args: { id: v.id("storyboard_elements") },
+  handler: async (ctx, { id }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("User not authenticated");
+    const el = await ctx.db.get(id);
+    if (!el) throw new Error("Element not found");
+    await ctx.db.patch(id, { preferredTemplate: undefined, updatedAt: Date.now() });
+  },
+});
+
 // Update variant label
 export const updateVariantLabel = mutation({
   args: {

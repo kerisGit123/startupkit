@@ -7,6 +7,7 @@ export interface TemplateCandidate {
   score: number;
   matchReason: string;
   priority: number;
+  matchCount: number;
 }
 
 export function findBestTemplates(
@@ -27,6 +28,7 @@ export function findBestTemplates(
           score: 0,
           matchReason: 'No annotation',
           priority: 0,
+          matchCount: 0,
         };
       }
       const keywordMatches = annotation.matchKeywords.filter(k =>
@@ -43,6 +45,7 @@ export function findBestTemplates(
         score,
         matchReason,
         priority: annotation.priority,
+        matchCount: keywordMatches.length,
       };
     })
     .sort((a, b) => b.score - a.score);

@@ -1021,6 +1021,7 @@ export function ElementForge({
 
   const createElement = useMutation(api.storyboard.storyboardElements.create);
   const updateElement = useMutation(api.storyboard.storyboardElements.update);
+  const clearPreferredTemplateMut = useMutation(api.storyboard.storyboardElements.clearPreferredTemplate);
 
   // User-created templates from Convex only (system templates come from static file)
   const libraryTemplates = useQuery(api.promptTemplates.getByCompany, companyId ? { companyId } : "skip");
@@ -1099,7 +1100,7 @@ export function ElementForge({
   const bestMatchSuggestion = useMemo(() => {
     if (!composedPrompt || composedPrompt.length < 15) return null;
     const results = findBestTemplates(composedPrompt, type as 'character' | 'environment' | 'prop', 1);
-    if (!results.length || results[0].score === 0) return null;
+    if (!results.length || results[0].matchCount === 0) return null;
     const matchName = results[0].name;
     const idx = allTemplates.findIndex(t => t.rawName === matchName || t.name === matchName);
     if (idx < 0 || idx === selectedTemplate) return null;
@@ -1138,7 +1139,9 @@ export function ElementForge({
         : undefined;
 
       let savedId: string | null = effectiveElementId ?? null;
-      const preferredTemplate = allTemplates[selectedTemplate]?.rawName || allTemplates[selectedTemplate]?.name;
+      // Use the explicitly starred template — selecting a template in the dropdown does NOT auto-favorite it.
+      // localPreferredTemplate is undefined when the user has unfavorited, which correctly clears DB preference.
+      const preferredTemplate = localPreferredTemplate;
 
       if (effectiveMode === "edit" && effectiveElementId) {
         await updateElement({
@@ -1147,6 +1150,10 @@ export function ElementForge({
           referencePhotos,
           preferredTemplate,
         });
+        // JSON strips undefined so updateElement can't clear the field — call dedicated mutation
+        if (!preferredTemplate) {
+          await clearPreferredTemplateMut({ id: effectiveElementId as Id<"storyboard_elements"> });
+        }
       } else {
         savedId = await createElement({
           projectId, name: name.trim(), type, description,
@@ -1157,7 +1164,6 @@ export function ElementForge({
         }) as unknown as string;
         if (savedId) setCreatedId(savedId);
       }
-      if (preferredTemplate) setLocalPreferredTemplate(preferredTemplate);
       onSave({ name: name.trim(), type, description, identity: identityData });
       return savedId;
     } catch (error) {
@@ -1390,8 +1396,8 @@ export function ElementForge({
       if (url) {
         const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
         const matchingFile = elementFiles?.find(f =>
-          f.sourceUrl === url ||
-          (f.r2Key && r2Base && `${r2Base}/${f.r2Key}` === url)
+          (f.sourceUrl === url || (f.r2Key && r2Base && `${r2Base}/${f.r2Key}` === url)) &&
+          f.status !== "generating" && f.status !== "processing"
         );
         if (matchingFile) {
           if (matchingFile.r2Key) {
@@ -1708,11 +1714,13 @@ export function ElementForge({
                       const tpl = allTemplates[idx];
                       const name = tpl?.rawName || tpl?.name;
                       if (!name) return;
-                      const isAlreadyPreferred = localPreferredTemplate === name;
+                      // Use same OR-match as the star display so toggle is always consistent with what's shown
+                      const isAlreadyPreferred = !!localPreferredTemplate &&
+                        (tpl.rawName === localPreferredTemplate || tpl.name === localPreferredTemplate);
                       if (isAlreadyPreferred) {
                         setLocalPreferredTemplate(undefined);
                         if (effectiveElementId) {
-                          await updateElement({ id: effectiveElementId as Id<"storyboard_elements">, preferredTemplate: undefined });
+                          await clearPreferredTemplateMut({ id: effectiveElementId as Id<"storyboard_elements"> });
                         }
                       } else {
                         setSelectedTemplate(idx);
@@ -2258,7 +2266,7 @@ export function ElementForge({
                       const isUploaded = variant?.model === "uploaded";
                       const isEditing = editingVariantIdx === idx;
                       return (
-                        <div key={idx} className={`group relative shrink-0 w-[180px] rounded-xl overflow-hidden border-2 transition-all ${
+                        <div key={url || idx} className={`group relative shrink-0 w-[180px] rounded-xl overflow-hidden border-2 transition-all ${
                           isPrimary ? "border-amber-400 ring-1 ring-amber-400/20"
                           : isUploaded ? "border-blue-500/50 hover:border-blue-400/70"
                           : "border-transparent hover:border-white/20"
