@@ -7,7 +7,7 @@ import { query } from "../_generated/server";
 export const getAllCustomers = query({
   args: {
     companyId: v.optional(v.string()),
-    customerType: v.optional(v.union(v.literal("saas"), v.literal("local"))),
+    customerType: v.optional(v.union(v.literal("saas"), v.literal("local"), v.literal("enterprise"), v.literal("agency"), v.literal("offline"))),
     includeInactive: v.optional(v.boolean()),
   },
   handler: async (ctx, { companyId, customerType, includeInactive = false }) => {
@@ -56,7 +56,7 @@ export const searchCustomers = query({
   args: {
     searchTerm: v.string(),
     companyId: v.optional(v.string()),
-    customerType: v.optional(v.union(v.literal("saas"), v.literal("local"))),
+    customerType: v.optional(v.union(v.literal("saas"), v.literal("local"), v.literal("enterprise"), v.literal("agency"), v.literal("offline"))),
   },
   handler: async (ctx, { searchTerm, companyId, customerType }) => {
     let customers = await ctx.db.query("saas_customers").collect();
@@ -102,12 +102,14 @@ export const getCustomerStats = query({
 
     const activeCustomers = customers.filter((c) => c.isActive);
     const saasCustomers = activeCustomers.filter((c) => c.customerType === "saas");
-    const localCustomers = activeCustomers.filter((c) => c.customerType === "local");
+    const localOfflineCustomers = activeCustomers.filter(
+      (c) => c.customerType !== "saas"
+    );
 
     return {
       total: activeCustomers.length,
       saas: saasCustomers.length,
-      local: localCustomers.length,
+      local: localOfflineCustomers.length,
       inactive: customers.filter((c) => !c.isActive).length,
     };
   },

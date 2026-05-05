@@ -10,7 +10,7 @@ export const createCustomer = mutation({
     customerEmail: v.optional(v.string()),
     customerPhone: v.optional(v.string()),
     customerAddress: v.optional(v.string()),
-    customerType: v.union(v.literal("saas"), v.literal("local")),
+    customerType: v.union(v.literal("saas"), v.literal("local"), v.literal("enterprise"), v.literal("agency"), v.literal("offline")),
     companyRegistrationNo: v.optional(v.string()),
     taxId: v.optional(v.string()),
     contactPersonName: v.optional(v.string()),
@@ -21,6 +21,10 @@ export const createCustomer = mutation({
     notes: v.optional(v.string()),
     companyId: v.optional(v.string()),
     createdBy: v.optional(v.string()),
+    linkedClerkUserId: v.optional(v.string()),
+    dealStatus: v.optional(v.union(v.literal("prospect"), v.literal("negotiating"), v.literal("active"), v.literal("churned"))),
+    contractValue: v.optional(v.number()),
+    paymentTerms: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -46,7 +50,7 @@ export const updateCustomer = mutation({
     customerEmail: v.optional(v.string()),
     customerPhone: v.optional(v.string()),
     customerAddress: v.optional(v.string()),
-    customerType: v.optional(v.union(v.literal("saas"), v.literal("local"))),
+    customerType: v.optional(v.union(v.literal("saas"), v.literal("local"), v.literal("enterprise"), v.literal("agency"), v.literal("offline"))),
     companyRegistrationNo: v.optional(v.string()),
     taxId: v.optional(v.string()),
     contactPersonName: v.optional(v.string()),
@@ -57,6 +61,10 @@ export const updateCustomer = mutation({
     notes: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
     lastEditedBy: v.optional(v.string()),
+    linkedClerkUserId: v.optional(v.string()),
+    dealStatus: v.optional(v.union(v.literal("prospect"), v.literal("negotiating"), v.literal("active"), v.literal("churned"))),
+    contractValue: v.optional(v.number()),
+    paymentTerms: v.optional(v.string()),
   },
   handler: async (ctx, { customerId, ...updates }) => {
     const existing = await ctx.db.get(customerId);

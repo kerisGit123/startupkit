@@ -4,11 +4,13 @@ import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { toast } from "sonner";
 
 export function LoginTracker() {
   const { user, isLoaded } = useUser();
   const trackLogin = useMutation(api.userActivity.trackLogin);
   const updateLastActive = useMutation(api.credits.updateLastActive);
+  const checkOverdue = useMutation(api.adminManualBilling.checkAndDowngradeOverdue);
   const hasTracked = useRef(false);
 
   useEffect(() => {
@@ -53,6 +55,12 @@ export function LoginTracker() {
           email: user.primaryEmailAddress?.emailAddress,
         }).catch(() => {});
 
+        // Check for overdue offline subscription invoices — downgrade if any found
+        const overdueResult = await checkOverdue({ clerkUserId: user.id }).catch(() => null);
+        if (overdueResult?.downgraded) {
+          toast.warning("Your subscription has expired. Please renew to continue using Pro features.");
+        }
+
         hasTracked.current = true;
       } catch (error) {
         console.error("❌ Failed to track login:", error);
@@ -60,7 +68,7 @@ export function LoginTracker() {
     };
 
     trackUserLogin();
-  }, [isLoaded, user, trackLogin, updateLastActive]);
+  }, [isLoaded, user, trackLogin, updateLastActive, checkOverdue]);
 
   return null; // This component doesn't render anything
 }

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Download, Eye, TrendingUp, Search, Copy, Check, Settings2, Plus, Trash2, ShoppingCart, Edit, RefreshCw, CheckCircle, Calendar, MoreHorizontal, XCircle, Ban } from "lucide-react";
+import { FileText, Download, Eye, TrendingUp, Search, Copy, Check, Settings2, Plus, Trash2, ShoppingCart, Edit, RefreshCw, CheckCircle, Calendar, MoreHorizontal, XCircle, Ban, UserCheck, Send } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,7 @@ interface POItem {
 
 export default function InvoicesAndPOsPage() {
   const { user } = useUser();
-  const companyId = (user?.publicMetadata?.companyId as string) || user?.id;
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -128,6 +127,115 @@ export default function InvoicesAndPOsPage() {
     }));
     setInvoiceCustomerSearch("");
     setShowInvoiceCustomerDropdown(false);
+  };
+
+  // ── Offline subscription state ───────────────────────────────────────────
+  const offlineInvoices = useQuery(api.adminManualBilling.getOfflineSubscriptions);
+  const createOfflineInvoice = useMutation(api.adminManualBilling.createOfflineInvoice);
+  const markOfflinePaid = useMutation(api.adminManualBilling.markOfflineInvoicePaid);
+
+  const [showOfflineModal, setShowOfflineModal] = useState(false);
+  const [offlineForm, setOfflineForm] = useState({
+    companyId: "",
+    billingName: "",
+    billingEmail: "",
+    billingAddress: "",
+    planTier: "pro_personal" as "pro_personal" | "business",
+    billingInterval: "monthly" as "monthly" | "annual",
+    amount: 4500,   // cents — default Pro monthly $45
+    currency: "USD",
+    dueDate: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    notes: "",
+  });
+  const [offlineUserSearch, setOfflineUserSearch] = useState("");
+  const [showOfflineUserDropdown, setShowOfflineUserDropdown] = useState(false);
+
+  const filteredOfflineUsers = useMemo(() => {
+    if (!allUsers || !offlineUserSearch || offlineUserSearch.length < 2) return [];
+    const q = offlineUserSearch.toLowerCase();
+    return allUsers
+      .filter(u =>
+        u.fullName?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q)
+      )
+      .slice(0, 8);
+  }, [allUsers, offlineUserSearch]);
+
+  const selectOfflineUser = (u: any) => {
+    const name = u.fullName || `${u.firstName || ""} ${u.lastName || ""}`.trim();
+    setOfflineForm(prev => ({
+      ...prev,
+      companyId: u.clerkUserId || u._id,
+      billingName: name,
+      billingEmail: u.email || "",
+    }));
+    setOfflineUserSearch(name);
+    setShowOfflineUserDropdown(false);
+  };
+
+  const PLAN_DEFAULTS: Record<string, { amount: number; label: string }> = {
+    pro_personal: { amount: 4500, label: "Pro — $45/mo" },
+    business:     { amount: 11900, label: "Business — $119/mo" },
+  };
+
+  const handleCreateOfflineInvoice = async () => {
+    if (!offlineForm.companyId) { toast.error("Select a user first"); return; }
+    if (!offlineForm.billingName || !offlineForm.billingEmail) { toast.error("Name and email required"); return; }
+    try {
+      const { invoiceNo } = await createOfflineInvoice({
+        companyId: offlineForm.companyId,
+        billingName: offlineForm.billingName,
+        billingEmail: offlineForm.billingEmail,
+        billingAddress: offlineForm.billingAddress || undefined,
+        planTier: offlineForm.planTier,
+        billingInterval: offlineForm.billingInterval,
+        amount: offlineForm.amount,
+        currency: offlineForm.currency,
+        dueDate: offlineForm.dueDate,
+        notes: offlineForm.notes || undefined,
+      });
+      toast.success(`Invoice ${invoiceNo} issued — plan activates on payment`);
+      setShowOfflineModal(false);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to create invoice");
+    }
+  };
+
+  const handleSendInvoiceEmail = async (inv: any) => {
+    const email = inv.billingDetails?.email;
+    if (!email) { toast.error("No billing email on this invoice"); return; }
+    try {
+      const res = await fetch("/api/admin/send-invoice-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: email,
+          recipientName: inv.billingDetails?.name,
+          invoiceNo: inv.invoiceNo,
+          planTier: inv.planTier,
+          billingInterval: inv.billingInterval,
+          amount: inv.total ?? inv.amount ?? 0,
+          currency: inv.currency ?? "USD",
+          dueDate: inv.dueDate,
+          notes: inv.notes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(`Invoice emailed to ${email}`);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to send email");
+    }
+  };
+
+  const handleMarkOfflinePaid = async (invoiceId: any, invoiceNo: string, planTier: string) => {
+    if (!confirm(`Mark ${invoiceNo} as paid? This will immediately activate the ${planTier === "pro_personal" ? "Pro" : "Business"} plan for this user.`)) return;
+    try {
+      await markOfflinePaid({ invoiceId });
+      toast.success(`${invoiceNo} marked paid — plan activated`);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to mark paid");
+    }
   };
 
   const getNextSONumber = useMutation(api.soConfig.getNextSONumber);
@@ -307,20 +415,14 @@ export default function InvoicesAndPOsPage() {
     setVisibleColumns(prev => ({ ...prev, [column]: !prev[column] }));
   };
 
-  const invoices = useQuery(
-    api.invoices.queries.getCompanyInvoices,
-    companyId ? { companyId, limit: 100 } : "skip"
-  );
+  const invoices = useQuery(api.invoices.queries.getAllInvoicesAdmin, { limit: 500 });
 
   const purchaseOrders = useQuery(
     api.purchaseOrders.queries.getAllPurchaseOrders,
     { limit: 100 }
   );
 
-  const stats = useQuery(
-    api.invoices.queries.getInvoiceStats,
-    companyId ? { companyId } : "skip"
-  );
+  const stats = useQuery(api.invoices.queries.getInvoiceStatsAdmin, {});
   
   // Filter invoices based on search, date, status, and type
   const filteredInvoices = useMemo(() => {
@@ -454,7 +556,7 @@ export default function InvoicesAndPOsPage() {
         paymentTerms: poForm.paymentTerms || undefined,
         dueDate: poForm.dueDate || undefined,
         currency: "MYR",
-        companyId,
+        companyId: user?.id,
       });
       
       toast.success(`Sales Order ${poNumber} created successfully!`);
@@ -1229,7 +1331,7 @@ export default function InvoicesAndPOsPage() {
       <Card>
         <CardContent className="pt-6">
           <Tabs defaultValue="invoices" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="invoices">
                 <FileText className="h-4 w-4 mr-2" />
                 Invoices
@@ -1237,6 +1339,10 @@ export default function InvoicesAndPOsPage() {
               <TabsTrigger value="pos">
                 <ShoppingCart className="h-4 w-4 mr-2" />
                 Sales Orders
+              </TabsTrigger>
+              <TabsTrigger value="offline">
+                <UserCheck className="h-4 w-4 mr-2" />
+                Offline Subscriptions
               </TabsTrigger>
             </TabsList>
 
@@ -1300,7 +1406,7 @@ export default function InvoicesAndPOsPage() {
                                   <DropdownMenuItem asChild>
                                     <Link href={`/admin/invoice/${invoice._id}`} className="cursor-pointer">
                                       <Download className="mr-2 h-4 w-4" />
-                                      Download PDF
+                                      View PDF
                                     </Link>
                                   </DropdownMenuItem>
                                   {invoice.status !== "paid" && invoice.status !== "cancelled" && (
@@ -1434,7 +1540,7 @@ export default function InvoicesAndPOsPage() {
                                   <DropdownMenuItem asChild>
                                     <Link href={`/admin/po/${po._id}`} className="cursor-pointer">
                                       <Download className="mr-2 h-4 w-4" />
-                                      Download PDF
+                                      View PDF
                                     </Link>
                                   </DropdownMenuItem>
                                   {po.status !== "approved" && po.status !== "cancelled" && (
@@ -1516,10 +1622,300 @@ export default function InvoicesAndPOsPage() {
                 </>
               )}
             </TabsContent>
+            {/* Offline Subscriptions Tab */}
+            <TabsContent value="offline" className="mt-4">
+              {/* Renewal summary bar */}
+              {offlineInvoices && offlineInvoices.length > 0 && (() => {
+                const now = Date.now();
+                const sevenDays = 7 * 24 * 60 * 60 * 1000;
+                const dueSoon = offlineInvoices.filter((i: any) => i.status === "issued" && i.dueDate && i.dueDate - now < sevenDays && i.dueDate > now);
+                const overdue = offlineInvoices.filter((i: any) => i.status === "overdue");
+                const active = offlineInvoices.filter((i: any) => i.status === "paid");
+                if (dueSoon.length === 0 && overdue.length === 0) return null;
+                return (
+                  <div className="flex gap-3 mb-4">
+                    {overdue.length > 0 && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        {overdue.length} overdue — plan already reverted to Free
+                      </div>
+                    )}
+                    {dueSoon.length > 0 && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                        {dueSoon.length} renewal{dueSoon.length > 1 ? "s" : ""} due within 7 days
+                      </div>
+                    )}
+                    {active.length > 0 && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-50 border border-green-200 text-xs text-green-700 font-medium">
+                        <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                        {active.length} active paid
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="flex justify-end mb-4">
+                <Dialog open={showOfflineModal} onOpenChange={setShowOfflineModal}>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2">
+                      <Plus className="h-4 w-4" />
+                      Create Offline Invoice
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Create Offline Subscription Invoice</DialogTitle>
+                      <DialogDescription>
+                        Issue an invoice to an offline client. Plan activates only when you mark it paid.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                      {/* User search */}
+                      <div className="space-y-2">
+                        <Label>Search User *</Label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Type name or email…"
+                            value={offlineUserSearch}
+                            onChange={(e) => { setOfflineUserSearch(e.target.value); setShowOfflineUserDropdown(e.target.value.length >= 2); }}
+                            onFocus={() => offlineUserSearch.length >= 2 && setShowOfflineUserDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowOfflineUserDropdown(false), 200)}
+                            className="pl-9"
+                          />
+                          {showOfflineUserDropdown && filteredOfflineUsers.length > 0 && (
+                            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                              {filteredOfflineUsers.map((u: any) => (
+                                <button
+                                  key={u._id}
+                                  type="button"
+                                  className="w-full text-left px-3 py-2 hover:bg-muted/50 text-sm"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => selectOfflineUser(u)}
+                                >
+                                  <p className="font-medium">{u.fullName || "No name"}</p>
+                                  <p className="text-xs text-muted-foreground">{u.email}</p>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Billing Name *</Label>
+                          <Input value={offlineForm.billingName} onChange={(e) => setOfflineForm(p => ({ ...p, billingName: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Billing Email *</Label>
+                          <Input type="email" value={offlineForm.billingEmail} onChange={(e) => setOfflineForm(p => ({ ...p, billingEmail: e.target.value }))} />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Billing Address</Label>
+                        <Input placeholder="Optional" value={offlineForm.billingAddress} onChange={(e) => setOfflineForm(p => ({ ...p, billingAddress: e.target.value }))} />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Plan *</Label>
+                          <Select
+                            value={offlineForm.planTier}
+                            onValueChange={(v: "pro_personal" | "business") =>
+                              setOfflineForm(p => ({
+                                ...p,
+                                planTier: v,
+                                amount: PLAN_DEFAULTS[v].amount,
+                              }))
+                            }
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pro_personal">Pro — $45/mo</SelectItem>
+                              <SelectItem value="business">Business — $119/mo</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Billing Interval *</Label>
+                          <Select
+                            value={offlineForm.billingInterval}
+                            onValueChange={(v: "monthly" | "annual") =>
+                              setOfflineForm(p => ({
+                                ...p,
+                                billingInterval: v,
+                                amount: v === "annual"
+                                  ? (p.planTier === "pro_personal" ? 47880 : 107880)
+                                  : PLAN_DEFAULTS[p.planTier].amount,
+                              }))
+                            }
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                              <SelectItem value="annual">Annual (one-time)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Amount (cents) *</Label>
+                          <Input
+                            type="number"
+                            value={offlineForm.amount}
+                            onChange={(e) => setOfflineForm(p => ({ ...p, amount: parseInt(e.target.value) || 0 }))}
+                          />
+                          <p className="text-xs text-muted-foreground">${(offlineForm.amount / 100).toFixed(2)} {offlineForm.currency}</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Currency</Label>
+                          <Select value={offlineForm.currency} onValueChange={(v) => setOfflineForm(p => ({ ...p, currency: v }))}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="USD">USD</SelectItem>
+                              <SelectItem value="MYR">MYR</SelectItem>
+                              <SelectItem value="SGD">SGD</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Due Date *</Label>
+                        <Input
+                          type="date"
+                          defaultValue={new Date(offlineForm.dueDate).toISOString().split("T")[0]}
+                          onChange={(e) => setOfflineForm(p => ({ ...p, dueDate: new Date(e.target.value).getTime() }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Notes</Label>
+                        <Input placeholder="e.g. Enterprise deal, 6-month contract" value={offlineForm.notes} onChange={(e) => setOfflineForm(p => ({ ...p, notes: e.target.value }))} />
+                      </div>
+
+                      <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-xs text-amber-800">
+                        Plan will NOT activate until you mark this invoice as <strong>Paid</strong>. If the invoice becomes overdue, the user&apos;s plan reverts to Free on their next login.
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="outline" onClick={() => setShowOfflineModal(false)}>Cancel</Button>
+                      <Button onClick={handleCreateOfflineInvoice} disabled={!offlineForm.companyId || !offlineForm.billingName || !offlineForm.billingEmail}>
+                        Issue Invoice
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              {!offlineInvoices || offlineInvoices.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <UserCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No offline subscriptions yet</p>
+                  <p className="text-sm mt-2">Create an invoice for enterprise or agency clients paying manually</p>
+                </div>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[120px]">Invoice #</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Plan</TableHead>
+                        <TableHead>Interval</TableHead>
+                        <TableHead>Due</TableHead>
+                        <TableHead className="w-[100px]">Status</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="w-[60px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {offlineInvoices.map((inv: any) => {
+                        const dueSoon = inv.status === "issued" && inv.dueDate &&
+                          inv.dueDate - Date.now() < 7 * 24 * 60 * 60 * 1000 &&
+                          inv.dueDate > Date.now();
+                        return (
+                        <TableRow key={inv._id} className={inv.status === "overdue" ? "bg-red-50" : dueSoon ? "bg-amber-50" : ""}>
+                          <TableCell className="font-mono font-medium text-sm">{inv.invoiceNo}</TableCell>
+                          <TableCell>
+                            <p className="text-sm font-medium">{inv.billingDetails?.name || "—"}</p>
+                            <p className="text-xs text-muted-foreground">{inv.billingDetails?.email || ""}</p>
+                          </TableCell>
+                          <TableCell>
+                            {inv.planTier === "pro_personal"
+                              ? <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Pro</Badge>
+                              : <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">Business</Badge>}
+                          </TableCell>
+                          <TableCell className="text-sm capitalize">{inv.billingInterval ?? "—"}</TableCell>
+                          <TableCell className="text-sm">
+                            {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "—"}
+                          </TableCell>
+                          <TableCell>{getStatusBadge(inv.status)}</TableCell>
+                          <TableCell className="text-right font-medium text-sm">
+                            {inv.currency} {((inv.total ?? inv.amount ?? 0) / 100).toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleSendInvoiceEmail(inv)}>
+                                  <Send className="mr-2 h-4 w-4" />
+                                  Send Invoice Email
+                                </DropdownMenuItem>
+                                {inv.status !== "paid" && inv.status !== "cancelled" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => handleMarkOfflinePaid(inv._id, inv.invoiceNo, inv.planTier)}
+                                      className="text-green-600 focus:text-green-600"
+                                    >
+                                      <CheckCircle className="mr-2 h-4 w-4" />
+                                      Mark Paid + Activate Plan
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {inv.status !== "paid" && inv.status !== "cancelled" && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleSetInvoiceStatus(inv._id, inv.invoiceNo, "cancelled")}
+                                    className="text-amber-600 focus:text-amber-600"
+                                  >
+                                    <Ban className="mr-2 h-4 w-4" />
+                                    Cancel Invoice
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteInvoice(inv._id, inv.invoiceNo)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+
           </Tabs>
         </CardContent>
       </Card>
-      
+
       {/* PO Edit Dialog */}
       <POEditDialog
         poId={editingPOId}

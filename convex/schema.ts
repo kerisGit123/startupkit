@@ -584,6 +584,10 @@ export default defineSchema({
     // and not expired, grantMonthlyCreditsIfDue caps the monthly grant
     // to zero so the abuser can't keep harvesting fresh allowances.
     cyclingBlockedUntil: v.optional(v.number()),
+    // Set when this org is frozen because the owner's plan no longer allows
+    // this many orgs (e.g. Business → Pro downgrade). Cleared when the
+    // owner upgrades back to a plan that covers this org slot.
+    overQuota: v.optional(v.boolean()),
     // Inactivity tracking: updated on every login via LoginTracker.
     // Used by the 1-year inactivity purge cron to find and clean up
     // abandoned accounts (R2 files deleted, Convex metadata preserved).
@@ -975,6 +979,9 @@ export default defineSchema({
     notes: v.optional(v.string()),
     stripePaymentIntentId: v.optional(v.string()),
     stripeInvoiceId: v.optional(v.string()),
+    // Offline subscription billing — plan to activate when this invoice is marked paid
+    planTier: v.optional(v.string()),
+    billingInterval: v.optional(v.union(v.literal("monthly"), v.literal("annual"))),
     issuedAt: v.optional(v.number()),
     paidAt: v.optional(v.number()),
     createdAt: v.number(),
@@ -1145,7 +1152,7 @@ export default defineSchema({
     customerEmail: v.optional(v.string()),
     customerPhone: v.optional(v.string()),
     customerAddress: v.optional(v.string()),
-    customerType: v.union(v.literal("saas"), v.literal("local")), // Distinguish between SaaS and local customers
+    customerType: v.union(v.literal("saas"), v.literal("local"), v.literal("enterprise"), v.literal("agency"), v.literal("offline")),
     // Additional business info
     companyRegistrationNo: v.optional(v.string()),
     taxId: v.optional(v.string()),
@@ -1157,6 +1164,11 @@ export default defineSchema({
     industry: v.optional(v.string()),
     website: v.optional(v.string()),
     notes: v.optional(v.string()),
+    // Offline/enterprise billing
+    linkedClerkUserId: v.optional(v.string()),    // links to system account
+    dealStatus: v.optional(v.union(v.literal("prospect"), v.literal("negotiating"), v.literal("active"), v.literal("churned"))),
+    contractValue: v.optional(v.number()),        // monthly MRR in cents
+    paymentTerms: v.optional(v.string()),
     // Metadata
     isActive: v.boolean(),
     createdAt: v.number(),
@@ -1837,6 +1849,9 @@ export default defineSchema({
     isAIGenerated: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
+    // World View Sheet
+    worldViewConcept: v.optional(v.string()),   // Haiku-distilled visual concept (persisted, editable)
+    worldViewImageUrl: v.optional(v.string()),  // Primary world view sheet image URL
   })
     .index("by_companyId", ["companyId"])
     .index("by_org", ["orgId"])
@@ -1981,6 +1996,7 @@ export default defineSchema({
     .index("by_categoryId", ["categoryId"]) // For efficient cleanup by parent entity
     .index("by_companyId", ["companyId"]) // For company-wide file listing
     .index("by_companyId_category", ["companyId", "category"]) // For filtered file listing
+    .index("by_companyId_fileType", ["companyId", "fileType"]) // For listAudioFiles (avoids full company scan)
     .index("by_isShared", ["isShared", "sharedAt"]) // Gallery listing sorted by share date
     .index("by_isShared_model", ["isShared", "model"]), // Gallery filter by model
 
@@ -2111,6 +2127,9 @@ export default defineSchema({
     // Which referenceUrls[] entry is the primary identity sheet
     primaryIndex: v.optional(v.number()),
 
+    // Last template used for this element's identity sheet (name string, matches DEFAULT_PROMPT_TEMPLATES)
+    preferredTemplate: v.optional(v.string()),
+
     // Cleanup tracking
     isOrphaned: v.optional(v.boolean()),
     orphanedAt: v.optional(v.number()),
@@ -2209,12 +2228,14 @@ export default defineSchema({
     companyId: v.string(),
     isPublic: v.boolean(),
     isSystem: v.optional(v.boolean()),
+    isDefault: v.optional(v.boolean()),
     tags: v.optional(v.array(v.string())),
     usageCount: v.number(),
     createdAt: v.number(),
   })
     .index("by_company", ["companyId"])
     .index("by_type", ["type"])
+    .index("by_company_type", ["companyId", "type"])
     .index("public_templates", ["isPublic", "type"]),
 
   // ============================================

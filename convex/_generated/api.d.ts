@@ -13,6 +13,7 @@ import type * as admin from "../admin.js";
 import type * as adminAnalytics from "../adminAnalytics.js";
 import type * as adminDashboard from "../adminDashboard.js";
 import type * as adminLogs from "../adminLogs.js";
+import type * as adminManualBilling from "../adminManualBilling.js";
 import type * as adminNotifications from "../adminNotifications.js";
 import type * as adminNotificationsForceFix from "../adminNotificationsForceFix.js";
 import type * as adminPurchases from "../adminPurchases.js";
@@ -137,6 +138,7 @@ declare const fullApi: ApiFromModules<{
   adminAnalytics: typeof adminAnalytics;
   adminDashboard: typeof adminDashboard;
   adminLogs: typeof adminLogs;
+  adminManualBilling: typeof adminManualBilling;
   adminNotifications: typeof adminNotifications;
   adminNotificationsForceFix: typeof adminNotificationsForceFix;
   adminPurchases: typeof adminPurchases;
