@@ -735,9 +735,7 @@ export async function dispatchDirectorTool(
           : (baseModel === "gpt-image-2" || baseModel === "gpt-image-2-image-to-image" ? "gpt-image-2-text-to-image" : baseModel);
 
         const resolution = String(input.resolution || "1K");
-        const elCreditMap: Record<string, number> = { "1K": 4, "2K": 7, "4K": 10 };
-        const creditsUsed = model.startsWith("gpt-image-2")
-          ? (elCreditMap[resolution] ?? 4)
+        const creditsUsed = model.startsWith("gpt-image-2") ? 15
           : model === "z-image" ? 1 : 5;
 
         // ── Compose element description — identity fields → composePrompt ─────
@@ -822,7 +820,8 @@ export async function dispatchDirectorTool(
         const project = await convex.query(api.storyboard.projects.get, { id: projectId as any });
         const aspectRatio = (project as any)?.aspectRatio || "16:9";
         const modelMode = hasRefs ? "image-to-image" : "text-to-image";
-        const qualityParam = JSON.stringify({ type: "gpt-image-2", mode: modelMode, nsfwChecker: false });
+        const modelType = model.startsWith("gpt-image-2") ? "gpt-image-2" : model.startsWith("z-image") ? "z-image" : "gpt-image-2";
+        const qualityParam = JSON.stringify({ type: modelType, mode: modelMode, nsfwChecker: false });
         const modeLabel = hasRefs ? refStrength : "text-to-image";
 
         ctx.onProgress?.(`Generating reference for "${el.name}" (${resolution}, ${creditsUsed}cr, ${modeLabel})…`);
