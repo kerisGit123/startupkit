@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
@@ -32,8 +33,9 @@ interface POItem {
 
 export default function InvoicesAndPOsPage() {
   const { user } = useUser();
+  const searchParams = useSearchParams();
 
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -140,6 +142,11 @@ export default function InvoicesAndPOsPage() {
     billingName: "",
     billingEmail: "",
     billingAddress: "",
+    billingPhone: "",
+    billingCompanyName: "",
+    billingCompanyLicense: "",
+    billingTinNumber: "",
+    billingCountry: "",
     planTier: "pro_personal" as "pro_personal" | "business",
     billingInterval: "monthly" as "monthly" | "annual",
     amount: 4500,   // cents — default Pro monthly $45
@@ -168,6 +175,13 @@ export default function InvoicesAndPOsPage() {
       companyId: u.clerkUserId || u._id,
       billingName: name,
       billingEmail: u.email || "",
+      // Pre-fill from billing profile if available on the user record
+      billingCompanyName: u.companyName || "",
+      billingAddress: u.billingAddress || "",
+      billingPhone: u.phone || "",
+      billingCompanyLicense: u.companyLicense || "",
+      billingTinNumber: u.tinNumber || "",
+      billingCountry: u.country || "",
     }));
     setOfflineUserSearch(name);
     setShowOfflineUserDropdown(false);
@@ -187,6 +201,11 @@ export default function InvoicesAndPOsPage() {
         billingName: offlineForm.billingName,
         billingEmail: offlineForm.billingEmail,
         billingAddress: offlineForm.billingAddress || undefined,
+        billingPhone: offlineForm.billingPhone || undefined,
+        billingCompanyName: offlineForm.billingCompanyName || undefined,
+        billingCompanyLicense: offlineForm.billingCompanyLicense || undefined,
+        billingTinNumber: offlineForm.billingTinNumber || undefined,
+        billingCountry: offlineForm.billingCountry || undefined,
         planTier: offlineForm.planTier,
         billingInterval: offlineForm.billingInterval,
         amount: offlineForm.amount,
@@ -1409,24 +1428,41 @@ export default function InvoicesAndPOsPage() {
                                       View PDF
                                     </Link>
                                   </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
                                   {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-                                    <>
-                                      <DropdownMenuSeparator />
-                                      <DropdownMenuItem
-                                        onClick={() => handleSetInvoiceStatus(invoice._id, invoice.invoiceNo, "paid")}
-                                        className="text-green-600 focus:text-green-600"
-                                      >
-                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                        Set to Paid
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() => handleSetInvoiceStatus(invoice._id, invoice.invoiceNo, "cancelled")}
-                                        className="text-amber-600 focus:text-amber-600"
-                                      >
-                                        <Ban className="mr-2 h-4 w-4" />
-                                        Cancel Invoice
-                                      </DropdownMenuItem>
-                                    </>
+                                    <DropdownMenuItem
+                                      onClick={() => handleSetInvoiceStatus(invoice._id, invoice.invoiceNo, "paid")}
+                                      className="text-green-600 focus:text-green-600"
+                                    >
+                                      <CheckCircle className="mr-2 h-4 w-4" />
+                                      Set to Paid
+                                    </DropdownMenuItem>
+                                  )}
+                                  {invoice.status !== "cancelled" && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        const msg = invoice.status === "paid"
+                                          ? `Cancel paid invoice ${invoice.invoiceNo}? The plan will NOT be auto-reverted — adjust manually if needed.`
+                                          : `Cancel invoice ${invoice.invoiceNo}?`;
+                                        if (confirm(msg)) handleSetInvoiceStatus(invoice._id, invoice.invoiceNo, "cancelled");
+                                      }}
+                                      className="text-amber-600 focus:text-amber-600"
+                                    >
+                                      <Ban className="mr-2 h-4 w-4" />
+                                      Cancel Invoice
+                                    </DropdownMenuItem>
+                                  )}
+                                  {invoice.status === "cancelled" && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        if (confirm(`Reactivate ${invoice.invoiceNo}? Status will be set back to Issued.`))
+                                          handleSetInvoiceStatus(invoice._id, invoice.invoiceNo, "issued");
+                                      }}
+                                      className="text-blue-600 focus:text-blue-600"
+                                    >
+                                      <RefreshCw className="mr-2 h-4 w-4" />
+                                      Reactivate Invoice
+                                    </DropdownMenuItem>
                                   )}
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem 
@@ -1715,8 +1751,35 @@ export default function InvoicesAndPOsPage() {
                       </div>
 
                       <div className="space-y-2">
+                        <Label>Company Name</Label>
+                        <Input placeholder="Auto-filled from profile" value={offlineForm.billingCompanyName} onChange={(e) => setOfflineForm(p => ({ ...p, billingCompanyName: e.target.value }))} />
+                      </div>
+
+                      <div className="space-y-2">
                         <Label>Billing Address</Label>
-                        <Input placeholder="Optional" value={offlineForm.billingAddress} onChange={(e) => setOfflineForm(p => ({ ...p, billingAddress: e.target.value }))} />
+                        <Input placeholder="Auto-filled from profile" value={offlineForm.billingAddress} onChange={(e) => setOfflineForm(p => ({ ...p, billingAddress: e.target.value }))} />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Contact Number</Label>
+                          <Input placeholder="Auto-filled from profile" value={offlineForm.billingPhone} onChange={(e) => setOfflineForm(p => ({ ...p, billingPhone: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Country</Label>
+                          <Input placeholder="Auto-filled from profile" value={offlineForm.billingCountry} onChange={(e) => setOfflineForm(p => ({ ...p, billingCountry: e.target.value }))} />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <Label>Company Reg No.</Label>
+                          <Input placeholder="Auto-filled from profile" value={offlineForm.billingCompanyLicense} onChange={(e) => setOfflineForm(p => ({ ...p, billingCompanyLicense: e.target.value }))} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>TIN / Tax ID</Label>
+                          <Input placeholder="Auto-filled from profile" value={offlineForm.billingTinNumber} onChange={(e) => setOfflineForm(p => ({ ...p, billingTinNumber: e.target.value }))} />
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -1883,13 +1946,30 @@ export default function InvoicesAndPOsPage() {
                                     </DropdownMenuItem>
                                   </>
                                 )}
-                                {inv.status !== "paid" && inv.status !== "cancelled" && (
+                                {inv.status !== "cancelled" && (
                                   <DropdownMenuItem
-                                    onClick={() => handleSetInvoiceStatus(inv._id, inv.invoiceNo, "cancelled")}
+                                    onClick={() => {
+                                      const msg = inv.status === "paid"
+                                        ? `Cancel paid invoice ${inv.invoiceNo}? The plan will NOT be auto-reverted — adjust manually if needed.`
+                                        : `Cancel invoice ${inv.invoiceNo}?`;
+                                      if (confirm(msg)) handleSetInvoiceStatus(inv._id, inv.invoiceNo, "cancelled");
+                                    }}
                                     className="text-amber-600 focus:text-amber-600"
                                   >
                                     <Ban className="mr-2 h-4 w-4" />
                                     Cancel Invoice
+                                  </DropdownMenuItem>
+                                )}
+                                {inv.status === "cancelled" && (
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      if (confirm(`Reactivate ${inv.invoiceNo}? Status will be set back to Issued.`))
+                                        handleSetInvoiceStatus(inv._id, inv.invoiceNo, "issued");
+                                    }}
+                                    className="text-blue-600 focus:text-blue-600"
+                                  >
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                    Reactivate Invoice
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuSeparator />

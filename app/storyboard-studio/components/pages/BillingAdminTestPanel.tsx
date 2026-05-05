@@ -323,178 +323,212 @@ export function BillingAdminTestPanel() {
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageW = doc.internal.pageSize.getWidth();
       const pageH = doc.internal.pageSize.getHeight();
-      const marginL = 14;
-      const marginR = 14;
-      const contentW = pageW - marginL - marginR;
-      let y = 16;
+      const mL = 14, mR = 14;
+      const cW = pageW - mL - mR;
+      let y = 0;
+
+      const FOOTER_H = 12;
+      const printableH = pageH - FOOTER_H;
 
       const checkPage = (needed: number) => {
-        if (y + needed > pageH - 12) {
-          doc.addPage();
-          y = 16;
+        if (y + needed > printableH) { doc.addPage(); y = 18; }
+      };
+
+      const drawFooters = () => {
+        const total = (doc.internal as any).getNumberOfPages?.() ?? 1;
+        for (let i = 1; i <= total; i++) {
+          doc.setPage(i);
+          doc.setFillColor(15, 15, 17);
+          doc.rect(0, pageH - FOOTER_H, pageW, FOOTER_H, "F");
+          doc.setDrawColor(39, 39, 42);
+          doc.line(0, pageH - FOOTER_H, pageW, pageH - FOOTER_H);
+          doc.setFontSize(7);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(80, 80, 90);
+          doc.text("Storytica — Admin Billing Ops Report", mL, pageH - 4.5);
+          doc.text(`Page ${i} / ${total}`, pageW - mR, pageH - 4.5, { align: "right" });
         }
       };
 
       // ── Header bar ────────────────────────────────────────────────────────
-      doc.setFillColor(9, 9, 11); // zinc-950
-      doc.rect(0, 0, pageW, 22, "F");
-      doc.setFontSize(13);
+      doc.setFillColor(9, 9, 11);
+      doc.rect(0, 0, pageW, 24, "F");
+      doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(45, 212, 191); // teal-400 — "STORY"
-      doc.text("STORY", marginL, 14);
-      const storyW = doc.getTextWidth("STORY");
-      doc.setTextColor(251, 191, 36); // amber-400 — "TICA"
-      doc.text("TICA", marginL + storyW, 14);
-      doc.setFontSize(9);
+      doc.setTextColor(45, 212, 191);
+      doc.text("STORY", mL, 15.5);
+      const sw = doc.getTextWidth("STORY");
+      doc.setTextColor(251, 191, 36);
+      doc.text("TICA", mL + sw, 15.5);
+      doc.setFontSize(8.5);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(161, 161, 170); // zinc-400
-      doc.text("Admin Billing Ops Report", pageW - marginR, 14, { align: "right" });
-      y = 30;
+      doc.setTextColor(100, 100, 115);
+      doc.text("Admin Billing Ops Report", pageW - mR, 15.5, { align: "right" });
+      y = 32;
 
-      // ── Title ─────────────────────────────────────────────────────────────
-      doc.setFontSize(16);
+      // ── Title + timestamp ─────────────────────────────────────────────────
+      doc.setFontSize(17);
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(255, 255, 255);
-      doc.text("Billing Ops Test Report", marginL, y);
-      y += 7;
+      doc.setTextColor(240, 240, 245);
+      doc.text("Billing Ops Test Report", mL, y);
+      y += 6;
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(161, 161, 170);
-      doc.text(`Generated: ${runTimestamp}`, marginL, y);
-      y += 10;
+      doc.setTextColor(120, 120, 135);
+      doc.text(`Generated: ${runTimestamp}`, mL, y);
+      y += 11;
 
-      // ── Target user block ─────────────────────────────────────────────────
-      doc.setFillColor(24, 24, 27); // zinc-900
-      doc.roundedRect(marginL, y, contentW, 20, 2, 2, "F");
-      doc.setFontSize(8);
+      // ── Target user card ──────────────────────────────────────────────────
+      doc.setFillColor(22, 22, 26);
+      doc.setDrawColor(50, 50, 60);
+      doc.roundedRect(mL, y, cW, 26, 2, 2, "FD");
+      // left accent bar
+      doc.setFillColor(251, 191, 36);
+      doc.rect(mL, y, 2.5, 26, "F");
+      doc.setFontSize(7);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(251, 191, 36);
-      doc.text("TARGET USER", marginL + 4, y + 6);
+      doc.text("TARGET USER", mL + 6, y + 6.5);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(240, 240, 245);
+      doc.text(targetName, mL + 6, y + 13.5);
+      doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(255, 255, 255);
-      doc.text(targetName, marginL + 4, y + 12);
-      doc.setTextColor(161, 161, 170);
-      doc.text(targetEmail, marginL + 4, y + 17);
-      doc.setTextColor(113, 113, 122);
-      doc.text(targetClerkId, pageW - marginR - 4, y + 12, { align: "right" });
-      y += 26;
+      doc.setTextColor(140, 140, 160);
+      doc.text(targetEmail, mL + 6, y + 19.5);
+      doc.setFontSize(7);
+      doc.setTextColor(70, 70, 85);
+      doc.text(targetClerkId, pageW - mR - 4, y + 13.5, { align: "right" });
+      y += 32;
 
       // ── Summary pills ─────────────────────────────────────────────────────
-      const passed = results.filter(r => r.status === "pass").length;
-      const failed = results.filter(r => r.status === "fail").length;
-      const total = results.length;
+      const passedN = results.filter(r => r.status === "pass").length;
+      const failedN = results.filter(r => r.status === "fail").length;
+      const totalN  = results.length;
       const totalMs = results.reduce((s, r) => s + (r.durationMs ?? 0), 0);
-      const allPassed = failed === 0;
+      const allPassed = failedN === 0;
 
-      const pills = [
-        { label: `${passed}/${total} Passed`, bg: allPassed ? [16, 185, 129] as [number,number,number] : [239, 68, 68] as [number,number,number], fg: [9, 9, 11] as [number,number,number] },
-        { label: `${failed} Failed`, bg: failed > 0 ? [239, 68, 68] as [number,number,number] : [39, 39, 42] as [number,number,number], fg: failed > 0 ? [255, 255, 255] as [number,number,number] : [161, 161, 170] as [number,number,number] },
-        { label: `${totalMs}ms total`, bg: [39, 39, 42] as [number,number,number], fg: [161, 161, 170] as [number,number,number] },
+      const pills: { label: string; bg: [number,number,number]; fg: [number,number,number] }[] = [
+        { label: `${passedN}/${totalN} Passed`,  bg: allPassed ? [16,185,129]  : [239,68,68],   fg: [10,10,12]     },
+        { label: `${failedN} Failed`,             bg: failedN > 0 ? [239,68,68] : [35,35,42],   fg: failedN > 0 ? [255,255,255] : [120,120,140] },
+        { label: `${totalMs}ms total`,            bg: [35, 35, 42],                             fg: [140, 140, 160] },
+        { label: allPassed ? "✓ ALL PASSED" : "✗ SOME FAILED", bg: allPassed ? [16,185,129] : [239,68,68], fg: [10,10,12] },
       ];
-      let px = marginL;
+      let px = mL;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
       for (const pill of pills) {
-        doc.setFontSize(8);
-        doc.setFont("helvetica", "bold");
-        const pw = doc.getTextWidth(pill.label) + 8;
+        const pw = doc.getTextWidth(pill.label) + 10;
         doc.setFillColor(...pill.bg);
-        doc.roundedRect(px, y, pw, 7, 1.5, 1.5, "F");
+        doc.roundedRect(px, y, pw, 8, 2, 2, "F");
         doc.setTextColor(...pill.fg);
-        doc.text(pill.label, px + pw / 2, y + 4.8, { align: "center" });
-        px += pw + 3;
+        doc.text(pill.label, px + pw / 2, y + 5.5, { align: "center" });
+        px += pw + 4;
       }
-      y += 13;
+      y += 14;
 
-      // ── Results table ─────────────────────────────────────────────────────
-      const colW = [6, contentW * 0.46, 18, contentW - contentW * 0.46 - 6 - 18 - 2];
-      // icon | step name | duration | details/error
-      const rowH = 8;
-
+      // ── Phase sections ────────────────────────────────────────────────────
       const phases = [
-        { prefix: "A", label: "PHASE A — CREDIT ADJUSTMENTS", color: [52, 211, 153] as [number,number,number] },
-        { prefix: "B", label: "PHASE B — PLAN CHANGE ROUND-TRIP", color: [96, 165, 250] as [number,number,number] },
-        { prefix: "C", label: "PHASE C — INVOICE LIFECYCLE", color: [251, 191, 36] as [number,number,number] },
+        { prefix: "A", label: "PHASE A — CREDIT ADJUSTMENTS",     accent: [52, 211, 153]  as [number,number,number] },
+        { prefix: "B", label: "PHASE B — PLAN CHANGE ROUND-TRIP", accent: [96, 165, 250]  as [number,number,number] },
+        { prefix: "C", label: "PHASE C — INVOICE LIFECYCLE",      accent: [251, 191, 36]  as [number,number,number] },
       ];
 
       for (const phase of phases) {
         const rows = results.filter(r => r.name.startsWith(`[${phase.prefix}`));
         if (rows.length === 0) continue;
 
-        checkPage(12 + rows.length * rowH);
+        checkPage(18);
 
-        // Phase header
-        doc.setFillColor(39, 39, 42);
-        doc.rect(marginL, y, contentW, 8, "F");
-        doc.setFontSize(7.5);
+        // Phase header band
+        doc.setFillColor(28, 28, 34);
+        doc.setDrawColor(50, 50, 60);
+        doc.rect(mL, y, cW, 9, "FD");
+        // colour accent left strip
+        doc.setFillColor(...phase.accent);
+        doc.rect(mL, y, 3, 9, "F");
+        doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(...phase.color);
-        doc.text(phase.label, marginL + 3, y + 5.5);
-        y += 10;
+        doc.setTextColor(...phase.accent);
+        doc.text(phase.label, mL + 7, y + 6.2);
+        // pass/fail count right
+        const phPassed = rows.filter(r => r.status === "pass").length;
+        doc.setFontSize(7.5);
+        doc.setTextColor(120, 120, 140);
+        doc.text(`${phPassed}/${rows.length}`, pageW - mR - 2, y + 6.2, { align: "right" });
+        y += 11;
 
         for (const row of rows) {
-          checkPage(rowH + 2);
+          // Compute wrapped detail lines first to know row height
+          const detail = row.error ? `Error: ${row.error}` : (row.details ?? "");
+          doc.setFontSize(7);
+          doc.setFont("helvetica", "normal");
+          const detailLines = doc.splitTextToSize(detail, cW - 14);
+          const rowH = 7 + detailLines.length * 4.5 + 3;
 
-          // Row bg
-          doc.setFillColor(18, 18, 20);
-          doc.rect(marginL, y, contentW, rowH, "F");
-          doc.setDrawColor(39, 39, 42);
-          doc.rect(marginL, y, contentW, rowH, "S");
+          checkPage(rowH + 1);
 
-          let cx = marginL + 2;
+          // Row background
+          doc.setFillColor(16, 16, 20);
+          doc.setDrawColor(32, 32, 40);
+          doc.rect(mL, y, cW, rowH, "FD");
 
-          // Status dot
+          // Status indicator stripe on left
           const dotColor: [number,number,number] =
             row.status === "pass" ? [52, 211, 153] :
-            row.status === "fail" ? [239, 68, 68] :
-            [156, 163, 175];
+            row.status === "fail" ? [239, 68, 68] : [100, 100, 120];
           doc.setFillColor(...dotColor);
-          doc.circle(cx + 1.5, y + rowH / 2, 1.5, "F");
-          cx += colW[0];
+          doc.rect(mL, y, 2.5, rowH, "F");
 
-          // Step name
-          doc.setFontSize(7);
+          // Status dot
+          doc.circle(mL + 8, y + 5.5, 2, "F");
+
+          // Step name (bold, coloured)
+          doc.setFontSize(8);
           doc.setFont("helvetica", "bold");
-          doc.setTextColor(...phase.color);
-          const maxNameW = colW[1] - 2;
-          const nameTrunc = doc.getTextWidth(row.name) > maxNameW
-            ? row.name.slice(0, Math.floor(row.name.length * maxNameW / doc.getTextWidth(row.name)) - 1) + "…"
-            : row.name;
-          doc.text(nameTrunc, cx, y + rowH / 2 + 2.5);
-          cx += colW[1];
+          doc.setTextColor(...phase.accent);
+          doc.text(row.name, mL + 13, y + 6);
 
-          // Duration
-          doc.setFont("helvetica", "normal");
-          doc.setTextColor(113, 113, 122);
+          // Duration — right aligned
           if (row.durationMs !== undefined) {
-            doc.text(`${row.durationMs}ms`, cx + colW[2] / 2, y + rowH / 2 + 2.5, { align: "center" });
+            doc.setFontSize(7);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(80, 80, 100);
+            doc.text(`${row.durationMs}ms`, pageW - mR - 3, y + 6, { align: "right" });
           }
-          cx += colW[2] + 2;
 
-          // Details / error
-          const detail = row.error ? `✗ ${row.error}` : (row.details ?? "");
-          doc.setTextColor(row.error ? 252 : 161, row.error ? 100 : 161, row.error ? 100 : 170);
-          const maxDW = colW[3] - 2;
-          const detailTrunc = doc.getTextWidth(detail) > maxDW
-            ? detail.slice(0, Math.floor(detail.length * maxDW / doc.getTextWidth(detail)) - 1) + "…"
-            : detail;
-          doc.text(detailTrunc, cx, y + rowH / 2 + 2.5);
+          // Detail lines — full width, wrapped
+          if (detail) {
+            doc.setFontSize(7.5);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(row.error ? 252 : 180, row.error ? 100 : 180, row.error ? 100 : 195);
+            for (let li = 0; li < detailLines.length; li++) {
+              doc.text(detailLines[li], mL + 13, y + 11.5 + li * 4.5);
+            }
+          }
 
-          y += rowH;
+          y += rowH + 1.5;
         }
-        y += 6;
+        y += 5;
       }
 
-      // ── Footer ─────────────────────────────────────────────────────────────
-      const totalPages = (doc.internal as any).getNumberOfPages?.() ?? 1;
-      for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
-        doc.setFillColor(24, 24, 27);
-        doc.rect(0, pageH - 10, pageW, 10, "F");
-        doc.setFontSize(7);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(113, 113, 122);
-        doc.text("Storytica — Admin Billing Ops Report", marginL, pageH - 4);
-        doc.text(`Page ${i} / ${totalPages}`, pageW - marginR, pageH - 4, { align: "right" });
-      }
+      // ── Outcome banner ────────────────────────────────────────────────────
+      checkPage(16);
+      doc.setFillColor(allPassed ? 16 : 239, allPassed ? 50 : 68, allPassed ? 30 : 68, 0.15);
+      doc.setFillColor(allPassed ? 10 : 40, allPassed ? 30 : 10, allPassed ? 20 : 10);
+      doc.setDrawColor(allPassed ? 16 : 239, allPassed ? 185 : 68, allPassed ? 129 : 68);
+      doc.roundedRect(mL, y, cW, 13, 2, 2, "FD");
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(allPassed ? 52 : 239, allPassed ? 211 : 68, allPassed ? 153 : 68);
+      doc.text(
+        allPassed ? `All ${totalN} tests passed — system verified` : `${failedN} test(s) failed — review required`,
+        pageW / 2, y + 8.5, { align: "center" }
+      );
+      y += 18;
+
+      drawFooters();
 
       const safeName = (targetEmail || targetName || "report").replace(/[^a-z0-9]/gi, "_").toLowerCase();
       doc.save(`billing_ops_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);

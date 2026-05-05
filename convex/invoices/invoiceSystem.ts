@@ -599,6 +599,10 @@ export const updateInvoice = mutation({
       state: v.optional(v.string()),
       country: v.optional(v.string()),
       postalCode: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      companyName: v.optional(v.string()),
+      companyLicense: v.optional(v.string()),
+      tinNumber: v.optional(v.string()),
     })),
     subtotal: v.optional(v.number()),
     tax: v.optional(v.number()),
@@ -615,13 +619,6 @@ export const updateInvoice = mutation({
       return {
         success: false,
         error: "Invoice not found",
-      };
-    }
-
-    if (invoice.status === "paid" || invoice.status === "cancelled") {
-      return {
-        success: false,
-        error: `Cannot update ${invoice.status} invoice`,
       };
     }
 

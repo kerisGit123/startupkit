@@ -2,6 +2,54 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 // ============================================
+// Update User Billing Profile (User Self-Service)
+// ============================================
+export const updateUserBillingProfile = mutation({
+  args: {
+    clerkUserId: v.string(),
+    companyName: v.optional(v.string()),
+    billingAddress: v.optional(v.string()),
+    country: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    companyLicense: v.optional(v.string()),
+    tinNumber: v.optional(v.string()),
+  },
+  handler: async (ctx, { clerkUserId, ...profile }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", clerkUserId))
+      .first();
+    if (!user) throw new Error("User not found");
+    await ctx.db.patch(user._id, { ...profile, updatedAt: Date.now() });
+    return { success: true };
+  },
+});
+
+// ============================================
+// Get User Billing Profile
+// ============================================
+export const getUserBillingProfile = query({
+  args: { clerkUserId: v.string() },
+  handler: async (ctx, { clerkUserId }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", clerkUserId))
+      .first();
+    if (!user) return null;
+    return {
+      companyName: user.companyName,
+      billingAddress: user.billingAddress,
+      country: user.country,
+      phone: user.phone,
+      companyLicense: user.companyLicense,
+      tinNumber: user.tinNumber,
+      fullName: user.fullName,
+      email: user.email,
+    };
+  },
+});
+
+// ============================================
 // Get User Credit History (Admin Query)
 // ============================================
 export const getUserCreditHistory = query({

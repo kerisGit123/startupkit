@@ -7,15 +7,22 @@ interface UserLabelBadgeProps {
 }
 
 const labelColors: Record<string, string> = {
-  "VIP": "bg-yellow-100 text-yellow-800 border-yellow-300",
-  "Premium": "bg-purple-100 text-purple-800 border-purple-300",
-  "Enterprise": "bg-blue-100 text-blue-800 border-blue-300",
-  "Beta Tester": "bg-green-100 text-green-800 border-green-300",
-  "At Risk": "bg-orange-100 text-orange-800 border-orange-300",
-  "Blocked": "bg-red-100 text-red-800 border-red-300",
-  "Trial": "bg-gray-100 text-gray-800 border-gray-300",
+  // Client type
+  "Online Client":  "bg-sky-100 text-sky-800 border-sky-300",
+  "Offline Client": "bg-amber-100 text-amber-800 border-amber-300",
+  "Offline Agency": "bg-indigo-100 text-indigo-800 border-indigo-300",
+  // Billing flags
+  "Invoice Pending": "bg-orange-100 text-orange-800 border-orange-300",
+  // Account tier
+  "VIP":              "bg-yellow-100 text-yellow-800 border-yellow-300",
+  "Premium":          "bg-purple-100 text-purple-800 border-purple-300",
+  "Enterprise":       "bg-blue-100 text-blue-800 border-blue-300",
+  "Trial":            "bg-gray-100 text-gray-800 border-gray-300",
+  "Beta Tester":      "bg-green-100 text-green-800 border-green-300",
+  // Support flags
   "Support Priority": "bg-pink-100 text-pink-800 border-pink-300",
-  "Education": "bg-teal-100 text-teal-800 border-teal-300",
+  "At Risk":          "bg-red-100 text-red-800 border-red-300",
+  "Education":        "bg-teal-100 text-teal-800 border-teal-300",
 };
 
 export function UserLabelBadge({ label, editable, onLabelChange }: UserLabelBadgeProps) {
@@ -37,13 +44,20 @@ export function UserLabelBadge({ label, editable, onLabelChange }: UserLabelBadg
 }
 
 export const USER_LABELS = [
+  // Client type
+  "Online Client",
+  "Offline Client",
+  "Offline Agency",
+  // Billing flags
+  "Invoice Pending",
+  // Account tier
   "VIP",
-  "Premium",
   "Enterprise",
-  "Beta Tester",
-  "At Risk",
-  "Blocked",
+  "Premium",
   "Trial",
+  "Beta Tester",
+  // Support flags
   "Support Priority",
+  "At Risk",
   "Education",
 ];

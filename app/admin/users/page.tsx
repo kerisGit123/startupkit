@@ -153,11 +153,67 @@ function UserDrawer({
     user.companyId ? { companyId: user.companyId } : "skip",
   );
 
+  const billingProfile = useQuery(
+    api.adminUserManagement.getUserBillingProfile,
+    user.clerkUserId ? { clerkUserId: user.clerkUserId } : "skip",
+  );
+  const updateBillingProfile = useMutation(api.adminUserManagement.updateUserBillingProfile);
+
   const adjustCredits = useMutation(api.adminUserManagement.adminAdjustCredits);
   const propagatePlan = useMutation(api.credits.propagateOwnerPlanChange);
   const markOfflinePaid = useMutation(api.adminManualBilling.markOfflineInvoicePaid);
 
+  const [drawerTab, setDrawerTab] = useState<"profile" | "billing" | "credits">("profile");
   const [activeTab, setActiveTab] = useState<"purchases" | "history">("purchases");
+
+  // Billing profile edit state
+  const [billingForm, setBillingForm] = useState({
+    companyName: "", billingAddress: "", country: "",
+    phone: "", companyLicense: "", tinNumber: "",
+  });
+  const [billingDirty, setBillingDirty] = useState(false);
+  const [savingBilling, setSavingBilling] = useState(false);
+
+  useEffect(() => {
+    if (billingProfile) {
+      setBillingForm({
+        companyName: billingProfile.companyName ?? "",
+        billingAddress: billingProfile.billingAddress ?? "",
+        country: billingProfile.country ?? "",
+        phone: billingProfile.phone ?? "",
+        companyLicense: billingProfile.companyLicense ?? "",
+        tinNumber: billingProfile.tinNumber ?? "",
+      });
+      setBillingDirty(false);
+    }
+  }, [billingProfile]);
+
+  const setBillingField = (field: string, value: string) => {
+    setBillingForm(p => ({ ...p, [field]: value }));
+    setBillingDirty(true);
+  };
+
+  const handleSaveBilling = async () => {
+    if (!user.clerkUserId) return;
+    setSavingBilling(true);
+    try {
+      await updateBillingProfile({
+        clerkUserId: user.clerkUserId,
+        companyName: billingForm.companyName || undefined,
+        billingAddress: billingForm.billingAddress || undefined,
+        country: billingForm.country || undefined,
+        phone: billingForm.phone || undefined,
+        companyLicense: billingForm.companyLicense || undefined,
+        tinNumber: billingForm.tinNumber || undefined,
+      });
+      toast.success("Billing profile updated");
+      setBillingDirty(false);
+    } catch {
+      toast.error("Failed to save billing profile");
+    } finally {
+      setSavingBilling(false);
+    }
+  };
 
   // Change plan state — pre-fill with current plan
   const [selectedPlan, setSelectedPlan] = useState<string>(user.ownerPlan ?? "free");
@@ -297,164 +353,243 @@ function UserDrawer({
           </div>
         </SheetHeader>
 
+        {/* ── Main tab bar ── */}
+        <div className="flex border-b shrink-0 bg-muted/30">
+          {(["profile", "billing", "credits"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setDrawerTab(tab)}
+              className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-colors ${
+                drawerTab === tab
+                  ? "border-b-2 border-primary text-primary bg-background"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab === "profile" ? "Profile" : tab === "billing" ? "Billing" : "Credits"}
+            </button>
+          ))}
+        </div>
+
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto">
 
-          {/* Profile Info */}
-          <div className="px-6 py-4 border-b space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Plan</p>
-                {user.ownerPlan && PLAN_BADGE[user.ownerPlan] ? (
-                  <Badge className={PLAN_BADGE[user.ownerPlan]}>{PLAN_LABELS[user.ownerPlan]}</Badge>
-                ) : (
-                  <Badge variant="outline" className="text-gray-500">Free</Badge>
-                )}
+          {/* ══ PROFILE TAB ══ */}
+          {drawerTab === "profile" && (
+            <div className="px-6 py-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Plan</p>
+                  {user.ownerPlan && PLAN_BADGE[user.ownerPlan] ? (
+                    <Badge className={PLAN_BADGE[user.ownerPlan]}>{PLAN_LABELS[user.ownerPlan]}</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-gray-500">Free</Badge>
+                  )}
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Credits</p>
+                  <p className="text-sm font-semibold flex items-center gap-1">
+                    <Coins className="w-3.5 h-3.5 text-amber-500" />
+                    {liveBalance !== null ? liveBalance.toLocaleString() : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Last Login</p>
+                  <p className="text-sm">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : "Never"}</p>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Member Since</p>
+                  <p className="text-sm">{new Date(user._creationTime).toLocaleDateString()}</p>
+                </div>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Credits</p>
-                <p className="text-sm font-semibold flex items-center gap-1">
-                  <Coins className="w-3.5 h-3.5 text-amber-500" />
-                  {liveBalance !== null ? liveBalance.toLocaleString() : "—"}
-                </p>
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Status</p>
+                {user.isBlocked
+                  ? <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Blocked</Badge>
+                  : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>}
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Last Login</p>
-                <p className="text-sm">{user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString() : "Never"}</p>
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Email</p>
+                <p className="text-sm">{user.email || "—"}</p>
               </div>
-              <div className="space-y-1">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Member Since</p>
-                <p className="text-sm">{new Date(user._creationTime).toLocaleDateString()}</p>
-              </div>
-            </div>
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Status</p>
-              {user.isBlocked
-                ? <Badge className="bg-red-100 text-red-800 hover:bg-red-100">Blocked</Badge>
-                : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>}
-            </div>
-          </div>
-
-          {/* Change Plan */}
-          {user.clerkUserId && (
-            <div className="px-6 py-4 border-b space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Plan</p>
-              <select
-                value={selectedPlan}
-                onChange={(e) => setSelectedPlan(e.target.value)}
-                className="w-full h-9 text-sm border rounded-md px-3 bg-transparent"
-              >
-                <option value="free">Free</option>
-                <option value="pro_personal">Pro — $45/mo</option>
-                <option value="business">Business — $119/mo</option>
-              </select>
-              <Button
-                size="sm"
-                className="w-full"
-                disabled={changingPlan || selectedPlan === (user.ownerPlan ?? "free")}
-                onClick={handleChangePlan}
-              >
-                {changingPlan ? "Applying…" : "Apply Plan"}
-              </Button>
+              {user.clerkUserId && (
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Clerk ID</p>
+                  <p className="text-xs font-mono text-muted-foreground break-all">{user.clerkUserId}</p>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Offline Invoices */}
-          {user.companyId && (
-            <div className="px-6 py-4 border-b space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Offline Subscriptions</p>
-                <a
-                  href="/admin/invoices-and-pos"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  Manage <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              {!offlineInvoices ? (
-                <p className="text-xs text-muted-foreground">Loading…</p>
-              ) : offlineInvoices.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No offline invoices</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {offlineInvoices.slice(0, 4).map((inv: any) => {
-                    const isOverdue = inv.status === "overdue";
-                    const isDueSoon = inv.status === "issued" && inv.dueDate && inv.dueDate - Date.now() < 7 * 24 * 60 * 60 * 1000 && inv.dueDate > Date.now();
-                    const planLabel = inv.planTier === "pro_personal" ? "Pro" : "Business";
-                    return (
-                      <div key={inv._id} className={`flex items-center justify-between rounded-md px-2.5 py-2 text-xs border ${isOverdue ? "bg-red-50 border-red-200" : isDueSoon ? "bg-amber-50 border-amber-200" : "bg-muted/40 border-transparent"}`}>
-                        <div className="min-w-0">
-                          <span className="font-mono font-medium">{inv.invoiceNo}</span>
-                          <span className="text-muted-foreground ml-1.5">{planLabel} · {inv.billingInterval}</span>
-                          {inv.dueDate && (
-                            <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-600" : isDueSoon ? "text-amber-600" : "text-muted-foreground"}`}>
-                              {isOverdue ? "Overdue" : "Due"} {new Date(inv.dueDate).toLocaleDateString()}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                            inv.status === "paid" ? "bg-green-100 text-green-700" :
-                            inv.status === "overdue" ? "bg-red-100 text-red-700" :
-                            inv.status === "cancelled" ? "bg-gray-100 text-gray-500" :
-                            "bg-blue-100 text-blue-700"
-                          }`}>{inv.status}</span>
-                          {inv.status === "issued" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50"
-                              onClick={() => handleDrawerMarkPaid(inv._id, inv.invoiceNo, inv.planTier)}
-                            >
-                              Mark Paid
-                            </Button>
-                          )}
-                        </div>
+          {/* ══ BILLING TAB ══ */}
+          {drawerTab === "billing" && (
+            <div className="px-6 py-4 space-y-5">
+
+              {/* Change Plan */}
+              {user.clerkUserId && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Change Plan</p>
+                  <select
+                    value={selectedPlan}
+                    onChange={(e) => setSelectedPlan(e.target.value)}
+                    className="w-full h-9 text-sm border rounded-md px-3 bg-transparent"
+                  >
+                    <option value="free">Free</option>
+                    <option value="pro_personal">Pro — $45/mo</option>
+                    <option value="business">Business — $119/mo</option>
+                  </select>
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    disabled={changingPlan || selectedPlan === (user.ownerPlan ?? "free")}
+                    onClick={handleChangePlan}
+                  >
+                    {changingPlan ? "Applying…" : "Apply Plan"}
+                  </Button>
+                </div>
+              )}
+
+              <div className="border-t" />
+
+              {/* Billing Profile */}
+              {user.clerkUserId && (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Profile</p>
+                  <div className="space-y-2">
+                    <div>
+                      <Label className="text-xs">Company Name</Label>
+                      <Input className="h-8 text-sm" placeholder="e.g. Acme Sdn Bhd" value={billingForm.companyName} onChange={e => setBillingField("companyName", e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Billing Address</Label>
+                      <Input className="h-8 text-sm" placeholder="Street, city, postcode" value={billingForm.billingAddress} onChange={e => setBillingField("billingAddress", e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Country</Label>
+                        <Input className="h-8 text-sm" placeholder="Malaysia" value={billingForm.country} onChange={e => setBillingField("country", e.target.value)} />
                       </div>
-                    );
-                  })}
-                  {offlineInvoices.length > 4 && (
-                    <p className="text-xs text-muted-foreground text-center pt-1">+{offlineInvoices.length - 4} more in Invoices page</p>
+                      <div>
+                        <Label className="text-xs">Phone</Label>
+                        <Input className="h-8 text-sm" placeholder="+60 12 345 6789" value={billingForm.phone} onChange={e => setBillingField("phone", e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Company Reg No.</Label>
+                        <Input className="h-8 text-sm" placeholder="1234567-X" value={billingForm.companyLicense} onChange={e => setBillingField("companyLicense", e.target.value)} />
+                      </div>
+                      <div>
+                        <Label className="text-xs">TIN / Tax ID</Label>
+                        <Input className="h-8 text-sm" placeholder="C12345678" value={billingForm.tinNumber} onChange={e => setBillingField("tinNumber", e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                  <Button size="sm" className="w-full" disabled={!billingDirty || savingBilling} onClick={handleSaveBilling}>
+                    {savingBilling ? "Saving…" : "Save Billing Profile"}
+                  </Button>
+                </div>
+              )}
+
+              <div className="border-t" />
+
+              {/* Offline Subscriptions */}
+              {user.companyId && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Offline Subscriptions</p>
+                    <a
+                      href={`/admin/invoices-and-pos?q=${encodeURIComponent(user.email || user.companyId || "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Manage <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                  {!offlineInvoices ? (
+                    <p className="text-xs text-muted-foreground">Loading…</p>
+                  ) : offlineInvoices.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No offline invoices</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {offlineInvoices.slice(0, 5).map((inv: any) => {
+                        const isOverdue = inv.status === "overdue";
+                        const isDueSoon = inv.status === "issued" && inv.dueDate && inv.dueDate - Date.now() < 7 * 24 * 60 * 60 * 1000 && inv.dueDate > Date.now();
+                        const planLabel = inv.planTier === "pro_personal" ? "Pro" : "Business";
+                        return (
+                          <div key={inv._id} className={`flex items-center justify-between rounded-md px-2.5 py-2 text-xs border ${isOverdue ? "bg-red-50 border-red-200" : isDueSoon ? "bg-amber-50 border-amber-200" : "bg-muted/40 border-transparent"}`}>
+                            <div className="min-w-0">
+                              <span className="font-mono font-medium">{inv.invoiceNo}</span>
+                              <span className="text-muted-foreground ml-1.5">{planLabel} · {inv.billingInterval}</span>
+                              {inv.dueDate && (
+                                <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-600" : isDueSoon ? "text-amber-600" : "text-muted-foreground"}`}>
+                                  {isOverdue ? "Overdue" : "Due"} {new Date(inv.dueDate).toLocaleDateString()}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                              <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                inv.status === "paid" ? "bg-green-100 text-green-700" :
+                                inv.status === "overdue" ? "bg-red-100 text-red-700" :
+                                inv.status === "cancelled" ? "bg-gray-100 text-gray-500" :
+                                "bg-blue-100 text-blue-700"
+                              }`}>{inv.status}</span>
+                              {inv.status === "issued" && (
+                                <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-green-700 border-green-200 hover:bg-green-50"
+                                  onClick={() => handleDrawerMarkPaid(inv._id, inv.invoiceNo, inv.planTier)}>
+                                  Mark Paid
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {offlineInvoices.length > 5 && (
+                        <p className="text-xs text-muted-foreground text-center pt-1">+{offlineInvoices.length - 5} more in Invoices page</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Adjust Credits */}
-          {user.companyId && (
-            <div className="px-6 py-4 border-b space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Adjust Credits</p>
-              <Input type="number" min="1" placeholder="Amount (e.g. 500)" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} />
-              <Input placeholder="Reason (e.g. support compensation)" value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} />
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="flex-1 text-green-700 border-green-200 hover:bg-green-50" disabled={adjusting} onClick={() => handleAdjust(1)}>
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Add
-                </Button>
-                <Button size="sm" variant="outline" className="flex-1 text-red-700 border-red-200 hover:bg-red-50" disabled={adjusting} onClick={() => handleAdjust(-1)}>
-                  <Minus className="w-3.5 h-3.5 mr-1" /> Deduct
-                </Button>
-              </div>
-            </div>
-          )}
+          {/* ══ CREDITS TAB ══ */}
+          {drawerTab === "credits" && (
+            <div className="flex flex-col">
 
-          {/* Tab bar */}
-          <div className="flex border-b shrink-0">
-            <button
-              className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${activeTab === "purchases" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setActiveTab("purchases")}
-            >
-              Purchases {purchases ? `(${purchases.length})` : ""}
-            </button>
-            <button
-              className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${activeTab === "history" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => setActiveTab("history")}
-            >
-              Credit History {creditHistory ? `(${creditHistory.length})` : ""}
-            </button>
-          </div>
+              {/* Adjust Credits */}
+              {user.companyId && (
+                <div className="px-6 py-4 border-b space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Adjust Credits</p>
+                  <Input type="number" min="1" placeholder="Amount (e.g. 500)" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} />
+                  <Input placeholder="Reason (e.g. support compensation)" value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 text-green-700 border-green-200 hover:bg-green-50" disabled={adjusting} onClick={() => handleAdjust(1)}>
+                      <Plus className="w-3.5 h-3.5 mr-1" /> Add
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1 text-red-700 border-red-200 hover:bg-red-50" disabled={adjusting} onClick={() => handleAdjust(-1)}>
+                      <Minus className="w-3.5 h-3.5 mr-1" /> Deduct
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-tabs: Purchases | History */}
+              <div className="flex border-b shrink-0">
+                <button
+                  className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${activeTab === "purchases" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setActiveTab("purchases")}
+                >
+                  Purchases {purchases ? `(${purchases.length})` : ""}
+                </button>
+                <button
+                  className={`flex-1 px-4 py-2.5 text-xs font-semibold transition-colors ${activeTab === "history" ? "border-b-2 border-primary text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                  onClick={() => setActiveTab("history")}
+                >
+                  History {creditHistory ? `(${creditHistory.length})` : ""}
+                </button>
+              </div>
 
           {/* ── Purchases tab ── */}
           {activeTab === "purchases" && (
@@ -580,6 +715,8 @@ function UserDrawer({
                   </div>
                 </div>
               )}
+            </div>
+          )}
             </div>
           )}
         </div>
@@ -908,6 +1045,7 @@ export default function UsersPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        title="Send in-app alert to this user"
                         onClick={() => setAlertDialog({
                           userId: user.clerkUserId || user._id,
                           userName: getDisplayName(user),
@@ -919,6 +1057,7 @@ export default function UsersPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        title={user.isBlocked ? "Unblock — restore login access" : "Block — prevent login"}
                         onClick={() => handleBlockUser(user._id, user.isBlocked || false)}
                         className={user.isBlocked ? "" : "text-destructive hover:bg-destructive/10"}
                       >
@@ -927,6 +1066,7 @@ export default function UsersPage() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        title="Open user details & management drawer"
                         onClick={() => setSelectedUserId(user._id)}
                         className="text-muted-foreground"
                       >

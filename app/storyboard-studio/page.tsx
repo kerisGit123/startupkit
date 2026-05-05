@@ -32,6 +32,7 @@ import LogsPage from "./components/account/LogsPage";
 import AdminPage from "./components/account/AdminPage";
 import InvoicesPage from "./components/account/InvoicesPage";
 import ReferralsPage from "./components/account/ReferralsPage";
+import BillingProfilePage from "./components/account/BillingProfilePage";
 import SupportChatWidget from "@/components/support-chat/SupportChatWidget";
 
 export default function StoryboardPage() {
@@ -299,6 +300,7 @@ export default function StoryboardPage() {
     if (activeNav === "projects") setCurrentStep("dashboard");
     if (activeNav === "image-maker") setCurrentStep("image-maker");
     if (activeNav === "price-management") setCurrentStep("price-management");
+    if (activeNav === "profile") setCurrentStep("profile");
     if (activeNav === "billing") setCurrentStep("billing");
     if (activeNav === "support") setCurrentStep("support");
     if (activeNav === "logs") setCurrentStep("logs");
@@ -652,6 +654,13 @@ export default function StoryboardPage() {
 
         {currentStep === "price-management" && (
           <PricingManagementPage 
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          />
+        )}
+
+        {currentStep === "profile" && (
+          <BillingProfilePage
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           />

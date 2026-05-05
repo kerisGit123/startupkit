@@ -33,6 +33,7 @@ const ORGANIZE_ITEMS = [
 ];
 
 const UNIVERSE_NAV_ITEMS = [
+  { key: "profile", icon: Settings, label: "My Profile" },
   { key: "price-management", icon: DollarSign, label: "Price Management" },
   { key: "billing", icon: CreditCard, label: "Billing & Subscription" },
   { key: "support", icon: LifeBuoy, label: "Support" },

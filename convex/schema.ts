@@ -19,6 +19,14 @@ export default defineSchema({
     lastActivityAt: v.optional(v.number()),
     loginCount: v.optional(v.number()),
     
+    // Billing Profile (user-editable, used in offline invoices)
+    companyName: v.optional(v.string()),
+    billingAddress: v.optional(v.string()),
+    country: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    companyLicense: v.optional(v.string()),
+    tinNumber: v.optional(v.string()),
+
     // Admin Labels & Tags
     userLabel: v.optional(v.string()),
     userTags: v.optional(v.array(v.string())),
@@ -968,6 +976,10 @@ export default defineSchema({
       state: v.optional(v.string()),
       country: v.optional(v.string()),
       postalCode: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      companyName: v.optional(v.string()),
+      companyLicense: v.optional(v.string()),
+      tinNumber: v.optional(v.string()),
     }),
     subtotal: v.number(),
     tax: v.optional(v.number()),

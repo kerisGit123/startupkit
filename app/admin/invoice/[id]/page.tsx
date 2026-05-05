@@ -157,15 +157,20 @@ export default function InvoiceDocumentPage() {
     }
   };
 
+  // Currency: use the invoice's own currency, fall back to config
+  const displayCurrency = invoice.currency || invoicePOConfig.currency || "RM";
+
   // Calculate tax and rounding with Malaysian standard
   const subtotal = (invoice.subtotal || 0) / 100;
   const discount = (invoice.discount || 0) / 100;
-  const serviceTaxEnabled = invoicePOConfig.serviceTaxInvoiceEnable && invoicePOConfig.serviceTax;
+  // Only apply service tax for regular invoices — not subscriptions or payments
+  const serviceTaxEnabled = invoicePOConfig.serviceTaxInvoiceEnable && invoicePOConfig.serviceTax
+    && invoice.invoiceType === "invoice";
   const subtotalAfterDiscount = subtotal - discount;
   const serviceTax = serviceTaxEnabled ? subtotalAfterDiscount * (invoicePOConfig.serviceTax / 100) : 0;
   let total = subtotalAfterDiscount + serviceTax;
   let roundingAdjustment = 0;
-  
+
   // Determine if discount should be shown
   const showDiscount = invoicePOConfig.discountInvoice && invoice.invoiceType === "invoice" && discount > 0;
   
@@ -250,12 +255,38 @@ export default function InvoiceDocumentPage() {
           {/* Customer and Invoice Details */}
           <div className="grid grid-cols-2 gap-8 mb-6">
             <div>
-              <h3 className="font-bold mb-2">{invoice.billingDetails?.name || "Customer"}</h3>
+              {/* Company name */}
+              {(invoice.billingDetails as any)?.companyName && (
+                <h3 className="font-bold mb-1">{(invoice.billingDetails as any).companyName}</h3>
+              )}
+              {/* Contact name — only show if it's different from the email */}
+              {invoice.billingDetails?.name && invoice.billingDetails.name !== invoice.billingDetails?.email && (
+                <p className={`${(invoice.billingDetails as any)?.companyName ? "font-semibold text-sm" : "font-bold"} mb-1`}>
+                  {invoice.billingDetails.name}
+                </p>
+              )}
               {invoice.billingDetails?.address && (
-                <p className="text-sm">{invoice.billingDetails.address}</p>
+                <p className="text-sm whitespace-pre-line">{invoice.billingDetails.address}</p>
+              )}
+              {(invoice.billingDetails?.city || invoice.billingDetails?.state || invoice.billingDetails?.postalCode) && (
+                <p className="text-sm">
+                  {[invoice.billingDetails.city, invoice.billingDetails.state, invoice.billingDetails.postalCode].filter(Boolean).join(", ")}
+                </p>
+              )}
+              {invoice.billingDetails?.country && (
+                <p className="text-sm">{invoice.billingDetails.country}</p>
+              )}
+              {(invoice.billingDetails as any)?.phone && (
+                <p className="text-sm mt-1">Tel: {(invoice.billingDetails as any).phone}</p>
               )}
               {invoice.billingDetails?.email && (
                 <p className="text-sm">{invoice.billingDetails.email}</p>
+              )}
+              {(invoice.billingDetails as any)?.companyLicense && (
+                <p className="text-sm mt-1">Reg No.: {(invoice.billingDetails as any).companyLicense}</p>
+              )}
+              {(invoice.billingDetails as any)?.tinNumber && (
+                <p className="text-sm">TIN: {(invoice.billingDetails as any).tinNumber}</p>
               )}
             </div>
             
@@ -288,7 +319,7 @@ export default function InvoiceDocumentPage() {
                   <th className="border border-black p-2 text-left" style={{minWidth: '300px'}}>DESCRIPTION</th>
                   <th className="border border-black p-2 text-center w-20">QTY</th>
                   <th className="border border-black p-2 text-right w-28">UNIT PRICE</th>
-                  <th className="border border-black p-2 text-right w-32">TOTAL ({invoicePOConfig.currency})</th>
+                  <th className="border border-black p-2 text-right w-32">TOTAL ({displayCurrency})</th>
                 </tr>
               </thead>
               <tbody>
@@ -335,14 +366,14 @@ export default function InvoiceDocumentPage() {
                   <tbody>
                     <tr className="border-b border-black">
                       <td className="py-2 px-2 font-semibold">Sub Total (Excl. SST)</td>
-                      <td className="py-2 px-2 text-right font-semibold w-16 border-l border-black">{invoicePOConfig.currency}</td>
+                      <td className="py-2 px-2 text-right font-semibold w-16 border-l border-black">{displayCurrency}</td>
                       <td className="py-2 px-2 text-right font-semibold w-24 border-l border-black">{subtotal.toFixed(2)}</td>
                     </tr>
                     
                     {showDiscount && (
                       <tr className="border-b border-black text-green-600">
                         <td className="py-2 px-2">Discount</td>
-                        <td className="py-2 px-2 text-right w-16 border-l border-black">{invoicePOConfig.currency}</td>
+                        <td className="py-2 px-2 text-right w-16 border-l border-black">{displayCurrency}</td>
                         <td className="py-2 px-2 text-right w-24 border-l border-black">-{discount.toFixed(2)}</td>
                       </tr>
                     )}
@@ -350,7 +381,7 @@ export default function InvoiceDocumentPage() {
                     {serviceTaxEnabled && (
                       <tr className="border-b border-black">
                         <td className="py-2 px-2">Service Tax {invoicePOConfig.serviceTax}%</td>
-                        <td className="py-2 px-2 text-right w-16 border-l border-black">{invoicePOConfig.currency}</td>
+                        <td className="py-2 px-2 text-right w-16 border-l border-black">{displayCurrency}</td>
                         <td className="py-2 px-2 text-right w-24 border-l border-black">{serviceTax.toFixed(2)}</td>
                       </tr>
                     )}
@@ -358,14 +389,14 @@ export default function InvoiceDocumentPage() {
                     {invoicePOConfig.roundingEnable && roundingAdjustment !== 0 && (
                       <tr className="border-b border-black">
                         <td className="py-2 px-2">Rounding Adj.</td>
-                        <td className="py-2 px-2 text-right w-16 border-l border-black">{invoicePOConfig.currency}</td>
+                        <td className="py-2 px-2 text-right w-16 border-l border-black">{displayCurrency}</td>
                         <td className="py-2 px-2 text-right w-24 border-l border-black">{roundingAdjustment.toFixed(2)}</td>
                       </tr>
                     )}
                     
                     <tr className="bg-gray-100 font-bold text-lg">
                       <td className="py-2 px-2">TOTAL {serviceTaxEnabled ? "(Incl. of SST)" : ""}</td>
-                      <td className="py-2 px-2 text-right w-16 border-l border-black">{invoicePOConfig.currency}</td>
+                      <td className="py-2 px-2 text-right w-16 border-l border-black">{displayCurrency}</td>
                       <td className="py-2 px-2 text-right w-24 border-l border-black">{total.toFixed(2)}</td>
                     </tr>
                   </tbody>

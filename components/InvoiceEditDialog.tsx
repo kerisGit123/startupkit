@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, RefreshCw } from "lucide-react";
 
 interface InvoiceEditDialogProps {
   invoiceId: Id<"invoices"> | null;
@@ -51,11 +51,22 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [customerCompanyName, setCustomerCompanyName] = useState("");
+  const [customerCompanyLicense, setCustomerCompanyLicense] = useState("");
+  const [customerTinNumber, setCustomerTinNumber] = useState("");
+  const [customerCountry, setCustomerCountry] = useState("");
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(0);
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Load billing profile for sync-from-profile
+  const billingProfile = useQuery(
+    api.adminUserManagement.getUserBillingProfile,
+    invoice?.companyId ? { clerkUserId: invoice.companyId } : "skip"
+  );
 
   // Load invoice data when dialog opens
   useEffect(() => {
@@ -63,6 +74,11 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
       setCustomerName(invoice.billingDetails?.name || "");
       setCustomerEmail(invoice.billingDetails?.email || "");
       setCustomerAddress(invoice.billingDetails?.address || "");
+      setCustomerPhone((invoice.billingDetails as any)?.phone || "");
+      setCustomerCompanyName((invoice.billingDetails as any)?.companyName || "");
+      setCustomerCompanyLicense((invoice.billingDetails as any)?.companyLicense || "");
+      setCustomerTinNumber((invoice.billingDetails as any)?.tinNumber || "");
+      setCustomerCountry(invoice.billingDetails?.country || "");
       setItems(
         invoice.items?.map((item) => ({
           ...item,
@@ -85,6 +101,20 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
     setCustomerAddress(customer.customerAddress || "");
     setCustomerSearchTerm("");
     setShowCustomerDropdown(false);
+  };
+
+  // Sync billing details from the user's saved profile
+  const handleSyncFromProfile = () => {
+    if (!billingProfile) return;
+    setCustomerCompanyName(billingProfile.companyName ?? "");
+    setCustomerAddress(billingProfile.billingAddress ?? "");
+    setCustomerCountry(billingProfile.country ?? "");
+    setCustomerPhone(billingProfile.phone ?? "");
+    setCustomerCompanyLicense(billingProfile.companyLicense ?? "");
+    setCustomerTinNumber(billingProfile.tinNumber ?? "");
+    if (billingProfile.fullName) setCustomerName(billingProfile.fullName);
+    if (billingProfile.email) setCustomerEmail(billingProfile.email);
+    toast.success("Billing details synced from profile");
   };
 
   // Calculate totals
@@ -127,7 +157,12 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
         billingDetails: {
           name: customerName,
           email: customerEmail,
-          address: customerAddress,
+          address: customerAddress || undefined,
+          country: customerCountry || undefined,
+          phone: customerPhone || undefined,
+          companyName: customerCompanyName || undefined,
+          companyLicense: customerCompanyLicense || undefined,
+          tinNumber: customerTinNumber || undefined,
         },
         subtotal: Math.round(subtotal * 100),
         discount: Math.round(discount * 100),
@@ -150,23 +185,7 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
 
   if (!invoice) return null;
 
-  if (invoice.status === "paid" || invoice.status === "cancelled") {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Cannot Edit Invoice</DialogTitle>
-            <DialogDescription>
-              This invoice has been {invoice.status} and cannot be edited.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={onClose}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  const isLocked = invoice.status === "paid" || invoice.status === "cancelled";
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -178,10 +197,24 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
           </DialogDescription>
         </DialogHeader>
 
+        {isLocked && (
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+            This invoice is <strong>{invoice.status}</strong>. Editing will update the record but will not reverse any payment or plan changes.
+          </div>
+        )}
+
         <div className="space-y-6 py-4">
           {/* Customer Information */}
           <div className="space-y-4">
-            <h3 className="font-semibold">Customer Information</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Customer Information</h3>
+              {billingProfile && (
+                <Button type="button" size="sm" variant="outline" className="gap-1.5 text-xs h-7" onClick={handleSyncFromProfile}>
+                  <RefreshCw className="h-3 w-3" />
+                  Sync from Profile
+                </Button>
+              )}
+            </div>
             
             {/* Customer Search */}
             <div className="relative">
@@ -245,6 +278,55 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
                 placeholder="Enter customer address"
                 rows={2}
               />
+            </div>
+            <div>
+              <Label htmlFor="customerCompanyName">Company Name</Label>
+              <Input
+                id="customerCompanyName"
+                value={customerCompanyName}
+                onChange={(e) => setCustomerCompanyName(e.target.value)}
+                placeholder="e.g. Acme Sdn Bhd"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customerPhone">Phone</Label>
+                <Input
+                  id="customerPhone"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="+60 12 345 6789"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerCountry">Country</Label>
+                <Input
+                  id="customerCountry"
+                  value={customerCountry}
+                  onChange={(e) => setCustomerCountry(e.target.value)}
+                  placeholder="Malaysia"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="customerCompanyLicense">Company Reg No.</Label>
+                <Input
+                  id="customerCompanyLicense"
+                  value={customerCompanyLicense}
+                  onChange={(e) => setCustomerCompanyLicense(e.target.value)}
+                  placeholder="1234567-X"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customerTinNumber">TIN / Tax ID</Label>
+                <Input
+                  id="customerTinNumber"
+                  value={customerTinNumber}
+                  onChange={(e) => setCustomerTinNumber(e.target.value)}
+                  placeholder="C12345678"
+                />
+              </div>
             </div>
           </div>
 
