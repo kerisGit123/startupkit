@@ -37,7 +37,7 @@ export function RevenueOverview() {
   const monthlySignups = useQuery(api.financialLedger.getMonthlySignups, { months: 6 });
   const invoiceRevenueTrend = useQuery(api.financialLedger.getInvoiceRevenueTrend, { months: 6 });
   
-  const recentTransactions = allTransactions?.slice(0, 8) || [];
+  const recentTransactions = (allTransactions || []).filter(t => t.amount !== 0).slice(0, 8);
 
   const formatCurrency = (amount: number, currency: string = 'MYR') => {
     return new Intl.NumberFormat('en-MY', {

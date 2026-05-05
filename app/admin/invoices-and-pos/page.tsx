@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FileText, Download, Eye, TrendingUp, Search, Copy, Check, Settings2, Plus, Trash2, ShoppingCart, Edit, RefreshCw, CheckCircle, Calendar, MoreHorizontal, XCircle, Ban, UserCheck, Send } from "lucide-react";
+import { FileText, Download, Eye, TrendingUp, Search, Copy, Check, Settings2, Plus, Trash2, ShoppingCart, Edit, RefreshCw, CheckCircle, Calendar, MoreHorizontal, XCircle, Ban, UserCheck, Send, Coins } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,15 @@ interface POItem {
   unitPrice: number;
   total: number;
 }
+
+const INVOICE_PRESETS = [
+  { id: "pro_monthly",      label: "Pro Plan",       sub: "$45/mo",  planTier: "pro_personal", creditsToGrant: 0,     itemDesc: "Pro Plan – Monthly Subscription",      unitPrice: 189  },
+  { id: "business_monthly", label: "Business Plan",  sub: "$119/mo", planTier: "business",     creditsToGrant: 0,     itemDesc: "Business Plan – Monthly Subscription", unitPrice: 499  },
+  { id: "cancel_free",      label: "Cancel Plan",    sub: "free",    planTier: "free",         creditsToGrant: 0,     itemDesc: "Plan Cancellation – Downgrade to Free", unitPrice: 0   },
+  { id: "credits_1000",     label: "1,000 Credits",  sub: "$10",     planTier: "",             creditsToGrant: 1000,  itemDesc: "1,000 AI Credits Top-Up",              unitPrice: 42   },
+  { id: "credits_5500",     label: "5,500 Credits",  sub: "$50",     planTier: "",             creditsToGrant: 5500,  itemDesc: "5,500 AI Credits Top-Up",              unitPrice: 210  },
+  { id: "credits_30000",    label: "30,000 Credits", sub: "$249",    planTier: "",             creditsToGrant: 30000, itemDesc: "30,000 AI Credits Top-Up",             unitPrice: 1045 },
+];
 
 export default function InvoicesAndPOsPage() {
   const { user } = useUser();
@@ -103,6 +112,8 @@ export default function InvoicesAndPOsPage() {
     paymentTerms: "CASH",
     status: "draft" as string,
     dueDate: null as number | null,
+    planTier: "" as string,
+    creditsToGrant: 0 as number,
   });
 
   // Invoice customer search
@@ -129,6 +140,17 @@ export default function InvoicesAndPOsPage() {
     }));
     setInvoiceCustomerSearch("");
     setShowInvoiceCustomerDropdown(false);
+  };
+
+  const applyInvoicePreset = (presetId: string) => {
+    const preset = INVOICE_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+    setInvoiceForm(prev => ({
+      ...prev,
+      planTier: preset.planTier,
+      creditsToGrant: preset.creditsToGrant,
+      items: [{ description: preset.itemDesc, quantity: 1, unitPrice: preset.unitPrice, total: preset.unitPrice }],
+    }));
   };
 
   // ── Offline subscription state ───────────────────────────────────────────
@@ -266,6 +288,8 @@ export default function InvoicesAndPOsPage() {
   const deletePO = useMutation(api.purchaseOrders.mutations.deletePurchaseOrder);
   const updateInvoiceStatus = useMutation(api.invoices.invoiceSystem.updateInvoiceStatus);
   const updatePOStatus = useMutation(api.purchaseOrders.mutations.updatePOStatus);
+  const markPaidAndGrantCredits = useMutation(api.invoices.invoiceSystem.markPaidAndGrantCredits);
+  const propagatePlan = useMutation(api.credits.propagateOwnerPlanChange);
 
   const handleConvertToInvoice = async (poId: Id<"purchase_orders">, poNo: string) => {
     if (!confirm(`Convert sales order ${poNo} to an invoice? This will create a new invoice from the SO items.`)) {
@@ -367,7 +391,7 @@ export default function InvoicesAndPOsPage() {
   const handleCreateInvoice = async () => {
     try {
       const totals = calculateInvoiceTotals();
-      await createInvoiceMutation({
+      const result = await createInvoiceMutation({
         amount: totals.total,
         currency: "MYR",
         items: invoiceForm.items.map(item => ({
@@ -390,14 +414,16 @@ export default function InvoicesAndPOsPage() {
         dueDate: invoiceForm.dueDate || undefined,
         paymentTerms: invoiceForm.paymentTerms || undefined,
         autoIssue: invoiceForm.status === "issued" || invoiceForm.status === "paid",
+        planTier: invoiceForm.planTier || undefined,
+        creditsToGrant: invoiceForm.creditsToGrant > 0 ? invoiceForm.creditsToGrant : undefined,
       });
 
-      // If status is "paid", we need to update it after creation since createInvoice only supports draft/issued
-      // The autoIssue flag handles "issued", but "paid" needs an extra step
-      // We'll handle this via the returned invoiceId - but createInvoice doesn't return the id in a way we can use here
-      // For now, autoIssue handles issued, and paid invoices start as issued then get updated
+      // If status is "paid", mark paid immediately so fulfillment fires
+      if (invoiceForm.status === "paid" && result.invoiceId) {
+        await updateInvoiceStatus({ id: result.invoiceId, status: "paid" });
+      }
 
-      toast.success("Invoice created successfully!");
+      toast.success(`Invoice ${result.invoiceNo} created!`);
       setShowInvoiceModal(false);
       setInvoiceForm({
         customerName: "",
@@ -409,6 +435,8 @@ export default function InvoicesAndPOsPage() {
         paymentTerms: "CASH",
         status: "draft",
         dueDate: null,
+        planTier: "",
+        creditsToGrant: 0,
       });
     } catch (error) {
       console.error("Failed to create invoice:", error);
@@ -657,6 +685,55 @@ export default function InvoicesAndPOsPage() {
   const [editingPOId, setEditingPOId] = useState<Id<"purchase_orders"> | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<Id<"invoices"> | null>(null);
 
+  // Mark Paid + Grant Credits dialog
+  const [grantCreditsInvoice, setGrantCreditsInvoice] = useState<{
+    id: Id<"invoices">; invoiceNo: string; total: number; currency: string;
+    companyId?: string; invoiceType?: string;
+  } | null>(null);
+  const [grantCreditsAmount, setGrantCreditsAmount] = useState("");
+  const [grantCreditsReason, setGrantCreditsReason] = useState("");
+  const [grantPlan, setGrantPlan] = useState("none");
+  const [grantCreditsBusy, setGrantCreditsBusy] = useState(false);
+
+  // Auto-detect plan from invoice items descriptions
+  const detectPlanFromItems = (items: { description: string }[], invoiceType?: string) => {
+    if (invoiceType !== "subscription" && invoiceType !== "invoice") return "none";
+    const desc = items.map(i => i.description.toLowerCase()).join(" ");
+    if (desc.includes("business")) return "business";
+    if (desc.includes("pro")) return "pro_personal";
+    return "none";
+  };
+
+  const handleMarkPaidAndGrantCredits = async () => {
+    if (!grantCreditsInvoice) return;
+    const tokens = parseInt(grantCreditsAmount, 10);
+    if (isNaN(tokens) || tokens <= 0) { toast.error("Enter a valid credits amount"); return; }
+    setGrantCreditsBusy(true);
+    try {
+      const result = await markPaidAndGrantCredits({
+        id: grantCreditsInvoice.id,
+        creditsToGrant: tokens,
+        reason: grantCreditsReason || undefined,
+      });
+      // Activate plan if selected — companyId is the owner's clerkUserId for personal workspaces
+      if (grantPlan !== "none" && grantCreditsInvoice.companyId) {
+        await propagatePlan({ ownerUserId: grantCreditsInvoice.companyId, newPlan: grantPlan });
+        const planLabel = grantPlan === "pro_personal" ? "Pro" : "Business";
+        toast.success(`Invoice ${result.invoiceNo} paid ✓  ${result.creditsGranted.toLocaleString()} credits + ${planLabel} plan activated`);
+      } else {
+        toast.success(`Invoice ${result.invoiceNo} paid ✓  ${result.creditsGranted.toLocaleString()} credits granted (balance: ${result.newBalance.toLocaleString()})`);
+      }
+      setGrantCreditsInvoice(null);
+      setGrantCreditsAmount("");
+      setGrantCreditsReason("");
+      setGrantPlan("none");
+    } catch (err) {
+      toast.error(String(err));
+    } finally {
+      setGrantCreditsBusy(false);
+    }
+  };
+
   const handleSetInvoiceStatus = async (invoiceId: Id<"invoices">, invoiceNo: string, status: "draft" | "issued" | "paid" | "cancelled" | "overdue") => {
     try {
       await updateInvoiceStatus({ id: invoiceId, status });
@@ -765,6 +842,77 @@ export default function InvoicesAndPOsPage() {
                     onChange={(e) => setInvoiceForm({ ...invoiceForm, customerAddress: e.target.value })}
                     rows={2}
                   />
+                </div>
+
+                {/* Product / Fulfillment Action */}
+                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Coins className="h-4 w-4 text-amber-600 shrink-0" />
+                    <span className="font-semibold text-sm">Product &amp; Fulfillment</span>
+                    <span className="text-xs text-muted-foreground">— auto-executes when marked paid</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {INVOICE_PRESETS.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => applyInvoicePreset(p.id)}
+                        className={`flex flex-col items-start gap-0.5 rounded-md border px-3 py-2 text-left text-xs transition-colors hover:bg-amber-100 ${
+                          (p.planTier && invoiceForm.planTier === p.planTier) ||
+                          (p.creditsToGrant > 0 && invoiceForm.creditsToGrant === p.creditsToGrant)
+                            ? "border-amber-500 bg-amber-100 font-semibold"
+                            : "border-gray-200 bg-white"
+                        }`}
+                      >
+                        <span className="font-medium">{p.label}</span>
+                        <span className="text-muted-foreground">{p.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Plan Action on Payment</Label>
+                      <Select
+                        value={invoiceForm.planTier || "none"}
+                        onValueChange={(v) => setInvoiceForm(prev => ({ ...prev, planTier: v === "none" ? "" : v }))}
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="No plan change" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No plan change</SelectItem>
+                          <SelectItem value="pro_personal">→ Activate Pro</SelectItem>
+                          <SelectItem value="business">→ Activate Business</SelectItem>
+                          <SelectItem value="free">→ Cancel (Free)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Credits to Grant</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={invoiceForm.creditsToGrant || ""}
+                        onChange={(e) => setInvoiceForm(prev => ({ ...prev, creditsToGrant: parseInt(e.target.value) || 0 }))}
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                  {(invoiceForm.planTier || invoiceForm.creditsToGrant > 0) && (
+                    <div className="rounded bg-amber-100 px-3 py-2 text-xs text-amber-800">
+                      <strong>On payment:</strong>{" "}
+                      {invoiceForm.planTier === "free"
+                        ? "Cancel plan → Free"
+                        : invoiceForm.planTier === "pro_personal"
+                        ? "Activate Pro Plan"
+                        : invoiceForm.planTier === "business"
+                        ? "Activate Business Plan"
+                        : ""}
+                      {invoiceForm.planTier && invoiceForm.creditsToGrant > 0 ? " + " : ""}
+                      {invoiceForm.creditsToGrant > 0 ? `Grant ${invoiceForm.creditsToGrant.toLocaleString()} credits` : ""}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t pt-4">
@@ -1438,6 +1586,29 @@ export default function InvoicesAndPOsPage() {
                                       Set to Paid
                                     </DropdownMenuItem>
                                   )}
+                                  {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        const suggested = Math.round((invoice.total || 0) * 100);
+                                        const detectedPlan = detectPlanFromItems(invoice.items || [], invoice.invoiceType);
+                                        setGrantCreditsInvoice({
+                                          id: invoice._id,
+                                          invoiceNo: invoice.invoiceNo,
+                                          total: invoice.total,
+                                          currency: invoice.currency || invoicePOConfig?.currency || "USD",
+                                          companyId: invoice.companyId,
+                                          invoiceType: invoice.invoiceType,
+                                        });
+                                        setGrantCreditsAmount(String(suggested));
+                                        setGrantCreditsReason(`Offline payment — ${invoice.invoiceNo}`);
+                                        setGrantPlan(detectedPlan);
+                                      }}
+                                      className="text-emerald-600 focus:text-emerald-600"
+                                    >
+                                      <Coins className="mr-2 h-4 w-4" />
+                                      Mark Paid + Grant Credits
+                                    </DropdownMenuItem>
+                                  )}
                                   {invoice.status !== "cancelled" && (
                                     <DropdownMenuItem
                                       onClick={() => {
@@ -2013,10 +2184,111 @@ export default function InvoicesAndPOsPage() {
         isOpen={!!editingInvoiceId}
         onClose={() => setEditingInvoiceId(null)}
         onSuccess={() => {
-          // Refresh will happen automatically via Convex reactivity
           setEditingInvoiceId(null);
         }}
       />
+
+      {/* Mark Paid + Grant Credits Dialog */}
+      <Dialog open={!!grantCreditsInvoice} onOpenChange={open => { if (!open) setGrantCreditsInvoice(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Coins className="h-5 w-5 text-emerald-500" />
+              Mark Paid + Grant Credits
+            </DialogTitle>
+            <DialogDescription>
+              Marks <strong>{grantCreditsInvoice?.invoiceNo}</strong> as paid, grants credits, and optionally activates a subscription plan — all in one step.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1.5 border">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Invoice</span>
+                <span className="font-medium">{grantCreditsInvoice?.invoiceNo}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total Paid</span>
+                <span className="font-medium">{grantCreditsInvoice?.currency} {grantCreditsInvoice?.total?.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Suggested credits</span>
+                <span className="text-xs text-muted-foreground">total × 100 (e.g. $10 → 1,000 cr)</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="grant-credits-amount">Credits to Grant</Label>
+              <Input
+                id="grant-credits-amount"
+                type="number"
+                min="1"
+                value={grantCreditsAmount}
+                onChange={e => setGrantCreditsAmount(e.target.value)}
+                placeholder="e.g. 1000"
+              />
+              <p className="text-xs text-muted-foreground">
+                Standard rate: $10 = 1,000 cr · $50 = 5,000 cr · $249 = 30,000 cr
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="grant-plan">Activate Subscription Plan</Label>
+              <select
+                id="grant-plan"
+                value={grantPlan}
+                onChange={e => setGrantPlan(e.target.value)}
+                className="w-full h-9 text-sm border rounded-md px-3 bg-background"
+              >
+                <option value="none">No plan change — credits only</option>
+                <option value="pro_personal">Pro — $45/mo</option>
+                <option value="business">Business — $119/mo</option>
+              </select>
+              {grantPlan !== "none" && (
+                <p className="text-xs text-emerald-600">
+                  ✓ Will activate {grantPlan === "pro_personal" ? "Pro" : "Business"} plan + grant credits in one step
+                </p>
+              )}
+              {grantPlan === "none" && (
+                <p className="text-xs text-muted-foreground">
+                  Select a plan if this invoice is for a subscription
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="grant-credits-reason">Reason / Note</Label>
+              <Input
+                id="grant-credits-reason"
+                value={grantCreditsReason}
+                onChange={e => setGrantCreditsReason(e.target.value)}
+                placeholder="Offline payment — bank transfer"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setGrantCreditsInvoice(null)}
+                disabled={grantCreditsBusy}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                onClick={handleMarkPaidAndGrantCredits}
+                disabled={grantCreditsBusy}
+              >
+                {grantCreditsBusy ? (
+                  <span className="flex items-center gap-2"><span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />Processing…</span>
+                ) : (
+                  <span className="flex items-center gap-2"><Coins className="h-4 w-4" />Confirm & Grant</span>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

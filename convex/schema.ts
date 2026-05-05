@@ -991,8 +991,9 @@ export default defineSchema({
     notes: v.optional(v.string()),
     stripePaymentIntentId: v.optional(v.string()),
     stripeInvoiceId: v.optional(v.string()),
-    // Offline subscription billing — plan to activate when this invoice is marked paid
-    planTier: v.optional(v.string()),
+    // On-payment fulfillment — actions executed automatically when invoice status → "paid"
+    planTier: v.optional(v.string()),          // "pro_personal" | "business" | "free" (free = cancel)
+    creditsToGrant: v.optional(v.number()),    // credits to add to the workspace on payment
     billingInterval: v.optional(v.union(v.literal("monthly"), v.literal("annual"))),
     issuedAt: v.optional(v.number()),
     paidAt: v.optional(v.number()),

@@ -12,12 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Plus, Trash2, Save, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Save, RefreshCw, Coins } from "lucide-react";
 
 interface InvoiceEditDialogProps {
   invoiceId: Id<"invoices"> | null;
@@ -60,6 +61,8 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(0);
   const [notes, setNotes] = useState("");
+  const [planTier, setPlanTier] = useState("");
+  const [creditsToGrant, setCreditsToGrant] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
   // Load billing profile for sync-from-profile
@@ -89,6 +92,8 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
       setDiscount((invoice.discount || 0) / 100);
       setTaxRate(invoice.taxRate || (invoicePOConfig?.serviceTax || 0));
       setNotes(invoice.notes || "");
+      setPlanTier((invoice as any).planTier || "");
+      setCreditsToGrant((invoice as any).creditsToGrant || 0);
       setCustomerSearchTerm("");
       setShowCustomerDropdown(false);
     }
@@ -170,6 +175,8 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
         taxRate: serviceTaxEnabled ? taxRate : undefined,
         total: Math.round(total * 100),
         notes,
+        planTier: planTier || undefined,
+        creditsToGrant: creditsToGrant > 0 ? creditsToGrant : undefined,
       });
 
       toast.success("Invoice updated successfully");
@@ -204,6 +211,57 @@ export function InvoiceEditDialog({ invoiceId, isOpen, onClose, onSuccess }: Inv
         )}
 
         <div className="space-y-6 py-4">
+          {/* Fulfillment on Payment */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Coins className="h-4 w-4 text-amber-600 shrink-0" />
+              <span className="font-semibold text-sm">Fulfillment on Payment</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Plan Action</Label>
+                <Select
+                  value={planTier || "none"}
+                  onValueChange={(v) => setPlanTier(v === "none" ? "" : v)}
+                  disabled={isLocked}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="No plan change" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No plan change</SelectItem>
+                    <SelectItem value="pro_personal">→ Activate Pro</SelectItem>
+                    <SelectItem value="business">→ Activate Business</SelectItem>
+                    <SelectItem value="free">→ Cancel (Free)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Credits to Grant</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={creditsToGrant || ""}
+                  onChange={(e) => setCreditsToGrant(parseInt(e.target.value) || 0)}
+                  disabled={isLocked}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+            {(planTier || creditsToGrant > 0) && (
+              <div className="rounded bg-amber-100 px-3 py-2 text-xs text-amber-800">
+                <strong>On payment:</strong>{" "}
+                {planTier === "free" ? "Cancel plan → Free"
+                  : planTier === "pro_personal" ? "Activate Pro Plan"
+                  : planTier === "business" ? "Activate Business Plan"
+                  : ""}
+                {planTier && creditsToGrant > 0 ? " + " : ""}
+                {creditsToGrant > 0 ? `Grant ${creditsToGrant.toLocaleString()} credits` : ""}
+              </div>
+            )}
+          </div>
+
           {/* Customer Information */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">

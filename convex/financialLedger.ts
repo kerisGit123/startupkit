@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, action } from "./_generated/server";
+import { api } from "./_generated/api";
 
 // Stripe amounts are stored in cents (e.g. 1000 = RM10.00)
 // This helper converts cents to actual currency value
@@ -546,6 +547,179 @@ export const getInvoiceRevenueTrend = query({
         count: monthInvoices.length,
       };
     });
+  },
+});
+
+// ============================================
+// TEST / SEED MUTATIONS (dev only)
+// ============================================
+
+export const seedTestBillingData = mutation({
+  args: {
+    scenario: v.union(
+      v.literal("1_pro"),
+      v.literal("1_business"),
+      v.literal("2pro_1biz"),
+      v.literal("credit_10"),
+      v.literal("refund_45"),
+    ),
+  },
+  handler: async (ctx, { scenario }) => {
+    const now = Date.now();
+    const TAG = "TEST_BILLING_SEED";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ins = (amount: number, type: any, src: any, plan: string | undefined, desc: string) =>
+      ctx.db.insert("financial_ledger", {
+        ledgerId: `TEST-${now}-${Math.random().toString(36).slice(2, 8)}`,
+        amount, currency: "USD", type, revenueSource: src,
+        description: desc, companyId: "TEST_COMPANY_SEED",
+        subscriptionPlan: plan, transactionDate: now, recordedAt: now,
+        isReconciled: false, notes: TAG, createdAt: now, updatedAt: now,
+      });
+
+    const ids: string[] = [];
+    if (scenario === "1_pro") {
+      ids.push(await ins(4500, "subscription_charge", "stripe_subscription", "pro", "TEST: Pro subscription $45/mo"));
+    } else if (scenario === "1_business") {
+      ids.push(await ins(11900, "subscription_charge", "stripe_subscription", "business", "TEST: Business subscription $119/mo"));
+    } else if (scenario === "2pro_1biz") {
+      ids.push(await ins(4500, "subscription_charge", "stripe_subscription", "pro", "TEST: Pro sub #1 $45"));
+      ids.push(await ins(4500, "subscription_charge", "stripe_subscription", "pro", "TEST: Pro sub #2 $45"));
+      ids.push(await ins(11900, "subscription_charge", "stripe_subscription", "business", "TEST: Business sub $119"));
+    } else if (scenario === "credit_10") {
+      ids.push(await ins(1000, "credit_purchase", "stripe_payment", undefined, "TEST: Credit top-up $10"));
+    } else if (scenario === "refund_45") {
+      ids.push(await ins(-4500, "refund", "manual", "pro", "TEST: Refund pro subscription -$45"));
+    }
+    return { created: ids.length, scenario };
+  },
+});
+
+export const cleanupTestBillingData = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const entries = await ctx.db.query("financial_ledger")
+      .filter(q => q.eq(q.field("notes"), "TEST_BILLING_SEED"))
+      .collect();
+    for (const e of entries) await ctx.db.delete(e._id);
+    return { deleted: entries.length };
+  },
+});
+
+// Server-side automated billing metrics test — avoids React closure/stale-state problem
+export const runBillingMetricsAutoTest = action({
+  args: {},
+  handler: async (ctx) => {
+    type TR = { name: string; pass: boolean; expected: string; actual: string; durationMs: number };
+    const results: TR[] = [];
+
+    const step = async (name: string, fn: () => Promise<{ pass: boolean; expected: string; actual: string }>) => {
+      const t0 = Date.now();
+      try {
+        const r = await fn();
+        results.push({ name, ...r, durationMs: Date.now() - t0 });
+      } catch (e) {
+        results.push({ name, pass: false, expected: "no error", actual: String(e), durationMs: Date.now() - t0 });
+      }
+    };
+
+    // [0] Cleanup any leftover test data
+    await step("[0] Cleanup stale test data", async () => {
+      const r = await ctx.runMutation(api.financialLedger.cleanupTestBillingData, {});
+      return { pass: true, expected: "cleaned", actual: `deleted ${r.deleted} entries` };
+    });
+
+    // Read baseline AFTER cleanup
+    const baseline = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+    const baseMrr = baseline.mrr;
+    const baseNet = baseline.currentPeriod.netRevenue;
+
+    // [1] Seed 1 Pro → MRR should go up by exactly $45
+    await step("[1] Seed 1 Pro sub → MRR +$45", async () => {
+      await ctx.runMutation(api.financialLedger.seedTestBillingData, { scenario: "1_pro" });
+      const after = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      const delta = after.mrr - baseMrr;
+      return {
+        pass: delta >= 44.5 && delta <= 45.5,
+        expected: `+$45.00  (baseline MRR: $${baseMrr.toFixed(2)})`,
+        actual: `MRR $${after.mrr.toFixed(2)}  (delta +$${delta.toFixed(2)})`,
+      };
+    });
+
+    // [2] Seed 1 Business → MRR should go up by $119 more
+    await step("[2] Seed 1 Business sub → MRR +$119", async () => {
+      const before = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      await ctx.runMutation(api.financialLedger.seedTestBillingData, { scenario: "1_business" });
+      const after = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      const delta = after.mrr - before.mrr;
+      return {
+        pass: delta >= 118.5 && delta <= 119.5,
+        expected: "+$119.00",
+        actual: `delta +$${delta.toFixed(2)}  (MRR now $${after.mrr.toFixed(2)})`,
+      };
+    });
+
+    // [3] ARR should always equal MRR × 12
+    await step("[3] ARR = MRR × 12", async () => {
+      const s = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      const expected = Math.round(s.mrr * 12 * 100) / 100;
+      return {
+        pass: Math.abs(s.arr - expected) < 0.5,
+        expected: `$${expected.toFixed(2)}`,
+        actual: `$${s.arr.toFixed(2)}  (MRR $${s.mrr.toFixed(2)} × 12)`,
+      };
+    });
+
+    // [4] Credit purchase $10 → Net Revenue up by $10
+    await step("[4] Credit purchase $10 → Net Revenue +$10", async () => {
+      const before = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      await ctx.runMutation(api.financialLedger.seedTestBillingData, { scenario: "credit_10" });
+      const after = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      const delta = after.currentPeriod.netRevenue - before.currentPeriod.netRevenue;
+      return {
+        pass: delta >= 9.5 && delta <= 10.5,
+        expected: "+$10.00",
+        actual: `delta +$${delta.toFixed(2)}  (net now $${after.currentPeriod.netRevenue.toFixed(2)})`,
+      };
+    });
+
+    // [5] Refund -$45 → Net Revenue down by $45
+    await step("[5] Refund -$45 → Net Revenue -$45", async () => {
+      const before = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      await ctx.runMutation(api.financialLedger.seedTestBillingData, { scenario: "refund_45" });
+      const after = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      const delta = after.currentPeriod.netRevenue - before.currentPeriod.netRevenue;
+      return {
+        pass: delta <= -44.5 && delta >= -45.5,
+        expected: "-$45.00",
+        actual: `delta $${delta.toFixed(2)}  (net now $${after.currentPeriod.netRevenue.toFixed(2)})`,
+      };
+    });
+
+    // [6] Cleanup → all test entries removed
+    await step("[6] Cleanup → all test entries removed", async () => {
+      const r = await ctx.runMutation(api.financialLedger.cleanupTestBillingData, {});
+      const after = await ctx.runQuery(api.financialLedger.getRevenueAnalytics, {});
+      return {
+        pass: r.deleted >= 4,
+        expected: `≥4 entries deleted, MRR back ≈ $${baseMrr.toFixed(2)}`,
+        actual: `deleted ${r.deleted}  (MRR now $${after.mrr.toFixed(2)}, net $${after.currentPeriod.netRevenue.toFixed(2)})`,
+      };
+    });
+
+    const passed = results.filter(r => r.pass).length;
+    const failed = results.filter(r => !r.pass).length;
+    return { results, passed, failed, baselineMrr: baseMrr, baselineNet: baseNet };
+  },
+});
+
+export const getTestBillingEntries = query({
+  args: {},
+  handler: async (ctx) => {
+    const entries = await ctx.db.query("financial_ledger")
+      .filter(q => q.eq(q.field("notes"), "TEST_BILLING_SEED"))
+      .collect();
+    return entries.map(e => ({ ...e, amount: toCurrency(e.amount) }));
   },
 });
 

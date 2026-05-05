@@ -418,6 +418,8 @@ export const createInvoice = mutation({
       v.literal("one_time")
     )),
     autoIssue: v.optional(v.boolean()),
+    planTier: v.optional(v.string()),
+    creditsToGrant: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Generate invoice number
@@ -445,6 +447,8 @@ export const createInvoice = mutation({
       stripeInvoiceId: args.stripeInvoiceId,
       dueDate: args.dueDate,
       paymentTerms: args.paymentTerms,
+      planTier: args.planTier,
+      creditsToGrant: args.creditsToGrant,
       issuedAt: undefined as number | undefined,
       createdAt: now,
       updatedAt: now,
@@ -573,9 +577,71 @@ export const updateInvoiceStatus = mutation({
 
     await ctx.db.patch(id, updates);
 
+    // ── On-payment fulfillment ───────────────────────────────────────────────
+    // Only execute once — guard against re-triggering if already paid
+    if (status === "paid" && invoice.companyId && invoice.status !== "paid") {
+      const balance = await ctx.db
+        .query("credits_balance")
+        .withIndex("by_companyId", (q) => q.eq("companyId", invoice.companyId!))
+        .first();
+
+      // Activate / change / cancel plan
+      if (invoice.planTier && balance) {
+        const isCancelling = invoice.planTier === "free";
+        await ctx.db.patch(balance._id, {
+          ownerPlan: invoice.planTier,
+          lapsedAt: isCancelling ? now : undefined,
+          updatedAt: now,
+        });
+        await ctx.db.insert("credits_ledger", {
+          companyId: invoice.companyId,
+          tokens: 0,
+          type: "subscription_change",
+          reason: isCancelling
+            ? `Plan cancelled (downgrade to free) — invoice ${invoice.invoiceNo}`
+            : `Plan activated: ${invoice.planTier} — invoice ${invoice.invoiceNo}`,
+          invoiceId: id,
+          createdAt: now,
+        });
+      }
+
+      // Grant credits
+      let creditsGranted = 0;
+      let newBalance: number | undefined;
+      if (invoice.creditsToGrant && invoice.creditsToGrant > 0 && balance) {
+        newBalance = balance.balance + invoice.creditsToGrant;
+        creditsGranted = invoice.creditsToGrant;
+        await ctx.db.patch(balance._id, {
+          balance: newBalance,
+          updatedAt: now,
+        });
+        await ctx.db.insert("credits_ledger", {
+          companyId: invoice.companyId,
+          tokens: invoice.creditsToGrant,
+          type: "admin_adjustment",
+          reason: `Credits granted — invoice ${invoice.invoiceNo}`,
+          invoiceId: id,
+          createdAt: now,
+        });
+      }
+
+      return {
+        success: true,
+        message: `Invoice ${invoice.invoiceNo} paid — fulfillment executed`,
+        fulfilled: true,
+        planActivated: invoice.planTier || null,
+        creditsGranted,
+        newBalance: newBalance ?? balance?.balance ?? null,
+      };
+    }
+
     return {
       success: true,
       message: `Invoice status updated to ${status}`,
+      fulfilled: false,
+      planActivated: null,
+      creditsGranted: 0,
+      newBalance: null,
     };
   },
 });
@@ -611,6 +677,8 @@ export const updateInvoice = mutation({
     total: v.optional(v.number()),
     notes: v.optional(v.string()),
     dueDate: v.optional(v.number()),
+    planTier: v.optional(v.string()),
+    creditsToGrant: v.optional(v.number()),
   },
   handler: async (ctx, { id, ...updates }) => {
     const invoice = await ctx.db.get(id);
@@ -712,5 +780,56 @@ export const getInvoiceStats = query({
     };
 
     return stats;
+  },
+});
+
+// Mark invoice as paid AND grant credits to the client workspace
+export const markPaidAndGrantCredits = mutation({
+  args: {
+    id: v.id("invoices"),
+    creditsToGrant: v.number(),
+    reason: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, creditsToGrant, reason }) => {
+    const invoice = await ctx.db.get(id);
+    if (!invoice) throw new Error("Invoice not found");
+    if (invoice.status === "paid") throw new Error("Invoice already paid");
+    if (invoice.status === "cancelled") throw new Error("Cannot pay a cancelled invoice");
+    if (!invoice.companyId) throw new Error("Invoice has no companyId — cannot grant credits");
+    if (creditsToGrant <= 0) throw new Error("Credits must be positive");
+
+    const now = Date.now();
+
+    // Mark invoice paid
+    await ctx.db.patch(id, { status: "paid", paidAt: now, updatedAt: now });
+
+    // Grant credits to the workspace
+    const balance = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", invoice.companyId!))
+      .first();
+
+    if (!balance) throw new Error(`No credits_balance record for companyId ${invoice.companyId}`);
+
+    await ctx.db.patch(balance._id, {
+      balance: balance.balance + creditsToGrant,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("credits_ledger", {
+      companyId: invoice.companyId,
+      tokens: creditsToGrant,
+      type: "admin_adjustment",
+      reason: reason ?? `Offline payment — invoice ${invoice.invoiceNo}`,
+      invoiceId: id,
+      createdAt: now,
+    });
+
+    return {
+      success: true,
+      invoiceNo: invoice.invoiceNo,
+      creditsGranted: creditsToGrant,
+      newBalance: balance.balance + creditsToGrant,
+    };
   },
 });

@@ -37,9 +37,12 @@ import {
   BadgePlus,
   ShieldAlert,
   CreditCard,
+  TrendingUp,
 } from "lucide-react";
 import { SubscriptionTestPanel } from "./SubscriptionTestPanel";
 import { BillingAdminTestPanel } from "./BillingAdminTestPanel";
+import { RevenueMetricsTestPanel } from "./RevenueMetricsTestPanel";
+import { InvoiceFulfillmentTestPanel } from "./InvoiceFulfillmentTestPanel";
 
 interface TestingPageProps {
   sidebarOpen: boolean;
@@ -120,7 +123,7 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
         )
       : [];
 
-  const [activeTab, setActiveTab] = useState<"credits" | "subscription" | "billing">("credits");
+  const [activeTab, setActiveTab] = useState<"credits" | "subscription" | "billing" | "revenue" | "invoice">("credits");
 
   const [status, setStatus] = useState<
     { kind: "success" | "error"; text: string } | null
@@ -1280,6 +1283,28 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
           <BadgePlus className="w-4 h-4" />
           Admin Billing Ops
         </button>
+        <button
+          onClick={() => setActiveTab("revenue")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === "revenue"
+              ? "border-emerald-400 text-emerald-400"
+              : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+          }`}
+        >
+          <TrendingUp className="w-4 h-4" />
+          Revenue Metrics
+        </button>
+        <button
+          onClick={() => setActiveTab("invoice")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === "invoice"
+              ? "border-sky-400 text-sky-400"
+              : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          Invoice Fulfillment
+        </button>
       </div>
 
       {/* Subscription Lifecycle tab */}
@@ -1287,6 +1312,12 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
 
       {/* Admin Billing Ops tab */}
       {activeTab === "billing" && <BillingAdminTestPanel />}
+
+      {/* Revenue Metrics test tab */}
+      {activeTab === "revenue" && <RevenueMetricsTestPanel />}
+
+      {/* Invoice Fulfillment test tab */}
+      {activeTab === "invoice" && <InvoiceFulfillmentTestPanel />}
 
       {/* Credit & Identity tab */}
       {activeTab === "credits" && (
