@@ -3,11 +3,12 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ShoppingCart, DollarSign, TrendingUp, Coins, Search } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function PurchasesTab() {
   const purchases = useQuery(api.adminPurchases.getAllPurchases);
@@ -15,7 +16,9 @@ export function PurchasesTab() {
   const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [creditFilter, setCreditFilter] = useState("");
+  const [creditFilter, setCreditFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const rowsPerPage = 10;
 
   const filteredPurchases = useMemo(() => {
     if (!purchases) return [];
@@ -31,23 +34,30 @@ export function PurchasesTab() {
       const matchesEndDate = !endDate || purchaseDate <= new Date(endDate + "T23:59:59");
       const matchesDate = matchesStartDate && matchesEndDate;
       
-      const matchesCredit = !creditFilter || 
-        (creditFilter === "500+" ? purchase.tokens > 500 : purchase.tokens.toString() === creditFilter);
+      const matchesCredit = creditFilter === "all" ||
+        (creditFilter === "25000+" ? purchase.tokens >= 25000 : purchase.tokens.toString() === creditFilter);
       
       return matchesSearch && matchesDate && matchesCredit;
     });
   }, [purchases, searchTerm, startDate, endDate, creditFilter]);
 
+  useEffect(() => { setPage(1); }, [searchTerm, startDate, endDate, creditFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPurchases.length / rowsPerPage));
+  const paginatedPurchases = useMemo(() => {
+    const start = (page - 1) * rowsPerPage;
+    return filteredPurchases.slice(start, start + rowsPerPage);
+  }, [filteredPurchases, page, rowsPerPage]);
+
   const getCreditBadge = (tokens: number) => {
-    if (tokens >= 500) return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">500+</Badge>;
-    if (tokens >= 300) return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">300</Badge>;
-    if (tokens >= 200) return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">200</Badge>;
-    return <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">100</Badge>;
+    if (tokens >= 25000) return <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">25,000</Badge>;
+    if (tokens >= 5000) return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">5,000</Badge>;
+    return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">1,000</Badge>;
   };
 
   const getPriorityIcon = (tokens: number) => {
-    if (tokens >= 500) return "↑";
-    if (tokens >= 300) return "→";
+    if (tokens >= 25000) return "↑";
+    if (tokens >= 5000) return "→";
     return "↓";
   };
 
@@ -137,22 +147,22 @@ export function PurchasesTab() {
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
         />
-        <select
-          value={creditFilter}
-          onChange={(e) => setCreditFilter(e.target.value)}
-          className="flex h-9 w-40 items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm"
-        >
-          <option value="">All Credits</option>
-          <option value="100">100 Credits</option>
-          <option value="200">200 Credits</option>
-          <option value="300">300 Credits</option>
-          <option value="500">500 Credits</option>
-          <option value="500+">Above 500</option>
-        </select>
+        <Select value={creditFilter} onValueChange={setCreditFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="All Credits" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Credits</SelectItem>
+            <SelectItem value="1000">1,000 Credits</SelectItem>
+            <SelectItem value="5000">5,000 Credits</SelectItem>
+            <SelectItem value="25000">25,000 Credits</SelectItem>
+            <SelectItem value="25000+">Above 25,000</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Clean Table - Image 4 Style */}
-      <div className="bg-white rounded-lg border">
+      <div className="rounded-lg border bg-card">
         <table className="w-full">
           <thead className="border-b">
             <tr className="text-left">
@@ -167,12 +177,12 @@ export function PurchasesTab() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {!filteredPurchases ? (
+            {!purchases ? (
               <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">Loading...</td></tr>
-            ) : filteredPurchases.length === 0 ? (
+            ) : paginatedPurchases.length === 0 ? (
               <tr><td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">No purchases found</td></tr>
             ) : (
-              filteredPurchases.map((purchase) => (
+              paginatedPurchases.map((purchase) => (
                 <tr key={purchase._id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <input type="checkbox" className="rounded" />
@@ -241,19 +251,22 @@ export function PurchasesTab() {
         </table>
         
         {/* Pagination Footer */}
-        <div className="border-t px-6 py-3 flex items-center justify-between text-sm text-gray-600">
-          <div>0 of {filteredPurchases?.length || 0} row(s) selected.</div>
-          <div className="flex items-center gap-4">
-            <span>Rows per page: 10</span>
-            <span>Page 1 of {Math.ceil((filteredPurchases?.length || 0) / 10)}</span>
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled>«</Button>
-              <Button variant="outline" size="sm" disabled>‹</Button>
-              <Button variant="outline" size="sm">›</Button>
-              <Button variant="outline" size="sm">»</Button>
+        {filteredPurchases.length > 0 && (
+          <div className="border-t px-6 py-3 flex items-center justify-between text-sm text-muted-foreground">
+            <div>
+              {filteredPurchases.length === 0 ? 0 : (page - 1) * rowsPerPage + 1}–{Math.min(page * rowsPerPage, filteredPurchases.length)} of {filteredPurchases.length} purchases
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs">Page {page} of {totalPages}</span>
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" onClick={() => setPage(1)} disabled={page === 1}>«</Button>
+                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹</Button>
+                <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>›</Button>
+                <Button variant="outline" size="sm" onClick={() => setPage(totalPages)} disabled={page === totalPages}>»</Button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

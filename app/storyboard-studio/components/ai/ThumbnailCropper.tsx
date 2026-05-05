@@ -26,6 +26,7 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const [imgNatural, setImgNatural] = useState({ w: 1, h: 1 });
   const [displaySize, setDisplaySize] = useState({ w: 1, h: 1 });
 
@@ -190,6 +191,13 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
         </div>
 
         {/* Crop Area */}
+        {imgError ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 min-h-[300px] bg-(--bg-primary)">
+            <span className="text-sm text-(--text-secondary)">Image could not be loaded.</span>
+            <span className="text-xs text-(--text-tertiary)">The file may have been deleted or is no longer accessible.</span>
+            <button onClick={onClose} className="mt-2 px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-sm text-(--text-primary) transition-colors">Close</button>
+          </div>
+        ) : (
         <div ref={containerRef} className="flex-1 flex items-center justify-center p-4 min-h-[300px] bg-(--bg-primary)">
           <div className="relative" style={{ width: displaySize.w, height: displaySize.h }}>
             {/* Base image (dimmed) */}
@@ -198,7 +206,7 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
               src={imageUrl}
               alt="Crop source"
               onLoad={handleImageLoad}
-              onError={() => console.error("[ThumbnailCropper] Failed to load image:", imageUrl)}
+              onError={() => { console.warn("[ThumbnailCropper] Image not available (deleted or expired):", imageUrl); setImgError(true); }}
               className="block select-none"
               style={{ width: displaySize.w, height: displaySize.h, opacity: 0.35 }}
               draggable={false}
@@ -246,6 +254,7 @@ export function ThumbnailCropper({ imageUrl, onSave, onClose, aspectRatio = 1 }:
             )}
           </div>
         </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-white/5">

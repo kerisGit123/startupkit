@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { useSubscription } from "@/hooks/useSubscription";
-import { Coins } from "lucide-react";
+import { AlertTriangle, Coins } from "lucide-react";
 
 interface CreditBalanceDisplayProps {
   className?: string;
@@ -38,6 +38,11 @@ export default function CreditBalanceDisplay({ className = "" }: CreditBalanceDi
   const recentUsage = useQuery(
     api.credits.listOrgUsage,
     companyId ? { companyId } : "skip",
+  );
+
+  const cyclingBlock = useQuery(
+    api.credits.getCyclingBlock,
+    companyId && !companyId.startsWith("org_") ? { companyId } : "skip",
   );
 
   const ensureMonthlyGrant = useMutation(api.credits.ensureMonthlyGrant);
@@ -136,6 +141,19 @@ export default function CreditBalanceDisplay({ className = "" }: CreditBalanceDi
           >
             {VIEW_LABELS[usageView]}
           </button>
+        </div>
+      )}
+
+      {/* Cycling block warning — shown when monthly credit refill is paused */}
+      {cyclingBlock?.cyclingBlockedUntil && cyclingBlock.cyclingBlockedUntil > Date.now() && (
+        <div className="mt-3 pt-3 border-t border-(--border-primary)">
+          <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/25 px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+            <div className="text-[11px] leading-snug text-amber-300">
+              <span className="font-medium">Monthly credit refill paused</span>
+              <span className="text-amber-400/80"> until {new Date(cyclingBlock.cyclingBlockedUntil).toLocaleDateString(undefined, { month: "short", day: "numeric" })} — your plan changed too frequently.</span>
+            </div>
+          </div>
         </div>
       )}
     </div>

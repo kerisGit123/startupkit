@@ -76,12 +76,13 @@ export const getUnreadCount = query({
       messages = messages.filter(m => m.assignedTo === args.assignedTo);
     }
 
+    const tickets = messages.filter(m => m.channel === "ticket").length;
     return {
-      total: messages.length,
+      total: tickets,
       byChannel: {
         email: messages.filter(m => m.channel === "email").length,
         chatbot: messages.filter(m => m.channel === "chatbot").length,
-        ticket: messages.filter(m => m.channel === "ticket").length,
+        ticket: tickets,
         sms: messages.filter(m => m.channel === "sms").length,
       },
     };
@@ -184,6 +185,8 @@ export const getGroupedMessages = query({
     for (const [threadId, data] of threadMap) {
       let ticketMessageCount = 0;
       let hasNewCustomerReply = data.hasNewCustomerReply;
+      let resolvedName: string | null = null;
+      let resolvedEmail: string | null = null;
 
       if (data.original.channel === "ticket" && data.original.metadata?.ticketId) {
         const ticketMessages = await ctx.db
@@ -199,10 +202,34 @@ export const getGroupedMessages = query({
             hasNewCustomerReply = true;
           }
         }
+
+        // Resolve display name from support_ticket → users table
+        const ticket = await ctx.db.get(data.original.metadata.ticketId as any);
+        if (ticket) {
+          resolvedEmail = ticket.userEmail || null;
+          const user = await ctx.db
+            .query("users")
+            .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", ticket.userId))
+            .first();
+          if (user) {
+            resolvedName = user.fullName || user.firstName || user.email || null;
+          }
+          if (!resolvedName) resolvedName = ticket.userEmail || null;
+        }
       }
+
+      const existingMeta = data.original.metadata as Record<string, unknown> | undefined;
+      const rawUserName = existingMeta?.userName as string | undefined;
+      // A raw Clerk ID starts with "user_" — treat it as missing
+      const isRawClerkId = rawUserName?.startsWith("user_") && rawUserName.length > 20;
 
       results.push({
         ...data.original,
+        metadata: {
+          ...existingMeta,
+          userName: resolvedName || (!isRawClerkId ? rawUserName : null) || existingMeta?.senderName || null,
+          userEmail: resolvedEmail || existingMeta?.userEmail || null,
+        },
         threadId,
         replyCount: Math.max(data.replyCount, ticketMessageCount > 0 ? ticketMessageCount - 1 : 0),
         lastReplyAt: data.lastReplyAt,

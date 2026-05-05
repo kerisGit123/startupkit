@@ -298,9 +298,10 @@ export function useExport({
             ? audioBuf.getChannelData(1).slice(startSample, endSample)
             : left;
           const destOffset = Math.round(audioTimeOffset * AUDIO_SR);
+          const acGain = (ac.volume ?? 100) / 100;
           for (let i = 0; i < left.length && destOffset + i < totalAudioSamples; i++) {
-            mixedAudioL![destOffset + i] += left[i];
-            mixedAudioR![destOffset + i] += right[i];
+            mixedAudioL![destOffset + i] += left[i] * acGain;
+            mixedAudioR![destOffset + i] += right[i] * acGain;
           }
           audioTimeOffset += getVisDur(ac);
         }
@@ -319,9 +320,10 @@ export function useExport({
                 ? audioBuf.getChannelData(1).slice(startSample, endSample)
                 : left;
               const destOffset = Math.round(videoTimeOffset * AUDIO_SR);
+              const vcGain = (vc.volume ?? 100) / 100;
               for (let i = 0; i < left.length && destOffset + i < totalAudioSamples; i++) {
-                mixedAudioL![destOffset + i] += left[i];
-                mixedAudioR![destOffset + i] += right[i];
+                mixedAudioL![destOffset + i] += left[i] * vcGain;
+                mixedAudioR![destOffset + i] += right[i] * vcGain;
               }
             } catch {
               // Video may not have audio track — skip silently
@@ -336,14 +338,17 @@ export function useExport({
             try {
               const cachedBlob = overlayBlobs[layer.id] || await fetchBlob(layer.src, layer.src.split("/").pop() || layer.id);
               const audioBuf = await audioCtx.decodeAudioData(await cachedBlob.arrayBuffer());
+              const acGain = (layer.volume ?? 100) / 100;
               const layerDur = layer.endTime - layer.startTime;
               const left = audioBuf.getChannelData(0);
               const right = audioBuf.numberOfChannels > 1 ? audioBuf.getChannelData(1) : left;
+              const srcSamples = left.length;
               const destOffset = Math.round(layer.startTime * AUDIO_SR);
-              const maxSamples = Math.min(left.length, Math.round(layerDur * audioBuf.sampleRate));
+              const maxSamples = Math.round(layerDur * audioBuf.sampleRate);
               for (let i = 0; i < maxSamples && destOffset + i < totalAudioSamples; i++) {
-                mixedAudioL![destOffset + i] += left[i];
-                mixedAudioR![destOffset + i] += right[i];
+                const si = srcSamples > 0 ? i % srcSamples : 0;
+                mixedAudioL![destOffset + i] += left[si] * acGain;
+                mixedAudioR![destOffset + i] += right[si] * acGain;
               }
             } catch {
               // Overlay video may not have audio — skip
@@ -392,16 +397,36 @@ export function useExport({
         ctx.fillStyle = bgColor || "#000000";
         ctx.fillRect(0, 0, W, H);
 
-        const r = getClipAtTime(videoClips, f / FPS);
+        const exportTime2 = f / FPS;
+
+        // Detect active transition early so Clip A draw can apply fade/slide modifiers
+        const activeTrans = overlayLayers.find(l => l.type === "transition" && exportTime2 >= l.startTime && exportTime2 < l.endTime && (l.visible ?? true));
+        let transP = 0;
+        let transLayerA: OverlayLayer | null = null;
+        let transLayerB: OverlayLayer | null = null;
+        let isVideoTrackTrans = false;
+        if (activeTrans) {
+          transP = (exportTime2 - activeTrans.startTime) / (activeTrans.endTime - activeTrans.startTime);
+          const tl = getTransitionLayers(overlayLayers, activeTrans.startTime, activeTrans.endTime);
+          transLayerA = tl.layerA;
+          transLayerB = tl.layerB;
+          isVideoTrackTrans = !transLayerA && !transLayerB;
+        }
+        const tt0 = activeTrans?.transitionType || "crossfade";
+
+        const r = getClipAtTime(videoClips, exportTime2);
         if (r) {
           const prevComposite = ctx.globalCompositeOperation;
           const prevAlpha = ctx.globalAlpha;
           if (r.clip.blendMode && r.clip.blendMode !== "normal") {
             ctx.globalCompositeOperation = r.clip.blendMode as GlobalCompositeOperation;
           }
-          if (r.clip.opacity != null && r.clip.opacity < 100) {
-            ctx.globalAlpha = r.clip.opacity / 100;
+          // Apply crossfade fade-out to Clip A
+          let clipAlpha = (r.clip.opacity ?? 100) / 100;
+          if (isVideoTrackTrans && (tt0 === "crossfade" || tt0 === "cross-dissolve")) {
+            clipAlpha *= (1 - transP);
           }
+          ctx.globalAlpha = clipAlpha;
           if (r.clip.type === "video") {
             const vid = videoEls[r.clip.id];
             if (vid && vid.videoWidth > 0) {
@@ -412,14 +437,22 @@ export function useExport({
               } else if (Math.abs(vid.currentTime - r.offset) > 1 / FPS) {
                 await seekVideo(vid, r.offset);
               }
-              ctx.drawImage(vid, 0, 0, W, H);
+              if (isVideoTrackTrans && tt0 === "slide-left") {
+                ctx.save(); ctx.translate(-transP * W, 0); ctx.drawImage(vid, 0, 0, W, H); ctx.restore();
+              } else {
+                ctx.drawImage(vid, 0, 0, W, H);
+              }
               // Advance video by one frame for next iteration
               vid.currentTime = r.offset + 1 / FPS;
             }
           } else if (r.clip.type === "image") {
             const bmp = imageBitmaps[r.clip.id];
             if (bmp) {
-              ctx.drawImage(bmp, 0, 0, W, H);
+              if (isVideoTrackTrans && tt0 === "slide-left") {
+                ctx.save(); ctx.translate(-transP * W, 0); ctx.drawImage(bmp, 0, 0, W, H); ctx.restore();
+              } else {
+                ctx.drawImage(bmp, 0, 0, W, H);
+              }
             }
             lastVideoClipId = "";
           }
@@ -429,43 +462,39 @@ export function useExport({
           lastVideoClipId = "";
         }
 
-        // Render video-track transition effects (overlay layer transitions are handled inline below)
-        const exportTime2 = f / FPS;
-        const activeTrans = overlayLayers.find(l => l.type === "transition" && exportTime2 >= l.startTime && exportTime2 < l.endTime && (l.visible ?? true));
-        let transP = 0;
-        let transLayerA: OverlayLayer | null = null;
-        let transLayerB: OverlayLayer | null = null;
-        if (activeTrans) {
-          transP = (exportTime2 - activeTrans.startTime) / (activeTrans.endTime - activeTrans.startTime);
-          const tl = getTransitionLayers(overlayLayers, activeTrans.startTime, activeTrans.endTime);
-          transLayerA = tl.layerA;
-          transLayerB = tl.layerB;
-
-          // Video-track transitions only (when no overlay layers match)
-          if (!transLayerA && !transLayerB) {
-            const tt = activeTrans.transitionType || "crossfade";
-            const tc = getTransitionClips(videoClips, activeTrans.startTime, activeTrans.endTime);
-            const clipB = tc.clipB?.clip;
-            const hasB = !!(clipB && (clipB.type === "image" || clipB.type === "video"));
-            const drawClipB = () => {
-              if (!clipB) return;
-              if (clipB.type === "image" && imageBitmaps[clipB.id]) ctx.drawImage(imageBitmaps[clipB.id], 0, 0, W, H);
-              else if (clipB.type === "video" && videoEls[clipB.id]) ctx.drawImage(videoEls[clipB.id], 0, 0, W, H);
-            };
-
-            if (tt === "fade-color") {
-              const colorOpacity = transP < 0.5 ? transP * 2 : (1 - transP) * 2;
-              ctx.fillStyle = activeTrans.backgroundColor || "#000000";
-              ctx.globalAlpha = colorOpacity;
-              ctx.fillRect(0, 0, W, H);
-              ctx.globalAlpha = 1;
-            } else if ((tt === "crossfade" || tt === "cross-dissolve") && hasB) {
-              ctx.globalAlpha = transP; drawClipB(); ctx.globalAlpha = 1;
-            } else if (tt === "slide-left" && hasB) {
-              ctx.save(); ctx.translate((1 - transP) * W, 0); drawClipB(); ctx.restore();
-            } else if (tt === "wipe" && hasB) {
-              ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W * transP, H); ctx.clip(); drawClipB(); ctx.restore();
+        // Video-track Clip B transition effects
+        if (activeTrans && isVideoTrackTrans) {
+          const tt = activeTrans.transitionType || "crossfade";
+          const tc = getTransitionClips(videoClips, activeTrans.startTime, activeTrans.endTime);
+          const clipB = tc.clipB?.clip;
+          const hasB = !!(clipB && (clipB.type === "image" || clipB.type === "video"));
+          const drawClipB = async () => {
+            if (!clipB) return;
+            if (clipB.type === "image" && imageBitmaps[clipB.id]) {
+              ctx.drawImage(imageBitmaps[clipB.id], 0, 0, W, H);
+            } else if (clipB.type === "video" && videoEls[clipB.id]) {
+              const vid = videoEls[clipB.id];
+              let clipBStart = 0;
+              for (let i = 0; i < (tc.clipB?.idx ?? 0); i++) clipBStart += getVisDur(videoClips[i]);
+              const clipBTime = Math.max(0, exportTime2 - clipBStart + (clipB.trimStart || 0));
+              const target = vid.duration > 0 ? Math.min(clipBTime, vid.duration - 0.01) : clipBTime;
+              await seekVideo(vid, target);
+              ctx.drawImage(vid, 0, 0, W, H);
             }
+          };
+
+          if (tt === "fade-color") {
+            const colorOpacity = transP < 0.5 ? transP * 2 : (1 - transP) * 2;
+            ctx.fillStyle = activeTrans.backgroundColor || "#000000";
+            ctx.globalAlpha = colorOpacity;
+            ctx.fillRect(0, 0, W, H);
+            ctx.globalAlpha = 1;
+          } else if ((tt === "crossfade" || tt === "cross-dissolve") && hasB) {
+            ctx.globalAlpha = transP; await drawClipB(); ctx.globalAlpha = 1;
+          } else if (tt === "slide-left" && hasB) {
+            ctx.save(); ctx.translate((1 - transP) * W, 0); await drawClipB(); ctx.restore();
+          } else if (tt === "wipe" && hasB) {
+            ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W * transP, H); ctx.clip(); await drawClipB(); ctx.restore();
           }
         }
 
@@ -609,8 +638,8 @@ export function useExport({
             const vid = overlayVideos[layer.id];
             const layerTime = exportTime - layer.startTime;
             if (vid.duration > 0 && layerTime >= 0) {
-              // Clamp to last frame instead of looping
-              const target = Math.min(layerTime, vid.duration - 0.01);
+              const loopedTime = layerTime % vid.duration;
+              const target = Math.min(loopedTime, vid.duration - 0.01);
               await seekVideo(vid, target);
             }
             let drawn = false;

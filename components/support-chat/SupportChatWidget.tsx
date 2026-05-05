@@ -2,6 +2,8 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useUser } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { MessageCircle, X, Send, Loader2, RotateCcw, Home, Search, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -442,6 +444,14 @@ const uid = () =>
     : Math.random().toString(36).slice(2);
 
 export default function SupportChatWidget({ variant, onNavigate }: SupportChatWidgetProps) {
+  const configType = variant === "studio" ? "user_panel" : "frontend";
+  const chatbotConfig = useQuery(api.chatbot.getConfig, { type: configType });
+  // Only hide when we have a confirmed disabled state. Show during loading (undefined).
+  if (chatbotConfig !== undefined && chatbotConfig.isActive === false) return null;
+  return <SupportChatWidgetInner variant={variant} onNavigate={onNavigate} />;
+}
+
+function SupportChatWidgetInner({ variant, onNavigate }: SupportChatWidgetProps) {
   const { isSignedIn } = useUser();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
@@ -1058,7 +1068,7 @@ export default function SupportChatWidget({ variant, onNavigate }: SupportChatWi
               />
               <Button
                 size="icon"
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={streaming || !input.trim()}
                 className="h-10 w-10 shrink-0"
               >

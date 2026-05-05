@@ -429,27 +429,36 @@ export const getFinancialSummary = query({
         ? positiveEntries.reduce((sum, e) => sum + e.amount, 0) / positiveEntries.length
         : 0;
 
-    // Top customers by revenue
-    const customerRevenue: Record<string, { total: number; count: number; stripeId?: string }> = {};
+    // Top customers by revenue — group by companyId for stable key
+    const customerRevenue: Record<string, { total: number; count: number }> = {};
     for (const entry of allEntries.filter((e) => e.amount > 0)) {
-      const key = entry.stripeCustomerId || entry.companyId || "unknown";
+      const key = entry.companyId || entry.stripeCustomerId || "unknown";
       if (!customerRevenue[key]) {
-        customerRevenue[key] = { total: 0, count: 0, stripeId: entry.stripeCustomerId };
+        customerRevenue[key] = { total: 0, count: 0 };
       }
       customerRevenue[key].total += entry.amount;
       customerRevenue[key].count++;
     }
 
-    const topCustomers = Object.entries(customerRevenue)
-      .map(([key, data]) => ({ customer: key, ...data }))
-      .sort((a, b) => b.total - a.total)
+    const topRaw = Object.entries(customerRevenue)
+      .sort((a, b) => b[1].total - a[1].total)
       .slice(0, 5);
 
-    // Convert topCustomers totals from cents
-    const convertedTopCustomers = topCustomers.map(c => ({
-      ...c,
-      total: toCurrency(c.total),
-    }));
+    // Enrich with user name/email from users table
+    const convertedTopCustomers = await Promise.all(
+      topRaw.map(async ([companyId, data]) => {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", companyId))
+          .first();
+        return {
+          customer: user?.fullName || user?.firstName || user?.email || companyId,
+          email: user?.email || null,
+          total: toCurrency(data.total),
+          count: data.count,
+        };
+      })
+    );
 
     return {
       allTime: {

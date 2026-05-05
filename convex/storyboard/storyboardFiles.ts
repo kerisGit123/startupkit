@@ -289,9 +289,29 @@ export const listByCategory = query({
   },
 });
 
-export const listAll = query({
+// Admin-only: returns temps files with only the fields needed for cleanup.
+// Replaces the former listAll (which exposed every file from every company).
+// Temps files have no companyId so they cannot be scoped per-company.
+export const listTempFiles = query({
   handler: async (ctx) => {
-    return await ctx.db.query("storyboard_files").order("desc").collect();
+    const files = await ctx.db
+      .query("storyboard_files")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("category"), "temps"),
+          q.neq(q.field("status"), "deleted")
+        )
+      )
+      .collect();
+    return files.map((f) => ({
+      _id: f._id,
+      r2Key: f.r2Key,
+      category: f.category,
+      status: f.status,
+      size: f.size,
+      createdAt: f.createdAt,
+      uploadedAt: f.uploadedAt,
+    }));
   },
 });
 
@@ -306,6 +326,7 @@ export const listByCompany = query({
     return files;
   },
 });
+
 
 export const listFiltered = query({
   args: {
@@ -395,6 +416,44 @@ export const listByCategoryId = query({
       .withIndex("by_categoryId", (q) => q.eq("categoryId", categoryId))
       .collect();
     return files;
+  },
+});
+
+// Returns files with no categoryId scoped to a company — uses by_companyId index to avoid full table scan.
+export const listOrphaned = query({
+  args: { companyId: v.string() },
+  handler: async (ctx, { companyId }) => {
+    return await ctx.db
+      .query("storyboard_files")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .filter((q) => q.eq(q.field("categoryId"), undefined))
+      .collect();
+  },
+});
+
+// Returns all generating/processing element files for a set of element IDs (for loading indicators in Element Library)
+export const listPendingElementFiles = query({
+  args: { elementIds: v.array(v.id("storyboard_elements")) },
+  handler: async (ctx, { elementIds }) => {
+    if (elementIds.length === 0) return [];
+    const idSet = new Set(elementIds.map(String));
+    const results: { categoryId: string; status: string }[] = [];
+    for (const elementId of elementIds) {
+      const files = await ctx.db
+        .query("storyboard_files")
+        .withIndex("by_categoryId", (q) => q.eq("categoryId", elementId))
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("status"), "generating"),
+            q.eq(q.field("status"), "processing")
+          )
+        )
+        .collect();
+      for (const f of files) {
+        results.push({ categoryId: String(f.categoryId), status: f.status ?? "generating" });
+      }
+    }
+    return results;
   },
 });
 
@@ -513,17 +572,14 @@ export const listAudioFiles = query({
     categoryId: v.optional(v.string()),
   },
   handler: async (ctx, { companyId, categoryId }) => {
-    // Use by_companyId index + server-side filter for fileType/status
-    // instead of fetching ALL company files then filtering in JS
+    // Use by_companyId_fileType index to scan only audio files for this company
+    // (avoids reading every company file just to filter by fileType)
     const files = await ctx.db
       .query("storyboard_files")
-      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("fileType"), "audio"),
-          q.eq(q.field("status"), "completed")
-        )
+      .withIndex("by_companyId_fileType", (q) =>
+        q.eq("companyId", companyId).eq("fileType", "audio")
       )
+      .filter((q) => q.eq(q.field("status"), "completed"))
       .collect();
     return files
       .filter(f =>

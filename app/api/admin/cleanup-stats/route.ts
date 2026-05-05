@@ -31,23 +31,21 @@ export async function GET(req: NextRequest) {
     }
 
     const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-    const allFiles = await convex.query(api.storyboard.storyboardFiles.listAll);
+    const tempsFiles = await convex.query(api.storyboard.storyboardFiles.listTempFiles);
 
     const now = Date.now();
     const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
-    const tempsConvex = allFiles.filter(f => f.category === "temps");
-
     // Cleanable = temp files older than 7 days — exactly what "Clean Temporary Files" deletes
-    const cleanable = tempsConvex.filter(f => (f.createdAt ?? f.uploadedAt) < now - sevenDaysMs);
+    const cleanable = tempsFiles.filter(f => (f.createdAt ?? f.uploadedAt) < now - sevenDaysMs);
 
-    // Total size from Convex size field (covers all tracked files, not just temps/)
-    const totalBytes = allFiles.reduce((acc, f) => acc + ((f as any).size ?? 0), 0);
+    // Total size of temp files only (listAll replaced with listTempFiles for security)
+    const totalBytes = tempsFiles.reduce((acc, f) => acc + (f.size ?? 0), 0);
 
     const stats = {
-      totalFiles: allFiles.length,
-      tempsFiles: tempsConvex.length,  // updated below if R2 has more
-      oldFiles: cleanable.length,       // "cleanable temps" — renamed in UI
+      totalFiles: tempsFiles.length,
+      tempsFiles: tempsFiles.length,   // updated below if R2 has more
+      oldFiles: cleanable.length,      // "cleanable temps" — renamed in UI
       totalSize: formatBytes(totalBytes),
     };
 

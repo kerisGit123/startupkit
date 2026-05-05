@@ -1,6 +1,6 @@
 # Pricing Strategy — Storytica
 
-> **Last updated:** 2026-04-25
+> **Last updated:** 2026-05-03
 > All user credit pricing targets ~20% margin minimum.
 > Formula: user_credits = ceil(kie_credits x 0.625) for 20% margin at base Kie rate.
 
@@ -126,7 +126,7 @@ Wait — Seedance 1.5 Pro at 720P 4s no audio is only **9 credits ($0.09)** vs S
 
 | Plan | Monthly | Annual/mo | Credits/mo | Cost/Credit | Extras |
 |------|---------|-----------|-----------|-------------|--------|
-| Free | $0 | $0 | 50 | free | 300 MB, 3 projects (20 frames each) |
+| Free | $0 | $0 | 50 × 3 months only | free | 300 MB, 3 projects (20 frames each) |
 | Pro | $45 | $39.90 | 3,500 | $0.0129 (mo) / $0.0114 (yr) | 10 GB, unlimited projects & frames, 5 seats, 1 org |
 | Business | $119 | $89.90 | 8,000 | $0.0149 (mo) / $0.0112 (yr) | 20 GB, unlimited projects & frames, 15 seats, 3 orgs |
 
@@ -152,19 +152,19 @@ No bulk discount — margin is already thin at 19% minimum.
 
 ### What Users Get Per Plan (Image Gens)
 
-| Model | Free (50 cr) | Pro (3,500 cr) | Business (8,000 cr) |
+| Model | Free (50 cr/mo × 3mo = 150 total) | Pro (3,500 cr) | Business (8,000 cr) |
 |-------|--------------|----------------|---------------------|
-| GPT Image 2 1K (4 cr) | 12 | 875 | 2,000 |
-| Nano Banana 2 (5 cr) | 10 | 700 | 1,600 |
-| Nano Banana Pro 1K (12 cr) | 4 | 291 | 666 |
+| GPT Image 2 1K (4 cr) | 12/mo (37 total) | 875 | 2,000 |
+| Nano Banana 2 (5 cr) | 10/mo (30 total) | 700 | 1,600 |
+| Nano Banana Pro 1K (12 cr) | 4/mo (12 total) | 291 | 666 |
 
 ### What Users Get Per Plan (Video Gens)
 
-| Model | Free (50 cr) | Pro (3,500 cr) | Business (8,000 cr) |
+| Model | Free (50 cr/mo × 3mo = 150 total) | Pro (3,500 cr) | Business (8,000 cr) |
 |-------|--------------|----------------|---------------------|
-| Seedance 2.0 Fast 480P 5s img2vid (29 cr) | 1 | 120 | 275 |
-| Seedance 1.5 Pro 480P 4s (5 cr) | 10 | 700 | 1,600 |
-| Seedance 1.5 Pro 720P 4s (9 cr) | 5 | 388 | 888 |
+| Seedance 2.0 Fast 480P 5s img2vid (29 cr) | 1/mo (5 total) | 120 | 275 |
+| Seedance 1.5 Pro 480P 4s (5 cr) | 10/mo (30 total) | 700 | 1,600 |
+| Seedance 1.5 Pro 720P 4s (9 cr) | 5/mo (16 total) | 388 | 888 |
 
 ---
 
@@ -220,7 +220,7 @@ Users can transfer subscription credits to an org before month-end clawback. Tho
 | NB Pro quality gens | 291 gens (12 cr each) | 500 gens |
 | Video: Seedance 2.0 Fast | 120 gens (480P 5s) | -- |
 | Video: Seedance 1.5 Pro | 700 gens (480P 4s) | ~114 Kling 3.0 |
-| Free tier | 50 cr/mo (12 images) | None ($5 min) |
+| Free tier | 50 cr/mo × 3 months (150 total) | None — starts at $5/mo |
 | Credits expire | Top-ups **never expire** | Top-ups expire 90 days |
 | Model choice | 25+ models (image/video/music/audio) | Forced onto NB Pro |
 | Seats included | 5 (no per-seat charge) | 1 (Business $62/seat) |
@@ -244,6 +244,24 @@ Users can transfer subscription credits to an org before month-end clawback. Tho
 
 ---
 
+## Competitor Free Tier Comparison
+
+| Platform | Free Tier | Catch |
+| -------- | --------- | ----- |
+| **Storytica** | 50 cr/mo × 3 months (150 total) | Stops after 3 grants — upgrade or top-up after |
+| **Higgsfield** | Trial generations on signup only | No ongoing free plan. Starts at $5/mo minimum |
+| **Artlist** | None | Subscription-only. Music/stock licensing, AI tools fully paywalled |
+| **InVideo** | Weekly limited AI "generations" | **Watermark on every export.** Most AI features locked. Unusable for real deliverables |
+| **ImagineArt** | Limited daily free gens | Very low limit, forced to paid quickly |
+| **OpenArt** | Small monthly free allowance | Quality models locked behind paid plans |
+| **LTX Studio** | No meaningful free tier | Beta access only, invite-gated |
+
+**Our position:** We are the only platform offering clean (no watermark), full-quality output on a free tier with access to all 29+ models. Competitors either charge from day one (Higgsfield, Artlist) or hobble the free plan so severely it cannot produce usable work (InVideo watermarks).
+
+The 3-month cap converts casual browsers into paying users naturally — they get enough time to build real projects and see the value, then face a clear upgrade decision.
+
+---
+
 ## Our Competitive Advantages
 
 ### Pricing
@@ -251,7 +269,7 @@ Users can transfer subscription credits to an org before month-end clawback. Tho
 - **Cheapest image gen in the market**: GPT Image 2 1K at 4 credits ($0.04) — 48% cheaper than Higgsfield
 - **25+ AI models**: image, video, music, audio, analyze — users pick per generation
 - **Credits never expire** (purchased top-ups) — competitors expire monthly or 90 days
-- **Free tier**: 50 credits/mo — Higgsfield starts at $5/mo, no free option
+- **Free tier**: 50 credits/mo × 3 months (150 total) — Higgsfield starts at $5/mo (no free), Artlist is subscription-only (no free tier), InVideo is free but **watermarks every export** (unusable for real work)
 - **No subscription required**: $9.90 top-up, use whenever
 - **No per-seat charges**: Pro includes 5, Business includes 15 (HF charges $62/seat)
 - **One plan, multiple orgs**: Business supports 3 orgs (competitors bill per org)

@@ -76,9 +76,10 @@ interface SceneEditorProps {
   userId?: string;
   user?: any;
   userCompanyId?: string;
+  worldViewConcept?: string;
 }
 
-export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, onSaveSelectedImageToItem, onNavigateToShot, projectId, userId, user, userCompanyId }: SceneEditorProps) {
+export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSaveImageAsElement, onSaveSelectedImageToItem, onNavigateToShot, projectId, userId, user, userCompanyId, worldViewConcept }: SceneEditorProps) {
   // Mobile detection
   const { isMobile, isTablet, isDesktop } = useMobileDetection();
   
@@ -5504,6 +5505,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                   activeShotDescription={activeShot?.description}
                   activeShotImagePrompt={activeShot?.imagePrompt}
                   activeShotVideoPrompt={activeShot?.videoPrompt}
+                  worldViewConcept={worldViewConcept}
                   onCombine={handleCombineLayers}
                   onUploadOverride={() => setShowUploadOverrideBrowser(true)}
                   onDownloadCanvas={undefined}
@@ -6955,6 +6957,7 @@ export function SceneEditor({ shots, initialShotId, onClose, onShotsChange, onSa
                       activeShotDescription={activeShot?.description}
                       activeShotImagePrompt={activeShot?.imagePrompt}
                       activeShotVideoPrompt={activeShot?.videoPrompt}
+                      worldViewConcept={worldViewConcept}
                       generatedItemImages={
                         projectFiles
                           ?.filter(f => f.category === "generated" && f.status === "completed" && f.sourceUrl && f.fileType === "image" && String(f.categoryId ?? "") === String(activeShot?.id ?? ""))

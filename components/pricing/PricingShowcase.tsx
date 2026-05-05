@@ -72,7 +72,7 @@ export default function PricingShowcase({
     {
       id: "free",
       name: "Free",
-      tagline: "For hobbyists & first-time creators",
+      tagline: "Try the full studio — no credit card needed",
       badge: null,
       cardStyle: "border-[#2a2a2a] bg-[#111111]",
       headerGradient: "",
@@ -80,14 +80,15 @@ export default function PricingShowcase({
       annual: 0,
       originalMonthly: 0,
       savings: 0,
-      credits: 100,
+      credits: 50,
       gens: GENERATION_ESTIMATES.free,
       cta: "Start Free",
       ctaStyle: "bg-[#2a2a2a] text-white hover:bg-[#333] border border-[#3a3a3a]",
       features: [
+        { text: "50 credits/month for 3 months", included: true },
         { text: "3 projects (20 frames each)", included: true },
         { text: "300 MB storage", included: true },
-        { text: "All 25+ AI models", included: true },
+        { text: "All 29+ AI models", included: true },
         { text: "AI Analyze + Prompt Enhance", included: true },
         { text: "Face swap + AI inpaint + edit image", included: true },
         { text: "Drawing canvas + bubble text", included: true },
@@ -298,6 +299,9 @@ export default function PricingShowcase({
                     <Zap className="w-4 h-4 text-yellow-400" />
                     <span className="text-sm font-bold text-white">
                       {plan.gens.credits.toLocaleString()} credits/month
+                      {plan.id === "free" && (
+                        <span className="ml-1.5 text-xs font-normal text-yellow-400/80">× 3 months</span>
+                      )}
                     </span>
                   </div>
                   <div className="space-y-2 text-sm">
@@ -540,7 +544,7 @@ export function WhyStorytica() {
 
         <div className="rounded-xl border border-[#2a2a2a] bg-[#111] p-5 hover:translate-y-[-1px] transition-all">
           <Palette className="w-5 h-5 text-gray-400 mb-3" />
-          <h4 className="text-sm font-semibold text-white mb-1.5">25+ AI models, you choose</h4>
+          <h4 className="text-sm font-semibold text-white mb-1.5">29+ AI models, you choose</h4>
           <p className="text-xs text-gray-500 leading-relaxed">Pick cheap fast drafts or premium quality — not locked to one model. Image, video, music, audio, analyze.</p>
         </div>
 

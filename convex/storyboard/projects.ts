@@ -54,7 +54,7 @@ export const create = mutation({
         .query("credits_balance")
         .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
         .first();
-      if (preCheckBalance?.ownerPlan === "free") {
+      if (preCheckBalance?.lapsedAt) {
         throw new Error(
           "This organization's subscription has lapsed. Resubscribe to create new projects.",
         );
@@ -126,7 +126,15 @@ export const get = query({
     if (_secret) {
       requireWebhookSecret(_secret); // n8n / r2-upload webhooks
     } else {
-      await requireWorkspaceAccess(ctx, project.companyId ?? project.orgId ?? project.ownerId);
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) return null; // Unauthenticated — let Clerk redirect handle it
+      // Fast path: the project's creator always has access.
+      if (project.ownerId === identity.subject) return project;
+      try {
+        await requireWorkspaceAccess(ctx, project.companyId ?? project.orgId ?? project.ownerId);
+      } catch {
+        return null; // Access denied — caller shows 404/denied UI instead of crashing
+      }
     }
     return project;
   },
@@ -465,5 +473,21 @@ export const updateScript = mutation({
       },
       updatedAt: Date.now(),
     });
+  },
+});
+
+export const updateWorldView = mutation({
+  args: {
+    id: v.id("storyboard_projects"),
+    worldViewConcept: v.optional(v.string()),
+    worldViewImageUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, worldViewConcept, worldViewImageUrl }) => {
+    const project = await ctx.db.get(id);
+    if (!project) throw new Error("Project not found");
+    const patch: Record<string, any> = { updatedAt: Date.now() };
+    if (worldViewConcept !== undefined) patch.worldViewConcept = worldViewConcept;
+    if (worldViewImageUrl !== undefined) patch.worldViewImageUrl = worldViewImageUrl;
+    await ctx.db.patch(id, patch);
   },
 });

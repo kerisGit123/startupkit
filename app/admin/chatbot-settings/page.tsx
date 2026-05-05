@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,42 +25,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Search, Plus, Edit, Trash2, BookOpen } from "lucide-react";
+import { Search, Plus, Edit, Trash2, BookOpen, Globe, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ChatbotSettingsPage() {
-  const frontendConfig = useQuery(api.chatbot.getConfig, { type: "frontend" });
-  const userPanelConfig = useQuery(api.chatbot.getConfig, { type: "user_panel" });
-  const updateConfig = useMutation(api.chatbot.updateConfig);
-
   return (
     <div className="p-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold">Chatbot</h1>
-        <p className="text-gray-500 mt-1">Configure your AI chatbots and manage knowledge base</p>
+        <p className="text-gray-500 mt-1">Configure chatbot widgets and manage knowledge base</p>
       </div>
 
-      <Tabs defaultValue="frontend">
+      <Tabs defaultValue="widget">
         <TabsList>
-          <TabsTrigger value="frontend">Frontend Chatbot</TabsTrigger>
-          <TabsTrigger value="user_panel">User Panel Chatbot</TabsTrigger>
+          <TabsTrigger value="widget">Widget Settings</TabsTrigger>
           <TabsTrigger value="knowledge_base">Knowledge Base</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="frontend">
-          <ChatbotConfigCard
-            config={frontendConfig}
-            type="frontend"
-            onUpdate={updateConfig}
-          />
-        </TabsContent>
-
-        <TabsContent value="user_panel">
-          <ChatbotConfigCard
-            config={userPanelConfig}
-            type="user_panel"
-            onUpdate={updateConfig}
-          />
+        <TabsContent value="widget">
+          <WidgetSettingsTab />
         </TabsContent>
 
         <TabsContent value="knowledge_base">
@@ -71,24 +54,48 @@ export default function ChatbotSettingsPage() {
   );
 }
 
-interface ChatbotConfigCardProps {
+function WidgetSettingsTab() {
+  const frontendConfig = useQuery(api.chatbot.getConfig, { type: "frontend" });
+  const userPanelConfig = useQuery(api.chatbot.getConfig, { type: "user_panel" });
+  const updateConfig = useMutation(api.chatbot.updateConfig);
+
+  return (
+    <div className="mt-4 grid md:grid-cols-2 gap-6">
+      <WidgetCard
+        label="Frontend Widget"
+        description="Chat widget shown on your public website"
+        icon={<Globe className="w-4 h-4" />}
+        config={frontendConfig}
+        type="frontend"
+        onUpdate={updateConfig}
+      />
+      <WidgetCard
+        label="User Panel Widget"
+        description="Chat widget shown inside the user dashboard"
+        icon={<LayoutDashboard className="w-4 h-4" />}
+        config={userPanelConfig}
+        type="user_panel"
+        onUpdate={updateConfig}
+      />
+    </div>
+  );
+}
+
+interface WidgetCardProps {
+  label: string;
+  description: string;
+  icon: React.ReactNode;
   config: any;
   type: "frontend" | "user_panel";
   onUpdate: any;
 }
 
-function ChatbotConfigCard({ config, type, onUpdate }: ChatbotConfigCardProps) {
-  const [isActive, setIsActive] = useState(config?.isActive || false);
-  const [webhookUrl, setWebhookUrl] = useState(config?.n8nWebhookUrl || "");
-  const [widgetColor, setWidgetColor] = useState(config?.primaryColor || "#854fff");
+function WidgetCard({ label, description, icon, config, type, onUpdate }: WidgetCardProps) {
+  const [isActive, setIsActive] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (config) {
-      setIsActive(config.isActive || false);
-      setWebhookUrl(config.n8nWebhookUrl || "");
-      setWidgetColor(config.primaryColor || "#854fff");
-    }
+    if (config) setIsActive(config.isActive || false);
   }, [config]);
 
   const handleSave = async () => {
@@ -97,12 +104,12 @@ function ChatbotConfigCard({ config, type, onUpdate }: ChatbotConfigCardProps) {
       await onUpdate({
         type,
         isActive,
-        n8nWebhookUrl: webhookUrl,
-        primaryColor: widgetColor,
+        n8nWebhookUrl: "",
+        primaryColor: "#854fff",
         secondaryColor: "#6b3fd4",
         backgroundColor: "#ffffff",
         textColor: "#333333",
-        userMessageBgColor: widgetColor,
+        userMessageBgColor: "#854fff",
         aiMessageBgColor: "#f1f1f1",
         userMessageTextColor: "#ffffff",
         aiMessageTextColor: "#333333",
@@ -110,119 +117,47 @@ function ChatbotConfigCard({ config, type, onUpdate }: ChatbotConfigCardProps) {
         aiTextColor: "#333333",
         welcomeMessage: config?.welcomeMessage || "Hi, how can we help?",
         responseTimeText: config?.responseTimeText || "We typically respond right away",
-        firstBotMessage: config?.firstBotMessage || "Hi there! How can we help today?",
+        firstBotMessage: config?.firstBotMessage || "Hi there! How can I help today?",
         placeholderText: config?.placeholderText || "Type your message here...",
         position: config?.position || "right",
         theme: config?.theme || "light",
         roundness: config?.roundness || 12,
         companyName: config?.companyName || "Your Company",
-        showThemeToggle: config?.showThemeToggle || false,
-        showCompanyLogo: config?.showCompanyLogo || true,
-        showResponseTime: config?.showResponseTime || true,
-        enableSoundNotifications: config?.enableSoundNotifications || false,
-        enableTypingIndicator: config?.enableTypingIndicator || true,
-        mobileFullScreen: config?.mobileFullScreen || false,
-        mobilePosition: config?.mobilePosition || "bottom",
+        showThemeToggle: false,
+        showCompanyLogo: true,
+        showResponseTime: true,
+        enableSoundNotifications: false,
+        enableTypingIndicator: true,
+        mobileFullScreen: false,
+        mobilePosition: "bottom",
       });
-      toast.success("Configuration saved successfully!");
-    } catch (error) {
-      toast.error("Failed to save configuration");
-      console.error(error);
+      toast.success(`${label} saved`);
+    } catch {
+      toast.error("Failed to save");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const testWebhook = async () => {
-    if (!webhookUrl) {
-      toast.error("Please enter a webhook URL first");
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          n8nWebhookUrl: webhookUrl,
-          chatId: "test_" + Date.now(),
-          message: "Test connection from chatbot settings",
-          route: type,
-          userId: null
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.output) {
-          toast.success("Connection successful! Response: " + data.output.substring(0, 100));
-        } else if (data.error) {
-          toast.error("Connection failed: " + data.error);
-        } else {
-          toast.success("Connection successful!");
-        }
-      } else {
-        toast.error("Connection failed: " + response.statusText);
-      }
-    } catch (error: any) {
-      toast.error("Connection failed: " + error.message);
-    }
-  };
-
   return (
-    <Card className="mt-4">
+    <Card>
       <CardHeader>
-        <CardTitle>
-          {type === "frontend" ? "Frontend" : "User Panel"} Chatbot Settings
-        </CardTitle>
+        <div className="flex items-center gap-2">
+          {icon}
+          <CardTitle className="text-base">{label}</CardTitle>
+        </div>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <Label>Enable Chatbot</Label>
-            <p className="text-sm text-gray-500">Activate this chatbot on your website</p>
+            <Label>Enable Widget</Label>
+            <p className="text-sm text-muted-foreground">Show chat widget to users</p>
           </div>
           <Switch checked={isActive} onCheckedChange={setIsActive} />
         </div>
-
-        <div>
-          <Label>Webhook URL</Label>
-          <Input
-            value={webhookUrl}
-            onChange={(e) => setWebhookUrl(e.target.value)}
-            placeholder="https://your-instance.com/webhook/..."
-          />
-          <p className="text-sm text-gray-500 mt-1">
-            Create a webhook trigger in your automation tool and paste the URL here
-          </p>
-        </div>
-
-        <div>
-          <Label>Widget Primary Color</Label>
-          <div className="flex gap-2">
-            <Input
-              type="color"
-              value={widgetColor}
-              onChange={(e) => setWidgetColor(e.target.value)}
-              className="w-20"
-            />
-            <Input
-              value={widgetColor}
-              onChange={(e) => setWidgetColor(e.target.value)}
-              placeholder="#854fff"
-            />
-          </div>
-          <p className="text-sm text-gray-500 mt-1">
-            This color will be used for the chat widget button and messages
-          </p>
-        </div>
-
-        <Button variant="outline" onClick={testWebhook} className="w-full">
-          Test Connection
-        </Button>
-
         <Button onClick={handleSave} className="w-full" disabled={isSaving}>
-          {isSaving ? "Saving..." : "Save Configuration"}
+          {isSaving ? "Saving..." : "Save"}
         </Button>
       </CardContent>
     </Card>
@@ -255,13 +190,13 @@ function KnowledgeBaseTab() {
 
   return (
     <div className="mt-4 space-y-4">
-      {/* Chatbot type filter */}
       <div className="flex gap-2">
         <Button
           variant={selectedType === "frontend" ? "default" : "outline"}
           size="sm"
           onClick={() => setSelectedType("frontend")}
         >
+          <Globe className="w-3.5 h-3.5 mr-1.5" />
           Frontend
         </Button>
         <Button
@@ -269,14 +204,14 @@ function KnowledgeBaseTab() {
           size="sm"
           onClick={() => setSelectedType("user_panel")}
         >
+          <LayoutDashboard className="w-3.5 h-3.5 mr-1.5" />
           User Panel
         </Button>
       </div>
 
-      {/* Search and Actions */}
       <div className="flex gap-4">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
             placeholder="Search articles..."
             value={searchQuery}
@@ -301,7 +236,6 @@ function KnowledgeBaseTab() {
         </Dialog>
       </div>
 
-      {/* Articles Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredArticles?.map((article) => (
           <ArticleCard
@@ -312,8 +246,8 @@ function KnowledgeBaseTab() {
         ))}
         {filteredArticles?.length === 0 && (
           <div className="col-span-full text-center py-12">
-            <BookOpen className="w-16 h-16 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">No articles found</p>
+            <BookOpen className="w-16 h-16 mx-auto text-muted-foreground/30 mb-4" />
+            <p className="text-muted-foreground">No articles found</p>
             <Button variant="outline" onClick={handleNew} className="mt-4">
               Create your first article
             </Button>
@@ -334,32 +268,31 @@ function ArticleCard({ article, onEdit }: any) {
     }
   };
 
-  const statusColors = {
-    draft: "bg-yellow-100 text-yellow-800",
-    published: "bg-green-100 text-green-800",
-  };
-
   return (
-    <Card className="hover:shadow-lg transition-shadow">
+    <Card className="hover:shadow-md transition-shadow">
       <CardHeader>
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-lg line-clamp-2">{article.title}</CardTitle>
-          <Badge className={statusColors[article.status as keyof typeof statusColors]}>
+        <div className="flex justify-between items-start gap-2">
+          <CardTitle className="text-sm font-medium line-clamp-2">{article.title}</CardTitle>
+          <Badge
+            className={
+              article.status === "published"
+                ? "bg-green-100 text-green-800 hover:bg-green-100 shrink-0"
+                : "bg-yellow-100 text-yellow-800 hover:bg-yellow-100 shrink-0"
+            }
+          >
             {article.status}
           </Badge>
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-gray-600 mb-3 line-clamp-3">{article.content}</p>
-        <div className="mb-3">
-          <Badge variant="outline" className="text-xs">{article.category}</Badge>
-        </div>
+        <p className="text-sm text-muted-foreground mb-3 line-clamp-3">{article.content}</p>
+        <Badge variant="outline" className="text-xs mb-2">{article.category}</Badge>
         <div className="flex flex-wrap gap-1 mb-3">
           {article.tags.slice(0, 3).map((tag: string, idx: number) => (
-            <span key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded">#{tag}</span>
+            <span key={idx} className="text-xs bg-muted px-2 py-0.5 rounded">#{tag}</span>
           ))}
           {article.tags.length > 3 && (
-            <span className="text-xs text-gray-500">+{article.tags.length - 3} more</span>
+            <span className="text-xs text-muted-foreground">+{article.tags.length - 3} more</span>
           )}
         </div>
         <div className="flex gap-2">
@@ -391,7 +324,6 @@ function ArticleEditor({ article, type, onClose }: any) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const data = {
       title: formData.title,
       content: formData.content,
@@ -401,7 +333,6 @@ function ArticleEditor({ article, type, onClose }: any) {
       status: formData.status as "draft" | "published",
       type,
     };
-
     try {
       if (article) {
         await updateArticle({ articleId: article._id, ...data });
@@ -411,9 +342,8 @@ function ArticleEditor({ article, type, onClose }: any) {
         toast.success("Article created");
       }
       onClose();
-    } catch (error) {
+    } catch {
       toast.error("Failed to save article");
-      console.error(error);
     }
   };
 
@@ -422,7 +352,6 @@ function ArticleEditor({ article, type, onClose }: any) {
       <DialogHeader>
         <DialogTitle>{article ? "Edit Article" : "New Article"}</DialogTitle>
       </DialogHeader>
-
       <form onSubmit={handleSubmit} className="space-y-4 mt-4">
         <div>
           <Label htmlFor="title">Title *</Label>
@@ -434,7 +363,6 @@ function ArticleEditor({ article, type, onClose }: any) {
             required
           />
         </div>
-
         <div>
           <Label htmlFor="category">Category *</Label>
           <Input
@@ -445,7 +373,6 @@ function ArticleEditor({ article, type, onClose }: any) {
             required
           />
         </div>
-
         <div>
           <Label htmlFor="content">Content *</Label>
           <Textarea
@@ -456,11 +383,10 @@ function ArticleEditor({ article, type, onClose }: any) {
             rows={8}
             required
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             This content will be used by the AI to answer user questions
           </p>
         </div>
-
         <div>
           <Label htmlFor="tags">Tags</Label>
           <Input
@@ -470,7 +396,6 @@ function ArticleEditor({ article, type, onClose }: any) {
             placeholder="password, reset, account (comma-separated)"
           />
         </div>
-
         <div>
           <Label htmlFor="keywords">Keywords</Label>
           <Input
@@ -479,11 +404,10 @@ function ArticleEditor({ article, type, onClose }: any) {
             onChange={(e) => setFormData({ ...formData, keywords: e.target.value })}
             placeholder="forgot password, can't login (comma-separated)"
           />
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Keywords help the AI match user questions to this article
           </p>
         </div>
-
         <div>
           <Label htmlFor="status">Status</Label>
           <Select
@@ -498,11 +422,10 @@ function ArticleEditor({ article, type, onClose }: any) {
               <SelectItem value="published">Published</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Only published articles will be used by the chatbot
           </p>
         </div>
-
         <div className="flex gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onClose} className="flex-1">
             Cancel

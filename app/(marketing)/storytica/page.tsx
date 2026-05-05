@@ -153,12 +153,12 @@ export default function StorticaLanding() {
 
   /* ─── bento features ──────────────────────────────────────────────── */
   const bentoFeatures = [
-    { icon: Sparkles, title: "AI Storyboarding", desc: "Script-to-storyboard in one click. Smart Build auto-extracts characters, environments, and props. Update & Add mode preserves existing work. 16 genre presets (Cinematic, Horror, Noir, Sci-Fi…) and 12 format presets (Film, YouTube, Reel, Commercial…) auto-shape every generation. Batch generate all frames at once.", span: "md:col-span-2", accent: "from-teal-500/20 to-teal-500/5", img: `${img}/storyboardItem.png` },
-    { icon: Video, title: "AI Video Generation", desc: "8 video engines — Seedance 1.5/2.0, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Upscale, InfiniteTalk lip sync. Multi-shot UGC and Showcase modes. 15 camera motion presets and speed ramps.", span: "", accent: "from-cyan-500/20 to-cyan-500/5", img: `${img}/AIModal.png` },
+    { icon: Sparkles, title: "AI Storyboarding", desc: "Script-to-storyboard in one click. Smart Build auto-extracts characters, environments, and props. Update & Add mode preserves existing work. 16 genre presets (Cinematic, Horror, Noir, Sci-Fi…) and 12 format presets (Film, YouTube, Reel, Commercial…) auto-shape every generation. Visual Lock: vision-analyze reference images and auto-rewrite the script to match. Batch generate all frames at once.", span: "md:col-span-2", accent: "from-teal-500/20 to-teal-500/5", img: `${img}/storyboardItem.png` },
+    { icon: Video, title: "AI Video Generation", desc: "Seedance 2.0, Veo 3.1, Kling 3.0 Motion, Topaz Upscale, InfiniteTalk lip sync and more. Multi-shot UGC mode (6 images) and Showcase mode (9 images). 15 camera motion presets and speed ramps.", span: "", accent: "from-cyan-500/20 to-cyan-500/5", img: `${img}/AIModal.png` },
     { icon: Music, title: "AI Music & Audio", desc: "Generate original music, cover songs with custom personas, extend tracks, and create voiceovers with ElevenLabs TTS. Full audio production pipeline.", span: "", accent: "from-purple-500/20 to-purple-500/5", img: `${img}/elementLibrary.png` },
-    { icon: Camera, title: "Cinema Studio", desc: "Camera Studio with 9 cameras (ARRI, Hasselblad, iPhone…), 6 lenses, 8 focal lengths, 6 apertures. Cinema Grade with 12 film stocks. 3D angle picker with wireframe globe. 10 post-processing tools — upscale, enhance, relight, background removal, reframe, style transfer. Color palette picker with eyedropper.", span: "", accent: "from-amber-500/20 to-amber-500/5", img: `${img}/toolbox.png` },
+    { icon: Camera, title: "Cinema Studio", desc: "Camera Studio with 9 cameras (ARRI, Hasselblad, iPhone…), 6 lenses, 8 focal lengths, 6 apertures. Cinema Grade with 12 film stocks. 3D angle picker with wireframe globe. 12-model inpaint suite — mask-based face replacement, character remix, background removal, reframe, relight, style transfer, upscale. Color palette picker with eyedropper.", span: "", accent: "from-amber-500/20 to-amber-500/5", img: `${img}/toolbox.png` },
     { icon: Film, title: "Video Editor", desc: "Multi-layer timeline with video, audio, and subtitle tracks. Overlay system with text, images, video PiP, and shapes. 5 transition types (crossfade, wipe, slide, dissolve, fade). Blend modes, opacity, scrolling text, undo/redo. Aspect ratio per project (16:9, 9:16, 1:1). Export to MP4 or WAV.", span: "md:col-span-2", accent: "from-emerald-500/20 to-emerald-500/5", img: `${img}/fileBrowser.png` },
-    { icon: Zap, title: "AI Director & Agent", desc: "AI Director with 22 tools — breaks scripts into shots, generates storyboards, manages elements. Agent Mode for autonomous multi-step execution with plan approval. Vision-enabled analysis. Director's View filmstrip with comparison mode, animatic playback, and continuity checking.", span: "", accent: "from-rose-500/20 to-rose-500/5", img: `${img}/storyboard_home.png` },
+    { icon: Zap, title: "AI Director & Agent", desc: "AI Director with 22 tools — breaks scripts into shots, generates storyboards, manages elements. Agent Mode for multi-step execution with plan approval. Visual Lock: vision-analyze reference images and rewrite the script to match. Director's View filmstrip with comparison mode, animatic playback, and snapshot continuity bridge.", span: "", accent: "from-rose-500/20 to-rose-500/5", img: `${img}/storyboard_home.png` },
   ];
 
   return (
@@ -237,12 +237,12 @@ export default function StorticaLanding() {
               </h1>
 
               <p className={`font-body text-[15px] text-white/50 leading-relaxed max-w-lg mb-5 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "300ms" }}>
-                Turn any script into a visual storyboard with 25+ AI models. Set your genre, format, and camera — then generate images, videos, music, and voiceovers. Let the AI Director manage your project — all in one place.
+                The director's studio — not an autonomous video generator. You control every frame: set genre, camera, and style, then generate with 29+ AI models across image, video, music, and audio. Script to export, all in one pipeline.
               </p>
 
               {/* Bullets */}
               <div className={`flex flex-col gap-2 mb-7 transition-all duration-1000 ${ready ? "opacity-100" : "opacity-0"}`} style={{ transitionDelay: "420ms" }}>
-                {["25+ AI models (image, video, music, audio, utility)", "16 genre presets + 12 format presets for cinematic control", "Camera Studio with 9 cameras, 6 lenses & 15 motion presets", "AI Director agent with 22 tools + video editor with transitions", "Files kept as long as you're active — no 30-day auto-deletion like other platforms"].map(b => (
+                {["29+ AI models — 16 image, 6 video, 12 inpaint, music, audio, utility", "16 genre presets + 12 format presets for cinematic control", "Camera Studio with 9 cameras, 6 lenses & 15 motion presets", "AI Director + Visual Lock + 12-model inpaint suite + video editor", "Files kept as long as you're active — no 30-day auto-deletion like other platforms"].map(b => (
                   <span key={b} className="flex items-center gap-2.5 font-body text-[13px] text-white/50"><Check className="w-3.5 h-3.5 text-teal-400 shrink-0" />{b}</span>
                 ))}
               </div>
@@ -470,7 +470,7 @@ export default function StorticaLanding() {
             <div className="text-center mb-10">
               <span className="font-body text-[11px] font-semibold uppercase tracking-[0.2em] text-amber-400/80 mb-3 block">AI Engine</span>
               <h2 className="font-display text-[2rem] lg:text-[3rem] font-extrabold tracking-tight mb-4">
-                <span className="text-white">25+ Models.</span>{" "}
+                <span className="text-white">29+ Models.</span>{" "}
                 <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">One Studio.</span>
               </h2>
               <p className="font-body text-[15px] text-white/45 max-w-xl mx-auto">Image, video, music, audio, and utility models — all accessible from the same workspace.</p>
@@ -538,7 +538,7 @@ export default function StorticaLanding() {
           <div className="grid md:grid-cols-2 gap-5">
             {[
               { title: "Storyboard Workspace", desc: "Script-to-storyboard with genre presets, batch generation, and Director's View filmstrip", img: `${img}/storyboardItem.png` },
-              { title: "AI Generation Panel", desc: "25+ models with genre/format pill, Camera Studio, and real-time cost preview", img: `${img}/AIModal.png` },
+              { title: "AI Generation Panel", desc: "29+ models with genre/format pill, Camera Studio, and real-time cost preview", img: `${img}/AIModal.png` },
               { title: "Cinema Studio", desc: "Camera Studio (9 bodies, 6 lenses), Cinema Grade, 10 post-processing tools, 3D angle picker", img: `${img}/toolbox.png` },
               { title: "Element Forge", desc: "Structured character wizard with variants, reference photos, and @mention consistency", img: `${img}/elementLibrary.png` },
             ].map((s, i) => (
@@ -655,13 +655,13 @@ export default function StorticaLanding() {
           <R><div>
             <Faq q="What AI models are available?" a="25+ models across 5 categories. Image: Nano Banana 2, Nano Banana Pro, GPT Image 2, Z-Image, Flux 2 Pro, Flux 2 Flex Image-to-Image, Character Edit, Nano Banana Edit, Crisp Upscale, Topaz Image Upscale. Video: Seedance 1.5/2.0/2.0 Fast, Kling 3.0 Motion, Veo 3.1, Grok Imagine, Topaz Video Upscale, InfiniteTalk. Music: AI Music, Cover Song, Extend Music, Create Persona. Audio: ElevenLabs TTS. Utility: AI Analyze (image/video/audio), Prompt Enhance." />
             <Faq q="Can I maintain consistent characters?" a="Yes. Element Forge lets you build characters with a structured wizard (gender, build, archetype, outfit). Generate variants with multiple models. @mention characters in prompts — reference images auto-attach at generation time." />
-            <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 50 credits/month. Top-up packs available from $9.90." />
+            <Faq q="How does the credit system work?" a="Each generation costs credits based on model, resolution, and duration. Exact cost shown before generating. Free plan includes 50 credits/month for your first 3 months — enough to try every model and build real projects. After that, top-up packs start from $9.90 or upgrade to Pro for 3,500 credits/month." />
             <Faq q="Is there a video editor?" a="Yes. Multi-layer timeline with video, audio, and subtitle tracks. Overlay system for text, images, video picture-in-picture, and shapes. 5 transition types (crossfade, wipe, slide, dissolve, fade-to-color). Blend modes, opacity control, scrolling text overlays, and aspect ratio selector (16:9, 9:16, 1:1). Export to MP4 or WAV." />
-            <Faq q="Is there an AI Director?" a="Yes. The AI Director has 22 tools — breaks scripts into shots, generates storyboards, manages elements, and controls your entire project. Agent Mode enables autonomous multi-step execution with plan approval. Plus a Director's View filmstrip with comparison mode, animatic playback, and continuity checking." />
+            <Faq q="Is there an AI Director?" a="Yes. The AI Director has 22 tools — breaks scripts into shots, generates storyboards, manages elements, and controls your entire project. Agent Mode enables autonomous multi-step execution with plan approval. Visual Lock vision-analyzes your reference images and rewrites the script to match them. Director's View filmstrip with comparison mode, animatic playback, snapshot continuity bridge, and director notes per frame." />
             <Faq q="What is the Genre & Format system?" a="16 genre presets (Cinematic, Horror, Noir, Sci-Fi, Fantasy, Anime, Cyberpunk, and more) control mood, lighting, and color grading. 12 format presets (Film, YouTube, Reel/TikTok, Commercial, Music Video, and more) control framing, pacing, and camera behavior. They work as two independent axes — combine any genre with any format. You can also create custom genres." />
             <Faq q="Are my generated files ever deleted?" a="Your files stay in your library as long as your account is active. If your account has no activity for 12 months, we'll send you a warning email — simply log back in to keep everything. This is still far more generous than other AI platforms that auto-delete files after just 30 days regardless of activity. Only temporary processing files are cleaned up automatically." />
             <Faq q="Does it support team collaboration?" a="Yes. Create organizations, invite members with roles (Admin, Member, Viewer). Members share the org's credit pool and storage." />
-            <Faq q="Is there a free plan?" a="Yes. 50 credits/month, 300MB storage. No credit card required. Upgrade anytime for more credits and pro workflow tools." />
+            <Faq q="Is there a free plan?" a="Yes. 50 credits/month for your first 3 months, 300MB storage, no credit card required. That's 150 credits total — enough to generate 37 images or explore video, music, and audio AI. Upgrade anytime for more credits and pro workflow tools." />
           </div></R>
           <R>
             <div className="mt-8 text-center">
@@ -683,7 +683,7 @@ export default function StorticaLanding() {
               Ready to create your{" "}
               <span className="bg-gradient-to-r from-teal-400 to-amber-400 bg-clip-text text-transparent">next story</span>?
             </h2>
-            <p className="font-body text-[15px] text-white/45 mb-8 max-w-lg mx-auto">25+ AI models. 16 genre presets. Camera Studio. AI Director. Multi-layer video editor. Cinema Grade. Music generation. Start free — no credit card required.</p>
+            <p className="font-body text-[15px] text-white/45 mb-8 max-w-lg mx-auto">29+ AI models. 16 genre presets. Camera Studio. AI Director + Visual Lock. 12-model inpaint suite. Multi-layer video editor. Music generation. Start free — no credit card required.</p>
             <a href="/sign-up" className="group inline-flex items-center gap-2.5 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-[#09090b] font-display font-bold text-base px-10 py-4 rounded-xl transition-all shadow-xl shadow-teal-500/20 hover:shadow-teal-400/30 hover:scale-[1.02]">
               Start Creating Free <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </a>

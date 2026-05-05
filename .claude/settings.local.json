@@ -135,7 +135,16 @@
       "Bash(node -e \"try { require\\(''@clerk/nextjs/experimental''\\); console.log\\(''OK''\\); } catch\\(e\\) { console.log\\(''ERR:'', e.message\\); }\")",
       "Bash(ls d:/gemini/startupkit/lib/convex-client*)",
       "Bash(grep -rl \"/api/chat\\\\b\\\\|n8nWebhookUrl\\\\|ChatWidget\" d:/gemini/startupkit/ --include=*.tsx --include=*.ts)",
-      "Bash(ls -la /d/gemini/startupkit/app/\\\\\\(marketing\\\\\\)/billing-policy/)"
+      "Bash(ls -la /d/gemini/startupkit/app/\\\\\\(marketing\\\\\\)/billing-policy/)",
+      "Bash(powershell -Command \"\\(Get-Content lib/director/tool-executor.ts\\) -replace '^\\\\s+prompt: P\\\\.[A-Z0-9]+,\\\\s*$' | Set-Content lib/director/tool-executor.ts -Encoding UTF8\")",
+      "Bash(python3 -c ' *)",
+      "Bash(powershell -Command \"[System.IO.File]::ReadAllLines\\('lib\\\\\\\\director\\\\\\\\tool-executor.ts', [System.Text.Encoding]::UTF8\\)[524] | Format-Hex\")",
+      "Bash(powershell -Command ' *)",
+      "Bash(node -e ' *)",
+      "Bash(git checkout *)",
+      "Bash(node)",
+      "Read(//c/Windows/Temp/**)",
+      "Bash(Remove-Item -Recurse -Force \"d:\\\\gemini\\\\startupkit\\\\.next\" -ErrorAction SilentlyContinue)"
     ],
     "additionalDirectories": [
       "d:\\gemini\\startupkit\\.next"

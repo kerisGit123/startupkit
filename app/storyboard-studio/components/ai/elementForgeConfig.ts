@@ -798,6 +798,406 @@ export function composePrompt(type: ForgeElementType, identity: Record<string, a
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// IDENTITY SHEET PROMPT COMPOSERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generates a 7-view photorealistic character identity reference contact sheet.
+ * Top row: front / left-3/4 / right-3/4 / back (full body).
+ * Bottom row: face close-up / costume detail / expression reference.
+ * Uses GPT Image 2 at 4K 16:9.
+ */
+export function composeCharacterSheetPrompt(identity: Record<string, any>): string {
+  const characterDesc = composeCharacterPrompt(identity);
+  const hasReferencePhotos = identity.ref_face || identity.ref_outfit || identity.ref_fullBody || identity.ref_head || identity.ref_body;
+
+  const outfitDesc = identity.outfitCustom?.trim()
+    ? identity.outfitCustom.trim()
+    : identity.outfit
+      ? `${labelFor(OUTFIT_OPTIONS, identity.outfit).toLowerCase()} clothing`
+      : "their outfit";
+
+  const expressionDesc = identity.expression
+    ? labelFor(EXPRESSION_OPTIONS, identity.expression).toLowerCase()
+    : "neutral";
+
+  const archetypeDesc = identity.archetype
+    ? labelFor(ARCHETYPE_OPTIONS, identity.archetype).toLowerCase()
+    : "character";
+
+  const ageDesc = identity.ageRange
+    ? labelFor(AGE_OPTIONS, identity.ageRange).toLowerCase()
+    : "adult";
+
+  const unconventionalHint = !hasReferencePhotos
+    ? `\nThe character must have a distinctive, unconventional face — realistic ${ageDesc} features, not conventionally attractive, with genuine lived-in character.`
+    : "";
+
+  return `Create a photorealistic character identity reference contact sheet for professional film and TV production.
+
+CHARACTER: ${characterDesc}${unconventionalHint}
+
+LAYOUT: Two horizontal rows arranged on a clean neutral seamless studio background. Each image is clearly labeled with its view name.
+
+TOP ROW — 4 images labeled:
+[1 FRONT VIEW] Full body, facing camera directly, neutral standing pose, feet visible
+[2 LEFT 3/4 VIEW] Slight left turn, depth and side structure visible, full body
+[3 RIGHT 3/4 VIEW] Slight right turn, opposite depth, full body
+[4 BACK VIEW] Full body facing away from camera, back of outfit visible
+
+BOTTOM ROW — 3 images labeled:
+[5 FACE CLOSE-UP] Sharp facial detail, catch light in eyes, ${expressionDesc} expression, photographed at portrait lens distance
+[6 COSTUME DETAIL] Close view showing ${outfitDesc} — fabric texture, construction details, accessories, material quality
+[7 EXPRESSION REFERENCE] ${archetypeDesc} emotional expression, slight variation from neutral, character psychology visible
+
+CONSISTENCY RULES:
+- All 7 photographs depict the exact same person with identical face, hair, outfit, and proportions
+- Same studio lighting session throughout — no variation in light direction between views
+- Full-body shots show complete figure from head to feet
+
+TECHNICAL STYLE:
+- Background: neutral seamless studio backdrop, light gray or off-white
+- Lighting: soft key light from 45 degrees, gentle fill, minimal shadows, no dramatic rim lighting
+- Camera: realistic portrait and full-body lens behavior, natural depth of field
+- Resolution: ultra-high detail, 4K photographic clarity — every fabric fiber, skin pore, and hair strand visible
+
+CRITICAL RESTRICTIONS — the output must NOT resemble:
+- 3D render or CGI asset
+- Game asset or character model
+- Stylized illustration or concept art
+- Anime, cartoon, or painted artwork
+This is real film production reference photography. Photorealistic only.`;
+}
+
+/**
+ * Generates a 7-view photorealistic object/prop identity reference sheet.
+ * Top row: front / left perspective / right perspective / rear (structural views).
+ * Bottom row: functional surface / material texture / light interaction.
+ * Uses GPT Image 2 at 4K 16:9.
+ */
+export function composePropSheetPrompt(identity: Record<string, any>): string {
+  const objectDesc = composePropPrompt(identity);
+  const objectName = identity.name?.trim() || "the object";
+  const materialDesc = identity.material ? labelFor(PROP_MATERIAL_OPTIONS, identity.material).toLowerCase() : "its material";
+  const sizeDesc = identity.size ? labelFor(PROP_SIZE_OPTIONS, identity.size).toLowerCase() : "medium";
+  const conditionDesc = identity.condition ? labelFor(PROP_CONDITION_OPTIONS, identity.condition).toLowerCase() : "";
+
+  return `Create a photorealistic object identity reference sheet showing the same real-world physical object photographed from multiple angles.
+
+OBJECT: ${objectDesc}
+
+The result must look like real product-style photography captured during a single reference session — not CGI, not a 3D render, not stylized illustration.
+
+The object (${objectName}) must remain fully consistent across all images in shape, proportions, materials, surface textures, color, finish, and any wear or imperfections.
+
+SCALE RULE: The photography must adapt naturally to the object's real-world size. Use framing, camera distance, and composition appropriate to a ${sizeDesc}-sized object.
+
+LAYOUT: Clean reference contact sheet in two horizontal rows. All images depict the exact same object photographed in the same session under identical lighting.
+
+TOP ROW — 4 images labeled:
+[FRONT VIEW] Object facing directly toward camera
+[LEFT PERSPECTIVE] Slightly angled left to reveal depth and side structure
+[RIGHT PERSPECTIVE] Opposite angle showing the other side
+[REAR VIEW] Back side of the object
+
+BOTTOM ROW — 3 images labeled:
+[FUNCTIONAL SURFACE] The most recognizable or defining surface of the object
+[MATERIAL CLOSE-UP] Close view showing ${materialDesc} texture, surface grain, ${conditionDesc ? conditionDesc + " condition, " : ""}construction detail
+[LIGHT INTERACTION] View showing how light reacts with the ${materialDesc} surface — reflections, matte diffusion, gloss, or metallic highlights
+
+BACKGROUND: Simple neutral photographic environment — neutral studio backdrop or clean tabletop surface appropriate to object scale.
+
+LIGHTING: Soft neutral studio lighting, gentle shadows, natural reflections. No dramatic cinematic lighting or exaggerated effects.
+
+TECHNICAL STYLE:
+- Resolution: ultra-high detail, 4K photographic clarity — every surface texture, material grain, and finish visible
+- Real photographic documentation of a physical object
+
+CRITICAL RESTRICTIONS — the output must NOT resemble:
+- 3D render or CGI asset
+- Game asset or prop model
+- Stylized illustration or concept art
+- Anime, cartoon, or painted artwork
+This is real product photography reference. Photorealistic only.`;
+}
+
+// ── Production Sheet param types ─────────────────────────────────────────────
+
+export interface ProductionSheetElement {
+  name: string;
+  type: string; // "character" | "prop" | "environment"
+  identity?: Record<string, any>;
+  description?: string; // full visual description text from element library
+  primaryImageUrl?: string;
+}
+
+export interface ProductionSheetParams {
+  elements: ProductionSheetElement[];
+  imagePrompt?: string;
+  videoPrompt?: string;
+  description?: string;
+  cutCount?: number;
+}
+
+/**
+ * Composes the final GPT Image 2 prompt for a scene production sheet.
+ * Uses the partner's proven template structure with Haiku-distilled concept
+ * as {user input} and minimal one-line element labels below it.
+ *
+ * concept: the 120-150 word visual paragraph written by Haiku (or empty string
+ *          for graceful fallback to description text).
+ */
+export function composeProductionSheetPrompt(params: ProductionSheetParams & { concept?: string }): string {
+  const { elements, videoPrompt, imagePrompt, description, cutCount, concept } = params;
+
+  const characters = elements.filter(e => e.type === "character");
+  const props = elements.filter(e => e.type === "prop");
+  const environments = elements.filter(e => e.type === "environment");
+
+  const storyInput = concept?.trim() || description?.trim() || "A cinematic scene.";
+
+  // Parse video prompt into structured cuts — max 6 panels
+  const parsedCuts = (videoPrompt ?? "")
+    .split(/\n/)
+    .map(l => l.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const totalCuts = cutCount || parsedCuts.length || 3;
+
+  // Character notes — name + key identity details
+  const characterDetails = characters.map((c, i) => {
+    const id = c.identity ?? {};
+    const parts: string[] = [`CHARACTER ${String.fromCharCode(65 + i)}: ${c.name.toUpperCase()}`];
+    if (id.ageRange) parts.push(id.ageRange);
+    if (id.archetype) parts.push(`${id.archetype} archetype`);
+    if (id.outfitCustom?.trim()) parts.push(id.outfitCustom.trim());
+    else if (id.outfit) parts.push(`${id.outfit} outfit`);
+    if (id.expression) parts.push(`${id.expression} expression`);
+    return parts.join(", ");
+  });
+
+  // Prop notes — name + material + condition + details
+  const propDetails = props.map(p => {
+    const id = p.identity ?? {};
+    const parts: string[] = [`PROP: ${p.name.toUpperCase()}`];
+    if (id.material) parts.push(id.material);
+    if (id.condition) parts.push(id.condition);
+    if (id.details?.trim()) parts.push(id.details.trim());
+    return parts.join(", ");
+  });
+
+  // Environment fingerprint — full identity
+  const envFingerprint = environments.length > 0
+    ? environments.map(e => {
+        if (!e.identity) return e.name;
+        const parts: string[] = [e.name];
+        if (e.identity.setting) parts.push(labelFor(SETTING_OPTIONS, e.identity.setting));
+        if (e.identity.subSetting && e.identity.setting) {
+          parts.push(labelFor(SUB_SETTING_OPTIONS[e.identity.setting] || [], e.identity.subSetting));
+        }
+        if (e.identity.timeOfDay) parts.push(labelFor(TIME_OF_DAY_OPTIONS, e.identity.timeOfDay));
+        if (e.identity.weather) parts.push(labelFor(WEATHER_OPTIONS, e.identity.weather));
+        if (e.identity.mood) parts.push(labelFor(MOOD_OPTIONS, e.identity.mood));
+        if (e.identity.keyFeatures?.trim()) parts.push(e.identity.keyFeatures.trim());
+        return parts.join(", ");
+      }).join(" | ")
+    : "";
+
+  // Structured cut specs from videoPrompt
+  const cutSpecs = parsedCuts.length > 0
+    ? parsedCuts.map((cut, i) => `Cut ${i + 1}: ${cut}`).join("\n")
+    : "";
+
+  // Mood / lighting / style from imagePrompt
+  const moodLine = imagePrompt?.trim() ? `MOOD & LIGHTING: ${imagePrompt.trim()}` : "";
+
+  // Genre / tone extracted from description or concept
+  const genreTone = description?.trim() ? description.trim().split(/[.,!?]/)[0].trim() : "CINEMATIC";
+
+  // Personality line derived from archetype (one sentence, not hardcoded traits)
+  const archetypePersonality: Record<string, string> = {
+    hero: "Driven, courageous — the one who acts when others hesitate",
+    villain: "Calculating, imposing — pursues their goal without compromise",
+    mentor: "Wise, measured — guides through experience rather than force",
+    trickster: "Unpredictable, sharp — uses wit and misdirection",
+    everyman: "Ordinary person in an extraordinary situation — relatable anchor",
+    rebel: "Defiant, independent — refuses to accept the established order",
+    caregiver: "Protective, empathetic — motivated by others before self",
+    explorer: "Restless, curious — defined by the need to discover",
+    sage: "Observant, analytical — seeks truth above all",
+    innocent: "Hopeful, pure-hearted — believes in the best outcome",
+    ruler: "Commanding, responsible — carries the weight of authority",
+    creator: "Imaginative, obsessive — driven to make something new",
+  };
+
+  // Character notes as bullet list — physical attributes + costume + personality
+  const characterNotesBullets = characters.map(c => {
+    const id = c.identity ?? {};
+    const bullets: string[] = [];
+
+    // Physical attributes
+    if (id.ageRange) bullets.push(`Age: ${labelFor(AGE_OPTIONS, id.ageRange)}`);
+    if (id.height) bullets.push(`Height: ${labelFor(HEIGHT_OPTIONS, id.height)}`);
+    if (id.build) bullets.push(`Build: ${labelFor(BUILD_OPTIONS, id.build)}`);
+    if (id.ethnicity) bullets.push(`Ethnicity: ${labelFor(ETHNICITY_OPTIONS, id.ethnicity)}`);
+
+    // Hair — combine color + texture + style into one line
+    const hairParts: string[] = [];
+    if (id.hairColor) hairParts.push(labelFor(HAIR_COLOR_OPTIONS, id.hairColor));
+    if (id.hairTexture) hairParts.push(labelFor(HAIR_TEXTURE_OPTIONS, id.hairTexture).toLowerCase());
+    if (id.hairStyle) hairParts.push(labelFor(HAIR_STYLE_OPTIONS, id.hairStyle).toLowerCase());
+    if (hairParts.length > 0) bullets.push(`Hair: ${hairParts.join(", ")}`);
+
+    if (id.eyeColor) bullets.push(`Eyes: ${labelFor(EYE_COLOR_OPTIONS, id.eyeColor)}`);
+
+    // Costume
+    if (id.outfitCustom?.trim()) bullets.push(`Outfit: ${id.outfitCustom.trim()}`);
+    else if (id.outfit) bullets.push(`Outfit: ${labelFor(OUTFIT_OPTIONS, id.outfit)}`);
+    if (id.expression) bullets.push(`Expression: ${labelFor(EXPRESSION_OPTIONS, id.expression)}`);
+
+    // Personality derived from archetype
+    const archetypeKey = id.archetype?.toLowerCase() || "";
+    const personalityLine = archetypePersonality[archetypeKey]
+      || (id.archetype ? `${labelFor(ARCHETYPE_OPTIONS, id.archetype)} — defined by role in the story` : null);
+    if (personalityLine) bullets.push(`Personality: ${personalityLine}`);
+
+    // Fallback for auto-extracted characters with sparse identity
+    if (bullets.length === 0 && c.description?.trim()) bullets.push(c.description.trim().slice(0, 200));
+
+    return `  ${c.name.toUpperCase()} CHARACTER NOTES:\n${bullets.map(b => `    • ${b}`).join("\n")}`;
+  }).join("\n");
+
+  // Gear detail label (first accessory or outfit detail)
+  const gearDetailLabel = characters.map(c => {
+    const id = c.identity ?? {};
+    return id.outfitCustom?.trim() || (id.outfit ? labelFor(OUTFIT_OPTIONS, id.outfit) : null);
+  }).filter(Boolean)[0] || "costume accessory";
+
+  // Prop detail labels
+  const propDetailLabels = props.map(p => {
+    const id = p.identity ?? {};
+    return `${p.name.toUpperCase()} (${id.material ? labelFor(PROP_MATERIAL_OPTIONS, id.material) : "prop"})`;
+  }).join(", ");
+
+  // Derive floor plan shape from environment identity
+  const envNameLower = environments.map(e => e.name + " " + (e.identity?.subSetting || "") + " " + (e.identity?.setting || "")).join(" ").toLowerCase();
+  const floorPlanShape = /arena|ring|court|stadium|pit|coliseum|stage|dojo|gym|square|room|office|lab|vault|bunker/.test(envNameLower)
+    ? "SQUARE (equal width and height — do NOT stretch into a rectangle)"
+    : /street|road|corridor|hallway|alley|highway|bridge|tunnel|runway/.test(envNameLower)
+    ? "LONG NARROW RECTANGLE (much wider than tall — linear layout)"
+    : "correct proportions matching the actual set shape (square if enclosed space, wide if open landscape)";
+
+  // Floor plan camera positions + movement extracted from video prompt cuts
+  const floorPlanCuts = parsedCuts.map((cut, i) => {
+    const move = cut.match(/STEADICAM|DOLLY|TRACK|CRANE|HANDHELD|STATIC|PAN|TILT|ZOOM|PUSH|RACK.?FOCUS|INSERT/i)?.[0]?.toUpperCase().replace("-", "") || "CUT";
+    return `Cut ${i + 1}/${move}`;
+  }).join("  ");
+
+  // Prop narrative notes — use description field first (richest source), fall back to identity fields
+  const propNarrative = props.map(p => {
+    const id = p.identity ?? {};
+    const parts: string[] = [];
+    if (p.description?.trim()) {
+      parts.push(p.description.trim());
+    } else {
+      if (id.details?.trim()) parts.push(id.details.trim());
+      if (id.material) parts.push(`${labelFor(PROP_MATERIAL_OPTIONS, id.material)} construction`);
+      if (id.condition) parts.push(labelFor(PROP_CONDITION_OPTIONS, id.condition));
+    }
+    return `${p.name}: ${parts.join(". ")}`;
+  }).join("\n");
+
+  // Truncate env fingerprint for top bar — long text causes the model to garble/corrupt it
+  const envFingerprintShort = envFingerprint
+    ? envFingerprint.slice(0, 80) + (envFingerprint.length > 80 ? "…" : "")
+    : "[derive from scene]";
+
+  const contextLines = [
+    // TOP BAR
+    [
+      `TOP BAR (full-width dark strip spanning entire board top, white text):`,
+      `  "Cut Count: ${totalCuts}"  |  "Color Palette: [derive 3-5 descriptive color names e.g. dawn gold + arena red + iron blue]"  |  "Environment: ${envFingerprintShort}"`,
+    ].join("\n"),
+
+    // SECTION 1 — Character + Hero Prop (two columns side by side)
+    [
+      `SECTION 1: CHARACTER + HERO PROP REFERENCE (two columns, left half of board):`,
+      ``,
+      `  LEFT COLUMN — CHARACTER REFERENCE:`,
+      `    Image row 1: FRONT / SIDE / BACK — full-body photorealistic renders`,
+      characterDetails.length > 0 ? `    Character data: ${characterDetails.join("; ")}` : "",
+      `    Image row 2: FACIAL CLOSE-UP / SIDE FACE CLOSE-UP / COSTUME DETAIL (close-up of ${gearDetailLabel})`,
+      characterNotesBullets ? `${characterNotesBullets}` : "",
+      ``,
+      props.length > 0 ? [
+        `  RIGHT COLUMN — HERO PROP: ${props.map(p => p.name.toUpperCase()).join(", ")}:`,
+        `    6 photorealistic prop views: FRONT VIEW / 3/4 VIEW / SIDE VIEW / REAR 3/4 VIEW / DETAIL CLOSE-UP / IN CONTEXT (prop shown in the scene environment)`,
+        propDetailLabels ? `    Prop: ${propDetailLabels}` : "",
+        propNarrative ? `    PROP NOTES: ${propNarrative}` : "",
+      ].filter(Boolean).join("\n") : "",
+      ``,
+      `  FAR RIGHT PANEL (narrow column):`,
+      `    COLOR PALETTE: 4-5 actual filled color swatches with HEX-style codes below each (e.g. #6E7C8A)`,
+      `    THEME & TONE: 4-5 short thematic lines derived from the story concept (not physical description — narrative meaning)`,
+    ].filter(s => s !== "").join("\n"),
+
+    // SECTION 2 — Environment (env fingerprint is already in top bar — do NOT repeat it here)
+    [
+      `SECTION 2: ENVIRONMENT / SET DESIGN (three columns):`,
+      `  LEFT COLUMN: ESTABLISHING ENVIRONMENT REFERENCE — large cinematic photorealistic keyframe`,
+      `  CENTER COLUMN: SUPPLEMENTARY ANGLE — second photorealistic view from a different angle`,
+      `  RIGHT COLUMN: FLOOR PLAN (TOP-DOWN DIAGRAM) — bird's-eye schematic, clean technical drawing:`,
+      `    Shape: ${floorPlanShape}`,
+      `    Numbered camera icons at each cut position with movement labels: ${floorPlanCuts || "Cut 1/STATIC  Cut 2/DOLLY-IN  Cut 3/PUSH-IN  Cut 4/HANDHELD"}`,
+      `    Dashed arrows for talent movement paths, solid arrows for camera movement direction`,
+      props.length > 0 ? `    Label the hero prop's position (e.g. "${props[0]?.name?.toUpperCase()}")` : "",
+      `    Label key set zones: FOREGROUND / MID-ZONE / BACKGROUND DEPTH`,
+      `    North arrow in the corner`,
+      `    Below the floor plan: SIDE ELEVATION DIAGRAM — cross-section showing vertical spatial layers with height labels`,
+      `    (e.g. OVERHEAD RIGS at top, then DEPTH zone, then MID-ZONE / ARENA FLOOR, then FOREGROUND / AUDIENCE)`,
+    ].filter(Boolean).join("\n"),
+
+    // SECTION 3 — Storyboard
+    [
+      `SECTION 3: STORYBOARD (full-width horizontal strip):`,
+      `  ${totalCuts} panels numbered 1–${totalCuts} side by side`,
+      `  Each panel: PHOTOREALISTIC cinematic scene render — real photography quality, not sketch or illustration`,
+      `  Below each panel: "Cut N | [lens]mm anamorphic | [duration]s | [MOVEMENT] | [FRAMING] —"`,
+      `  Below the spec line: one sentence describing the action or emotion in that cut`,
+      cutSpecs ? `  Shot data to use:\n${cutSpecs}` : `  Derive ${totalCuts} cinematic cuts from the story concept`,
+    ].filter(Boolean).join("\n"),
+
+    // SECTION 4 — Lighting / Mood / Style
+    [
+      `SECTION 4: LIGHTING / MOOD / STYLE NOTES (bottom strip, full width — 3 columns):`,
+      `  LEFT: 4 photorealistic lighting reference thumbnails, each with:`,
+      `    - ALL-CAPS title (e.g. "FIRST LIGHT RIM ON WATER")`,
+      `    - One sentence below describing the lighting quality and emotional effect`,
+      moodLine ? `    Derive from: ${moodLine}` : "",
+      `  CENTER: MOOD KEYWORDS — plain stacked text, one per line, 5-6 keywords (e.g. solitary / anticipatory / uncanny / awe-struck)`,
+      `  RIGHT: CINEMATOGRAPHY NOTES — 4-5 bullet points: lens rationale, movement strategy, color unification approach, scale contrast, emotional arc`,
+    ].filter(Boolean).join("\n"),
+  ].filter(Boolean).join("\n\n");
+
+  return `${storyInput}
+The above is the story plot and narrative concept. Transform it into a professional film pre-production board — a single cohesive A3-style reference document on a LIGHT CREAM or off-white background, styled exactly like a high-end studio production sheet used in real film production.
+
+BACKGROUND: Light cream or off-white. Section dividers as thin dark horizontal rules. All section headers in ALL CAPS bold dark charcoal.
+
+${contextLines}
+
+VISUAL STYLE RULES:
+- Light/cream document background — NOT a dark cinematic scene, NOT a movie poster
+- All character and environment art is PHOTOREALISTIC — real photography or photorealistic render quality
+- Storyboard panels are PHOTOREALISTIC cinematic scene renders — NOT sketches, NOT illustrations
+- Color swatches are actual filled color rectangles with text name labels below each
+- Mood keywords render as filled rounded pill/badge shapes with text inside
+- Floor plan is a clean top-down schematic with camera icons and directional arrows
+- ONE unified board image — not multiple images, not a collage
+- High detail, balanced whitespace, sharp readable typography throughout`;
+}
+
 /**
  * Build prompt context for custom element types (logo, style, other).
  * Injected during generation when these elements are @mentioned or linked.
@@ -935,4 +1335,58 @@ export function randomizeIdentity(type: ForgeElementType): Record<string, any> {
     details: "",
     customNotes: "",
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WORLD VIEW SHEET PROMPT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface WorldViewParams {
+  concept: string;                      // Haiku-distilled world concept (150-200 words)
+  elements: ProductionSheetElement[];   // All project elements
+  projectName?: string;
+}
+
+/**
+ * Composes the GPT Image 2 prompt for the project-level World View Sheet.
+ * Uses the partner's proven template with Haiku concept as {user input}.
+ * Sections: cast overview + world design + story arc + visual language.
+ */
+export function composeWorldViewPrompt(params: WorldViewParams): string {
+  const { concept, elements, projectName } = params;
+
+  const characters = elements.filter(e => e.type === "character");
+  const props = elements.filter(e => e.type === "prop");
+  const environments = elements.filter(e => e.type === "environment");
+
+  const storyInput = concept?.trim() || `A cinematic story titled ${projectName || "Untitled"}.`;
+
+  // Minimal one-line labels — visual identity carried by reference images
+  const castLabels = characters
+    .map((c, i) => `CHARACTER ${String.fromCharCode(65 + i)}: ${c.name.toUpperCase()}`)
+    .join(" | ");
+
+  const propLabels = props.map(p => `KEY PROP: ${p.name.toUpperCase()}`).join(" | ");
+
+  const envLabels = environments.map(e => {
+    if (!e.identity) return `WORLD: ${e.name.toUpperCase()}`;
+    const parts: string[] = [e.name];
+    if (e.identity.setting) parts.push(labelFor(SETTING_OPTIONS, e.identity.setting));
+    if (e.identity.timeOfDay) parts.push(labelFor(TIME_OF_DAY_OPTIONS, e.identity.timeOfDay));
+    if (e.identity.weather) parts.push(labelFor(WEATHER_OPTIONS, e.identity.weather));
+    if (e.identity.mood) parts.push(labelFor(MOOD_OPTIONS, e.identity.mood));
+    return `WORLD: ${parts.join(", ")}`;
+  }).join(" | ");
+
+  const contextLines = [
+    castLabels && `CAST: ${castLabels}`,
+    propLabels && `PROPS: ${propLabels}`,
+    envLabels,
+    `LAYOUT: Four sections — (1) CAST OVERVIEW showing all principal characters side by side with multi-view reference, (2) WORLD DESIGN showing the primary environment as a large establishing keyframe plus 2-3 supporting location views, (3) STORY ARC showing 3-5 key emotional beats labeled ACT 1 / TURNING POINT / CLIMAX / RESOLUTION, (4) VISUAL LANGUAGE showing color palette swatches, mood keywords, and cinematography style notes.`,
+  ].filter(Boolean).join("\n");
+
+  return `${storyInput}
+The above is the story plot and narrative concept to be translated into a visual filmmaking plan. Create a professional film pre-production board that combines a character design sheet, environment concept art, storyboard sequence, camera diagram or shot plan, and lighting and mood references. Interpret the story and transform it into a complete visual filmmaking plan presented as a single cohesive board that looks like a high-end studio production sheet used in film or game development. The layout must be clearly structured with distinct sections including character design showing multiple views such as front, side, and back along with close-ups for face, materials, or key props while maintaining consistent design language and clear personality and scale; an environment or set design section featuring one large cinematic keyframe plus supporting views that convey scale, lighting, and atmosphere; a storyboard sequence of 4 to 8 panels arranged in a horizontal strip or grid where each panel represents a shot with clear cinematic framing and implied camera motion such as wide shot, close-up, crane, dolly, or pan, showing progression from beginning to climax. Include a camera or shot diagram using a simple top-down or schematic layout with arrows indicating character and camera movement, and a lighting, mood, and style section with small thumbnails that communicate lighting variations, color palette, and atmosphere. The visual style must be cinematic concept art quality similar to AAA film or game production, with a clean, sharp, highly readable layout, balanced composition, strong hierarchy, consistent color grading, and high detail without clutter. Use minimal functional text labels only such as "Cut 1", "Wide Shot", or "Close-up", avoiding long paragraphs or dense text so visuals remain dominant. The output must be a single unified board, not multiple images, and must not be a cinematic scene, poster, collage, UI, or abstract composition; it must maintain strict structure, clear section separation, and logical organization. The final image should clearly read as a professional storyboard and concept development sheet used in real film production, not a movie still or decorative artwork. Include style guidance such as film pre-production board, cinematic storyboard sheet, concept art layout, visual development board, shot planning, structured composition, high detail, dramatic lighting, and production design, and prioritize clarity, readability, and structured visual communication since this output may be used by another AI system.
+
+${contextLines}`;
 }

@@ -1,15 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { 
-  Mail, 
-  Inbox as InboxIcon, 
-  Search, 
-  Trash2, 
-  Tag, 
+import Link from "next/link";
+import {
+  Mail,
+  Inbox as InboxIcon,
+  Search,
+  Trash2,
   Star,
   MoreVertical,
   Reply,
@@ -19,10 +18,9 @@ import {
   Bell,
   Send,
   Calendar,
-  CalendarPlus,
-  CreditCard,
   ExternalLink,
   Image as ImageIcon,
+  ChevronRight,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,19 +30,16 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type MessageType = "all" | "ticket" | "chatbot" | "email" | "notification";
 type MessageStatus = "unread" | "read" | "archived" | "replied";
 
 export default function InboxPage() {
-  const searchParams = useSearchParams();
   // State declarations first
   const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "unread" | "important">("all");
-  const [activeType, setActiveType] = useState<MessageType>("all");
-  const [userTypeFilter, setUserTypeFilter] = useState<"all" | "logged-in" | "visitor">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
   const [replyDialogOpen, setReplyDialogOpen] = useState(false);
@@ -64,22 +59,8 @@ export default function InboxPage() {
   const [cleanupDays, setCleanupDays] = useState(90);
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [starredFilter, setStarredFilter] = useState(false);
-  const [notifCategoryFilter, setNotifCategoryFilter] = useState<string>("all");
-  const [notifPage, setNotifPage] = useState(0);
-  const NOTIF_PAGE_SIZE = 20;
-  const [chatbotPage, setChatbotPage] = useState(0);
-  const [allInboxPage, setAllInboxPage] = useState(0);
-  const [ticketPage, setTicketPage] = useState(0);
+  const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
-  const CHATBOT_PAGE_SIZE = 20;
-
-  // Handle URL params (e.g. ?tab=chatbot from Live Chat redirect)
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "chatbot") setActiveType("chatbot");
-    else if (tab === "ticket") setActiveType("ticket");
-    else if (tab === "email") setActiveType("email" as MessageType);
-  }, [searchParams]);
 
   // Fetch real data from Convex (after state is declared)
   const groupedMessages = useQuery(api.inbox.getGroupedMessages, {});
@@ -104,13 +85,6 @@ export default function InboxPage() {
       : "skip"
   );
 
-  const emailLogs = useQuery(
-    api.emails.emailLogs.listEmailLogs,
-    activeType === "email" ? {} : "skip"
-  );
-  const notifications = useQuery(
-    api.adminNotifications.getNotifications
-  );
   const cleanupPreview = useQuery(
     api.inboxCleanup.getCleanupPreview,
     cleanupDialogOpen ? { olderThanDays: cleanupDays } : "skip"
@@ -124,10 +98,10 @@ export default function InboxPage() {
   const adminReplyToConversation = useMutation(api.chatbot.adminReplyToConversation);
   const updateConversationLabel = useMutation(api.chatbot.updateConversationLabel);
   const requestRatingMutation = useMutation(api.chatbot.requestRating);
-  const markAsReadMutation = useMutation(api.adminNotifications.markAsRead);
   const cleanOldChatbot = useMutation(api.inboxCleanup.cleanOldChatbot);
   const cleanOldInboxMessages = useMutation(api.inboxCleanup.cleanOldInboxMessages);
   const cleanOldEmailLogs = useMutation(api.inboxCleanup.cleanOldEmailLogs);
+  const repairTicketInbox = useMutation(api.tickets.repairTicketInbox);
 
   // Live chatbot conversation data (reactive - updates when admin sends reply)
   const liveChatbotConversation = selectedMessage?._isChatbot
@@ -150,34 +124,19 @@ export default function InboxPage() {
   };
 
   // Filter messages - use grouped messages (one entry per thread)
-  const isChatbotTab = activeType === "chatbot";
-  const filteredMessages = isChatbotTab ? [] : (groupedMessages || []).filter((msg: any) => {
-    if (activeType !== "all" && msg.channel !== activeType) return false;
+  const filteredMessages = (groupedMessages || []).filter((msg: any) => {
+    if (msg.channel === "chatbot") return false; // chatbots appear only when escalated
     if (activeFilter === "unread" && !msg.hasUnread) return false;
     if (activeFilter === "important" && msg.workflowStatus !== "urgent" && msg.workflowStatus !== "follow-up") return false;
-    if (searchQuery && !msg.subject?.toLowerCase().includes(searchQuery.toLowerCase()) && 
+    if (searchQuery && !msg.subject?.toLowerCase().includes(searchQuery.toLowerCase()) &&
         !msg.body?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
 
-  // Chatbot conversations filtered for the chatbot tab
-  const filteredChatbotConversations = (chatbotConversations || []).filter((conv: any) => {
-    if (activeFilter === "unread" && conv.status !== "active" && conv.status !== "escalated") return false;
-    if (activeFilter === "important" && !conv.escalatedToSupport && conv.label !== "urgent" && conv.label !== "follow-up") return false;
-    if (!isWithinDateRange(conv.updatedAt || conv.createdAt)) return false;
-    if (labelFilter !== "all" && conv.label !== labelFilter) return false;
-    // User type filter: logged-in vs visitor
-    if (userTypeFilter === "logged-in" && conv.userType !== "registered") return false;
-    if (userTypeFilter === "visitor" && conv.userType !== "visitor") return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchName = conv.userName?.toLowerCase().includes(q);
-      const matchEmail = conv.userEmail?.toLowerCase().includes(q);
-      const matchMsg = conv.lastMessageContent?.toLowerCase().includes(q);
-      if (!matchName && !matchEmail && !matchMsg) return false;
-    }
-    return true;
-  });
+  // Only escalated chatbot convos surface in All Inbox
+  const escalatedChatbotConversations = (chatbotConversations || []).filter((conv: any) =>
+    conv.escalatedToSupport === true
+  );
 
   const getMessageIcon = (channel: string) => {
     switch (channel) {
@@ -369,20 +328,20 @@ export default function InboxPage() {
     hasNewReplies: msg.hasUnread || msg.hasNewCustomerReply,
   }));
 
-  // Combined "All Inbox" items for sorting by newest across chatbot + tickets
-  const allInboxItems = activeType === "all" ? [
+  // Single unified list: tickets + escalated chatbot convos, sorted newest first
+  const allInboxItems = [
     ...ticketsWithReplyCounts.map((msg: any) => ({
       ...msg,
       _source: "ticket" as const,
       _sortTime: msg.lastReplyAt || msg.updatedAt || msg.sentAt,
     })),
-    ...filteredChatbotConversations.map((conv: any) => ({
+    ...escalatedChatbotConversations.map((conv: any) => ({
       ...conv,
       _source: "chatbot" as const,
       _isChatbot: true,
       _sortTime: conv.updatedAt || conv.createdAt,
     })),
-  ].sort((a, b) => b._sortTime - a._sortTime) : [];
+  ].sort((a, b) => b._sortTime - a._sortTime);
 
   const unreadCount = unreadCountData?.total || 0;
   const formatDate = (timestamp: number) => {
@@ -415,14 +374,17 @@ export default function InboxPage() {
       {/* Header */}
       <div className="flex items-center justify-between pb-3 shrink-0">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Inbox</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Ticket Inbox</h1>
           <p className="text-sm text-muted-foreground">
             {unreadCount} unread messages
           </p>
         </div>
-        <Button size="sm" className="gap-2">
-          <Mail className="w-4 h-4" />
-          Compose
+        <Button size="sm" variant="outline" className="gap-2" asChild>
+          <Link href="/admin/support-tickets">
+            <Ticket className="w-4 h-4" />
+            Ticket Queue
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
         </Button>
       </div>
 
@@ -431,77 +393,18 @@ export default function InboxPage() {
         {/* Left Sidebar - Navigation */}
         <Card className="col-span-2 p-2 overflow-y-auto">
           <div className="space-y-0.5">
-            <Button
-              variant={activeType === "all" ? "default" : "ghost"}
-              size="sm"
-              className="w-full justify-start gap-2 h-9"
-              onClick={() => setActiveType("all")}
-            >
-              <InboxIcon className="w-4 h-4 shrink-0" />
-              <span className="truncate">All Inbox</span>
-              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
-                {groupedMessages?.length || 0}
+            <div className="px-2 py-2 flex items-center justify-between">
+              <span className="text-sm font-semibold">Support Tickets</span>
+              <Badge variant="secondary" className="text-[10px] px-1.5 h-5">
+                {allInboxItems.length}
               </Badge>
-            </Button>
-            <Button
-              variant={activeType === "ticket" ? "default" : "ghost"}
-              size="sm"
-              className="w-full justify-start gap-2 h-9"
-              onClick={() => setActiveType("ticket")}
-            >
-              <Ticket className="w-4 h-4 shrink-0" />
-              <span className="truncate">Tickets</span>
-              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
-                {groupedMessages?.filter((m: any) => m.channel === "ticket").length || 0}
-              </Badge>
-            </Button>
-            <Button
-              variant={activeType === "chatbot" ? "default" : "ghost"}
-              size="sm"
-              className="w-full justify-start gap-2 h-9"
-              onClick={() => { setActiveType("chatbot"); setSelectedMessage(null); }}
-            >
-              <MessageSquare className="w-4 h-4 shrink-0" />
-              <span className="truncate">Chatbot</span>
-              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
-                {chatbotConversations?.length || 0}
-              </Badge>
-            </Button>
-            <Button
-              variant={activeType === "email" ? "default" : "ghost"}
-              size="sm"
-              className="w-full justify-start gap-2 h-9"
-              onClick={() => { setActiveType("email" as MessageType); setSelectedMessage(null); }}
-            >
-              <Mail className="w-4 h-4 shrink-0" />
-              <span className="truncate">Email Logs</span>
-              <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">
-                {emailLogs?.length || 0}
-              </Badge>
-            </Button>
-            <Button
-              variant={activeType === "notification" ? "default" : "ghost"}
-              size="sm"
-              className="w-full justify-start gap-2 h-9"
-              onClick={() => { setActiveType("notification" as MessageType); setSelectedMessage(null); }}
-            >
-              <Bell className="w-4 h-4 shrink-0" />
-              <span className="truncate">Notifications</span>
-              {(notifications?.length || 0) > 0 ? (
-                <Badge variant="default" className="ml-auto text-[10px] px-1.5 h-5 bg-blue-600">
-                  {notifications?.length}
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">0</Badge>
-              )}
-            </Button>
-
-            <div className="pt-3 mt-2 border-t">
+            </div>
+            <div className="pt-2 mt-1 border-t">
               <Button
                 variant={starredFilter ? "default" : "ghost"}
                 size="sm"
                 className="w-full justify-start gap-2 h-9"
-                onClick={() => { setStarredFilter(!starredFilter); setActiveType("ticket"); }}
+                onClick={() => setStarredFilter(!starredFilter)}
               >
                 <Star className={cn("w-4 h-4 shrink-0", starredFilter && "fill-yellow-400 text-yellow-400")} />
                 <span>Starred</span>
@@ -551,6 +454,17 @@ export default function InboxPage() {
                 <span>Cleanup Old Data</span>
               </Button>
             </div>
+
+            {/* Queue Management Link */}
+            <div className="pt-3 mt-1 border-t">
+              <Button variant="ghost" size="sm" className="w-full justify-start gap-2 h-8 text-xs" asChild>
+                <Link href="/admin/support-tickets">
+                  <Ticket className="w-3.5 h-3.5 shrink-0" />
+                  <span>Ticket Queue</span>
+                  <ChevronRight className="w-3 h-3 ml-auto opacity-50" />
+                </Link>
+              </Button>
+            </div>
           </div>
         </Card>
 
@@ -576,71 +490,82 @@ export default function InboxPage() {
             </Tabs>
             {/* Date Range + Label + User Type Filters */}
             <div className="flex gap-2 flex-wrap">
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background min-w-[100px]"
-              >
-                <option value="all">All Time</option>
-                <option value="1w">Last 1 Week</option>
-                <option value="2w">Last 2 Weeks</option>
-                <option value="1m">Last 1 Month</option>
-                <option value="2m">Last 2 Months</option>
-                <option value="3m">Last 3 Months</option>
-              </select>
-              <select
-                value={labelFilter}
-                onChange={(e) => setLabelFilter(e.target.value)}
-                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background min-w-[100px]"
-              >
-                <option value="all">All Labels</option>
-                <option value="urgent">🔴 Urgent</option>
-                <option value="follow-up">🟡 Follow-up</option>
-                <option value="resolved">🟢 Resolved</option>
-              </select>
-              {isChatbotTab && (
-                <select
-                  value={userTypeFilter}
-                  onChange={(e) => setUserTypeFilter(e.target.value as "all" | "logged-in" | "visitor")}
-                  className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-background min-w-[100px]"
-                >
-                  <option value="all">All Users</option>
-                  <option value="logged-in">🔵 Logged-in</option>
-                  <option value="visitor">⚪ Visitors</option>
-                </select>
-              )}
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger className="flex-1 h-8 text-xs min-w-[100px]">
+                  <SelectValue placeholder="All Time" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Time</SelectItem>
+                  <SelectItem value="1w">Last 1 Week</SelectItem>
+                  <SelectItem value="2w">Last 2 Weeks</SelectItem>
+                  <SelectItem value="1m">Last 1 Month</SelectItem>
+                  <SelectItem value="2m">Last 2 Months</SelectItem>
+                  <SelectItem value="3m">Last 3 Months</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={labelFilter} onValueChange={setLabelFilter}>
+                <SelectTrigger className="flex-1 h-8 text-xs min-w-[100px]">
+                  <SelectValue placeholder="All Labels" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Labels</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="follow-up">Follow-up</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
           {/* Action Bar */}
           {selectedMessages.size > 0 && (
             <div className="px-4 py-2 border-b bg-muted/50 flex items-center gap-2">
-              <Button variant="ghost" size="sm" title="Delete selected">
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Delete selected"
+                className="text-destructive hover:text-destructive"
+                onClick={async () => {
+                  if (!confirm(`Delete ${selectedMessages.size} message(s)? This cannot be undone.`)) return;
+                  let failed = 0;
+                  for (const id of selectedMessages) {
+                    try { await deleteMessage({ id: id as any }); }
+                    catch { failed++; }
+                  }
+                  setSelectedMessages(new Set());
+                  if (failed > 0) toast.error(`${failed} deletion(s) failed`);
+                  else toast.success(`${selectedMessages.size} message(s) deleted`);
+                }}
+              >
                 <Trash2 className="w-4 h-4" />
-              </Button>
-              <Button variant="ghost" size="sm" title="Add label">
-                <Tag className="w-4 h-4" />
               </Button>
               <span className="text-sm text-muted-foreground ml-auto">
                 {selectedMessages.size} selected
               </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs h-7"
+                onClick={() => setSelectedMessages(new Set())}
+              >
+                Clear
+              </Button>
             </div>
           )}
 
           {/* Message List */}
           <div className="flex-1 overflow-y-auto">
-            {/* All Inbox: Mixed chatbot + tickets sorted by newest */}
-            {activeType === "all" ? (
-              allInboxItems.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <div className="text-center p-8">
-                    <InboxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p className="font-medium">No messages</p>
-                  </div>
+            {allInboxItems.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center p-8">
+                  <InboxIcon className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">No tickets</p>
+                  <p className="text-xs mt-1">Support tickets will appear here</p>
                 </div>
-              ) : (
-                <>
-              {allInboxItems.slice(allInboxPage * PAGE_SIZE, (allInboxPage + 1) * PAGE_SIZE).map((item: any) =>
+              </div>
+            ) : (
+              <>
+              {allInboxItems.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((item: any) =>
                   item._source === "chatbot" ? (
                     /* Chatbot item in All Inbox */
                     <div
@@ -778,477 +703,14 @@ export default function InboxPage() {
                 {allInboxItems.length > PAGE_SIZE && (
                   <div className="p-3 border-t flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">
-                      {allInboxPage * PAGE_SIZE + 1}-{Math.min((allInboxPage + 1) * PAGE_SIZE, allInboxItems.length)} of {allInboxItems.length}
+                      {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, allInboxItems.length)} of {allInboxItems.length}
                     </span>
                     <div className="flex gap-1">
-                      <Button variant="outline" size="sm" disabled={allInboxPage === 0} onClick={() => setAllInboxPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
-                      <Button variant="outline" size="sm" disabled={(allInboxPage + 1) * PAGE_SIZE >= allInboxItems.length} onClick={() => setAllInboxPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
+                      <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
+                      <Button variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= allInboxItems.length} onClick={() => setPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
                     </div>
                   </div>
                 )}
-                </>
-              )
-            ) : isChatbotTab ? (
-              /* Chatbot-only tab */
-              <>
-                {filteredChatbotConversations.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">
-                    <div className="text-center p-8">
-                      <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                      <p className="font-medium">No chatbot conversations</p>
-                      <p className="text-sm mt-1">Conversations will appear here when users chat</p>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                  {filteredChatbotConversations.slice(chatbotPage * CHATBOT_PAGE_SIZE, (chatbotPage + 1) * CHATBOT_PAGE_SIZE).map((conv: any) => (
-                    <div
-                      key={conv._id}
-                      onClick={() => setSelectedMessage({ ...conv, _isChatbot: true })}
-                      className={cn(
-                        "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors relative",
-                        selectedMessage?._id === conv._id && "bg-muted",
-                        conv.escalatedToSupport && "border-l-4 border-l-red-500",
-                        conv.status === "active" && !conv.escalatedToSupport && "border-l-4 border-l-green-500"
-                      )}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
-                          conv.userType === "registered"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-gray-100 text-gray-600"
-                        )}>
-                          {conv.userType === "registered" ? "U" : "V"}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium truncate">{conv.userName}</span>
-                            <Badge variant="outline" className={cn(
-                              "text-[10px] px-1.5 py-0",
-                              conv.type === "user_panel"
-                                ? "border-blue-300 text-blue-700 bg-blue-50"
-                                : "border-gray-300 text-gray-600 bg-gray-50"
-                            )}>
-                              {conv.type === "user_panel" ? "Logged-in" : "Visitor"}
-                            </Badge>
-                            {conv.escalatedToSupport && (
-                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Escalated</Badge>
-                            )}
-                            {conv.label && (
-                              <span className={cn(
-                                "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                                conv.label === "urgent" && "bg-red-100 text-red-700",
-                                conv.label === "follow-up" && "bg-yellow-100 text-yellow-700",
-                                conv.label === "resolved" && "bg-green-100 text-green-700"
-                              )}>
-                                {conv.label}
-                              </span>
-                            )}
-                            <span className={cn(
-                              "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                              conv.status === "active" && "bg-green-100 text-green-700",
-                              conv.status === "escalated" && "bg-red-100 text-red-700",
-                              conv.status === "admin_takeover" && "bg-blue-100 text-blue-700",
-                              conv.status === "resolved" && "bg-gray-100 text-gray-500"
-                            )}>
-                              {conv.status === "admin_takeover" ? "Agent Active" : conv.status}
-                            </span>
-                            <span className="text-xs text-muted-foreground ml-auto">
-                              {formatDate(conv.lastMessageTime)}
-                            </span>
-                          </div>
-                          {conv.userEmail && (
-                            <p className="text-xs text-muted-foreground mb-1">{conv.userEmail}</p>
-                          )}
-                          <p className="text-sm text-muted-foreground truncate">
-                            {conv.lastMessageRole === "user" ? "Customer: " : conv.lastMessageRole === "admin" ? "Agent: " : "AI: "}
-                            {conv.lastMessageContent || "No messages"}
-                          </p>
-                          <div className="flex gap-1 mt-2 items-center flex-wrap">
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">
-                              {conv.messageCount} messages
-                            </span>
-                            {conv.hasAppointment && conv.appointmentDetails && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium" title={`${conv.appointmentDetails.purpose || "Appointment"} - ${conv.appointmentDetails.status}`}>
-                                📅 {new Date(conv.appointmentDetails.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {conv.appointmentDetails.time}
-                                {(() => {
-                                  const diffDays = Math.ceil((conv.appointmentDetails.date - Date.now()) / 86400000);
-                                  if (diffDays < 0) return ` (${Math.abs(diffDays)}d ago)`;
-                                  if (diffDays === 0) return " (Today)";
-                                  if (diffDays === 1) return " (Tomorrow)";
-                                  return ` (in ${diffDays}d)`;
-                                })()}
-                              </span>
-                            )}
-                            {conv.hasAppointment && !conv.appointmentDetails && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-medium">
-                                📅 Booking
-                              </span>
-                            )}
-                            {conv.rating && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700">
-                                {"⭐".repeat(conv.rating)}
-                              </span>
-                            )}
-                            {conv.userPhone && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-600">
-                                📞 {conv.userPhone}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {/* Pagination controls */}
-                  {filteredChatbotConversations.length > CHATBOT_PAGE_SIZE && (
-                    <div className="p-3 border-t flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        {chatbotPage * CHATBOT_PAGE_SIZE + 1}-{Math.min((chatbotPage + 1) * CHATBOT_PAGE_SIZE, filteredChatbotConversations.length)} of {filteredChatbotConversations.length}
-                      </span>
-                      <div className="flex gap-1">
-                        <Button variant="outline" size="sm" disabled={chatbotPage === 0} onClick={() => setChatbotPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
-                        <Button variant="outline" size="sm" disabled={(chatbotPage + 1) * CHATBOT_PAGE_SIZE >= filteredChatbotConversations.length} onClick={() => setChatbotPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
-                      </div>
-                    </div>
-                  )}
-                  </>
-                )}
-              </>
-            ) : activeType === "email" ? (
-              /* Email Logs tab */
-              !emailLogs || emailLogs.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <div className="text-center p-8">
-                    <Mail className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p className="font-medium">No email logs</p>
-                    <p className="text-xs mt-1">System emails will appear here</p>
-                  </div>
-                </div>
-              ) : (
-                emailLogs.filter((log: any) => {
-                  if (!isWithinDateRange(log.createdAt)) return false;
-                  if (searchQuery) {
-                    const q = searchQuery.toLowerCase();
-                    return log.sentTo.toLowerCase().includes(q) || log.subject.toLowerCase().includes(q);
-                  }
-                  return true;
-                }).map((log: any) => (
-                  <div
-                    key={log._id}
-                    onClick={() => setSelectedMessage({ ...log, _isEmailLog: true })}
-                    className={cn(
-                      "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors",
-                      selectedMessage?._id === log._id && "bg-muted",
-                      log.status === "failed" && "border-l-4 border-l-red-500"
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={cn(
-                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
-                        log.status === "sent" ? "bg-green-100 text-green-700" :
-                        log.status === "failed" ? "bg-red-100 text-red-700" :
-                        "bg-gray-100 text-gray-600"
-                      )}>
-                        <Mail className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium truncate text-sm">{log.sentTo}</span>
-                          <Badge variant="outline" className={cn(
-                            "text-[10px] px-1.5 py-0",
-                            log.status === "sent" && "border-green-300 text-green-700 bg-green-50",
-                            log.status === "failed" && "border-red-300 text-red-700 bg-red-50",
-                            log.status === "logged" && "border-gray-300 text-gray-600 bg-gray-50"
-                          )}>
-                            {log.status}
-                          </Badge>
-                          {log.templateType && (
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                              {log.templateType}
-                            </Badge>
-                          )}
-                          <span className="text-xs text-muted-foreground ml-auto">
-                            {formatDate(log.createdAt)}
-                          </span>
-                        </div>
-                        <p className="text-sm font-medium truncate">{log.subject}</p>
-                        {log.errorMessage && (
-                          <p className="text-xs text-red-600 mt-1 truncate">❌ {log.errorMessage}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )
-            ) : activeType === "notification" ? (
-              /* Notifications tab - grouped by category with filter + pagination */
-              (() => {
-                const categories = [
-                  { key: "subscription", label: "New Subscriptions", icon: <Star className="w-4 h-4" />, color: "bg-emerald-500", textColor: "text-emerald-700", bgColor: "bg-emerald-50", filter: (n: any) => n.type?.includes("subscription") },
-                  { key: "credit", label: "Credit Purchases", icon: <CreditCard className="w-4 h-4" />, color: "bg-violet-500", textColor: "text-violet-700", bgColor: "bg-violet-50", filter: (n: any) => n.type?.includes("credit") },
-                  { key: "ticket", label: "New Tickets", icon: <Ticket className="w-4 h-4" />, color: "bg-amber-500", textColor: "text-amber-700", bgColor: "bg-amber-50", filter: (n: any) => n.type?.includes("ticket") },
-                  { key: "booking", label: "Booking Appointments", icon: <CalendarPlus className="w-4 h-4" />, color: "bg-blue-500", textColor: "text-blue-700", bgColor: "bg-blue-50", filter: (n: any) => n.type?.includes("booking") },
-                ];
-
-                // Apply filters to notifications
-                const filtered = (notifications || []).filter((n: any) => {
-                  if (activeFilter === "unread" && n.read) return false;
-                  if (searchQuery && !n.title?.toLowerCase().includes(searchQuery.toLowerCase()) && !n.description?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                  if (!isWithinDateRange(n.time)) return false;
-                  // Category filter
-                  if (notifCategoryFilter !== "all") {
-                    const cat = categories.find(c => c.key === notifCategoryFilter);
-                    if (cat && !cat.filter(n)) return false;
-                  }
-                  return true;
-                });
-                const unreadCount = (notifications || []).filter((n: any) => !n.read).length;
-
-                // Paginate
-                const totalFiltered = filtered.length;
-                const paginatedNotifs = filtered.slice(notifPage * NOTIF_PAGE_SIZE, (notifPage + 1) * NOTIF_PAGE_SIZE);
-
-                return (
-                  <>
-                    {/* Notification header: category filter + unread count + mark-all-read */}
-                    <div className="px-4 py-2 border-b bg-muted/30 flex items-center gap-2 flex-wrap">
-                      <select
-                        value={notifCategoryFilter}
-                        onChange={(e) => { setNotifCategoryFilter(e.target.value); setNotifPage(0); }}
-                        className="text-xs h-7 px-2 rounded-md border bg-background"
-                      >
-                        <option value="all">All Categories</option>
-                        {categories.map(cat => (
-                          <option key={cat.key} value={cat.key}>{cat.label}</option>
-                        ))}
-                      </select>
-                      {unreadCount > 0 && (
-                        <span className="text-xs text-muted-foreground">{unreadCount} unread</span>
-                      )}
-                      <div className="ml-auto">
-                        {unreadCount > 0 && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={async () => {
-                              try {
-                                for (const n of (notifications || []).filter((n: any) => !n.read)) {
-                                  await markAsReadMutation({ notificationId: n.id, type: n.type || "unknown" });
-                                }
-                                toast.success("All notifications marked as read");
-                              } catch { toast.error("Failed to mark as read"); }
-                            }}
-                          >
-                            Mark all read
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    {paginatedNotifs.length === 0 ? (
-                      <div className="flex items-center justify-center h-full text-muted-foreground">
-                        <div className="text-center p-8">
-                          <Bell className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                          <p className="font-medium">{activeFilter === "unread" ? "No unread notifications" : notifCategoryFilter !== "all" ? "No notifications in this category" : "No notifications"}</p>
-                          <p className="text-xs mt-1">System notifications will appear here</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Group by category within current page */}
-                        {notifCategoryFilter === "all" ? (
-                          categories.map(cat => {
-                            const items = paginatedNotifs.filter(cat.filter);
-                            if (items.length === 0) return null;
-                            return (
-                              <div key={cat.key}>
-                                <div className={cn("px-4 py-2 flex items-center gap-2 sticky top-0 z-10 border-b", cat.bgColor)}>
-                                  <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-white", cat.color)}>
-                                    {cat.icon}
-                                  </div>
-                                  <span className={cn("text-xs font-semibold uppercase tracking-wide", cat.textColor)}>{cat.label}</span>
-                                  <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 h-5">{items.length}</Badge>
-                                </div>
-                                {items.map((notif: any) => (
-                                  <div
-                                    key={notif.id}
-                                    className={cn(
-                                      "px-4 py-3 border-b cursor-pointer hover:bg-muted/50 transition-colors",
-                                      !notif.read && "bg-blue-50/40 border-l-2 border-l-blue-500"
-                                    )}
-                                    onClick={async () => {
-                                      if (!notif.read) {
-                                        try { await markAsReadMutation({ notificationId: notif.id, type: notif.type || "unknown" }); } catch {}
-                                      }
-                                    }}
-                                  >
-                                    <div className="flex items-start gap-3">
-                                      <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", cat.bgColor, cat.textColor)}>
-                                        {cat.icon}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-medium text-sm truncate">{notif.title}</span>
-                                          {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
-                                          <span className="text-[11px] text-muted-foreground ml-auto whitespace-nowrap">{formatDate(notif.time)}</span>
-                                        </div>
-                                        <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.description}</p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          })
-                        ) : (
-                          /* Single category - flat list */
-                          paginatedNotifs.map((notif: any) => {
-                            const cat = categories.find(c => c.filter(notif)) || categories[0];
-                            return (
-                              <div
-                                key={notif.id}
-                                className={cn(
-                                  "px-4 py-3 border-b cursor-pointer hover:bg-muted/50 transition-colors",
-                                  !notif.read && "bg-blue-50/40 border-l-2 border-l-blue-500"
-                                )}
-                                onClick={async () => {
-                                  if (!notif.read) {
-                                    try { await markAsReadMutation({ notificationId: notif.id, type: notif.type || "unknown" }); } catch {}
-                                  }
-                                }}
-                              >
-                                <div className="flex items-start gap-3">
-                                  <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0", cat.bgColor, cat.textColor)}>
-                                    {cat.icon}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium text-sm truncate">{notif.title}</span>
-                                      {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
-                                      <span className="text-[11px] text-muted-foreground ml-auto whitespace-nowrap">{formatDate(notif.time)}</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground truncate mt-0.5">{notif.description}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-
-                        {/* Pagination */}
-                        {totalFiltered > NOTIF_PAGE_SIZE && (
-                          <div className="p-3 border-t flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              {notifPage * NOTIF_PAGE_SIZE + 1}-{Math.min((notifPage + 1) * NOTIF_PAGE_SIZE, totalFiltered)} of {totalFiltered}
-                            </span>
-                            <div className="flex gap-1">
-                              <Button variant="outline" size="sm" disabled={notifPage === 0} onClick={() => setNotifPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
-                              <Button variant="outline" size="sm" disabled={(notifPage + 1) * NOTIF_PAGE_SIZE >= totalFiltered} onClick={() => setNotifPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </>
-                );
-              })()
-            ) : (
-              /* Ticket specific tab */
-              <>
-              {ticketsWithReplyCounts.slice(ticketPage * PAGE_SIZE, (ticketPage + 1) * PAGE_SIZE).map((ticket: any) => (
-                <div
-                  key={ticket._id}
-                  onClick={() => setSelectedMessage(ticket)}
-                  className={cn(
-                    "p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors relative",
-                    selectedMessage?._id === ticket._id && "bg-muted",
-                    ticket.hasNewReplies && "bg-blue-50/30 border-l-4 border-l-blue-500"
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedMessages.has(ticket._id)}
-                      onChange={() => toggleMessageSelection(ticket._id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-1"
-                    />
-                    <button
-                      onClick={(e) => handleToggleStar(ticket._id, e)}
-                      className="mt-1 hover:scale-110 transition-transform"
-                    >
-                      <Star
-                        className={cn(
-                          "w-4 h-4",
-                          ticket.starred ? "fill-yellow-400 text-yellow-400" : "text-gray-400"
-                        )}
-                      />
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium truncate">
-                          {ticket.metadata?.userName || ticket.metadata?.senderName || "Unknown"}
-                        </span>
-                        {ticket.hasNewReplies && (
-                          <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
-                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                            New reply
-                          </span>
-                        )}
-                        {ticket.workflowStatus && (
-                          <span className={cn(
-                            "text-xs px-2 py-0.5 rounded-full font-medium",
-                            ticket.workflowStatus === "urgent" && "bg-red-100 text-red-700",
-                            ticket.workflowStatus === "follow-up" && "bg-yellow-100 text-yellow-700",
-                            ticket.workflowStatus === "resolved" && "bg-green-100 text-green-700",
-                            ticket.workflowStatus === "pending" && "bg-gray-100 text-gray-700"
-                          )}>
-                            {ticket.workflowStatus}
-                          </span>
-                        )}
-                        <span className="text-xs text-muted-foreground ml-auto">
-                          {formatDate(ticket.updatedAt)}
-                        </span>
-                      </div>
-                      <p className="text-sm font-medium truncate mb-1">
-                        {ticket.subject || "No subject"}
-                      </p>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {ticket.body}
-                      </p>
-                      <div className="flex gap-1 mt-2 items-center">
-                        {ticket.replyCount > 0 && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                            {ticket.replyCount} replies
-                          </span>
-                        )}
-                        {ticket.tags?.slice(0, 3).map((tag: string) => (
-                          <span
-                            key={tag}
-                            className="text-xs px-2 py-0.5 rounded-full bg-muted"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {ticketsWithReplyCounts.length > PAGE_SIZE && (
-                <div className="p-3 border-t flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    {ticketPage * PAGE_SIZE + 1}-{Math.min((ticketPage + 1) * PAGE_SIZE, ticketsWithReplyCounts.length)} of {ticketsWithReplyCounts.length}
-                  </span>
-                  <div className="flex gap-1">
-                    <Button variant="outline" size="sm" disabled={ticketPage === 0} onClick={() => setTicketPage(p => p - 1)} className="h-7 px-2 text-xs">Prev</Button>
-                    <Button variant="outline" size="sm" disabled={(ticketPage + 1) * PAGE_SIZE >= ticketsWithReplyCounts.length} onClick={() => setTicketPage(p => p + 1)} className="h-7 px-2 text-xs">Next</Button>
-                  </div>
-                </div>
-              )}
               </>
             )}
           </div>
@@ -1515,9 +977,7 @@ export default function InboxPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <h2 className="text-xl font-semibold">
-                        {selectedMessage.channel === "ticket" && selectedMessage.threadId
-                          ? `[${selectedMessage.threadId}] ${selectedMessage.subject || "No subject"}`
-                          : selectedMessage.subject || "No subject"}
+                        {selectedMessage.subject || "No subject"}
                       </h2>
                       <div className="flex items-center gap-2 mt-2">
                         <div className={cn("p-1.5 rounded", getTypeColor(selectedMessage.channel))}>
@@ -1866,17 +1326,18 @@ export default function InboxPage() {
           <div className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label>Delete data older than</Label>
-              <select
-                value={cleanupDays}
-                onChange={(e) => setCleanupDays(Number(e.target.value))}
-                className="w-full border rounded-md px-3 py-2 bg-background"
-              >
-                <option value={30}>30 days</option>
-                <option value={60}>60 days</option>
-                <option value={90}>90 days</option>
-                <option value={180}>6 months</option>
-                <option value={365}>1 year</option>
-              </select>
+              <Select value={String(cleanupDays)} onValueChange={(v) => setCleanupDays(Number(v))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 days</SelectItem>
+                  <SelectItem value="60">60 days</SelectItem>
+                  <SelectItem value="90">90 days</SelectItem>
+                  <SelectItem value="180">6 months</SelectItem>
+                  <SelectItem value="365">1 year</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {cleanupPreview && (
@@ -1907,6 +1368,35 @@ export default function InboxPage() {
               <p className="text-xs text-yellow-700 mt-1">
                 Deleted data includes conversations, ticket messages, and email logs older than {cleanupDays} days.
               </p>
+            </div>
+
+            {/* Repair section */}
+            <div className="border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Data Repair</p>
+              <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3">
+                <div>
+                  <p className="text-sm font-medium">Sync Ticket Inbox</p>
+                  <p className="text-xs text-muted-foreground">Fixes mismatched ticket data between inbox and support tickets table.</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={cleanupRunning}
+                  onClick={async () => {
+                    setCleanupRunning(true);
+                    try {
+                      const result = await repairTicketInbox();
+                      toast.success(`Repaired: ${result.updated} updated, ${result.deleted} removed, ${result.created} created`);
+                    } catch {
+                      toast.error("Repair failed");
+                    } finally {
+                      setCleanupRunning(false);
+                    }
+                  }}
+                >
+                  Run Repair
+                </Button>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2">

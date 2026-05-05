@@ -96,9 +96,12 @@ Add ALL of these:
 | `INTERNAL_REPAIR_SECRET` | `SECRET_B` (from step 1) | Generated in step 1 |
 | `SUPPORT_INTERNAL_SECRET` | `SECRET_C` (from step 1) | Generated in step 1 |
 | `NEXT_PUBLIC_APP_URL` | `https://your-domain.com` | Your production domain |
+| `SYSTEM_TEST` | `true` | **Dev only** — enables test mutations (simulate lapse, nuclear reset, etc.) |
 
 > These are **Convex-side** env vars — separate from `.env.local`.
 > The cron jobs (inactivity cleanup, orphan repair) and internal mutations read from here.
+>
+> ⚠️ Do **not** set `SYSTEM_TEST=true` in production — it enables destructive test mutations.
 
 ### 3c. Alternative: set via CLI
 ```bash
@@ -107,6 +110,9 @@ npx convex env set WEBHOOK_SECRET <SECRET_A>
 npx convex env set INTERNAL_REPAIR_SECRET <SECRET_B>
 npx convex env set SUPPORT_INTERNAL_SECRET <SECRET_C>
 npx convex env set NEXT_PUBLIC_APP_URL https://your-domain.com
+
+# Dev only — enables simulate-lapse, nuclear reset, and other test mutations:
+npx convex env set SYSTEM_TEST true
 ```
 
 ---
@@ -265,6 +271,7 @@ The Convex runtime reads these for cron jobs, internal mutations, and auth.
 | `INTERNAL_REPAIR_SECRET` | Same as `INTERNAL_REPAIR_SECRET` in `.env.local` |
 | `SUPPORT_INTERNAL_SECRET` | Same as `SUPPORT_INTERNAL_SECRET` in `.env.local` |
 | `NEXT_PUBLIC_APP_URL` | Your production domain (used by inactivity cron to call API routes) |
+| `SYSTEM_TEST` | `true` — **dev deployments only**; omit entirely in production |
 
 ### ⚠️ Critical: `INTERNAL_REPAIR_SECRET` must be in BOTH places
 

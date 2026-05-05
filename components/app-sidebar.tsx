@@ -85,18 +85,23 @@ const navItems = [
     color: "text-orange-600",
   },
   {
-    title: "Inbox",
+    title: "Support",
     icon: IconInbox,
     color: "text-cyan-600",
     items: [
       {
-        title: "All Messages",
+        title: "Ticket Inbox",
         url: "/admin/inbox",
         icon: IconInbox,
       },
       {
-        title: "Support Tickets",
+        title: "Ticket Queue",
         url: "/admin/support-tickets",
+        icon: IconMessageChatbot,
+      },
+      {
+        title: "Chatbot",
+        url: "/admin/chatbot-settings",
         icon: IconMessageChatbot,
       },
       {
@@ -105,12 +110,6 @@ const navItems = [
         icon: IconBell,
       },
     ],
-  },
-  {
-    title: "Chatbot",
-    url: "/admin/chatbot-settings",
-    icon: IconMessageChatbot,
-    color: "text-indigo-600",
   },
   {
     title: "Email",

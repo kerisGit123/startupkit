@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     }
     let file = formData.get('file') as File | null;
     const useTemp = formData.get('useTemp') as string;
+    const noLog = formData.get('noLog') === '1';
     const projectId = formData.get('projectId') as string;
     const categoryParam = formData.get('category') as string;
     const explicitPath = formData.get('path') as string;
@@ -195,7 +196,22 @@ export async function POST(request: NextRequest) {
       expiresAt: expiresAt?.toISOString()
     });
 
-    // Log file to Convex database
+    // Log file to Convex database (skipped for noLog uploads like crop thumbnails)
+    if (noLog) {
+      return NextResponse.json({
+        success: true,
+        r2Key,
+        publicUrl,
+        category,
+        isTemporary,
+        expiresAt: expiresAt?.toISOString(),
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        companyId,
+      });
+    }
+
     try {
       // Parse tags from FormData if provided
       let tags = [];

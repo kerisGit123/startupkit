@@ -15,6 +15,7 @@ const labelColors: Record<string, string> = {
   "Blocked": "bg-red-100 text-red-800 border-red-300",
   "Trial": "bg-gray-100 text-gray-800 border-gray-300",
   "Support Priority": "bg-pink-100 text-pink-800 border-pink-300",
+  "Education": "bg-teal-100 text-teal-800 border-teal-300",
 };
 
 export function UserLabelBadge({ label, editable, onLabelChange }: UserLabelBadgeProps) {
@@ -44,4 +45,5 @@ export const USER_LABELS = [
   "Blocked",
   "Trial",
   "Support Priority",
+  "Education",
 ];

@@ -32,6 +32,12 @@ interface PlanStep {
   credits: number;
 }
 
+interface QuickAction {
+  label: string;
+  message: string;
+  style?: "primary" | "secondary" | "danger";
+}
+
 type AgentMode = "director" | "agent";
 
 interface DirectorChatPanelProps {
@@ -42,6 +48,7 @@ interface DirectorChatPanelProps {
   currentFrameImageUrl?: string;
   initialMessage?: string;
   onClose: () => void;
+  onOpenBatchGenerate?: () => void;
 }
 
 // ── Markdown renderer ──────────────────────────────────────────────
@@ -64,6 +71,14 @@ function renderInlineSpans(text: string, keyOffset: number = 0): (string | React
   }
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));
   return parts;
+}
+
+function parseChoices(content: string): { text: string; choices: string[] } {
+  const match = content.match(/\[CHOICES:\s*([\s\S]*?)\]\s*$/);
+  if (!match) return { text: content, choices: [] };
+  const choices = [...match[1].matchAll(/"([^"]+)"/g)].map(m => m[1]);
+  const text = content.replace(/\s*\[CHOICES:[\s\S]*?\]\s*$/, "").trimEnd();
+  return { text, choices };
 }
 
 function renderMarkdown(text: string): React.ReactElement {
@@ -165,13 +180,15 @@ const TOOL_LABELS: Record<string, string> = {
   get_model_pricing: "Comparing models...",
   create_execution_plan: "Planning...",
   trigger_image_generation: "Generating image...",
+  trigger_element_image_generation: "Generating element reference...",
   trigger_video_generation: "Generating video...",
   trigger_post_processing: "Processing...",
   get_prompt_templates: "Loading templates...",
   get_presets: "Loading presets...",
   enhance_prompt: "Enhancing prompt...",
   browse_project_files: "Browsing files...",
-  invoke_skill: "Building script...",
+  invoke_skill: "Writing & building storyboard...",
+  suggest_actions: "",
   save_script: "Saving script...",
   build_storyboard: "Building storyboard...",
   suggest_shot_list: "Planning shots...",
@@ -188,6 +205,7 @@ export function DirectorChatPanel({
   currentFrameImageUrl,
   initialMessage,
   onClose,
+  onOpenBatchGenerate,
 }: DirectorChatPanelProps) {
   const { user } = useUser();
   const userId = user?.id;
@@ -197,6 +215,7 @@ export function DirectorChatPanel({
   const [streaming, setStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [toolProgress, setToolProgress] = useState<string | null>(null);
+  const [quickActions, setQuickActions] = useState<QuickAction[] | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [mode, setMode] = useState<AgentMode>("director");
   const [scriptMode, setScriptMode] = useState<"quick" | "cinematic">("quick");
@@ -204,6 +223,7 @@ export function DirectorChatPanel({
   const [confirmingAction, setConfirmingAction] = useState<{ label: string; cost: number; isEstimate?: boolean; action: () => Promise<void> } | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [postGenNudge, setPostGenNudge] = useState(false);
   const [hiddenCount, setHiddenCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -293,6 +313,8 @@ export function DirectorChatPanel({
       setInput("");
       setStreaming(true);
       setActiveTool(null);
+      setQuickActions(null);
+      setPostGenNudge(false);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -353,13 +375,24 @@ export function DirectorChatPanel({
                     { id: `plan-${Date.now()}`, role: "assistant", content: "", isPlanApproval: true, planData: { steps: event.steps || [], totalCredits: event.totalCredits || 0, status: "pending" } },
                   ]);
                   break;
-                case "done":
+                case "quick_actions":
+                  setQuickActions(event.actions || null);
+                  break;
+                case "open_batch_generate":
+                  onOpenBatchGenerate?.();
+                  break;
+                case "done": {
+                  const toolsUsedList = event.toolsUsed || [];
                   setMessages((prev) => prev.map((m) =>
                     m.id === assistantMsg.id
-                      ? { ...m, isStreaming: false, toolsUsed: event.toolsUsed || [] }
+                      ? { ...m, isStreaming: false, toolsUsed: toolsUsedList }
                       : m
                   ));
+                  if (toolsUsedList.some((t: string) => t === "trigger_image_generation" || t === "trigger_video_generation")) {
+                    setPostGenNudge(true);
+                  }
                   break;
+                }
               }
             } catch { /* skip malformed JSON */ }
           }
@@ -569,7 +602,9 @@ export function DirectorChatPanel({
 
   const directorCategories = [
     { id: "project", icon: "📋", label: "Storyboard" },
+    ...(currentSceneId ? [{ id: "scene", icon: "🎥", label: "This scene" }] : []),
     { id: "frame", icon: "🎬", label: "This frame" },
+    { id: "style", icon: "🎨", label: "Style" },
     { id: "improve", icon: "✨", label: "Improve" },
   ];
 
@@ -583,11 +618,19 @@ export function DirectorChatPanel({
 
   const directorPills: Record<string, QuickPill[]> = {
     project: [
+      { label: "What needs my attention?", prompt: "Assess the current project state. What are the top 3 most important things to work on right now? Surface issues with action buttons for next steps." },
       { label: "What is this storyboard about?", localHandler: () => analyzeStoryboard() },
       { label: "Review shot variety", prompt: "Look at all my frames and check for shot variety. Are there too many similar angles or compositions? Tell me what to change." },
       { label: "Pacing check", prompt: "Review my storyboard for pacing. Are scene durations appropriate? Does the flow feel right? Which scenes need more or fewer frames?" },
       { label: "Consistency check", prompt: "Check my storyboard for visual consistency — do the prompts maintain consistent character descriptions, environment, and style across frames?" },
       { label: "Script help", prompt: "Review my project and help me improve the narrative structure. Are there gaps, pacing issues, or missing scenes?" },
+    ],
+    scene: [
+      { label: "Review this scene's shots", prompt: "Review all frames in the current scene. Are the shot types varied? Do they tell the scene's story effectively? What's missing?" },
+      { label: "Shot coverage check", prompt: "Check if the current scene has proper coverage — establishing shot, mid shots, close-ups. List what shot types are present and what's missing." },
+      { label: "Continuity in scene", prompt: "Check visual continuity across all frames in the current scene. Do character appearances, lighting, and environment stay consistent frame to frame?" },
+      { label: "Generate this scene", prompt: "Generate images for all frames in the current scene that don't have images yet. Show me a plan with credit costs before executing." },
+      { label: "Animate this scene", prompt: "Generate videos for all frames in the current scene that have images but no video. Show me the plan with credit costs first." },
     ],
     frame: [
       { label: "What is the current frame about?", localHandler: () => handleCurrentFrameAbout() },
@@ -595,10 +638,21 @@ export function DirectorChatPanel({
         ? [{ label: "Analyze the current image · 1cr", localHandler: () => analyzeCurrentImage() }]
         : [{ label: "Analyze the current image", localHandler: () => handleCurrentFrameAbout() }]
       ),
+      ...(currentFrameNumber && currentFrameNumber > 1 ? [
+        { label: "Continuity vs previous frame", prompt: `Compare frame ${currentFrameNumber} with frame ${currentFrameNumber - 1}. Are they visually consistent — same character look, lighting continuity, environment match? What specifically needs fixing?` },
+      ] : []),
       { label: "Camera angle advice", prompt: `What's the best camera angle and shot type for frame ${currentFrameNumber}? Consider the scene context and what would be most cinematic.` },
       { label: "Lighting setup", prompt: `Suggest the best lighting setup for frame ${currentFrameNumber}. Consider the mood, time of day, and what would complement the scene.` },
       { label: "What's wrong with this frame?", prompt: `Critically review frame ${currentFrameNumber}. What are the weaknesses in the prompt? What might generate poorly and why? Be specific.` },
       { label: "Add director notes", prompt: `Add director notes to frame ${currentFrameNumber} with production guidance — key things to watch for when generating.` },
+    ],
+    style: [
+      { label: "More dramatic", prompt: "Push all frame prompts toward more dramatic visual language — deeper shadows, higher contrast, intense close framing, weight in every shot. Update the prompts directly." },
+      { label: "Brighter & airier", prompt: "Shift the project mood to brighter and more optimistic — soft diffused lighting, warm highlights, open airy compositions. Update the project style." },
+      { label: "Grittier & raw", prompt: "Apply a gritty, raw aesthetic — film grain, desaturated palette, harsh practical lighting, tight handheld framing. Update the style and key frame prompts." },
+      { label: "Warmer tones", prompt: "Apply a warm color grade across all frames — golden hour lighting, amber and terracotta palette, warm shadow tones. Update the project style prompt." },
+      { label: "More cinematic", prompt: "Elevate every frame to true cinematic quality — add specific lens choices (anamorphic 2.39:1, 35mm), precise lighting setups (rembrandt, three-point), and strong composition (rule of thirds, leading lines). Update all prompts." },
+      { label: "Noir & moody", prompt: "Transform the visual style to noir — low-key lighting, deep shadows, high contrast, desaturated with selective warm highlights. Update the project style." },
     ],
     improve: [
       { label: "Improve all prompts", prompt: "Look at all my frames and improve the image prompts. Make them more cinematic with specific camera angles, lighting, and composition. Update them directly." },
@@ -620,6 +674,7 @@ export function DirectorChatPanel({
       { label: "🧙 Fantasy · 4 min",    prompt: "Write an epic fantasy adventure, 4 minutes", creditEstimate: { quick: 32, cinematic: 72 } },
     ],
     generate: [
+      { label: "⚡ What's next?", prompt: "Assess the current project state and show me what to do next with action buttons." },
       { label: "Generate all images", prompt: "Check my credit balance, then generate images for all frames that don't have images yet. Use the cheapest suitable model. Show me a plan with credit costs before executing." },
       { label: "Animate all frames", prompt: "Generate videos for all frames that have images but no videos. Use Seedance 2.0 Fast for budget. Show me the plan with credit costs first." },
       { label: "Enhance all images", prompt: "Post-process all generated images with the Enhance tool to improve quality. Show me a plan with credit costs before executing." },
@@ -725,6 +780,14 @@ export function DirectorChatPanel({
                   ? `Frame ${currentFrameNumber} selected. Ask about prompts, camera, and composition.`
                   : "Ask about your storyboard, frames, pacing, and visual style."}
             </p>
+            {mode === "director" && !streaming && (
+              <button
+                onClick={() => sendMessage("Assess the project state. What are the top things I should work on right now? Show me action buttons for next steps.")}
+                className="mt-4 px-4 py-1.5 rounded-xl text-[12px] font-medium bg-white/5 border border-(--border-primary) text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/8 hover:border-(--border-secondary) transition-all"
+              >
+                What needs my attention? →
+              </button>
+            )}
           </div>
         )}
 
@@ -788,7 +851,28 @@ export function DirectorChatPanel({
                   {msg.role === "user"
                     ? <span className="whitespace-pre-wrap">{msg.content}</span>
                     : msg.content
-                      ? renderMarkdown(msg.content)
+                      ? (() => {
+                          const { text, choices } = parseChoices(msg.content);
+                          const isLastAssistant = messages.filter(m => m.role === "assistant").at(-1)?.id === msg.id;
+                          return (
+                            <>
+                              {renderMarkdown(text)}
+                              {isLastAssistant && !msg.isStreaming && choices.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2.5">
+                                  {choices.map((choice, i) => (
+                                    <button
+                                      key={i}
+                                      onClick={() => sendMessage(choice)}
+                                      className="text-[11px] px-2.5 py-1 rounded-lg border border-(--border-secondary) bg-(--bg-tertiary) hover:bg-(--accent-blue)/15 hover:border-(--accent-blue)/40 text-(--text-secondary) hover:text-(--text-primary) transition-colors cursor-pointer"
+                                    >
+                                      {choice}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()
                       : null
                   }
                   {msg.isStreaming && !msg.content && (
@@ -835,18 +919,66 @@ export function DirectorChatPanel({
           )
         )}
 
-        {activeTool && (
+        {(activeTool || (streaming && !activeTool)) && (
           <div className="flex flex-col gap-1 px-1">
             <div className="flex items-center gap-2 text-[11px] text-amber-400/80">
               <Wrench className="w-3.5 h-3.5 animate-spin shrink-0" strokeWidth={1.75} />
-              <span>{TOOL_LABELS[activeTool] || `Using ${activeTool}...`}</span>
+              <span>{activeTool ? (TOOL_LABELS[activeTool] || `Using ${activeTool}...`) : "Thinking..."}</span>
               {elapsed > 0 && <span className="text-amber-400/50 tabular-nums">{elapsed}s</span>}
             </div>
             {toolProgress ? (
               <p className="text-[10px] text-amber-300/60 pl-5">{toolProgress}</p>
-            ) : (activeTool === "invoke_skill" || activeTool === "build_storyboard") ? (
-              <p className="text-[10px] text-amber-300/40 pl-5">Keep this panel open — this step takes ~30–60s</p>
+            ) : activeTool === "invoke_skill" ? (
+              <p className="text-[10px] text-amber-300/40 pl-5">Keep this panel open — writing script + building frames (~30–90s)</p>
             ) : null}
+          </div>
+        )}
+
+        {/* Quick action buttons — shown after Director proposes next steps */}
+        {quickActions && quickActions.length > 0 && !streaming && (
+          <div className="flex flex-wrap gap-2 px-1 pt-1">
+            {quickActions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => { sendMessage(action.message); setQuickActions(null); }}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border ${
+                  action.style === "danger"
+                    ? "bg-red-500/10 text-red-400 border-red-500/25 hover:bg-red-500/20"
+                    : action.style === "secondary" || i > 0
+                    ? "bg-white/5 text-(--text-secondary) border-(--border-primary) hover:bg-white/10 hover:text-(--text-primary)"
+                    : "bg-(--accent-blue)/15 text-(--accent-blue) border-(--accent-blue)/30 hover:bg-(--accent-blue)/25"
+                }`}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Post-generation nudge — surfaces next steps after image/video generation */}
+        {postGenNudge && !streaming && (
+          <div className="flex flex-col gap-1.5 px-1 pt-1">
+            <p className="text-[10px] text-(--text-tertiary) font-medium uppercase tracking-wider">What's next?</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => { sendMessage("Animate the frames we just generated. Show me a credit breakdown first."); setPostGenNudge(false); }}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border bg-(--accent-teal)/10 text-(--accent-teal) border-(--accent-teal)/25 hover:bg-(--accent-teal)/20"
+              >
+                Animate these frames
+              </button>
+              <button
+                onClick={() => { sendMessage("Check visual consistency across the frames we just generated — characters, lighting, and environments."); setPostGenNudge(false); }}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all border bg-white/5 text-(--text-secondary) border-(--border-primary) hover:bg-white/10 hover:text-(--text-primary)"
+              >
+                Check consistency
+              </button>
+              <button
+                onClick={() => setPostGenNudge(false)}
+                className="px-2 py-1.5 text-[11px] text-(--text-tertiary) hover:text-(--text-secondary) transition"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -1057,7 +1189,8 @@ export function DirectorChatPanel({
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim()}
-              className="p-2.5 rounded-xl bg-(--accent-blue)/12 text-(--accent-blue) hover:bg-(--accent-blue)/20 border border-(--accent-blue)/20 disabled:opacity-30 disabled:cursor-not-allowed transition shrink-0"
+              className="p-2.5 rounded-xl bg-(--accent-blue)/12 text-(--accent-blue) hover:bg-(--accent-blue)/20 border border-(--accent-blue)/20 disabled:opacity-40 disabled:cursor-not-allowed transition shrink-0"
+              title={!input.trim() ? "Type a message to send" : "Send"}
             >
               <Send className="w-4 h-4" strokeWidth={1.75} />
             </button>

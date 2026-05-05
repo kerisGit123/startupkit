@@ -2127,20 +2127,22 @@ export default function EditImageAIPanel({
         </div>
       )}
 
-      {/* Prompt Library Modal */}
-      <PromptLibrary
-        isOpen={isPromptLibraryOpen}
-        onClose={() => setIsPromptLibraryOpen(false)}
-        onSelectPrompt={(prompt) => {
-          const el = editorRef.current;
-          if (el) {
-            el.textContent = prompt;
-            setEditorIsEmpty(false);
-            handleEditorInput();
-          }
-        }}
-        userCompanyId={currentCompanyId}
-      />
+      {/* Prompt Library Modal — conditionally mounted so subscriptions only run when open */}
+      {isPromptLibraryOpen && (
+        <PromptLibrary
+          isOpen={isPromptLibraryOpen}
+          onClose={() => setIsPromptLibraryOpen(false)}
+          onSelectPrompt={(prompt) => {
+            const el = editorRef.current;
+            if (el) {
+              el.textContent = prompt;
+              setEditorIsEmpty(false);
+              handleEditorInput();
+            }
+          }}
+          userCompanyId={currentCompanyId}
+        />
+      )}
     </>
   );
 }

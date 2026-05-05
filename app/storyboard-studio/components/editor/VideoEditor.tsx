@@ -6,7 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import {
-  Film, Music, Plus, Loader2, Camera, X, Save, FolderOpen, Download, Trash2,
+  Film, Music, Plus, Loader2, Camera, X, Save, FolderOpen, Download, Trash2, Volume2,
 } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
@@ -65,6 +65,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const [pxPerSec, setPxPerSec] = useState(100);
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
   const [showMedia, setShowMedia] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<"video" | "image" | "audio" | "all">("video");
   const [showRangeCut, setShowRangeCut] = useState(false);
   const [rangeCutStart, setRangeCutStart] = useState(0);
   const [rangeCutEnd, setRangeCutEnd] = useState(30);
@@ -80,6 +81,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
   const [extracting, setExtracting] = useState(false);
   const [clipContextMenu, setClipContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
   const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [showLayerFileBrowser, setShowLayerFileBrowser] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // ── Refs ────────────────────────────────────────────────────────────────
@@ -185,7 +187,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       if (vr.clip.type === "video") {
         if (videoChanged) {
           vid.muted = false;
-          vid.volume = 1.0;
+          vid.volume = Math.max(0, Math.min(1, (vr.clip.volume ?? 100) / 100));
           vid.src = vr.clip.src; vid.load(); vid.currentTime = vr.offset;
           if (isPlaying) {
             vid.play().catch(() => {
@@ -238,14 +240,19 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     if (vr && vr.clip.type === "video" && previewRef.current) {
       const vid = previewRef.current;
       vid.muted = false;
-      vid.volume = 1.0;
+      vid.volume = Math.max(0, Math.min(1, (vr.clip.volume ?? 100) / 100));
       const srcChanged = !vid.src || !vid.src.includes(vr.clip.src.split("/").pop()!.split("?")[0]);
-      if (srcChanged) { vid.src = vr.clip.src; vid.load(); }
-      vid.currentTime = vr.offset;
-      vid.play().catch((err) => {
-        console.warn("[VideoEditor] play() failed, retrying on canplay:", err.message);
-        vid.oncanplay = () => { vid.oncanplay = null; vid.play().catch(() => {}); };
-      });
+      if (srcChanged || vid.readyState === 0) { vid.src = vr.clip.src; vid.load(); }
+      const doPlay = () => {
+        vid.currentTime = vr.offset;
+        vid.play().catch(() => {});
+      };
+      if (vid.readyState >= 2) {
+        doPlay();
+      } else {
+        vid.oncanplay = () => { vid.oncanplay = null; doPlay(); };
+        if (srcChanged || vid.readyState === 0) vid.load();
+      }
       lastSyncVideoId.current = vr.clip.id;
     }
     const ar = getClipAtTime(audioClips, currentTime);
@@ -341,6 +348,24 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
     await addClip({ sourceUrl: url, fileType, filename });
     setShowFileBrowser(false);
   }, [addClip]);
+
+  const addLayerFromUrl = useCallback((url: string, fileType: string) => {
+    if (fileType !== "image" && fileType !== "video") return;
+    pushHistory();
+    const id = `ol-${Date.now()}-m`;
+    const st = isNaN(currentTime) ? 0 : currentTime;
+    const et = Math.max(st + 5, Math.min(st + 5, totalDur || st + 5));
+    setOverlayLayers(p => [...p, {
+      id, type: fileType as "image" | "video",
+      startTime: parseFloat(st.toFixed(2)), endTime: parseFloat(et.toFixed(2)),
+      x: 96, y: 96,
+      w: Math.round(canvasSize.w * 0.45), h: Math.round(canvasSize.h * 0.45),
+      src: url, borderRadius: 16, borderWidth: 4, borderColor: "#00D4AA",
+    }]);
+    setSelectedOverlayId(id);
+    setShowLayerPanel(true);
+    setShowLayerFileBrowser(false);
+  }, [currentTime, totalDur, canvasSize, pushHistory]);
 
   const removeClip = useCallback((id: string) => {
     pushHistory();
@@ -644,7 +669,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === "Space") { e.preventDefault(); toggle(); }
       if ((e.code === "Delete" || e.code === "Backspace") && selectedClipId) removeClip(selectedClipId);
-      if ((e.code === "Delete" || e.code === "Backspace") && selectedOverlayId) {
+      else if ((e.code === "Delete" || e.code === "Backspace") && selectedOverlayId) {
         pushHistory();
         setOverlayLayers(p => p.filter(l => l.id !== selectedOverlayId));
         setSelectedOverlayId(null);
@@ -737,7 +762,7 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         )}
 
         <div className="absolute top-3 left-3 flex items-center gap-2 z-10">
-          <button onClick={() => setShowMedia(!showMedia)}
+          <button onClick={() => { setShowMedia(!showMedia); if (showMedia) setMediaFilter("video"); }}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium transition shadow-lg ${showMedia ? "bg-(--accent-teal) text-white" : "bg-(--bg-secondary)/90 backdrop-blur text-(--text-secondary) hover:text-(--text-primary) border border-(--border-primary)"}`}>
             {showMedia ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
             {showMedia ? "Close" : "Add Media"}
@@ -755,15 +780,32 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         </div>
 
         {showMedia && (
-          <div className="absolute top-12 left-3 bottom-16 w-56 bg-(--bg-secondary)/95 backdrop-blur-md border border-(--border-primary) rounded-xl overflow-hidden z-20 shadow-2xl flex flex-col">
+          <div className="absolute top-12 left-3 bottom-16 w-60 bg-(--bg-secondary)/95 backdrop-blur-md border border-(--border-primary) rounded-xl overflow-hidden z-20 shadow-2xl flex flex-col">
+            {/* Filter tabs */}
+            <div className="flex gap-1 px-2 pt-2 pb-1 border-b border-(--border-primary) shrink-0">
+              {([["video", "🎬 Video"], ["image", "🖼️ Image"], ["audio", "🎵 Audio"]] as const).map(([f, label]) => (
+                <button key={f} onClick={() => setMediaFilter(f)}
+                  className={`flex-1 py-1 rounded-md text-[10px] font-medium transition ${mediaFilter === f ? "bg-(--accent-teal)/20 text-(--accent-teal)" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
               {!projectFiles ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 text-(--border-primary) animate-spin" /></div>
-              ) : mediaFiles.length === 0 ? (
-                <div className="text-center py-12 text-[11px] text-(--text-tertiary)">No media files in this project</div>
-              ) : (
-                mediaFiles.map(file => {
+              ) : (() => {
+                const filtered = mediaFiles.filter(f =>
+                  mediaFilter === "audio" ? (f.fileType === "audio" || f.fileType === "music") :
+                  f.fileType === mediaFilter
+                );
+                if (filtered.length === 0) return (
+                  <div className="text-center py-12 text-[11px] text-(--text-tertiary)">
+                    No {mediaFilter === "all" ? "media" : mediaFilter} files
+                  </div>
+                );
+                return filtered.map(file => {
                   const src = file.r2Key ? `${R2_PUBLIC_URL}/${file.r2Key}` : file.sourceUrl || "";
+                  const isAudio = file.fileType === "audio" || file.fileType === "music";
                   return (
                     <button key={file._id} onClick={() => addClip(file)}
                       className="w-full flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/5 transition text-left group">
@@ -778,18 +820,18 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
                         </div>
                       ) : (
                         <div className="w-16 h-10 rounded-md bg-(--bg-primary) flex items-center justify-center shrink-0 border border-(--border-primary)">
-                          <Music className="w-5 h-5 text-(--accent-teal)/60" />
+                          <Music className="w-5 h-5 text-purple-400/70" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] text-(--text-secondary) truncate">{file.filename || file.model || "Untitled"}</p>
-                        <p className="text-[9px] text-(--text-tertiary) capitalize">{file.fileType}</p>
+                        <p className={`text-[9px] capitalize ${isAudio ? "text-purple-400/70" : file.fileType === "video" ? "text-emerald-400/70" : "text-orange-400/70"}`}>{isAudio ? "audio" : file.fileType}</p>
                       </div>
                       <Plus className="w-3.5 h-3.5 text-(--text-tertiary) opacity-0 group-hover:opacity-100 transition shrink-0" />
                     </button>
                   );
-                })
-              )}
+                });
+              })()}
             </div>
           </div>
         )}
@@ -804,6 +846,8 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
             bgColor={bgColor} setBgColor={setBgColor}
             mediaFiles={mediaFiles} canvasSize={canvasSize}
             onBeforeChange={pushHistory}
+            onClose={() => setShowLayerPanel(false)}
+            onOpenFileBrowser={() => setShowLayerFileBrowser(true)}
           />
         )}
       </div>
@@ -856,9 +900,25 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
         return (
           <div
             className="fixed bg-(--bg-secondary) border border-(--border-primary) rounded-xl shadow-2xl overflow-hidden py-1.5 min-w-[180px]"
-            style={{ left: clipContextMenu.x, top: clipContextMenu.y, zIndex: 99999 }}
+            style={{ left: clipContextMenu.x, bottom: window.innerHeight - clipContextMenu.y, zIndex: 99999 }}
             onClick={() => setClipContextMenu(null)}
           >
+            <div className="px-3 py-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <Volume2 className="w-3.5 h-3.5 text-(--text-secondary) shrink-0" />
+              <input type="range" min={0} max={100} value={ctxClip.volume ?? 100}
+                onChange={(e) => {
+                  const vol = parseInt(e.target.value);
+                  setVideoClips(p => p.map(c => c.id === ctxClip.id ? { ...c, volume: vol } : c));
+                  setAudioClips(p => p.map(c => c.id === ctxClip.id ? { ...c, volume: vol } : c));
+                  if (previewRef.current && getClipAtTime(videoClips, currentTime)?.clip.id === ctxClip.id)
+                    previewRef.current.volume = vol / 100;
+                  if (audioRef.current && getClipAtTime(audioClips, currentTime)?.clip.id === ctxClip.id)
+                    audioRef.current.volume = vol / 100;
+                }}
+                className="flex-1 h-1 accent-(--accent-teal) cursor-pointer" />
+              <span className="text-[11px] text-(--text-tertiary) w-6 text-right shrink-0">{ctxClip.volume ?? 100}</span>
+            </div>
+            <div className="h-px bg-(--border-primary) mx-2 mb-1" />
             <button onClick={() => saveClipToUploads(ctxClip)} disabled={saving}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-(--accent-teal) hover:bg-white/5 transition-colors disabled:opacity-50">
               <Save className="w-4 h-4" /> {saving ? "Saving..." : "Save to Uploads"}
@@ -892,6 +952,14 @@ export function VideoEditor({ projectId, onClose, projectName }: VideoEditorProp
           onSelectFile={(url, type) => {
             if (type === "image" || type === "video" || type === "audio") addClipFromUrl(url, type);
           }}
+        />
+      )}
+
+      {showLayerFileBrowser && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowLayerFileBrowser(false)}
+          onSelectFile={(url, type) => addLayerFromUrl(url, type)}
         />
       )}
     </div>

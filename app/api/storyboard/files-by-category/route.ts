@@ -28,16 +28,10 @@ export async function POST(request: NextRequest) {
 
     let files;
     if (categoryId === null || categoryId === undefined) {
-      // Get files with no categoryId (orphaned files)
-      const allFiles = await convex.query(api.storyboard.storyboardFiles.listByCompany, { 
-        companyId 
-      });
-      files = allFiles.filter(file => !file.categoryId);
+      // Orphaned files — by_companyId index + server-side filter, no full table scan
+      files = await convex.query(api.storyboard.storyboardFiles.listOrphaned, { companyId });
     } else {
-      // Get files with specific categoryId
-      files = await convex.query(api.storyboard.storyboardFiles.listByCategoryId, { 
-        categoryId 
-      });
+      files = await convex.query(api.storyboard.storyboardFiles.listByCategoryId, { categoryId });
     }
 
     console.log('[files-by-category] Found files:', { 

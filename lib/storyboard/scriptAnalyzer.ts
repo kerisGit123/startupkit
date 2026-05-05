@@ -48,7 +48,8 @@ export interface ScriptAnalysisResult {
 
 export async function analyzeScript(
   scriptContent: string,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  existingElements?: Array<{ name: string; type: string; description: string }>
 ): Promise<ScriptAnalysisResult> {
   const progress = onProgress ?? (() => {});
 
@@ -81,7 +82,7 @@ export async function analyzeScript(
 
   // Step 2: Extract elements with AI (smart filtering)
   progress(`Found ${scenes.length} scenes. Extracting elements...`);
-  const elements = await extractElements(scriptContent, scenes);
+  const elements = await extractElements(scriptContent, scenes, existingElements);
 
 
   progress("Analysis complete.");
@@ -243,7 +244,8 @@ function extractSection(block: string, startPattern: RegExp, endPattern: RegExp)
   const endMatch = endPattern.exec(afterStart);
   const text = endMatch ? afterStart.substring(0, endMatch.index) : afterStart;
 
-  return text.trim();
+  // Strip trailing markdown bold markers (**) that leak when the next label uses **🎬 ...
+  return text.replace(/\*+\s*$/, "").trim();
 }
 
 // Extract description from a scene block (narrative text, excluding prompts/metadata)
@@ -328,7 +330,8 @@ RETURN ONLY valid JSON, no markdown:
 
 async function extractElements(
   scriptContent: string,
-  scenes: AnalyzedScene[]
+  scenes: AnalyzedScene[],
+  existingElements?: Array<{ name: string; type: string; description: string }>
 ): Promise<AnalyzedElement[]> {
   try {
   const anthropic = getAnthropicClient();
@@ -370,6 +373,8 @@ ENVIRONMENTS — The PRIMARY location(s) the entire story is set in. One entry p
 PROPS — HERO PROPS only: INANIMATE objects that are central to the plot, have a unique recognisable design, and must look identical every time they appear. A prop has no life — it does not breathe, move, think, or feel.
   ✓ "The Research Submarine" — hero vehicle, unique design, appears throughout
   ✓ "Ancient Artifact" — plot-driving object with specific described appearance
+  ✓ Competition robots, mechs, drones — each distinct robot is a separate prop entry; mark importance="primary"
+  ✓ Hero weapons, vehicles, gadgets that are unique to a character — mark importance="primary"
   ✗ "Aquarium Glass" — a surface/material of the environment, not a standalone object
   ✗ "Research Computer" — generic set dressing any art director would place
   ✗ "Fish Tank" — part of the aquarium environment
@@ -403,6 +408,14 @@ PROP: category("vehicle"|"weapon"|"tool"|"furniture"|"technology"|"container"|"m
 occurrenceCount = number of distinct scenes where this element is visually prominent.
 IMPORTANT: Use ONLY the exact scene IDs from the list below — copy them character-for-character. Do NOT invent IDs or omit letter suffixes (e.g. use "scene_1a" not "scene_1").
 SCENES: ${sceneList}
+
+━━━ EXISTING ELEMENTS (already in project) ━━━
+${existingElements && existingElements.length > 0
+  ? `The following elements already exist. If ANY character/environment/prop in this script is clearly the same entity — even if referred to by a different name or nickname — use the EXISTING NAME exactly. Do NOT create a new element for the same character.
+${existingElements.map(e => `- ${e.name} (${e.type}): ${e.description.substring(0, 120)}`).join("\n")}
+
+Example: if the existing element is "The Girl in Hiding" and the new script calls her "The Child", "The Little Girl", or "The Kid" — use "The Girl in Hiding".`
+  : "None — this is a fresh project, extract all elements normally."}
 
 RETURN ONLY valid JSON (no markdown):
 {"elements":[{"name":"...","type":"character","description":"...","identity":{...},"sceneIds":["scene_1a","scene_1b"],"occurrenceCount":2,"importance":"primary","tags":["human"]}]}`,
@@ -472,11 +485,11 @@ RETURN ONLY valid JSON (no markdown):
         if (el.type === "prop" && CREATURE_PART_WORDS.test(el.name)) return false;
       }
 
-      // Characters: always keep. Environments: 2+ scenes. Props: stricter — 3+ scenes OR marked primary.
+      // Characters: always keep. Environments + Props: 2+ scenes OR marked primary.
       if (el.type === "character") return true;
       if (el.type === "environment") return el.occurrenceCount >= 2 || el.sceneIds.length >= 2;
-      // Props must be genuinely recurring hero objects
-      return (el.occurrenceCount >= 3 || el.sceneIds.length >= 3) || el.importance === "primary";
+      // Props: hero objects that appear in 2+ scenes OR explicitly marked primary (e.g. robots, vehicles, weapons)
+      return (el.occurrenceCount >= 2 || el.sceneIds.length >= 2) || el.importance === "primary";
     });
 
     // Dedup pass 1: if a parent name is a prefix of a child name (e.g. "Submarine" → "Submarine Porthole"), remove child

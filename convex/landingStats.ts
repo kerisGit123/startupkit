@@ -23,21 +23,19 @@ export const getPublicStats = query({
       };
     }
 
-    // Fallback: count via lightweight scan (no field data loaded by .collect()
-    // beyond the _id, but still scans the table). This only runs until the
-    // first refreshLandingStats call populates the cache row.
-    const [users, projects, files] = await Promise.all([
+    // Fallback: count via storyboard_generation_daily (tiny table) instead of
+    // scanning storyboard_files. Only runs until the first refreshLandingStats
+    // call populates the cache row.
+    const [users, projects, dailyRows] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("storyboard_projects").collect(),
-      ctx.db.query("storyboard_files")
-        .filter((q) => q.eq(q.field("category"), "generated"))
-        .collect(),
+      ctx.db.query("storyboard_generation_daily").collect(),
     ]);
 
     return {
       totalCreators: users.length,
       totalProjects: projects.length,
-      totalGenerations: files.length,
+      totalGenerations: dailyRows.reduce((sum, r) => sum + r.count, 0),
     };
   },
 });
@@ -49,18 +47,21 @@ export const getPublicStats = query({
  */
 export const refreshLandingStats = internalMutation({
   handler: async (ctx) => {
-    const [users, projects, files] = await Promise.all([
+    // Use storyboard_generation_daily to count generated files — far fewer
+    // rows than scanning the entire storyboard_files table (one row per
+    // company+date+model vs one row per file).
+    const [users, projects, dailyRows] = await Promise.all([
       ctx.db.query("users").collect(),
       ctx.db.query("storyboard_projects").collect(),
-      ctx.db.query("storyboard_files")
-        .filter((q) => q.eq(q.field("category"), "generated"))
-        .collect(),
+      ctx.db.query("storyboard_generation_daily").collect(),
     ]);
+
+    const totalGenerations = dailyRows.reduce((sum, r) => sum + r.count, 0);
 
     const stats = {
       totalCreators: users.length,
       totalProjects: projects.length,
-      totalGenerations: files.length,
+      totalGenerations,
       updatedAt: Date.now(),
     };
 

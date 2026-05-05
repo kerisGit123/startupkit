@@ -3,11 +3,13 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { DEFAULT_PROMPT_TEMPLATES } from "@/lib/storyboard/defaultPromptTemplates";
+import { findBestTemplates } from "@/lib/storyboard/templateMatcher";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   X, Shuffle, ChevronDown, ChevronRight, ChevronLeft, Sparkles, Check, User, Trees, Package,
   ImagePlus, Send, FileText, Crop, Upload, Trash2, Star, Coins, Monitor, RectangleHorizontal, Zap, Camera, FolderOpen,
-  RefreshCw, Copy, AlertCircle, Expand, Plus, Pencil, RotateCcw, Save,
+  RefreshCw, Copy, AlertCircle, Expand, Plus, Pencil, RotateCcw, Save, LayoutGrid,
 } from "lucide-react";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { usePricingData } from "../shared/usePricingData";
@@ -20,6 +22,8 @@ import {
   getStepsForType,
   composePrompt,
   composeImageOverrides,
+  composeCharacterSheetPrompt,
+  composePropSheetPrompt,
   getIdentityBadges,
   randomizeIdentity,
 } from "./elementForgeConfig";
@@ -72,6 +76,7 @@ interface ElementForgeProps {
     };
     variants?: { label: string; model: string; createdAt: number }[];
     primaryIndex?: number;
+    preferredTemplate?: string;
   } | null;
 }
 
@@ -744,14 +749,18 @@ function StackedFields({ fields, renderField, identity }: {
   );
 }
 
-function TemplateDropdown({ templates, selected, onSelect, onNew, onDuplicate, onEdit, onDelete }: {
-  templates: { _id?: string; name: string; prompt: string; isSystem?: boolean }[];
+function TemplateDropdown({ templates, selected, preferredTemplateName, onSelect, onNew, onDuplicate, onEdit, onDelete, onSetDefault, onClearDefault, onSavePreferred }: {
+  templates: { _id?: string; name: string; rawName?: string; prompt: string; isSystem?: boolean; isDefault?: boolean }[];
   selected: number;
+  preferredTemplateName?: string;
   onSelect: (i: number) => void;
   onNew: () => void;
   onDuplicate: (index: number) => void;
   onEdit: (index: number) => void;
   onDelete: (index: number) => void;
+  onSetDefault: (index: number) => void;
+  onClearDefault: (index: number) => void;
+  onSavePreferred: (index: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const current = templates[selected];
@@ -772,7 +781,12 @@ function TemplateDropdown({ templates, selected, onSelect, onNew, onDuplicate, o
         <button onClick={() => setOpen(!open)}
           className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-(--border-primary) bg-(--bg-primary) text-left hover:border-white/15 transition-colors">
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-medium text-(--text-primary) truncate">{current?.name || "Select template"}</div>
+            <div className="flex items-center gap-1.5">
+              {preferredTemplateName && (current?.rawName === preferredTemplateName || current?.name === preferredTemplateName) && (
+                <Star className="w-3 h-3 text-yellow-400 shrink-0 fill-yellow-400" strokeWidth={2} />
+              )}
+              <span className="text-[13px] font-medium text-(--text-primary) truncate">{current?.name || "Select template"}</span>
+            </div>
             <div className="text-[11px] text-(--text-tertiary) truncate mt-0.5">
               {current?.prompt.replace(/\{description\}/g, "...").slice(0, 80)}
             </div>
@@ -793,6 +807,9 @@ function TemplateDropdown({ templates, selected, onSelect, onNew, onDuplicate, o
                   <button onClick={() => { onSelect(i); setOpen(false); }}
                     className="flex-1 text-left px-4 py-2.5 min-w-0">
                     <div className="flex items-center gap-2">
+                      {preferredTemplateName && (t.rawName === preferredTemplateName || t.name === preferredTemplateName) && (
+                        <Star className="w-3 h-3 text-yellow-400 shrink-0 fill-yellow-400" strokeWidth={2} />
+                      )}
                       <span className="text-[13px] font-medium truncate flex-1">{t.name}</span>
                       {t.isSystem && <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-(--text-tertiary) shrink-0">system</span>}
                     </div>
@@ -801,6 +818,13 @@ function TemplateDropdown({ templates, selected, onSelect, onNew, onDuplicate, o
                     </div>
                   </button>
                   <div className="flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    {/* Star = save as preferred for THIS element (works for system + custom) */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSavePreferred(i); setOpen(false); }}
+                      title={preferredTemplateName && (t.rawName === preferredTemplateName || t.name === preferredTemplateName) ? "Preferred template" : "Set as preferred for this element"}
+                      className={`p-1 rounded hover:bg-white/10 transition-colors ${preferredTemplateName && (t.rawName === preferredTemplateName || t.name === preferredTemplateName) ? "text-yellow-400 hover:text-yellow-200" : "text-(--text-tertiary) hover:text-yellow-400"}`}>
+                      <Star className={`w-3.5 h-3.5 ${preferredTemplateName && (t.rawName === preferredTemplateName || t.name === preferredTemplateName) ? "fill-yellow-400" : ""}`} strokeWidth={2} />
+                    </button>
                     <button onClick={(e) => { e.stopPropagation(); onDuplicate(i); setOpen(false); }} title="Duplicate"
                       className="p-1 rounded hover:bg-white/10 text-(--text-tertiary) hover:text-(--accent-blue) transition-colors">
                       <Copy className="w-3.5 h-3.5" strokeWidth={2} />
@@ -957,6 +981,7 @@ export function ElementForge({
   const [genVariantLabel, setGenVariantLabel] = useState(() => element?.name || "");
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);
   const [refStrength, setRefStrength] = useState<"prompt" | "balanced" | "image">("balanced");
+  const [isIdentitySheet, setIsIdentitySheet] = useState(false);
   const { getModelCredits } = usePricingData();
 
   const [activeTab, setActiveTab] = useState(0);
@@ -979,6 +1004,7 @@ export function ElementForge({
   const [saving, setSaving] = useState(false);
   const [referenceUrls, setReferenceUrls] = useState<string[]>(element?.referenceUrls || []);
   const [selectedTemplate, setSelectedTemplate] = useState(0);
+  const [localPreferredTemplate, setLocalPreferredTemplate] = useState<string | undefined>(element?.preferredTemplate);
   const [cropImageUrl, setCropImageUrl] = useState<string | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string>(element?.thumbnailUrl || "");
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
@@ -996,30 +1022,54 @@ export function ElementForge({
   const createElement = useMutation(api.storyboard.storyboardElements.create);
   const updateElement = useMutation(api.storyboard.storyboardElements.update);
 
-  // Load ALL prompt templates for this type from the library (system + user)
+  // User-created templates from Convex only (system templates come from static file)
   const libraryTemplates = useQuery(api.promptTemplates.getByCompany, companyId ? { companyId } : "skip");
   const allTemplates = useMemo(() => {
-    const matching = (libraryTemplates || [])
-      .filter((t: any) => t.type === type)
+    // System templates from file — filtered by forge type, zero Convex bandwidth
+    const systemMatching = DEFAULT_PROMPT_TEMPLATES
+      .filter(t => t.type === type)
+      .map(t => ({
+        _id: undefined as string | undefined,
+        name: t.name,
+        prompt: t.prompt,
+        notes: (t as any).notes as string | undefined,
+        isSystem: true,
+        isDefault: false,
+        rawName: t.name,
+      }));
+    // User-created templates from Convex — filter out any legacy isSystem records
+    const userMatching = (libraryTemplates || [])
+      .filter((t: any) => t.type === type && !t.isSystem)
       .map((t: any) => ({
         _id: t._id as string | undefined,
-        name: t.name + (t.isSystem ? " (system)" : ""),
+        name: t.name,
         prompt: t.prompt,
         notes: t.notes as string | undefined,
-        isSystem: !!t.isSystem,
+        isSystem: false,
+        isDefault: !!t.isDefault,
         rawName: t.name as string,
       }));
-    // Fallback if no templates in library
-    if (matching.length === 0) {
-      return (FALLBACK_TEMPLATES[type] || []).map(t => ({ ...t, _id: undefined, notes: undefined, isSystem: true, rawName: t.name }));
-    }
-    return matching;
+    // User templates first (they can carry isDefault), then system templates
+    const merged = [...userMatching, ...systemMatching];
+    return merged.length > 0 ? merged : (FALLBACK_TEMPLATES[type] || []).map(t => ({ ...t, _id: undefined, notes: undefined, isSystem: true, isDefault: false, rawName: t.name }));
   }, [libraryTemplates, type]);
+
+  // Auto-select template priority: element.preferredTemplate > company isDefault > index 0
+  useEffect(() => {
+    if (element?.preferredTemplate) {
+      const savedIdx = allTemplates.findIndex(t => t.rawName === element.preferredTemplate || t.name === element.preferredTemplate);
+      if (savedIdx >= 0) { setSelectedTemplate(savedIdx); return; }
+    }
+    const defaultIdx = allTemplates.findIndex(t => t.isDefault);
+    setSelectedTemplate(defaultIdx >= 0 ? defaultIdx : 0);
+  }, [allTemplates, element?.preferredTemplate]);
 
   // Prompt template CRUD
   const createTemplate = useMutation(api.promptTemplates.create);
   const updateTemplate = useMutation(api.promptTemplates.update);
   const removeTemplate = useMutation(api.promptTemplates.remove);
+  const setDefaultTemplate = useMutation(api.promptTemplates.setDefault);
+  const clearDefaultTemplate = useMutation(api.promptTemplates.clearDefault);
   const [promptEditMode, setPromptEditMode] = useState<"none" | "create" | "edit">("none");
   const [editTemplateName, setEditTemplateName] = useState("");
   const [editTemplateNotes, setEditTemplateNotes] = useState("");
@@ -1044,6 +1094,17 @@ export function ElementForge({
     // Append identity context to the template prompt
     return `${template.prompt}\n\nCharacter Identity: ${composedPrompt}`;
   }, [allTemplates, selectedTemplate, composedPrompt]);
+
+  // Suggest a better-matching template when the composed description changes
+  const bestMatchSuggestion = useMemo(() => {
+    if (!composedPrompt || composedPrompt.length < 15) return null;
+    const results = findBestTemplates(composedPrompt, type as 'character' | 'environment' | 'prop', 1);
+    if (!results.length || results[0].score === 0) return null;
+    const matchName = results[0].name;
+    const idx = allTemplates.findIndex(t => t.rawName === matchName || t.name === matchName);
+    if (idx < 0 || idx === selectedTemplate) return null;
+    return { idx, name: results[0].name, matchReason: results[0].matchReason };
+  }, [composedPrompt, type, allTemplates, selectedTemplate]);
 
   const updateField = useCallback((key: string, value: any) => {
     setIdentity(prev => {
@@ -1077,12 +1138,14 @@ export function ElementForge({
         : undefined;
 
       let savedId: string | null = effectiveElementId ?? null;
+      const preferredTemplate = allTemplates[selectedTemplate]?.rawName || allTemplates[selectedTemplate]?.name;
 
       if (effectiveMode === "edit" && effectiveElementId) {
         await updateElement({
           id: effectiveElementId as Id<"storyboard_elements">, name: name.trim(), description, identity: identityData,
           thumbnailUrl: thumbnailUrl || undefined,
           referencePhotos,
+          preferredTemplate,
         });
       } else {
         savedId = await createElement({
@@ -1090,9 +1153,11 @@ export function ElementForge({
           thumbnailUrl: thumbnailUrl || "", referenceUrls, tags: [],
           createdBy: userId, visibility: "private", identity: identityData,
           referencePhotos,
+          preferredTemplate,
         }) as unknown as string;
         if (savedId) setCreatedId(savedId);
       }
+      if (preferredTemplate) setLocalPreferredTemplate(preferredTemplate);
       onSave({ name: name.trim(), type, description, identity: identityData });
       return savedId;
     } catch (error) {
@@ -1112,7 +1177,6 @@ export function ElementForge({
   // Credit calculation for Generate tab (must be before handleGenerate so it can reference it)
   const genCredits = useMemo(() => {
     if (genModel === "z-image") return 1;
-    if (genModel.startsWith("gpt-image-2")) return getModelCredits(genModel, genResolution);
     return getModelCredits(genModel, genResolution);
   }, [genModel, genResolution, getModelCredits]);
 
@@ -1125,6 +1189,71 @@ export function ElementForge({
     const elementId = await handleSave();
     if (!elementId) {
       alert("Failed to save element. Please try again.");
+      return;
+    }
+
+    // ── Identity Sheet mode ────────────────────────────────────────────
+    if (isIdentitySheet && (type === "character" || type === "prop")) {
+      const sheetPrompt = type === "character"
+        ? composeCharacterSheetPrompt(identity)
+        : composePropSheetPrompt(identity);
+      // References: uploaded ref photos (face/outfit/body) + existing identity sheet if present
+      const uploadedRefs: string[] = [];
+      if (identity.ref_fullBody) {
+        uploadedRefs.push(identity.ref_fullBody);
+      } else {
+        if (identity.ref_face) uploadedRefs.push(identity.ref_face);
+        if (identity.ref_outfit) uploadedRefs.push(identity.ref_outfit);
+        if (identity.ref_head) uploadedRefs.push(identity.ref_head);
+        if (identity.ref_body) uploadedRefs.push(identity.ref_body);
+      }
+      // Include existing Identity Sheet for regeneration consistency
+      const existingSheetIdx = (liveVariants as any[] | undefined)?.findIndex((v: any) => v.label === "Identity Sheet") ?? -1;
+      const existingSheetUrl = existingSheetIdx >= 0 ? liveReferenceUrls[existingSheetIdx] : null;
+      if (existingSheetUrl && !uploadedRefs.includes(existingSheetUrl)) {
+        uploadedRefs.push(existingSheetUrl);
+      }
+      const sheetRefUrls = uploadedRefs.slice(0, 3);
+      const sheetModel = sheetRefUrls.length > 0
+        ? "gpt-image-2-image-to-image"
+        : "gpt-image-2-text-to-image";
+      setIsGenerating(true);
+      onGenerating?.(elementId as Id<"storyboard_elements">);
+      try {
+        const res = await fetch('/api/storyboard/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sceneContent: sheetPrompt,
+            model: sheetModel,
+            style: 'realistic',
+            quality: JSON.stringify({ type: 'gpt-image-2', mode: sheetRefUrls.length > 0 ? 'image-to-image' : 'text-to-image', nsfwChecker: false }),
+            aspectRatio: "16:9",
+            resolution: genResolution,
+            companyId: effectiveCompanyId,
+            userId,
+            projectId: projectId as string,
+            elementId,
+            enhance: false,
+            creditsUsed: genCredits,
+            referenceImageUrls: sheetRefUrls.length > 0 ? sheetRefUrls : undefined,
+            variantLabel: "Identity Sheet",
+            variantModel: sheetModel,
+            outputFormat: genFormat,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Generation failed');
+        }
+        const data = await res.json();
+        console.log('[ElementForge] Identity Sheet generation started:', data.taskId);
+      } catch (error: any) {
+        console.error('[ElementForge] Identity Sheet generation failed:', error);
+        alert(error.message || 'Failed to generate identity sheet');
+      } finally {
+        setIsGenerating(false);
+      }
       return;
     }
 
@@ -1213,7 +1342,7 @@ export function ElementForge({
     } finally {
       setIsGenerating(false);
     }
-  }, [canSave, isGenerating, companyId, element, identity, referencePrompt, composedPrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, userId, projectId, handleSave, genCredits, refStrength]);
+  }, [canSave, isGenerating, isIdentitySheet, type, companyId, element, identity, referencePrompt, composedPrompt, genModel, genAspectRatio, genFormat, genGridSize, genVariantLabel, referenceUrls, liveReferenceUrls, userId, projectId, handleSave, genCredits, refStrength]);
 
   const setPrimaryVariant = useMutation(api.storyboard.storyboardElements.setPrimaryVariant);
   const updateVariantLabelMut = useMutation(api.storyboard.storyboardElements.updateVariantLabel);
@@ -1259,7 +1388,11 @@ export function ElementForge({
 
       // 2. Find and soft-delete the storyboard_files record + R2 file
       if (url) {
-        const matchingFile = elementFiles?.find(f => f.sourceUrl === url || (f.r2Key && url.includes(f.r2Key)));
+        const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
+        const matchingFile = elementFiles?.find(f =>
+          f.sourceUrl === url ||
+          (f.r2Key && r2Base && `${r2Base}/${f.r2Key}` === url)
+        );
         if (matchingFile) {
           if (matchingFile.r2Key) {
             await fetch("/api/storyboard/delete-file", {
@@ -1318,10 +1451,27 @@ export function ElementForge({
     if (!companyId) return;
     setUploadingThumbnail(true);
     try {
-      // Delete old thumbnail from R2 if one exists
-      if (thumbnailUrl) {
+      // Upload new cropped thumbnail first
+      const file = new File([blob], `thumb-${Date.now()}.jpg`, { type: "image/jpeg" });
+      const result = await uploadToR2({
+        file,
+        category: "elements",
+        projectId: projectId as string,
+        userId,
+        companyId,
+        tags: ["thumbnail"],
+        noLog: true,
+      });
+      if (!result.publicUrl) return;
+
+      const newThumbnailUrl = result.publicUrl;
+
+      // Delete old standalone thumbnail from R2 only if it is NOT also a variant URL.
+      // thumbnailUrl is often set to referenceUrls[primaryIndex] — deleting it would wipe
+      // out the variant's R2 file and cause "Image unavailable".
+      if (thumbnailUrl && !liveReferenceUrls.includes(thumbnailUrl)) {
         try {
-          const r2Base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+          const r2Base = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
           if (r2Base && thumbnailUrl.startsWith(r2Base)) {
             const oldR2Key = thumbnailUrl.slice(r2Base.length + 1);
             await fetch("/api/storyboard/delete-file", {
@@ -1331,28 +1481,22 @@ export function ElementForge({
             });
           }
         } catch (e) {
-          // Non-blocking — old file becomes orphan, cleaned up later
-          console.warn("[ElementForge] Old thumbnail cleanup failed:", e);
+          console.warn("[ElementForge] Old standalone thumbnail cleanup failed:", e);
         }
       }
 
-      // Upload new cropped thumbnail
-      const file = new File([blob], `thumb-${Date.now()}.jpg`, { type: "image/jpeg" });
-      const result = await uploadToR2({
-        file,
-        category: "elements",
-        projectId: projectId as string,
-        userId,
-        companyId,
-        tags: ["thumbnail"],
-      });
-      if (result.publicUrl) setThumbnailUrl(result.publicUrl);
+      setThumbnailUrl(newThumbnailUrl);
+
+      // Persist to DB immediately so a page refresh doesn't revert to the deleted URL
+      if (element?._id) {
+        await updateElement({ id: element._id, thumbnailUrl: newThumbnailUrl });
+      }
     } catch (err) {
       console.error("[ElementForge] Thumbnail upload failed:", err);
     } finally {
       setUploadingThumbnail(false);
     }
-  }, [companyId, projectId, userId, thumbnailUrl]);
+  }, [companyId, projectId, userId, thumbnailUrl, liveReferenceUrls, element, updateElement]);
 
   const renderField = (field: ForgeField) => {
     const val = identity[field.key];
@@ -1441,6 +1585,7 @@ export function ElementForge({
                   return (
                     <img key={i} src={url} alt={`Variant ${i + 1}`}
                       onClick={() => setActiveTab(tabs.length - 1)}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       className={`w-8 h-8 rounded-full object-cover border-2 cursor-pointer hover:border-white/40 transition-colors ${
                         isPrimary ? "border-amber-400" : "border-white/15"
                       } ${i > 0 ? "-ml-1.5" : ""}`}
@@ -1557,7 +1702,26 @@ export function ElementForge({
                   <TemplateDropdown
                     templates={allTemplates}
                     selected={selectedTemplate}
+                    preferredTemplateName={localPreferredTemplate}
                     onSelect={setSelectedTemplate}
+                    onSavePreferred={async (idx) => {
+                      const tpl = allTemplates[idx];
+                      const name = tpl?.rawName || tpl?.name;
+                      if (!name) return;
+                      const isAlreadyPreferred = localPreferredTemplate === name;
+                      if (isAlreadyPreferred) {
+                        setLocalPreferredTemplate(undefined);
+                        if (effectiveElementId) {
+                          await updateElement({ id: effectiveElementId as Id<"storyboard_elements">, preferredTemplate: undefined });
+                        }
+                      } else {
+                        setSelectedTemplate(idx);
+                        setLocalPreferredTemplate(name);
+                        if (effectiveElementId) {
+                          await updateElement({ id: effectiveElementId as Id<"storyboard_elements">, preferredTemplate: name });
+                        }
+                      }
+                    }}
                     onNew={() => {
                       setPromptEditMode("create");
                       setEditTemplateName("");
@@ -1588,7 +1752,33 @@ export function ElementForge({
                       await removeTemplate({ id: tpl._id as Id<"promptTemplates"> });
                       setSelectedTemplate(0);
                     }}
+                    onSetDefault={async (idx) => {
+                      const tpl = allTemplates[idx];
+                      if (!tpl?._id || !companyId) return;
+                      await setDefaultTemplate({ id: tpl._id as Id<"promptTemplates">, companyId, type });
+                    }}
+                    onClearDefault={async (idx) => {
+                      const tpl = allTemplates[idx];
+                      if (!tpl?._id) return;
+                      await clearDefaultTemplate({ id: tpl._id as Id<"promptTemplates"> });
+                    }}
                   />
+                  {bestMatchSuggestion && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-(--accent-blue)/10 border border-(--accent-blue)/20 text-[12px]">
+                      <Sparkles size={12} className="text-(--accent-blue) shrink-0" />
+                      <span className="text-(--text-secondary) min-w-0 truncate">
+                        <span className="text-(--accent-blue) font-medium">Suggested: </span>
+                        {bestMatchSuggestion.name}
+                        <span className="text-(--text-tertiary) ml-1">· {bestMatchSuggestion.matchReason}</span>
+                      </span>
+                      <button
+                        onClick={() => setSelectedTemplate(bestMatchSuggestion.idx)}
+                        className="ml-auto shrink-0 text-[11px] font-semibold text-(--accent-blue) hover:underline whitespace-nowrap"
+                      >
+                        Use
+                      </button>
+                    </div>
+                  )}
                   <div>
                     <label className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-3">
                       Final Prompt (sent to Studio)
@@ -1777,6 +1967,33 @@ export function ElementForge({
                 </div>
               )}
 
+              {/* Mode toggle — Identity Sheet only for character / prop */}
+              {(type === "character" || type === "prop") && (
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-lg border border-(--border-primary) overflow-hidden text-[12px]">
+                    <button
+                      onClick={() => setIsIdentitySheet(false)}
+                      className={`px-3 py-1.5 font-medium transition-colors flex items-center gap-1.5 ${
+                        !isIdentitySheet ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary) hover:bg-white/5"
+                      }`}>
+                      <Shuffle className="w-3.5 h-3.5" />
+                      Variants
+                    </button>
+                    <button
+                      onClick={() => setIsIdentitySheet(true)}
+                      className={`px-3 py-1.5 font-medium transition-colors flex items-center gap-1.5 ${
+                        isIdentitySheet ? "bg-amber-500/20 text-amber-400" : "text-(--text-tertiary) hover:text-(--text-secondary) hover:bg-white/5"
+                      }`}>
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      Identity Sheet
+                    </button>
+                  </div>
+                  {isIdentitySheet && (
+                    <span className="text-[11px] text-(--text-tertiary)">{genResolution} · 16:9 · {genCredits}cr</span>
+                  )}
+                </div>
+              )}
+
               {/* Toolbar row — VideoImageAIPanel style */}
               <div className="flex items-center gap-2 px-1">
                 {/* Model dropdown */}
@@ -1860,8 +2077,8 @@ export function ElementForge({
                   )}
                 </div>
 
-                {/* Grid size */}
-                {[{v: 1, l: "1x1"}, {v: 2, l: "2x2"}].map(g => (
+                {/* Grid size — hidden in identity sheet mode */}
+                {!isIdentitySheet && [{ v: 1, l: "1x1" }, { v: 2, l: "2x2" }].map(g => (
                   <button key={g.v} onClick={() => setGenGridSize(g.v)}
                     className={`px-2 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
                       genGridSize === g.v ? "bg-white/12 text-(--text-primary)" : "text-(--text-tertiary) hover:text-(--text-secondary)"
@@ -1870,18 +2087,25 @@ export function ElementForge({
 
                 <div className="flex-1" />
 
-                {/* Variant name input */}
-                <input
-                  value={genVariantLabel}
-                  onChange={(e) => setGenVariantLabel(e.target.value)}
-                  placeholder={`${identity.name || "Variant"} ${(referenceUrls.length) + 1}`}
-                  className="w-[180px] rounded-lg border border-(--border-primary) bg-(--bg-primary) px-2.5 py-1.5 text-[12px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
-                />
+                {/* Variant name input — locked in identity sheet mode */}
+                {isIdentitySheet ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-(--border-primary) bg-(--bg-primary) w-[180px]">
+                    <LayoutGrid className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="text-[12px] text-amber-400 font-medium truncate">Identity Sheet</span>
+                  </div>
+                ) : (
+                  <input
+                    value={genVariantLabel}
+                    onChange={(e) => setGenVariantLabel(e.target.value)}
+                    placeholder={`${identity.name || "Variant"} ${(referenceUrls.length) + 1}`}
+                    className="w-[180px] rounded-lg border border-(--border-primary) bg-(--bg-primary) px-2.5 py-1.5 text-[12px] text-(--text-primary) outline-none placeholder:text-(--text-tertiary) focus:border-(--accent-blue)/40 transition-colors"
+                  />
+                )}
 
                 {/* Credits */}
                 <div className="flex items-center gap-1 text-[12px] text-(--text-secondary)">
                   <Coins className="w-3.5 h-3.5 text-amber-400" />
-                  <span>{genGridSize > 1 ? `${genCredits * genGridSize * genGridSize}` : genCredits}</span>
+                  <span>{isIdentitySheet ? genCredits : (genGridSize > 1 ? `${genCredits * genGridSize * genGridSize}` : genCredits)}</span>
                 </div>
 
                 {/* Generate button */}
@@ -1899,7 +2123,7 @@ export function ElementForge({
                     <>
                       <Sparkles className="w-4 h-4" />
                       Generate
-                      <span className="text-xs opacity-75">+ {genCredits * genGridSize * genGridSize}</span>
+                      <span className="text-xs opacity-75">+ {isIdentitySheet ? genCredits : genCredits * genGridSize * genGridSize}</span>
                     </>
                   )}
                 </button>
@@ -2044,7 +2268,16 @@ export function ElementForge({
                             alt={variant?.label || `${identity.name || "Variant"} ${idx + 1}`}
                             className="w-full aspect-[4/3] object-cover"
                             draggable={false}
+                            onError={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              img.style.display = 'none';
+                              const placeholder = img.nextElementSibling as HTMLElement | null;
+                              if (placeholder) placeholder.style.display = 'flex';
+                            }}
                           />
+                          <div className="w-full aspect-[4/3] bg-(--bg-secondary) hidden items-center justify-center flex-col gap-1">
+                            <span className="text-[10px] text-(--text-tertiary)">Image unavailable</span>
+                          </div>
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                             <button
                               onClick={(e) => { e.stopPropagation(); setPreviewUrl(url); }}

@@ -11,6 +11,7 @@ import { Shield, Plus, Trash2, Globe, MapPin } from "lucide-react";
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { COUNTRIES } from "@/lib/countries";
+import { toast } from "sonner";
 
 export default function SecurityPage() {
   const { user } = useUser();
@@ -42,16 +43,15 @@ export default function SecurityPage() {
       });
 
       if (result.success) {
-        alert(result.message);
+        toast.success(result.message || "IP added to blacklist");
         setIpInput("");
         setIpReason("");
         setIsAddingIp(false);
       } else {
-        alert(result.error);
+        toast.error(result.error || "Failed to add IP");
       }
-    } catch (error) {
-      console.error("Error adding IP:", error);
-      alert("Failed to add IP to blacklist");
+    } catch {
+      toast.error("Failed to add IP to blacklist");
     }
   };
 
@@ -61,13 +61,12 @@ export default function SecurityPage() {
     try {
       const result = await removeIpFromBlacklist({ ipAddress });
       if (result.success) {
-        alert(result.message);
+        toast.success(result.message || "IP removed");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Failed to remove IP");
       }
-    } catch (error) {
-      console.error("Error removing IP:", error);
-      alert("Failed to remove IP from blacklist");
+    } catch {
+      toast.error("Failed to remove IP from blacklist");
     }
   };
 
@@ -83,17 +82,16 @@ export default function SecurityPage() {
       });
 
       if (result.success) {
-        alert(result.message);
+        toast.success(result.message || "Country added to blacklist");
         setCountryCode("");
         setCountryName("");
         setCountryReason("");
         setIsAddingCountry(false);
       } else {
-        alert(result.error);
+        toast.error(result.error || "Failed to add country");
       }
-    } catch (error) {
-      console.error("Error adding country:", error);
-      alert("Failed to add country to blacklist");
+    } catch {
+      toast.error("Failed to add country to blacklist");
     }
   };
 
@@ -103,13 +101,12 @@ export default function SecurityPage() {
     try {
       const result = await removeCountryFromBlacklist({ countryCode: code });
       if (result.success) {
-        alert(result.message);
+        toast.success(result.message || "Country removed");
       } else {
-        alert(result.error);
+        toast.error(result.error || "Failed to remove country");
       }
-    } catch (error) {
-      console.error("Error removing country:", error);
-      alert("Failed to remove country from blacklist");
+    } catch {
+      toast.error("Failed to remove country from blacklist");
     }
   };
 

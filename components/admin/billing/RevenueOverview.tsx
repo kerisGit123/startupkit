@@ -456,7 +456,7 @@ export function RevenueOverview() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {financialSummary.topCustomers.map((customer: { customer: string; total: number; count: number }, idx: number) => (
+              {financialSummary.topCustomers.map((customer: { customer: string; email?: string | null; total: number; count: number }, idx: number) => (
                 <div key={customer.customer} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className={cn(
@@ -466,8 +466,8 @@ export function RevenueOverview() {
                       {idx + 1}
                     </div>
                     <div>
-                      <p className="font-medium text-sm">{customer.customer.length > 25 ? customer.customer.substring(0, 25) + "..." : customer.customer}</p>
-                      <p className="text-xs text-muted-foreground">{customer.count} transactions</p>
+                      <p className="font-medium text-sm">{customer.customer.length > 30 ? customer.customer.substring(0, 30) + "..." : customer.customer}</p>
+                      <p className="text-xs text-muted-foreground">{customer.email ? customer.email : `${customer.count} transactions`}</p>
                     </div>
                   </div>
                   <span className="font-bold text-sm">{formatCurrency(customer.total)}</span>

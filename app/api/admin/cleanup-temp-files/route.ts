@@ -41,25 +41,19 @@ export async function POST(req: NextRequest) {
     console.log(`[cleanup-temp-files] Cleaning files older than ${daysOlderThan} days (before ${new Date(cutoffTime)})`);
 
     // Step 1: Get old files from Convex
-    const allFiles = await convex.query(api.storyboard.storyboardFiles.listAll);
-    console.log(`[cleanup-temp-files] Total files in storyboard_files: ${allFiles.length}`);
-    
-    // Log all temps files for debugging
-    const tempsFiles = allFiles.filter(f => f.category === "temps");
-    console.log(`[cleanup-temp-files] Total temps files: ${tempsFiles.length}`);
-    
+    const tempsFiles = await convex.query(api.storyboard.storyboardFiles.listTempFiles);
+    console.log(`[cleanup-temp-files] Total temps files in storyboard_files: ${tempsFiles.length}`);
+
     if (tempsFiles.length > 0) {
       console.log(`[cleanup-temp-files] Temps files details:`);
       tempsFiles.forEach((file, index) => {
         console.log(`  ${index + 1}. ID: ${file._id}, r2Key: ${file.r2Key}, createdAt: ${new Date(file.createdAt).toISOString()}, Category: ${file.category}`);
       });
     }
-    
-    const oldFiles = allFiles.filter(f => {
+
+    const oldFiles = tempsFiles.filter(f => {
       const fileTime = f.createdAt ?? f.uploadedAt;
-      const isOld = fileTime < cutoffTime;
-      const isTemps = f.category === "temps";
-      return isOld && isTemps;
+      return fileTime < cutoffTime;
     });
     
     console.log(`[cleanup-temp-files] Cutoff time: ${new Date(cutoffTime).toISOString()}`);

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import {
   ALargeSmall, Square, Circle, ArrowUpRight, Minus, Image as ImageIcon, Film, Music,
-  Eye, EyeOff, Lock, Unlock, Trash2, Copy, ChevronUp, ChevronDown, Layers, ScrollText, Blend,
+  Eye, EyeOff, Lock, Unlock, Trash2, Copy, ChevronUp, ChevronDown, Layers, ScrollText, Blend, X, FolderOpen,
 } from "lucide-react";
 import { OverlayLayer, OVERLAY_FONTS, R2_PUBLIC_URL } from "./types";
 
@@ -19,11 +19,13 @@ interface LayerPanelProps {
   mediaFiles: any[];
   canvasSize: { w: number; h: number };
   onBeforeChange?: () => void;
+  onClose?: () => void;
+  onOpenFileBrowser?: () => void;
 }
 
 export function LayerPanel({
   overlayLayers, setOverlayLayers, selectedOverlayId, setSelectedOverlayId,
-  currentTime, totalDur, bgColor, setBgColor, mediaFiles, canvasSize, onBeforeChange,
+  currentTime, totalDur, bgColor, setBgColor, mediaFiles, canvasSize, onBeforeChange, onClose, onOpenFileBrowser,
 }: LayerPanelProps) {
   const CW = canvasSize.w, CH = canvasSize.h;
   const sel = overlayLayers.find(l => l.id === selectedOverlayId);
@@ -68,7 +70,12 @@ export function LayerPanel({
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-(--border-primary) flex items-center gap-2">
         <Layers className="w-3.5 h-3.5 text-(--accent-teal)" />
-        <span className="text-[13px] font-semibold text-(--text-primary)">Layers</span>
+        <span className="text-[13px] font-semibold text-(--text-primary) flex-1">Layers</span>
+        {onClose && (
+          <button onClick={onClose} className="p-0.5 rounded hover:bg-white/10 transition text-(--text-tertiary) hover:text-(--text-primary)" title="Close">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Tool buttons */}
@@ -92,6 +99,10 @@ export function LayerPanel({
             <span className="text-[9px] text-(--text-tertiary)">BG</span>
             <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-4 h-4 rounded cursor-pointer border-none" />
           </div>
+          {onOpenFileBrowser && (
+            <button onClick={onOpenFileBrowser} title="Browse Files"
+              className={btnCls}><FolderOpen className="w-3.5 h-3.5" /></button>
+          )}
         </div>
 
         {/* Media picker */}
@@ -181,7 +192,14 @@ export function LayerPanel({
                   className="shrink-0 p-0.5 hover:text-(--text-primary) transition">
                   {(layer.visible ?? true) ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5 text-(--text-tertiary)" />}
                 </button>
-                <span className="shrink-0">{layerIcon(layer)}</span>
+                {layer.type === "image" && layer.src ? (
+                  <img src={layer.src} className="w-7 h-5 rounded object-cover shrink-0 bg-black border border-(--border-primary)" alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                ) : layer.type === "video" && layer.src ? (
+                  <video src={layer.src} className="w-7 h-5 rounded object-cover shrink-0 bg-black border border-(--border-primary)" muted preload="metadata"
+                    onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 0.5; }} />
+                ) : (
+                  <span className="shrink-0">{layerIcon(layer)}</span>
+                )}
                 <span className="flex-1 truncate">{label}</span>
                 <div className="flex shrink-0">
                   <button onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 1); }} className="p-0.5 hover:text-(--text-primary)"><ChevronUp className="w-2.5 h-2.5" /></button>
@@ -218,13 +236,14 @@ export function LayerPanel({
           {/* Position */}
           <div>
             <span className={labelCls}>Position</span>
-            <div className="grid grid-cols-4 gap-1 mt-1">
-              <input type="number" value={Math.round(sel.x) || 0} onChange={(e) => patch(sel.id, { x: parseInt(e.target.value) || 0 })} className={inputCls} />
-              <input type="number" value={Math.round(sel.y) || 0} onChange={(e) => patch(sel.id, { y: parseInt(e.target.value) || 0 })} className={inputCls} />
-              <input type="number" value={Math.round(sel.w) || 40} onChange={(e) => patch(sel.id, { w: parseInt(e.target.value) || 40 })} className={inputCls} />
-              <input type="number" value={Math.round(sel.h) || 20} onChange={(e) => patch(sel.id, { h: parseInt(e.target.value) || 20 })} className={inputCls} />
+            <div className="grid grid-cols-2 gap-1 mt-1">
+              {([["X", "x", sel.x, 0], ["Y", "y", sel.y, 0], ["W", "w", sel.w, 40], ["H", "h", sel.h, 20]] as [string, keyof typeof sel, number, number][]).map(([lbl, key, val, def]) => (
+                <div key={lbl}>
+                  <input type="number" value={Math.round((val as number) || def)} onChange={(e) => patch(sel.id, { [key]: parseInt(e.target.value) || def })} className={inputCls} />
+                  <span className="text-[8px] text-(--text-tertiary) block text-center mt-0.5">{lbl}</span>
+                </div>
+              ))}
             </div>
-            <div className="flex gap-1 text-[8px] text-(--text-tertiary) mt-0.5"><span className="flex-1 text-center">X</span><span className="flex-1 text-center">Y</span><span className="flex-1 text-center">W</span><span className="flex-1 text-center">H</span></div>
           </div>
 
           {/* Rotation + Opacity */}
@@ -236,7 +255,7 @@ export function LayerPanel({
             <div className="flex-1">
               <span className={labelCls}>Opacity</span>
               <input type="range" min={0} max={100} value={sel.opacity ?? 100} onChange={(e) => patch(sel.id, { opacity: parseInt(e.target.value) })}
-                className="w-full h-1 accent-[var(--accent-teal)] cursor-pointer mt-2.5" />
+                className="w-full h-1 accent-(--accent-teal) cursor-pointer mt-2.5" />
             </div>
           </div>
 
@@ -244,15 +263,15 @@ export function LayerPanel({
           {sel.type === "text" && (
             <div className="space-y-2">
               <div><span className={labelCls}>Text</span><input value={sel.text || ""} onChange={(e) => patch(sel.id, { text: e.target.value })} className={`${inputCls} mt-1`} /></div>
-              <div className="flex gap-1">
-                <select value={sel.fontFamily || "Arial"} onChange={(e) => patch(sel.id, { fontFamily: e.target.value })} className={`${inputCls} flex-1`}>
-                  {OVERLAY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-                <input type="number" min={12} max={200} value={sel.fontSize || 48} onChange={(e) => patch(sel.id, { fontSize: parseInt(e.target.value) || 48 })} className={`${inputCls} w-14`} />
-              </div>
-              <select value={sel.fontWeight || "bold"} onChange={(e) => patch(sel.id, { fontWeight: e.target.value })} className={inputCls}>
-                <option value="normal">Regular</option><option value="bold">Bold</option><option value="lighter">Light</option>
+              <select value={sel.fontFamily || "Arial"} onChange={(e) => patch(sel.id, { fontFamily: e.target.value })} className={inputCls}>
+                {OVERLAY_FONTS.map(f => <option key={f} value={f}>{f}</option>)}
               </select>
+              <div className="flex gap-1">
+                <input type="number" min={12} max={200} value={sel.fontSize || 48} onChange={(e) => patch(sel.id, { fontSize: parseInt(e.target.value) || 48 })} className={`${inputCls} w-16`} title="Font size" />
+                <select value={sel.fontWeight || "bold"} onChange={(e) => patch(sel.id, { fontWeight: e.target.value })} className={`${inputCls} flex-1`}>
+                  <option value="normal">Regular</option><option value="bold">Bold</option><option value="lighter">Light</option>
+                </select>
+              </div>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1"><span className="text-[9px] text-(--text-tertiary)">Text</span><input type="color" value={sel.fontColor || "#FFFFFF"} onChange={(e) => patch(sel.id, { fontColor: e.target.value })} className="w-5 h-5 rounded cursor-pointer border-none" /></div>
                 <div className="flex items-center gap-1"><span className="text-[9px] text-(--text-tertiary)">BG</span><input type="color" value={sel.backgroundColor === "transparent" ? "#000000" : (sel.backgroundColor || "#000000")} onChange={(e) => patch(sel.id, { backgroundColor: e.target.value })} className="w-5 h-5 rounded cursor-pointer border-none" /></div>
@@ -292,6 +311,14 @@ export function LayerPanel({
                 <input type="number" min={0} max={20} value={sel.borderWidth || 0} onChange={(e) => patch(sel.id, { borderWidth: parseInt(e.target.value) || 0 })} className={`${inputCls} w-12`} />
               </div>
               <div className="flex items-center gap-1"><span className="text-[9px] text-(--text-tertiary)">Radius</span><input type="number" min={0} max={50} value={sel.borderRadius || 0} onChange={(e) => patch(sel.id, { borderRadius: parseInt(e.target.value) || 0 })} className={`${inputCls} w-14`} /></div>
+              {sel.type === "video" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] text-(--text-tertiary) shrink-0">Vol</span>
+                  <input type="range" min={0} max={100} value={sel.volume ?? 100} onChange={(e) => patch(sel.id, { volume: parseInt(e.target.value) })}
+                    className="flex-1 h-1 accent-(--accent-teal) cursor-pointer" />
+                  <span className="text-[9px] text-(--text-tertiary) w-6 text-right shrink-0">{sel.volume ?? 100}</span>
+                </div>
+              )}
             </div>
           )}
 

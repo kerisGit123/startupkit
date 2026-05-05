@@ -5,6 +5,7 @@ import { MODEL_KNOWLEDGE } from "./constants";
 import { getAnthropicClient } from "@/lib/support/anthropic";
 import { analyzeScript } from "@/lib/storyboard/scriptAnalyzer";
 import { cleanupItemFiles } from "@/lib/storyboard/cleanupFiles";
+import { triggerImageGeneration } from "@/lib/storyboard/kieAI";
 
 // @mention injection — mirrors the logic in build-storyboard/route.ts
 const _STOP_WORDS = new Set(["the", "a", "an", "of", "in", "at", "to", "for", "and", "or", "its", "with"]);
@@ -281,18 +282,40 @@ export async function dispatchDirectorTool(
           return { output: "No elements in the library yet.", isError: false };
         }
 
+        // Single query to get all pending files for all elements at once
+        const elementIds = (elements as any[]).map((e) => e._id);
+        let pendingFiles: { categoryId: string; status: string }[] = [];
+        try {
+          pendingFiles = await convex.query(api.storyboard.storyboardFiles.listPendingElementFiles, { elementIds }) as any;
+        } catch {}
+        const pendingIdSet = new Set(pendingFiles.map((f) => f.categoryId));
+
+        const mapped = (elements as any[]).map((e) => {
+          const hasImage = !!(e.thumbnailUrl || (e.referenceUrls && e.referenceUrls.length > 0));
+          const generating = pendingIdSet.has(String(e._id));
+          return {
+            name: e.name,
+            type: e.type,
+            description: e.description || "",
+            usageCount: e.usageCount || 0,
+            imageStatus: generating ? "generating" : hasImage ? "ready" : "no-image",
+            imageCount: (e.referenceUrls || []).length,
+          };
+        });
+
+        const noImage = mapped.filter((e) => e.imageStatus === "no-image");
+        const generating = mapped.filter((e) => e.imageStatus === "generating");
+        const ready = mapped.filter((e) => e.imageStatus === "ready");
         return {
-          output: stringifyResult(
-            (elements as any[]).map((e) => ({
-              name: e.name,
-              type: e.type,
-              description: e.description || "",
-              usageCount: e.usageCount || 0,
-              status: e.status,
-              thumbnailUrl: e.thumbnailUrl || null,
-              referenceUrls: e.referenceUrls || [],
-            }))
-          ),
+          output: stringifyResult({
+            elements: mapped,
+            summary: [
+              `${mapped.length} elements total.`,
+              ready.length ? `${ready.length} ready: ${ready.map(e => e.name).join(", ")}.` : "",
+              generating.length ? `${generating.length} currently generating (do NOT trigger again): ${generating.map(e => e.name).join(", ")}.` : "",
+              noImage.length ? `${noImage.length} have no reference image yet: ${noImage.map(e => e.name).join(", ")}.` : "",
+            ].filter(Boolean).join(" "),
+          }),
           isError: false,
         };
       }
@@ -667,6 +690,121 @@ export async function dispatchDirectorTool(
           if (!genRes.ok) return { output: `Generation failed: ${await genRes.text()}`, isError: true };
           const genResult = await genRes.json();
           return { output: `Image generation started for frame ${frameNum} ("${frame.title}") using ${model} at ${resolution}. Cost: ${creditsUsed} credits.`, isError: false };
+        } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "trigger_element_image_generation": {
+        const elName = String(input.element_name || "").trim();
+        if (!elName) return { output: "element_name is required.", isError: true };
+        const elements = await convex.query(api.storyboard.storyboardElements.listByProject, { projectId: projectId as any });
+        const el = (elements as any[]).find((e) => e.name.toLowerCase() === elName.toLowerCase());
+        if (!el) return { output: `Element "${elName}" not found in the library.`, isError: true };
+
+        // Guard: skip if there's already a generation in flight for this element
+        const pendingCheck = await convex.query(api.storyboard.storyboardFiles.listPendingElementFiles, { elementIds: [el._id] }) as any[];
+        if (pendingCheck.length > 0) {
+          return { output: `A reference image for "${el.name}" is already generating — check the Elements panel in a moment.`, isError: false };
+        }
+
+        // ── Reference photos (user-uploaded for img2img) ──────────────────────
+        const refPhotos: Record<string, string> = el.referencePhotos || {};
+        const refImageUrls: string[] = [];
+        if (refPhotos.fullBody) {
+          refImageUrls.push(refPhotos.fullBody);
+        } else {
+          if (refPhotos.face) refImageUrls.push(refPhotos.face);
+          if (refPhotos.outfit) refImageUrls.push(refPhotos.outfit);
+          if (refPhotos.head) refImageUrls.push(refPhotos.head);
+          if (refPhotos.body) refImageUrls.push(refPhotos.body);
+        }
+        const hasRefs = refImageUrls.length > 0;
+
+        // ── Model selection ───────────────────────────────────────────────────
+        const requestedModel = String(input.model || "");
+        const isBadModel = requestedModel === "nano-banana-2" || requestedModel === "nano-banana-pro";
+        const baseModel = (isBadModel || !requestedModel) ? "gpt-image-2" : requestedModel;
+        const model = hasRefs
+          ? (baseModel === "gpt-image-2" || baseModel === "gpt-image-2-text-to-image" ? "gpt-image-2-image-to-image" : baseModel)
+          : (baseModel === "gpt-image-2" || baseModel === "gpt-image-2-image-to-image" ? "gpt-image-2-text-to-image" : baseModel);
+
+        const resolution = String(input.resolution || "1K");
+        const elCreditMap: Record<string, number> = { "1K": 4, "2K": 7, "4K": 10 };
+        const creditsUsed = model.startsWith("gpt-image-2")
+          ? (elCreditMap[resolution] ?? 4)
+          : model === "z-image" ? 1 : 5;
+
+        // ── Select best prompt template for this element ──────────────────────
+        let templatePrompt: string | null = null;
+        let templateName: string | null = null;
+        try {
+          const dbTemplateRecords = await convex.query(api.promptTemplates.getByCompany, { companyId: ctx.companyId });
+          const dbTemplates = (dbTemplateRecords as any[] || []).map((t: any) => ({ name: String(t.name || ""), prompt: String(t.prompt || "") }));
+          const bestRule = selectTemplateForElement(el, dbTemplates);
+          if (bestRule) { templatePrompt = bestRule.prompt; templateName = bestRule.name; }
+        } catch {
+          // Non-fatal: fall back to hardcoded prompts if DB query fails
+          const bestRule = selectTemplateForElement(el);
+          if (bestRule) { templatePrompt = bestRule.prompt; templateName = bestRule.name; }
+        }
+
+        // ── Compose prompt ────────────────────────────────────────────────────
+        const elementDescription = el.description || `${el.type} named ${el.name}`;
+        let composedPrompt: string;
+        if (input.custom_prompt) {
+          composedPrompt = String(input.custom_prompt);
+        } else if (templatePrompt) {
+          composedPrompt = templatePrompt.includes("{description}")
+            ? templatePrompt.replace(/\{description\}/g, elementDescription)
+            : `${templatePrompt}\n\nCharacter Identity: ${elementDescription}`;
+        } else {
+          composedPrompt = elementDescription;
+        }
+
+        // ── Mode modifier (refStrength) ───────────────────────────────────────
+        const requestedMode = String(input.mode || "");
+        const refStrength: "prompt" | "balanced" | "image" =
+          requestedMode === "image" ? "image" : requestedMode === "prompt" ? "prompt" : "balanced";
+
+        let finalPrompt = composedPrompt;
+        if (hasRefs && !input.custom_prompt) {
+          if (refStrength === "prompt") {
+            finalPrompt += `\n\nCRITICAL: The reference image(s) are for loose inspiration only. You MUST follow the TEXT description above for ALL visual details.`;
+          } else if (refStrength === "balanced") {
+            finalPrompt += `\n\nUse the reference image(s) as a guide for general shape and composition, but follow the text description for specific details.`;
+          }
+        }
+
+        const project = await convex.query(api.storyboard.projects.get, { id: projectId as any });
+        const aspectRatio = (project as any)?.aspectRatio || "16:9";
+        const modelMode = hasRefs ? "image-to-image" : "text-to-image";
+        const qualityParam = JSON.stringify({ type: "gpt-image-2", mode: modelMode, nsfwChecker: false });
+        const modeLabel = hasRefs ? refStrength : "text-to-image";
+
+        ctx.onProgress?.(`Generating reference for "${el.name}" (${resolution}, ${creditsUsed}cr, ${modeLabel})…`);
+        try {
+          await triggerImageGeneration({
+            prompt: finalPrompt,
+            model,
+            resolution,
+            quality: qualityParam as any,
+            aspectRatio,
+            categoryId: el._id,
+            category: "elements",
+            variantLabel: `${el.type} reference`,
+            variantModel: model,
+            companyId: ctx.companyId,
+            userId: ctx.userId,
+            projectId,
+            creditsUsed,
+            convexToken: ctx.convexToken,
+            setPrimary: true,
+            ...(hasRefs && { referenceImageUrls: refImageUrls }),
+          });
+          ctx.onProgress?.(`"${el.name}" queued`);
+          return {
+            output: `Reference image queued for "${el.name}" (${el.type}) — ${model}, ${resolution}, ${creditsUsed}cr. Template: ${templateName ? `"${templateName}"` : "none"}. Check the Elements panel for the result.`,
+            isError: false,
+          };
         } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
       }
 

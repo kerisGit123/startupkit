@@ -150,6 +150,7 @@ export interface TriggerImageGenerationParams {
   variantLabel?: string;
   variantModel?: string;
   resolution?: string; // 1K, 2K, 4K
+  setPrimary?: boolean; // When true, newly generated image is always set as primary (used by Director chat)
 }
 
 // Video generation interface for Seedance 1.5 Pro
@@ -408,6 +409,7 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
       // Element variant metadata (for appendReferenceImage)
       variantLabel: params.variantLabel,
       variantModel: params.variantModel,
+      setPrimary: params.setPrimary,
     },
   });
   
@@ -501,10 +503,12 @@ export async function triggerImageGeneration(params: TriggerImageGenerationParam
       let gpt2Nsfw = false;
       try { const p = JSON.parse(params.quality || '{}'); gpt2Nsfw = p.nsfwChecker ?? false; } catch {}
       const inputUrls = [encodedImageUrl, ...encodedReferenceUrls].filter(Boolean);
+      const ar = params.aspectRatio || "auto";
       return {
         prompt: fullPrompt,
         ...(inputUrls.length > 0 && { input_urls: inputUrls }),
-        aspect_ratio: params.aspectRatio || "auto",
+        aspect_ratio: ar,
+        ...(resolution !== "1K" && ar !== "1:1" && ar !== "auto" && { resolution }),
         nsfw_checker: gpt2Nsfw,
       };
     })() : actualModel === 'gpt-image-2-text-to-image' ? (() => {

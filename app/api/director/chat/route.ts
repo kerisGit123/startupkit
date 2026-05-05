@@ -160,6 +160,7 @@ export async function POST(req: NextRequest) {
           projectId,
           companyId,
           userId: clerkUserId,
+          convexToken: convexToken ?? undefined,
           onProgress: (message: string) => {
             send({ type: "tool_progress", message });
           },
@@ -225,6 +226,13 @@ export async function POST(req: NextRequest) {
               // ensures the Director follows "pass raw text to save_script" instructions precisely.
               if (tb.name === "invoke_skill" && !result.isError) {
                 nextModel = "claude-sonnet-4-6";
+                // Signal the UI to open the Batch Generate dialog when frames were built
+                try {
+                  const skillData = JSON.parse(result.output);
+                  if (skillData.framesCreated > 0) {
+                    send({ type: "open_batch_generate" });
+                  }
+                } catch { /* non-fatal */ }
               }
 
               // Check if tool returned a plan approval request
@@ -238,6 +246,16 @@ export async function POST(req: NextRequest) {
                       totalCredits: planData.totalCredits,
                       balance: planData.balance,
                     });
+                  }
+                } catch {}
+              }
+
+              // Emit quick action buttons for suggest_actions tool
+              if (tb.name === "suggest_actions" && !result.isError) {
+                try {
+                  const data = JSON.parse(result.output);
+                  if (data.__quick_actions) {
+                    send({ type: "quick_actions", actions: data.actions });
                   }
                 } catch {}
               }
@@ -262,7 +280,7 @@ export async function POST(req: NextRequest) {
                       buffer = await sharp(buffer)
                         .resize({ width: newWidth, withoutEnlargement: true })
                         .jpeg({ quality: 80 })
-                        .toBuffer();
+                        .toBuffer() as Buffer<ArrayBuffer>;
                       mediaType = "image/jpeg";
                     } else {
                       const ct = imgRes.headers.get("content-type") || "image/png";
@@ -295,10 +313,23 @@ export async function POST(req: NextRequest) {
               }
             }
 
+            // Cap large text tool results to ~1200 chars in the accumulated history.
+            // Claude already processed the full output in this iteration; subsequent
+            // iterations only need the summary, not the full JSON payload.
+            const MAX_TOOL_RESULT_HISTORY = 1200;
+            const toolResultsForHistory = toolResults.map((tr) => {
+              if (typeof tr.content !== "string" || tr.content.length <= MAX_TOOL_RESULT_HISTORY) return tr;
+              return {
+                ...tr,
+                content: tr.content.substring(0, MAX_TOOL_RESULT_HISTORY) +
+                  `\n[...${tr.content.length - MAX_TOOL_RESULT_HISTORY} chars omitted]`,
+              };
+            });
+
             currentMessages = [
               ...currentMessages,
               { role: "assistant", content: response.content },
-              { role: "user", content: toolResults },
+              { role: "user", content: toolResultsForHistory },
             ];
           }
 

@@ -51,6 +51,8 @@ export async function POST(req: NextRequest) {
       variantLabel,   // Element variant label (for character variants)
       variantModel,   // Element variant model used
       resolution,     // Image resolution: 1K, 2K, 4K
+      category: categoryOverride,   // Optional category override (e.g. "worldview")
+      categoryId: categoryIdOverride, // Optional categoryId override
     } = await req.json();
 
     console.log('[generate-image] API route received parameters:', {
@@ -132,8 +134,8 @@ export async function POST(req: NextRequest) {
         companyId,
         userId,
         projectId,
-        categoryId: elementId || itemId, // Link to element or storyboard item
-        category: elementId ? "elements" : "generated",
+        categoryId: categoryIdOverride || elementId || itemId,
+        category: categoryOverride || (elementId ? "elements" : "generated"),
         creditsUsed,  // NEW - actual credit amount from AI panel
         model, // NEW - pass the actual model from EditImageAIPanel
         imageUrl, // NEW - pass canvas image URL for character-edit models

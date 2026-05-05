@@ -1,53 +1,72 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
 
+// Reads from financial_ledger (not credits_ledger) using the by_type index so
+// only credit_purchase rows are fetched. credits_ledger grows on every AI
+// generation (usage entries) which would cause this subscription to re-fire
+// constantly. financial_ledger only changes on actual financial events.
+
 export const getAllPurchases = query({
   handler: async (ctx) => {
-    const purchases = await ctx.db
-      .query("credits_ledger")
+    const entries = await ctx.db
+      .query("financial_ledger")
+      .withIndex("by_type", (q) => q.eq("type", "credit_purchase"))
       .order("desc")
       .collect();
 
-    // Get user details for each purchase
-    const purchasesWithUsers = await Promise.all(
-      purchases.map(async (purchase) => {
-        const user = await ctx.db
-          .query("users")
-          .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", purchase.companyId))
-          .first();
+    return await Promise.all(
+      entries.map(async (entry) => {
+        // companyId === Clerk user ID for personal workspaces (top-ups always
+        // go to personal workspace — see webhook comment in createPaymentTransaction)
+        const user = entry.companyId
+          ? await ctx.db
+              .query("users")
+              .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", entry.companyId!))
+              .first()
+          : null;
 
         return {
-          ...purchase,
+          _id: entry._id,
+          createdAt: entry.transactionDate,
+          companyId: entry.companyId,
+          tokens: entry.tokensAmount || 0,
+          amountPaid: entry.amount,
+          currency: entry.currency,
+          stripePaymentIntentId: entry.stripePaymentIntentId,
+          description: entry.description,
           userEmail: user?.email || "Unknown",
           userName: user?.fullName || user?.firstName || "Unknown",
         };
       })
     );
-
-    return purchasesWithUsers;
   },
 });
 
 export const getPurchaseStats = query({
   handler: async (ctx) => {
-    const purchases = await ctx.db.query("credits_ledger").collect();
-    
-    const totalPurchases = purchases.length;
-    const totalRevenue = purchases.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
-    const totalCredits = purchases.reduce((sum, p) => sum + p.tokens, 0);
-    
-    // Get this month's purchases
-    const now = Date.now();
-    const startOfMonth = new Date(new Date().setDate(1)).setHours(0, 0, 0, 0);
-    const thisMonthPurchases = purchases.filter(p => p.createdAt >= startOfMonth);
-    const monthlyRevenue = thisMonthPurchases.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+    const entries = await ctx.db
+      .query("financial_ledger")
+      .withIndex("by_type", (q) => q.eq("type", "credit_purchase"))
+      .collect();
+
+    const totalPurchases = entries.length;
+    const totalRevenue = entries.reduce((sum, e) => sum + e.amount, 0);
+    const totalCredits = entries.reduce((sum, e) => sum + (e.tokensAmount || 0), 0);
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const startOfMonthTs = startOfMonth.getTime();
+
+    const thisMonth = entries.filter((e) => e.transactionDate >= startOfMonthTs);
+    const monthlyRevenue = thisMonth.reduce((sum, e) => sum + e.amount, 0);
 
     return {
       totalPurchases,
-      totalRevenue: (totalRevenue / 100).toFixed(2), // Convert from cents
+      totalRevenue: (totalRevenue / 100).toFixed(2),
       totalCredits,
       monthlyRevenue: (monthlyRevenue / 100).toFixed(2),
-      thisMonthPurchases: thisMonthPurchases.length,
+      thisMonthPurchases: thisMonth.length,
     };
   },
 });
@@ -55,12 +74,11 @@ export const getPurchaseStats = query({
 export const getPurchasesByUser = query({
   args: { companyId: v.string() },
   handler: async (ctx, args) => {
-    const purchases = await ctx.db
-      .query("credits_ledger")
+    return await ctx.db
+      .query("financial_ledger")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .filter((q) => q.eq(q.field("type"), "credit_purchase"))
       .order("desc")
       .collect();
-
-    return purchases;
   },
 });

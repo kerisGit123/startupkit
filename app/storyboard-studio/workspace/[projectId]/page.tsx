@@ -21,6 +21,7 @@ import { GENRE_PRESETS, FORMAT_PRESETS } from "../../constants";
 import { ElementLibrary } from "../../components/ai/ElementLibrary";
 import { BuildStoryboardDialogSimplified } from "../../components/storyboard/BuildStoryboardDialogSimplified";
 import { VisualLockModal } from "../../components/storyboard/VisualLockModal";
+import { WorldViewModal } from "../../components/ai/WorldViewModal";
 import { BatchGenerateDialog } from "../../components/storyboard/BatchGenerateDialog";
 import { PresetManager } from "../../components/storyboard/PresetManager";
 import { TaskStatusBadge, TaskStatusWithProgress } from "../../components/storyboard/TaskStatus";
@@ -116,6 +117,7 @@ import {
   Menu,
   Check,
   Film,
+  Globe,
 } from "lucide-react";
 
 type Tab = "script" | "storyboard" | "table" | "video";
@@ -132,8 +134,7 @@ export default function StoryboardWorkspacePage() {
   const currentCompanyId = useCurrentCompanyId() || "personal";
   const { hasProFeatures, maxFramesPerProject } = useFeatures();
   // Credit balance now handled by CreditBadge component
-  const customStyles = useQuery(api.promptTemplates.getByCompany, { companyId: currentCompanyId });
-  const customStyleTemplates = customStyles?.filter(t => t.type === "style") ?? [];
+  const customStyleTemplates = useQuery(api.promptTemplates.getByCompanyAndType, { companyId: currentCompanyId, type: "style" }) ?? [];
   const stylePresets = useQuery(api.storyboard.presets.list, { companyId: currentCompanyId, category: "style" });
 
   const updateScript = useMutation(api.storyboard.projects.updateScript);
@@ -544,6 +545,7 @@ export default function StoryboardWorkspacePage() {
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showBatchGenerate, setShowBatchGenerate] = useState(false);
+  const [showWorldViewModal, setShowWorldViewModal] = useState(false);
   const [showPresetManager, setShowPresetManager] = useState(false);
   const [tableEditField, setTableEditField] = useState<{ itemId: string; field: string; value: string } | null>(null);
   const [tableTagEditorId, setTableTagEditorId] = useState<string | null>(null);
@@ -881,10 +883,26 @@ export default function StoryboardWorkspacePage() {
     }
   };
 
-  if (!project) {
+  if (project === undefined) {
     return (
       <div className="flex h-full items-center justify-center bg-(--bg-primary)">
         <Loader2 className="w-6 h-6 text-(--accent-blue) animate-spin" />
+      </div>
+    );
+  }
+
+  if (project === null) {
+    return (
+      <div className="flex h-full items-center justify-center bg-(--bg-primary)">
+        <div className="text-center space-y-3">
+          <p className="text-(--text-secondary)">Project not found or you don&apos;t have access.</p>
+          <button
+            onClick={() => router.push("/storyboard-studio")}
+            className="text-sm text-(--accent-blue) hover:underline"
+          >
+            Back to projects
+          </button>
+        </div>
       </div>
     );
   }
@@ -915,7 +933,7 @@ export default function StoryboardWorkspacePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Tab switcher — pill toggle style (matches Element Forge Simple/Advanced) */}
+          {/* Tab switcher — pill toggle style */}
           <div className="flex items-center rounded-xl border border-white/8 overflow-hidden">
             {(["script", "storyboard", "table", "video"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)}
@@ -930,6 +948,20 @@ export default function StoryboardWorkspacePage() {
             ))}
           </div>
 
+          {/* World View — project-level sheet, always accessible */}
+          <button
+            onClick={() => setShowWorldViewModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-500/30 hover:border-indigo-400/50 hover:bg-indigo-500/8 transition-all group"
+            title="World View Sheet"
+          >
+            {(project as any).worldViewImageUrl ? (
+              <img src={(project as any).worldViewImageUrl} alt="" className="w-5 h-[11px] rounded object-cover" />
+            ) : (
+              <Globe className="w-3.5 h-3.5 text-indigo-400/60 group-hover:text-indigo-400 transition-colors" strokeWidth={1.75} />
+            )}
+            <span className="text-[12px] font-medium text-indigo-400/70 group-hover:text-indigo-300 transition-colors">World View</span>
+          </button>
+
           {/* Script Actions */}
           {tab === "script" && (
             <button
@@ -941,26 +973,49 @@ export default function StoryboardWorkspacePage() {
             </button>
           )}
 
-          {tab === "script" && !scriptDirty && parseScriptScenes(displayScript).scenes.length > 0 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowVisualLock(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 border border-white/8 rounded-xl transition-all"
-                title="Visual Lock — align script to reference images"
-              >
-                <Lock className="w-3.5 h-3.5" strokeWidth={1.75} />
-                Visual Lock
-              </button>
-              <button
-                onClick={() => setShowBuildDialog(true)}
-                disabled={isBuilding}
-                className="flex items-center gap-1.5 px-4 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[12px] font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
-                Build Storyboard
-              </button>
-            </div>
-          )}
+          {tab === "script" && !scriptDirty && (() => {
+            const firstScenePos = displayScript.search(/(?:^|\n)(?:###\s*)?SCENE\s+\d+/);
+            const hasPreamble = firstScenePos > 0;
+            const hasScenes = parseScriptScenes(displayScript).scenes.length > 0;
+            return (
+              <div className="flex items-center gap-2">
+                {hasPreamble && (
+                  <button
+                    onClick={() => {
+                      const cleaned = displayScript.substring(firstScenePos).trimStart();
+                      handleScriptChange(cleaned);
+                      toast.success("Preamble stripped — save to persist");
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium text-amber-400 hover:text-amber-300 hover:bg-amber-500/8 border border-amber-500/25 rounded-xl transition-all"
+                    title="Remove chatty preamble before the first SCENE block"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" strokeWidth={1.75} />
+                    Clean Script
+                  </button>
+                )}
+                {hasScenes && (
+                  <>
+                    <button
+                      onClick={() => setShowVisualLock(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-[12px] font-medium text-(--text-secondary) hover:text-(--text-primary) hover:bg-white/5 border border-white/8 rounded-xl transition-all"
+                      title="Visual Lock — align script to reference images"
+                    >
+                      <Lock className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      Visual Lock
+                    </button>
+                    <button
+                      onClick={() => setShowBuildDialog(true)}
+                      disabled={isBuilding}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white text-[12px] font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" strokeWidth={1.75} />
+                      Build Storyboard
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {tab === "storyboard" && (
             <>
@@ -1163,9 +1218,8 @@ export default function StoryboardWorkspacePage() {
               </div>
             </div>
 
-            {/* Scene navigator sidebar */}
-            {parsedScenes.scenes.length > 0 && (
-              <div className="w-72 border-l border-(--border-primary) bg-(--bg-secondary)/30 overflow-y-auto shrink-0">
+            {/* Scene navigator sidebar — always visible */}
+            <div className="w-72 border-l border-(--border-primary) bg-(--bg-secondary)/30 overflow-y-auto shrink-0">
                 {/* Header */}
                 <div className="px-4 py-3 border-b border-(--border-primary) flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1229,8 +1283,7 @@ export default function StoryboardWorkspacePage() {
                     ))}
                   </div>
                 )}
-              </div>
-            )}
+            </div>
           </div>
           );
         })()}
@@ -1538,6 +1591,20 @@ export default function StoryboardWorkspacePage() {
                           setShowDirectorChat(true);
                         }}
                       />
+                    </div>
+                  ))}
+                  {/* Skeleton cards while Director is building */}
+                  {project.taskStatus === "building" && Array.from({ length: 6 }).map((_, i) => (
+                    <div
+                      key={`skeleton-${i}`}
+                      className="rounded-xl overflow-hidden border border-white/5 animate-pulse"
+                      style={{ aspectRatio: project.settings.frameRatio === "9:16" ? "9/16" : project.settings.frameRatio === "1:1" ? "1/1" : "16/9" }}
+                    >
+                      <div className="w-full h-full bg-white/5 flex flex-col items-center justify-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-white/10" />
+                        <div className="w-20 h-2 rounded bg-white/10" />
+                        <div className="w-14 h-2 rounded bg-white/5" />
+                      </div>
                     </div>
                   ))}
                   {/* Add frame button */}
@@ -1947,6 +2014,12 @@ export default function StoryboardWorkspacePage() {
           onClose={() => setShowBatchGenerate(false)}
         />
       )}
+      {showWorldViewModal && (
+        <WorldViewModal
+          projectId={pid}
+          onClose={() => setShowWorldViewModal(false)}
+        />
+      )}
       {showExportModal && items && project && (
         <WorkspaceExportModal
           projectName={project.name}
@@ -2030,6 +2103,7 @@ export default function StoryboardWorkspacePage() {
           userId={user?.id}
           user={user}
           userCompanyId={currentCompanyId}
+          worldViewConcept={(project as any).worldViewConcept || undefined}
           onNavigateToShot={(shotId) => {
             const targetItem = (items || []).find(item => item._id === shotId);
             if (targetItem) {
@@ -2177,6 +2251,7 @@ export default function StoryboardWorkspacePage() {
           currentFrameNumber={directorReviewFrame}
           currentFrameImageUrl={directorFrameImageUrl}
           initialMessage={directorInitialMessage}
+          onOpenBatchGenerate={() => setShowBatchGenerate(true)}
           onClose={() => {
             setShowDirectorChat(false);
             setDirectorReviewFrame(undefined);
@@ -2477,6 +2552,15 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
             {/* Action Buttons - Show on hover */}
             {item.imageUrl && (
               <div className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
+                {/* Regenerate — re-open the AI panel for frames that already have an image */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDoubleClick(item); }}
+                  className="bg-amber-500/80 backdrop-blur-sm rounded-full p-1.5 border border-amber-400/40 hover:bg-amber-500 transition-all duration-200 shadow-lg"
+                  title="Regenerate image"
+                >
+                  <RefreshCw className="w-3 h-3 text-white" />
+                </button>
+
                 {/* Remove Image Button - Show if this frame IS the storyboard URL */}
                 {projectStoryboardUrl === item.imageUrl && onClearStoryboardUrl && (
                   <button
@@ -2490,7 +2574,7 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
                     <X className="w-3 h-3 text-white" />
                   </button>
                 )}
-                
+
                 {/* Set as Storyboard URL Button - Show if this frame is NOT the storyboard URL */}
                 {projectStoryboardUrl !== item.imageUrl && onSetStoryboardUrl && (
                   <button
@@ -2513,6 +2597,13 @@ function FrameCard({ item, index, frameRatio, selected, projectId, onSelect, onD
               <ImageIcon className="w-6 h-6 text-gray-600" />
             </div>
             <span className="text-xs text-gray-500">No media</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDoubleClick(item); }}
+              className="flex items-center gap-2 px-3 py-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg cursor-pointer transition-all duration-200"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-xs text-amber-400 font-medium">Open Studio</span>
+            </button>
             <button
               onClick={() => setShowFrameFileBrowser(true)}
               className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/8 rounded-lg cursor-pointer transition-all duration-200"

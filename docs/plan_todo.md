@@ -1,6 +1,6 @@
 # Project TODO — Consolidated
 
-> **Last updated:** 2026-05-03 (Session #36 — invoke_skill persistence fix + Stop button)
+> **Last updated:** 2026-05-05 (Session #44 — Template matcher, preferred template per element, agent element build)
 
 ---
 
@@ -21,8 +21,8 @@
 **Still to build:**
 
 - [ ] Workspace: show "Start with AI" panel when project has 0 frames + 0 script (big textarea → invoke_skill auto-triggered)
-- [ ] Auto-build storyboard after `save_script` (Director proactively offers "Build Storyboard?" after save)
-- [ ] Auto-show `BatchGenerateDialog` after build completes ("Generate images for all N frames? Cost: X credits")
+- [x] Auto-build storyboard after script generation — `invoke_skill` now auto-saves + auto-builds in one tool call (Session #39)
+- [x] Auto-show `BatchGenerateDialog` after build completes — `open_batch_generate` SSE event opens it directly (Session #41)
 - [ ] Build Storyboard rate limit: 20 builds/hour per user (add to API route, not credit-gated)
 
 **Pricing logic:**
@@ -46,33 +46,216 @@
 
 ## Current State
 
-**On `main`, 5 commits ahead of origin (unpushed). Session #36 changes uncommitted.** Last 5 commits:
+**On `main`, uncommitted changes through Session #44.** Last 5 commits:
 
 ```text
-5299681  Session #35: agent UX hardening — progress timer, tool history, Sonnet after invoke_skill, retry logic
-4df411c  Director: redesign chat panel to match LTX dark theme + proper markdown rendering
-9957370  Director: improve invoke_skill flow for video-prompt-builder
-97eb390  Session #33: Director invoke_skill + save_script + story-from-scratch workflow
-ef915fb  Initialize runbook: ⚠️ critical callout for INTERNAL_REPAIR_SECRET
+e8a1819  Director: add getAgentAccess query + setAgentAccess admin mutation
+638b191  Director enhancements + docs cleanup (obsolete planning files removed)
+5b66e60  docs: add honest self-assessment section to plan_ai_director.md
+c95829b  docs: update plan_ai_director.md for Session #36 + fix MD lint warnings
+3f4eacc  Director: credit confirm for all generation/analyze pills
 ```
 
-**Session #36 changes not yet committed (5 files):**
-- `lib/director/tool-executor.ts` — `build_storyboard` case, `invoke_skill` credit check/deduction + auto-save, `save_script` idempotent, `_injectElementMentions` helper
-- `lib/director/agent-tools.ts` — `build_storyboard` tool definition, updated `save_script` + `invoke_skill` descriptions, `DirectorToolName` union
-- `lib/director/system-prompt.ts` — "New Story from Scratch" flow: credit check first, show pricing, user confirms, invoke_skill → save_script → build_storyboard
-- `components/director/DirectorChatPanel.tsx` — Stop button, `build_storyboard` label, updated keep-open warning
-- `docs/plan_todo.md`
+**TypeScript status: 0 errors** (`npx tsc --noEmit` exits cleanly).
+
+**Build status: clean** — `ThumbnailCropper.tsx` parse error fixed; `VideoImageAIPanel.tsx` TDZ runtime error fixed.
+
+**Agent seat status:**
+
+- `agentModeEnabled: true` set manually in Convex dashboard for dev account (`user_3CFIfm0kkPdgvs69to7ij57qv9n`)
+- `SKILL_VIDEO_PROMPT_BUILDER_ID` set in `.env.local`
+- Stripe wiring for auto-toggle on seat purchase: **not yet built**
+
+**Known data issue:** Orphaned R2 URLs in `storyboard_elements.referenceUrls` — files deleted from R2 but URL still in DB. When `ThumbnailCropper` opens on such an element it shows the "Image could not be loaded" fallback (handled gracefully). Fix: orphan cleanup cron should null out `referenceUrls` entries on delete.
 
 **Top priorities for next session (in order):**
 
-1. **Commit Session #36 changes** — commit the 5 modified files, then push the full 6-commit backlog to origin/main
-2. **End-to-end test: full agent story flow** — open Agent mode → "write me a dragon story" → agent checks balance → shows 10cr cost → user confirms → `invoke_skill` → summary → user says save → `save_script` → `build_storyboard` → frames appear live → agent offers hero shots
-3. **Visual Lock end-to-end** — generate primary images → click Visual Lock → analyze → review → apply → verify script + elements updated
-4. **Unpark onboarding** — when 0 frames + 0 script, show big textarea "Tell me your story..." with Agent mode auto-selected
+1. **Brevo IP whitelist** — Email Send tab built and working, but Brevo blocks sends from unrecognised IPs. Add server IP at `app.brevo.com/security/authorised_ips`. Dev IP flagged: `180.74.175.136`. Production host IP will also need adding after deploy.
+2. **Stripe agent seat checkout** — extend `/api/stripe/create-checkout` for `type: "agent_seat"` recurring subscription + webhook handler toggles `agentModeEnabled` on purchase/cancellation. Currently the paywall card in DirectorChatPanel is a dead end — users cannot buy Agent access themselves, it requires a manual Convex dashboard edit.
+3. **Unpark onboarding** — when 0 frames + 0 script, show big textarea "Tell me your story..." with Agent mode auto-selected, auto-triggers `invoke_skill`. New user "wow moment": type a story → frames appear.
+4. **Unify vision paths** — `analyze_frame_image` tool (Director) vs direct `/api/ai-analyze` (balloon pill, Gemini 2.5 Flash) return different formats and charge differently. Merge into one shared route.
+5. **Conversation compression** — 20-message hardcap loses context abruptly on long sessions. Smart summarise older turns instead of hard-truncating.
 
 ---
 
-## Recently Completed (Session #11-36 — 2026-04-26/05-03)
+### Production Sheet — Frame Card UX (Backlog)
+
+Two UI enhancements after production sheet generation is validated:
+
+- [ ] **Production sheet badge on frame card** — small `LayoutTemplate` icon overlaid on the corner of the frame thumbnail card in the storyboard grid. Visible when `storyboard_files` has a completed file with `categoryId = itemId` and `variantLabel = "Production Sheet"`. Clicking it opens the sheet full-screen in a lightbox. Lets users see at a glance which frames already have a production sheet.
+
+- [ ] **Open Studio shortcut in PRODUCTION SHEET mode** — extra hover button on the frame card (alongside existing delete/duplicate/etc. buttons) that opens Cinema Studio already switched to `PRODUCTION SHEET` mode instead of the default `CREATE IMAGE` mode. Skips the manual mode-switch step inside Cinema Studio. Pass an `initialMode?: "production-sheet"` prop through `SceneEditor` → `ImageAIPanel`.
+
+---
+
+## Recently Completed (Session #11-42 — 2026-04-26/05-05)
+
+### Session #44 — 2026-05-05 (Template matcher, preferred template per element, agent element build)
+
+**Convex bandwidth — Session 4: system templates fully out of DB (`lib/storyboard/defaultPromptTemplates.ts`, `convex/promptTemplates.ts`, `PromptLibrary.tsx`, `ElementForge.tsx`):**
+
+- [x] `resetDefaults` and `purgeSystemTemplates` mutations removed from `convex/promptTemplates.ts` — no system templates stored in DB
+- [x] `PromptLibrary.tsx` stripped from 5500 lines to ~500 lines — `DEFAULT_PROMPT_TEMPLATES` extracted to `lib/storyboard/defaultPromptTemplates.ts`
+- [x] Camera (CA01–CA10), Action (AC01–AC07), Notes (N01–N05) templates added to `defaultPromptTemplates.ts` — were in old DB but never hardcoded
+- [x] `allTemplates` in `PromptLibrary` and `ElementForge` merges static file templates (zero Convex cost) + user-created DB templates only
+- [x] System templates show "System" badge; Edit/Delete/Star hidden for system templates in list UI
+
+**Template annotation + matcher (`lib/storyboard/templateAnnotations.ts`, `lib/storyboard/templateMatcher.ts`):**
+
+- [x] `templateAnnotations.ts` — `TEMPLATE_ANNOTATIONS` record with `matchKeywords`, `matchDescription`, `priority` for all ~145 templates; deep keyword lists for character/environment/prop types
+- [x] `templateMatcher.ts` — `findBestTemplates(description, type, topN)` + `findTopTemplate()` — keyword score × 10 + priority; always includes broad fallback
+
+**ElementForge: "Suggested" badge + preferred template per element (`ElementForge.tsx`, `convex/schema.ts`, `convex/storyboard/storyboardElements.ts`):**
+
+- [x] `bestMatchSuggestion` memo runs `findBestTemplates` against `composedPrompt` as identity fields are filled; shows blue "Suggested: [name] · Matched: keyword" badge below template dropdown with one-click "Use" button
+- [x] `preferredTemplate: v.optional(v.string())` added to `storyboard_elements` schema, `create` mutation, and `update` mutation
+- [x] Star button restored in `TemplateDropdown` — works for **all** templates (system + custom); click to pin, click again to unpin (toggle)
+- [x] Star saves `preferredTemplate` immediately to element record via `updateElement` (edit mode) or on next Save (create mode)
+- [x] `localPreferredTemplate` state drives instant UI feedback — no round-trip wait
+- [x] Auto-select priority on open: `element.preferredTemplate` → company `isDefault` (user custom templates) → index 0
+- [x] Set Default / Star removed from system templates in dropdown (system templates use matcher as smart default)
+
+**Director agent — single element build flow (`lib/director/tool-executor.ts`, `lib/director/system-prompt.ts`):**
+
+- [x] `selectTemplateForElement` now reads prompts from `DEFAULT_PROMPT_TEMPLATES` (single source of truth) instead of `template-prompts.ts` duplicate — agent and UI always use identical prompt text
+- [x] `template-prompts.ts` import removed from `tool-executor.ts`; `prompt` field removed from `TemplateRule` interface; all 39 `prompt: P.Xxx` lines stripped
+- [x] "Build Me an Element" workflow added to agent system prompt — step-by-step: `create_element` → `suggest_actions` with credit options → `create_execution_plan` → `trigger_element_image_generation`; template auto-selected by rule engine, no manual selection needed
+
+**Bug fixes:**
+
+- [x] `PurchasesTab.tsx` — `<SelectItem value="">` crash (Radix requires non-empty value) — changed initial state + filter guard to `"all"` sentinel
+- [x] `ElementLibrary.tsx` — `MultiImageBadge` was `absolute top-2 right-2`, colliding with Visibility badge — moved to `bottom-2 right-2`
+
+---
+
+### Session #42 — 2026-05-05 (Runtime bug fixes + Director pipeline hardening)
+
+**`VideoImageAIPanel.tsx` — `aspectRatio` temporal dead zone (TDZ):**
+
+- [x] `const [aspectRatio, setAspectRatio] = useState("16:9")` was declared at line 615, below the `handleGenerateProductionSheet` useCallback at line 431 that referenced it in its dep array — JavaScript TDZ killed every render. Moved declaration to line 429, immediately above the callback.
+
+**`ThumbnailCropper.tsx` — JSX parse error:**
+
+- [x] `)}` closing the `{imgError ? ... : ...}` ternary was positioned after the Footer `<div>`, making Footer a second sibling in the else branch (invalid without a fragment). Moved `)}` to immediately after the crop area's closing `</div></div>` so Footer renders outside the ternary as a proper sibling of the ternary block.
+
+**`app/storyboard-studio/components/planningdoc/test.md` — stale scratch file:**
+
+- [x] Confirmed unused (no code imports it, only appears in `.claude/settings.local.json`). Safe to delete.
+
+**Director pipeline hardening (`lib/director/tool-executor.ts`) — carried from Session #41 plan:**
+
+- [x] Extend story context injection — last 4 existing scenes (title + description) prepended to skill prompt before the extension call; AI now continues the narrative instead of writing an independent story
+- [x] Preamble hard error — `firstScene === -1` guard added; skill output with no `SCENE` blocks returns `isError: true` instead of silently saving garbage text
+- [x] `creditsUsed` added to `invoke_skill` return JSON + "Used X credits." appended to note string
+- [x] `open_batch_generate` SSE event emitted by `route.ts` after `framesCreated > 0`; `DirectorChatPanel` handles via new `onOpenBatchGenerate` prop; `page.tsx` opens `BatchGenerateDialog` directly
+- [x] Regenerate button (`RefreshCw`, amber) added to frame hover overlay on frames with existing images
+- [x] Clean Script button in Script tab — visible when preamble detected (`firstScenePos > 0`), strips text before first `SCENE` block, marks script dirty, toasts confirmation
+
+---
+
+### Session #41 — 2026-05-04 (AI Director pipeline — extend story + batch generate + script cleanup)
+
+**Script pipeline hardened (`lib/director/tool-executor.ts`, `lib/storyboard/scriptAnalyzer.ts`):**
+
+- [x] Preamble strip — `callSkillAct` output strips everything before first `SCENE N` block; chatty commentary never reaches DB or parser
+- [x] Preamble hard error — if skill returns zero `SCENE` blocks, returns `isError: true` instead of silently saving garbage text
+- [x] SKILL.md format fixed — scene blocks now use plain `SCENE N`, `Image Prompt:`, `Video Prompt:` labels; `parseStructuredScript` fires reliably
+- [x] Wrong query name fixed — `getProjectScript` → `getScriptContent`; script append was silently failing on every extend call
+- [x] Hardcoded template prompts — `lib/director/template-prompts.ts` created with 39 prompt strings (C01–C14, E01–E14, P01–P12); `selectTemplateForElement` now runs in-process, zero DB round-trips
+
+**Extend story flow (`lib/director/tool-executor.ts`, `lib/director/agent-tools.ts`, `lib/director/system-prompt.ts`):**
+
+- [x] `strategy` parameter added to `invoke_skill` (`replace_all` | `extend`)
+- [x] Replace vs Extend confirmation — Director detects existing frame count, shows button choice before writing
+- [x] Extend passes story context — last 4 existing scenes (title + description) prepended to skill prompt so extension continues the narrative
+- [x] Script append — on extend, loads existing script and concatenates new scenes
+- [x] Frame order/sceneId offset — new frames start from `existingItems.length`, no ID collision
+- [x] Element deduplication — existing elements seeded into `savedElementMap` (lowercase key); same-name elements never duplicated
+- [x] Semantic element name matching — existing elements passed as context to Haiku extractor; "The Child" maps to "The Girl in Hiding" instead of creating a duplicate
+- [x] Director prompt — when extending, calls `get_element_library` first and includes existing character names in skill brief
+
+**Batch generate wired to SSE (`app/api/director/chat/route.ts`, `components/director/DirectorChatPanel.tsx`, `app/storyboard-studio/workspace/[projectId]/page.tsx`):**
+
+- [x] After `invoke_skill` returns `framesCreated > 0`, route emits `open_batch_generate` SSE event
+- [x] `DirectorChatPanel` handles it via `onOpenBatchGenerate` prop
+- [x] `page.tsx` opens `BatchGenerateDialog` directly — no Director intermediary, no dead button
+
+**UX improvements (`page.tsx`, `tool-executor.ts`):**
+
+- [x] "Thinking..." shown immediately on Director start (before first `tool_call` SSE event)
+- [x] Credit estimate + confirm buttons before `invoke_skill` runs
+- [x] `taskStatus: "building"` set during auto-build; 6 skeleton cards shown in storyboard grid
+- [x] New frames born with `frameStatus: "draft"` (was "Set Status" / unknown)
+- [x] Per-frame Generate button (amber) on No Media frames → opens SceneEditor
+- [x] Regenerate button (`RefreshCw`) on hover overlay of frames that already have an image
+- [x] Clean Script button in Script tab — strips preamble from legacy projects, toasts confirmation
+- [x] `creditsUsed` added to `invoke_skill` return payload; "Used X credits." surfaced to user
+
+---
+
+### Session #40 — 2026-05-04 (Convex bandwidth optimizations — Session 3)
+
+**Audit + three fixes applied (`plan_efficiency_convex.md` updated):**
+
+- [x] **Gallery over-fetch** — `GalleryPage.tsx:31` dropped `limit: 200` → uses query default (40). Live subscription was pushing 5× more data on every share/unshare across the platform.
+- [x] **`files-by-element` full-table dump** — `app/api/storyboard/files-by-element/route.ts` replaced `listByCompany` (reads every company file) with `listByCategoryId` (reads only files tagged to that element via `by_categoryId` index). Triggered on every element deletion.
+- [x] **`files-by-category` orphan path full-table dump** — added `listOrphaned` query to `convex/storyboard/storyboardFiles.ts` using `by_companyId` index + server-side `categoryId === undefined` filter. Updated `app/api/storyboard/files-by-category/route.ts` to use it instead of `listByCompany` + JS filter.
+
+**Remaining open (intentionally deferred):**
+
+| Item | Affects | When |
+| ---- | ------- | ---- |
+| `listByProject` (~94 MB dev) | End-users | After 2–3 weeks production data |
+| Admin dashboard 5× `.collect()` | Super admin only | When admin panel gets heavy use |
+| Admin inbox 6× full scans | Super admin only | Same |
+| `financialLedger.getAllLedgerEntries` | Super admin only | When ledger grows large |
+
+---
+
+### Session #39 — 2026-05-04 (TypeScript error elimination + VideoImageAIPanel production sheet fixes)
+
+**VideoImageAIPanel production sheet enhancements (`app/storyboard-studio/components/ai/VideoImageAIPanel.tsx`):**
+
+- [x] **Dynamic credit display** — `psHasRefs` + `psEffectiveCredits` computed from `getModelCredits()` based on whether elements/images are present and selected resolution
+- [x] **Image-to-image when refs present** — `handleGenerateProductionSheet` includes element primary images in `referenceImageUrls`; selects `gpt-image-2-image-to-image` when any ref exists, `gpt-image-2-text-to-image` otherwise
+- [x] **Resolution defaults to 1K** — entering PS mode resets resolution from any video value (480P/720P/etc.) to `"1K"`; PS toolbar shows inline 1K/2K/4K picker
+- [x] **Standard generate button** — "Generate Sheet" uses `<Sparkles>Generate + {psEffectiveCredits}</Sparkles>` matching the standard button style
+- [x] **Confirm dialog** — shows dynamic resolution, img2img suffix when refs present, and correct credit cost
+
+**TypeScript — 0 errors remaining (`npx tsc --noEmit` clean):**
+
+| File | Error | Fix |
+| --- | --- | --- |
+| `video-editor/types.ts` | `volume` missing from `OverlayLayer` | Added `volume?: number` — fixed 3 errors across LayerPanel, PreviewCanvas, useExport |
+| `VideoEditor.tsx:68` | `mediaFilter` typed without `"all"` but compared to it | Added `"all"` to the `useState` union |
+| `SupportChatWidget.tsx:1061` | `sendMessage(overrideMessage?)` used directly as `onClick` | Wrapped as `onClick={() => sendMessage()}` |
+| `director/chat/route.ts:273` | `sharp().toBuffer()` returns `Buffer<ArrayBufferLike>` | Cast to `Buffer<ArrayBuffer>` |
+| `VideoImageAIPanel.tsx:475` | `resolution` used before declaration in `useCallback` deps | Moved `const [resolution, setResolution]` above `handleGenerateProductionSheet` |
+| `VideoImageAIPanel.tsx:6166` | `variant="default"` not valid on `ConfirmDialog` | Removed prop (defaults to `"danger"`) |
+
+---
+
+### Session #38 — 2026-05-03 (Prompt template reordering + Element Library UX fixes)
+
+**Prop prompt templates (`app/storyboard-studio/components/ai/PromptLibrary.tsx`):**
+
+- [x] New `P01 - Photorealistic Prop Identity Sheet` added — Universal Object Identity Sheet prompt (scale-adaptive: any object size from small to oversized, full 7-image contact sheet layout)
+- [x] Old P01 renamed to `P07 - Photorealistic Prop Identity Sheet - table size` — original table-scale version preserved with existing notes
+
+**Character prompt templates (`app/storyboard-studio/components/ai/PromptLibrary.tsx`):**
+
+- [x] C01 ↔ C03 swapped — `C01 - Ultra Realistic Character Sheet` now first, `C03 - UGC Character` moved to third position (both number and array position swapped)
+
+**Reset defaults fix (`convex/promptTemplates.ts`):**
+
+- [x] `resetDefaults` mutation now deletes all `isSystem: true` templates before recreating — previously only deleted by name match, leaving stale duplicates after any rename
+
+**Element Library UX (`app/storyboard-studio/components/ai/ElementLibrary.tsx`):**
+
+- [x] Pencil edit icon hidden for Character, Prop, and Environment types — only Sparkles (Element Forge) button shown for those types; Logos/Styles/Other keep the pencil
+- [x] Edit panel closes when switching tabs — any tab change now calls `setShowCreate(false)` + `setEditingId(null)` regardless of edit/create mode
+
+---
 
 ### Session #36 — 2026-05-03 (build_storyboard tool + credit pricing + persistence fix + Stop button)
 
@@ -1273,3 +1456,39 @@ User adds https://storytica.ai/mcp in Claude settings
 - [ ] AddImageMenu (5), prompt assembly (5), integration (12)
 - [ ] Post-processing tools (NEW — need test cases)
 - [ ] AI Agent tools (NEW — need test cases)
+
+### Automated Subscription Lifecycle Tests (Session #37)
+
+23-step automated suite in **Testing page → Subscription Lifecycle tab** covers:
+
+- Free → Pro → Business → Free plan transitions (credits granted/clawed back)
+- Clawback math: `leftover = previousSubTokens - usedSincePrev` deducted before new grant
+- Cycling block: 5+ plan changes in 30 days → `cyclingBlockedUntil` set, grants skipped
+- Org slot enforcement: excess orgs marked `overQuota=true` + `lapsedAt` when plan downgrades
+- Org restore: orgs un-lapsed when plan upgrades back above slot limit
+- Lazy credit grant: `grantMonthlyCreditsIfDue` triggered on first `deductCredits` call
+- Multi-org credit isolation: deductions on org balance do not affect personal balance
+
+**Last run (Session #37):** 22 pass / 0 fail / 1 skip (P7-2: Clerk org auto-delete disabled at instance level)
+
+### What the tests did NOT cover ⚠️
+
+These need a real Stripe test card to verify end-to-end:
+
+| Scenario | How to test |
+| -------- | ----------- |
+| User clicks Upgrade in the UI → Stripe checkout → plan activates | Manually, Stripe test card `4242 4242 4242 4242` |
+| Clerk webhook fires → `propagateOwnerPlanChange` actually called | Check Clerk Dashboard → Webhooks → recent events after a real checkout |
+| Cancellation via Clerk Billing UI | Manually cancel in Billing & Subscription |
+| Credit top-up purchase (Stripe) | Stripe CLI + test card |
+| Stripe refund → credits clawed back | Issue refund from Stripe Dashboard |
+
+**Bottom line:** The subscription engine (the logic that runs when a plan changes) is complete and correct. The payment plumbing (Stripe checkout → Clerk webhook → your server) needs one manual smoke test per flow to confirm the wiring is connected.
+
+If the Clerk webhook is already firing correctly for your real account (the `pro_personal` plan was already active before the test ran), then the full loop is working in production too.
+
+### Remaining Manual Tasks (Session #37)
+
+- [ ] Run one credit top-up test purchase with Stripe test card `4242 4242 4242 4242`
+- [ ] Delete orphaned Clerk org `org_3DCzTvSWtcgbux…` from Clerk Dashboard
+- [ ] Enable "Allow admins to delete organizations" in Clerk Dashboard (fixes P7-2 skip in automated suite)

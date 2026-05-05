@@ -21,6 +21,7 @@ export const create = mutation({
       head: v.optional(v.string()),
       body: v.optional(v.string()),
     })),
+    preferredTemplate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Get user from auth context
@@ -55,6 +56,7 @@ export const create = mutation({
       status: "ready",
       identity: args.identity,
       referencePhotos: args.referencePhotos,
+      preferredTemplate: args.preferredTemplate,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -65,6 +67,14 @@ export const getById = query({
   args: { id: v.id("storyboard_elements") },
   handler: async (ctx, { id }) => {
     return await ctx.db.get(id);
+  },
+});
+
+export const getByIds = query({
+  args: { ids: v.array(v.id("storyboard_elements")) },
+  handler: async (ctx, { ids }) => {
+    const results = await Promise.all(ids.map(id => ctx.db.get(id)));
+    return results.filter(Boolean);
   },
 });
 
@@ -171,6 +181,7 @@ export const update = mutation({
       head: v.optional(v.string()),
       body: v.optional(v.string()),
     })),
+    preferredTemplate: v.optional(v.string()),
   },
   handler: async (ctx, { id, ...fields }) => {
     const element = await ctx.db.get(id);
@@ -245,8 +256,9 @@ export const appendReferenceImage = mutation({
     imageUrl: v.string(),
     variantLabel: v.optional(v.string()),
     variantModel: v.optional(v.string()),
+    setPrimary: v.optional(v.boolean()),
   },
-  handler: async (ctx, { id, imageUrl, variantLabel, variantModel }) => {
+  handler: async (ctx, { id, imageUrl, variantLabel, variantModel, setPrimary }) => {
     const el = await ctx.db.get(id);
     if (!el) {
       console.log(`[appendReferenceImage] Element ${id} not found, skipping`);
@@ -256,6 +268,7 @@ export const appendReferenceImage = mutation({
     const variants = el.variants || [];
     const isFirst = refs.length === 0;
 
+    let newIndex = refs.length; // index of the newly added image
     if (!refs.includes(imageUrl)) {
       refs.push(imageUrl);
       variants.push({
@@ -263,6 +276,8 @@ export const appendReferenceImage = mutation({
         model: variantModel || "gpt-image-2",
         createdAt: Date.now(),
       });
+    } else {
+      newIndex = refs.indexOf(imageUrl);
     }
 
     const patch: Record<string, any> = {
@@ -271,13 +286,18 @@ export const appendReferenceImage = mutation({
       updatedAt: Date.now(),
     };
 
-    // Auto-set primary + thumbnail on first generation
-    if (isFirst || !el.thumbnailUrl) {
-      patch.primaryIndex = 0;
-      patch.thumbnailUrl = imageUrl;
+    // A "custom crop" thumbnail is one whose URL is NOT in referenceUrls — preserve it.
+    const hasCustomCrop = !!(el.thumbnailUrl && !(el.referenceUrls || []).includes(el.thumbnailUrl));
+
+    if (isFirst || !el.thumbnailUrl || setPrimary) {
+      patch.primaryIndex = newIndex;
+      // Only overwrite thumbnailUrl if it isn't a custom-cropped image the user made
+      if (!hasCustomCrop) {
+        patch.thumbnailUrl = imageUrl;
+      }
     }
     await ctx.db.patch(id, patch);
-    console.log(`[appendReferenceImage] Updated element ${id} — refs: ${refs.length}, primary: ${patch.primaryIndex ?? el.primaryIndex ?? 0}`);
+    console.log(`[appendReferenceImage] Updated element ${id} — refs: ${refs.length}, primary: ${patch.primaryIndex ?? el.primaryIndex ?? 0}${setPrimary ? " (forced primary)" : ""}`);
   },
 });
 
@@ -297,12 +317,15 @@ export const setPrimaryVariant = mutation({
     const refs = el.referenceUrls || [];
     if (index < 0 || index >= refs.length) throw new Error("Invalid variant index");
 
+    // Preserve custom-cropped thumbnail (URL not in referenceUrls) — only sync thumbnailUrl to
+    // the selected variant when no custom crop exists.
+    const hasCustomCrop = !!(el.thumbnailUrl && !refs.includes(el.thumbnailUrl));
     await ctx.db.patch(id, {
       primaryIndex: index,
-      thumbnailUrl: refs[index],
+      ...(!hasCustomCrop && { thumbnailUrl: refs[index] }),
       updatedAt: Date.now(),
     });
-    console.log(`[setPrimaryVariant] Element ${id} primary set to index ${index}`);
+    console.log(`[setPrimaryVariant] Element ${id} primary set to index ${index}${hasCustomCrop ? " (custom crop thumbnail preserved)" : ""}`);
   },
 });
 
@@ -359,13 +382,18 @@ export const removeVariant = mutation({
       primaryIndex = 0; // reset to first
     }
 
-    const thumbnailUrl = refs.length > 0 ? refs[primaryIndex] : "";
+    // Preserve custom crop thumbnail — only sync thumbnailUrl to a variant if
+    // it isn't already a standalone crop (URL not in the original referenceUrls).
+    const hasCustomCrop = !!(el.thumbnailUrl && !(el.referenceUrls || []).includes(el.thumbnailUrl));
+    const newThumbnailUrl = hasCustomCrop
+      ? el.thumbnailUrl                              // keep custom crop
+      : (refs.length > 0 ? refs[primaryIndex] : ""); // sync to new primary
 
     await ctx.db.patch(id, {
       referenceUrls: refs,
       variants,
       primaryIndex,
-      thumbnailUrl,
+      thumbnailUrl: newThumbnailUrl,
       updatedAt: Date.now(),
     });
 

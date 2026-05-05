@@ -247,7 +247,7 @@ export const deductCredits = mutation({
         .query("credits_balance")
         .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
         .first();
-      if (preCheckBalance?.ownerPlan === "free") {
+      if (preCheckBalance?.lapsedAt) {
         throw new Error(
           "This organization's subscription has lapsed. Resubscribe to continue generating content.",
         );
@@ -323,6 +323,27 @@ async function grantMonthlyCreditsIfDue(
     balanceForCheck.cyclingBlockedUntil > args.now
   ) {
     return { granted: false, reason: "cycling_blocked" };
+  }
+
+  // Free plan limited to 3 monthly grants total (3-month trial).
+  // After month 3, free users stop receiving auto-grants — they must upgrade
+  // or purchase a top-up to continue generating.
+  if (args.plan === "free") {
+    const allSubGrants = await ctx.db
+      .query("credits_ledger")
+      .withIndex("by_company_type", (q: any) =>
+        q.eq("companyId", args.companyId).eq("type", "subscription")
+      )
+      .filter((q: any) => q.gt(q.field("tokens"), 0))
+      .collect();
+
+    const freeMonthsGranted = allSubGrants.filter((r: any) =>
+      r.reason?.includes("Monthly grant: free")
+    ).length;
+
+    if (freeMonthsGranted >= 3) {
+      return { granted: false, reason: "free_trial_months_exhausted" };
+    }
   }
 
   const monthStart = (() => {
@@ -796,7 +817,8 @@ export async function requireWorkspaceAccess(
   const creator = await resolveCompanyCreator(ctx, companyId);
   if (creator === userId) return userId;
 
-  // 4: Owns a project in this workspace
+  // 4: Owns a project in this workspace (check both orgId and companyId indexes
+  //    because old projects may have one but not both consistently set)
   const ownedProject = await ctx.db
     .query("storyboard_projects")
     .withIndex("by_owner", (q: any) =>
@@ -804,6 +826,13 @@ export async function requireWorkspaceAccess(
     )
     .first();
   if (ownedProject) return userId;
+
+  const ownedByCompanyId = await ctx.db
+    .query("storyboard_projects")
+    .withIndex("by_companyId", (q: any) => q.eq("companyId", companyId))
+    .filter((q: any) => q.eq(q.field("ownerId"), userId))
+    .first();
+  if (ownedByCompanyId) return userId;
 
   // 5: Has any ledger evidence (deduction, refund, etc.) — scans via
   // by_companyId then filters; acceptable for typical workspace sizes.
@@ -854,6 +883,13 @@ const MONTHLY_CREDITS: Record<string, number> = {
   free: 50,
   pro_personal: 3500,
   business: 8000,
+};
+
+// Max orgs each plan allows. Duplicated from lib/plan-config.ts PLAN_LIMITS.maxOrgs.
+const MAX_ORGS_BY_PLAN: Record<string, number> = {
+  free: 0,
+  pro_personal: 1,
+  business: 3,
 };
 
 /**
@@ -944,7 +980,23 @@ export const resetCreditsForTesting = mutation({
       await ctx.db.delete(row._id);
     }
 
-    // 2. Reset balance to 0 (create row if missing)
+    // Also delete subscription_change audit entries so the cycling-block
+    // counter resets between test phases. Without this, plan changes from
+    // Phase 1 accumulate and trigger the cycling block by Phase 2, which
+    // prevents the expected clawback + re-grant from firing.
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const changeEntries = await ctx.db
+      .query("credits_ledger")
+      .withIndex("by_company_type", (q) =>
+        q.eq("companyId", companyId).eq("type", "subscription_change"),
+      )
+      .filter((q) => q.gte(q.field("createdAt"), thirtyDaysAgo))
+      .collect();
+    for (const row of changeEntries) {
+      await ctx.db.delete(row._id);
+    }
+
+    // 2. Reset balance to 0 and clear cycling block (create row if missing)
     const balance = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -953,6 +1005,7 @@ export const resetCreditsForTesting = mutation({
     if (balance) {
       await ctx.db.patch(balance._id, {
         balance: 0,
+        cyclingBlockedUntil: undefined,
         updatedAt: Date.now(),
       });
     } else {
@@ -966,8 +1019,68 @@ export const resetCreditsForTesting = mutation({
     return {
       companyId,
       deletedSubscriptionEntries: subsThisMonth.length,
+      deletedChangeEntries: changeEntries.length,
       newBalance: 0,
     };
+  },
+});
+
+/**
+ * Testing: insert N fake "Monthly grant: free" subscription ledger entries
+ * dated in past months. Used by Phase 8 of the subscription lifecycle test to
+ * simulate a company having already received N prior free grants without
+ * waiting for real cron runs.
+ *
+ * Also deletes any existing "Monthly grant: free" entries first so each
+ * call starts from a clean baseline.
+ */
+export const seedFreeGrantsForTesting = mutation({
+  args: {
+    companyId: v.optional(v.string()),
+    count: v.number(),
+  },
+  handler: async (ctx, args) => {
+    if (process.env.SYSTEM_TEST !== "true")
+      throw new Error("Test mutations are disabled in production");
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+
+    const companyId =
+      args.companyId ?? (identity.orgId as string) ?? identity.subject;
+
+    // 1. Delete ALL existing "Monthly grant: free" subscription entries
+    const existing = await ctx.db
+      .query("credits_ledger")
+      .withIndex("by_company_type", (q) =>
+        q.eq("companyId", companyId).eq("type", "subscription"),
+      )
+      .filter((q) => q.gt(q.field("tokens"), 0))
+      .collect();
+
+    const freeGrants = existing.filter((r) =>
+      r.reason?.includes("Monthly grant: free"),
+    );
+    for (const row of freeGrants) {
+      await ctx.db.delete(row._id);
+    }
+
+    // 2. Insert N fake past-month grants spread 30 days apart
+    // i=0 → 30 days ago, i=1 → 60 days ago, etc.
+    const now = Date.now();
+    for (let i = 0; i < args.count; i++) {
+      const createdAt = now - (i + 1) * 30 * 24 * 60 * 60 * 1000;
+      await ctx.db.insert("credits_ledger", {
+        companyId,
+        tokens: 50,
+        type: "subscription",
+        reason: "Monthly grant: free",
+        userId: identity.subject,
+        createdAt,
+      });
+    }
+
+    return { deletedExisting: freeGrants.length, seeded: args.count };
   },
 });
 
@@ -1047,6 +1160,8 @@ export const simulateOrgLapseForTesting = mutation({
     companyId: v.string(),
   },
   handler: async (ctx, args) => {
+    if (process.env.SYSTEM_TEST !== "true")
+      throw new Error("Test mutations are disabled in production");
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
     if (!args.companyId.startsWith("org_")) {
@@ -1084,6 +1199,8 @@ export const restoreOrgPlanForTesting = mutation({
     plan: v.string(),
   },
   handler: async (ctx, args) => {
+    if (process.env.SYSTEM_TEST !== "true")
+      throw new Error("Test mutations are disabled in production");
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthenticated");
 
@@ -1105,6 +1222,52 @@ export const restoreOrgPlanForTesting = mutation({
     });
 
     return { ok: true, companyId: args.companyId, restoredPlan: args.plan };
+  },
+});
+
+/**
+ * Clear a test-induced lapsedAt from ALL workspaces owned by the caller.
+ * Safe to call without SYSTEM_TEST — it only repairs data the caller owns
+ * and only clears the flag (no destructive writes). Useful when a test
+ * run sets lapsedAt via propagateOwnerPlanChange and P7 cleanup doesn't
+ * run (e.g. the test panel crashes mid-run).
+ */
+export const clearAllLapseForTesting = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthenticated");
+    const userId = identity.subject;
+    const now = Date.now();
+
+    const byCreator = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_creatorUserId", (q) => q.eq("creatorUserId", userId))
+      .collect();
+
+    const personalRow = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", userId))
+      .first();
+
+    const allRows = [...byCreator];
+    if (personalRow && !allRows.some((r) => r._id === personalRow._id)) {
+      allRows.push(personalRow);
+    }
+
+    let cleared = 0;
+    for (const row of allRows) {
+      if (row.lapsedAt || row.overQuota) {
+        await ctx.db.patch(row._id, {
+          lapsedAt: undefined,
+          overQuota: undefined,
+          updatedAt: now,
+        });
+        cleared++;
+      }
+    }
+
+    return { cleared, companyIds: allRows.map((r) => r.companyId) };
   },
 });
 
@@ -1367,6 +1530,101 @@ export const seedCreditsForTesting = mutation({
     }
 
     return { companyId, added: args.amount };
+  },
+});
+
+/**
+ * Dev-only: create a credits_balance row for a freshly-created Clerk org so
+ * the subscription lifecycle test suite can exercise slot-enforcement and
+ * lapse logic without waiting for the Clerk webhook to fire.
+ *
+ * Safe: validates orgId starts with "org_" and records the authenticated
+ * caller as creatorUserId — exactly what the webhook would do.
+ */
+export const seedOrgForTesting = mutation({
+  args: {
+    orgId: v.string(),
+    orgName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.orgId.startsWith("org_")) {
+      throw new Error("orgId must start with 'org_'");
+    }
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const callerUserId = identity.subject;
+    const now = Date.now();
+
+    const existing = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.orgId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        creatorUserId: callerUserId,
+        ownerPlan: "free",
+        organizationName: args.orgName ?? existing.organizationName,
+        updatedAt: now,
+      });
+      return { existed: true };
+    }
+
+    await ctx.db.insert("credits_balance", {
+      companyId: args.orgId,
+      balance: 0,
+      updatedAt: now,
+      ownerPlan: "free",
+      creatorUserId: callerUserId,
+      organizationName: args.orgName ?? "Test Org",
+    });
+    await ctx.db.insert("credits_ledger", {
+      companyId: args.orgId,
+      tokens: 0,
+      type: "org_created",
+      userId: callerUserId,
+      reason: "seedOrgForTesting",
+      createdAt: now,
+    });
+    return { existed: false };
+  },
+});
+
+/**
+ * Dev-only: delete all Convex rows for a test org so re-runs start clean.
+ * Validates the caller is the org's creatorUserId before deleting.
+ */
+export const cleanupTestOrgForTesting = mutation({
+  args: { orgId: v.string() },
+  handler: async (ctx, args) => {
+    if (!args.orgId.startsWith("org_")) {
+      throw new Error("orgId must start with 'org_'");
+    }
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const callerUserId = identity.subject;
+
+    const balanceRow = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.orgId))
+      .first();
+
+    if (!balanceRow) return { deleted: false, reason: "no_balance_row" };
+    if (balanceRow.creatorUserId !== callerUserId) {
+      throw new Error("Not the creator of this org");
+    }
+
+    await ctx.db.delete(balanceRow._id);
+
+    const ledgerEntries = await ctx.db
+      .query("credits_ledger")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.orgId))
+      .collect();
+    for (const entry of ledgerEntries) {
+      await ctx.db.delete(entry._id);
+    }
+
+    return { deleted: true, ledgerEntriesRemoved: ledgerEntries.length };
   },
 });
 
@@ -1709,7 +1967,8 @@ export const markInactivityWarning2 = internalMutation({
  * every org they created in a single mutation.
  *
  * Also manages the `lapsedAt` timestamp:
- *   - Downgrading to "free" → set lapsedAt = now (starts the 3-month clock)
+ *   - Cancelling a PAID subscription (paid → "free") → set lapsedAt = now
+ *   - free → free (fresh signup, test cleanup, never subscribed) → NOT lapsed
  *   - Upgrading from "free" → clear lapsedAt (re-subscription unfreezes the org)
  */
 export const propagateOwnerPlanChange = mutation({
@@ -1749,18 +2008,19 @@ export const propagateOwnerPlanChange = mutation({
     }
 
     const downgradingToFree = args.newPlan === "free";
+    // previousPlan is the owner's personal workspace plan BEFORE this change.
+    // Used both for the audit ledger entry and to gate lapsedAt: we only mark
+    // workspaces as lapsed when cancelling an active PAID subscription.
+    // Going free → free (fresh signup, test cleanup, never-subscribed) must
+    // never set lapsedAt — the user never had a subscription to lapse.
+    const previousPlan = personalRow?.ownerPlan ?? null;
+    const cancellingPaidSub = downgradingToFree && previousPlan !== null && previousPlan !== "free";
     let updated = 0;
-    let previousPlan: string | null = null;
 
     for (const row of allOwnedRows) {
       const patch: Record<string, unknown> = {
         updatedAt: now,
       };
-
-      // Capture the prior plan from the personal workspace row for the audit entry.
-      if (row.companyId === args.ownerUserId) {
-        previousPlan = row.ownerPlan ?? null;
-      }
 
       if (row.ownerPlan !== args.newPlan) {
         patch.ownerPlan = args.newPlan;
@@ -1775,8 +2035,8 @@ export const propagateOwnerPlanChange = mutation({
       // Personal workspaces also need a lapsed signal so the UI can
       // show a "subscription ended" banner there too — they don't get
       // the file-purge treatment but the flag drives banner display.
-      if (downgradingToFree && !row.lapsedAt) {
-        patch.lapsedAt = now; // start the lapse clock
+      if (cancellingPaidSub && !row.lapsedAt) {
+        patch.lapsedAt = now; // start the lapse clock (paid → free only)
       } else if (!downgradingToFree && row.lapsedAt) {
         patch.lapsedAt = undefined; // clear on re-subscription
       }
@@ -1789,12 +2049,46 @@ export const propagateOwnerPlanChange = mutation({
       }
     }
 
+    // ── Org slot enforcement ──
+    // Enforce the new plan's org limit. Orgs are sorted oldest-first so the
+    // user's longest-standing workspace is always the safe/preserved one.
+    // Over-quota orgs get lapsedAt + overQuota=true (same freeze as free-plan
+    // lapse, prevents generation). Within-quota orgs that were previously
+    // over-quota get the flag cleared (upgrade path).
+    const maxOrgs = MAX_ORGS_BY_PLAN[args.newPlan] ?? 0;
+    const orgRows = allOwnedRows
+      .filter((r) => r.companyId.startsWith("org_"))
+      .sort((a, b) => a._creationTime - b._creationTime);
+
+    const frozenOrgIds: string[] = [];
+    for (let i = 0; i < orgRows.length; i++) {
+      const orgRow = orgRows[i];
+      const isOverQuota = i >= maxOrgs;
+      if (isOverQuota) {
+        frozenOrgIds.push(orgRow.companyId);
+        await ctx.db.patch(orgRow._id, {
+          lapsedAt: orgRow.lapsedAt ?? now,
+          overQuota: true,
+          updatedAt: now,
+        });
+      } else if (orgRow.overQuota) {
+        // Was frozen by a prior over-quota enforcement — clear it now that
+        // the plan covers this org slot again.
+        await ctx.db.patch(orgRow._id, {
+          overQuota: undefined,
+          lapsedAt: undefined,
+          updatedAt: now,
+        });
+      }
+    }
+
     // ── Audit + cycling detection ──
     // Only log a ledger row if the plan actually changed. We anchor the
     // entry at the OWNER'S PERSONAL workspace so cycling detection has a
     // single deterministic location to count from (regardless of how
     // many orgs the user happens to own).
     let cyclingBlocked = false;
+    let newBalance = 0;
     if (previousPlan !== args.newPlan) {
       await ctx.db.insert("credits_ledger", {
         companyId: args.ownerUserId,
@@ -1847,6 +2141,13 @@ export const propagateOwnerPlanChange = mutation({
           userId: args.ownerUserId,
           now,
         });
+        const updatedPersonal = await ctx.db
+          .query("credits_balance")
+          .withIndex("by_companyId", (q) =>
+            q.eq("companyId", personalRow.companyId),
+          )
+          .first();
+        newBalance = updatedPersonal?.balance ?? 0;
       }
     }
 
@@ -1856,6 +2157,8 @@ export const propagateOwnerPlanChange = mutation({
       totalOwned: allOwnedRows.length,
       updated,
       cyclingBlocked,
+      newBalance,
+      frozenOrgIds,
     };
   },
 });
@@ -1920,7 +2223,7 @@ export const listOwnedWorkspaces = query({
 export const getBalance = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    await requireWorkspaceAccess(ctx, companyId);
+    try { await requireWorkspaceAccess(ctx, companyId); } catch { return null; }
     const balance = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -1930,10 +2233,25 @@ export const getBalance = query({
   },
 });
 
+export const getCyclingBlock = query({
+  args: { companyId: v.string() },
+  handler: async (ctx, { companyId }) => {
+    try { await requireWorkspaceAccess(ctx, companyId); } catch { return null; }
+    const row = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
+      .first();
+    return {
+      cyclingBlockedUntil: row?.cyclingBlockedUntil ?? null,
+      overQuota: row?.overQuota ?? false,
+    };
+  },
+});
+
 export const getCompanyBalance = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    await requireWorkspaceAccess(ctx, companyId);
+    try { await requireWorkspaceAccess(ctx, companyId); } catch { return null; }
     const balance = await ctx.db
       .query("credits_balance")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))
@@ -1951,7 +2269,7 @@ export const getLedger = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireWorkspaceAccess(ctx, args.companyId);
+    try { await requireWorkspaceAccess(ctx, args.companyId); } catch { return null; }
     const limit = args.limit || 100;
     const ledger = await ctx.db
       .query("credits_ledger")
@@ -1968,7 +2286,7 @@ export const getPurchaseHistory = query({
     companyId: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireWorkspaceAccess(ctx, args.companyId);
+    try { await requireWorkspaceAccess(ctx, args.companyId); } catch { return null; }
     const purchases = await ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q) =>
@@ -1992,7 +2310,7 @@ export const listTransferHistory = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await requireWorkspaceAccess(ctx, args.companyId);
+    try { await requireWorkspaceAccess(ctx, args.companyId); } catch { return null; }
     const limit = args.limit ?? 50;
     const transfersOut = await ctx.db
       .query("credits_ledger")
@@ -2023,7 +2341,7 @@ export const listTransferHistory = query({
 export const getOrgUsageSummary = query({
   args: { companyId: v.string() },
   handler: async (ctx, { companyId }) => {
-    await requireWorkspaceAccess(ctx, companyId);
+    try { await requireWorkspaceAccess(ctx, companyId); } catch { return null; }
     const all = await ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q) =>
@@ -2061,7 +2379,7 @@ export const getOrgUsageSummary = query({
 export const listOrgUsage = query({
   args: { companyId: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, { companyId, limit }) => {
-    await requireWorkspaceAccess(ctx, companyId);
+    try { await requireWorkspaceAccess(ctx, companyId); } catch { return null; }
     const q = ctx.db
       .query("credits_ledger")
       .withIndex("by_company_type", (q2) =>

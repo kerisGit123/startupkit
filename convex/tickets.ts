@@ -112,6 +112,121 @@ export const getTicketById = query({
   },
 });
 
+// Full repair: deletes stale/orphaned inbox_messages and updates outdated ones
+// to match the current support_tickets (source of truth).
+// Run this after any nuclear reset or manual data cleanup.
+export const repairTicketInbox = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const tickets = await ctx.db.query("support_tickets").collect();
+    const ticketByNumber = new Map(tickets.map((t) => [t.ticketNumber, t]));
+
+    const allInbox = await ctx.db.query("inbox_messages").collect();
+    const ticketInbox = allInbox.filter((m) => m.channel === "ticket");
+
+    // Group by threadId to detect duplicates
+    const byThread = new Map<string, typeof ticketInbox>();
+    for (const msg of ticketInbox) {
+      const group = byThread.get(msg.threadId) || [];
+      group.push(msg);
+      byThread.set(msg.threadId, group);
+    }
+
+    let deleted = 0;
+    let updated = 0;
+    let created = 0;
+    const now = Date.now();
+
+    for (const [threadId, msgs] of byThread) {
+      const ticket = ticketByNumber.get(threadId);
+
+      if (!ticket) {
+        // No matching support_ticket — all inbox entries for this thread are orphaned
+        for (const msg of msgs) {
+          await ctx.db.delete(msg._id);
+          deleted++;
+        }
+        continue;
+      }
+
+      const expectedSubject = `[${ticket.ticketNumber}] ${ticket.subject}`;
+      const priority: "low" | "normal" | "high" =
+        ticket.priority === "urgent" || ticket.priority === "high" ? "high"
+        : ticket.priority === "low" ? "low"
+        : "normal";
+
+      // Keep the newest record, delete duplicates
+      const sorted = msgs.sort((a, b) => b.sentAt - a.sentAt);
+      const keep = sorted[0];
+      for (const dup of sorted.slice(1)) {
+        await ctx.db.delete(dup._id);
+        deleted++;
+      }
+
+      // Update the keeper if content is stale
+      const needsUpdate =
+        keep.subject !== expectedSubject ||
+        keep.body !== ticket.description ||
+        (keep.metadata as any)?.ticketId !== ticket._id;
+
+      if (needsUpdate) {
+        await ctx.db.patch(keep._id, {
+          subject: expectedSubject,
+          body: ticket.description,
+          priority,
+          tags: [ticket.category, ticket.priority],
+          metadata: {
+            ticketId: ticket._id,
+            ticketNumber: ticket.ticketNumber,
+            category: ticket.category,
+            originalPriority: ticket.priority,
+            userEmail: ticket.userEmail || "",
+            userName: ticket.userId || "Unknown",
+            slaBreached: ticket.slaBreached || false,
+          },
+          updatedAt: now,
+        });
+        updated++;
+      }
+    }
+
+    // Create inbox entries for tickets that have no inbox record at all
+    const coveredThreads = new Set(byThread.keys());
+    for (const ticket of tickets) {
+      if (coveredThreads.has(ticket.ticketNumber)) continue;
+      const priority: "low" | "normal" | "high" =
+        ticket.priority === "urgent" || ticket.priority === "high" ? "high"
+        : ticket.priority === "low" ? "low"
+        : "normal";
+      await ctx.db.insert("inbox_messages", {
+        threadId: ticket.ticketNumber,
+        channel: "ticket",
+        direction: "inbound",
+        subject: `[${ticket.ticketNumber}] ${ticket.subject}`,
+        body: ticket.description || "",
+        status: "unread",
+        priority,
+        tags: [ticket.category || "general", ticket.priority || "medium"],
+        sentAt: ticket.createdAt,
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt || ticket.createdAt,
+        metadata: {
+          ticketId: ticket._id,
+          ticketNumber: ticket.ticketNumber,
+          category: ticket.category || "general",
+          originalPriority: ticket.priority,
+          userEmail: ticket.userEmail || "",
+          userName: ticket.userId || "Unknown",
+          slaBreached: ticket.slaBreached || false,
+        },
+      });
+      created++;
+    }
+
+    return { deleted, updated, created };
+  },
+});
+
 // Sync all tickets to inbox - creates inbox entries for tickets that don't have them
 export const syncTicketsToInbox = mutation({
   args: {},

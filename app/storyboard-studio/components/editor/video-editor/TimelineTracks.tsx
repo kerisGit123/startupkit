@@ -63,7 +63,24 @@ export function TimelineTracks(props: TimelineTracksProps) {
   const clips = selectedTrack === "video" ? videoClips : audioClips;
   const sel = videoClips.find(c => c.id === selectedClipId) || audioClips.find(c => c.id === selectedClipId);
   const tlWidth = Math.max(totalDur * pxPerSec + 200, 500);
+
+  // Snap points: video clip boundaries + other layer edges + 0
+  const snapPoints = (() => {
+    const pts: number[] = [0];
+    let t = 0;
+    for (const c of videoClips) { t += getVisDur(c); pts.push(t); }
+    for (const l of overlayLayers) { pts.push(l.startTime, l.endTime); }
+    return pts;
+  })();
+  const SNAP_SEC = 8 / Math.max(pxPerSec, 1); // 8px in time units
+  const snap = (t: number) => {
+    let closest = t;
+    let minDist = SNAP_SEC;
+    for (const p of snapPoints) { const d = Math.abs(t - p); if (d < minDist) { minDist = d; closest = p; } }
+    return closest;
+  };
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [snapLineX, setSnapLineX] = useState<number | null>(null);
   const toggleCollapse = (t: string) => setCollapsed(p => ({ ...p, [t]: !p[t] }));
 
   const vH = collapsed.video ? 0 : 56;
@@ -153,8 +170,8 @@ export function TimelineTracks(props: TimelineTracksProps) {
                   <div key={clip.id} data-clip draggable
                     onDragStart={(e) => onDragStart(e, clip.id)} onDragOver={onDragOver}
                     onDrop={(e) => onDrop(e, clip.id)} onDragEnd={onDragEnd}
-                    onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); }}
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); setSelectedOverlayId(null); }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("video"); setSelectedOverlayId(null); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
                     className={`relative shrink-0 rounded-lg overflow-hidden transition cursor-grab active:cursor-grabbing ${
                       isSel ? "ring-2 ring-(--accent-teal) shadow-lg shadow-teal-500/20" : "ring-1 ring-(--border-primary) hover:ring-(--border-secondary)"
                     } ${draggedClipId === clip.id ? "opacity-30" : ""}`}
@@ -195,8 +212,8 @@ export function TimelineTracks(props: TimelineTracksProps) {
                   <div key={clip.id} data-clip draggable
                     onDragStart={(e) => onDragStart(e, clip.id)} onDragOver={onDragOver}
                     onDrop={(e) => onDrop(e, clip.id)} onDragEnd={onDragEnd}
-                    onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); }}
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); setSelectedOverlayId(null); }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setSelectedClipId(clip.id); setSelectedTrack("audio"); setSelectedOverlayId(null); setClipContextMenu({ x: e.clientX, y: e.clientY, clipId: clip.id }); }}
                     className={`relative shrink-0 rounded-lg overflow-hidden transition cursor-grab ${
                       isSel ? "ring-2 ring-purple-400" : "ring-1 ring-(--border-primary) hover:ring-(--border-secondary)"
                     } ${draggedClipId === clip.id ? "opacity-30" : ""}`}
@@ -224,7 +241,10 @@ export function TimelineTracks(props: TimelineTracksProps) {
           {!collapsed.overlay && (
             <div className={`absolute left-12 border-b border-(--border-primary) ${selectedTrack === "overlay" ? "bg-teal-500/2" : ""}`}
               style={{ width: tlWidth, top: overlayTop, height: oH }}>
-              {overlayLayers.map((layer, li) => {
+              {snapLineX !== null && (
+                <div className="absolute top-0 bottom-0 w-0.5 bg-teal-400/80 pointer-events-none z-50 shadow-[0_0_4px_rgba(45,212,191,0.6)]" style={{ left: snapLineX }} />
+              )}
+              {[...overlayLayers].reverse().map((layer, li) => {
                 const x = (layer.startTime || 0) * pxPerSec;
                 const w = ((layer.endTime || 0) - (layer.startTime || 0)) * pxPerSec;
                 const isSel = layer.id === selectedOverlayId;
@@ -237,18 +257,57 @@ export function TimelineTracks(props: TimelineTracksProps) {
 
                 const onLayerDrag = (e: React.MouseEvent) => {
                   e.stopPropagation();
+                  e.preventDefault();
                   props.onBeforeLayerChange?.();
                   setSelectedOverlayId(layer.id); setSelectedTrack("overlay");
                   const startX = e.clientX;
+                  const startY = e.clientY;
                   const origStart = layer.startTime;
                   const dur = layer.endTime - layer.startTime;
+                  const trackTop = (e.currentTarget as HTMLElement).parentElement?.getBoundingClientRect().top ?? 0;
+                  let mode: "h" | "v" | null = null;
+                  let lastTargetLi = -1;
+                  let active = true;
                   const onMove = (me: MouseEvent) => {
-                    const dt = (me.clientX - startX) / pxPerSec;
-                    const newStart = Math.max(0, origStart + dt);
-                    setOverlayLayers(p => p.map(l => l.id !== layer.id ? l : { ...l, startTime: parseFloat(newStart.toFixed(2)), endTime: parseFloat((newStart + dur).toFixed(2)) }));
+                    if (!active) return;
+                    const dx = me.clientX - startX;
+                    const dy = me.clientY - startY;
+                    if (!mode) {
+                      if (Math.abs(dy) > 8 && Math.abs(dy) >= Math.abs(dx) * 1.5) mode = "v";
+                      else if (Math.abs(dx) > 8) mode = "h";
+                      else return;
+                    }
+                    if (mode === "h") {
+                      const rawStart = Math.max(0, origStart + dx / pxPerSec);
+                      const snappedStart = snap(rawStart);
+                      const didSnap = Math.abs(snappedStart - rawStart) > 0.001;
+                      setSnapLineX(didSnap ? snappedStart * pxPerSec + 8 : null);
+                      const newStart = parseFloat(snappedStart.toFixed(2));
+                      setOverlayLayers(p => p.map(l => l.id !== layer.id ? l : { ...l, startTime: newStart, endTime: parseFloat((newStart + dur).toFixed(2)) }));
+                    } else {
+                      const targetLi = Math.max(0, Math.min(overlayLayers.length - 1, Math.floor((me.clientY - trackTop) / layerRowH)));
+                      if (targetLi === lastTargetLi) return;
+                      lastTargetLi = targetLi;
+                      setOverlayLayers(p => {
+                        if (targetLi >= p.length) return p;
+                        const rev = [...p].reverse();
+                        const currentLi = rev.findIndex(l => l.id === layer.id);
+                        if (currentLi < 0 || currentLi === targetLi) return p;
+                        [rev[currentLi], rev[targetLi]] = [rev[targetLi], rev[currentLi]];
+                        return rev.reverse();
+                      });
+                    }
                   };
-                  const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
-                  window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
+                  const onUp = () => {
+                    active = false;
+                    setSnapLineX(null);
+                    window.removeEventListener("mousemove", onMove);
+                    window.removeEventListener("mouseup", onUp);
+                    window.removeEventListener("blur", onUp);
+                  };
+                  window.addEventListener("mousemove", onMove);
+                  window.addEventListener("mouseup", onUp);
+                  window.addEventListener("blur", onUp);
                 };
 
                 const onTrimLeft = (e: React.MouseEvent) => {
@@ -258,8 +317,8 @@ export function TimelineTracks(props: TimelineTracksProps) {
                   const origStart = layer.startTime;
                   const onMove = (me: MouseEvent) => {
                     const dt = (me.clientX - startX) / pxPerSec;
-                    const newStart = Math.max(0, Math.min(layer.endTime - 0.2, origStart + dt));
-                    setOverlayLayers(p => p.map(l => l.id !== layer.id ? l : { ...l, startTime: parseFloat(newStart.toFixed(2)) }));
+                    const raw = Math.max(0, Math.min(layer.endTime - 0.2, origStart + dt));
+                    setOverlayLayers(p => p.map(l => l.id !== layer.id ? l : { ...l, startTime: parseFloat(snap(raw).toFixed(2)) }));
                   };
                   const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
                   window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
@@ -272,8 +331,8 @@ export function TimelineTracks(props: TimelineTracksProps) {
                   const origEnd = layer.endTime;
                   const onMove = (me: MouseEvent) => {
                     const dt = (me.clientX - startX) / pxPerSec;
-                    const newEnd = Math.max(layer.startTime + 0.2, origEnd + dt);
-                    setOverlayLayers(p => p.map(l => l.id !== layer.id ? l : { ...l, endTime: parseFloat(newEnd.toFixed(2)) }));
+                    const raw = Math.max(layer.startTime + 0.2, origEnd + dt);
+                    setOverlayLayers(p => p.map(l => l.id !== layer.id ? l : { ...l, endTime: parseFloat(snap(raw).toFixed(2)) }));
                   };
                   const onUp = () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
                   window.addEventListener("mousemove", onMove); window.addEventListener("mouseup", onUp);
@@ -281,14 +340,14 @@ export function TimelineTracks(props: TimelineTracksProps) {
 
                 return (
                   <div key={layer.id}
-                    className={`absolute rounded cursor-grab active:cursor-grabbing transition ${
+                    className={`absolute rounded cursor-grab active:cursor-grabbing select-none ${
                       isSel ? "ring-1 ring-(--accent-teal) shadow-md shadow-teal-500/20" : "ring-1 ring-(--border-primary) hover:ring-(--border-secondary)"
                     } ${!(layer.visible ?? true) ? "opacity-30" : ""}`}
-                    style={{ left: x + 8, width: Math.max(w, 24), top: rowY + 2, height: layerRowH - 4 }}
+                    style={{ left: x + 8, width: Math.max(w, 24), top: rowY + 2, height: layerRowH - 4, transition: "top 0.1s ease", zIndex: isSel ? 10 : 1 }}
                     onMouseDown={onLayerDrag}
-                    onClick={(e) => { e.stopPropagation(); setSelectedOverlayId(layer.id); setSelectedTrack("overlay"); }}
+                    onClick={(e) => { e.stopPropagation(); setSelectedOverlayId(layer.id); setSelectedTrack("overlay"); setSelectedClipId(null); setSelectedSubtitleId(null); }}
                   >
-                    <div className={`h-full rounded px-1 flex items-center gap-1 overflow-hidden ${
+                    <div className={`relative h-full rounded overflow-hidden flex items-center gap-1 px-1 ${
                       layer.type === "text" ? "bg-linear-to-r from-teal-900/30 to-teal-800/15" :
                       layer.type === "scrolling-text" ? "bg-linear-to-r from-amber-900/30 to-amber-800/15" :
                       layer.type === "transition" ? "bg-linear-to-r from-rose-900/40 to-rose-800/20" :
@@ -296,15 +355,22 @@ export function TimelineTracks(props: TimelineTracksProps) {
                       layer.type === "image" ? "bg-linear-to-r from-orange-900/30 to-orange-800/15" :
                       "bg-linear-to-r from-cyan-900/30 to-cyan-800/15"
                     }`}>
-                      {layerIcon(layer)}
-                      <span className="text-[7px] text-white/60 truncate">{label}</span>
+                      {layer.type === "image" && layer.src && (
+                        <img src={layer.src} className="absolute inset-0 w-full h-full object-cover opacity-40 pointer-events-none" draggable={false} alt="" />
+                      )}
+                      {layer.type === "video" && layer.src && (
+                        <video src={layer.src} className="absolute inset-0 w-full h-full object-cover opacity-40 pointer-events-none" draggable={false} muted preload="metadata"
+                          onLoadedMetadata={(e) => { (e.target as HTMLVideoElement).currentTime = 0.5; }} />
+                      )}
+                      <span className="relative z-10 shrink-0">{layerIcon(layer)}</span>
+                      <span className="relative z-10 text-[7px] text-white/80 truncate font-medium">{label}</span>
                     </div>
                     <div className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 group/tl"
-                      onMouseDown={onTrimLeft}>
+                      onMouseDown={(e) => { e.stopPropagation(); onTrimLeft(e); }}>
                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-transparent group-hover/tl:bg-(--accent-teal) transition rounded-l-lg" />
                     </div>
                     <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 group/tr"
-                      onMouseDown={onTrimRight}>
+                      onMouseDown={(e) => { e.stopPropagation(); onTrimRight(e); }}>
                       <div className="absolute right-0 top-0 bottom-0 w-1 bg-transparent group-hover/tr:bg-(--accent-teal) transition rounded-r-lg" />
                     </div>
                   </div>

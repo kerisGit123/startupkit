@@ -331,6 +331,41 @@ export const DIRECTOR_TOOLS: Anthropic.Tool[] = [
 // ═══════════════════════════════════════════════════════════════════════
 
 export const AGENT_TOOLS: Anthropic.Tool[] = [
+  // ── ELEMENT IMAGE GENERATION ───────────────────────────────────────
+  {
+    name: "trigger_element_image_generation",
+    description:
+      "Generate a reference image for an element (character, environment, or prop) using the Element Forge pipeline: default prompt template applied to the element's structured description, with the correct mode (text-to-image if no reference photos, balanced img2img if reference photos exist). Always use GPT Image 2 at 1K by default. Call this after create_execution_plan is approved. The element must already exist in the library.",
+    input_schema: {
+      type: "object",
+      properties: {
+        element_name: {
+          type: "string",
+          description: "The element's name exactly as it appears in the element library (e.g., 'TheSamurai').",
+        },
+        model: {
+          type: "string",
+          description: "Image model. Leave empty to use GPT Image 2 (default). Only override if user explicitly requests a different model.",
+        },
+        resolution: {
+          type: "string",
+          enum: ["1K", "2K", "4K"],
+          description: "Output resolution. Default: '1K' (4cr). 2K=7cr, 4K=10cr.",
+        },
+        mode: {
+          type: "string",
+          enum: ["balanced", "prompt", "image"],
+          description: "Img2img reference strength. Only applies when element has reference photos. 'balanced' (default) = follow text but use refs for shape. 'prompt' = refs are loose inspiration only, text takes priority. 'image' = follow reference closely. Ignored when no reference photos exist.",
+        },
+        custom_prompt: {
+          type: "string",
+          description: "Optional custom image prompt. If omitted, the default prompt template is applied to the element's stored description (the Element Forge pipeline). Only provide if you specifically want to override the template system.",
+        },
+      },
+      required: ["element_name"],
+    },
+  },
+
   // ── ELEMENT CREATION ───────────────────────────────────────────────
   {
     name: "create_element",
@@ -409,7 +444,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
               },
               tool: {
                 type: "string",
-                enum: ["trigger_image_generation", "trigger_video_generation", "trigger_post_processing"],
+                enum: ["trigger_image_generation", "trigger_element_image_generation", "generate_scene_production_sheet", "generate_world_view_image", "trigger_video_generation", "trigger_post_processing"],
                 description: "Which generation tool to call for this step",
               },
               frame_number: {
@@ -505,6 +540,56 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ["frame_number"],
+    },
+  },
+
+  // ── PRODUCTION SHEETS ──────────────────────────────────────────────
+  {
+    name: "generate_scene_production_sheet",
+    description:
+      "Generate a production sheet image for one storyboard frame. Uses the frame's title, description, image prompt, and linked elements. If the frame already has a generated image, that image is used as a reference for visual consistency. Default: GPT Image 2 at 1K (4cr). Supports 2K (7cr) and 4K (10cr). Saved as a storyboard file with category 'production-sheet'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        frame_number: {
+          type: "number",
+          description: "1-based frame number to generate a production sheet for.",
+        },
+        resolution: {
+          type: "string",
+          enum: ["1K", "2K", "4K"],
+          description: "Image resolution. Default: 1K (4cr). 2K=7cr. 4K=10cr.",
+        },
+      },
+      required: ["frame_number"],
+    },
+  },
+
+  // ── WORLD VIEW ─────────────────────────────────────────────────────
+  {
+    name: "generate_world_view_concept",
+    description:
+      "Generate (or regenerate) the World View concept text for the project. Reads the saved script and all elements, calls Haiku to write a 150-200 word cinematic prose summary (characters, world, emotional arc, visual language), and saves it to project.worldViewConcept. Visible immediately in World View Sheet → Concept tab. Free — uses Haiku, no credits charged.",
+    input_schema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "generate_world_view_image",
+    description:
+      "Generate a World View Sheet image for the project. Uses the saved worldViewConcept text as the prompt, with element reference images (characters + environments) for visual consistency. Default: GPT Image 2 at 1K (4cr). Supports 2K (7cr) and 4K (10cr). The kie-callback automatically saves the result and updates project.worldViewImageUrl.",
+    input_schema: {
+      type: "object",
+      properties: {
+        resolution: {
+          type: "string",
+          enum: ["1K", "2K", "4K"],
+          description: "Image resolution. Default: 1K (4cr). 2K=7cr. 4K=10cr.",
+        },
+      },
+      required: [],
     },
   },
 
@@ -614,6 +699,11 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
           enum: ["quick", "cinematic"],
           description: "'quick' = Haiku model, 6cr/min simple or 8cr/min complex (action/VFX/fantasy). 'cinematic' = Sonnet model, 18cr/min flat — richer camera language, TIME REMAP, cinematic lens specs. Default: 'quick'.",
         },
+        strategy: {
+          type: "string",
+          enum: ["replace_all", "extend"],
+          description: "'replace_all' clears all existing frames before building (use for a new story — DEFAULT). 'extend' appends new frames to the existing storyboard without deleting anything.",
+        },
       },
       required: ["skill_name", "prompt"],
     },
@@ -647,6 +737,32 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: [],
+    },
+  },
+
+  // ── QUICK ACTIONS ─────────────────────────────────────────────────
+  {
+    name: "suggest_actions",
+    description:
+      "Show clickable action buttons to the user instead of requiring them to type a response. Call this at the end of any proposal or question where the user needs to choose a next step — e.g. after proposing element image generation, after a plan summary, or when offering 'generate all frames'. Always include a primary action and at least one secondary/skip option.",
+    input_schema: {
+      type: "object",
+      properties: {
+        actions: {
+          type: "array",
+          description: "List of action buttons to show. First item is the primary action.",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "Button label shown to user, e.g. 'Generate element images (60cr)'" },
+              message: { type: "string", description: "Message sent to Director when user clicks this button" },
+              style: { type: "string", enum: ["primary", "secondary", "danger"], description: "Button style: primary (blue), secondary (ghost), danger (red)" },
+            },
+            required: ["label", "message"],
+          },
+        },
+      },
+      required: ["actions"],
     },
   },
 
@@ -714,9 +830,14 @@ export type DirectorToolName =
   | "get_model_pricing"
   | "create_execution_plan"
   | "trigger_image_generation"
+  | "trigger_element_image_generation"
+  | "generate_scene_production_sheet"
+  | "generate_world_view_concept"
+  | "generate_world_view_image"
   | "trigger_video_generation"
   | "trigger_post_processing"
   | "get_prompt_templates"
   | "get_presets"
   | "enhance_prompt"
-  | "browse_project_files";
+  | "browse_project_files"
+  | "suggest_actions";

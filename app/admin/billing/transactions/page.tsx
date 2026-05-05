@@ -209,7 +209,7 @@ export default function TransactionsPage() {
             variant="ghost" 
             size="icon"
             className="h-8 w-8"
-            onClick={() => router.push('/admin/revenue')}
+            onClick={() => router.push('/admin/billing')}
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
@@ -481,7 +481,7 @@ export default function TransactionsPage() {
                             "font-bold text-sm",
                             transaction.amount >= 0 ? "text-emerald-600" : "text-red-600"
                           )}>
-                            {transaction.amount >= 0 ? "+" : ""}{formatCurrency(transaction.amount, transaction.currency)}
+                            {transaction.amount >= 0 ? "+" : ""}{formatCurrency(transaction.amount, transaction.currency || 'MYR')}
                           </span>
                         </TableCell>
                       </TableRow>
@@ -530,7 +530,7 @@ export default function TransactionsPage() {
                 <div>
                   <p className="text-muted-foreground text-xs uppercase font-medium">Amount</p>
                   <p className={cn("text-lg font-bold", selectedTransaction.amount >= 0 ? "text-emerald-600" : "text-red-600")}>
-                    {selectedTransaction.amount >= 0 ? "+" : ""}{formatCurrency(selectedTransaction.amount, selectedTransaction.currency)}
+                    {selectedTransaction.amount >= 0 ? "+" : ""}{formatCurrency(selectedTransaction.amount, selectedTransaction.currency || 'MYR')}
                   </p>
                 </div>
                 <div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -35,6 +36,7 @@ import {
   Shield,
   MessageSquare,
   ChevronRight,
+  Inbox,
 } from "lucide-react";
 
 type Status =
@@ -142,7 +144,14 @@ export default function SupportTicketsPage() {
             Manage customer support requests created by users and the AI chatbot.
           </p>
         </div>
-        <CleanupButton
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="gap-2" asChild>
+            <Link href="/admin/inbox">
+              <Inbox className="w-4 h-4" />
+              View Inbox
+            </Link>
+          </Button>
+          <CleanupButton
           triggerLabel="Clean up tickets"
           itemNoun="ticket"
           eligibilityHint="Only resolved or closed tickets qualify. Active tickets (open, in progress, waiting customer) are never deleted. Deletes associated ticket messages and inbox entries."
@@ -172,6 +181,7 @@ export default function SupportTicketsPage() {
             };
           }}
         />
+        </div>
       </div>
 
       {forbidden && (
@@ -284,7 +294,7 @@ export default function SupportTicketsPage() {
                     <th className="py-2 pr-3 font-medium">Status</th>
                     <th className="py-2 pr-3 text-right font-medium">Msgs</th>
                     <th className="py-2 pr-3 font-medium">Updated</th>
-                    <th className="py-2 pr-3" />
+                    <th className="py-2 pr-3 font-medium sr-only">Actions</th>
                   </tr>
                 </thead>
                 <tbody>

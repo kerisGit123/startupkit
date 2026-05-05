@@ -684,10 +684,39 @@ export async function POST(request: NextRequest) {
             imageUrl: finalUrl,
             variantLabel: meta?.variantLabel || undefined,
             variantModel: meta?.variantModel || undefined,
+            setPrimary: meta?.setPrimary === true ? true : undefined,
           });
           console.log('[kie-callback] Updated element referenceUrls/thumbnail for', fileRecord.categoryId);
         } catch (elementUpdateError) {
           console.warn('[kie-callback] Element auto-update failed (non-critical):', elementUpdateError);
+        }
+      }
+
+      // Clear taskStatus when a Director-triggered production sheet finishes
+      if (fileRecord?.category === 'production-sheet' && fileRecord?.projectId) {
+        try {
+          await convex.mutation(api.storyboard.build.setTaskStatus, {
+            projectId: fileRecord.projectId as Id<"storyboard_projects">,
+            taskStatus: "idle",
+          });
+        } catch { /* non-fatal */ }
+      }
+
+      // Auto-update project worldViewImageUrl + project cover when this is a world view sheet
+      if (fileRecord?.category === 'worldview' && fileRecord?.projectId && finalUrl) {
+        try {
+          await convex.mutation(api.storyboard.projects.updateWorldView, {
+            id: fileRecord.projectId as Id<"storyboard_projects">,
+            worldViewImageUrl: finalUrl,
+          });
+          // Also set as the project cover image (shown in project grid)
+          await convex.mutation(api.storyboard.projects.update, {
+            id: fileRecord.projectId as Id<"storyboard_projects">,
+            imageUrl: finalUrl,
+          });
+          console.log('[kie-callback] Updated worldViewImageUrl + project cover for project', fileRecord.projectId);
+        } catch (worldViewUpdateError) {
+          console.warn('[kie-callback] World view auto-update failed (non-critical):', worldViewUpdateError);
         }
       }
 

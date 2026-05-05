@@ -10,6 +10,7 @@ import {
   ZoomIn, ZoomOut, Maximize2, MessageSquareText, Scan, Wand2, Settings, Scissors, MousePointer, RectangleHorizontal, Image, ArrowUp, BookOpen, Check,
   FolderOpen, FileText, Video, Filter, Search,
   Zap, Camera, Film, Palette, Clock, Monitor, Volume2, VolumeX, Coins, Mic, Music, Play, Pause, Loader2, Lock, LayoutGrid, SlidersHorizontal, Timer, Crosshair,
+  User, Trees, Package,
 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -18,7 +19,7 @@ import { AddImageMenu } from "../shared/AddImageMenu";
 import { ConfirmDialog } from "../shared/ConfirmDialog";
 import { usePromptEditor } from "../shared/usePromptEditor";
 import { PromptTextarea } from "../shared/PromptTextarea";
-import { composeCustomElementPrompt } from "./elementForgeConfig";
+import { composeCustomElementPrompt, composeProductionSheetPrompt, type ProductionSheetParams } from "./elementForgeConfig";
 import { ConvexHttpClient } from "convex/browser";
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { usePricingData } from "@/app/storyboard-studio/components/shared/usePricingData";
@@ -138,6 +139,7 @@ export interface ImageAIPanelProps {
   generatedItemImages?: Array<{ id: string; url: string; filename: string }>;
   generatedProjectImages?: Array<{ id: string; url: string; filename: string }>;
   onSelectGeneratedImage?: (url: string) => void;
+  worldViewConcept?: string;
   showMask?: boolean;
   setShowMask?: (value: boolean) => void;
   onZoomChange?: (value: number) => void;
@@ -253,6 +255,7 @@ export function ImageAIPanel({
   generatedItemImages,
   generatedProjectImages,
   onSelectGeneratedImage,
+  worldViewConcept,
 }: ImageAIPanelProps) {
   // Get the proper companyId using the auth hook
   const currentCompanyId = useCurrentCompanyId();
@@ -275,7 +278,16 @@ export function ImageAIPanel({
   const [showElementLibrary, setShowElementLibrary] = useState(false);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   // showPromptActions now managed by PromptActionsDropdown component
-  const [outputMode, setOutputMode] = useState<"image" | "video" | "audio" | "analyze">("image");
+  const [outputMode, setOutputMode] = useState<"image" | "video" | "audio" | "analyze" | "production-sheet">("image");
+  // ── Production Sheet state ──────────────────────────────────────────
+  const [psRefImages, setPsRefImages] = useState<Array<{id: string; url: string; name: string; elementType: string}>>([]);
+  const [psUseImagePrompt, setPsUseImagePrompt] = useState(true);
+  const [psUseVideoPrompt, setPsUseVideoPrompt] = useState(true);
+  const [psGenerating, setPsGenerating] = useState(false);
+  const [psConfirm, setPsConfirm] = useState(false);
+  const [showPsFileBrowser, setShowPsFileBrowser] = useState(false);
+  const [psPreviewUrl, setPsPreviewUrl] = useState<string | null>(null);
+  const psImageUploadRef = useRef<HTMLInputElement>(null);
   const createTemplate = useMutation(api.promptTemplates.create);
   const logUpload = useMutation(api.storyboard.storyboardFiles.logUpload);
   const deductCredits = useMutation(api.credits.deductCredits);
@@ -297,7 +309,63 @@ export function ImageAIPanel({
   const updateProjectMutation = useMutation(api.storyboard.projects.update);
   const audioFiles = useQuery(api.storyboard.storyboardFiles.listAudioFiles, { companyId, categoryId: activeShotId });
   const { getModelCredits } = usePricingData();
-  
+
+  // ── Production Sheet: use ALL project elements (not just frame-linked) ──
+  // Production sheet is a project-level design doc — every character, environment,
+  // and prop in the library should appear with its reference image for consistency.
+  const psElements = outputMode === "production-sheet" ? (projectElements as any[] | undefined) : undefined;
+
+  // ── Production Sheet: fetch previously generated sheets for this scene ──
+  const psAllSceneFiles = useQuery(
+    api.storyboard.storyboardFiles.listByCategoryId,
+    outputMode === "production-sheet" && activeShotId ? { categoryId: activeShotId as any } : "skip"
+  );
+  const psGeneratedSheets = (psAllSceneFiles || [])
+    .filter((f: any) => (f.metadata as any)?.variantLabel === "Production Sheet")
+    .sort((a: any, b: any) => b.createdAt - a.createdAt);
+
+  // Auto-set toggles when entering production-sheet mode
+  useEffect(() => {
+    if (outputMode !== "production-sheet") return;
+    setPsUseImagePrompt(!!activeShotImagePrompt);
+    setPsUseVideoPrompt(!!activeShotVideoPrompt);
+  }, [outputMode, activeShotImagePrompt, activeShotVideoPrompt]);
+
+  // Auto-populate reference images from linked elements
+  useEffect(() => {
+    if (outputMode !== "production-sheet" || !psElements) return;
+    const images = (psElements as any[])
+      .filter(Boolean)
+      .map((el: any) => {
+        const primaryUrl = (el.referenceUrls && el.referenceUrls.length > 0)
+          ? (el.referenceUrls[el.primaryIndex ?? 0] || el.referenceUrls[0])
+          : el.thumbnailUrl || "";
+        return { id: el._id as string, url: primaryUrl, name: el.name as string, elementType: el.type as string };
+      })
+      .filter((img) => img.url);
+    setPsRefImages(images);
+  }, [outputMode, psElements]);
+
+  const handlePsImageUpload = useCallback(async (file: File) => {
+    if (psRefImages.length >= 16) return;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('useTemp', 'true');
+      formData.append('companyId', companyId);
+      if (projectId) formData.append('projectId', projectId);
+      const res = await fetch('/api/storyboard/upload', { method: 'POST', body: formData });
+      const result = await res.json();
+      if (result.success && result.publicUrl) {
+        setPsRefImages(prev => prev.length < 16 ? [...prev, { id: `upload-${Date.now()}`, url: result.publicUrl, name: file.name, elementType: 'custom' }] : prev);
+      } else {
+        toast.error(result.error || 'Upload failed');
+      }
+    } catch {
+      toast.error('Upload failed');
+    }
+  }, [psRefImages.length, companyId, projectId]);
+
   // Debug: Log when company ID changes and getBalance result
   useEffect(() => {
     console.log('[VideoImageAIPanel] clerkUser:', clerkUser?.id);
@@ -357,6 +425,95 @@ export function ImageAIPanel({
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
   const [currentPrompt, setCurrentPrompt] = useState(userPrompt ?? "");
+  const [resolution, setResolution] = useState(outputMode === "video" ? "480P" : "1K");
+  const [aspectRatio, setAspectRatio] = useState("16:9");
+
+  // ── Production Sheet generate ──────────────────────────────────────
+  const handleGenerateProductionSheet = useCallback(async () => {
+    if (psGenerating) return;
+    const elements: ProductionSheetParams["elements"] = (psElements as any[] || [])
+      .filter(Boolean)
+      .map((el: any) => ({
+        name: el.name as string,
+        type: el.type as string,
+        identity: el.identity,
+        description: el.description as string | undefined,
+        primaryImageUrl: (el.referenceUrls?.[el.primaryIndex ?? 0]) || el.thumbnailUrl || "",
+      }));
+    const imagePromptVal = (psUseImagePrompt && activeShotImagePrompt) ? activeShotImagePrompt : undefined;
+    const videoPromptVal = (psUseVideoPrompt && activeShotVideoPrompt) ? activeShotVideoPrompt : undefined;
+
+    // Stage 1: Haiku distillation — convert structured data to cinematic language
+    let concept = "";
+    try {
+      const distillRes = await fetch("/api/ps-distill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          elements,
+          imagePrompt: imagePromptVal,
+          videoPrompt: videoPromptVal,
+          description: currentPrompt || undefined,
+          worldViewConcept: worldViewConcept || undefined,
+        }),
+      });
+      if (distillRes.ok) {
+        const data = await distillRes.json();
+        concept = data.concept ?? "";
+      }
+    } catch {
+      // Haiku failure is non-fatal — continue with empty concept (falls back to description)
+    }
+
+    // Stage 2: compose final prompt using partner's template + Haiku concept
+    const prompt = composeProductionSheetPrompt({
+      elements,
+      imagePrompt: imagePromptVal,
+      videoPrompt: videoPromptVal,
+      description: currentPrompt || undefined,
+      concept,
+    });
+    // psRefImages already contains element primary images (auto-populated by useEffect)
+    // plus any extra images added via the + Image button
+    const refUrls = psRefImages.map(r => r.url).filter(Boolean);
+    // Always use text-to-image for production sheets — references are character context,
+    // not style references. img2img would inherit the 1:1 square ratio of element thumbnails.
+    const model = "gpt-image-2-text-to-image";
+    const psRes = ["1K","2K","4K"].includes(resolution) ? resolution : "1K";
+    const creditsUsed = (() => { const c = getModelCredits(model, psRes); return Number.isFinite(c) && c > 0 ? c : 6; })();
+    const effectiveCompanyId = userCompanyId || companyId;
+    setPsGenerating(true);
+    try {
+      const res = await fetch("/api/storyboard/generate-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneContent: prompt,
+          model,
+          quality: JSON.stringify({ type: "gpt-image-2", mode: "text-to-image", nsfwChecker: false }),
+          aspectRatio: aspectRatio,
+          resolution: psRes,
+          companyId: effectiveCompanyId,
+          userId: userId || user?.id,
+          projectId: projectId as string,
+          categoryId: activeShotId,
+          enhance: false,
+          creditsUsed,
+          referenceImageUrls: refUrls.length > 0 ? refUrls : undefined,
+          variantLabel: "Production Sheet",
+          variantModel: model,
+          outputFormat: "png",
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Generation failed");
+      toast.success(`Production sheet generating — ${creditsUsed} credits used`);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to generate production sheet");
+    } finally {
+      setPsGenerating(false);
+    }
+  }, [psGenerating, psElements, psUseImagePrompt, psUseVideoPrompt, activeShotImagePrompt, activeShotVideoPrompt, currentPrompt, psRefImages, resolution, aspectRatio, getModelCredits, userCompanyId, companyId, userId, user, projectId, activeShotId, worldViewConcept]);
+
 
   // Handle output mode toggle and auto-switch to Seedance model for video
   const handleOutputModeToggle = () => {
@@ -456,8 +613,6 @@ export function ImageAIPanel({
   ];
 
   // State for new dropdowns
-  const [aspectRatio, setAspectRatio] = useState("16:9");
-  const [resolution, setResolution] = useState(outputMode === "video" ? "480P" : "1K");
   const [outputFormat, setOutputFormat] = useState("png");
   const [videoDuration, setVideoDuration] = useState("8s");
   const [audioEnabled, setAudioEnabled] = useState(false);
@@ -746,6 +901,12 @@ export function ImageAIPanel({
       })()
     : credits);
   const displayedCredits = Number.isFinite(_rawCredits) ? _rawCredits : 0;
+
+  // PS credit calculation — depends on whether any refs (images or elements) will be sent
+  // psRefImages already holds all refs (element primary images + user-added images)
+  const psHasRefs = (psRefImages?.length ?? 0) > 0;
+  const _psRawCredits = getModelCredits(psHasRefs ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image", ["1K","2K","4K"].includes(resolution) ? resolution : "1K");
+  const psEffectiveCredits = Number.isFinite(_psRawCredits) && _psRawCredits > 0 ? _psRawCredits : 6;
 
   // Dropdown visibility states
   const [showModelDropdown, setShowModelDropdown] = useState(false);
@@ -2676,8 +2837,82 @@ export function ImageAIPanel({
           </div>
         )}
 
+        {/* ── PRODUCTION SHEET: Generated sheets viewer ─────────────── */}
+        {outputMode === "production-sheet" && psGeneratedSheets.length > 0 && (
+          <div className="px-[10px] pt-[10px]">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-(--text-tertiary) mb-2 flex items-center gap-1.5">
+              <LayoutGrid className="w-3 h-3" strokeWidth={2} />
+              Generated Sheets ({psGeneratedSheets.length})
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {psGeneratedSheets.map((sheet: any) => {
+                const url = sheet.sourceUrl || (sheet.metadata as any)?.finalImageUrl;
+                const isProcessing = sheet.status === "generating" || sheet.status === "processing";
+                const isFailed = sheet.status === "failed" || sheet.status === "error";
+                return (
+                  <div key={sheet._id} className="relative group flex-shrink-0">
+                    {isProcessing ? (
+                      <div className="w-32 h-[72px] rounded-lg border border-white/10 bg-white/5 flex flex-col items-center justify-center gap-1">
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-amber-400 rounded-full animate-spin" />
+                        <span className="text-[9px] text-(--text-tertiary)">Generating…</span>
+                      </div>
+                    ) : isFailed ? (
+                      <div className="w-32 h-[72px] rounded-lg border border-red-500/20 bg-red-500/5 flex items-center justify-center">
+                        <span className="text-[9px] text-red-400">Failed</span>
+                      </div>
+                    ) : url ? (
+                      <img
+                        src={url}
+                        alt="Production Sheet"
+                        className="w-32 h-[72px] object-cover rounded-lg border border-white/15 cursor-zoom-in hover:border-amber-400/50 transition-colors"
+                        onClick={() => setPsPreviewUrl(url)}
+                        title="Click to view full size"
+                      />
+                    ) : null}
+                    {url && !isProcessing && !isFailed && (
+                      <div className="absolute bottom-0.5 right-0.5 bg-black/60 rounded px-1 py-0.5">
+                        <span className="text-[8px] text-gray-300">
+                          {new Date(sheet.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── PRODUCTION SHEET MODE: Reference thumbnails ───────────── */}
+        {outputMode === "production-sheet" && psRefImages.length > 0 && (
+          <div className="px-[10px] pt-[10px] flex flex-wrap gap-2">
+            {psRefImages.map((img, i) => (
+              <div key={img.id + i} className="relative group flex-shrink-0">
+                <img src={img.url} alt={img.name} className="w-14 h-14 object-cover rounded-lg border border-white/15 cursor-zoom-in" onDoubleClick={() => setPsPreviewUrl(img.url)} />
+                <div className={`absolute top-0.5 left-0.5 p-1 rounded-sm ${
+                  img.elementType === "character" ? "bg-purple-600/90 text-white"
+                  : img.elementType === "environment" ? "bg-emerald-700/90 text-white"
+                  : img.elementType === "prop" ? "bg-blue-600/90 text-white"
+                  : "bg-white/25 text-white"
+                }`}>
+                  {img.elementType === "character" ? <User className="w-3 h-3" strokeWidth={2} />
+                  : img.elementType === "environment" ? <Trees className="w-3 h-3" strokeWidth={2} />
+                  : img.elementType === "prop" ? <Package className="w-3 h-3" strokeWidth={2} />
+                  : <Image className="w-3 h-3" strokeWidth={2} />}
+                </div>
+                <button
+                  onClick={() => setPsRefImages(prev => prev.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-20"
+                >
+                  <X className="w-2 h-2 text-white" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Reference Images thumbnails — only show when images exist, hidden when empty (compact Add Image in pill row handles adding) */}
-        {outputMode !== "analyze" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (referenceImages.length > 0 || seedanceMode === "lipsync" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "first-frame" || seedanceMode === "first-last-frame") && (
+        {outputMode !== "analyze" && outputMode !== "production-sheet" && selectedModelOption.value !== "z-image" && selectedModelOption.value !== "topaz/video-upscale" && selectedModelOption.value !== "infinitalk/from-audio" && selectedModelOption.value !== "ai-music-api/generate" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && (referenceImages.length > 0 || seedanceMode === "lipsync" || seedanceMode === "ugc" || seedanceMode === "showcase" || seedanceMode === "first-frame" || seedanceMode === "first-last-frame") && (
         <div className={`mb-0 ${addImageMenuOpen ? "invisible" : ""}`}>
           <div className="px-0 py-0">
             <div className="flex items-center gap-2 overflow-x-auto">
@@ -3167,27 +3402,65 @@ export function ImageAIPanel({
         {outputMode !== "analyze" && selectedModelOption.value !== "topaz/video-upscale" && !selectedModelOption.value.startsWith("ai-music-api/") && projectData && (
           <div className="relative flex items-center justify-center mb-[3px] min-h-[32px]">
             {/* Inline Add Image — compact, pinned left */}
-            {selectedModelOption.value !== "z-image" && selectedModelOption.value !== "infinitalk/from-audio" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
-              <div className="absolute left-0">
-              <AddImageMenu
-                onUploadClick={() => fileInputRef.current?.click()}
-                onR2Click={() => setShowFileBrowser(true)}
-                canOpenR2={canOpenFileBrowser()}
-                onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
-                onElementsClick={() => setShowElementLibrary(true)}
-                canOpenElements={canOpenElementLibrary()}
-                onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
-                onCaptureClick={handleAddBackground}
-                generatedItemImages={generatedItemImages}
-                generatedProjectImages={generatedProjectImages}
-                onSelectGeneratedImage={onSelectGeneratedImage}
-                compact
-                onMenuToggle={setAddImageMenuOpen}
-              />
-              </div>
+            {outputMode === "production-sheet" ? (
+              psRefImages.length < 16 && (
+                <div className="absolute left-0 flex items-center gap-1">
+                  {/* + Element — opens Element Library */}
+                  <button
+                    onClick={() => setShowElementLibrary(true)}
+                    className="flex items-center gap-1 px-2 py-1 text-[12px] text-(--text-tertiary) hover:text-(--text-secondary) transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Element
+                  </button>
+                  <span className="text-(--text-tertiary) opacity-30 text-[11px]">·</span>
+                  {/* + Image — R2 / elements / generated / capture (no upload) */}
+                  <AddImageMenu
+                    label="Image"
+                    onUploadClick={() => {}}
+                    hideUpload
+                    onR2Click={() => setShowPsFileBrowser(true)}
+                    canOpenR2={canOpenFileBrowser()}
+                    onR2Unavailable={() => showToast('Project info required', 'error')}
+                    onElementsClick={() => setShowElementLibrary(true)}
+                    canOpenElements={canOpenElementLibrary()}
+                    onElementsUnavailable={() => showToast('Project and user info required', 'error')}
+                    onCaptureClick={handleAddBackground}
+                    generatedItemImages={generatedItemImages}
+                    generatedProjectImages={generatedProjectImages}
+                    onSelectGeneratedImage={(url) => {
+                      if (psRefImages.length < 16) {
+                        setPsRefImages(prev => [...prev, { id: `gen-${Date.now()}`, url, name: 'reference', elementType: 'custom' }]);
+                      }
+                    }}
+                    compact
+                  />
+                  <span className="text-(--text-tertiary) opacity-40 text-[11px] ml-1">({psRefImages.length}/16)</span>
+                </div>
+              )
+            ) : (
+              selectedModelOption.value !== "z-image" && selectedModelOption.value !== "infinitalk/from-audio" && !selectedModelOption.value.startsWith("ai-music-api/") && selectedModelOption.value !== "elevenlabs/text-to-speech-multilingual-v2" && maxReferenceImages > 0 && referenceImages.length < maxReferenceImages && (
+                <div className="absolute left-0">
+                <AddImageMenu
+                  onUploadClick={() => fileInputRef.current?.click()}
+                  onR2Click={() => setShowFileBrowser(true)}
+                  canOpenR2={canOpenFileBrowser()}
+                  onR2Unavailable={() => showToast('Project and company info required to browse R2 files', 'error')}
+                  onElementsClick={() => setShowElementLibrary(true)}
+                  canOpenElements={canOpenElementLibrary()}
+                  onElementsUnavailable={() => showToast('Project and user info required to browse elements', 'error')}
+                  onCaptureClick={handleAddBackground}
+                  generatedItemImages={generatedItemImages}
+                  generatedProjectImages={generatedProjectImages}
+                  onSelectGeneratedImage={onSelectGeneratedImage}
+                  compact
+                  onMenuToggle={setAddImageMenuOpen}
+                />
+                </div>
+              )
             )}
-            {/* Settings pill bar — Genre / Format / Camera / Angle / Motion / Speed / Palette */}
-            {(() => {
+            {/* Settings pill bar — Genre / Format / Camera / Angle / Motion / Speed / Palette — hidden in production-sheet mode */}
+            {outputMode !== "production-sheet" && (() => {
               const activeGenre = GENRE_PRESETS.find(s => s.id === projectData?.style);
               const activeFormat = FORMAT_PRESETS.find(f => f.id === projectData?.formatPreset);
               const camParts = [
@@ -3708,7 +3981,7 @@ export function ImageAIPanel({
             </div>
           )}
 
-          {/* User Prompt Area — hidden for Topaz Video Upscale, Create Persona, and Analyze mode */}
+          {/* User Prompt Area — hidden for Topaz Video Upscale, Create Persona, Analyze modes */}
           {outputMode === "analyze" || selectedModelOption.value === "topaz/video-upscale" || selectedModelOption.value === "ai-music-api/generate-persona" ? null : (
             <div className="px-[10px] pt-[10px] pb-[10px]">
               <div className="flex gap-2">
@@ -3723,7 +3996,9 @@ export function ImageAIPanel({
                           ? "Describe the music mood, instruments... e.g. calm piano with soft melodies"
                           : "Write your lyrics here... use [Verse], [Chorus], [Bridge] to structure. e.g. [Verse 1] Walking through the city lights..."
                         : "Describe the mood and style. Lyrics will be auto-generated. e.g. A powerful rock ballad with emotional vocals"
-                      : "Describe your element... drag & drop reference images here"
+                      : outputMode === "production-sheet"
+                        ? "Short scene premise or extra notes... (optional)"
+                        : "Describe your element... drag & drop reference images here"
                   }
                   minHeight={TEXTAREA_MIN_HEIGHT}
                   maxHeight={TEXTAREA_MAX_HEIGHT}
@@ -4151,8 +4426,11 @@ export function ImageAIPanel({
                   {outputMode === "video" && <Film className="w-4 h-4" strokeWidth={1.75} />}
                   {outputMode === "audio" && <Music className="w-4 h-4" strokeWidth={1.75} />}
                   {outputMode === "analyze" && <Scan className="w-4 h-4" strokeWidth={1.75} />}
+                  {outputMode === "production-sheet" && <LayoutGrid className="w-4 h-4" strokeWidth={1.75} />}
                   <span>
-                    {outputMode === "analyze" ? "Analyze" : `Create ${outputMode.charAt(0).toUpperCase() + outputMode.slice(1)}`}
+                    {outputMode === "analyze" ? "Analyze"
+                      : outputMode === "production-sheet" ? "Production Sheet"
+                      : `Create ${outputMode.charAt(0).toUpperCase() + outputMode.slice(1)}`}
                   </span>
                   <ChevronDown className="w-3 h-3 opacity-50" />
                 </button>
@@ -4202,6 +4480,18 @@ export function ImageAIPanel({
                         <span className="font-medium">{cat.label}</span>
                       </button>
                     ))}
+                    <div className="border-t border-white/5 my-1" />
+                    <button
+                      onClick={() => { setOutputMode("production-sheet"); setShowCreateModeDropdown(false); if (!["1K","2K","4K"].includes(resolution)) setResolution("1K"); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors ${
+                        outputMode === "production-sheet"
+                          ? "bg-blue-500/15 text-blue-400"
+                          : "text-(--text-secondary) hover:text-blue-400 hover:bg-blue-500/8"
+                      }`}
+                    >
+                      <LayoutGrid className="w-4 h-4" strokeWidth={1.75} />
+                      <span className="font-medium">Production Sheet</span>
+                    </button>
                     <div className="border-t border-white/5 my-1" />
                     <button
                       onClick={() => { setOutputMode("analyze"); setShowCreateModeDropdown(false); }}
@@ -4273,8 +4563,77 @@ export function ImageAIPanel({
               </button>
             </>}
 
+            {/* ── PRODUCTION SHEET toolbar ─────────────────────────── */}
+            {outputMode === "production-sheet" && <>
+              <div className="w-px h-4 bg-[#32363E] mx-1" />
+              <div className="flex items-center gap-1.5 px-2 py-1 text-[13px] font-medium text-(--text-primary)">
+                <Zap className="w-4 h-4 text-(--text-secondary)" strokeWidth={1.75} />
+                <span>GPT Image 2</span>
+              </div>
+              <div className="w-px h-4 bg-[#32363E] mx-1" />
+              {/* Video Prompt toggle */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-(--text-tertiary)">Video</span>
+                <div className="flex rounded-md border border-(--border-primary) overflow-hidden text-[11px]">
+                  <button onClick={() => setPsUseVideoPrompt(false)}
+                    className={`px-2 py-0.5 transition-colors ${!psUseVideoPrompt ? "bg-white/12 text-(--text-primary) font-medium" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}
+                  >None</button>
+                  <button onClick={() => setPsUseVideoPrompt(true)}
+                    disabled={!activeShotVideoPrompt}
+                    className={`px-2 py-0.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${psUseVideoPrompt ? "bg-blue-500/20 text-blue-400 font-medium" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}
+                  >Prompt</button>
+                </div>
+              </div>
+              {/* Image Prompt toggle */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] text-(--text-tertiary)">Image</span>
+                <div className="flex rounded-md border border-(--border-primary) overflow-hidden text-[11px]">
+                  <button onClick={() => setPsUseImagePrompt(false)}
+                    className={`px-2 py-0.5 transition-colors ${!psUseImagePrompt ? "bg-white/12 text-(--text-primary) font-medium" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}
+                  >None</button>
+                  <button onClick={() => setPsUseImagePrompt(true)}
+                    disabled={!activeShotImagePrompt}
+                    className={`px-2 py-0.5 transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${psUseImagePrompt ? "bg-blue-500/20 text-blue-400 font-medium" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}
+                  >Prompt</button>
+                </div>
+              </div>
+              <div className="flex-1" />
+              <span className="text-[11px] text-(--text-tertiary)">16:9</span>
+              <span className="text-[11px] text-(--text-tertiary) opacity-40">·</span>
+              {/* Resolution picker */}
+              <div className="flex rounded-md border border-(--border-primary) overflow-hidden text-[11px]">
+                {["1K","2K","4K"].map(r => (
+                  <button key={r} onClick={() => setResolution(r)}
+                    className={`px-2 py-0.5 transition-colors ${resolution === r ? "bg-white/12 text-(--text-primary) font-medium" : "text-(--text-tertiary) hover:text-(--text-secondary)"}`}
+                  >{r}</button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1 text-[12px] text-(--text-secondary)">
+                <Coins className="w-4 h-4 text-amber-400" strokeWidth={1.75} />
+                <span>{psEffectiveCredits}</span>
+              </div>
+              <button
+                onClick={() => setPsConfirm(true)}
+                disabled={psGenerating}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-md transition font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed bg-(--accent-blue) hover:bg-(--accent-blue-hover) text-white"
+              >
+                {psGenerating ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Generate
+                    <span className="text-xs opacity-75">+ {psEffectiveCredits}</span>
+                  </>
+                )}
+              </button>
+            </>}
+
             {/* ── NON-ANALYZE MODE: Model + Primary Controls + Settings + Generate ── */}
-            {outputMode !== "analyze" && <>
+            {outputMode !== "analyze" && outputMode !== "production-sheet" && <>
             <div className="w-px h-4 bg-[#32363E] mx-1" />
 
             {/* Model name */}
@@ -5392,6 +5751,18 @@ export function ImageAIPanel({
         }}
         className="hidden"
       />
+      {/* Production Sheet image upload */}
+      <input
+        ref={psImageUploadRef}
+        type="file"
+        accept="image/*"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handlePsImageUpload(file);
+          e.target.value = "";
+        }}
+        className="hidden"
+      />
 
       <div className="absolute inset-0 pointer-events-none z-10 flex flex-col">
         {/* Canvas area with toolbars */}
@@ -5406,23 +5777,47 @@ export function ImageAIPanel({
         </div>
       </div>
 
-      {/* Prompt Library Modal */}
-      <PromptLibrary
-        isOpen={isPromptLibraryOpen}
-        onClose={() => setIsPromptLibraryOpen(false)}
-        onSelectPrompt={(prompt) => {
-          const el = editorRef.current;
-          if (el) {
-            el.textContent = prompt;
-            setEditorIsEmpty(false);
-            setCurrentPrompt(prompt);
-            onUserPromptChange?.(prompt);
-          }
-        }}
-        userCompanyId={currentCompanyId}
-      />
+      {/* Prompt Library Modal — conditionally mounted so subscriptions only run when open */}
+      {isPromptLibraryOpen && (
+        <PromptLibrary
+          isOpen={isPromptLibraryOpen}
+          onClose={() => setIsPromptLibraryOpen(false)}
+          onSelectPrompt={(prompt) => {
+            const el = editorRef.current;
+            if (el) {
+              el.textContent = prompt;
+              setEditorIsEmpty(false);
+              setCurrentPrompt(prompt);
+              onUserPromptChange?.(prompt);
+            }
+          }}
+          userCompanyId={currentCompanyId}
+        />
+      )}
 
       {/* R2 File Browser Modal */}
+      {/* Production Sheet R2 FileBrowser */}
+      {showPsFileBrowser && projectId && (
+        <FileBrowser
+          projectId={projectId}
+          onClose={() => setShowPsFileBrowser(false)}
+          imageSelectionMode={true}
+          defaultFileType={'image' as any}
+          onSelectImage={(imageUrl, fileName) => {
+            if (psRefImages.length < 16) {
+              setPsRefImages(prev => [...prev, { id: `r2-${Date.now()}`, url: imageUrl, name: fileName, elementType: 'custom' }]);
+            }
+            setShowPsFileBrowser(false);
+          }}
+          onSelectFile={(url, type) => {
+            if (type === 'image' && psRefImages.length < 16) {
+              setPsRefImages(prev => [...prev, { id: `r2-${Date.now()}`, url, name: 'image', elementType: 'custom' }]);
+              setShowPsFileBrowser(false);
+            }
+          }}
+        />
+      )}
+
       {showFileBrowser && projectId && (
         <FileBrowser
           projectId={projectId}
@@ -5770,6 +6165,14 @@ export function ImageAIPanel({
             setShowElementLibrary(false);
           }}
           onSelectImage={(imageUrl, elementName, element) => {
+            if (outputMode === "production-sheet") {
+              // In production-sheet mode: add to PS reference images instead
+              if (psRefImages.length < 16) {
+                setPsRefImages(prev => [...prev, { id: element._id, url: imageUrl, name: elementName, elementType: element.type }]);
+              }
+              setShowElementLibrary(false);
+              return;
+            }
             // Handle single image selection
             handleImageSelect('element', {
               url: imageUrl,
@@ -5784,6 +6187,15 @@ export function ImageAIPanel({
             });
           }}
           onSelectElement={(referenceUrls, name, element) => {
+            if (outputMode === "production-sheet") {
+              // In production-sheet mode: add primary image to PS reference images
+              const primaryUrl = referenceUrls?.[0];
+              if (primaryUrl && psRefImages.length < 16) {
+                setPsRefImages(prev => [...prev, { id: element._id, url: primaryUrl, name, elementType: element.type }]);
+              }
+              setShowElementLibrary(false);
+              return;
+            }
             // Handle multi-image element selection (existing behavior)
             if (referenceUrls && referenceUrls.length > 0) {
               referenceUrls.forEach(url => handleImageSelect('element', {
@@ -5801,6 +6213,43 @@ export function ImageAIPanel({
           }}
         />
       )}
+      {/* Production Sheet image preview lightbox */}
+      {psPreviewUrl && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setPsPreviewUrl(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <img src={psPreviewUrl} alt="Preview" className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl shadow-2xl" />
+            <button
+              onClick={() => setPsPreviewUrl(null)}
+              className="absolute -top-3 -right-3 w-7 h-7 bg-black/70 hover:bg-black rounded-full flex items-center justify-center text-white border border-white/20 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Production Sheet credit confirmation */}
+      <ConfirmDialog
+        isOpen={psConfirm}
+        onCancel={() => setPsConfirm(false)}
+        onConfirm={() => { setPsConfirm(false); handleGenerateProductionSheet(); }}
+        title="Generate Production Sheet"
+        subtitle={`GPT Image 2 · ${["1K","2K","4K"].includes(resolution) ? resolution : "1K"} · ${aspectRatio}`}
+        message={
+          <>
+            This will generate a cinematic production reference sheet
+            {psHasRefs && <> using <span className="text-white font-semibold">{psRefImages?.length ?? 0}</span> reference image{(psRefImages?.length ?? 0) !== 1 ? "s" : ""}</>}.
+            <br /><br />
+            Cost: <span className="text-amber-400 font-semibold">{psEffectiveCredits} credits</span>
+          </>
+        }
+        confirmText={`Generate (${psEffectiveCredits}cr)`}
+        cancelText="Cancel"
+      />
       {/* Prompt Length Error Dialog for Seedance 2.0 */}
       <ConfirmDialog
         isOpen={!!promptLengthError}

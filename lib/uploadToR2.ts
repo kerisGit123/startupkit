@@ -27,6 +27,7 @@ export interface UploadOptions {
   onProgress?: (progress: number) => void;
   onSuccess?: (result: UploadResult) => void;
   onError?: (error: Error) => void;
+  noLog?: boolean;
 }
 
 export interface UploadResult {
@@ -157,6 +158,7 @@ export async function uploadToR2(options: UploadOptions): Promise<UploadResult> 
     onProgress,
     onSuccess,
     onError,
+    noLog,
   } = options;
 
   try {
@@ -229,6 +231,7 @@ export async function uploadToR2(options: UploadOptions): Promise<UploadResult> 
       if (sourceUrl) formData.append('sourceUrl', sourceUrl);
       if (sourceFilename) formData.append('sourceFilename', sourceFilename);
       if (sourceMimeType) formData.append('sourceMimeType', sourceMimeType);
+      if (noLog) formData.append('noLog', '1');
 
       const response = await fetch('/api/storyboard/upload', {
         method: 'POST',

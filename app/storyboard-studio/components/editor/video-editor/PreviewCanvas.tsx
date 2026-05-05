@@ -39,6 +39,31 @@ export function PreviewCanvas({
   const transLayers = activeTransition ? getTransitionLayers(overlayLayers, activeTransition.startTime, activeTransition.endTime) : null;
   const transClips = activeTransition && !transLayers?.layerA && !transLayers?.layerB
     ? getTransitionClips(videoClips, activeTransition.startTime, activeTransition.endTime) : null;
+
+  // Pre-compute base clip modifiers so Clip A fades/slides correctly during transitions
+  const activeTT = activeTransition?.transitionType || "crossfade";
+  const baseOpacityMul = (() => {
+    if (!activeTransition || !transClips) return 1;
+    if (activeTT === "crossfade" || activeTT === "cross-dissolve") return 1 - transProgress;
+    // fade-color: base video fades out in first half, fades back in (as clip B) in second half
+    // so at peak-black (p=0.5) the base is opacity=0 — no subpixel edge bleed
+    if (activeTT === "fade-color") {
+      if (transProgress <= 0.5) return Math.max(0, 1 - transProgress * 2);
+      return Math.max(0, (transProgress - 0.5) * 2);
+    }
+    return 1;
+  })();
+  const baseSlideXPct = (activeTransition && transClips && activeTT === "slide-left") ? -transProgress * 100 : 0;
+
+  // Clip B video time offset for correct seeking in transition preview
+  let clipBTimelineStart = 0;
+  if (transClips?.clipB) {
+    for (let i = 0; i < transClips.clipB.idx; i++) clipBTimelineStart += getVisDur(videoClips[i]);
+  }
+  const clipBVideoOffset = transClips?.clipB
+    ? Math.max(0, currentTime - clipBTimelineStart + (transClips.clipB.clip.trimStart ?? 0))
+    : 0;
+
   const areaRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<DragState>(null);
   const [resizing, setResizing] = useState<ResizeState>(null);
@@ -262,9 +287,12 @@ export function PreviewCanvas({
           style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: layer.borderRadius || 0, display: "block" }}
           ref={(el) => {
             if (!el) return;
-            if (el.readyState >= 1) {
-              const safeTime = Math.max(0, layerTime);
-              const target = el.duration > 0 ? Math.min(safeTime, el.duration - 0.01) : safeTime;
+            el.volume = (layer.volume ?? 100) / 100;
+            el.muted = false;
+            el.loop = true;
+            if (el.readyState >= 1 && el.duration > 0) {
+              const loopedTime = Math.max(0, layerTime) % el.duration;
+              const target = Math.min(loopedTime, el.duration - 0.01);
               if (Math.abs(el.currentTime - target) > 0.15) el.currentTime = target;
             }
             if (playing && el.paused) el.play().catch(() => {});
@@ -336,7 +364,7 @@ export function PreviewCanvas({
         <div className="absolute inset-0 flex items-center justify-center overflow-hidden" style={{ backgroundColor: bgColor }}>
           {cur?.clip.type === "video" ? (
             <video ref={previewRef} className="absolute inset-0 w-full h-full object-cover" playsInline
-              style={{ mixBlendMode: (cur.clip.blendMode || "normal") as any, opacity: (cur.clip.opacity ?? 100) / 100 }} />
+              style={{ mixBlendMode: (cur.clip.blendMode || "normal") as any, opacity: (cur.clip.opacity ?? 100) / 100 * baseOpacityMul, transform: baseSlideXPct !== 0 ? `translateX(${baseSlideXPct}%)` : undefined }} />
           ) : cur?.clip.type === "audio" ? (
             <div className="flex flex-col items-center gap-4">
               <div className="w-24 h-24 rounded-full bg-(--bg-secondary) flex items-center justify-center border border-(--border-primary)">
@@ -346,7 +374,7 @@ export function PreviewCanvas({
             </div>
           ) : cur?.clip.type === "image" ? (
             <img src={cur.clip.src} className="absolute inset-0 w-full h-full object-cover" alt=""
-              style={{ mixBlendMode: (cur.clip.blendMode || "normal") as any, opacity: (cur.clip.opacity ?? 100) / 100 }} />
+              style={{ mixBlendMode: (cur.clip.blendMode || "normal") as any, opacity: (cur.clip.opacity ?? 100) / 100 * baseOpacityMul, transform: baseSlideXPct !== 0 ? `translateX(${baseSlideXPct}%)` : undefined }} />
           ) : (
             <div className="flex flex-col items-center gap-4 text-(--border-primary)">
               <Film className="w-20 h-20" />
@@ -361,28 +389,39 @@ export function PreviewCanvas({
             const clipB = transClips.clipB?.clip;
             const hasB = !!(clipB && (clipB.type === "image" || clipB.type === "video"));
 
+            // Renders Clip B; video elements get time-synced via ref callback
+            const renderClipB = () => {
+              if (!hasB || !clipB) return null;
+              if (clipB.type === "image") return <img src={clipB.src} className="w-full h-full object-cover" alt="" />;
+              return (
+                <video src={clipB.src} className="w-full h-full object-cover" muted playsInline
+                  ref={(el) => {
+                    if (!el || el.readyState < 1) return;
+                    const target = el.duration > 0 ? Math.min(clipBVideoOffset, el.duration - 0.01) : clipBVideoOffset;
+                    if (Math.abs(el.currentTime - target) > 0.15) el.currentTime = target;
+                  }} />
+              );
+            };
+
             if (tt === "fade-color") {
-              const colorOpacity = p < 0.5 ? p * 2 : (1 - p) * 2;
+              const colorOpacity = Math.min(1, p < 0.5 ? p * 2 : (1 - p) * 2);
               return <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: activeTransition.backgroundColor || "#000000", opacity: colorOpacity }} />;
             }
 
             if (tt === "crossfade" || tt === "cross-dissolve") {
-              return (
-                <>
-                  <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: bgColor, opacity: p }} />
-                  {hasB && (
-                    <div className="absolute inset-0 pointer-events-none" style={{ opacity: p }}>
-                      {clipB!.type === "image" ? <img src={clipB!.src} className="w-full h-full object-cover" alt="" /> : <video src={clipB!.src} className="w-full h-full object-cover" muted playsInline />}
-                    </div>
-                  )}
-                </>
-              );
+              // Clip A fade-out is handled via baseOpacityMul on the base content element above
+              return hasB ? (
+                <div className="absolute inset-0 pointer-events-none" style={{ opacity: p }}>
+                  {renderClipB()}
+                </div>
+              ) : null;
             }
 
             if (tt === "slide-left" && hasB) {
+              // Clip A slide-out is handled via baseSlideXPct on the base content element above
               return (
-                <div className="absolute inset-0 pointer-events-none" style={{ transform: `translateX(${(1 - p) * 100}%)` }}>
-                  {clipB!.type === "image" ? <img src={clipB!.src} className="w-full h-full object-cover" alt="" /> : <video src={clipB!.src} className="w-full h-full object-cover" muted playsInline />}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ transform: `translateX(${(1 - p) * 100}%)` }}>
+                  {renderClipB()}
                 </div>
               );
             }
@@ -390,7 +429,7 @@ export function PreviewCanvas({
             if (tt === "wipe" && hasB) {
               return (
                 <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ clipPath: `inset(0 ${(1 - p) * 100}% 0 0)` }}>
-                  {clipB!.type === "image" ? <img src={clipB!.src} className="w-full h-full object-cover" alt="" /> : <video src={clipB!.src} className="w-full h-full object-cover" muted playsInline />}
+                  {renderClipB()}
                 </div>
               );
             }
@@ -418,7 +457,9 @@ export function PreviewCanvas({
               if (tt === "crossfade" || tt === "cross-dissolve") {
                 transOpacity = isA ? (1 - p) : p;
               } else if (tt === "fade-color") {
-                transOpacity = isA ? (p < 0.5 ? 1 : 0) : (p >= 0.5 ? 1 : 0);
+                // Clip B enters the DOM at p=0.3 (color still fully opaque) so the
+                // video element has ~30% of the transition to seek before it's revealed.
+                transOpacity = isA ? (p < 0.5 ? 1 : 0) : (p >= 0.3 ? 1 : 0);
               } else if (tt === "slide-left") {
                 transTranslate = isA ? `translateX(${-p * 100}%)` : `translateX(${(1 - p) * 100}%)`;
               } else if (tt === "wipe") {
@@ -536,7 +577,9 @@ export function PreviewCanvas({
         {/* Fade-to-color overlay for overlay-layer transitions */}
         {activeTransition && transLayers && (transLayers.layerA || transLayers.layerB) && activeTransition.transitionType === "fade-color" && (() => {
           const p = transProgress;
-          const colorOp = p < 0.5 ? p * 2 : (1 - p) * 2;
+          // Fully opaque from 30%–70% of transition so the async video seek window is hidden.
+          // Ramps: 0→1 over [0, 0.3], holds 1 over [0.3, 0.7], 1→0 over [0.7, 1].
+          const colorOp = p < 0.3 ? p / 0.3 : p > 0.7 ? (1 - p) / 0.3 : 1;
           const lA = transLayers.layerA;
           const lB = transLayers.layerB;
           const aX = lA?.x ?? lB!.x, aY = lA?.y ?? lB!.y, aR = lA ? lA.x + lA.w : lB!.x + lB!.w, aB = lA ? lA.y + lA.h : lB!.y + lB!.h;

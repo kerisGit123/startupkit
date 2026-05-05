@@ -28,7 +28,7 @@ export function GalleryPage({ sidebarOpen, onToggleSidebar }: GalleryPageProps) 
   const creatorsScrollRef = useRef<HTMLDivElement>(null);
   const [displayLimit, setDisplayLimit] = useState(30);
 
-  const files = useQuery(api.storyboard.gallery.listSharedFiles, { limit: 200, sortBy: "recent" });
+  const files = useQuery(api.storyboard.gallery.listSharedFiles, { sortBy: "recent" });
   const topCreators = useQuery(api.storyboard.gallery.getTopCreators, { limit: 10 });
   const sharedModels = useQuery(api.storyboard.gallery.getSharedModels);
 

@@ -50,7 +50,7 @@ export const getSettings = query({
   handler: async (ctx, { companyId }) => {
     // Members may need to read non-sensitive settings; updateSettings stays owner-only.
     // TODO: split sensitive fields (API keys) into a separate getOwnerSettings query.
-    await requireWorkspaceAccess(ctx, companyId);
+    try { await requireWorkspaceAccess(ctx, companyId); } catch { return null; }
     const settings = await ctx.db
       .query("org_settings")
       .withIndex("by_companyId", (q) => q.eq("companyId", companyId))

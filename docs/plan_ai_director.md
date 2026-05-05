@@ -1,7 +1,7 @@
 # AI Director + Agent — Architecture & Status
 
-> **Status:** Built + Script Generation live (Sessions #33–#37), end-to-end flow fixed
-> **Last updated:** 2026-05-03 (Session #37)
+> **Status:** Built + Script Generation live (Sessions #33–#41), pipeline production-ready
+> **Last updated:** 2026-05-05 (Session #41)
 > **Models:** Haiku 4.5 default · Sonnet 4.6 for post-invoke_skill iteration + Cinematic mode
 
 ---
@@ -26,8 +26,8 @@ Two AI modes embedded in the storyboard studio:
 | ---- | -------- | ------------ |
 | `get_project_overview` | Read | Project context: scenes, frames, style, genre, elements, script |
 | `get_scene_frames` | Read | All frames in a scene with prompts/status |
-| `get_frame_details` | Read | Full frame details + imageUrl, videoUrl, audioUrl |
-| `get_element_library` | Read | Elements with referenceUrls + primaryIndex (primary variant) |
+| `get_frame_details` | Read | Full frame details (hasImage/hasVideo/hasAudio booleans — URL strings excluded) |
+| `get_element_library` | Read | Elements with hasImage + imageCount (referenceUrls excluded — agent uses element name to trigger generation) |
 | `update_frame_prompt` | Write | Improve image and/or video prompts with @ElementName |
 | `update_frame_notes` | Write | Add director notes to frames |
 | `update_project_style` | Write | Set genre preset + format preset + style prompt |
@@ -251,7 +251,7 @@ route.ts (server)
   |
   +-- Auth check (Clerk)
   +-- Load project context → inject into system prompt
-  +-- Load conversation history (last 20 from Convex)
+  +-- Load conversation history (last 20 from Convex, last 10 messages sent to LLM)
   +-- Select tools via getToolsForMode(mode)
   +-- Inject scriptMode into system prompt (agent mode only):
   |     "USER SCRIPT MODE: QUICK (Haiku, 8cr/min). Always pass quality: 'quick'"
@@ -265,6 +265,7 @@ Agentic loop (up to MAX_TOOL_ITERATIONS):
   +-- Tool calls → dispatchDirectorTool() → Convex / API routes → back to LLM
   +-- plan_approval event → UI shows Approve/Cancel card in chat
   +-- invoke_skill success → nextModel = Sonnet for one iteration
+  +-- Tool results capped at 1200 chars in currentMessages (full output used in current iteration)
   |
   v
 Persist session → directorChat.appendMessages (Convex)
@@ -278,8 +279,12 @@ data: {"type":"tool_call","name":"get_project_overview"}
 data: {"type":"tool_result","name":"get_project_overview","isError":false}
 data: {"type":"text","delta":"Your project has 8 scenes..."}
 data: {"type":"plan_approval","steps":[...],"totalCredits":30,"balance":500}
+data: {"type":"quick_actions","actions":[{"label":"Generate all","message":"..."}]}
+data: {"type":"open_batch_generate"}
 data: {"type":"done","toolsUsed":["get_project_overview","invoke_skill","save_script"]}
 ```
+
+`open_batch_generate` — emitted by `route.ts` immediately after `invoke_skill` returns `framesCreated > 0`. `DirectorChatPanel` handles it via `onOpenBatchGenerate` prop → `page.tsx` opens `BatchGenerateDialog` directly. No Director round-trip needed for the most common post-build action.
 
 ### Chat Persistence
 
@@ -354,33 +359,30 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 
 ---
 
-## Honest Self-Assessment (Session #37)
+## Honest Self-Assessment (Session #41)
 
-> Session #37 addressed the three blockers from #36. Remaining gaps listed below.
+> Sessions #39–#41: reliability pass + extend flow + post-build UX + script cleanup + runtime bug fixes. Core pipeline production-ready.
 
 | Area | Score | Verdict |
 | ---- | ----- | ------- |
-| Architecture & backend | 8/10 | SSE streaming, tool chaining, prompt caching, model upgrade, multi-act — all solid |
-| UI/UX | 7.5/10 | Progress signal added; invoke_skill now shows per-act status. Paywall card clean. |
-| Pricing logic | 7.5/10 | Margin analysis rigorous. Quick/Cinematic, scene-based Visual Lock, per-pill estimates, pre-flight 402 |
-| Completeness | 6.5/10 | E2E flow fixed, seat gate in place. Stripe not wired yet. Vision paths still diverge. |
-| **Overall** | **7.5/10** | **Ready to demo and manually enable seats. Not yet ready for self-serve Stripe checkout.** |
+| Architecture & backend | 9/10 | Extend flow complete: story context injection, script append, element dedup, semantic name matching, frame offset, preamble error gate, batch generate SSE event. |
+| UI/UX | 8.5/10 | Replace/extend confirmation, credit estimate, skeleton cards, draft status, per-frame Generate + Regenerate, Clean Script button, batch generate auto-opens after build. |
+| Pricing logic | 8/10 | Credit estimate before `invoke_skill`. Credit usage surfaced in return payload (`creditsUsed`). |
+| Completeness | 7.5/10 | E2E flow validated. `BatchGenerateDialog` opens automatically post-build. Stripe still not wired — zero self-serve monetisation. Vision paths still diverge. |
+| **Overall** | **8.3/10** | **Agent pipeline production-ready for demo and manual seat sales. Remaining gaps are monetisation + scale, not core functionality.** |
 
 ### Gaps that block full self-serve monetisation
 
-**High priority:**
+**High priority (next session):**
 
-- **Stripe integration for agent seat add-on** — `agentModeEnabled` must be toggled automatically on subscription events. Currently requires manual DB edit.
-- **End-to-end flow untested in production.** Logic fixed but the `invoke_skill` → `save_script` → `build_storyboard` chain still needs a real run to validate.
-
-**Should fix before scale:**
+- **Stripe integration for agent seat add-on** — `agentModeEnabled` must be toggled automatically on `customer.subscription.created/deleted`. Currently requires manual Convex dashboard edit. `setAgentAccess` mutation exists — only Stripe wiring is missing.
 
 **Should fix before scale:**
 
 - **Two separate vision paths diverging.** `analyze_frame_image` tool (Director, via tool executor) vs direct `/api/ai-analyze` (balloon pill, Gemini 2.5 Flash). They return different formats, charge differently, have no shared error handling.
-- **Director advisory questions have no rate limiting.** Each Director message costs us ~$0.006 Haiku API with no cost recovery on free plan. At scale, heavy Director users are loss-making.
-- **20-message hardcap is a blunt instrument.** No conversation compression or smart summarisation — long sessions lose context abruptly at the 20-message window.
-- **System prompt not tuned from real sessions.** Written speculatively; actual agent behaviour under real prompts is unknown.
+- **Director/Agent API usage has no credit offset.** A full story-build session costs ~$0.30–$0.50 in Haiku API with no cost recovery. At scale, heavy users are loss-making.
+- **20-message hardcap is a blunt instrument.** No conversation compression — long sessions lose context abruptly.
+- **Orphaned R2 URLs in `referenceUrls`.** Files deleted from R2 but URL still in DB → `ThumbnailCropper` shows "Image could not be loaded" fallback. Orphan cleanup cron should null out stale entries on delete.
 
 **Polish / nice to have:**
 
@@ -398,6 +400,97 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 - System prompt rewritten with full studio context
 - `suggest_shot_list` + `generate_scene` tools added
 - `update_project_style` supports genre + format + style
+
+### Session #39 — Extend story flow + pipeline reliability ✅
+
+**Script pipeline hardened:**
+
+- Preamble strip: `callSkillAct` output now strips everything before the first `SCENE N` block — chatty skill commentary never reaches the DB or parser
+- SKILL.md format fixed: scene blocks use `SCENE N`, `Image Prompt:`, `Video Prompt:` (no `###` prefix, no bold emoji) — `parseStructuredScript` now reliably fires instead of falling back to freeform Haiku
+- Old `### SCENE` patterns in `tool-executor.ts` updated to handle both old and new format (`(?:###\s*)?SCENE\s+\d+`)
+- Wrong query name fixed: `getProjectScript` → `getScriptContent` — script append was silently failing every time on extend
+
+**Extend story flow (new):**
+
+- `strategy` parameter added to `invoke_skill` (`replace_all` | `extend`)
+- Replace vs Extend confirmation: Director detects existing frame count, shows button choice before calling skill — no more silent append to old story
+- Script append: on extend, loads existing script and concatenates new scenes (old + new shown in Script tab)
+- Frame order/sceneId offset: new frames start from `existingItems.length` — no collision with existing frame IDs
+- Element deduplication: existing elements seeded into `savedElementMap` (lowercase key) — same-name elements never duplicated
+- Semantic element name matching: existing elements passed as context to Haiku extractor — "The Child" correctly maps to "The Girl in Hiding" rather than creating a duplicate
+- Director prompt: when extending, calls `get_element_library` first and includes existing character names in the skill brief
+
+**Template prompts:**
+
+- `lib/director/template-prompts.ts` created — 39 hardcoded prompt strings (C01–C14 characters, E01–E14 environments, P01–P12 props)
+- `selectTemplateForElement` rewritten — two-layer scoring (nameHas + match fn) picks best template in-process, zero DB round-trips
+
+**UX improvements:**
+
+- "Thinking..." shown immediately when Director starts (before first tool_call SSE event)
+- Credit estimate + confirm buttons shown before `invoke_skill` runs — users see ~Xcr cost upfront
+- After `invoke_skill` returns → immediate `suggest_actions` with frame generation options
+- `taskStatus: "building"` set during auto-build — top nav shows progress indicator
+- 6 skeleton cards shown in storyboard grid while Director is building
+- New frames created by Director born with `frameStatus: "draft"` (was "Set Status" / unknown)
+- Per-frame "Generate" button (amber) in No Media state — opens SceneEditor directly
+
+### Session #40 — Post-build UX + extend story context + script cleanup ✅
+
+**Fix 1 — Extend knows its story (`tool-executor.ts`):**
+
+- Last 4 existing scenes (title + description) loaded from Convex before calling skill
+- Prepended to prompt: `"CONTINUING THIS STORY — last 4 of N scenes: Scene 7: ... New scenes must start from scene N+1..."`
+- Skill now writes a genuine continuation rather than a fresh independent story
+
+**Fix 2 — Batch generate opens automatically after script build (`route.ts`, `DirectorChatPanel.tsx`, `page.tsx`):**
+
+- After `invoke_skill` returns `framesCreated > 0`, `route.ts` emits `open_batch_generate` SSE event
+- `DirectorChatPanel` handles it via new `onOpenBatchGenerate` prop
+- `page.tsx` opens `BatchGenerateDialog` directly — no Director intermediary, no dead button
+
+**Fix 3 — Preamble strip hard error instead of silent fallback (`tool-executor.ts`):**
+
+- If skill returns zero `SCENE` blocks (`firstScene === -1`), tool returns `isError: true` with clear message
+- Chatty garbage text never saved to DB; build aborts cleanly with user-visible error
+
+**Fix 4 — Regenerate button on frames that already have an image (`page.tsx`):**
+
+- Amber `RefreshCw` button added to frame hover overlay (alongside "Set as storyboard URL")
+- Calls `onDoubleClick(item)` → opens SceneEditor AI panel — same path as the empty-frame Generate button
+
+**Fix 5 — Credit usage surfaced after generation (`tool-executor.ts`):**
+
+- `creditsUsed: totalCredits` added to `invoke_skill` JSON return payload
+- `"Used X credits."` appended to the note string — Director's follow-up naturally surfaces this to user
+
+**Fix 6 — Clean Script button in Script tab (`page.tsx`):**
+
+- Appears only when preamble exists (`firstScenePos > 0`)
+- Strips everything before first `SCENE` block, calls `handleScriptChange` (marks dirty), toasts confirmation
+- Fixes legacy projects created before preamble strip was added
+
+### Session #41 — Runtime bug fixes ✅
+
+**`VideoImageAIPanel.tsx` — `aspectRatio` temporal dead zone:**
+
+- `const [aspectRatio, setAspectRatio] = useState("16:9")` was declared after the `handleGenerateProductionSheet` useCallback that referenced it in its dep array → JavaScript TDZ error on every render. Moved declaration immediately above the callback.
+
+**`ThumbnailCropper.tsx` — JSX parse error:**
+
+- `)}` closing the `{imgError ? ... : ...}` ternary was positioned after the Footer `<div>`, making Footer an illegal second sibling in the else branch. Moved `)}` to right after the crop area's closing tags — Footer now renders outside the ternary.
+
+---
+
+### Session #38 — API cost optimisation ✅
+
+- `stringifyResult` switched to compact JSON (no indentation) — ~15% off all tool output token counts
+- `get_element_library`: removed `referenceUrls` array, replaced with `imageCount: N` — agent never needs raw URL strings, it passes element name to `trigger_image_generation` which resolves the URL internally
+- `get_frame_details`: removed `imageUrl`, `videoUrl`, `audioUrl` URL strings — booleans `hasImage`/`hasVideo`/`hasAudio` already present and sufficient
+- `get_scene_frames`: `imagePrompt` capped at 400 chars, `videoPrompt` at 200 chars, with `...` suffix when truncated — full prompts stored in Convex and sent to generation API unaffected
+- `route.ts`: tool results capped at 1200 chars when accumulated in `currentMessages` — prevents early large tool results (e.g. `get_project_overview`) from being re-sent at full size on every subsequent iteration within the same request
+- **Script generation quality: unaffected** — `invoke_skill` runs as an isolated Skills API call; none of these changes touch the act prompt or the model that generates the script
+- Estimated savings: ~10–20% per session. Biggest remaining cost driver is system prompt + tools cold cache writes ($0.024/cold open) — not addressed as trimming risks quality
 
 ### Session #37 — E2E flow fix + progress signal + seat paywall ✅
 
@@ -434,10 +527,19 @@ Agent conversations covered by seat. Generation triggered by agent costs credits
 - [x] invoke_skill: multi-act script generation, tiered pricing
 - [x] Balloon category nav with credit confirm pattern
 - [x] Local answers (zero AI cost) for data-lookup pills
-- [x] **E2E flow fixed** — system prompt now runs invoke_skill → save_script → build_storyboard automatically with no confirmation pause
-- [x] **Agent seat paywall** — `agentModeEnabled` on `org_settings`, `getAgentAccess` query, 403 in route, paywall UI in DirectorChatPanel
-- [x] **invoke_skill progress signal** — `onProgress` callback → SSE `tool_progress` event → per-act status shown in UI indicator
-- [x] **build_storyboard progress** — parse / element-count / frame-create steps reported via same signal
+- [x] E2E flow fixed — invoke_skill → auto save → auto build runs in one tool call
+- [x] Agent seat paywall — `agentModeEnabled` on `org_settings`, 403 gate, paywall UI
+- [x] invoke_skill progress signal — per-act and per-step status via SSE `tool_progress`
+- [x] Script pipeline hardened — preamble strip, SKILL.md format fixed, structured parser reliable
+- [x] Extend story flow — replace/extend confirmation, script append, element dedup, frame offset, semantic name matching
+- [x] Credit estimate shown before invoke_skill runs
+- [x] Skeleton cards + taskStatus during auto-build
+- [x] Frame status "draft" on creation, per-frame Generate + Regenerate buttons
+- [x] Batch generate auto-opens after invoke_skill via SSE `open_batch_generate` event
+- [x] Extend passes story context — last 4 scene summaries prepended to skill prompt
+- [x] Preamble strip hard error — zero SCENE blocks returns isError instead of saving garbage
+- [x] Clean Script button — strips preamble from legacy scripts in Script tab
+- [x] Credit usage returned in invoke_skill payload and surfaced to user
 - [ ] Unify vision paths — one shared route used by both Director tool and balloon pill
 - [ ] Director rate limiting — daily message cap for free-plan users
 - [ ] Conversation compression — smart summarise beyond the 20-message window

@@ -85,6 +85,7 @@ export interface OverlayLayer {
   scrollDirection?: "up" | "down";
   // Video overlay
   src?: string;
+  volume?: number;    // 0-100, default 100
   // Transition
   transitionType?: "crossfade" | "fade-color" | "slide-left" | "wipe" | "cross-dissolve";
 }

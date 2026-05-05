@@ -61,27 +61,20 @@ export const getNotifications = query({
       });
     }
 
-    // Add credit reward notifications (purchases, referrals, bonuses)
+    // Only show paid purchases and earned bonuses — skip credit usage (AI generation events)
     for (const purchase of purchases) {
+      if (purchase.tokens <= 0) continue;
       const purchaseId = purchase._id.toString();
       const isPaid = purchase.amountPaid && purchase.amountPaid > 0;
-      const absTokens = Math.abs(purchase.tokens);
-      const isPositive = purchase.tokens > 0;
-      const title = isPaid
-        ? `Credit Purchase +${absTokens}`
-        : isPositive
-        ? `Credit Earned +${absTokens}`
-        : `Credit Used ${absTokens}`;
-      const description = isPaid
-        ? `MYR ${purchase.amountPaid}`
-        : isPositive ? "Referral/Signup Bonus" : purchase.reason || "AI Generation";
-      const type = isPaid ? "credit_purchase" : isPositive ? "credit_reward" : "credit_usage";
-
       notifications.push({
         id: purchaseId,
-        type,
-        title,
-        description,
+        type: isPaid ? "credit_purchase" : "credit_reward",
+        title: isPaid
+          ? `Credit Purchase +${purchase.tokens}`
+          : `Credit Earned +${purchase.tokens}`,
+        description: isPaid
+          ? `MYR ${(purchase.amountPaid / 100).toFixed(2)}`
+          : "Referral/Signup Bonus",
         time: purchase.createdAt,
         read: readIds.has(purchaseId),
       });
@@ -166,6 +159,7 @@ export const getUnreadCount = query({
 
     const [subs, purchases, tickets] = await Promise.all([
       ctx.db.query("subscription_transactions").order("desc").take(CAP),
+      // Only count paid credit purchases — not AI generation usage events
       ctx.db.query("credits_ledger").order("desc").take(CAP),
       ctx.db.query("support_tickets").order("desc").take(CAP),
     ]);
@@ -179,7 +173,19 @@ export const getUnreadCount = query({
     const readIds = new Set(readNotifications.map((n) => n.notificationId));
 
     let unreadCount = 0;
-    for (const item of [...subs, ...purchases, ...tickets]) {
+    for (const item of subs) {
+      if ((item as any).createdAt >= sevenDaysAgo && !readIds.has(item._id.toString())) {
+        unreadCount++;
+      }
+    }
+    for (const item of purchases) {
+      // Skip credit usage (AI generations) — only count paid purchases and earned bonuses
+      const p = item as any;
+      if (p.createdAt >= sevenDaysAgo && !readIds.has(p._id.toString()) && p.tokens > 0) {
+        unreadCount++;
+      }
+    }
+    for (const item of tickets) {
       if ((item as any).createdAt >= sevenDaysAgo && !readIds.has(item._id.toString())) {
         unreadCount++;
       }

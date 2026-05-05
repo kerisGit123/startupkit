@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
 
 export const create = mutation({
   args: {
@@ -81,6 +80,21 @@ export const getByCompany = query({
   },
 });
 
+export const getByCompanyAndType = query({
+  args: {
+    companyId: v.string(),
+    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("design"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom"), v.literal("notes")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("promptTemplates")
+      .withIndex("by_company_type", (q) =>
+        q.eq("companyId", args.companyId).eq("type", args.type)
+      )
+      .take(100);
+  },
+});
+
 export const getPublicTemplates = query({
   args: { type: v.optional(v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("design"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom"), v.literal("notes"))) },
   handler: async (ctx, args) => {
@@ -92,7 +106,7 @@ export const getPublicTemplates = query({
       query = query.filter((q) => q.eq("type", args.type));
     }
     
-    return await query.collect();
+    return await query.take(200);
   },
 });
 
@@ -110,62 +124,42 @@ export const incrementUsage = mutation({
   },
 });
 
-export const resetDefaults = mutation({
+export const setDefault = mutation({
   args: {
+    id: v.id("promptTemplates"),
     companyId: v.string(),
-    prompts: v.array(
-      v.object({
-        name: v.string(),
-        type: v.union(
-          v.literal("character"),
-          v.literal("environment"),
-          v.literal("prop"),
-          v.literal("design"),
-          v.literal("style"),
-          v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom"), v.literal("notes")
-        ),
-        prompt: v.string(),
-        notes: v.optional(v.string()),
-        isPublic: v.boolean(),
-        isSystem: v.optional(v.boolean()),
-        tags: v.optional(v.array(v.string())),
-      })
-    ),
+    type: v.union(v.literal("character"), v.literal("environment"), v.literal("prop"), v.literal("design"), v.literal("style"), v.literal("camera"), v.literal("action"), v.literal("video"), v.literal("other"), v.literal("custom"), v.literal("notes")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthorized");
 
-    const promptNames = new Set(args.prompts.map((prompt) => prompt.name));
-    const companyTemplates = await ctx.db
+    // Clear isDefault from all templates of this type+company
+    const existing = await ctx.db
       .query("promptTemplates")
       .withIndex("by_company", (q) => q.eq("companyId", args.companyId))
       .collect();
-
-    for (const template of companyTemplates) {
-      if (promptNames.has(template.name)) {
-        await ctx.db.delete(template._id);
+    for (const t of existing) {
+      if (t.type === args.type && t.isDefault) {
+        await ctx.db.patch(t._id, { isDefault: false });
       }
     }
 
-    const createdIds: Id<"promptTemplates">[] = [];
-
-    for (const prompt of args.prompts) {
-      const templateId = await ctx.db.insert("promptTemplates", {
-        name: prompt.name,
-        type: prompt.type,
-        prompt: prompt.prompt,
-        notes: prompt.notes,
-        companyId: args.companyId,
-        isPublic: prompt.isPublic,
-        isSystem: prompt.isSystem,
-        tags: prompt.tags,
-        usageCount: 0,
-        createdAt: Date.now(),
-      });
-      createdIds.push(templateId);
-    }
-
-    return createdIds;
+    // Set the new default
+    await ctx.db.patch(args.id, { isDefault: true });
+    return args.id;
   },
 });
+
+export const clearDefault = mutation({
+  args: {
+    id: v.id("promptTemplates"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+    await ctx.db.patch(args.id, { isDefault: false });
+  },
+});
+
+

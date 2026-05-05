@@ -36,7 +36,10 @@ import {
   Sparkles,
   BadgePlus,
   ShieldAlert,
+  CreditCard,
 } from "lucide-react";
+import { SubscriptionTestPanel } from "./SubscriptionTestPanel";
+import { BillingAdminTestPanel } from "./BillingAdminTestPanel";
 
 interface TestingPageProps {
   sidebarOpen: boolean;
@@ -116,6 +119,8 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
           (m) => m.role === "org:admin" || m.role === "admin",
         )
       : [];
+
+  const [activeTab, setActiveTab] = useState<"credits" | "subscription" | "billing">("credits");
 
   const [status, setStatus] = useState<
     { kind: "success" | "error"; text: string } | null
@@ -1240,7 +1245,51 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
         </div>
       </div>
 
-      {/* Content */}
+      {/* Tab bar */}
+      <div className="flex border-b border-(--border-primary) shrink-0 px-6">
+        <button
+          onClick={() => setActiveTab("credits")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === "credits"
+              ? "border-orange-400 text-orange-400"
+              : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+          }`}
+        >
+          <Coins className="w-4 h-4" />
+          Credit &amp; Identity
+        </button>
+        <button
+          onClick={() => setActiveTab("subscription")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === "subscription"
+              ? "border-purple-400 text-purple-400"
+              : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+          }`}
+        >
+          <CreditCard className="w-4 h-4" />
+          Subscription Lifecycle
+        </button>
+        <button
+          onClick={() => setActiveTab("billing")}
+          className={`flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === "billing"
+              ? "border-amber-400 text-amber-400"
+              : "border-transparent text-(--text-tertiary) hover:text-(--text-secondary)"
+          }`}
+        >
+          <BadgePlus className="w-4 h-4" />
+          Admin Billing Ops
+        </button>
+      </div>
+
+      {/* Subscription Lifecycle tab */}
+      {activeTab === "subscription" && <SubscriptionTestPanel />}
+
+      {/* Admin Billing Ops tab */}
+      {activeTab === "billing" && <BillingAdminTestPanel />}
+
+      {/* Credit & Identity tab */}
+      {activeTab === "credits" && (
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Status banner */}
@@ -2013,6 +2062,7 @@ export function TestingPage({ sidebarOpen, onToggleSidebar }: TestingPageProps) 
           </div>
         </div>
       </div>
+      )} {/* end Credit & Identity tab */}
     </div>
   );
 }

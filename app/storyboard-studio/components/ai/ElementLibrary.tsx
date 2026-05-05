@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, useReducer, useCallback, memo, type ChangeEvent } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Check, ChevronDown, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload, Star } from "lucide-react";
+import { Check, ChevronDown, Globe, ImagePlus, Image, Loader2, Lock, Package, Pencil, Sparkles, Trash2, User, Trees, Palette, Shapes, Users, X, FileText, Plus, Hash, FolderOpen, Upload, Star, LayoutGrid } from "lucide-react";
 import { useCurrentCompanyId } from "@/lib/auth-utils";
 import { uploadToR2, deleteFromR2 } from "@/lib/uploadToR2";
 import { FileBrowser } from "./FileBrowser";
@@ -357,7 +357,7 @@ export function ElementLibrary({
     if ((imageSelectionState.mode !== 'enabled' && imageSelectionState.mode !== 'selecting') || !element.referenceUrls?.length) return null;
     
     return (
-      <div className="absolute top-2 right-2 z-10">
+      <div className="absolute bottom-2 right-2 z-10">
         <span className="text-xs bg-(--accent-purple)/80 text-white rounded-xl px-2 py-1 font-medium backdrop-blur-sm">
           {element.referenceUrls.length} images
         </span>
@@ -381,6 +381,7 @@ export function ElementLibrary({
     }
   }, [imageSelectionState.selectedElement, onSelectImage, onClose]);
 
+  const convex = useConvex();
   const project = useQuery(api.storyboard.projects.get, { id: projectId });
   const projectCompanyId = useCurrentCompanyId(); // ✅ Use hook for active organization detection
   
@@ -397,6 +398,15 @@ export function ElementLibrary({
   } as any);
 
   const displayElements = elements;
+
+  // Pending element image files — drives loading indicator on cards
+  const elementIds = (elements ?? []).map((e: Element) => e._id);
+  const pendingElementFiles = useQuery(
+    api.storyboard.storyboardFiles.listPendingElementFiles,
+    elementIds.length > 0 ? { elementIds } : "skip"
+  );
+  const pendingElementIdSet = new Set((pendingElementFiles ?? []).map((f: any) => f.categoryId));
+
   const createElement = useMutation(api.storyboard.storyboardElements.create);
   const updateElement = useMutation(api.storyboard.storyboardElements.update);
   const removeElement = useMutation(api.storyboard.storyboardElements.remove);
@@ -416,21 +426,11 @@ export function ElementLibrary({
     }
   };
 
-  // 📁 FILE LOOKUP for deletion support
-  // Fetch all files for this company to build a lookup for deleteFromR2
-  const allStoryFiles = useQuery(api.storyboard.storyboardFiles.listByCompany, { 
-    companyId: projectCompanyId || "" 
-  });
-  
-  
-  const fileIdMap = useMemo(() => {
-    const map = new Map<string, Id<"storyboard_files">>();
-    allStoryFiles?.forEach(f => {
-      if (!f.r2Key) return;
-      map.set(f.r2Key, f._id);
-    });
-    return map;
-  }, [allStoryFiles]);
+  // 📁 FILE LOOKUP for deletion support — looked up on-demand (not a live subscription)
+  const lookupFileIdByR2Key = async (r2Key: string): Promise<Id<"storyboard_files"> | undefined> => {
+    const file = await convex.query(api.storyboard.storyboardFiles.getByR2Key, { r2Key });
+    return file?._id;
+  };
 
   // State for tracking deletion operations
   const [deletingIds, setDeletingIds] = useState<Set<Id<"storyboard_elements">>>(new Set());
@@ -516,7 +516,7 @@ export function ElementLibrary({
           model,
           style: 'realistic',
           quality: JSON.stringify({ type: 'gpt-image-2', mode }),
-          aspectRatio: element.type === 'character' ? '3:4' : '16:9',
+          aspectRatio: '16:9',
           companyId: projectCompanyId,
           userId,
           projectId: projectId as string,
@@ -1072,9 +1072,10 @@ export function ElementLibrary({
                 key={key}
                 onClick={() => {
                   setActiveType(key);
-                  // Close create panel when switching to wizard-based types
-                  if (!CUSTOM_ELEMENT_TYPES.has(key) && showCreate && !editingId) {
+                  // Close edit/create panel whenever switching tabs
+                  if (showCreate || editingId) {
                     setShowCreate(false);
+                    setEditingId(null);
                   }
                 }}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 text-[12px] font-medium transition-all duration-200 border-b-2 -mb-px ${
@@ -1237,30 +1238,67 @@ export function ElementLibrary({
                           {/* Multi-image badge */}
                           {MultiImageBadge(element)}
 
+                          {/* Identity Sheet badge */}
+                          {element.variants?.some(v => v.label === "Identity Sheet") && (
+                            <div className="absolute top-2 left-2 z-10">
+                              <span className="flex items-center gap-1 text-[10px] bg-amber-500/80 text-white rounded-xl px-1.5 py-0.5 font-medium backdrop-blur-sm">
+                                <LayoutGrid className="w-2.5 h-2.5" />
+                                Sheet
+                              </span>
+                            </div>
+                          )}
+
                           {(() => {
                             const thumbnailUrl = normalizeAssetUrl(element.thumbnailUrl);
-                            const firstReferenceUrl = element.referenceUrls && element.referenceUrls.length > 0
-                              ? normalizeAssetUrl(element.referenceUrls[0])
+                            const refs = element.referenceUrls ?? [];
+                            const primaryIdx = (element as any).primaryIndex ?? 0;
+                            const primaryReferenceUrl = refs.length > 0
+                              ? normalizeAssetUrl(refs[primaryIdx] ?? refs[0])
                               : null;
-                            const finalThumbnailUrl = thumbnailUrl || firstReferenceUrl;
+                            const firstReferenceUrl = refs.length > 0 ? normalizeAssetUrl(refs[0]) : null;
+                            const finalThumbnailUrl = thumbnailUrl || primaryReferenceUrl || firstReferenceUrl;
+                            const isGenerating = pendingElementIdSet.has(String(element._id));
 
-                            return finalThumbnailUrl ? (
-                              <img
-                                src={finalThumbnailUrl}
-                                alt={element.name}
-                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const parent = e.currentTarget.parentElement;
-                                  if (parent) {
-                                    const fallback = document.createElement('div');
-                                    fallback.className = 'h-full w-full flex items-center justify-center';
-                                    fallback.style.background = 'var(--bg-tertiary)';
-                                    fallback.innerHTML = '<svg class="h-6 w-6" style="color:var(--text-tertiary)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>';
-                                    parent.appendChild(fallback);
-                                  }
-                                }}
-                              />
+                            return isGenerating && !finalThumbnailUrl ? (
+                              <div className="h-full w-full flex flex-col items-center justify-center gap-1.5 bg-(--bg-tertiary)">
+                                <Loader2 className="h-5 w-5 text-blue-400 animate-spin" strokeWidth={1.75} />
+                                <span className="text-[10px] text-blue-400/80">Generating…</span>
+                              </div>
+                            ) : finalThumbnailUrl ? (
+                              <>
+                                <img
+                                  src={finalThumbnailUrl}
+                                  alt={element.name}
+                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                  onError={(e) => {
+                                    const img = e.currentTarget;
+                                    // Try primary reference as fallback before giving up
+                                    if (primaryReferenceUrl && img.src !== primaryReferenceUrl) {
+                                      img.src = primaryReferenceUrl;
+                                      return;
+                                    }
+                                    if (firstReferenceUrl && img.src !== firstReferenceUrl) {
+                                      img.src = firstReferenceUrl;
+                                      return;
+                                    }
+                                    img.style.display = 'none';
+                                    const parent = img.parentElement;
+                                    if (parent) {
+                                      const fallback = document.createElement('div');
+                                      fallback.className = 'h-full w-full flex items-center justify-center';
+                                      fallback.style.background = 'var(--bg-tertiary)';
+                                      fallback.innerHTML = '<svg class="h-6 w-6" style="color:var(--text-tertiary)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>';
+                                      parent.appendChild(fallback);
+                                    }
+                                  }}
+                                />
+                                {isGenerating && (
+                                  <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 bg-blue-500/85 text-white text-[9px] font-medium rounded-full px-1.5 py-0.5 backdrop-blur-sm pointer-events-none">
+                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                    Generating…
+                                  </div>
+                                )}
+                              </>
                             ) : (
                               <div className="h-full w-full flex items-center justify-center bg-(--bg-tertiary)">
                                 <Image className="h-6 w-6 text-(--text-tertiary)" strokeWidth={1.75} />
@@ -1279,17 +1317,19 @@ export function ElementLibrary({
                                 <Plus className="w-4 h-4" strokeWidth={2} />
                               </button>
                             )}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingId(element._id);
-                                setShowCreate(true);
-                              }}
-                              className="p-2 bg-white/15 rounded-lg hover:bg-white/25 text-white transition-colors"
-                              title="Edit"
-                            >
-                              <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
-                            </button>
+                            {!["character", "prop", "environment"].includes(element.type) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingId(element._id);
+                                  setShowCreate(true);
+                                }}
+                                className="p-2 bg-white/15 rounded-lg hover:bg-white/25 text-white transition-colors"
+                                title="Edit"
+                              >
+                                <Pencil className="w-3.5 h-3.5" strokeWidth={1.75} />
+                              </button>
+                            )}
                             {["character", "prop", "environment"].includes(element.type) && (
                               <button
                                 onClick={(e) => {
@@ -1514,7 +1554,7 @@ export function ElementLibrary({
                                     // ── Persisted R2 URL — find the storyboard_files row and call deleteFromR2
                                     const publicBase = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
                                     const r2Key = removedUrl.replace(`${publicBase}/`, "");
-                                    const fileId = fileIdMap.get(r2Key);
+                                    const fileId = await lookupFileIdByR2Key(r2Key);
 
                                     try {
                                       setDeletingRefUrls((prev) => new Set(prev).add(rawUrl));

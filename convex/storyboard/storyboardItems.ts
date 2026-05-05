@@ -28,6 +28,7 @@ export const create = mutation({
       name: v.string(),
       type: v.string(),
     }))),
+    frameStatus: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Get user from auth context

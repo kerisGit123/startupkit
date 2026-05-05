@@ -2,6 +2,51 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 // ============================================
+// Get User Credit History (Admin Query)
+// ============================================
+export const getUserCreditHistory = query({
+  args: { companyId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("credits_ledger")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .order("desc")
+      .take(200);
+  },
+});
+
+// ============================================
+// Adjust Credits (Admin Support Tool)
+// ============================================
+export const adminAdjustCredits = mutation({
+  args: {
+    companyId: v.string(),
+    tokens: v.number(),   // positive = add, negative = deduct
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const balance = await ctx.db
+      .query("credits_balance")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .first();
+    if (!balance) throw new Error("Workspace not found");
+
+    const newBalance = Math.max(0, balance.balance + args.tokens);
+    await ctx.db.patch(balance._id, { balance: newBalance, updatedAt: Date.now() });
+
+    await ctx.db.insert("credits_ledger", {
+      companyId: args.companyId,
+      tokens: args.tokens,
+      reason: args.reason,
+      type: "admin_adjustment",
+      createdAt: Date.now(),
+    });
+
+    return { newBalance };
+  },
+});
+
+// ============================================
 // Update User Label (Admin Function)
 // ============================================
 export const updateUserLabel = mutation({

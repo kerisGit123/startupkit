@@ -1,8 +1,10 @@
 # Competitive Analysis — Storyboard Studio
 
-> **Last updated:** 2026-05-02 (session #32)
-> Analysis of 8 direct competitors against our platform.
+> **Last updated:** 2026-05-03 (session #38)
+> Analysis of 9 direct competitors against our platform.
 >
+> **Session 2026-05-03 #38 (updated):** Full 4-way head-to-head added (Section 2b) — Us vs InVideo AI vs Higgsfield vs Artlist across all aspects. Corrected model counts: 16 image models, 6 video models, 12 inpaint models, 4 audio/music models (~29 total). Soul Cinema clarified: it is a video generation model, not a studio — our Cinema Studio workflow (genre/format/3D camera/style system) achieves equivalent cinematic output through the production layer. Face swap via inpaint (OpenAI 4o + mask) confirmed. Gaps updated: Sora 2 missing, voice cloning missing, video relight missing. Section 3/4/5 updated with accurate data.
+> **Session 2026-05-03 #38:** Added InVideo AI (50M users, autonomous agent, Sora 2+Veo 3.1 bundled). Updated Higgsfield to $1.3B/$200M ARR/15M users, Mr. Higgs executes not just advises, Cinema Studio 3.5 pricing corrected (Starter $15/mo). Updated Artlist to $300M ARR, AI Studio launched April 2026 (control-focused, agent still roadmap). Updated threat table: InVideo added as Highest threat (volume/speed segment), Higgsfield updated with real valuation/ARR.
 > **Session 2026-05-02 #32:** Visual Lock feature (production continuity — vision-analyze element images, rewrite script to match, segment-based Haiku/Sonnet auto-select, 9-step modal). @mention pipeline upgraded (inline injection, parseMentions in editor, drag-and-drop reorder, @ElementName→@Image{n} substitution at generate time). Element extraction quality bar (movie director framing, type-specific 100+ char descriptions, identity field population, sceneIds fuzzy expansion, occurrenceCount from ground truth, living creatures always characters). File deletion cleanup architecture (defaultAI rule for soft vs hard delete, shared cleanupFiles module, orphan repair daily cron, INTERNAL_REPAIR_SECRET env var).
 > **Session 2026-04-30 #29:** Character thumbnail regeneration (76+ thumbs, ultra-realistic 4K, steel-blue bg, measured grid cropping). Custom Element Builder for Logo/Style/Other (single-form UI, prompt injection, @mention support).
 > **Session 2026-04-30 #28:** Convex resource optimization — cron intervals, early returns, server-side filters, landing_stats cache. 2.38GB→~1.0GB bandwidth.
@@ -25,24 +27,62 @@
 
 ## 1. Competitor Profiles
 
+### InVideo AI (invideo.io) — NEW THREAT (added Session #38, 2026-05-03)
+
+**What they are:** Fully autonomous AI video agent. 50M+ users, $50M+ ARR. Mass-market consumer video production from a single sentence.
+
+**Key features:**
+
+- **Full autonomous agent**: one text prompt → script + voiceover + stock/AI clips + music → published video in 3-5 minutes for a 10-minute video
+- Makes 500+ creative decisions per video autonomously (pacing, transitions, BPM, cuts)
+- **Semantic editing**: "make the intro more exciting" → agent increases cut pace, adds transitions, raises music tempo automatically
+- Learns user aesthetic preferences over time
+- Multi-agent architecture: OpenAI o3 orchestrates, specialist agents handle script/visuals/voiceover/music
+- Video models: Sora 2, Veo 3.1, Kling 3.0, Pixverse, Hailuo (bundled under subscription — only platform with both Sora 2 and Veo 3.1)
+- Image models: Nano Banana Pro, Ideogram, Flux Kontext
+- Audio: ElevenLabs, Minimax; voice cloning from 30-second sample; 5 voice clones on Max plan
+- Uses stock footage library + AI generation (not pure frame-by-frame AI control)
+- Up to 30 minutes of video per generation
+
+**Pricing:**
+
+- Free: 10 AI videos/week
+- Plus: $28/month (50 min/month generation)
+- Max: $50-60/month (200 min/month)
+- Annual discounts ~20%. Credits do NOT roll over monthly.
+
+**Target:** YouTubers, social media teams, content creators who want volume and speed over frame-level control.
+
+**Their moat:** Sheer scale (50M users) + fastest time-to-published-video on market + Sora 2 + Veo 3.1 bundled + semantic intent understanding. Agent executes the entire production pipeline with zero manual steps.
+
+**Limitation:** Zero frame-level control. You can't specify individual shots, camera angles, or character consistency across scenes. It's a content machine, not a production studio.
+
+---
+
 ### Artlist (artlist.io)
 
-**What they are:** Stock asset marketplace + AI video production studio. $300M ARR (2026), one of the largest in the space.
+**What they are:** Stock asset marketplace + AI video production studio. $300M ARR (April 2026, up from $260M end 2025). 600% new user growth Q1 2026. One of the largest in the space.
 
 **Key features:**
 - Massive stock library (music, SFX, video clips, templates)
-- AI video generator with Sora 2 model
-- AI image generator
-- AI music and voiceover generators
-- Artlist Studio — AI video production platform (casting, locations, camera angles)
-- Silence removal, auto zoom editing tools
+- **Artlist Studio** (launched April 20, 2026): AI video production with casting, locations, camera angles, continuity control — "control over every single element"
+- AI video generation: Google Veo 3, Kling 2.5 (understands cinematic terms: "dolly zoom", smooth motion)
+- AI image generation: Google Nano Banana (consistency, relight, re-angle, reimagine)
+- Voice cloning: upload audio sample → instant AI voice + localization
+- AI music + SFX via integrated library
+- Silence removal, auto-zoom editing tools
 - Mobile app (iOS/Android)
+- **AI Agent: NOT YET LAUNCHED** — positioned as upcoming "intelligent assistance" (roadmap, no launch date)
+- Smart Canvas: also upcoming (roadmap)
 
-**Pricing:** Subscription-based ($10-30/mo), unlimited downloads on paid plans.
+**Pricing:**
+- AI Starter: $13.99-15.99/month (7,500 credits/month)
+- AI Professional: $99.99-149.99/month (up to 1M credits/month)
+- Annual billing saves 30%; credits up to 62% cheaper on higher tiers
 
-**Target:** Video marketers, content creators, social media teams.
+**Target:** Video marketers, content creators, social media teams, agencies.
 
-**Their moat:** Enormous stock library + $300M revenue + brand trust. They're adding AI on top of an existing content empire.
+**Their moat:** $300M stock library brand trust + Artlist Studio production control focus + Veo 3 + Kling 2.5. Note: their AI agent is still roadmap — they're building toward autonomous production but don't have it yet.
 
 ---
 
@@ -174,52 +214,43 @@
 
 ### Higgsfield AI (higgsfield.ai)
 
-**What they are:** AI video generation platform with Cinema Studio for filmmaking. 4.5M video generations/day, 30+ AI models.
+**What they are:** AI video generation platform with Cinema Studio for filmmaking. **15M+ users, $200M ARR, $1.3B valuation (Jan 2026).** Founded by ex-Snap head of GenAI. 4.5M video generations/day, 30+ AI models.
 
 **Key features:**
+
 - **Cinema Studio 3.5** — professional filmmaking environment with per-shot camera/style control
-- **Mr. Higgs AI co-director** — breaks scenes into shots, adjusts settings, populates prompts in real-time
-- Virtual camera system (camera bodies, lens types, Anamorphic glass, focal length, depth of field)
-- 30+ AI models (Sora 2, Kling 3.0, Veo 3.1, Seedance 2.0, GPT Image 2, Soul 2.0, Nano Banana Pro)
-- **Soul ID** — persistent character identity across generations
+- **Mr. Higgs AI co-director** — EXECUTES (not just advises): breaks scenes into shots, adjusts camera/lighting settings, populates prompts automatically in real-time. Responds to: "pick the camera", "light the scene", "write the prompt", "break this script into shots"
+- Reusable elements system: characters, locations, props persist and are shareable across team shots
+- Virtual camera system: precise optical physics, lens types, focal lengths, depth of field
+- 30+ AI models (Kling 3.0, Seedance 2.0, Soul V2, Cinema models, Flux 2.0 Pro, GPT Image, Seedream 5.0 Lite)
+- **Soul ID** — persistent character identity across generations (proprietary)
+- **Soul Cast** — full character builder: genre, era, physique, personality traits
 - **Photodump** — one-click multi-scene generation with character consistency
-- Lipsync Studio, face swap, character swap
-- Marketing Studio (multi-format from one product)
-- Video editing with shot-by-shot control
-- Inpainting, upscaling, background removal
-- Community gallery, team collaboration
-- 40+ creative AI applications
+- Native AI sound generation synchronized to video (SFX + speech + music — Cinema Studio 3.0+)
+- Real-time team collaboration: multiple users generate simultaneously on same project
+- Lipsync Studio, face swap, character swap, brush inpainting
+- Marketing Studio (URL → ad video in multiple formats)
+- Higgsfield Audio (TTS, voice swap, video translation)
+- Higgsfield Chat social network (shared projects, karma system)
+- 80+ creative AI applications
+- Topaz upscale, color grading, background removal
+- Full 4K resolution (Cinema Studio 2.0+)
 - Mobile accessible
 
 **Pricing (annual billing):**
 
-| Plan | Monthly | Annual | Credits/mo | Nano Banana 2/gen | Gens/mo | Cost/gen |
-|------|---------|--------|-----------|-------------------|---------|----------|
-| Basic | $5 | $5 (no discount) | 70 | 2 credits | 35 | $0.143 |
-| Plus | $49 | **$39** (20% off) | 1,000 | 2 credits | 500 | $0.078 |
-| Ultra | $129 | **$99** (23% off) | 3,000 (slider up to 9,000) | 2 credits | 1,500 | $0.066 |
-| Business | $89/seat | **$62/seat** (30% off) | 1,500/seat (slider up to 4,500) | 2 credits | 750 | $0.083 |
+| Plan | Monthly | Annual | Credits/mo | Gens/mo | Cost/gen |
+| --- | --- | --- | --- | --- | --- |
+| Starter | $15 | $15 | 200 | 100 | $0.15 |
+| Plus | $49 | $39 (20% off) | 1,000 | 500 | $0.078 |
+| Ultra | $129 | $99 (23% off) | 3,000-9,000 | 1,500+ | $0.066 |
+| Business | $89/seat | $62/seat (30% off) | 1,500/seat | 750+ | $0.083 |
 
-Plus features: All models, 6 parallel video + 8 parallel image, all features, early access to advanced AI.
-Ultra features: All models, 8 parallel video + 8 parallel image, lowest cost per credit (55% cheaper), one 365-day unlimited video model, 7-day unlimited (Nano Banana Pro 2K, Nano Banana 2 2K, Kling 3.0).
-Business features: All features & models, 2-15 members, shared credit pool, 16 parallel video + 16 parallel image, priority support, shareable Soul IDs, SSO.
+Cinema Studio included in all plans (not a separate product).
 
 **Target:** Content creators, marketers, filmmakers, production studios, enterprises.
 
-**Cinema Studio 3.5 (latest — April 2026):**
-- Mr. Higgs AI Director with per-shot camera + style control
-- Real-time collaboration on projects
-- 80+ creative apps (face swap, lipsync, AI headshot, VFX presets)
-- Marketing Studio (URL → ad video in multiple formats)
-- Higgsfield Audio (TTS, voice swap, video translation)
-- Higgsfield Chat social network (shared projects, karma system)
-- SOUL 2.0 proprietary image model + Soul Cinema cinematic model
-- Soul Cast full character builder (genre, era, physique, personality)
-- Native audio generation (SFX + speech + music synced to video)
-- Physics-aware generation, cinematic reasoning from reference images
-- Brush inpainting, Topaz upscale, color grading, background removal
-
-**Their moat:** Cinema Studio 3.5 with AI co-director + 80+ apps + Marketing Studio + social network + proprietary models (Soul 2.0, Soul Cinema) + native audio sync. Most feature-rich AI video platform overall. 4.5M generations/day. Direct competitor to our storyboard + AI pipeline.
+**Their moat:** Cinema Studio 3.5 with AI co-director that actually executes + 80+ apps + Soul ID proprietary consistency + native audio sync + real-time team collaboration + social network + $1.3B valuation + 15M users. Fastest-growing direct competitor — $200M ARR puts them well-funded for continued R&D. 4.5M generations/day. Direct competitor to our storyboard + AI pipeline.
 
 ---
 
@@ -370,8 +401,8 @@ See `plan_pricing_strategy.md` for full analysis with margin tables.
 
 | Feature | Us | Artlist | Lovart | Storyboarder | Krock | ImagineArt | OpenArt | Higgsfield | LTX Studio |
 |---------|:--:|:------:|:------:|:------------:|:-----:|:----------:|:------:|:----------:|:----------:|
-| Multi-model image AI | **YES** (5+) | YES | YES | YES | - | **YES** (5+) | YES (20+) | **YES** (30+) | YES |
-| Multi-model video AI | **YES** (5+) | Sora 2 | - | Basic | - | **YES** (5+) | Basic | **YES** (30+) | YES |
+| Multi-model image AI | **YES** (16 models) | YES | YES | YES | - | **YES** (5+) | YES (20+) | **YES** (~10) | YES |
+| Multi-model video AI | **YES** (6 models) | Sora 2 | - | Basic | - | **YES** (5+) | Basic | **YES** (20+) | YES |
 | AI music generation | **YES** | Stock | - | - | - | - | - | - | - |
 | AI TTS (text-to-speech) | **YES** | YES | - | - | - | - | - | - | - |
 | Lipsync | **YES** | - | - | - | - | YES | - | **YES** | - |
@@ -393,7 +424,7 @@ See `plan_pricing_strategy.md` for full analysis with margin tables.
 | Image upscaling | YES | - | - | - | - | YES | YES | YES | - |
 | Background removal | **YES** | - | - | - | - | YES | YES | YES | - |
 | Style transfer / Copy Style | **YES** (AI Analyze + GPT img2img) | - | YES | YES | - | - | YES | - | YES |
-| Face swap / character swap | - | - | - | - | - | - | - | **YES** | - |
+| Face swap / character swap | YES (inpaint: OpenAI 4o + mask, Ideogram Character Remix) | - | - | - | - | - | - | **YES** (dedicated button) | - |
 | Keyframe animation | - | - | - | - | - | - | - | - | **YES** |
 
 ### Video Editor / Timeline
@@ -467,6 +498,208 @@ See `plan_pricing_strategy.md` for full analysis with margin tables.
 
 ---
 
+## 2b. Head-to-Head: Us vs InVideo AI vs Higgsfield vs Artlist
+
+> Full 4-way comparison across all aspects. Added session #38, 2026-05-03.
+
+### Business Reality
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+| --- | --- | --- | --- | --- |
+| Stage | Pre-launch | Growth | Scale | Mature |
+| ARR | $0 | $50M | $200M | $300M |
+| Valuation | Bootstrapped | Funded | $1.3B | Acquired |
+| Users | Building | 50M | 15M | Large |
+| Founded | 2024 | 2019 | 2023 | 2014 |
+| Target | Filmmakers, agencies | YouTubers, content farms | Creators + filmmakers | Video marketers, agencies |
+
+### Core Philosophy
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+| --- | --- | --- | --- | --- |
+| Core model | Director controls every frame | One prompt → finished video | AI co-director executes shots | Stock + AI production control |
+| User intent | "I want to direct" | "I want a video, fast" | "I want a co-director" | "I want professional assets I control" |
+| Autonomous? | Partial (Agent mode) | Fully (500 decisions/video) | Mr. Higgs executes in real-time | Not yet (roadmap) |
+| Control level | Maximum (per-frame) | Zero | High (per-shot) | High |
+| Speed | Slower, deliberate | 3-5 min to finished video | Moderate | Moderate |
+
+### Image Models — Crown Jewels
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| GPT Image 2 | **YES** | NO | YES | NO |
+| Nano Banana 2 | **YES** | YES (Nano Banana Pro) | YES | **YES** |
+| Ideogram v3 (Edit + Remix + Reframe) | **YES** | YES | NO | NO |
+| Flux Pro | NO | YES (Flux Kontext) | **YES** (Flux 2.0 Pro) | NO |
+| Seedream 5.0 (4 variants) | **YES** | NO | YES (Lite) | NO |
+| Qwen Image Edit (3 variants) | **YES** | NO | NO | NO |
+| Grok Image | **YES** | NO | NO | NO |
+| Recraft (Remove BG + Crisp Upscale) | **YES** | NO | NO | NO |
+| Topaz Image Upscale | **YES** | NO | YES | NO |
+| **Total image models** | **~16** | ~4 | ~10 | 2 |
+
+**Verdict: We win on image model breadth. GPT Image 2 matched with Higgsfield.**
+
+### Video Models — Crown Jewels
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| Sora 2 | **NO** | **YES (bundled)** | YES | NO |
+| Veo 3.1 | **YES** | **YES (bundled)** | Unclear | YES (Veo 3) |
+| Seedance 2.0 | **YES** | NO | YES | NO |
+| Kling 3.0 | YES (motion) | YES | **YES** | YES (Kling 2.5) |
+| Soul Cinema | NO | NO | **YES (proprietary)** | NO |
+| Pixverse / Hailuo | NO | YES | YES | NO |
+| Topaz Video Enhance | **YES** | NO | YES | NO |
+| **Total video models** | **6** | 6 | 20+ | 2 |
+
+**Note on Soul Cinema:** Soul Cinema is a proprietary video model trained on cinematic footage — not a studio environment. Our workflow layer (genre system, format presets, 3D camera, virtual camera physics, style system) achieves equivalent cinematic output through prompt engineering and tooling rather than model fine-tuning. Different approach, comparable result for controlled productions.
+
+**Verdict: Missing Sora 2 — the only crown jewel gap. Everything else matched or close. Higgsfield's 20+ video model library is their real depth advantage.**
+
+### Audio / Voice / Music
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| AI music generation | **YES** | Stock library only | NO | Stock library only |
+| Extend music | **YES** | NO | NO | NO |
+| TTS (text-to-speech) | **YES** | YES (ElevenLabs) | YES | YES |
+| Custom voice persona | **YES** | NO | YES | NO |
+| Voice cloning | **NO** | YES (30-sec sample) | YES | YES |
+| Native audio sync to video | NO | Auto | **YES** | NO |
+| Lipsync | YES | NO | **YES** | NO |
+
+**Verdict: We win on music gen — nobody else has AI music in the same tool. Missing: voice cloning (addable via ElevenLabs).**
+
+### Image Editing / Inpainting
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| Canvas draw + annotate | **YES** | NO | NO | NO |
+| Inpaint model count | **12 models** | NO | 1 (brush only) | NO |
+| Mask-based face replacement | **YES** (OpenAI 4o + mask) | NO | YES (dedicated button) | NO |
+| Character remix / restyle | **YES** (Ideogram Character Remix) | NO | YES (character swap) | NO |
+| Background removal | **YES** (Recraft) | NO | YES | NO |
+| Image upscale | **YES** (Topaz + Recraft) | NO | YES (Topaz) | NO |
+| Reframe / expand canvas | **YES** (Ideogram V3 Reframe) | NO | NO | NO |
+| Video relight | **NO** | NO | **YES** | NO |
+| Video enhance | YES (Topaz) | NO | **YES** | NO |
+
+**Verdict: We win on inpainting depth — 12 models vs Higgsfield's 1 brush. Canvas draw is unique to us. Missing: video relight.**
+
+### Timeline Editor — 4-way
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| Multi-track timeline | **YES** | NO | **NO** | YES |
+| Video + audio + subtitle tracks | **YES** | NO | NO | YES |
+| Trim, split, range cut | **YES** | NO | NO | YES |
+| Blend modes + opacity | **YES** | NO | NO | YES |
+| Transitions (5 types) | **YES** | Auto only | NO | YES |
+| Scrolling text / teleprompter | **YES** | NO | NO | NO |
+| Multi-layer overlays (PiP, text, shapes) | **YES** | NO | NO | YES |
+| Semantic editing ("make it faster") | NO | **YES** | NO | NO |
+| Video export (WebCodecs) | **YES** | YES | NO | YES |
+
+**Verdict: We and Artlist win on editing depth. Higgsfield has NO timeline editor — major gap for them. Higgsfield generates shots but can't edit sequences.**
+
+### Pre-Production / Planning Pipeline
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| Script → storyboard pipeline | **YES** | Auto (no control) | Partial (Mr. Higgs) | NO |
+| Script parser + auto-frame creation | **YES** | YES (fully auto) | NO | NO |
+| Director's filmstrip (god view) | **YES** | NO | Per-shot only | NO |
+| Comparison mode (prev/cur/next) | **YES** | NO | NO | NO |
+| Snapshot continuity bridge | **YES** | NO | NO | NO |
+| Director notes per frame | **YES** | NO | NO | NO |
+| Scene grouping with dividers | **YES** | NO | NO | NO |
+| Animatic playback | **YES** | NO | NO | NO |
+| Drag reorder in filmstrip | **YES** | NO | NO | YES |
+
+**Verdict: We win this category entirely. This is our deepest moat — nobody else has this level of pre-production control.**
+
+### Camera System
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| 3D camera angle picker | **YES** | NO | YES | YES |
+| Virtual camera physics (lens, DOF) | **YES** | NO | **YES** | NO |
+| Camera motion presets | **YES** | Auto | **YES** | YES |
+| Per-shot camera control | **YES** | NO | **YES** | YES |
+| Genre system (16 presets) | **YES** | NO | NO | NO |
+| Format presets (12 types) | **YES** | NO | NO | NO |
+
+**Verdict: Matched with Higgsfield on per-shot camera. We win on genre + format preset system — their cinematic output comes from Soul Cinema model; ours comes from the workflow.**
+
+### Character / Element Consistency
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| Element library (characters/props/environments) | **YES** | NO | YES | NO |
+| Element Forge wizard (10 archetypes) | **YES** | NO | NO | NO |
+| @mention injection into prompts | **YES** | NO | NO | NO |
+| Visual Lock (vision → rewrite script) | **YES** | NO | NO | NO |
+| Soul ID (visual persistence) | NO | NO | **YES (proprietary)** | NO |
+| Soul Cast (character builder) | NO | NO | **YES** | NO |
+| Photodump (multi-scene one-click) | NO | NO | **YES** | NO |
+
+**Note:** Higgsfield uses model-level identity (Soul ID — baked into generation). We use prompt-level identity (@mentions + Element Forge). Soul ID is more automatic for novice users. Our approach gives more explicit control for professional users.
+
+### AI Director / Agent
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+| --- | --- | --- | --- | --- |
+| AI director / agent exists | YES (22 tools) | YES (fully autonomous) | YES (Mr. Higgs) | NO (roadmap) |
+| Executes without asking | Partial (E2E pipeline in progress) | **Full (500 decisions/video)** | **Yes (real-time in studio)** | NO |
+| Frame-level control during directing | **YES** | NO | YES | N/A |
+| Semantic editing | NO | **YES** | NO | NO |
+| Script → full video one-shot | In progress | **YES** | YES | NO |
+
+### Collaboration / Platform
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+|---|:---:|:---:|:---:|:---:|
+| Real-time sync (Convex, no save button) | **YES** | NO | NO | NO |
+| Multi-user organizations | **YES** | NO | YES | NO |
+| Real-time team generation | NO | NO | **YES** | NO |
+| Mobile app | NO | YES | YES | YES |
+| Social network | NO | NO | **YES** (Higgsfield Chat) | NO |
+| Stock footage library | NO | YES (bundled) | NO | **YES (massive)** |
+
+### Pricing Model
+
+| | **Us** | **InVideo AI** | **Higgsfield** | **Artlist** |
+| --- | --- | --- | --- | --- |
+| Model | Credit per generation | Minutes of video/month | Credits per generation | Credits per month |
+| Transparency | Per-model pricing | Opaque (minutes-based) | Per-credit | Per-credit tiers |
+| Free tier | YES (100 credits) | YES (10 videos/week) | NO | NO |
+| Entry paid | ~$10 top-up | $28/month | $15/month | $14/month |
+| Credits roll over | **YES** | **NO** | NO | YES |
+
+### Summary Scorecard
+
+| Aspect | Winner | Notes |
+| --- | --- | --- |
+| Image model quality | Tied (us + Higgsfield) | Both have GPT Image 2 |
+| Image model breadth | **Us (16 models)** | vs Higgsfield ~10, InVideo ~4 |
+| Video model quality | InVideo + Higgsfield | Missing Sora 2 only |
+| Video model breadth | **Higgsfield (20+)** | Their real depth advantage |
+| Inpainting / canvas | **Us (12 models)** | Higgsfield has 1 brush only |
+| Video timeline editor | **Us + Artlist** | Higgsfield has NO editor |
+| Pre-production pipeline | **Us** | Nobody comes close |
+| Camera system | **Us + Higgsfield** | Tied on per-shot; we win on genre/format |
+| AI music in same tool | **Us** | Nobody else combines music + storyboard |
+| Autonomous speed | **InVideo** | Different market segment |
+| Character consistency | Higgsfield (Soul ID) vs Us (@mentions) | Different approaches |
+| Real-time sync | **Us** | Unique — Convex backend |
+| Voice cloning | InVideo + Higgsfield + Artlist | Gap — addable via ElevenLabs |
+| Stock library | **Artlist + InVideo** | Different strategy — we generate instead |
+| Video relight | **Higgsfield** | Missing — niche but worth watching |
+| Scale / users | InVideo + Artlist | Business gap, not product gap |
+
+---
+
 ## 3. Our Advantages
 
 ### Things nobody else has
@@ -494,6 +727,8 @@ See `plan_pricing_strategy.md` for full analysis with margin tables.
 10. **Script-to-storyboard pipeline** — Script parser → n8n build → auto-create frames + elements → AI generation. Storyboarder.ai has script import but no multi-model generation after.
 
 11. **Snapshot continuity bridge** — Capture last frame of video → set as next frame's reference. Ensures visual continuity between shots. Nobody else has this.
+
+- **Frame-level creative control vs autonomous agents** — InVideo, Zopia, and Higgsfield Photodump produce a video for you. We produce a production you control. Every frame is individually accessible, regeneratable, and editable. Users who care about quality — not just volume — need this. No autonomous agent can match director intent at the frame level.
 
 12. **Multi-shot video (Seedance 2.0)** — UGC mode (product + influencer, 6 images), Showcase mode (subject + presenter + scene, 9 images). Generates multi-angle/multi-cut videos from reference images.
 
@@ -543,24 +778,26 @@ See `plan_pricing_strategy.md` for full analysis with margin tables.
 
 We occupy a unique position: **high pre-production planning + high AI generation power + full editing suite**. LTX Studio and Higgsfield are now in the same quadrant but each lacks pieces we have.
 
+- **InVideo AI** is high volume/speed but zero control — content factory for YouTubers, not a production tool. Their 50M users are a different audience entirely.
 - **LTX Studio** is closest — has Elements + script-to-video + timeline. But no multi-model AI (own models only), no music AI, no canvas draw+AI, no real-time sync, no credit pricing
-- **Higgsfield** has 30+ AI models + Cinema Studio + Soul ID. But no storyboard planning pipeline, no multi-track timeline with subtitles, no canvas editing, no music AI
+- **Higgsfield** has 30+ AI models + Cinema Studio + Mr. Higgs executes autonomously + Soul ID + $1.3B funding. Our defense: storyboard planning pipeline, canvas editing, multi-track timeline with subtitles, music AI, element @mentions
 - **Storyboarder.ai** is high on planning but limited on AI models (their own models only)
 - **ImagineArt/OpenArt** are high on AI but have zero planning/project structure
-- **Artlist** is high on stock assets but planning is basic
+- **Artlist** is high on stock assets, launched AI Studio April 2026 but agent not yet live
 - **Krock.io** is high on review/collaboration but has no generation
 - **Lovart** is design-focused, not filmmaking-focused
 
 ### Our natural competitors by threat level
 
 | Threat | Competitor | Why |
-|--------|-----------|-----|
-| **Highest** | Zopia AI | **NEW THREAT.** End-to-end autonomous Director Agent: script → storyboard → video → edit in one prompt. Multi-agent character consistency across 30+ shots. Same models (Kling 3.0, Seedance 2.0). Free beta capturing early market. Our defense: 11 post-processing tools (they have 0), canvas editing, music AI, camera system, manual creative control, established pricing model. They're automation-first, we're control-first |
-| **Highest** | LTX Studio | Same pipeline vision (script → storyboard → video), Elements consistency system, camera presets, timeline editor, team collaboration. Our defense: multi-model AI (they use own models only), music AI, canvas draw+AI, real-time Convex sync, credit-based pricing, AI Director + Agent, Cinema Grade |
-| **Highest** | Higgsfield | 30+ AI models (same as ours), Cinema Studio with AI co-director, Soul ID character persistence, 4.5M generations/day. Our defense: storyboard planning pipeline, canvas editing, multi-track timeline with subtitles, music AI, element @mentions, Cinema Grade (12 film stocks) |
+|--------|------------|-----|
+| **Highest** | InVideo AI | **NEW THREAT (added #38).** 50M users, $50M ARR, autonomous agent (500+ decisions/video), Sora 2 + Veo 3.1 bundled, 3-5 min to finished video. Dominates the "I want a video fast" segment. Our defense: they have zero frame-level control, no storyboard planning, no character consistency system, no music AI — we're for professionals who want to direct, not just generate |
+| **Highest** | Higgsfield | $1.3B valuation, $200M ARR, 15M users. Cinema Studio 3.5 with Mr. Higgs that EXECUTES (not just advises), Soul ID, 80+ apps, native audio sync, real-time team collab. Our defense: storyboard planning pipeline, canvas editing, multi-track timeline with subtitles, music AI, element @mentions, credit transparency |
+| **Highest** | Zopia AI | End-to-end autonomous Director Agent: script → storyboard → video → edit in one prompt. Multi-agent character consistency across 30+ shots. Free beta capturing early market. Our defense: 11 post-processing tools (they have 0), canvas editing, music AI, camera system, manual creative control |
+| **Highest** | LTX Studio | Same pipeline vision (script → storyboard → video), Elements consistency system, camera presets, timeline editor, team collaboration. Our defense: multi-model AI (they use own models only), music AI, canvas draw+AI, real-time Convex sync, credit-based pricing, AI Director + Agent |
 | **High** | ImagineArt | Same AI models, 30M users, adding workflow builder. If they add storyboard + timeline, they become dangerous. Our defense: project structure pipeline |
 | **High** | Storyboarder.ai | Same target audience (filmmakers), 250K users, script import, 3D camera. But no multi-model AI, no timeline, no music. Their users are our upgrade path |
-| **Medium** | Artlist | $300M, launching AI Studio. But stock-first DNA, subscription model, no storyboard planning. Different market segment |
+| **Medium** | Artlist | $300M ARR, AI Studio launched April 2026 (control-focused, not autonomous). Agent still roadmap. Stock-first DNA. Different market segment but watching |
 | **Low** | OpenArt | Image-focused, no video editing, no storyboard. Different use case |
 | **Low** | Krock.io | Review-only tool. Complementary, not competitive. Could be an integration partner |
 | **Low** | Lovart | Design agent, not filmmaking. Different market entirely |
