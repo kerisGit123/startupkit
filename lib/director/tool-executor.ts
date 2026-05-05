@@ -858,7 +858,12 @@ export async function dispatchDirectorTool(
         try {
           const webhookSecret = process.env.WEBHOOK_SECRET;
           if (!webhookSecret) throw new Error("WEBHOOK_SECRET not set — cannot call generate-image route internally");
-          const genRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/storyboard/generate-image`, {
+          // Use localhost directly for internal server-to-server calls — NEVER the cloudflare
+          // tunnel URL (NEXT_PUBLIC_APP_URL). The tunnel is for external KIE AI callbacks only.
+          // Routing internally through the tunnel causes circular external requests that can
+          // drop custom headers or stall. INTERNAL_BASE_URL can override port in production.
+          const internalBase = process.env.INTERNAL_BASE_URL || "http://localhost:3000";
+          const genRes = await fetch(`${internalBase}/api/storyboard/generate-image`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
