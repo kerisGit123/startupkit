@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
-  Play, Loader2, CheckCircle2, XCircle,
+  Play, Loader2, CheckCircle2, XCircle, SkipForward,
   Trash2, TrendingUp, BarChart3, Download, RefreshCw, FileText, Copy, ClipboardCheck,
 } from "lucide-react";
 import jsPDF from "jspdf";
@@ -191,7 +191,7 @@ export function RevenueMetricsTestPanel() {
     doc.setFontSize(7);
     doc.setTextColor(150);
     doc.setFont("helvetica", "normal");
-    const pages = (doc.internal as { getNumberOfPages: () => number }).getNumberOfPages();
+    const pages = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
     for (let p = 1; p <= pages; p++) {
       doc.setPage(p);
       doc.text(`Revenue Metrics Test  |  Page ${p} of ${pages}`, W / 2, 292, { align: "center" });

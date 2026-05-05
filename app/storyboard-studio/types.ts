@@ -1,4 +1,4 @@
-export type Step = "dashboard" | "script" | "breakdown" | "style" | "cast" | "storyboard" | "scene-editor" | "image-maker" | "members" | "usage" | "gallery" | "price-management" | "billing" | "support" | "logs" | "cleaning" | "testing" | "invoices" | "referrals";
+export type Step = "dashboard" | "script" | "breakdown" | "style" | "cast" | "storyboard" | "scene-editor" | "image-maker" | "members" | "usage" | "gallery" | "price-management" | "billing" | "support" | "logs" | "cleaning" | "testing" | "invoices" | "referrals" | "profile";
 
 export interface Project {
   id: string;

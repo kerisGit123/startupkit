@@ -165,6 +165,7 @@ export interface EditImageAIPanelProps {
   originalImage?: string;
   userId?: string;
   user?: any;
+  worldViewConcept?: string;
 }
 
 // ── Available Models ─────────────────────────────────────────────────

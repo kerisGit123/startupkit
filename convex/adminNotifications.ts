@@ -73,7 +73,7 @@ export const getNotifications = query({
           ? `Credit Purchase +${purchase.tokens}`
           : `Credit Earned +${purchase.tokens}`,
         description: isPaid
-          ? `MYR ${(purchase.amountPaid / 100).toFixed(2)}`
+          ? `MYR ${((purchase.amountPaid ?? 0) / 100).toFixed(2)}`
           : "Referral/Signup Bonus",
         time: purchase.createdAt,
         read: readIds.has(purchaseId),

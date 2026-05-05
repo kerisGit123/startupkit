@@ -211,7 +211,10 @@ export default function BillingProfilePage({ sidebarOpen, onToggleSidebar }: Bil
               Business / Billing Info
             </h2>
             <div className="space-y-4">
-              {FIELD_CONFIG.map(({ key, label, placeholder, icon: Icon, hint, textarea }) => (
+              {FIELD_CONFIG.map((field) => {
+                const { key, label, placeholder, icon: Icon, hint } = field;
+                const textarea = "textarea" in field ? field.textarea : false;
+                return (
                 <div key={key}>
                   <label className="text-xs font-medium text-(--text-secondary) mb-1.5 flex items-center gap-1.5">
                     <Icon className="w-3.5 h-3.5" />
@@ -236,7 +239,8 @@ export default function BillingProfilePage({ sidebarOpen, onToggleSidebar }: Bil
                   )}
                   <p className="text-xs text-(--text-tertiary) mt-1">{hint}</p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 /**
  * Unified Inbox Backend
@@ -204,7 +205,7 @@ export const getGroupedMessages = query({
         }
 
         // Resolve display name from support_ticket → users table
-        const ticket = await ctx.db.get(data.original.metadata.ticketId as any);
+        const ticket = await ctx.db.get(data.original.metadata.ticketId as Id<"support_tickets">);
         if (ticket) {
           resolvedEmail = ticket.userEmail || null;
           const user = await ctx.db

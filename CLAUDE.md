@@ -54,5 +54,5 @@ See `env.example` for the full list. Key services requiring configuration: Clerk
 
 ## Build Notes
 
-- TypeScript build errors are intentionally ignored (`ignoreBuildErrors: true` in `next.config.ts`) — there are 153 pre-existing type errors across 55+ files
+- TypeScript build errors are temporarily ignored (`ignoreBuildErrors: true`). Repo is at 2 known errors, both in `lib/director/tool-executor.ts` (active Director WIP — `api.credits.getBalance` returns `number | null` and needs `?? 0`). Flip the flag to `false` once those land, then keep it that way.
 - Server actions have a 50MB body size limit (for file uploads)
