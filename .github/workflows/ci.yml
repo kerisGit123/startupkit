@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        # Advisory until Director WIP in lib/director/tool-executor.ts lands
+        # the two ?? 0 guards on api.credits.getBalance. After that, flip
+        # ignoreBuildErrors: false in next.config.ts AND remove this line.
+        continue-on-error: true
+        run: npm run typecheck

@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "setup": "node scripts/setup.js",
     "screenshots": "node screenshot-utils.js"
   },
