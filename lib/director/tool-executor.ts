@@ -723,8 +723,8 @@ export async function dispatchDirectorTool(
         if (!el) return { output: `Element "${elName}" not found in the library.`, isError: true };
 
         // Guard: skip if there's already an active generation in flight for this element.
-        // Files older than 2 min are considered stuck (KIE callback never fired) and are ignored.
-        const STUCK_THRESHOLD_MS = 2 * 60 * 1000;
+        // Files older than 1 min are considered stuck (KIE callback never fired) and are ignored.
+        const STUCK_THRESHOLD_MS = 1 * 60 * 1000;
         const pendingCheck = await convex.query(api.storyboard.storyboardFiles.listPendingElementFiles, { elementIds: [el._id] }) as any[];
         const activePending = pendingCheck.filter((f: any) => (Date.now() - (f.createdAt ?? 0)) < STUCK_THRESHOLD_MS);
         if (activePending.length > 0) {
