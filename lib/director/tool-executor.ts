@@ -723,12 +723,23 @@ export async function dispatchDirectorTool(
         if (!el) return { output: `Element "${elName}" not found in the library.`, isError: true };
 
         // Guard: skip if there's already an active generation in flight for this element.
-        // Files older than 1 min are considered stuck (KIE callback never fired) and are ignored.
-        const STUCK_THRESHOLD_MS = 1 * 60 * 1000;
+        // Stuck files (>90s with no callback) are marked failed so they don't permanently block retries.
+        const ACTIVE_THRESHOLD_MS = 90 * 1000;
         const pendingCheck = await convex.query(api.storyboard.storyboardFiles.listPendingElementFiles, { elementIds: [el._id] }) as any[];
-        const activePending = pendingCheck.filter((f: any) => (Date.now() - (f.createdAt ?? 0)) < STUCK_THRESHOLD_MS);
-        if (activePending.length > 0) {
-          return { output: `A reference image for "${el.name}" was just queued — check the Elements panel in a moment.`, isError: false };
+        const now = Date.now();
+        const stuckFiles = pendingCheck.filter((f: any) => (now - (f.createdAt ?? 0)) >= ACTIVE_THRESHOLD_MS);
+        const activeFiles = pendingCheck.filter((f: any) => (now - (f.createdAt ?? 0)) < ACTIVE_THRESHOLD_MS);
+        // Clean up stuck files so they don't permanently block future generation.
+        for (const stuck of stuckFiles) {
+          try {
+            await convex.mutation(api.storyboard.storyboardFiles.updateFromCallback, {
+              fileId: stuck._id,
+              status: "failed",
+            });
+          } catch {}
+        }
+        if (activeFiles.length > 0) {
+          return { output: `A reference image for "${el.name}" is already generating — it should appear in the Elements panel within 30–60 seconds.`, isError: false };
         }
 
         // ── Reference photos (user-uploaded for img2img) ──────────────────────
