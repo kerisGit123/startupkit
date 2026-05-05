@@ -269,7 +269,7 @@ export const getRevenueAnalytics = query({
     }
 
     // SaaS Metrics
-    const PLAN_PRICES: Record<string, number> = { starter: 19.90, pro: 29.00, business: 99.00 };
+    const PLAN_PRICES: Record<string, number> = { starter: 0, pro: 45, business: 119 };
     const subscriptions = await ctx.db.query("org_subscriptions").collect();
     const users = await ctx.db.query("users").collect();
 
@@ -478,6 +478,74 @@ export const getFinancialSummary = query({
       avgTransactionValue: toCurrency(avgTransactionValue),
       topCustomers: convertedTopCustomers,
     };
+  },
+});
+
+// Plan distribution from credits_balance.ownerPlan (real-time, not ledger-dependent)
+export const getPlanDistribution = query({
+  args: {},
+  handler: async (ctx) => {
+    const balances = await ctx.db.query("credits_balance").collect();
+    const planCounts: Record<string, number> = {};
+    for (const b of balances) {
+      const plan = b.ownerPlan || "free";
+      planCounts[plan] = (planCounts[plan] || 0) + 1;
+    }
+    const PLAN_PRICES: Record<string, number> = { pro: 45, business: 119 };
+    const ORDER = ["free", "pro", "business", "enterprise"];
+    return ORDER.filter(p => p !== "enterprise" || planCounts[p] !== undefined).map(p => ({
+      plan: p.charAt(0).toUpperCase() + p.slice(1),
+      planKey: p,
+      count: planCounts[p] || 0,
+      mrr: (PLAN_PRICES[p] || 0) * (planCounts[p] || 0),
+    }));
+  },
+});
+
+// Monthly user signups trend
+export const getMonthlySignups = query({
+  args: { months: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const monthCount = args.months || 6;
+    const users = await ctx.db.query("users").collect();
+    const now = new Date();
+    return Array.from({ length: monthCount }, (_, i) => {
+      const start = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1 - i), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1 - i) + 1, 0, 23, 59, 59, 999);
+      return {
+        month: start.toLocaleDateString("en-US", { month: "short" }),
+        signups: users.filter(u => u.createdAt && u.createdAt >= start.getTime() && u.createdAt <= end.getTime()).length,
+      };
+    });
+  },
+});
+
+// Monthly revenue from paid invoices (reliable even without Stripe ledger data)
+export const getInvoiceRevenueTrend = query({
+  args: { months: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const monthCount = args.months || 6;
+    const allInvoices = await ctx.db.query("invoices").withIndex("by_status", q => q.eq("status", "paid")).collect();
+    const now = new Date();
+    return Array.from({ length: monthCount }, (_, i) => {
+      const start = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1 - i), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - (monthCount - 1 - i) + 1, 0, 23, 59, 59, 999);
+      const monthInvoices = allInvoices.filter(inv => {
+        const d = inv.paidAt ?? inv.createdAt;
+        return d >= start.getTime() && d <= end.getTime();
+      });
+      const subRevenue = monthInvoices.filter(inv => inv.invoiceType === "subscription" || inv.invoiceType === "payment")
+        .reduce((s, inv) => s + (inv.total || 0), 0);
+      const creditRevenue = monthInvoices.filter(inv => inv.invoiceType === "invoice")
+        .reduce((s, inv) => s + (inv.total || 0), 0);
+      return {
+        month: start.toLocaleDateString("en-US", { month: "short" }),
+        total: subRevenue + creditRevenue,
+        subscriptions: subRevenue,
+        credits: creditRevenue,
+        count: monthInvoices.length,
+      };
+    });
   },
 });
 

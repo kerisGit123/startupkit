@@ -26,13 +26,16 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, Cell } from 'recharts';
 
 export function RevenueOverview() {
   const analytics = useQuery(api.financialLedger.getRevenueAnalytics);
   const allTransactions = useQuery(api.financialLedger.getAllLedgerEntries, {});
   const monthlyTrend = useQuery(api.financialLedger.getMonthlyRevenueTrend, { months: 6 });
   const financialSummary = useQuery(api.financialLedger.getFinancialSummary);
+  const planDistribution = useQuery(api.financialLedger.getPlanDistribution);
+  const monthlySignups = useQuery(api.financialLedger.getMonthlySignups, { months: 6 });
+  const invoiceRevenueTrend = useQuery(api.financialLedger.getInvoiceRevenueTrend, { months: 6 });
   
   const recentTransactions = allTransactions?.slice(0, 8) || [];
 
@@ -112,6 +115,20 @@ export function RevenueOverview() {
     Revenue: m.revenue,
     Subscriptions: m.subscriptions,
     "One-time": m.oneTime,
+  }));
+
+  const PLAN_COLORS: Record<string, string> = {
+    Free: "#94a3b8",
+    Pro: "#6366f1",
+    Business: "#8b5cf6",
+    Enterprise: "#0ea5e9",
+  };
+
+  const invoiceTrendData = (invoiceRevenueTrend || []).map(m => ({
+    month: m.month,
+    Revenue: m.total,
+    Subscriptions: m.subscriptions,
+    Credits: m.credits,
   }));
 
   return (
@@ -345,6 +362,121 @@ export function RevenueOverview() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      {/* Invoice Revenue Trend (real data from invoices table) */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Invoice Revenue Trend</CardTitle>
+              <CardDescription>6-month paid invoice breakdown by type</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={invoiceTrendData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={(v) => formatCompact(v)} />
+              <Tooltip
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(value: any) => formatCurrency(Number(value))}
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                }}
+              />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+              <Bar dataKey="Subscriptions" stackId="a" fill="var(--chart-2)" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="Credits" stackId="a" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Plan Distribution + Monthly Signups */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Plan Distribution */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Plan Distribution</CardTitle>
+            <CardDescription>Active workspaces by plan · MRR contribution</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {planDistribution && planDistribution.length > 0 ? (
+              <div className="space-y-3 mt-1">
+                {planDistribution.filter(p => p.planKey !== "enterprise" || p.count > 0).map(p => {
+                  const total = planDistribution.reduce((s, x) => s + x.count, 0);
+                  const pct = total > 0 ? (p.count / total) * 100 : 0;
+                  return (
+                    <div key={p.planKey}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: PLAN_COLORS[p.plan] || "#94a3b8" }} />
+                          <span className="text-sm font-medium">{p.plan}</span>
+                          <span className="text-xs text-muted-foreground">({p.count})</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {p.mrr > 0 && <span className="text-xs text-emerald-600 font-semibold">${p.mrr.toFixed(0)}/mo</span>}
+                          <span className="text-xs text-muted-foreground w-10 text-right">{pct.toFixed(0)}%</span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%`, backgroundColor: PLAN_COLORS[p.plan] || "#94a3b8" }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* MRR total from plan counts */}
+                <div className="pt-3 border-t flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Total MRR (plan-based)</span>
+                  <span className="text-sm font-bold text-emerald-600">
+                    ${planDistribution.reduce((s, p) => s + p.mrr, 0).toFixed(0)}/mo
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">No plan data</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Monthly Signups */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Monthly Signups</CardTitle>
+            <CardDescription>New user registrations per month</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={monthlySignups || []} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                  }}
+                />
+                <Bar dataKey="signups" name="Signups" fill="var(--chart-1)" radius={[4, 4, 0, 0]}>
+                  {(monthlySignups || []).map((_: unknown, index: number) => (
+                    <Cell key={index} fill={`hsl(${240 + index * 10}, 70%, ${55 + index * 3}%)`} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Revenue Breakdown + Quick Stats */}
       <div className="grid gap-4 md:grid-cols-5">
