@@ -6,6 +6,9 @@ import { getAnthropicClient } from "@/lib/support/anthropic";
 import { analyzeScript } from "@/lib/storyboard/scriptAnalyzer";
 import { cleanupItemFiles } from "@/lib/storyboard/cleanupFiles";
 import { triggerImageGeneration } from "@/lib/storyboard/kieAI";
+import { composePrompt, composeProductionSheetPrompt, composeWorldViewPrompt } from "@/app/storyboard-studio/components/ai/elementForgeConfig";
+import { DEFAULT_PROMPT_TEMPLATES } from "@/lib/storyboard/defaultPromptTemplates";
+import { findBestTemplates } from "@/lib/storyboard/templateMatcher";
 
 // @mention injection — mirrors the logic in build-storyboard/route.ts
 const _STOP_WORDS = new Set(["the", "a", "an", "of", "in", "at", "to", "for", "and", "or", "its", "with"]);
@@ -100,6 +103,7 @@ export interface DirectorToolContext {
   projectId: string;
   companyId: string;
   userId: string;
+  convexToken?: string;
   onProgress?: (message: string) => void;
 }
 
@@ -700,9 +704,12 @@ export async function dispatchDirectorTool(
         const el = (elements as any[]).find((e) => e.name.toLowerCase() === elName.toLowerCase());
         if (!el) return { output: `Element "${elName}" not found in the library.`, isError: true };
 
-        // Guard: skip if there's already a generation in flight for this element
+        // Guard: skip if there's already a generation in flight for this element.
+        // Ignore files older than 10 min — those are stuck (KIE callback never fired).
+        const STUCK_THRESHOLD_MS = 10 * 60 * 1000;
         const pendingCheck = await convex.query(api.storyboard.storyboardFiles.listPendingElementFiles, { elementIds: [el._id] }) as any[];
-        if (pendingCheck.length > 0) {
+        const activePending = pendingCheck.filter((f: any) => (Date.now() - (f.createdAt ?? 0)) < STUCK_THRESHOLD_MS);
+        if (activePending.length > 0) {
           return { output: `A reference image for "${el.name}" is already generating — check the Elements panel in a moment.`, isError: false };
         }
 
@@ -733,22 +740,60 @@ export async function dispatchDirectorTool(
           ? (elCreditMap[resolution] ?? 4)
           : model === "z-image" ? 1 : 5;
 
-        // ── Select best prompt template for this element ──────────────────────
+        // ── Compose element description — identity fields → composePrompt ─────
+        const hasIdentity = el.identity && Object.keys(el.identity as object).length > 0;
+        const elementDescription = hasIdentity
+          ? composePrompt(el.type as "character" | "environment" | "prop", el.identity as Record<string, any>)
+          : (el.description || `${el.type} named ${el.name}`);
+
+        // ── Select prompt template ────────────────────────────────────────────
+        // Priority chain:
+        //   1. el.preferredTemplate (user-starred in ElementForge) — skipped if it's a reference-sheet
+        //   2. Keyword-scored best match via findBestTemplates (werewolf→C05, cockpit→E15, etc.)
+        //      only applied when score ≥ 10 (at least one keyword match)
+        //   3. composePrompt/description only (no template wrapper)
+        //
+        // Reference-sheet/production-sheet templates (E01, C01, P01…) are always excluded —
+        // they produce multi-panel boards, not single concept images.
+        const isRefSheetTemplate = (tpl: any) =>
+          (tpl?.tags || []).includes("reference-sheet") ||
+          /production\s+reference\s+sheet/i.test(tpl?.name || "");
+
         let templatePrompt: string | null = null;
         let templateName: string | null = null;
-        try {
-          const dbTemplateRecords = await convex.query(api.promptTemplates.getByCompany, { companyId: ctx.companyId });
-          const dbTemplates = (dbTemplateRecords as any[] || []).map((t: any) => ({ name: String(t.name || ""), prompt: String(t.prompt || "") }));
-          const bestRule = selectTemplateForElement(el, dbTemplates);
-          if (bestRule) { templatePrompt = bestRule.prompt; templateName = bestRule.name; }
-        } catch {
-          // Non-fatal: fall back to hardcoded prompts if DB query fails
-          const bestRule = selectTemplateForElement(el);
-          if (bestRule) { templatePrompt = bestRule.prompt; templateName = bestRule.name; }
+
+        // Step 1 — explicit preferredTemplate (user-starred, not auto-saved default)
+        if (el.preferredTemplate) {
+          try {
+            const systemTpls = DEFAULT_PROMPT_TEMPLATES.filter(t => t.type === el.type);
+            const dbTemplateRecords = await convex.query(api.promptTemplates.getByCompany, { companyId: ctx.companyId });
+            const userTpls = (dbTemplateRecords as any[]).filter((t: any) => t.type === el.type && !t.isSystem);
+            const allTpls = [...userTpls, ...systemTpls];
+            const preferred = allTpls.find((t: any) => t.name === el.preferredTemplate || t.rawName === el.preferredTemplate);
+            if (preferred && !isRefSheetTemplate(preferred)) {
+              templatePrompt = String(preferred.prompt);
+              templateName = String(preferred.name);
+            }
+          } catch {}
         }
 
-        // ── Compose prompt ────────────────────────────────────────────────────
-        const elementDescription = el.description || `${el.type} named ${el.name}`;
+        // Step 2 — keyword-scored matcher (same logic as ElementForge "Suggested" badge)
+        // Include element name + raw description so "Tabletop Arena" or "werewolf" in the
+        // name also drive template selection, not just the composed identity description.
+        if (!templatePrompt && (el.type === "character" || el.type === "environment" || el.type === "prop")) {
+          const matchInput = [el.name, el.description || "", (el.tags || []).join(" "), elementDescription].join(" ");
+          const candidates = findBestTemplates(matchInput, el.type, 5);
+          const best = candidates.find(c => {
+            if (c.score < 10) return false; // require at least one keyword match
+            const tpl = DEFAULT_PROMPT_TEMPLATES.find(t => t.name === c.name);
+            return !isRefSheetTemplate(tpl);
+          });
+          if (best) {
+            templatePrompt = best.prompt;
+            templateName = `${best.name} (score ${best.score}, ${best.matchReason})`;
+          }
+        }
+
         let composedPrompt: string;
         if (input.custom_prompt) {
           composedPrompt = String(input.custom_prompt);
@@ -1338,6 +1383,167 @@ export async function dispatchDirectorTool(
           }),
           isError: false,
         };
+      }
+
+      case "generate_world_view_concept": {
+        const project = await convex.query(api.storyboard.projects.get, { id: projectId as any });
+        if (!project) return { output: "Project not found.", isError: true };
+        const elements = await convex.query(api.storyboard.storyboardElements.listByProject, { projectId: projectId as any });
+
+        const projectName = (project as any).name || "Untitled";
+        const genre = (project as any).settings?.genre;
+        const lines: string[] = [];
+        lines.push(`PROJECT: ${projectName}${genre ? ` — ${genre}` : ""}`);
+
+        const chars = (elements as any[]).filter(e => e.type === "character");
+        const envs = (elements as any[]).filter(e => e.type === "environment");
+        const props = (elements as any[]).filter(e => e.type === "prop");
+
+        if (chars.length > 0) {
+          const charSummary = chars.map((c: any) => {
+            const id = c.identity ?? {};
+            const parts: string[] = [c.name];
+            if (id.ageRange) parts.push(id.ageRange);
+            if (id.ethnicity) parts.push(id.ethnicity);
+            if (id.gender) parts.push(id.gender);
+            if (id.archetype) parts.push(`${id.archetype} archetype`);
+            if (id.outfitCustom?.trim()) parts.push(id.outfitCustom.trim());
+            else if (id.outfit) parts.push(`${id.outfit} outfit`);
+            return parts.join(", ");
+          });
+          lines.push(`PRINCIPAL CHARACTERS:\n${charSummary.map(s => `- ${s}`).join("\n")}`);
+        }
+        if (envs.length > 0) {
+          const envSummary = envs.map((e: any) => {
+            const id = e.identity ?? {};
+            const parts: string[] = [e.name];
+            if (id.setting) parts.push(id.setting);
+            if (id.subSetting) parts.push(id.subSetting);
+            if (id.timeOfDay) parts.push(id.timeOfDay);
+            if (id.weather) parts.push(id.weather);
+            if (id.mood) parts.push(id.mood);
+            if (id.keyFeatures?.trim()) parts.push(id.keyFeatures.trim());
+            return parts.join(", ");
+          });
+          lines.push(`WORLD / ENVIRONMENTS:\n${envSummary.map(s => `- ${s}`).join("\n")}`);
+        }
+        if (props.length > 0) lines.push(`KEY PROPS: ${props.map((p: any) => p.name).join(", ")}`);
+
+        const projectScript = (project as any).script?.trim();
+        if (projectScript) {
+          const trimmed = projectScript.split("\n")
+            .filter((line: string) => !/^\d+\.\d+s[–—\-]/.test(line.trim()))
+            .join("\n").slice(0, 4000);
+          lines.push(`FULL SCRIPT:\n${trimmed}`);
+        }
+
+        if (lines.length <= 1) return { output: "Not enough project data to generate concept.", isError: true };
+
+        ctx.onProgress?.("Generating World View concept…");
+        try {
+          const anthropic = getAnthropicClient();
+          const response = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 400,
+            system: `You are a film pre-production designer writing a World View brief for a project bible.\n\nRead the full project script and element data provided. Write ONE focused paragraph of 150–200 words that synthesizes:\n- The principal characters and their visual identities\n- The story's world — its setting, scale, texture, dominant light quality and atmosphere\n- The emotional arc of the full story\n- The project's visual language — color palette, contrast, cinematographic tone\n\nRules:\n- Write in cinematic prose only. No lists, no headers, no bullet points.\n- Be specific and visual. Use language an AI image generator can render.\n- Do not start with "In this story" or "This project" — open with the world and its characters.`,
+            messages: [{ role: "user", content: lines.join("\n\n") }],
+          });
+          const concept = response.content.filter((b) => b.type === "text").map((b) => (b as any).text).join("").trim();
+          if (!concept) return { output: "Haiku returned an empty concept. Try again.", isError: true };
+          await convex.mutation(api.storyboard.projects.updateWorldView, { id: projectId as any, worldViewConcept: concept });
+          return { output: `World View concept generated and saved. Visible in World View Sheet → Concept tab.\n\n"${concept.slice(0, 300)}${concept.length > 300 ? "…" : ""}"`, isError: false };
+        } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "generate_world_view_image": {
+        const project = await convex.query(api.storyboard.projects.get, { id: projectId as any });
+        if (!project) return { output: "Project not found.", isError: true };
+        const concept = (project as any).worldViewConcept?.trim();
+        if (!concept) return { output: "No World View concept saved. Run generate_world_view_concept first.", isError: true };
+
+        const elements = await convex.query(api.storyboard.storyboardElements.listByProject, { projectId: projectId as any });
+        const elData = (elements as any[]).map(el => {
+          const refs = el.referenceUrls ?? [];
+          const url = el.thumbnailUrl || refs[el.primaryIndex ?? 0] || refs[0] || undefined;
+          return { name: el.name, type: el.type, identity: el.identity, primaryImageUrl: url };
+        });
+        const refUrls = elData.map(e => e.primaryImageUrl).filter(Boolean) as string[];
+        const hasRefs = refUrls.length > 0;
+
+        const resolution = String(input.resolution || "1K");
+        const creditMap: Record<string, number> = { "1K": 4, "2K": 7, "4K": 10 };
+        const creditsUsed = creditMap[resolution] ?? 4;
+        const model = hasRefs ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image";
+        const qualityParam = JSON.stringify({ type: "gpt-image-2", mode: hasRefs ? "image-to-image" : "text-to-image", nsfwChecker: false });
+
+        const prompt = composeWorldViewPrompt({ concept, elements: elData, projectName: (project as any).name });
+        ctx.onProgress?.(`Generating World View Sheet (${resolution}, ${creditsUsed}cr, ${refUrls.length} element refs)…`);
+        try {
+          await triggerImageGeneration({
+            prompt, model, resolution, quality: qualityParam as any, aspectRatio: "16:9",
+            categoryId: projectId as any, category: "worldview",
+            variantLabel: "World View Sheet", variantModel: model,
+            companyId: ctx.companyId, userId: ctx.userId, projectId, creditsUsed,
+            convexToken: ctx.convexToken,
+            ...(hasRefs && { referenceImageUrls: refUrls }),
+          });
+          return { output: `World View Sheet queued — ${resolution}, ${creditsUsed}cr, ${refUrls.length} element references. Check World View Sheet → Generate tab for the result.`, isError: false };
+        } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
+      }
+
+      case "generate_scene_production_sheet": {
+        const frameNum = Number(input.frame_number);
+        if (!frameNum || frameNum < 1) return { output: "frame_number must be a positive number.", isError: true };
+        const items = await convex.query(api.storyboard.storyboardItems.listByProject, { projectId: projectId as any });
+        const sorted = (items as any[]).sort((a, b) => a.order - b.order);
+        const frame = sorted[frameNum - 1];
+        if (!frame) return { output: `Frame ${frameNum} not found.`, isError: true };
+
+        const elements = await convex.query(api.storyboard.storyboardElements.listByProject, { projectId: projectId as any });
+        const project = await convex.query(api.storyboard.projects.get, { id: projectId as any });
+        const worldViewConcept = (project as any)?.worldViewConcept;
+
+        const linkedIds = new Set((frame.linkedElements ?? []).map((le: any) => String(le.id)));
+        const frameEls = linkedIds.size > 0
+          ? (elements as any[]).filter(el => linkedIds.has(String(el._id)))
+          : (elements as any[]);
+
+        const elData = frameEls.map((el: any) => ({
+          name: el.name, type: el.type, identity: el.identity,
+          primaryImageUrl: el.thumbnailUrl || (el.referenceUrls ?? [])[el.primaryIndex ?? 0] || (el.referenceUrls ?? [])[0] || undefined,
+        }));
+
+        const refUrls: string[] = [];
+        if (frame.imageUrl) refUrls.push(frame.imageUrl);
+        for (const el of elData) { if (el.primaryImageUrl && !refUrls.includes(el.primaryImageUrl)) refUrls.push(el.primaryImageUrl); }
+        const hasRefs = refUrls.length > 0;
+
+        const resolution = String(input.resolution || "1K");
+        const creditMap: Record<string, number> = { "1K": 4, "2K": 7, "4K": 10 };
+        const creditsUsed = creditMap[resolution] ?? 4;
+        const model = hasRefs ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image";
+        const qualityParam = JSON.stringify({ type: "gpt-image-2", mode: hasRefs ? "image-to-image" : "text-to-image", nsfwChecker: false });
+        const aspectRatio = (project as any)?.aspectRatio || "16:9";
+
+        const prompt = composeProductionSheetPrompt({
+          elements: elData, imagePrompt: frame.imagePrompt, videoPrompt: frame.videoPrompt,
+          description: frame.description || frame.title,
+          cutCount: frame.videoPrompt ? frame.videoPrompt.split("\n").filter(Boolean).length : undefined,
+          concept: worldViewConcept,
+        });
+
+        ctx.onProgress?.(`Generating production sheet for frame ${frameNum} "${frame.title || ""}" (${resolution}, ${creditsUsed}cr)…`);
+        try {
+          await triggerImageGeneration({
+            prompt, model, resolution, quality: qualityParam as any, aspectRatio,
+            categoryId: frame._id, category: "production-sheet",
+            variantLabel: `Frame ${frameNum} Production Sheet`, variantModel: model,
+            companyId: ctx.companyId, userId: ctx.userId, projectId, creditsUsed,
+            convexToken: ctx.convexToken,
+            ...(hasRefs && { referenceImageUrls: refUrls }),
+          });
+          return { output: `Production sheet queued for frame ${frameNum} "${frame.title || ""}" — ${resolution}, ${creditsUsed}cr, ${refUrls.length} reference images. Check the frame gallery for the result.`, isError: false };
+        } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }
       }
 
       case "browse_project_files": {

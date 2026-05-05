@@ -437,7 +437,7 @@ export const listPendingElementFiles = query({
   handler: async (ctx, { elementIds }) => {
     if (elementIds.length === 0) return [];
     const idSet = new Set(elementIds.map(String));
-    const results: { categoryId: string; status: string }[] = [];
+    const results: { categoryId: string; status: string; createdAt: number }[] = [];
     for (const elementId of elementIds) {
       const files = await ctx.db
         .query("storyboard_files")
@@ -450,7 +450,7 @@ export const listPendingElementFiles = query({
         )
         .collect();
       for (const f of files) {
-        results.push({ categoryId: String(f.categoryId), status: f.status ?? "generating" });
+        results.push({ categoryId: String(f.categoryId), status: f.status ?? "generating", createdAt: f.createdAt ?? f._creationTime });
       }
     }
     return results;
@@ -838,7 +838,9 @@ export const listGenerationLogs = query({
         q.and(
           q.or(
             q.eq(q.field("category"), "generated"),
-            q.eq(q.field("category"), "elements")
+            q.eq(q.field("category"), "elements"),
+            q.eq(q.field("category"), "worldview"),
+            q.eq(q.field("category"), "production-sheet")
           ),
           q.neq(q.field("status"), "deleted")
         )
@@ -850,10 +852,9 @@ export const listGenerationLogs = query({
 
     const results = await filteredQuery.order("desc").paginate(args.paginationOpts);
 
-    // Filter out crop thumbnails (element uploads tagged "thumbnail")
-    const filtered = results.page.filter(
-      (file) => !(file.category === "elements" && file.tags?.includes("thumbnail"))
-    );
+    // Only include AI-generated files (model field is always set by triggerImageGeneration).
+    // Uploads and crops never set model, so they are excluded regardless of category.
+    const filtered = results.page.filter((file) => !!file.model);
 
     // Resolve defaultAI references to get key names (only for this page)
     const enriched = await Promise.all(

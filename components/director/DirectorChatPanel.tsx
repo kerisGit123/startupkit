@@ -313,7 +313,6 @@ export function DirectorChatPanel({
       setInput("");
       setStreaming(true);
       setActiveTool(null);
-      setQuickActions(null);
       setPostGenNudge(false);
 
       const controller = new AbortController();
