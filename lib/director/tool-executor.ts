@@ -844,27 +844,40 @@ export async function dispatchDirectorTool(
 
         ctx.onProgress?.(`Generating reference for "${el.name}" (${resolution}, ${creditsUsed}cr, ${modeLabel})…`);
         try {
-          await triggerImageGeneration({
-            prompt: finalPrompt,
-            model,
-            resolution,
-            quality: qualityParam as any,
-            aspectRatio,
-            categoryId: el._id,
-            category: "elements",
-            variantLabel: `${el.type} reference`,
-            variantModel: model,
-            companyId: ctx.companyId,
-            userId: ctx.userId,
-            projectId,
-            creditsUsed,
-            convexToken: ctx.convexToken,
-            setPrimary: true,
-            ...(hasRefs && { referenceImageUrls: refImageUrls }),
+          const webhookSecret = process.env.WEBHOOK_SECRET;
+          if (!webhookSecret) throw new Error("WEBHOOK_SECRET not set — cannot call generate-image route internally");
+          const genRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/storyboard/generate-image`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Internal-Director": webhookSecret,
+            },
+            body: JSON.stringify({
+              sceneContent: finalPrompt,
+              style: "realistic",
+              quality: qualityParam,
+              aspectRatio,
+              elementId: el._id,
+              variantLabel: `${el.type} reference`,
+              variantModel: model,
+              companyId: ctx.companyId,
+              userId: ctx.userId,
+              projectId,
+              creditsUsed,
+              model,
+              resolution,
+              enhance: false,
+              ...(hasRefs && { referenceImageUrls: refImageUrls }),
+            }),
           });
-          ctx.onProgress?.(`"${el.name}" queued`);
+          if (!genRes.ok) {
+            const errText = await genRes.text();
+            return { output: `Generation failed (${genRes.status}): ${errText}`, isError: true };
+          }
+          const genResult = await genRes.json();
+          ctx.onProgress?.(`"${el.name}" queued (taskId: ${genResult.taskId})`);
           return {
-            output: `Reference image queued for "${el.name}" (${el.type}) — ${model}, ${resolution}, ${creditsUsed}cr. Template: ${templateName ? `"${templateName}"` : "none"}. Check the Elements panel for the result.`,
+            output: `Reference image queued for "${el.name}" (${el.type}) — ${model}, ${resolution}, ${creditsUsed}cr. Template: ${templateName ? `"${templateName}"` : "none"}. taskId: ${genResult.taskId}. Check the Elements panel for the result.`,
             isError: false,
           };
         } catch (err) { return { output: `Failed: ${err instanceof Error ? err.message : String(err)}`, isError: true }; }

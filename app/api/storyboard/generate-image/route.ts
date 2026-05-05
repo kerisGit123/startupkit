@@ -11,13 +11,19 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    // Get Convex auth token from Clerk
-    const authResult = await auth();
-    if (!authResult.userId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    // Internal server-side calls (e.g. Director agent tool-executor) bypass Clerk cookie auth
+    // by passing X-Internal-Director: <WEBHOOK_SECRET> — all Convex ops in this path don't need auth.
+    const internalSecret = req.headers.get("X-Internal-Director");
+    const isInternalCall = !!(internalSecret && process.env.WEBHOOK_SECRET && internalSecret === process.env.WEBHOOK_SECRET);
+
     let convexToken: string | null = null;
-    try { convexToken = await authResult.getToken({ template: "convex" }); } catch {}
-    if (!convexToken) {
-      try { convexToken = await authResult.getToken(); } catch {}
+    if (!isInternalCall) {
+      const authResult = await auth();
+      if (!authResult.userId) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      try { convexToken = await authResult.getToken({ template: "convex" }); } catch {}
+      if (!convexToken) {
+        try { convexToken = await authResult.getToken(); } catch {}
+      }
     }
 
     const {
