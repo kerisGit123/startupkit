@@ -1269,7 +1269,7 @@ export function ElementLibrary({
                                 <img
                                   src={finalThumbnailUrl}
                                   alt={element.name}
-                                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                  className={`h-full w-full object-cover transition-transform duration-300 group-hover:scale-105 ${isGenerating ? "opacity-50" : ""}`}
                                   onError={(e) => {
                                     const img = e.currentTarget;
                                     // Try primary reference as fallback before giving up
@@ -1293,9 +1293,9 @@ export function ElementLibrary({
                                   }}
                                 />
                                 {isGenerating && (
-                                  <div className="absolute bottom-2 left-2 z-10 flex items-center gap-1 bg-blue-500/85 text-white text-[9px] font-medium rounded-full px-1.5 py-0.5 backdrop-blur-sm pointer-events-none">
-                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                    Generating…
+                                  <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+                                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin" strokeWidth={2} />
+                                    <span className="text-[10px] font-medium text-blue-300">Generating…</span>
                                   </div>
                                 )}
                               </>
