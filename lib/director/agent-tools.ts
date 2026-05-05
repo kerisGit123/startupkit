@@ -350,7 +350,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         resolution: {
           type: "string",
           enum: ["1K", "2K", "4K"],
-          description: "Output resolution. Default: '1K' (4cr). 2K=7cr, 4K=10cr.",
+          description: "Output resolution. Default: '1K'. GPT Image 2: 15cr flat regardless of resolution. z-image: 1cr.",
         },
         mode: {
           type: "string",
@@ -370,7 +370,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "create_element",
     description:
-      "Create a new element (character, environment, or prop) in the project's element library. Call this BEFORE generate_scene when the scene introduces new characters, locations, or important props that don't already exist. Elements created here are text-only — users add reference images later via the Element Library. Once created, use @ElementName in prompts for consistency.",
+      "Create a new element (character, environment, or prop) in the project's element library. Call this BEFORE generate_scene when the scene introduces new characters, locations, or important props. Pass identity fields and any reference photo URLs so trigger_element_image_generation can produce the best possible reference image immediately after. Once created, use @ElementName in prompts for consistency.",
     input_schema: {
       type: "object",
       properties: {
@@ -386,6 +386,22 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         description: {
           type: "string",
           description: "Visual description used in generation prompts. Characters: appearance, clothing, age, distinguishing features. Environments: location, atmosphere, key visual elements. Props: physical description, material, size.",
+        },
+        identity: {
+          type: "object",
+          description: "Structured identity fields for the Element Forge pipeline. Character keys: ageRange, ethnicity, gender, archetype, hairStyle, hairColor, eyeColor, outfit, outfitCustom, distinctiveFeatures, personality. Environment keys: setting, subSetting, timeOfDay, weather, mood, scale, keyFeatures, lighting. Prop keys: category, material, size, condition, color, function, keyFeatures. All fields optional — provide as many as known. These drive composePrompt() and template matching for image generation.",
+          additionalProperties: true,
+        },
+        reference_photos: {
+          type: "object",
+          description: "Optional reference photo URLs for img2img generation. Provide any combination of: fullBody (overrides all others), face, head, body, outfit. All values must be publicly accessible image URLs.",
+          properties: {
+            fullBody: { type: "string", description: "Full-body reference — takes priority over all other photos." },
+            face: { type: "string" },
+            head: { type: "string" },
+            body: { type: "string" },
+            outfit: { type: "string" },
+          },
         },
         keywords: {
           type: "array",

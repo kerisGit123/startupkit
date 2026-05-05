@@ -596,6 +596,16 @@ export async function dispatchDirectorTool(
         }
 
         const keywords = Array.isArray(input.keywords) ? (input.keywords as unknown[]).map(String) : [];
+        const identity = input.identity && typeof input.identity === "object" ? input.identity as Record<string, any> : undefined;
+
+        // Reference photos for img2img — strip undefined entries before saving
+        const rpRaw = input.reference_photos as Record<string, string> | undefined;
+        const referencePhotos = rpRaw && typeof rpRaw === "object"
+          ? (Object.fromEntries(Object.entries({
+              face: rpRaw.face, outfit: rpRaw.outfit, fullBody: rpRaw.fullBody, head: rpRaw.head, body: rpRaw.body,
+            }).filter(([, v]) => !!v)) as { face?: string; outfit?: string; fullBody?: string; head?: string; body?: string })
+          : undefined;
+        const hasRefPhotos = referencePhotos && Object.keys(referencePhotos).length > 0;
 
         await convex.mutation(api.storyboard.storyboardElements.create, {
           projectId: projectId as any,
@@ -606,10 +616,18 @@ export async function dispatchDirectorTool(
           referenceUrls: [],
           tags: keywords,
           createdBy: ctx.userId,
+          identity,
+          ...(hasRefPhotos && { referencePhotos }),
         });
 
+        const identityKeys = identity ? Object.keys(identity).filter(k => identity[k]) : [];
+        const extras = [
+          identityKeys.length > 0 && `identity (${identityKeys.join(", ")})`,
+          hasRefPhotos && `${Object.keys(referencePhotos!).join("+")} photo(s)`,
+        ].filter(Boolean).join(", ");
+
         return {
-          output: `Created ${elType} "@${elName}". Use @${elName} in prompts — the reference image slot is empty until the user uploads one via the Element Library.`,
+          output: `Created ${elType} "@${elName}".${extras ? ` Saved: ${extras}.` : ""} Call trigger_element_image_generation to generate a reference image — identity and reference photos will be used automatically.`,
           isError: false,
         };
       }
